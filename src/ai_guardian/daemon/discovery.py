@@ -1027,6 +1027,38 @@ class DaemonDiscovery:
         if _is_openshell_container(labels):
             token_paths = tuple(reversed(token_paths))
 
+            # OpenShell gateway services may not expose the workload through
+            # the local container SDK. Use the gateway exec path to retrieve
+            # the daemon token without ever logging its value.
+            sandbox_name = _normalize_container_name(
+                labels.get(_OPEN_SHELL_NAME_LABEL) or labels.get("ai-guardian.name")
+            )
+            openshell_cli = os.environ.get("OPENSHELL_CLI", "openshell")
+            if sandbox_name and shutil.which(openshell_cli):
+                for token_path in token_paths:
+                    try:
+                        result = subprocess.run(
+                            [
+                                openshell_cli,
+                                "sandbox",
+                                "exec",
+                                "--name",
+                                sandbox_name,
+                                "--no-tty",
+                                "--",
+                                "cat",
+                                token_path,
+                            ],
+                            capture_output=True,
+                            text=True,
+                            timeout=timeout,
+                            check=False,
+                        )
+                    except (OSError, subprocess.TimeoutExpired):
+                        continue
+                    if result.returncode == 0 and result.stdout.strip():
+                        return result.stdout.strip()
+
         for token_path in token_paths:
             try:
                 exit_code, output = container.exec_run(

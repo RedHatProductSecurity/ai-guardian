@@ -7,6 +7,7 @@ MenuItem trees by reading state from DaemonTray and its sub-managers.
 """
 
 import logging
+import json
 import os
 import shlex
 import subprocess
@@ -27,6 +28,41 @@ from ai_guardian.tray import notifications as tray_notifications
 from ai_guardian.tray import plugins as tray_plugins
 
 logger = logging.getLogger(__name__)
+
+
+def _get_openshell_openai_providers() -> tuple:
+    """Return existing OpenAI provider instances usable by OpenCode."""
+    try:
+        result = subprocess.run(
+            ["openshell", "provider", "list", "--output", "json"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        payload = json.loads(result.stdout) if result.returncode == 0 else {}
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return ()
+
+    providers = payload.get("providers", []) if isinstance(payload, dict) else []
+    names = {
+        str(provider["name"])
+        for provider in providers
+        if isinstance(provider, dict)
+        and provider.get("type") == "openai"
+        and "codex" not in str(provider.get("name", "")).lower()
+        and provider.get("name")
+    }
+    return tuple(sorted(names, key=str.casefold))
+
+
+# Tray advertises only OpenShell scenarios qualified against v0.1.2. Other
+# bundled clients remain available through the CLI for manual qualification.
+TRAY_OPENSHELL_CLI_CHOICES = ("codex",)
+TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
+    "container": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["container"],
+    "openshell": TRAY_OPENSHELL_CLI_CHOICES,
+}
 
 try:
     import pystray
@@ -817,6 +853,12 @@ class TrayMenuBuilder:
         profile = str(values.get("profile") or "").strip()
         if profile:
             command.extend(["--profile", profile])
+        agent = str(values.get("agent") or "").strip()
+        if cli == "opencode" and agent:
+            command.extend(["--opencode-agent-profile", agent])
+        model = str(values.get("model") or "").strip()
+        if model:
+            command.extend(["--model", model])
         providers = [
             item.strip()
             for item in str(values.get("providers") or "").replace("\n", ",").split(",")
@@ -985,8 +1027,8 @@ class TrayMenuBuilder:
         runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
         if runtime not in {"container", "openshell"}:
             runtime = "openshell"
-        cli_choices = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME[runtime]
-        default_cli = "claude" if runtime == "openshell" else "codex"
+        cli_choices = TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME[runtime]
+        default_cli = "codex"
         cli = os.environ.get("AI_GUARDIAN_CLI", default_cli)
         if cli not in cli_choices:
             cli = default_cli
@@ -1001,12 +1043,36 @@ class TrayMenuBuilder:
         if not repo_default:
             repo_default = os.path.expanduser("~")
         profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
-        opencode_agent_choices = ("", "build", "plan", "claude")
+        opencode_agent_choices = (
+            ("", "build") if runtime == "openshell" else ("", "build", "plan", "claude")
+        )
         agent_provider_choices = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
         if agent_provider not in agent_provider_choices:
             agent_provider = ""
         if runtime == "openshell" and cli == "pi" and not agent_provider:
             agent_provider = "anthropic"
+        if runtime == "openshell" and cli == "opencode" and not opencode_agent:
+            opencode_agent = "build"
+        model_default = os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", "")
+        if runtime == "openshell" and cli == "opencode" and not model_default:
+            model_default = "openai/gpt-5.6-luna"
+        openai_providers = _get_openshell_openai_providers()
+        openshell_provider_choices_by_cli = {
+            "codex": ("",),
+            "opencode": openai_providers or ("",),
+        }
+        openshell_provider_choices = (
+            openshell_provider_choices_by_cli.get(cli, ("",))
+            if runtime == "openshell"
+            else ()
+        )
+        providers_default = (
+            openai_providers[0]
+            if runtime == "openshell"
+            and cli == "opencode"
+            and len(openai_providers) == 1
+            else ""
+        )
         from ai_guardian.sandbox import _generated_openshell_name
 
         name_default = _generated_openshell_name(cli)
@@ -1027,7 +1093,7 @@ class TrayMenuBuilder:
                 "choices": cli_choices,
                 "choices_by": {
                     "field": "runtime",
-                    "values": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
+                    "values": TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME,
                 },
                 "clear_when_choice_invalid": True,
                 "default": cli,
@@ -1124,7 +1190,13 @@ class TrayMenuBuilder:
             {
                 "name": "model",
                 "label": "Inference model",
-                "default": os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", ""),
+                "default": model_default,
+                "dynamic_default": {
+                    "field": "cli",
+                    "value_by": {
+                        "opencode": "openai/gpt-5.6-luna",
+                    },
+                },
                 "help": "CLI model or OpenShell inference model; empty uses the default.",
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
@@ -1162,8 +1234,26 @@ class TrayMenuBuilder:
             {
                 "name": "providers",
                 "label": "OpenShell providers",
-                "default": "",
-                "help": "OpenShell provider names; separate names with commas or newlines.",
+                "type": "choice" if runtime == "openshell" else "text",
+                "choices": openshell_provider_choices,
+                "editable": False if runtime == "openshell" else True,
+                "clear_when_choice_invalid": True,
+                "choices_by": (
+                    {
+                        "field": "cli",
+                        "values": openshell_provider_choices_by_cli,
+                    }
+                    if runtime == "openshell"
+                    else {}
+                ),
+                "default": providers_default,
+                "help": (
+                    "Select existing OpenAI provider instance; one provider "
+                    "is selected automatically when unambiguous."
+                    if openshell_provider_choices
+                    else "OpenShell provider names; separate names with commas "
+                    "or newlines."
+                ),
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
             },
@@ -1216,7 +1306,8 @@ class TrayMenuBuilder:
         runtime = values.get("runtime")
         name = str(values.get("name") or "").strip()
         profile = str(values.get("profile") or "").strip()
-        restore = values.get("config_source") == "Latest saved snapshot"
+        config_source = str(values.get("config_source") or "Host/default")
+        restore = config_source == "Latest saved snapshot"
         if restore and profile:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
@@ -1320,6 +1411,10 @@ class TrayMenuBuilder:
             provider = provider.strip()
             if provider:
                 provider_names.append(provider)
+        if runtime == "openshell" and cli == "opencode" and not provider_names:
+            openai_providers = _get_openshell_openai_providers()
+            if len(openai_providers) == 1:
+                provider_names.append(openai_providers[0])
         environment_values = []
         environment = str(values.get("environment") or "").strip()
         for entry in environment.replace("\n", ",").split(","):
@@ -1402,7 +1497,7 @@ class TrayMenuBuilder:
                 agent_provider=agent_provider,
                 profile=profile_value,
                 restore_config="latest" if restore else None,
-                fresh_config=values.get("config_source") == "Host/default",
+                fresh_config=config_source == "Host/default",
                 config_dir=config_dir,
                 repo=repo,
                 port=port_value,

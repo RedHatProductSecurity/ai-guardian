@@ -39,7 +39,6 @@ DEFAULT_CONTAINER_CLI = "codex"
 DEFAULT_OPENSHELL_CLI = "claude"
 DEFAULT_REST_PORT = "63152"
 DEFAULT_OPENSHELL_MODEL = "claude-sonnet-4-6"
-OPENSHELL_MAX_NAME_LENGTH = 19
 MANAGED_LABEL = "ai-guardian.managed=true"
 DAEMON_LABEL = "ai-guardian.daemon=true"
 MANAGED_LABEL_KEY = "ai-guardian.managed"
@@ -197,7 +196,7 @@ def _agent_provider(args, cli: str) -> Optional[str]:
 
 
 def _openshell_inference_cli(args, cli: str) -> str:
-    """Return the model client whose OpenShell inference route is requested."""
+    """Return the client family used to select an OpenShell provider."""
     if cli == "pi":
         provider = _agent_provider(args, cli)
         if not provider:
@@ -206,7 +205,7 @@ def _openshell_inference_cli(args, cli: str) -> str:
             return "claude"
         return provider
     if cli == "claude":
-        # Claude uses the Anthropic Messages API and its OpenShell inference route.
+        # Claude uses the Anthropic-compatible provider family.
         return "claude"
     if cli != "opencode":
         return cli
@@ -1049,7 +1048,9 @@ def _merge_openshell_policy_values(base: Any, overlay: Any) -> Any:
     return overlay
 
 
-def _compose_openshell_policy(args, cli: str) -> Tuple[Path, Path]:
+def _compose_openshell_policy(
+    args, cli: str, *, provider_attached: bool = False
+) -> Tuple[Path, Path]:
     """Compose the baseline, user overlays, and selected-CLI policy."""
     import yaml
 
@@ -1070,6 +1071,11 @@ def _compose_openshell_policy(args, cli: str) -> Tuple[Path, Path]:
     network_policies = policy.get("network_policies")
     if network_policies is not None and not isinstance(network_policies, dict):
         raise ValueError("network_policies must be a YAML mapping")
+    if cli == "opencode" and provider_attached and isinstance(network_policies, dict):
+        # OpenAI provider profiles own endpoint and credential boundaries in
+        # OpenShell v0.1.2. Do not duplicate the provider policy in workload
+        # policy; the provider attachment supplies the boundary.
+        openai_policy = network_policies.pop("openai", None)
 
     try:
         temporary_dir = Path(
@@ -1270,35 +1276,53 @@ def _ensure_openshell_cli_provider(
             "create a compatible provider and pass it with --provider NAME"
         )
 
+    provider_environment = (
+        _openshell_provider_environment(args, cli) if cli == "codex" else {}
+    )
+    if cli == "codex" and provider_environment.get("OPENAI_API_KEY"):
+        # OpenShell v0.1.2 codex profile declares OAuth credentials only.
+        # API-key Codex/OpenCode sessions must use the openai profile.
+        provider_type = "openai"
+        if "openai" not in profiles:
+            raise ValueError(
+                "the active OpenShell gateway has no provider profile for 'openai'; "
+                "import a compatible profile before using Codex API-key credentials"
+            )
+
     provider_name = f"ai-guardian-{cli}"
     if _openshell_provider_exists(args, provider_name):
         if cli == "codex":
-            provider_environment = _openshell_provider_environment(args, cli)
             if provider_environment.get("OPENAI_API_KEY"):
-                # API-key login can replace an older OAuth-backed provider. Keep
-                # the value in the provider subprocess environment, never argv.
-                credential_keys = ["OPENAI_API_KEY"]
-            else:
-                credential_keys = [
-                    "CODEX_AUTH_ACCESS_TOKEN",
-                    "CODEX_AUTH_REFRESH_TOKEN",
-                    "CODEX_AUTH_ACCOUNT_ID",
-                ]
-                if provider_environment.get("CODEX_AUTH_ID_TOKEN"):
-                    credential_keys.append("CODEX_AUTH_ID_TOKEN")
-            if all(provider_environment.get(key) for key in credential_keys):
-                _emit_output(
-                    f"Refreshing existing OpenShell provider from local credentials: {provider_name}",
-                    output=output,
-                )
+                # Keep API-key values in the provider subprocess environment;
+                # OpenShell reads the named credential from that environment.
                 refresh_command = [
                     _openshell_cli(args),
                     "provider",
                     "update",
                     provider_name,
+                    "--credential",
+                    "OPENAI_API_KEY",
                 ]
-                for key in credential_keys:
-                    refresh_command.extend(["--credential", key])
+            else:
+                refresh_command = [
+                    _openshell_cli(args),
+                    "provider",
+                    "update",
+                    provider_name,
+                    "--from-existing",
+                ]
+            if provider_environment.get("OPENAI_API_KEY") or all(
+                provider_environment.get(key)
+                for key in (
+                    "CODEX_AUTH_ACCESS_TOKEN",
+                    "CODEX_AUTH_REFRESH_TOKEN",
+                    "CODEX_AUTH_ACCOUNT_ID",
+                )
+            ):
+                _emit_output(
+                    f"Refreshing existing OpenShell provider from local credentials: {provider_name}",
+                    output=output,
+                )
                 result = _run(
                     refresh_command,
                     env=provider_environment,
@@ -1330,7 +1354,8 @@ def _ensure_openshell_cli_provider(
                     "set --global --key providers_v2_enabled --value true"
                 )
 
-    provider_environment = _openshell_provider_environment(args, cli)
+    if cli != "codex":
+        provider_environment = _openshell_provider_environment(args, cli)
     if cli == "openai" and not provider_environment.get("OPENAI_API_KEY"):
         raise ValueError(
             "Pi's OpenAI provider requires OPENAI_API_KEY to create an OpenShell "
@@ -1384,11 +1409,18 @@ def _ensure_openshell_cli_provider(
 
 def _vertex_settings(args) -> Tuple[str, str, str]:
     """Return Vertex project, region, and inference model settings."""
-    project = os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID") or os.environ.get(
-        "VERTEX_AI_PROJECT_ID", ""
+    explicit_environment = _openshell_environment_values(args)
+    project = (
+        os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID")
+        or os.environ.get("VERTEX_AI_PROJECT_ID")
+        or explicit_environment.get("ANTHROPIC_VERTEX_PROJECT_ID")
+        or explicit_environment.get("VERTEX_AI_PROJECT_ID", "")
     )
-    region = os.environ.get("CLOUD_ML_REGION") or os.environ.get(
-        "VERTEX_AI_REGION", "global"
+    region = (
+        os.environ.get("CLOUD_ML_REGION")
+        or os.environ.get("VERTEX_AI_REGION")
+        or explicit_environment.get("CLOUD_ML_REGION")
+        or explicit_environment.get("VERTEX_AI_REGION", "global")
     )
     model = getattr(args, "model", None) or os.environ.get(
         "AI_GUARDIAN_OPEN_SHELL_MODEL", DEFAULT_OPENSHELL_MODEL
@@ -1499,31 +1531,151 @@ def _ensure_openshell_vertex_provider(
     return provider_name
 
 
-def _configure_openshell_inference(
-    args, provider_name: str, model: str, *, output=None
+def _ensure_openshell_google_cloud_provider(
+    args, project: str, region: str, *, output=None
+) -> str:
+    """Create or reuse gateway-managed Google ADC for native Vertex clients."""
+    profiles = _openshell_provider_profiles(args)
+    if "google-cloud" not in profiles:
+        raise ValueError(
+            "the active OpenShell gateway has no provider profile for 'google-cloud'; "
+            "import a compatible profile before creating a Claude Vertex sandbox"
+        )
+
+    provider_name = "ai-guardian-google-cloud"
+    if _openshell_provider_exists(args, provider_name):
+        _emit_output(
+            f"Using existing OpenShell provider: {provider_name}", output=output
+        )
+        result = _run(
+            [
+                _openshell_cli(args),
+                "provider",
+                "update",
+                provider_name,
+                "--config",
+                f"project_id={project}",
+                "--config",
+                f"region={region}",
+            ],
+            output=output,
+        )
+    else:
+        _emit_output(
+            f"Creating OpenShell Google Cloud provider: {provider_name}",
+            output=output,
+        )
+        result = _run(
+            [
+                _openshell_cli(args),
+                "provider",
+                "create",
+                "--name",
+                provider_name,
+                "--type",
+                "google-cloud",
+                "--from-gcloud-adc",
+                "--config",
+                f"project_id={project}",
+                "--config",
+                f"region={region}",
+            ],
+            output=output,
+        )
+    if result != 0:
+        raise ValueError(
+            f"unable to configure OpenShell Google Cloud provider '{provider_name}'; "
+            "verify gateway ADC configuration"
+        )
+    return provider_name
+
+
+def _add_openshell_vertex_policy_binding(
+    policy_path: Path, provider_name: str, cli: str
 ) -> None:
-    """Configure OpenShell's local inference route for a provider."""
-    _emit_output(
-        f"Configuring OpenShell inference route: {provider_name} / {model}",
-        output=output,
-    )
+    """Bind native Vertex endpoints to gateway-managed Google credentials."""
+    import yaml
+
+    try:
+        policy = yaml.safe_load(policy_path.read_text(encoding="utf-8")) or {}
+        network_policies = policy.setdefault("network_policies", {})
+        network_policies["ai_guardian_vertex"] = {
+            "name": "ai-guardian-vertex",
+            "endpoints": [
+                {
+                    "host": "*-aiplatform.googleapis.com",
+                    "port": 443,
+                    "protocol": "rest",
+                    "access": "read-write",
+                    "enforcement": "enforce",
+                    "credential_binding": {"provider": provider_name},
+                },
+                {
+                    "host": "aiplatform.googleapis.com",
+                    "port": 443,
+                    "protocol": "rest",
+                    "access": "read-write",
+                    "enforcement": "enforce",
+                    "credential_binding": {"provider": provider_name},
+                },
+                {
+                    "host": "aiplatform.us.rep.googleapis.com",
+                    "port": 443,
+                    "protocol": "rest",
+                    "access": "read-write",
+                    "enforcement": "enforce",
+                    "credential_binding": {"provider": provider_name},
+                },
+                {
+                    "host": "aiplatform.eu.rep.googleapis.com",
+                    "port": 443,
+                    "protocol": "rest",
+                    "access": "read-write",
+                    "enforcement": "enforce",
+                    "credential_binding": {"provider": provider_name},
+                },
+            ],
+            "binaries": [
+                {"path": f"/usr/bin/{cli}"},
+                {"path": f"/usr/local/bin/{cli}"},
+                {"path": f"/sandbox/.local/bin/{cli}"},
+            ],
+        }
+        if cli == "claude":
+            network_policies["ai_guardian_vertex"]["binaries"].extend(
+                [
+                    {"path": "/sandbox/.claude/downloads/**"},
+                    {"path": "/sandbox/.local/share/claude/**"},
+                ]
+            )
+        policy_path.write_text(
+            yaml.safe_dump(policy, sort_keys=False), encoding="utf-8"
+        )
+    except (OSError, UnicodeError, yaml.YAMLError, TypeError) as exc:
+        raise ValueError(
+            f"unable to bind Vertex policy to provider '{provider_name}'"
+        ) from exc
+
+
+def _wait_for_openshell_provider(
+    args, name: str, provider_name: str, *, output=None
+) -> None:
+    """Wait for provider environment and metadata services to become ready."""
     result = _run(
         [
             _openshell_cli(args),
-            "inference",
-            "set",
-            "--provider",
+            "sandbox",
+            "provider",
+            "attach",
+            name,
             provider_name,
-            "--model",
-            model,
-            "--no-verify",
+            "--wait",
         ],
         output=output,
     )
     if result != 0:
         raise ValueError(
-            "unable to configure OpenShell inference; verify the provider and "
-            "selected model"
+            f"OpenShell provider '{provider_name}' did not become ready for sandbox '{name}'"
         )
 
 
@@ -1598,36 +1750,18 @@ def _sandbox_base_name(args, runtime: str) -> str:
     return _generated_openshell_name(_selected_cli(args, default_cli))
 
 
-def _unique_openshell_uuid_name(args, base_name: str) -> str:
-    """Return a short OpenShell-safe name derived from a requested base."""
-    prefix = base_name[:8].rstrip("-") or "ag"
-    while True:
-        candidate = f"{prefix}-{uuid.uuid4().hex[:10]}"
-        if not _sandbox_name_exists(args, OPENSHELL_RUNTIME, candidate):
-            return candidate
-
-
 def _resolve_sandbox_name(args, runtime: str) -> str:
-    """Choose an unused runtime name, adding a local timestamp on collision."""
+    """Choose a runtime name, preserving OpenShell's native name handling."""
     base_name = _sandbox_base_name(args, runtime)
-    if runtime == OPENSHELL_RUNTIME and len(base_name) > OPENSHELL_MAX_NAME_LENGTH:
-        return _unique_openshell_uuid_name(args, base_name)
+    if runtime == OPENSHELL_RUNTIME:
+        return base_name
     if not _sandbox_name_exists(args, runtime, base_name):
         return base_name
 
-    if runtime == OPENSHELL_RUNTIME:
-        timestamp = datetime.now().strftime("%y%m%d%H%M")
-        if len(base_name) > OPENSHELL_MAX_NAME_LENGTH - len(timestamp) - 1:
-            return _unique_openshell_uuid_name(args, base_name)
-        candidate = f"{base_name}-{timestamp}"
-
-    else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        candidate = f"{base_name}-{timestamp}"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    candidate = f"{base_name}-{timestamp}"
     disambiguator = 1
     while _sandbox_name_exists(args, runtime, candidate):
-        if runtime == OPENSHELL_RUNTIME:
-            return _unique_openshell_uuid_name(args, base_name)
         candidate = f"{base_name}-{timestamp}-{disambiguator}"
         disambiguator += 1
     return candidate
@@ -2224,7 +2358,7 @@ def _openshell_create(
     provider_names = explicit_providers[:]
     provider_attached = bool(provider_names)
     suppress_credential_warnings = False
-    project, region, model = _vertex_settings(args)
+    project, region, _model = _vertex_settings(args)
     inference_cli = _openshell_inference_cli(args, cli)
     if cli == "pi" and inference_cli not in {
         "",
@@ -2242,25 +2376,49 @@ def _openshell_create(
         provider_name = (
             provider_names[0]
             if provider_names
-            else _ensure_openshell_vertex_provider(args, project, region, output=output)
+            else _ensure_openshell_google_cloud_provider(
+                args, project, region, output=output
+            )
         )
         if provider_names:
-            _configure_openshell_vertex_provider(
-                args, provider_name, project, region, output=output
-            )
-        _configure_openshell_inference(args, provider_name, model, output=output)
+            if provider_name == "ai-guardian-google-cloud":
+                result = _run(
+                    [
+                        _openshell_cli(args),
+                        "provider",
+                        "update",
+                        provider_name,
+                        "--config",
+                        f"project_id={project}",
+                        "--config",
+                        f"region={region}",
+                    ],
+                    output=output,
+                )
+                if result != 0:
+                    raise ValueError(
+                        f"unable to configure OpenShell Google Cloud provider '{provider_name}'"
+                    )
+            else:
+                _configure_openshell_vertex_provider(
+                    args, provider_name, project, region, output=output
+                )
         provider_names = [provider_name, *provider_names[1:]]
         provider_attached = True
         environment.extend(
             [
-                "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true",
-                "ANTHROPIC_BASE_URL=https://inference.local",
-                # Claude Code requires a non-empty key even though the
-                # inference router strips it and authenticates with the
-                # attached Vertex provider.
-                "ANTHROPIC_API_KEY=unused",
+                f"ANTHROPIC_VERTEX_PROJECT_ID={project}",
+                f"CLOUD_ML_REGION={region}",
+                f"GOOGLE_CLOUD_PROJECT={project}",
+                f"GCP_PROJECT_ID={project}",
+                f"GCP_LOCATION={region}",
+                "GCE_METADATA_HOST=127.0.0.1:8174",
+                "GCE_METADATA_IP=127.0.0.1:8174",
+                "METADATA_SERVER_DETECTION=assume-present",
             ]
         )
+        if cli == "claude":
+            environment.append("CLAUDE_CODE_USE_VERTEX=1")
         suppress_credential_warnings = True
 
     provider_cli = inference_cli
@@ -2274,8 +2432,7 @@ def _openshell_create(
         openai_api_client = requested_model.startswith(("openai/", "gpt-"))
     if not provider_names and openai_api_client:
         # A Codex API-key login is usable by clients that speak the OpenAI API
-        # directly. Do not route it through OpenShell inference: the Codex
-        # provider type is not accepted by ``openshell inference set``.
+        # directly. Keep it on the provider's native endpoint.
         if _openshell_provider_environment(args, "codex").get("OPENAI_API_KEY"):
             provider_cli = "codex"
             direct_codex_api_key = cli == "pi" and inference_cli == "openai"
@@ -2301,59 +2458,22 @@ def _openshell_create(
         provider_attached = True
 
     if cli == "opencode" and inference_cli == "claude" and provider_attached:
-        # OpenShell documents OpenCode's Anthropic-compatible client through
-        # inference.local/v1. Only an explicitly Claude-selected OpenCode
-        # profile/model uses this route; generic OpenCode providers keep their
-        # own endpoint and credential environment.
-        if not vertex_provider_required:
-            _configure_openshell_inference(
-                args, provider_names[0], model, output=output
-            )
-        environment.extend(
-            [
-                "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true",
-                "ANTHROPIC_BASE_URL=https://inference.local/v1",
-                "ANTHROPIC_API_KEY=unused",
-            ]
-        )
+        # OpenCode must use a provider-native endpoint in v0.1.2. Do not point
+        # it at the removed managed inference.local route.
         suppress_credential_warnings = True
 
     if cli == "pi" and inference_cli == "claude" and provider_attached:
-        # Pi's built-in Anthropic provider does not consistently honor an
-        # environment-only base URL override. The entrypoint writes the
-        # matching models.json provider override inside the sandbox.
-        if not vertex_provider_required:
-            _configure_openshell_inference(
-                args, provider_names[0], model, output=output
-            )
-        environment.extend(
-            [
-                "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true",
-                "ANTHROPIC_BASE_URL=https://inference.local",
-                "ANTHROPIC_API_KEY=unused",
-            ]
-        )
+        # Pi uses the provider-native Anthropic endpoint in v0.1.2.
         suppress_credential_warnings = True
 
     if cli == "pi" and inference_cli == "openai" and provider_attached:
-        # Pi's OpenAI client can use OpenShell's OpenAI-compatible inference
-        # route. The gateway owns the API key; Pi receives only a placeholder.
+        # Pi's OpenAI client uses the provider's native endpoint. The gateway
+        # owns the API key; Pi receives only the provider placeholder.
         if direct_codex_api_key:
             # A Codex API-key provider exposes OPENAI_API_KEY directly; Pi can
             # use its normal OpenAI client without the inference router.
             suppress_credential_warnings = True
         else:
-            if not vertex_provider_required:
-                _configure_openshell_inference(
-                    args, provider_names[0], model, output=output
-                )
-            environment.extend(
-                [
-                    "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true",
-                    "OPENAI_BASE_URL=https://inference.local/v1",
-                    "OPENAI_API_KEY=unused",
-                ]
-            )
             suppress_credential_warnings = True
 
     for value in environment:
@@ -2383,7 +2503,11 @@ def _openshell_create(
     else:
         command.append("--auto-providers")
 
-    policy_path, policy_dir = _compose_openshell_policy(args, cli)
+    policy_path, policy_dir = _compose_openshell_policy(
+        args, cli, provider_attached=provider_attached
+    )
+    if vertex_provider_required:
+        _add_openshell_vertex_policy_binding(policy_path, provider_names[0], cli)
     command.extend(["--policy", str(policy_path)])
 
     # A detached OpenShell sandbox with no upload still needs its entrypoint to
@@ -2409,20 +2533,10 @@ def _create(
         base_name = _sandbox_base_name(args, runtime)
         args.name = _resolve_sandbox_name(args, runtime)
         if args.name != base_name:
-            if (
-                runtime == OPENSHELL_RUNTIME
-                and len(base_name) > OPENSHELL_MAX_NAME_LENGTH
-            ):
-                message = (
-                    f"Sandbox name '{base_name}' exceeds OpenShell's "
-                    f"{OPENSHELL_MAX_NAME_LENGTH}-character limit; "
-                    f"using '{args.name}'."
-                )
-            else:
-                message = (
-                    f"Sandbox name '{base_name}' is already in use; "
-                    f"using '{args.name}'."
-                )
+            message = (
+                f"Sandbox name '{base_name}' is already in use; "
+                f"using '{args.name}'."
+            )
             _emit_output(message, output=output)
         if runtime == CONTAINER_RUNTIME:
             command, child_env = _container_create(args)
@@ -2435,6 +2549,23 @@ def _create(
         policy_dir = None
         if result != 0:
             return result
+
+        vertex_project, _vertex_region, _vertex_model = _vertex_settings(args)
+        inference_cli = _openshell_inference_cli(args, getattr(args, "cli", ""))
+        if (
+            runtime == OPENSHELL_RUNTIME
+            and vertex_project
+            and inference_cli == "claude"
+        ):
+            provider_name = (
+                getattr(args, "provider", None) or ["ai-guardian-google-cloud"]
+            )[0]
+            _wait_for_openshell_provider(
+                args,
+                name,
+                provider_name,
+                output=output,
+            )
 
         if uploads_requested:
             exec_command = _openshell_exec_command(
@@ -2484,7 +2615,10 @@ def _create(
         # versions where ``connect`` attaches to the sandbox's main process,
         # exiting that shell terminates the sandbox.
         if interactive and runtime == OPENSHELL_RUNTIME and not explicit_command:
-            return _run(_openshell_interactive_shell_command(args, name), output=output)
+            return _run(
+                _openshell_interactive_shell_command(args, name, bootstrap=True),
+                output=output,
+            )
         return result
     except ValueError as exc:
         _emit_output(f"Error: {exc}", output=output, error=True)
@@ -2658,9 +2792,12 @@ def _lifecycle_command(
     raise ValueError(f"unsupported sandbox operation: {operation}")
 
 
-def _openshell_interactive_shell_command(args, name: str) -> List[str]:
+def _openshell_interactive_shell_command(
+    args, name: str, *, bootstrap: bool = False
+) -> List[str]:
     """Build an independent interactive shell session for an OpenShell sandbox."""
-    return _openshell_exec_command(args, name, ("/bin/bash", "-l"), tty=True)
+    command = (OPENSHELL_ENTRYPOINT, "bash", "-l") if bootstrap else ("/bin/bash", "-l")
+    return _openshell_exec_command(args, name, command, tty=True)
 
 
 def handle_sandbox_command(args, *, output: Optional[List[str]] = None) -> int:

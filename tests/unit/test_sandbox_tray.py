@@ -18,7 +18,10 @@ from ai_guardian.tray.menu import (
     launch_sandbox_command,
     launch_sandbox_create_command,
 )
-from ai_guardian.tray.menu_builder import TrayMenuBuilder
+from ai_guardian.tray.menu_builder import (
+    TRAY_OPENSHELL_CLI_CHOICES,
+    TrayMenuBuilder,
+)
 
 
 class FakeMenu:
@@ -995,16 +998,69 @@ class TestSandboxTrayMenu:
             "config_source": "Host/default",
             "port": "",
         }
-        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
-            with mock.patch.object(
-                tray._menu, "_show_sandbox_progress", return_value=None
-            ):
-                tray._menu._complete_sandbox_create_form(values)
+        with (
+            mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
+            mock.patch(
+                "ai_guardian.tray.menu_builder._get_openshell_openai_providers",
+                return_value=("ai-guardian-openai",),
+            ),
+            mock.patch.object(tray._menu, "_show_sandbox_progress", return_value=None),
+        ):
+            tray._menu._complete_sandbox_create_form(values)
 
         args = create.call_args.args[0]
         assert args.cli == "opencode"
         assert args.opencode_agent == "build"
+        assert args.provider == ["ai-guardian-openai"]
         assert args.fresh_config is True
+
+    def test_create_form_defaults_missing_config_source_to_host(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-codex",
+            "cli": "codex",
+            "repo": "",
+            "providers": "",
+            "model": "",
+        }
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.restore_config is None
+        assert args.fresh_config is True
+
+    def test_create_form_auto_attaches_existing_openai_provider(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-opencode",
+            "cli": "opencode",
+            "agent": "build",
+            "repo": "",
+            "config_dir": "",
+            "image": "",
+            "model": "openai/gpt-5.6-luna",
+            "profile": "",
+            "policies": "",
+            "providers": "",
+            "environment": "",
+            "labels": "",
+            "config_source": "Host/default",
+            "port": "",
+        }
+        with (
+            mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
+            mock.patch(
+                "ai_guardian.tray.menu_builder._get_openshell_openai_providers",
+                return_value=("ai-guardian-openai",),
+            ),
+            mock.patch.object(tray._menu, "_show_sandbox_progress", return_value=None),
+        ):
+            tray._menu._complete_sandbox_create_form(values)
+
+        assert create.call_args.args[0].provider == ["ai-guardian-openai"]
 
     def test_create_form_rejects_unsupported_openshell_pi_provider(self):
         tray = _make_tray([])
@@ -1059,12 +1115,12 @@ class TestSandboxTrayMenu:
 
         cli_field = next(field for field in fields if field["name"] == "cli")
         assert cli_field["type"] == "choice"
-        assert cli_field["choices"] == SUPPORTED_OPENSHELL_CLI_IDE_TYPES
-        assert cli_field["default"] == "claude"
+        assert cli_field["choices"] == TRAY_OPENSHELL_CLI_CHOICES
+        assert cli_field["default"] == "codex"
         assert cli_field["required"] is True
 
         name_field = next(field for field in fields if field["name"] == "name")
-        assert name_field["default"] == "ag-claude"
+        assert name_field["default"] == "ag-codex"
         dynamic_default = name_field["dynamic_default"]
         assert dynamic_default["field"] == "cli"
         assert dynamic_default["separator"] == ""
@@ -1073,7 +1129,7 @@ class TestSandboxTrayMenu:
 
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["type"] == "choice"
-        assert agent_field["choices"] == ("", "build", "plan", "claude")
+        assert agent_field["choices"] == ("", "build")
         assert agent_field["editable"] is True
         assert agent_field["default"] == ""
         assert agent_field["required"] is True
@@ -1097,20 +1153,14 @@ class TestSandboxTrayMenu:
             "values": ("pi",),
         }
 
-        opencode_env = base_env.copy()
-        opencode_env.update(
-            {
-                "AI_GUARDIAN_CLI": "opencode",
-                "AI_GUARDIAN_OPENCODE_AGENT": "build",
-            }
-        )
-        with mock.patch.dict(os.environ, opencode_env, clear=True):
+        invalid_opencode_env = base_env.copy()
+        invalid_opencode_env["AI_GUARDIAN_CLI"] = "opencode"
+        with mock.patch.dict(os.environ, invalid_opencode_env, clear=True):
             fields = tray._menu._sandbox_create_fields()
 
-        agent_field = next(field for field in fields if field["name"] == "agent")
-        assert agent_field["default"] == "build"
-        name_field = next(field for field in fields if field["name"] == "name")
-        assert name_field["default"] == "ag-opencode"
+        cli_field = next(field for field in fields if field["name"] == "cli")
+        assert cli_field["default"] == "codex"
+        assert cli_field["choices"] == TRAY_OPENSHELL_CLI_CHOICES
 
         pi_env = base_env.copy()
         pi_env.update(
@@ -1128,7 +1178,7 @@ class TestSandboxTrayMenu:
         assert provider_field["default"] == "openai"
         assert next(field for field in fields if field["name"] == "name")[
             "default"
-        ] == ("ag-pi")
+        ] == ("ag-codex")
 
         container_env = base_env.copy()
         container_env.update({"AI_GUARDIAN_SANDBOX_RUNTIME": "container"})
@@ -1290,6 +1340,14 @@ class TestSandboxTrayMenu:
                 "claude",
             )
             == "ag-claude-abc123"
+        )
+
+        assert (
+            _dynamic_default_value(
+                {"value_by": {"opencode": "openai/gpt-5.6-luna"}},
+                "opencode",
+            )
+            == "openai/gpt-5.6-luna"
         )
 
     def test_path_browser_starts_at_current_directory_value(self, tmp_path):
@@ -1736,6 +1794,9 @@ class TestSandboxDialogFallback:
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
             mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+            ),
+            mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_progress_subprocess",
                 return_value=progress,
             ) as show_progress,
@@ -1767,6 +1828,9 @@ class TestSandboxDialogFallback:
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
             mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+            ),
+            mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess",
                 return_value={"runtime": "container"},
             ) as show_form,
@@ -1797,6 +1861,9 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+            ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_confirmation_subprocess",
                 return_value=True,
@@ -1835,6 +1902,9 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+            ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_upload_confirmation_subprocess",
                 return_value=True,

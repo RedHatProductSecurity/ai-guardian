@@ -8,8 +8,11 @@ not accept credential values on the command line.
 
 For OpenShell cases:
 
-- OpenShell CLI installed and connected to a gateway
+- OpenShell CLI and gateway both at v0.1.2 or newer
 - OpenShell Providers v2 enabled
+- Required provider profiles imported into active gateway (`codex` and
+  `openai` for Codex; `google-cloud` for Claude Vertex)
+- Local credentials available for the selected provider
 - A locally built or published AI Guardian OpenShell image
 
 For Container cases:
@@ -41,6 +44,78 @@ The runner automatically uses `uv run ai-guardian` from this checkout. Use
 `--ai-guardian-command` only when the installed command should be used instead,
 for example `--ai-guardian-command ai-guardian`.
 
+### Codex OpenShell Setup
+
+Import Codex's OAuth and OpenAI API-key profiles once per gateway. AI Guardian
+selects the OAuth profile for a normal Codex login and the OpenAI profile when
+Codex local auth contains `OPENAI_API_KEY`:
+
+```bash
+openshell profile import \
+    --url https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/codex.yaml \
+    --global
+openshell profile import \
+    --url https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/openai.yaml \
+    --global
+```
+
+Create a live Codex sandbox with the current development image:
+
+```bash
+uv run ai-guardian sandbox create \
+    --runtime openshell \
+    --name ag-codex-clean \
+    --base localhost/ai-guardian-openshell:v0.1.2-qualification-current \
+    --cli codex \
+    --repo .
+```
+
+The provider credential remains gateway-owned. Do not put credential values in
+commands or reports.
+
+### Complete Codex Qualification Sequence
+
+Run these commands in order from the repository root. Replace no credential
+values in commands; Codex local login is discovered by AI Guardian.
+
+```bash
+openshell --version
+openshell status
+
+openshell profile import \
+    --url https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/codex.yaml \
+    --global
+openshell profile import \
+    --url https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/openai.yaml \
+    --global
+
+codex login status
+
+podman run --rm \
+    --entrypoint /usr/local/bin/ai-guardian \
+    localhost/ai-guardian-openshell:v0.1.2-qualification-current \
+    --version
+
+uv run ai-guardian sandbox create \
+    --runtime openshell \
+    --name ag-codex-final \
+    --base localhost/ai-guardian-openshell:v0.1.2-qualification-current \
+    --cli codex \
+    --repo .
+```
+
+Inside the created sandbox, run Codex:
+
+```bash
+codex
+```
+
+For a non-interactive smoke test:
+
+```bash
+codex exec --skip-git-repo-check "Reply with OK"
+```
+
 Use the published image by omitting `--image`, or select a different local
 image. The runner creates a uniquely named temporary sandbox, bootstraps AI
 Guardian, runs the CLI, prints the result, and removes the sandbox and exposed
@@ -53,9 +128,9 @@ these three provider-backed rows:
 
 | Row | Agent/profile | Provider class | CI status |
 | --- | --- | --- | --- |
-| `claude-vertex` | Claude Code / default | Google Vertex AI | Contract tests only |
-| `codex-openshell` | Codex / native | OpenShell Codex provider | Contract tests only |
-| `opencode-claude-vertex` | OpenCode / `claude` | Google Vertex AI | Contract tests only |
+| `claude-vertex` | Claude Code / default | Google Vertex AI | Blocked by NVIDIA/OpenShell#3973 |
+| `codex-openshell` | Codex / native | OpenShell Codex or OpenAI provider | Manual v0.1.2 API-key qualification passed |
+| `opencode-claude-vertex` | OpenCode / `claude` | Google Vertex AI | Blocked by NVIDIA/OpenShell#3973 |
 
 The live provider calls require the user's OpenShell gateway and credentials.
 Provider arguments are gateway profile names, never credential values. Run the
@@ -77,7 +152,7 @@ credential values. It suppresses agent/provider output and records only:
 
 - AI Guardian, OpenShell CLI, and gateway versions.
 - Host OS and architecture.
-- Image reference/tag/digest, pinned Community base digest, and bundled CLI pins.
+- Image reference/tag/digest, pinned NVIDIA Ubuntu base digest, and bundled CLI pins.
 - Agent/profile/provider class/model family for each row.
 - Creation, daemon, gateway service, agent, deterministic detection,
   restart/reconnect, and cleanup statuses.
@@ -129,8 +204,8 @@ does not run a live provider or claim generic OpenShell compatibility.
 | `codex` | `codex exec --skip-git-repo-check "hello"` | Codex provider or local Codex login |
 | `copilot` | `copilot --help` | OpenShell Copilot provider; pass `--provider copilot=NAME` |
 | `opencode-claude` | `opencode --agent claude run "hello" --model claude-sonnet-4-6` | Claude/Vertex provider; pass `--provider opencode-claude=NAME` |
-| `opencode-openai` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Existing OpenAI-compatible provider, or Codex API-key login through sandbox auto-setup |
-| `opencode-openai-api-key` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Host Codex `auth.json` with `OPENAI_API_KEY`; skipped otherwise |
+| `opencode-openai` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Unsupported until custom OpenCode provider profile is provisioned |
+| `opencode-openai-api-key` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Unsupported until custom OpenCode provider profile is provisioned |
 | `pi-anthropic` | `pi -p "hello" --model claude-sonnet-4-6 --provider anthropic` | Anthropic-compatible provider |
 | `pi-openai` | `pi -p "hello" --model gpt-5.6-luna --provider openai` | Local Pi OpenAI API-key login |
 | `pi-openai-codex` | `pi -p "hello" --model gpt-5.6-luna --provider openai-codex` | Local Pi Codex OAuth login; experimental and may fail with resolver-backed credentials |
@@ -146,7 +221,7 @@ python container/tests/test_openshell_agents.py \
 
 Provider values are names only. The script delegates credential resolution to
 AI Guardian and OpenShell; it does not expose credential contents in command
-arguments.
+arguments or the sandbox environment.
 
 The `opencode-openai-api-key` case is skipped unless the host Codex auth file
 contains an API key. To exercise automatic `ai-guardian-codex` creation from a

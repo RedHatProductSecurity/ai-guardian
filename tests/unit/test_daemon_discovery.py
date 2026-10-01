@@ -1015,7 +1015,8 @@ class TestDiscoverContainers:
         container.labels = {"openshell.managed": "true"}
         container.exec_run.return_value = (0, b"openshell-daemon-token\n")
 
-        token = DaemonDiscovery._sdk_exec_auth_token(container)
+        with mock.patch("shutil.which", return_value=None):
+            token = DaemonDiscovery._sdk_exec_auth_token(container)
 
         assert token == "openshell-daemon-token"
         assert container.exec_run.call_args_list == [
@@ -1023,6 +1024,35 @@ class TestDiscoverContainers:
                 ["cat", "/sandbox/.local/state/ai-guardian/daemon.token"],
                 demux=False,
             ),
+        ]
+
+    def test_sdk_auth_token_uses_openshell_exec_for_gateway_sandbox(self):
+        container = mock.MagicMock()
+        container.labels = {
+            "openshell.managed": "true",
+            "openshell.ai/sandbox-name": "ag-opencode",
+        }
+
+        with (
+            mock.patch("shutil.which", return_value="/usr/local/bin/openshell"),
+            mock.patch(
+                "ai_guardian.daemon.discovery.subprocess.run",
+                return_value=mock.Mock(returncode=0, stdout="daemon-token\n"),
+            ) as run,
+        ):
+            token = DaemonDiscovery._sdk_exec_auth_token(container)
+
+        assert token == "daemon-token"
+        assert run.call_args.args[0] == [
+            "openshell",
+            "sandbox",
+            "exec",
+            "--name",
+            "ag-opencode",
+            "--no-tty",
+            "--",
+            "cat",
+            "/sandbox/.local/state/ai-guardian/daemon.token",
         ]
 
     def test_sdk_auth_token_from_root_home_for_regular_container(self):

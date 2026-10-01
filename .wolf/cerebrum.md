@@ -7,6 +7,8 @@
 ## User Preferences
 
 - Dev install must use `uv tool install --editable .` — `uv tool install --force .` copies a snapshot; subsequent source changes are NOT reflected in the binary.
+- When DAF metadata labels a repository issue as JIRA but the user identifies it as GitHub, use the repository-qualified `gh issue view` flow.
+- Pi OpenShell remains unqualified; local v0.1.2 validation must use supported Codex or OpenCode paths instead.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
@@ -115,6 +117,8 @@
 - [2026-08-05] **Empty dict is falsy — `run_*_scan(config={})` returns None:** All `run_*_scan()` functions in `hook_events/scanners.py` have `if not config: return None` early-exit. Passing `config={}` (empty dict from user config) triggers this — scanner skips entirely. Fix: pass `config or None` so scanner loads its own config internally via `_loaders._load_*_config()`.
 
 - [2026-08-07] **caplog + propagate=False on ai_guardian logger:** PR #1823 set `propagate=False` on `logging.getLogger("ai_guardian")`. pytest 9.x handles non-propagating loggers automatically in `catching_logs`, but pytest 8.x (Python 3.9 CI) doesn't — caplog handler stays on root and never sees messages. Fix: autouse `_capture_package_logs` fixture in `tests/conftest.py` adds caplog handler directly to the `ai_guardian` logger. Checks `already_attached` to avoid double-adding on pytest 9.x.
+- [2026-09-30] Explicit `headless` UI mode must short-circuit tray forwarding; otherwise a registered tray can open modal dialogs during tests despite `AI_GUARDIAN_PREFERRED_UI=headless`.
+- [2026-09-30] OpenShell v0.1.2 removes Community-image/inference-route assumptions; update container tests with the implementation when changing base-image, provider, or entrypoint behavior.
 
 - [2026-08-05] **Canary payload selection for smoke tests:** (1) `AKIAIOSFODNN7EXAMPLE` is in gitleaks allowlist — use `sk-proj-...` format instead for secret scanning. (2) Context poisoning requires BOTH persistence pattern (`from now on`, `remember`) AND dangerous pattern (`delete`, `ignore security`) — single-category text won't trigger. (3) ExfilDetectionScanner matches credential-specific patterns (credential_theft, key_file_exfil, base64_encoding, etc.), NOT general curl uploads — use `base64 ~/.aws/credentials` not `curl -d @/etc/passwd`. (4) Bandit does NOT flag `subprocess.call(input())` — use `os.system(input())` which triggers B605. (5) Secret redaction has its own patterns separate from gitleaks — `AKIAIOSFODNN7EXAMPLE` IS redacted even though gitleaks skips it.
 

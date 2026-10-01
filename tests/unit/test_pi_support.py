@@ -522,8 +522,12 @@ def test_pi_extension_template_contains_all_managed_events():
         'pi.on("session_shutdown"',
     ):
         assert event_name in _PI_EXTENSION_TS
-    assert "providerPayloadForScan" in _PI_EXTENSION_TS
-    assert "restoreProviderCredentials" in _PI_EXTENSION_TS
+    provider_hook_start = _PI_EXTENSION_TS.index('pi.on("before_provider_request"')
+    provider_hook = _PI_EXTENSION_TS[provider_hook_start:].split(
+        'pi.on("tool_call"', 1
+    )[0]
+    assert "return event.payload;" in provider_hook
+    assert "runGuardian" not in provider_hook
     assert "@modelcontextprotocol/sdk/client/index.js" in _PI_EXTENSION_TS
     assert "StdioClientTransport" in _PI_EXTENSION_TS
     assert "pi.registerTool" in _PI_EXTENSION_TS

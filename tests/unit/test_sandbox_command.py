@@ -25,6 +25,7 @@ from ai_guardian.sandbox import (
     _openshell_explicit_command,
     _openshell_inference_cli,
     _openshell_provider_environment,
+    _vertex_settings,
     _expose_openshell_service,
     _run,
     _runtime,
@@ -66,7 +67,21 @@ def _args(**overrides):
 @pytest.fixture(autouse=True)
 def sandbox_names_are_available():
     """Keep command-construction tests independent of installed runtimes."""
-    with patch("ai_guardian.sandbox._sandbox_name_exists", return_value=False):
+    credential_environment = {
+        name: ""
+        for name in (
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_VERTEX_PROJECT_ID",
+            "CLOUD_ML_REGION",
+            "OPENAI_API_KEY",
+            "OPENCODE_API_KEY",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+        )
+    }
+    with (
+        patch("ai_guardian.sandbox._sandbox_name_exists", return_value=False),
+        patch.dict(os.environ, credential_environment, clear=False),
+    ):
         yield
 
 
@@ -108,14 +123,8 @@ def test_resolve_sandbox_name_preserves_unused_requested_name():
     exists.assert_called_once_with(args, "container", "demo")
 
 
-@pytest.mark.parametrize(
-    ("runtime", "cli", "expected_base"),
-    (("container", "codex", "ag-codex"), ("openshell", "claude", "ag-claude")),
-)
-def test_resolve_sandbox_name_adds_local_timestamp_on_collision(
-    runtime, cli, expected_base
-):
-    args = _args(runtime=runtime, cli=cli, name=None)
+def test_resolve_sandbox_name_adds_local_timestamp_on_container_collision():
+    args = _args(runtime="container", cli="codex", name=None)
     timestamp = datetime(2026, 9, 17, 12, 34, 56)
 
     with (
@@ -124,55 +133,29 @@ def test_resolve_sandbox_name_adds_local_timestamp_on_collision(
             side_effect=[True, False],
         ),
         patch("ai_guardian.sandbox.datetime") as clock,
-        patch(
-            "ai_guardian.sandbox.uuid.uuid4",
-            return_value=SimpleNamespace(hex="0123456789abcdef"),
-        ),
     ):
         clock.now.return_value = timestamp
-        if runtime == "openshell":
-            expected_name = "ag-claud-0123456789"
-        else:
-            expected_name = f"{expected_base}-20260917_123456"
-        assert _resolve_sandbox_name(args, runtime) == expected_name
+        assert _resolve_sandbox_name(args, "container") == "ag-codex-20260917_123456"
 
 
-def test_resolve_sandbox_name_disambiguates_same_second_collisions():
+def test_resolve_sandbox_name_preserves_openshell_name_on_collision():
     args = _args(runtime="openshell", name="demo")
 
-    with (
-        patch(
-            "ai_guardian.sandbox._sandbox_name_exists",
-            side_effect=[True, True, False],
-        ),
-        patch("ai_guardian.sandbox.datetime") as clock,
-        patch(
-            "ai_guardian.sandbox.uuid.uuid4",
-            return_value=SimpleNamespace(hex="0123456789abcdef"),
-        ),
-    ):
-        clock.now.return_value = datetime(2026, 9, 17, 12, 34, 56)
-        assert _resolve_sandbox_name(args, "openshell") == ("demo-0123456789")
+    with patch("ai_guardian.sandbox._sandbox_name_exists") as exists:
+        assert _resolve_sandbox_name(args, "openshell") == "demo"
+
+    exists.assert_not_called()
 
 
-def test_resolve_sandbox_name_uses_uuid_for_long_openshell_name():
+def test_resolve_sandbox_name_preserves_long_openshell_name():
     args = _args(runtime="openshell", name="sandbox-name-that-is-too-long")
 
-    with (
-        patch(
-            "ai_guardian.sandbox._sandbox_name_exists",
-            return_value=False,
-        ) as exists,
-        patch(
-            "ai_guardian.sandbox.uuid.uuid4",
-            return_value=SimpleNamespace(hex="0123456789abcdef"),
-        ),
-    ):
-        name = _resolve_sandbox_name(args, "openshell")
+    with patch("ai_guardian.sandbox._sandbox_name_exists") as exists:
+        assert (
+            _resolve_sandbox_name(args, "openshell") == "sandbox-name-that-is-too-long"
+        )
 
-    assert name == "sandbox-0123456789"
-    assert len(name) == 18
-    exists.assert_called_once_with(args, "openshell", name)
+    exists.assert_not_called()
 
 
 def test_container_start_uses_selected_engine():
@@ -805,6 +788,31 @@ def test_container_create_forwards_vertex_auth_and_mounts_adc(tmp_path):
     assert f"{adc_path}:{CONTAINER_GOOGLE_CREDENTIALS_PATH}:ro,z" in command
 
 
+def test_vertex_settings_use_explicit_environment_values():
+    args = _args(
+        environment=[
+            "VERTEX_AI_PROJECT_ID=explicit-project",
+            "VERTEX_AI_REGION=us-central1",
+        ]
+    )
+
+    with patch.dict(
+        os.environ,
+        {
+            "ANTHROPIC_VERTEX_PROJECT_ID": "",
+            "VERTEX_AI_PROJECT_ID": "",
+            "CLOUD_ML_REGION": "",
+            "VERTEX_AI_REGION": "",
+        },
+        clear=False,
+    ):
+        assert _vertex_settings(args) == (
+            "explicit-project",
+            "us-central1",
+            "claude-sonnet-4-6",
+        )
+
+
 def test_container_create_uses_latest_saved_config_snapshot(tmp_path):
     state_dir = tmp_path / "state"
     snapshot_dir = state_dir / "sandboxes" / "demo" / "20260913T192805.123456Z"
@@ -1316,7 +1324,8 @@ def test_openshell_create_exposes_gateway_managed_service(tmp_path):
         "--workdir",
         "/sandbox/repo",
         "--",
-        "/bin/bash",
+        OPENSHELL_ENTRYPOINT,
+        "bash",
         "-l",
     ]
 
@@ -1358,6 +1367,38 @@ def test_openshell_create_composes_baseline_overlay_and_agent_policy(tmp_path):
     assert policy["version"] == 1
     assert policy["filesystem_policy"]["read_write"] == ["/sandbox"]
     assert set(policy["network_policies"]) == {"base", "overlay", "claude"}
+
+
+def test_opencode_provider_owns_openai_endpoints(tmp_path):
+    base = tmp_path / "base.yaml"
+    base.write_text("version: 1\nnetwork_policies: {}\n", encoding="utf-8")
+    agent_dir = tmp_path / "agents"
+    agent_dir.mkdir()
+    (agent_dir / "opencode.yaml").write_text(
+        "version: 1\nnetwork_policies:\n  openai:\n"
+        "    endpoints:\n      - host: api.openai.com\n"
+        "        port: 443\n    binaries:\n      - path: /usr/bin/opencode\n",
+        encoding="utf-8",
+    )
+    args = _args()
+
+    with patch.dict(
+        os.environ,
+        {
+            "AI_GUARDIAN_OPEN_SHELL_BASE_POLICY": str(base),
+            "AI_GUARDIAN_OPEN_SHELL_AGENT_POLICY_DIR": str(agent_dir),
+        },
+        clear=False,
+    ):
+        policy_path, policy_dir = _compose_openshell_policy(
+            args, "opencode", provider_attached=True
+        )
+        try:
+            policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(policy_dir)
+
+    assert "openai" not in policy["network_policies"]
 
 
 def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
@@ -1448,7 +1489,8 @@ def test_openshell_opencode_auto_attaches_codex_api_key_provider(tmp_path):
     with (
         patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
         patch(
-            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["codex", "openai"],
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
         patch("ai_guardian.sandbox._run", return_value=0) as run,
@@ -1461,10 +1503,8 @@ def test_openshell_opencode_auto_attaches_codex_api_key_provider(tmp_path):
         assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
         assert "--no-auto-providers" in command
         provider_command = run.call_args.args[0]
-        assert provider_command[provider_command.index("--type") + 1] == "codex"
-        assert provider_command[provider_command.index("--credential") + 1] == (
-            "OPENAI_API_KEY"
-        )
+        assert provider_command[provider_command.index("--type") + 1] == "openai"
+        assert "--from-existing" in provider_command
         assert "api-secret" not in provider_command
         assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
     finally:
@@ -1508,7 +1548,7 @@ def test_openshell_opencode_non_openai_model_keeps_generic_provider_route(tmp_pa
         shutil.rmtree(policy_dir)
 
 
-def test_openshell_opencode_claude_agent_uses_anthropic_route(tmp_path):
+def test_openshell_opencode_claude_agent_uses_native_provider(tmp_path):
     args = _args(
         sandbox_command="create",
         runtime="openshell",
@@ -1525,23 +1565,20 @@ def test_openshell_opencode_claude_agent_uses_anthropic_route(tmp_path):
         label=[],
     )
 
-    with patch("ai_guardian.sandbox._configure_openshell_inference") as configure:
-        command, name, uploads, policy_dir = _openshell_create(args)
+    command, name, uploads, policy_dir = _openshell_create(args)
     try:
         assert name == "opencode-claude-demo"
         assert uploads is False
         assert "AI_GUARDIAN_OPENCODE_AGENT=claude" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in command
-        assert "ANTHROPIC_BASE_URL=https://inference.local/v1" in command
-        assert "ANTHROPIC_API_KEY=unused" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        assert not any("inference.local" in value for value in command)
         assert command[command.index("--provider") + 1] == "vertex-provider"
         assert "--no-credential-warnings" in command
-        configure.assert_called_once()
     finally:
         shutil.rmtree(policy_dir)
 
 
-def test_openshell_opencode_claude_model_uses_anthropic_route(tmp_path):
+def test_openshell_opencode_claude_model_uses_native_provider(tmp_path):
     args = _args(
         sandbox_command="create",
         runtime="openshell",
@@ -1559,20 +1596,18 @@ def test_openshell_opencode_claude_model_uses_anthropic_route(tmp_path):
         label=[],
     )
 
-    with patch("ai_guardian.sandbox._configure_openshell_inference") as configure:
-        command, name, uploads, policy_dir = _openshell_create(args)
+    command, name, uploads, policy_dir = _openshell_create(args)
     try:
         assert name == "opencode-model-demo"
         assert uploads is False
         assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
-        assert "ANTHROPIC_BASE_URL=https://inference.local/v1" in command
+        assert not any("inference.local" in value for value in command)
         assert "--no-credential-warnings" in command
-        configure.assert_called_once()
     finally:
         shutil.rmtree(policy_dir)
 
 
-def test_openshell_opencode_default_model_uses_anthropic_route(tmp_path):
+def test_openshell_opencode_default_model_uses_native_provider(tmp_path):
     args = _args(
         sandbox_command="create",
         runtime="openshell",
@@ -1589,22 +1624,19 @@ def test_openshell_opencode_default_model_uses_anthropic_route(tmp_path):
         label=[],
     )
 
-    with patch("ai_guardian.sandbox._configure_openshell_inference") as configure:
-        command, name, uploads, policy_dir = _openshell_create(args)
+    command, name, uploads, policy_dir = _openshell_create(args)
     try:
         assert name == "opencode-default-model-demo"
         assert uploads is False
         assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in command
-        assert "ANTHROPIC_BASE_URL=https://inference.local/v1" in command
-        assert "ANTHROPIC_API_KEY=unused" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        assert not any("inference.local" in value for value in command)
         assert "--no-credential-warnings" in command
-        configure.assert_called_once()
     finally:
         shutil.rmtree(policy_dir)
 
 
-def test_openshell_pi_uses_anthropic_provider_route(tmp_path):
+def test_openshell_pi_uses_native_anthropic_provider(tmp_path):
     args = _args(
         sandbox_command="create",
         runtime="openshell",
@@ -1622,19 +1654,16 @@ def test_openshell_pi_uses_anthropic_provider_route(tmp_path):
         label=[],
     )
 
-    with patch("ai_guardian.sandbox._configure_openshell_inference") as configure:
-        command, name, uploads, policy_dir = _openshell_create(args)
+    command, name, uploads, policy_dir = _openshell_create(args)
     try:
         assert _openshell_inference_cli(args, "pi") == "claude"
         assert name == "pi-demo"
         assert uploads is False
         assert "PI_CODING_AGENT_DIR=/sandbox/.pi/agent" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in command
-        assert "ANTHROPIC_BASE_URL=https://inference.local" in command
-        assert "ANTHROPIC_API_KEY=unused" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        assert not any("inference.local" in value for value in command)
         assert command[command.index("--provider") + 1] == "pi-provider"
         assert "--no-credential-warnings" in command
-        configure.assert_called_once()
         policy_path = Path(command[command.index("--policy") + 1])
         policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
         assert "anthropic" in policy["network_policies"]
@@ -1669,10 +1698,10 @@ def test_openshell_pi_openai_uses_openai_inference_provider_from_pi_auth_file(tm
     with (
         patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
         patch(
-            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["codex", "openai"],
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
-        patch("ai_guardian.sandbox._configure_openshell_inference") as configure,
         patch("ai_guardian.sandbox._run", return_value=0) as run,
     ):
         command, name, uploads, policy_dir = _openshell_create(args)
@@ -1681,9 +1710,9 @@ def test_openshell_pi_openai_uses_openai_inference_provider_from_pi_auth_file(tm
         assert name == "pi-openai-demo"
         assert uploads is False
         assert "AI_GUARDIAN_AGENT_PROVIDER=openai" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in command
-        assert "OPENAI_BASE_URL=https://inference.local/v1" in command
-        assert "OPENAI_API_KEY=unused" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        assert not any("inference.local" in value for value in command)
+        assert "OPENAI_API_KEY=unused" not in command
         assert command[command.index("--provider") + 1] == "ai-guardian-openai"
         assert "--no-credential-warnings" in command
         assert "--no-auto-providers" in command
@@ -1692,7 +1721,6 @@ def test_openshell_pi_openai_uses_openai_inference_provider_from_pi_auth_file(tm
         assert "--from-existing" in provider_command
         assert "api-key-placeholder" not in provider_command
         assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-key-placeholder"
-        configure.assert_called_once()
     finally:
         shutil.rmtree(policy_dir)
 
@@ -1724,10 +1752,10 @@ def test_openshell_pi_openai_auto_uses_codex_api_key_provider(tmp_path):
     with (
         patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
         patch(
-            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["codex", "openai"],
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
-        patch("ai_guardian.sandbox._configure_openshell_inference") as configure,
         patch("ai_guardian.sandbox._run", return_value=0) as run,
     ):
         command, name, uploads, policy_dir = _openshell_create(args)
@@ -1740,13 +1768,10 @@ def test_openshell_pi_openai_auto_uses_codex_api_key_provider(tmp_path):
         assert "OPENAI_API_KEY=unused" not in command
         assert "--no-credential-warnings" in command
         provider_command = run.call_args.args[0]
-        assert provider_command[provider_command.index("--type") + 1] == "codex"
-        assert provider_command[provider_command.index("--credential") + 1] == (
-            "OPENAI_API_KEY"
-        )
+        assert provider_command[provider_command.index("--type") + 1] == "openai"
+        assert "--from-existing" in provider_command
         assert "api-secret" not in provider_command
         assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
-        configure.assert_not_called()
     finally:
         shutil.rmtree(policy_dir)
 
@@ -1882,7 +1907,7 @@ def test_existing_openshell_codex_provider_refreshes_local_credentials(tmp_path)
         "update",
         "ai-guardian-codex",
     ]
-    assert command.count("--credential") == 4
+    assert command[-1] == "--from-existing"
     assert "access-placeholder" not in command
     assert run.call_args.kwargs["env"]["CODEX_AUTH_ACCESS_TOKEN"] == (
         "access-placeholder"
@@ -1905,7 +1930,8 @@ def test_existing_openshell_codex_provider_refreshes_api_key(tmp_path):
             clear=True,
         ),
         patch(
-            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["codex", "openai"],
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
         patch("ai_guardian.sandbox._run", return_value=0) as run,
@@ -1986,7 +2012,7 @@ def test_openshell_provider_environment_bridges_codex_oauth_without_command_leak
     with (
         patch(
             "ai_guardian.sandbox._openshell_provider_profiles",
-            return_value=["codex"],
+            return_value=["codex", "openai"],
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
         patch("ai_guardian.sandbox._openshell_providers_v2_enabled", return_value=True),
@@ -2023,7 +2049,7 @@ def test_openshell_provider_environment_bridges_codex_api_key_without_command_le
     with (
         patch(
             "ai_guardian.sandbox._openshell_provider_profiles",
-            return_value=["codex"],
+            return_value=["codex", "openai"],
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
         patch("ai_guardian.sandbox._run", return_value=0) as run,
@@ -2037,8 +2063,7 @@ def test_openshell_provider_environment_bridges_codex_api_key_without_command_le
 
     command = run.call_args.args[0]
     assert "api-secret" not in command
-    assert command[command.index("--credential") + 1] == "OPENAI_API_KEY"
-    assert "--from-existing" not in command
+    assert "--from-existing" in command
     assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
 
 
@@ -2076,7 +2101,7 @@ def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
         ),
         patch(
             "ai_guardian.sandbox._openshell_provider_profiles",
-            return_value=["google-vertex-ai"],
+            return_value=["google-cloud"],
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
@@ -2093,34 +2118,25 @@ def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
         "provider",
         "create",
         "--name",
-        "ai-guardian-google-vertex-ai",
+        "ai-guardian-google-cloud",
         "--type",
-        "google-vertex-ai",
+        "google-cloud",
         "--from-gcloud-adc",
         "--config",
-        "VERTEX_AI_PROJECT_ID=test-project",
+        "project_id=test-project",
         "--config",
-        "VERTEX_AI_REGION=us-central1",
+        "region=us-central1",
     ]
-    assert provider_create.kwargs["env"]["GOOGLE_APPLICATION_CREDENTIALS"] == str(
-        adc_path
-    )
-    assert run.call_args_list[1].args[0] == [
-        "openshell",
-        "inference",
-        "set",
-        "--provider",
-        "ai-guardian-google-vertex-ai",
-        "--model",
-        "claude-sonnet-4-6",
-        "--no-verify",
-    ]
-    create_command = run.call_args_list[2].args[0]
-    assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in create_command
-    assert "ANTHROPIC_BASE_URL=https://inference.local" in create_command
-    assert "ANTHROPIC_API_KEY=unused" in create_command
+    create_command = run.call_args_list[1].args[0]
+    assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in create_command
+    assert "CLAUDE_CODE_USE_VERTEX=1" in create_command
+    assert "ANTHROPIC_VERTEX_PROJECT_ID=test-project" in create_command
+    assert "CLOUD_ML_REGION=us-central1" in create_command
+    assert "GCE_METADATA_HOST=127.0.0.1:8174" in create_command
+    assert "GCE_METADATA_IP=127.0.0.1:8174" in create_command
+    assert "METADATA_SERVER_DETECTION=assume-present" in create_command
     assert "--provider" in create_command
-    assert "ai-guardian-google-vertex-ai" in create_command
+    assert "ai-guardian-google-cloud" in create_command
     assert "--no-credential-warnings" in create_command
     assert str(adc_path) not in create_command
 
@@ -2158,9 +2174,6 @@ def test_openshell_vertex_provider_updates_explicit_provider_and_model(tmp_path)
         patch(
             "ai_guardian.sandbox._configure_openshell_vertex_provider"
         ) as configure_provider,
-        patch(
-            "ai_guardian.sandbox._configure_openshell_inference"
-        ) as configure_inference,
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
@@ -2175,9 +2188,6 @@ def test_openshell_vertex_provider_updates_explicit_provider_and_model(tmp_path)
         "test-project",
         "global",
         output=None,
-    )
-    configure_inference.assert_called_once_with(
-        args, "vertex-provider", "claude-haiku-4-5", output=None
     )
 
 
@@ -2280,7 +2290,8 @@ def test_openshell_create_invokes_entrypoint_without_uploads(tmp_path):
         "demo",
         "--tty",
         "--",
-        "/bin/bash",
+        OPENSHELL_ENTRYPOINT,
+        "bash",
         "-l",
     ]
 
@@ -2337,7 +2348,7 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
     assert command[-4:] == ["--", OPENSHELL_ENTRYPOINT, "bash", "-l"]
 
 
-def test_openshell_create_uses_timestamped_name_after_collision():
+def test_openshell_create_preserves_name_after_collision():
     args = _args(
         sandbox_command="create",
         runtime="openshell",
@@ -2357,11 +2368,6 @@ def test_openshell_create_uses_timestamped_name_after_collision():
     output = []
 
     with (
-        patch(
-            "ai_guardian.sandbox._sandbox_name_exists",
-            side_effect=[True, False],
-        ),
-        patch("ai_guardian.sandbox.datetime") as clock,
         patch("ai_guardian.sandbox._openshell_cli_has_credentials", return_value=False),
         patch(
             "ai_guardian.sandbox._expose_openshell_service", return_value=0
@@ -2371,15 +2377,13 @@ def test_openshell_create_uses_timestamped_name_after_collision():
             return_value=subprocess.CompletedProcess([], 0),
         ) as run,
     ):
-        clock.now.return_value = datetime(2026, 9, 17, 12, 34, 56)
         assert create_sandbox(args, interactive=False, output=output) == 0
 
-    expected_name = "demo-2609171234"
+    expected_name = "demo"
     command = run.call_args.args[0]
     assert args.name == expected_name
     assert command[command.index("--name") + 1] == expected_name
     assert f"ai-guardian.name={expected_name}" in command
-    assert "already in use" in "".join(output)
     expose.assert_called_once_with(args, expected_name, output=output)
 
 
@@ -2446,7 +2450,8 @@ def test_openshell_create_stages_uploads_before_entrypoint_exec(tmp_path):
         generated_name,
         "--tty",
         "--",
-        "/bin/bash",
+        OPENSHELL_ENTRYPOINT,
+        "bash",
         "-l",
     ]
 

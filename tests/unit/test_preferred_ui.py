@@ -168,14 +168,20 @@ class TestAskDialogHeadless:
             error_message="found secret",
         )
         with patch("ai_guardian.tui.display.get_preferred_ui", return_value="headless"):
-            with patch("ai_guardian.tui.ask_dialog._show_via_daemon") as mock_daemon:
+            with patch(
+                "ai_guardian.tui.ask_dialog._show_via_tray_forwarding"
+            ) as mock_tray:
                 with patch(
-                    "ai_guardian.tui.ask_dialog._show_via_subprocess"
-                ) as mock_sub:
-                    result = show_ask_dialog(violation, fallback_action="block")
-                    mock_daemon.assert_not_called()
-                    mock_sub.assert_not_called()
-                    assert result.decision == AskDecision.BLOCK
+                    "ai_guardian.tui.ask_dialog._show_via_daemon"
+                ) as mock_daemon:
+                    with patch(
+                        "ai_guardian.tui.ask_dialog._show_via_subprocess"
+                    ) as mock_sub:
+                        result = show_ask_dialog(violation, fallback_action="block")
+                        mock_tray.assert_not_called()
+                        mock_daemon.assert_not_called()
+                        mock_sub.assert_not_called()
+                        assert result.decision == AskDecision.BLOCK
 
     def test_headless_warn_fallback(self):
         from ai_guardian.tui.ask_dialog import (

@@ -252,10 +252,8 @@ if [ "${1:-}" = "__AI_GUARDIAN_DEFAULT_AGENT__" ]; then
   fi
 fi
 
-# OpenShell's gateway-managed inference route uses a placeholder API key.
-# Configure only the documented client environment here. Claude Code's
-# documented `--bare` flag remains explicit for interactive use; the
-# non-interactive `--print` path below preserves AI Guardian's automation
+# Claude Code's documented `--bare` flag remains explicit for interactive use;
+# the non-interactive `--print` path below preserves AI Guardian's automation
 # behavior without installing a persistent shell wrapper.
 _claude_print_command_needs_bare() {
   local argument
@@ -281,53 +279,9 @@ _claude_print_command_needs_bare() {
 }
 
 _configure_openshell_inference_environment() {
-  local bash_profile
-  local bashrc
-  local base_url
-  local marker="# ai-guardian-openshell-inference-environment-v1"
-
-  if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" != "true" ]; then
-    return 0
-  fi
-
-  case "$IDE" in
-    claude|pi) base_url="https://inference.local" ;;
-    opencode) base_url="https://inference.local/v1" ;;
-    *) return 0 ;;
-  esac
-
-  bashrc="${HOME}/.bashrc"
-  bash_profile="${HOME}/.bash_profile"
-  if ! mkdir -p "$HOME"; then
-    echo "Error: unable to prepare the sandbox shell for OpenShell inference" >&2
-    return 1
-  fi
-
-  if ! grep -Fq "$marker" "$bashrc" 2>/dev/null; then
-    printf '\n' >>"$bashrc"
-cat >>"$bashrc" <<EOF
-# $marker
-if [ "\${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ]; then
-    # Remove the legacy AI Guardian Claude wrapper if this sandbox was
-    # bootstrapped by an older image. Claude's --bare flag stays explicit.
-    if [ "\${AI_GUARDIAN_AGENT:-}" = "claude" ]; then
-        unset -f claude 2>/dev/null || true
-    fi
-    export ANTHROPIC_BASE_URL="\${ANTHROPIC_BASE_URL:-$base_url}"
-    export ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY:-unused}"
-fi
-EOF
-  fi
-
-  if ! grep -Fq "$marker" "$bash_profile" 2>/dev/null; then
-    printf '\n' >>"$bash_profile"
-cat >>"$bash_profile" <<EOF
-# $marker
-if [ -f "\$HOME/.bashrc" ]; then
-    . "\$HOME/.bashrc"
-fi
-EOF
-  fi
+  # OpenShell 0.1.2 uses native provider endpoints; no virtual route setup is
+  # required. Keep function for old entrypoint callers during image upgrades.
+  return 0
 }
 
 _configure_pi_settings() {
@@ -401,25 +355,38 @@ PY
 }
 
 _configure_pi_openshell_models() {
-  if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" != "true" ] ||
-    [ "$IDE" != "pi" ]; then
+  if [ "${AI_GUARDIAN_RUNTIME:-container}" != "openshell" ] ||
+    [ "$IDE" != "pi" ] || [ -z "${AI_GUARDIAN_AGENT_PROVIDER:-}" ]; then
     return 0
   fi
 
+  local provider_name
+  local base_url
   local pi_agent_dir
   local models_path
+  provider_name="${AI_GUARDIAN_AGENT_PROVIDER}"
+  case "$provider_name" in
+    openai)
+      base_url="https://api.openai.com/v1"
+      ;;
+    anthropic)
+      base_url="https://api.anthropic.com"
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+
   pi_agent_dir="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
   models_path="${pi_agent_dir}/models.json"
-
-  if ! python3 - "$models_path" <<'PY'
+  if ! python3 - "$models_path" "$provider_name" "$base_url" <<'PY'
 import json
 import os
-import stat
 import sys
 import tempfile
 
 
-models_path = sys.argv[1]
+models_path, provider_name, base_url = sys.argv[1:]
 try:
     with open(models_path, encoding="utf-8") as stream:
         models = json.load(stream)
@@ -438,79 +405,46 @@ if not isinstance(providers, dict):
     print("Pi models configuration providers must be a JSON object", file=sys.stderr)
     raise SystemExit(1)
 
-provider_name = os.environ.get("AI_GUARDIAN_AGENT_PROVIDER", "anthropic")
-if provider_name == "openai":
-    provider = providers.setdefault("openai", {})
-    base_url = "https://inference.local/v1"
-else:
-    provider_name = "anthropic"
-    provider = providers.setdefault("anthropic", {})
-    base_url = "https://inference.local"
+provider = providers.setdefault(provider_name, {})
 if not isinstance(provider, dict):
-    print(f"Pi {provider_name} provider configuration must be a JSON object", file=sys.stderr)
+    print(f"Pi {provider_name} provider configuration must be an object", file=sys.stderr)
     raise SystemExit(1)
-
 provider["baseUrl"] = base_url
-provider["apiKey"] = "unused"
+# OpenShell attaches credentials at gateway level; no credential is stored in
+# the sandbox provider configuration.
+provider["apiKey"] = ""
 
 models_dir = os.path.dirname(os.path.abspath(models_path))
 os.makedirs(models_dir, exist_ok=True)
+temporary_path = None
 try:
-    mode = stat.S_IMODE(os.stat(models_path).st_mode)
-except FileNotFoundError:
-    mode = 0o600
-
-file_descriptor, temporary_path = tempfile.mkstemp(
-    prefix=".models.json.", suffix=".tmp", dir=models_dir
-)
-try:
-    with os.fdopen(file_descriptor, "w", encoding="utf-8") as stream:
+    descriptor, temporary_path = tempfile.mkstemp(
+        prefix=".models.json.", suffix=".tmp", dir=models_dir
+    )
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         json.dump(models, stream, indent=2)
         stream.write("\n")
-    os.chmod(temporary_path, mode)
+    os.chmod(temporary_path, 0o600)
     os.replace(temporary_path, models_path)
 except Exception:
-    try:
-        os.unlink(temporary_path)
-    except OSError:
-        # intentionally silent — cleanup of the temporary models file
-        pass
+    if temporary_path:
+        try:
+            os.unlink(temporary_path)
+        except OSError:
+            pass
     raise
 PY
   then
-    echo "Error: unable to configure Pi for the OpenShell inference route: $models_path" >&2
+    echo "Error: unable to configure Pi native provider: $models_path" >&2
     return 1
   fi
+  return 0
 }
 
-if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ] &&
-  { [ "$IDE" = "claude" ] || [ "$IDE" = "opencode" ] || [ "$IDE" = "pi" ]; }; then
-  # Keep the route self-healing when an older OpenShell version or an existing
-  # sandbox omitted the non-secret environment values from sandbox creation.
-  if [ "$IDE" = "claude" ] || [ "$IDE" = "pi" ]; then
-    export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://inference.local}"
-  else
-    export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://inference.local/v1}"
-  fi
-  export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-unused}"
-  if ! _configure_openshell_inference_environment; then
-    exit 1
-  fi
-  if ! _configure_pi_openshell_models; then
-    exit 1
-  fi
-  if [ "$IDE" = "claude" ]; then
-    case "${1:-}" in
-      claude|*/claude)
-        if _claude_print_command_needs_bare "${@:2}"; then
-          set -- "$1" --bare "${@:2}"
-        fi
-        ;;
-    esac
-  fi
-fi
-
 if ! _configure_pi_settings; then
+  exit 1
+fi
+if ! _configure_pi_openshell_models; then
   exit 1
 fi
 
@@ -754,7 +688,7 @@ fi
 # agent is started; all supported integrations are configured below.
 if [ "$IDE" = "claude" ] && ! command -v claude >/dev/null 2>&1; then
   if _request_tos_consent "Claude Code" "https://www.anthropic.com/legal/consumer-terms"; then
-    curl -fsSL https://claude.ai/install.sh | sh
+    curl -fsSL https://claude.ai/install.sh | bash
     chmod 755 "${HOME}/.local/bin/claude" 2>/dev/null || true
   fi
 fi
@@ -1155,9 +1089,7 @@ fi
 echo "  Profile:      ${PROFILE:-none (host/default config)}"
 echo "  Config:       $CONFIG_PATH"
 echo "  Config source: $CONFIG_SOURCE"
-if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ]; then
-    echo "  Auth:         OpenShell inference route"
-elif [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     echo "  Auth:         Anthropic API key"
 elif [ -n "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ]; then
     echo "  Auth:         Vertex AI"
