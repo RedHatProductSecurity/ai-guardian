@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 from ai_guardian.constants import HookEvent
 from ai_guardian.hook_adapters import (
@@ -167,6 +168,15 @@ def test_transcript_and_session_capabilities_have_registered_implementations():
 def test_release_readiness_matrices_match_canonical_registry():
     assert _release_readiness_setup_ids() == SUPPORTED_IDE_TYPES
     assert _release_readiness_e2e_ids() == SUPPORTED_IDE_TYPES
+
+
+def test_release_readiness_e2e_matrix_parses_as_a_yaml_sequence():
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "release-readiness.yml").read_text()
+    )
+
+    matrix = workflow["jobs"]["ide-hook-e2e"]["strategy"]["matrix"]["ide"]
+    assert matrix == list(SUPPORTED_IDE_TYPES)
 
 
 def test_installers_and_support_docs_mention_every_supported_ide():

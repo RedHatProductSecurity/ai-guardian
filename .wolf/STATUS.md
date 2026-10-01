@@ -226,6 +226,20 @@ budget_tokens: 1000
   Mypy, and `git diff --check` passed.
 - Changes remain uncommitted; no commit or pull request was created.
 
+## ✅ CI Failure Follow-up — 2026-10-01
+
+- PR 2476 release-readiness metadata showed two failures in run
+  `36826458235`: the OpenShell Pi smoke step and the collapsed IDE E2E matrix.
+- Fixed `.github/workflows/release-readiness.yml` by aligning the five
+  misindented IDE entries and removing the impossible direct `claude --version`
+  assertion from the OpenShell image check; Claude is intentionally runtime
+  ToS-gated in `container/Dockerfile.openshell`.
+- Added regression assertions in `tests/unit/test_ide_registry.py` and
+  `tests/unit/test_container_scripts.py`.
+- Validation: all five affected IDE E2E cases passed individually, 121 workflow
+  and container contract tests passed, YAML parsing passed, Ruff/Black and
+  `git diff --check` passed. Docker image execution was not available locally.
+
 ## 🚀 Next phase
 
 **Goal:** Review the final uncommitted diff and decide whether to commit or open a PR.

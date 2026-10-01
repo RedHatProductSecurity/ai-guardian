@@ -328,10 +328,10 @@ jobs:
           - zoocode
           - kiro
           - aiderdesk
-           - openclaw
-           - opencode
-           - pi
-           - augment
+          - openclaw
+          - opencode
+          - pi
+          - augment
           - crush
           - junie
 
@@ -535,7 +535,6 @@ jobs:
           docker run --rm --entrypoint pi ai-guardian-openshell-readiness --version
           docker run --rm --entrypoint codex ai-guardian-openshell-readiness --version
           docker run --rm --entrypoint opencode ai-guardian-openshell-readiness --version
-          docker run --rm --entrypoint claude ai-guardian-openshell-readiness --version
           docker run --rm --entrypoint copilot ai-guardian-openshell-readiness --version
           docker run --rm \
             -e AI_GUARDIAN_AGENT=pi \

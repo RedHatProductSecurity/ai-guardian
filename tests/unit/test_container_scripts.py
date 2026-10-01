@@ -222,6 +222,10 @@ class TestContainerLaunchers:
         assert "ai-guardian-readiness" in workflow
         assert "ai-guardian-openshell-readiness" in workflow
         assert "test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts" in workflow
+        openshell_check = workflow.split(
+            "Verify OpenShell image Pi CLI and extension setup", 1
+        )[1].split("Verify OpenShell compatibility metadata", 1)[0]
+        assert "--entrypoint claude" not in openshell_check
 
     def test_openshell_image_uses_pinned_ubuntu_base_layout(self):
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")

@@ -106,6 +106,13 @@
   tests are POSIX-only; skip those assertions on Windows rather than assuming
   `os.chmod` exposes equivalent mode bits there.
 
+- **Release-readiness workflow contracts must parse YAML:** Text regex checks
+  can miss an indentation error that changes a GitHub Actions matrix value.
+  Parse the workflow in the contract test and compare the actual matrix list to
+  the canonical IDE registry. OpenShell image smoke checks must only require
+  CLIs packaged in the image; Claude is intentionally installed at runtime
+  after ToS consent.
+
 - **Multi-architecture OCI validation needs artifact cleanup:** The Ubuntu
   compatibility workflow exports normal and OpenShell images as large OCI
   tarballs on the same runner. Remove the first artifact before exporting the
