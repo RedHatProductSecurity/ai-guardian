@@ -281,6 +281,8 @@ budget_tokens: 1000
 - Focused validation: 1,046 tests passed; Ruff, Black, Pylint, Mypy, annotation checks, and diff checks passed.
 - Addressed PR #2480 review findings: paused responses no longer expose an authorizing `policy_decision`, and `get_config(project_dir=...)` now reports directory-scoped pause state consistently.
 - Review-fix validation: 363 directly affected tests passed; Ruff, Black, Mypy, annotation checks, and `git diff --check` passed.
+- Diagnosed Windows CI failures in Python 3.10, 3.13, and 3.14 as a hard-coded POSIX path in the MCP pause UX test; switched it to `tmp_path` and native `Path.resolve()` expectations.
+- Revalidated the complete 363-test affected set after the Windows fix; all passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
 ## 🚀 Next phase

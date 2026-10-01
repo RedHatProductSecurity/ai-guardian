@@ -55,7 +55,7 @@ class TestMCPPauseUX:
         ),
     )
     def test_query_tools_remain_available_and_report_effective_pause(
-        self, mock_config, mock_paused, mock_logger
+        self, mock_config, mock_paused, mock_logger, tmp_path
     ):
         """
         USER EXPERIENCE: Daemon pause -> diagnostics remain available.
@@ -67,9 +67,10 @@ class TestMCPPauseUX:
         mock_violation_logger.get_recent_violations.return_value = []
         mock_logger.return_value = mock_violation_logger
 
+        project_dir = tmp_path / "paused-project"
         server = create_server()
         config_result = server._tool_manager._tools["get_config"].fn(
-            project_dir="/workspace/paused-project"
+            project_dir=str(project_dir)
         )
         violations_result = server._tool_manager._tools["get_violations"].fn()
 
@@ -79,4 +80,4 @@ class TestMCPPauseUX:
         assert features["proactive_pause_source"] == "daemon"
         assert violations_result == {"violations": [], "count": 0}
         mock_config.assert_called_once()
-        mock_paused.assert_called_once_with(cwd="/workspace/paused-project")
+        mock_paused.assert_called_once_with(cwd=str(project_dir.resolve()))
