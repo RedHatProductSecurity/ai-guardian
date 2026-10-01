@@ -493,6 +493,7 @@ class Doctor:
     def check_scanners(self) -> CheckResult:
         try:
             from ai_guardian.scanners.manager import ScannerManager
+            from ai_guardian.scanners.engine_builder import ENGINE_PRESETS
         except ImportError:
             return CheckResult(
                 name="scanners",
@@ -500,10 +501,75 @@ class Doctor:
                 message="Scanner manager not available",
             )
 
-        manager = ScannerManager()
+        self._ensure_config()
+        config = self._config or {}
+        secret_config = config.get("secret_scanning", {})
+        if not isinstance(secret_config, dict):
+            secret_config = {}
+        configured_engines = secret_config.get("engines")
+        if configured_engines is None:
+            configured_engines = ["toml-patterns", "gitleaks"]
+        if isinstance(configured_engines, str) or not isinstance(
+            configured_engines, list
+        ):
+            return CheckResult(
+                name="scanners",
+                status=CheckStatus.FAIL,
+                message="Invalid secret_scanning.engines configuration",
+                detail="Expected a list of scanner names or engine objects.",
+            )
+
+        supported_names = set(ENGINE_PRESETS) | {"toml-patterns"}
+        invalid_names = []
+        has_builtin_scanner = False
+        for engine in configured_engines:
+            if isinstance(engine, str):
+                if engine not in supported_names:
+                    invalid_names.append(engine)
+                has_builtin_scanner |= engine == "toml-patterns"
+                continue
+            if not isinstance(engine, dict):
+                invalid_names.append(str(engine))
+                continue
+            engine_type = engine.get("type")
+            if engine_type == "python":
+                if not engine.get("class") or not (
+                    engine.get("module") or engine.get("path")
+                ):
+                    invalid_names.append("python (missing module/path/class)")
+                continue
+            if engine_type == "custom":
+                if not engine.get("binary") or not engine.get("command_template"):
+                    invalid_names.append("custom (missing binary/command_template)")
+                continue
+            if engine_type not in supported_names:
+                invalid_names.append(str(engine_type or "<missing type>"))
+            has_builtin_scanner |= engine_type == "toml-patterns"
+
+        if invalid_names:
+            return CheckResult(
+                name="scanners",
+                status=CheckStatus.FAIL,
+                message=("Unsupported scanner name(s): " + ", ".join(invalid_names)),
+                detail=(
+                    "Supported scanners: "
+                    + ", ".join(sorted(supported_names))
+                    + "; custom engines require binary and command_template; "
+                    "custom Python engines require module/path and class."
+                ),
+                fix_hint="Update secret_scanning.engines in the configuration.",
+            )
+
+        manager = ScannerManager(config=config)
         installed = manager.list_installed()
 
         if not installed:
+            if has_builtin_scanner:
+                return CheckResult(
+                    name="scanners",
+                    status=CheckStatus.PASS,
+                    message="toml-patterns (built-in)",
+                )
             return CheckResult(
                 name="scanners",
                 status=CheckStatus.FAIL,

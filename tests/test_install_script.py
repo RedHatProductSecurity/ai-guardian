@@ -301,6 +301,48 @@ class TestUninstallScript:
         assert not opencode_bridge.exists()
         assert not legacy_bridge.exists()
 
+    def test_claude_mcp_cleanup_uses_default_global_config(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        mcp_config = home / ".claude.json"
+        mcp_config.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "ai-guardian": {"command": "/tmp/ai-guardian"},
+                        "other-server": {"command": "/tmp/other"},
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        env = dict(os.environ)
+        env.update(
+            {
+                "HOME": str(home),
+                "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+                "AI_GUARDIAN_STATE_DIR": str(tmp_path / "state"),
+                "AI_GUARDIAN_CACHE_DIR": str(tmp_path / "cache"),
+                "PI_CODING_AGENT_DIR": str(tmp_path / "pi"),
+                "PATH": "/usr/bin:/bin",
+            }
+        )
+        env.pop("CLAUDE_CONFIG_DIR", None)
+
+        result = subprocess.run(
+            ["bash", str(UNINSTALL_SCRIPT), "--keep-config", "--yes"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=tmp_path,
+        )
+
+        assert result.returncode == 0, result.stderr + result.stdout
+        remaining = json.loads(mcp_config.read_text(encoding="utf-8"))
+        assert "ai-guardian" not in remaining["mcpServers"]
+        assert remaining["mcpServers"]["other-server"] == {"command": "/tmp/other"}
+
 
 class TestInstallPs1:
     """Tests for install.ps1 PowerShell installer."""

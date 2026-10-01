@@ -76,6 +76,53 @@
   native tool name such as Grok's `run_terminal_command` can bypass immutable
   host CLI/configuration checks.
 
+- **Anthropic native compaction only preserves a tail:** The provider summarizes
+  every message supplied in the compaction request. After compaction, send the
+  returned block first and only the untouched recent tail; do not re-add an
+  older prefix after the block or later beta requests become invalid.
+
+- **Hook audit logs are multi-process files:** Thread locks do not serialize
+  hook subprocesses. Audit writes and rotation need a per-log OS lock, private
+  0700/0600 permissions, and atomic replacement of rotated JSONL files.
+
+- **Claude MCP default path differs from settings:** Without
+  `CLAUDE_CONFIG_DIR`, Claude's settings are under `~/.claude/` but its global
+  MCP file is `~/.claude.json`; with relocation, the MCP file is adjacent to
+  the relocated settings directory.
+
+- **Self-protection Python launch detection:** Inline Python can invoke the
+  protected CLI through a path-qualified executable string (for example,
+  `/usr/local/bin/ai-guardian`), so matching must normalize an optional path
+  prefix rather than only matching the bare executable name. Package imports
+  remain intentionally protected because they can reach the CLI/runtime APIs.
+
+- **Doctor scanner defaults and schema:** When no config exists, doctor must
+  use the runtime default engine set (`toml-patterns` plus `gitleaks`) so a
+  built-in scanner is recognized. Scanner validation must also accept the
+  documented object forms for `custom` and `python`, while rejecting missing
+  required fields.
+
+- **Permission assertions are platform-specific:** Audit log permission-bit
+  tests are POSIX-only; skip those assertions on Windows rather than assuming
+  `os.chmod` exposes equivalent mode bits there.
+
+- **Release-readiness workflow contracts must parse YAML:** Text regex checks
+  can miss an indentation error that changes a GitHub Actions matrix value.
+  Parse the workflow in the contract test and compare the actual matrix list to
+  the canonical IDE registry. OpenShell image smoke checks must only require
+  CLIs packaged in the image; Claude is intentionally installed at runtime
+  after ToS consent.
+
+- **OpenShell base-image labels have one source of truth:** The compatibility
+  assertion in release readiness must match `Dockerfile.openshell`'s `BASE_IMAGE`
+  digest. Keep a contract test comparing the workflow value to the Dockerfile
+  instead of manually maintaining two independent digests.
+
+- **Python support transition:** The 1.19 line still supports Python 3.9, so
+  retain its compatibility job even if a transient CI run fails there. Version
+  1.20.0 will drop Python 3.9; remove the 3.9 CI matrix entries and update the
+  package support metadata together when that release work begins.
+
 - **Multi-architecture OCI validation needs artifact cleanup:** The Ubuntu
   compatibility workflow exports normal and OpenShell images as large OCI
   tarballs on the same runner. Remove the first artifact before exporting the

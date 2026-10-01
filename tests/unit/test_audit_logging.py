@@ -2,11 +2,14 @@
 
 import csv
 import json
+import os
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import ai_guardian
+import pytest
 from ai_guardian.constants import HookEvent
 from ai_guardian.config import loaders
 from ai_guardian.hook_adapters.base import NormalizedHookInput
@@ -239,3 +242,37 @@ def test_process_hook_data_writes_final_decision_to_separate_audit_file(
     assert entries[0]["decision"] == "allow"
     assert entries[0]["session_id"] == "session-boundary"
     assert entries[0]["policy_decision"]["source"] == "hook"
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits are not portable on Windows",
+)
+def test_audit_log_and_lock_permissions_are_private(tmp_path):
+    log_path = tmp_path / "audit.jsonl"
+    audit = AuditLogger(log_path=log_path, config=_config())
+
+    audit.log_decision("PreToolUse", "allow", {})
+
+    assert log_path.stat().st_mode & 0o777 == 0o600
+    assert log_path.parent.stat().st_mode & 0o777 == 0o700
+    assert (tmp_path / "audit.jsonl.lock").stat().st_mode & 0o777 == 0o600
+
+
+def test_audit_rotation_replaces_the_log_atomically(tmp_path, monkeypatch):
+    log_path = tmp_path / "audit.jsonl"
+    audit = AuditLogger(log_path=log_path, config=_config(max_entries=1))
+    replacements = []
+    original_replace = os.replace
+
+    def record_replace(source, destination):
+        replacements.append((source, destination))
+        return original_replace(source, destination)
+
+    monkeypatch.setattr("ai_guardian.violations.audit.os.replace", record_replace)
+
+    audit.log_decision("PreToolUse", "allow", {})
+
+    assert len(replacements) == 1
+    assert replacements[0][1] == log_path
+    assert not list(tmp_path.glob(".audit.jsonl.*.tmp"))

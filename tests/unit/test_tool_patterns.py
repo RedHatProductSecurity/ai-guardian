@@ -50,6 +50,15 @@ class TestImmutableDenyPatterns:
         assert is_ai_guardian_cli_command("/usr/local/bin/ai-guardian --help")
         assert is_ai_guardian_cli_command("python -m ai_guardian")
         assert is_ai_guardian_cli_command("python -m ai_guardian.cli.main")
+        assert is_ai_guardian_cli_command(
+            'python3 -c "from ai_guardian.__main__ import main; main()"'
+        )
+        assert is_ai_guardian_cli_command(
+            "python3 -c \"import subprocess; subprocess.run(['ai-guardian', 'status'])\""
+        )
+        assert is_ai_guardian_cli_command(
+            "python3 -c \"import subprocess; subprocess.run(['/usr/local/bin/ai-guardian', 'status'])\""
+        )
         assert is_ai_guardian_cli_command("uv run ai-guardian doctor")
         assert is_ai_guardian_cli_command("npx ai-guardian status")
         assert is_ai_guardian_cli_command("su -c 'ai-guardian status'")
@@ -58,6 +67,7 @@ class TestImmutableDenyPatterns:
         assert not is_ai_guardian_cli_command("printf '%s\\n' 'ai-guardian status'")
         assert not is_ai_guardian_cli_command("grep ai-guardian README.md")
         assert not is_ai_guardian_cli_command("git -C ai-guardian status")
+        assert not is_ai_guardian_cli_command("python3 -c \"print('ai_guardian')\"")
 
     def test_cli_detection_ignores_heredoc_content(self):
         command = "cat <<'EOF'\nai-guardian status\nEOF"

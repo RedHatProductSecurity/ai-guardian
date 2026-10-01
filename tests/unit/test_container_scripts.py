@@ -215,6 +215,7 @@ class TestContainerLaunchers:
 
     def test_release_readiness_smoke_tests_both_pi_images(self):
         workflow = RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8")
+        dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
 
         assert "container-images:" in workflow
         assert "Build normal support image" in workflow
@@ -222,6 +223,14 @@ class TestContainerLaunchers:
         assert "ai-guardian-readiness" in workflow
         assert "ai-guardian-openshell-readiness" in workflow
         assert "test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts" in workflow
+        openshell_check = workflow.split(
+            "Verify OpenShell image Pi CLI and extension setup", 1
+        )[1].split("Verify OpenShell compatibility metadata", 1)[0]
+        assert "--entrypoint claude" not in openshell_check
+
+        base_image = re.search(r"^ARG BASE_IMAGE=(\S+)$", dockerfile, re.MULTILINE)
+        assert base_image
+        assert f'"{base_image.group(1)}"' in workflow
 
     def test_openshell_image_uses_pinned_ubuntu_base_layout(self):
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
@@ -229,6 +238,7 @@ class TestContainerLaunchers:
         assert "ARG BASE_IMAGE=nvcr.io/nvidia/base/ubuntu@sha256:" in dockerfile
         assert "sandboxes/base:latest" not in dockerfile
         assert "FROM ${BASE_IMAGE}" in dockerfile
+        assert "FROM ${BASE_IMAGE}\n\nARG BASE_IMAGE\n" in dockerfile
         assert "uv pip install --python /sandbox/.venv/bin/python" in dockerfile
         assert "ARG CLAUDE_VERSION" not in dockerfile
         assert "ARG CODEX_VERSION=0.154.0" in dockerfile

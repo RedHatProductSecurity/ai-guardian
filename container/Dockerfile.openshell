@@ -22,6 +22,7 @@ ARG BASE_IMAGE=nvcr.io/nvidia/base/ubuntu@sha256:c280ee89f8bfcbdaba6179ad4347f60
 FROM docker.io/library/node:22.19.0-bookworm-slim AS node-runtime
 FROM ${BASE_IMAGE}
 
+ARG BASE_IMAGE
 ARG AI_GUARDIAN_VERSION=1.18.0
 ARG UV_VERSION=0.11.16
 ARG CODEX_VERSION=0.154.0

@@ -108,4 +108,4 @@ jobs:
 
       - name: Run mypy
         run: |
-          mypy src/ai_guardian/
+          mypy src/ai_guardian/ src/ai_guardian_hook_runtime.py

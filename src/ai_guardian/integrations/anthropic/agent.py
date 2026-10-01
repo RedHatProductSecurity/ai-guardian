@@ -98,37 +98,23 @@ def _compaction_summary_text(content: Any) -> str:
     )
 
 
-def _is_compaction_message(message: Dict[str, Any]) -> bool:
-    if message.get("role") != "assistant":
-        return False
-    content = message.get("content")
-    return isinstance(content, list) and any(
-        _content_block_type(block) == "compaction" for block in content
-    )
-
-
 def _split_native_compaction_messages(
-    messages: List[Dict[str, Any]], keep_first: int, keep_last: int
+    messages: List[Dict[str, Any]], keep_last: int
 ) -> Optional[Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]]:
-    """Split a history into the part to summarize and the verbatim tail."""
+    """Split a history into the part to summarize and the verbatim tail.
+
+    Anthropic summarizes every message in the compaction request and only
+    supports preserving a tail verbatim. Keeping an older prefix after the
+    returned compaction block would duplicate messages that were summarized
+    and can make the next request invalid.
+    """
     tail_count = max(0, keep_last) * 2
     tail_start = len(messages) - tail_count if tail_count else len(messages)
     if tail_start <= 1:
         return None
 
-    prefix = messages[:tail_start]
-    tail = messages[tail_start:]
-    if _is_compaction_message(prefix[0]):
-        body = prefix[1:]
-        preserve_count = min(len(body), 1 + max(0, keep_first) * 2)
-        preserved = body[:preserve_count]
-        older = [prefix[0]] + body[preserve_count:]
-    else:
-        preserve_count = min(max(0, keep_first) * 2, len(prefix) - 1)
-        preserved = prefix[: 1 + preserve_count]
-        older = prefix[:1] + prefix[1 + preserve_count :]
-
-    recent = preserved + tail
+    older = messages[:tail_start]
+    recent = messages[tail_start:]
     if len(older) < 2 or not recent:
         return None
     return older, recent
@@ -400,7 +386,7 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
         if not self.native_compaction_supported(client, model):
             return None
 
-        split = _split_native_compaction_messages(messages, keep_first, keep_last)
+        split = _split_native_compaction_messages(messages, keep_last)
         if split is None:
             return None
         older, recent = split

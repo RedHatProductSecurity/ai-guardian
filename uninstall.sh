@@ -118,6 +118,7 @@ STATE_DIR="${AI_GUARDIAN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/ai-gua
 CACHE_DIR="${AI_GUARDIAN_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/ai-guardian}"
 VENV_DIR="$HOME/.ai-guardian-venv"
 CLAUDE_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+CLAUDE_MCP_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -191,7 +192,7 @@ remove_json_hooks() {
     # Each entry: "agent_name|hook_config_path|mcp_config_path"
     # MCP config path is empty if same file or not applicable
     local agents=(
-        "claude|${CLAUDE_CONFIG}|${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.claude.json"
+        "claude|${CLAUDE_CONFIG}|${CLAUDE_MCP_CONFIG}"
         "cursor|$HOME/.cursor/hooks.json|$HOME/.cursor/mcp.json"
         "copilot|$HOME/.github/hooks/hooks.json|"
         "codex|$HOME/.codex/hooks.json|$HOME/codex.json"

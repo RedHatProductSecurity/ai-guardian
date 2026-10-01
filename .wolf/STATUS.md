@@ -206,13 +206,59 @@ budget_tokens: 1000
   `git diff --check` passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Review Findings Addressed — 2026-09-30
+
+- Fixed both self-protection gaps: transfer-tool mutations (`curl`, `wget`,
+  `scp`, `rsync`) and Python `-c` AI Guardian CLI launches now block with
+  positive/negative regression coverage.
+- Fixed Anthropic native compaction ordering; only the provider-summarized
+  block plus untouched recent tail is retained, including repeated compaction.
+- Hardened compliance audit logging with OS-level process locking, 0700/0600
+  permissions, and atomic rotation replacement.
+- Fixed default Claude MCP cleanup (`~/.claude.json`) while preserving relocated
+  `CLAUDE_CONFIG_DIR` behavior.
+- Doctor now validates configured scanner names and recognizes the built-in
+  `toml-patterns` engine, documented `custom`/`python` forms, and runtime
+  default engines; CI mypy now includes `src/ai_guardian_hook_runtime.py`.
+- Python inline CLI detection also covers path-qualified executables, and the
+  audit permission-bit regression test skips on Windows.
+- Focused validation: 1,073 tests passed, 1 skipped; Ruff, Black, Pylint,
+  Mypy, and `git diff --check` passed.
+- Changes remain uncommitted; no commit or pull request was created.
+
+## ✅ CI Failure Follow-up — 2026-10-01
+
+- PR 2476 release-readiness metadata showed two failures in run
+  `36826458235`: the OpenShell Pi smoke step and the collapsed IDE E2E matrix.
+- Fixed `.github/workflows/release-readiness.yml` by aligning the five
+  misindented IDE entries and removing the impossible direct `claude --version`
+  assertion from the OpenShell image check; Claude is intentionally runtime
+  ToS-gated in `container/Dockerfile.openshell`.
+- The follow-up run passed the image checks but exposed a stale compatibility
+  assertion; updated the expected OpenShell base-image digest to match the
+  Dockerfile's pinned `nvcr.io/nvidia/base/ubuntu` image.
+- The next run still failed that assertion because `BASE_IMAGE` was not
+  redeclared after the final `FROM`; redeclared it so the `LABEL` expansion
+  carries the pinned value into the image.
+- Added regression assertions in `tests/unit/test_ide_registry.py` and
+  `tests/unit/test_container_scripts.py`, including Dockerfile ARG scope.
+- Validation: all five affected IDE E2E cases passed individually, 121 workflow
+  and container contract tests passed, YAML parsing passed, Ruff/Black and
+  `git diff --check` passed. Docker image execution was not available locally.
+- The separate Python 3.9 compatibility failure did not reproduce: the exact
+  full-suite command passed locally under CPython 3.9 with 12,158 passed and
+  198 skipped. Python 3.9 remains required for the 1.19 line; remove it from
+  compatibility matrices only as part of the planned 1.20 support drop.
+- A later Tests workflow run cancelled the Python 3.9 coverage step after
+  20:51 while all other matrix jobs passed; the exact CI command passed locally
+  with coverage in 7:31, so no test-suite change was made.
+
 ## 🚀 Next phase
 
-**Goal:** Monitor PR #2474 checks after review-fix push, then hand issue #2460 back to workflow completion.
+**Goal:** Review the final uncommitted diff and decide whether to commit or open a PR.
 
 ### Open decisions
-- Review fixes committed as `bf41f8b1` and pushed to branch `2460`; PR checks are rerunning.
-- Local validation: 190 focused review tests, 306 UI/ask tests, 253 sandbox/daemon tests, 73 container-script tests, Black, Ruff, Mypy, Pylint, shell syntax, and `git diff --check` pass.
+- No commit or PR action has been requested.
 
 ---
 

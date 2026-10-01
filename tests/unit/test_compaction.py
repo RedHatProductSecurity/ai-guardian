@@ -510,7 +510,7 @@ class TestAnthropicNativeCompaction:
             ],
         )
 
-    def test_uses_native_api_and_preserves_configured_turns(self):
+    def test_uses_native_api_and_preserves_recent_turns(self):
         strategy = AnthropicLoopStrategy()
         client = _NativeClient(response=self._response())
         messages = _make_conversation(8)
@@ -531,21 +531,54 @@ class TestAnthropicNativeCompaction:
         assert result.method == "provider_native:anthropic"
         assert result.summary_text == "Native summary"
         assert result.tokens_before == 100_000
-        assert len(result.messages) == 8
+        assert len(result.messages) == 5
         assert result.messages[0]["content"][0].type == "compaction"
-        assert result.messages[1] == messages[0]
-        assert result.messages[-4:] == messages[-4:]
+        assert result.messages[1:] == messages[-4:]
 
         request = client.beta_messages.requests[0]
         assert request["betas"] == ["compact-2026-09-04"]
         assert request["compaction"] == {"type": "summarize"}
-        assert request["messages"] == messages[:1] + messages[3:-4]
+        assert request["messages"] == messages[:-4]
         assert request["system"] == "Be concise."
         assert request["tools"] == [{"name": "bash"}]
         assert request["max_tokens"] == 4096
 
         strategy.call_api(client, {"model": "claude-sonnet-5", "messages": []})
         assert len(client.beta_messages.requests) == 2
+
+    def test_native_compaction_can_run_again_after_the_first_block(self):
+        strategy = AnthropicLoopStrategy()
+        client = _NativeClient(response=self._response())
+        first = strategy.native_compact_messages(
+            client,
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            messages=_make_conversation(8),
+            system="",
+            tools=[],
+            keep_first=1,
+            keep_last=2,
+            tokens_before=100_000,
+        )
+
+        assert first is not None
+        messages_after_first = first.messages + list(_make_turn_pair(99))
+        second = strategy.native_compact_messages(
+            client,
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            messages=messages_after_first,
+            system="",
+            tools=[],
+            keep_first=1,
+            keep_last=2,
+            tokens_before=100_000,
+        )
+
+        assert second is not None
+        assert second.messages[0]["content"][0].type == "compaction"
+        assert second.messages[1:] == messages_after_first[-4:]
+        assert client.beta_messages.requests[1]["messages"] == messages_after_first[:-4]
 
     def test_native_failure_disables_it_for_local_fallback(self):
         strategy = AnthropicLoopStrategy()
