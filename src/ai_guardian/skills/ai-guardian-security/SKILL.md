@@ -64,6 +64,9 @@ When calling `check_command`, pass `project_dir` when the active workspace is
 known. Otherwise the server uses `AI_GUARDIAN_PROJECT_DIR` or its launch
 directory.
 
+When workspace context is available, pass `project_dir` to `get_config()` so
+its effective proactive level includes directory-scoped pauses.
+
 All checks are advisory — hooks provide enforcement as a safety net.
 
 ## When a Tool is Blocked

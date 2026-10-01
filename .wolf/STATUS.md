@@ -279,6 +279,8 @@ budget_tokens: 1000
 - Paused responses explicitly identify skipped action-gating checks while query/diagnostic tools remain available and hooks continue enforcing security.
 - Added the `paused` proactive level across schema, generated profiles, example/setup config, TUI, Web Console, tray, MCP skill, documentation, and changelog.
 - Focused validation: 1,046 tests passed; Ruff, Black, Pylint, Mypy, annotation checks, and diff checks passed.
+- Addressed PR #2480 review findings: paused responses no longer expose an authorizing `policy_decision`, and `get_config(project_dir=...)` now reports directory-scoped pause state consistently.
+- Review-fix validation: 363 directly affected tests passed; Ruff, Black, Mypy, annotation checks, and `git diff --check` passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
 ## 🚀 Next phase

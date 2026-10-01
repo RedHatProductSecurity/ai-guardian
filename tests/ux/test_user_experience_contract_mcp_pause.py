@@ -38,8 +38,7 @@ class TestMCPPauseUX:
             "MCP action-gating check skipped because AI Guardian is paused. "
             "Hooks remain active and enforce security."
         )
-        assert result["policy_decision"]["decision"] == "allow"
-        assert result["policy_decision"]["reason"] == "proactive_checks_paused"
+        assert "policy_decision" not in result
         mock_paused.assert_called_once_with(cwd=str(tmp_path.resolve()))
         mock_checker_cls.assert_not_called()
 
@@ -69,7 +68,9 @@ class TestMCPPauseUX:
         mock_logger.return_value = mock_violation_logger
 
         server = create_server()
-        config_result = server._tool_manager._tools["get_config"].fn()
+        config_result = server._tool_manager._tools["get_config"].fn(
+            project_dir="/workspace/paused-project"
+        )
         violations_result = server._tool_manager._tools["get_violations"].fn()
 
         features = config_result["features"]
@@ -78,3 +79,4 @@ class TestMCPPauseUX:
         assert features["proactive_pause_source"] == "daemon"
         assert violations_result == {"violations": [], "count": 0}
         mock_config.assert_called_once()
+        mock_paused.assert_called_once_with(cwd="/workspace/paused-project")

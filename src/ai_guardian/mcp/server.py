@@ -199,7 +199,7 @@ def _mcp_pause_source(
     return None
 
 
-def _mcp_paused_response(event: str, pause_source: str) -> Dict[str, Any]:
+def _mcp_paused_response(pause_source: str) -> Dict[str, Any]:
     """Build the stable response returned when an action check is skipped."""
     return {
         "status": "paused",
@@ -207,7 +207,6 @@ def _mcp_paused_response(event: str, pause_source: str) -> Dict[str, Any]:
         "reason": _MCP_REASON_PAUSED,
         "pause_source": pause_source,
         "message": _MCP_PAUSED_MESSAGE,
-        "policy_decision": _mcp_policy_metadata(event, "allow", _MCP_REASON_PAUSED),
     }
 
 
@@ -379,7 +378,7 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         try:
             pause_source = _mcp_pause_source(project_dir)
             if pause_source:
-                return _mcp_paused_response("mcp_check_path", pause_source)
+                return _mcp_paused_response(pause_source)
 
             resolved = Path(path).expanduser()
             if not resolved.exists():
@@ -436,7 +435,7 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         try:
             pause_source = _mcp_pause_source(project_dir)
             if pause_source:
-                return _mcp_paused_response("mcp_check_command", pause_source)
+                return _mcp_paused_response(pause_source)
 
             if identity_verified:
                 from ai_guardian.mcp.identity import verify_active_attestation
@@ -501,7 +500,7 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         try:
             pause_source = _mcp_pause_source(project_dir)
             if pause_source:
-                return _mcp_paused_response("mcp_check_trust", pause_source)
+                return _mcp_paused_response(pause_source)
 
             from ai_guardian.tools.policy import ToolPolicyChecker
 
@@ -706,8 +705,14 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
             return {"violations": [], "count": 0}
 
     @server.tool()
-    def get_config() -> Dict[str, Any]:
-        """Get current security posture summary. Returns feature enabled/disabled status only — no security rule details. Re-reads config on every call to reflect changes."""
+    def get_config(project_dir: Optional[str] = None) -> Dict[str, Any]:
+        """Get current security posture summary.
+
+        Returns feature enabled/disabled status only — no security rule details.
+        Re-reads config on every call to reflect changes. ``project_dir`` is
+        optional and identifies the workspace whose directory pause state
+        should be reflected in the effective proactive level.
+        """
         try:
             from ai_guardian.config.loaders import _load_config_file
             from ai_guardian.config.utils import is_feature_enabled
@@ -772,7 +777,10 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                 mcp_section = {}
             features["mcp_server"] = True
             configured_level = mcp_section.get("proactive_level", "low")
-            pause_source = _mcp_pause_source(configured_level=configured_level)
+            pause_source = _mcp_pause_source(
+                project_dir=project_dir,
+                configured_level=configured_level,
+            )
             features["configured_proactive_level"] = configured_level
             features["proactive_level"] = "paused" if pause_source else configured_level
             if pause_source:

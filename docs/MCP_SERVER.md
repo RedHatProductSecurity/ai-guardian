@@ -172,6 +172,10 @@ directory is used. The MCP process captures the trusted developer-session
 setting once at startup, matching the daemon's snapshot behavior rather than
 rereading that setting for each request.
 
+`get_config` accepts the same optional `project_dir` context when reporting the
+effective proactive level, so directory-scoped pauses are reflected consistently
+with action-gating checks.
+
 Command-check reason categories are intentionally stable and do not expose
 matched rules or patterns:
 
@@ -191,7 +195,7 @@ also be returned. An MCP startup failure reports `startup_failure` or
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
 | `get_violations` | `violation_type?`, `limit?` | violation list with file:line and policy decision | Recent security violations |
-| `get_config` | — | feature enabled/disabled map | Current security posture |
+| `get_config` | `project_dir?` | feature enabled/disabled map | Current security posture |
 | `get_scanner_status` | — | installed scanners + versions | Scanner inventory |
 | `get_scanner_supported` | — | all available scanners | What can be installed |
 | `get_patterns_list` | — | category names + counts | Active detection patterns |

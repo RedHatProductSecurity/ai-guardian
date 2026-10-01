@@ -62,6 +62,8 @@
 
 - **MCP command-check context (#2471):** `check_command` runs outside the daemon, so project policy must be selected through an explicit `project_dir` or `AI_GUARDIAN_PROJECT_DIR`; otherwise the server launch directory is the documented fallback. Capture the developer-session trust state at MCP startup, keep identity failures fail-closed, and have managed Pi pass `ctx.cwd` automatically.
 
+- **MCP paused responses (#2472):** A skipped action-gating check must not carry normalized `policy_decision.decision="allow"`, because consumers may treat it as authorization; omit policy metadata when no decision was evaluated. Diagnostic tools that report effective directory state must accept the same explicit `project_dir` context as the action check.
+
 - **Grok Build setup paths (#2446):** Grok's relocated user hook target is `<GROK_HOME>/hooks/ai-guardian.json`, not directly under `GROK_HOME`; shared path resolution must pass the `hooks` subdirectory alongside the filename. Project hooks and MCP remain under `.grok/`.
 
 - **Host CLI config diagnostics (#2461):** Malformed or structurally invalid
