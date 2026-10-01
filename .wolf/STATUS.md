@@ -206,13 +206,32 @@ budget_tokens: 1000
   `git diff --check` passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Review Findings Addressed — 2026-09-30
+
+- Fixed both self-protection gaps: transfer-tool mutations (`curl`, `wget`,
+  `scp`, `rsync`) and Python `-c` AI Guardian CLI launches now block with
+  positive/negative regression coverage.
+- Fixed Anthropic native compaction ordering; only the provider-summarized
+  block plus untouched recent tail is retained, including repeated compaction.
+- Hardened compliance audit logging with OS-level process locking, 0700/0600
+  permissions, and atomic rotation replacement.
+- Fixed default Claude MCP cleanup (`~/.claude.json`) while preserving relocated
+  `CLAUDE_CONFIG_DIR` behavior.
+- Doctor now validates configured scanner names and recognizes the built-in
+  `toml-patterns` engine, documented `custom`/`python` forms, and runtime
+  default engines; CI mypy now includes `src/ai_guardian_hook_runtime.py`.
+- Python inline CLI detection also covers path-qualified executables, and the
+  audit permission-bit regression test skips on Windows.
+- Focused validation: 1,073 tests passed, 1 skipped; Ruff, Black, Pylint,
+  Mypy, and `git diff --check` passed.
+- Changes remain uncommitted; no commit or pull request was created.
+
 ## 🚀 Next phase
 
-**Goal:** Monitor PR #2474 checks after review-fix push, then hand issue #2460 back to workflow completion.
+**Goal:** Review the final uncommitted diff and decide whether to commit or open a PR.
 
 ### Open decisions
-- Review fixes committed as `bf41f8b1` and pushed to branch `2460`; PR checks are rerunning.
-- Local validation: 190 focused review tests, 306 UI/ask tests, 253 sandbox/daemon tests, 73 container-script tests, Black, Ruff, Mypy, Pylint, shell syntax, and `git diff --check` pass.
+- No commit or PR action has been requested.
 
 ---
 

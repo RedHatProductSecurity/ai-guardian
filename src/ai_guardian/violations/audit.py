@@ -9,10 +9,31 @@ persisted; raw hook payloads and tool output are never written.
 import csv
 import json
 import logging
+import os
+import sys
+import tempfile
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    cast,
+)
+
+try:
+    import fcntl
+
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
 
 from ai_guardian.config.utils import get_state_dir, is_feature_enabled
 from ai_guardian.violations.decision import (
@@ -63,6 +84,42 @@ _SENSITIVE_KEY_PARTS = (
     "secret",
     "token",
 )
+
+
+@contextmanager
+def _audit_process_lock(log_path: Path) -> Iterator[None]:
+    """Serialize writes and rotation across hook processes."""
+    lock_path = log_path.with_name(log_path.name + ".lock")
+    lock_fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl_locked = False
+    windows_locked = False
+    try:
+        os.chmod(lock_path, 0o600)
+        if _HAS_FCNTL:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            fcntl_locked = True
+        elif sys.platform == "win32":
+            import msvcrt
+
+            if os.fstat(lock_fd).st_size == 0:
+                os.write(lock_fd, b"\0")
+            os.lseek(lock_fd, 0, os.SEEK_SET)
+            locking = cast(Callable[[int, int, int], None], getattr(msvcrt, "locking"))
+            locking(lock_fd, int(getattr(msvcrt, "LK_LOCK")), 1)
+            windows_locked = True
+        else:
+            logger.warning("Audit log process locking is unavailable on this platform")
+        yield
+    finally:
+        if fcntl_locked:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        elif windows_locked:
+            import msvcrt
+
+            os.lseek(lock_fd, 0, os.SEEK_SET)
+            locking = cast(Callable[[int, int, int], None], getattr(msvcrt, "locking"))
+            locking(lock_fd, int(getattr(msvcrt, "LK_UNLCK")), 1)
+        os.close(lock_fd)
 
 
 def _timestamp() -> str:
@@ -224,7 +281,17 @@ class AuditLogger:
         self.log_path = Path(log_path).expanduser()
 
         if self.enabled:
-            self.log_path.parent.mkdir(parents=True, exist_ok=True)
+            self.log_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            try:
+                self.log_path.parent.chmod(0o700)
+                if self.log_path.exists():
+                    self.log_path.chmod(0o600)
+            except OSError as error:
+                logger.warning(
+                    "Unable to harden audit log permissions for %s: %s",
+                    self.log_path,
+                    error,
+                )
 
     @staticmethod
     def _load_config() -> Optional[Dict[str, Any]]:
@@ -422,14 +489,29 @@ class AuditLogger:
             entry["decision_reason"] = sanitized_reason
 
         try:
-            with _WRITE_LOCK:
-                with open(self.log_path, "a", encoding="utf-8") as stream:
-                    stream.write(json.dumps(entry, sort_keys=True) + "\n")
+            with _WRITE_LOCK, _audit_process_lock(self.log_path):
+                self._append_entry(entry)
                 self._rotate_log_if_needed()
         except Exception as error:
             logger.warning("Failed to write audit log %s: %s", self.log_path, error)
             return None
         return entry
+
+    def _append_entry(self, entry: Mapping[str, Any]) -> None:
+        """Append one entry using private file permissions."""
+        file_descriptor = os.open(
+            str(self.log_path),
+            os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+            0o600,
+        )
+        try:
+            os.chmod(self.log_path, 0o600)
+            with os.fdopen(file_descriptor, "a", encoding="utf-8") as stream:
+                file_descriptor = -1
+                stream.write(json.dumps(entry, sort_keys=True) + "\n")
+        finally:
+            if file_descriptor >= 0:
+                os.close(file_descriptor)
 
     def log_hook_decision(
         self,
@@ -606,7 +688,9 @@ class AuditLogger:
         """Remove the audit log without changing its configuration."""
         try:
             if self.log_path.exists():
-                self.log_path.unlink()
+                with _WRITE_LOCK, _audit_process_lock(self.log_path):
+                    if self.log_path.exists():
+                        self.log_path.unlink()
             return True
         except OSError as error:
             logger.error("Unable to clear audit log %s: %s", self.log_path, error)
@@ -630,6 +714,23 @@ class AuditLogger:
             if _parse_timestamp(entry.get("timestamp")) >= cutoff
         ]
         entries = entries[-max_entries:]
-        with open(self.log_path, "w", encoding="utf-8") as stream:
-            for entry in entries:
-                stream.write(json.dumps(entry, sort_keys=True) + "\n")
+        file_descriptor, temporary_path = tempfile.mkstemp(
+            dir=str(self.log_path.parent),
+            prefix=f".{self.log_path.name}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(file_descriptor, "w", encoding="utf-8") as stream:
+                file_descriptor = -1
+                for entry in entries:
+                    stream.write(json.dumps(entry, sort_keys=True) + "\n")
+            os.replace(temporary_path, self.log_path)
+            os.chmod(self.log_path, 0o600)
+        finally:
+            if file_descriptor >= 0:
+                os.close(file_descriptor)
+            try:
+                os.unlink(temporary_path)
+            except FileNotFoundError:
+                # intentionally silent — atomic replace already removed the temp file
+                pass

@@ -5675,7 +5675,7 @@ class TestGuardedAgentCompaction:
             for call in mock_session.check_content.call_args_list
         )
         assert beta_create.call_count == 2
-        assert normal_create.call_count == 3
+        assert normal_create.call_count == 2
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_unsafe_native_summary_falls_back_to_local_compaction(self, mock_monitor):

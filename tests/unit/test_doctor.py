@@ -292,6 +292,10 @@ class TestCheckUnknownConfigKeys:
 
 class TestCheckScanners:
     def test_no_scanners(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps({"secret_scanning": {"engines": ["gitleaks"]}})
+        )
         mock_manager = mock.MagicMock()
         mock_manager.list_installed.return_value = []
         mock_cls = mock.MagicMock(return_value=mock_manager)
@@ -315,6 +319,85 @@ class TestCheckScanners:
             result = doctor.check_scanners()
         assert result.status == CheckStatus.PASS
         assert "gitleaks 8.30.1" in result.message
+
+    def test_unsupported_scanner_name_is_reported(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps({"secret_scanning": {"engines": ["not-a-scanner"]}})
+        )
+
+        result = Doctor().check_scanners()
+
+        assert result.status == CheckStatus.FAIL
+        assert "Unsupported scanner name" in result.message
+        assert "not-a-scanner" in result.message
+
+    def test_builtin_scanner_name_is_valid_without_external_binary(
+        self, _isolate_config_dir
+    ):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps({"secret_scanning": {"engines": ["toml-patterns"]}})
+        )
+        mock_manager = mock.MagicMock()
+        mock_manager.list_installed.return_value = []
+        mock_cls = mock.MagicMock(return_value=mock_manager)
+
+        with mock.patch("ai_guardian.scanners.manager.ScannerManager", mock_cls):
+            result = Doctor().check_scanners()
+
+        assert result.status == CheckStatus.PASS
+        assert result.message == "toml-patterns (built-in)"
+
+    def test_custom_engine_config_is_validated_as_an_object(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "secret_scanning": {
+                        "engines": [
+                            {
+                                "type": "custom",
+                                "binary": "custom-scanner",
+                                "command_template": [
+                                    "{binary}",
+                                    "scan",
+                                    "{source_file}",
+                                ],
+                            }
+                        ]
+                    }
+                }
+            )
+        )
+        mock_manager = mock.MagicMock()
+        mock_manager.list_installed.return_value = []
+        mock_cls = mock.MagicMock(return_value=mock_manager)
+
+        with mock.patch("ai_guardian.scanners.manager.ScannerManager", mock_cls):
+            result = Doctor().check_scanners()
+
+        assert result.status == CheckStatus.FAIL
+        assert result.message == "No scanners installed"
+
+    def test_custom_engine_missing_required_fields_is_rejected(
+        self, _isolate_config_dir
+    ):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "secret_scanning": {
+                        "engines": [{"type": "custom", "binary": "custom-scanner"}]
+                    }
+                }
+            )
+        )
+
+        result = Doctor().check_scanners()
+
+        assert result.status == CheckStatus.FAIL
+        assert "missing binary/command_template" in result.message
 
 
 class TestCheckPatternServer:

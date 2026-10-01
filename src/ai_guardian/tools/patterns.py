@@ -708,6 +708,38 @@ def _is_python_executable(token: str) -> bool:
     )
 
 
+def _python_code_targets_cli(
+    code: str,
+    target_executables: FrozenSet[str],
+    module_prefixes: FrozenSet[str],
+) -> bool:
+    """Return whether Python ``-c`` code imports or launches a target CLI."""
+    if not isinstance(code, str):
+        return False
+
+    for module in module_prefixes:
+        module_pattern = re.escape(module)
+        if re.search(
+            rf"\b(?:from|import)\s+{module_pattern}(?:\b|\.)", code
+        ) or re.search(
+            rf"\b(?:__import__|import_module|run_module)\s*\(\s*"
+            rf"['\"]{module_pattern}(?:['\"]|\.)",
+            code,
+        ):
+            return True
+
+    executable_pattern = "|".join(
+        re.escape(executable) for executable in target_executables
+    )
+    return bool(
+        executable_pattern
+        and re.search(
+            rf"['\"](?:[^'\"]*[\\/])?(?:{executable_pattern})(?:['\"]|\s)",
+            code,
+        )
+    )
+
+
 def _is_script_shell(token: str) -> bool:
     basename = _command_basename(token)
     return basename in _SCRIPT_COMMAND_WRAPPERS or basename in {"cmd.exe"}
@@ -888,6 +920,13 @@ def _contains_target_cli_in_tokens(
                 ):
                     return True
             if option in {"-c", "-c="}:
+                code = ""
+                if option == "-c=" and "=" in tokens[module_index]:
+                    code = _clean_command_token(tokens[module_index]).split("=", 1)[1]
+                elif module_index + 1 < len(tokens):
+                    code = _clean_command_token(tokens[module_index + 1])
+                if _python_code_targets_cli(code, target_executables, module_prefixes):
+                    return True
                 break
         return False
 
