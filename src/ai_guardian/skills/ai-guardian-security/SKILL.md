@@ -47,7 +47,11 @@ This adds noticeable latency, grows the conversation context, and increases toke
 
 ### Tool responses
 - `check_path`: `"allowed"` / `"denied"` (protected by rules) / `"not_found"` (file doesn't exist)
-- `check_command`: `"allowed"` / `"blocked"` + reason (`secret_detected`, `ssrf_detected`, `prompt_injection`, `directory_blocked`, `policy_denied`)
+- `check_command`: `"allowed"` / `"blocked"` + reason (`secret_detected`, `ssrf_detected`, `prompt_injection`, `directory_blocked`, `command_policy_denied`, `permission_denied`, `identity_failure`, `policy_check_error`)
+
+When calling `check_command`, pass `project_dir` when the active workspace is
+known. Otherwise the server uses `AI_GUARDIAN_PROJECT_DIR` or its launch
+directory.
 
 All checks are advisory — hooks provide enforcement as a safety net.
 

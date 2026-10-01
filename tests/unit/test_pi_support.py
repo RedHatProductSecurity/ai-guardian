@@ -532,6 +532,7 @@ def test_pi_extension_template_contains_all_managed_events():
     assert "StdioClientTransport" in _PI_EXTENSION_TS
     assert "pi.registerTool" in _PI_EXTENSION_TS
     assert "mcp-server" in _PI_EXTENSION_TS
+    assert "AI_GUARDIAN_PROJECT_DIR: ctx.cwd || process.cwd()" in _PI_EXTENSION_TS
 
 
 def test_pi_transcript_text_extraction():

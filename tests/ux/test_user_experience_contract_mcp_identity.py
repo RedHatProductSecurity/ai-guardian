@@ -47,6 +47,7 @@ class TestMCPIdentityUX:
         assert message is not None
         assert "MCP Identity Verification Failed" in message
         assert "allowlist" not in message.lower()
+        assert checker.last_deny_category == "identity_failure"
         result = mock_log_violation.call_args.args[0]
         assert result.extra["is_immutable"] is True
 
@@ -147,10 +148,9 @@ class TestMCPIdentityUX:
         mock_ensure.assert_called_once_with()
         mock_attest.assert_called_once_with()
         mock_create_server.assert_not_called()
-        assert (
-            "Error: AI Guardian MCP server identity verification failed."
-            in capsys.readouterr().err
-        )
+        stderr = capsys.readouterr().err
+        assert "Error: AI Guardian MCP server identity verification failed." in stderr
+        assert "Reason: identity_failure." in stderr
 
     @patch("ai_guardian.mcp.server.HAS_MCP", True)
     @patch("ai_guardian.mcp.server.create_server")

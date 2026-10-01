@@ -5,7 +5,7 @@
 | Tool | Parameters | Returns | When to Use |
 |------|-----------|---------|-------------|
 | `check_path` | `path: str` | `{status: "allowed"\|"denied"\|"not_found"}` | Before Read/Write/Edit on unfamiliar paths |
-| `check_command` | `command: str` | `{status: "allowed"\|"blocked", reason?: str}` | Before commands with URLs, credentials, file paths |
+| `check_command` | `command: str, project_dir?: str` | `{status: "allowed"\|"blocked", reason?: str}` | Before commands with URLs, credentials, file paths |
 | `check_mcp_trust` | `server_name: str` | `{status: "trusted"\|"untrusted"}` | Before suggesting MCP server usage |
 | `sanitize_text` | `text: str` | `{sanitized_text, redaction_count, types}` | Before outputting potentially sensitive content |
 | `check_annotations` | `file_path: str` | `{valid: bool, warnings: [...]}` | After editing files with ai-guardian annotations |
@@ -30,7 +30,15 @@
 | `ssrf_detected` | Command targets a potentially dangerous URL (internal IP, metadata endpoint) |
 | `prompt_injection` | Command contains suspected prompt injection |
 | `directory_blocked` | Command accesses a protected directory |
-| `policy_denied` | Command blocked by a permission rule |
+| `command_policy_denied` | Command protection policy blocked the command |
+| `permission_denied` | Ordinary tool permission blocked the command |
+| `identity_failure` | The running built-in MCP process is not currently verified |
+| `policy_check_error` | The policy check could not be completed |
+
+When `project_dir` is omitted, the MCP server uses `AI_GUARDIAN_PROJECT_DIR`
+when provided, otherwise its launch directory. The server captures the trusted
+developer-session setting once at startup. These context rules affect the
+advisory result only; the direct hook remains authoritative.
 
 ## Violation Types for get_violations
 

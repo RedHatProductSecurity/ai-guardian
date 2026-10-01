@@ -142,7 +142,7 @@ Configure via:
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
 | `check_path` | `path`, `operation?` | `allowed` / `denied` / `not_found` + policy decision | Is this path protected? |
-| `check_command` | `command` | `allowed` / `blocked` + reason + policy decision | Would this command be blocked? |
+| `check_command` | `command`, `project_dir?` | `allowed` / `blocked` + reason + policy decision | Would this command be blocked? |
 | `check_mcp_trust` | `server_name` | `trusted` / `untrusted` + policy decision | Is this MCP server allowed? |
 | `sanitize_text` | `text` | sanitized text + redaction count | Redact secrets/PII from text |
 | `check_annotations` | `file_path` | valid/invalid + warnings | Are annotation pairs matched? |
@@ -152,6 +152,27 @@ Configure via:
 Security check and violation responses include the normalized `policy_decision`
 object when available. Its versioned, redacted shape is documented in
 [`VIOLATION_LOGGING.md`](VIOLATION_LOGGING.md#unified-policy-decision).
+
+`check_command` evaluates the project configuration used by the caller when
+`project_dir` is supplied. Integrations may provide the same context through
+`AI_GUARDIAN_PROJECT_DIR`. If neither is available, the MCP server's launch
+directory is used. The MCP process captures the trusted developer-session
+setting once at startup, matching the daemon's snapshot behavior rather than
+rereading that setting for each request.
+
+Command-check reason categories are intentionally stable and do not expose
+matched rules or patterns:
+
+| Reason | Meaning |
+|--------|---------|
+| `command_policy_denied` | A command protection policy blocked the command |
+| `permission_denied` | An ordinary tool permission blocked the command |
+| `identity_failure` | The running built-in MCP process is not currently verified |
+| `policy_check_error` | The policy check could not be completed |
+
+Scanner-specific categories such as `secret_detected` and `ssrf_detected` may
+also be returned. An MCP startup failure reports `startup_failure` or
+`identity_failure` on stderr and exposes no tools.
 
 ### Information (Query)
 
@@ -210,7 +231,7 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
   migrated automatically; permission rules cannot override this gate or block a
   successfully verified built-in server.
 - All other MCP servers require explicit allow rules in the permissions config
-- The MCP server process runs separately from the daemon — if the daemon is unavailable, MCP tools still work
+- The MCP server process runs separately from the daemon — if the daemon is unavailable, MCP tools still work. Project context is supplied explicitly when the client can provide it; otherwise the server launch directory is used.
 
 ## Support Bundle Flow
 

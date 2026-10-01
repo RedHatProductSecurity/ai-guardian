@@ -6,7 +6,7 @@ budget_tokens: 1000
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Update this file at the end of every work phase so the next `/clear` resumes in 1 read.
-> Last updated: 2026-09-30
+> Last updated: 2026-10-01
 
 ---
 
@@ -206,6 +206,26 @@ budget_tokens: 1000
   `git diff --check` passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Issue #2471 Complete
+
+- MCP `check_command` now evaluates the caller's project configuration through
+  an explicit `project_dir`, `AI_GUARDIAN_PROJECT_DIR`, or documented launch-
+  directory fallback, and captures the trusted developer-session state at
+  server startup.
+- Added safe, stable command-check categories for command policy, ordinary
+  permission, identity, and policy-check failures; verified MCP identity still
+  fails closed and remains automatically allowed when attested.
+- The managed Pi MCP bridge now forwards its active `ctx.cwd` to the MCP
+  server; native clients can pass `project_dir` when they have workspace
+  context.
+- Added benign `gh` URL/heredoc, project-policy parity, identity, UX, and Pi
+  bridge regressions; updated MCP documentation, skill references, and the
+  Unreleased changelog.
+- Validation: 206 MCP/policy/UX/Pi tests passed, 98 shared-policy/hook tests
+  passed, and Ruff, Black, Pylint, Mypy, annotation checks, and diff checks
+  passed.
+- Changes are uncommitted; no commit or pull request was created.
+
 ## ✅ Review Findings Addressed — 2026-09-30
 
 - Fixed both self-protection gaps: transfer-tool mutations (`curl`, `wget`,
@@ -255,7 +275,7 @@ budget_tokens: 1000
 
 ## 🚀 Next phase
 
-**Goal:** Review the final uncommitted diff and decide whether to commit or open a PR.
+**Goal:** Review the final uncommitted #2471 diff and decide whether to commit or open a PR.
 
 ### Open decisions
 - No commit or PR action has been requested.
@@ -265,7 +285,7 @@ budget_tokens: 1000
 ## 📁 Active architecture
 
 - **Stack:** Python 3.9-3.14, pytest, Textual/NiceGUI/Tkinter tray UI.
-- **Key modules:** `hook_adapters/grok.py`, `setup/hooks.py`, `setup/mcp.py`, `ide_registry.py`, `container/entrypoint.sh`, `tests/unit/test_grok_support.py`, `tests/integration/test_ide_hooks_e2e.py`.
+- **Key modules:** `mcp/server.py`, `tools/policy.py`, `setup/hooks.py`, `setup/mcp.py`, `ide_registry.py`, `container/entrypoint.sh`, `tests/unit/test_mcp_server.py`, `tests/ux/test_user_experience_contract_mcp_command.py`.
 - **Patterns:** Shared MCP startup migration; fail-closed identity checks; test UI isolation through environment overrides.
 
 ---

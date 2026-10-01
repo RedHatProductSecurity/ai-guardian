@@ -253,6 +253,179 @@ class TestCheckCommand:
         assert result["status"] == "blocked"
         assert result["reason"] == "ssrf_detected"
 
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    def test_permission_denial_has_stable_reason(self, mock_checker_cls):
+        mock_checker = MagicMock()
+        mock_checker.last_deny_category = "permission_denied"
+        mock_checker.check_tool_allowed.return_value = (
+            False,
+            "Tool is blocked by policy",
+            "Bash",
+        )
+        mock_checker_cls.return_value = mock_checker
+
+        server = create_server()
+        tool = server._tool_manager._tools["check_command"]
+        result = tool.fn(command="gh --version")
+
+        assert result["status"] == "blocked"
+        assert result["reason"] == "permission_denied"
+        assert result["reason"] != "policy_denied"
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    def test_command_policy_denial_has_stable_reason(self, mock_checker_cls):
+        mock_checker = MagicMock()
+        mock_checker.last_deny_category = "command_policy"
+        mock_checker.check_tool_allowed.return_value = (False, None, "Bash")
+        mock_checker_cls.return_value = mock_checker
+
+        server = create_server()
+        tool = server._tool_manager._tools["check_command"]
+        result = tool.fn(command="gh --version")
+
+        assert result["status"] == "blocked"
+        assert result["reason"] == "command_policy_denied"
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    @patch("ai_guardian.config.utils.clear_project_dir_override")
+    @patch("ai_guardian.config.utils.set_project_dir_override")
+    @patch("ai_guardian.developer_session.is_trusted_developer_session")
+    def test_command_uses_project_context_and_startup_snapshot(
+        self,
+        mock_developer_session,
+        mock_set_project_dir,
+        mock_clear_project_dir,
+        mock_checker_cls,
+        tmp_path,
+    ):
+        mock_developer_session.return_value = True
+        mock_checker = MagicMock()
+        mock_checker.check_tool_allowed.return_value = (True, None, "Bash")
+        mock_checker_cls.return_value = mock_checker
+
+        server = create_server()
+        tool = server._tool_manager._tools["check_command"]
+        result = tool.fn(
+            command="gh issue create --body <<'EOF'\nhttps://example.com\nEOF",
+            project_dir=str(tmp_path),
+        )
+
+        assert result["status"] == "allowed"
+        mock_set_project_dir.assert_called_once_with(str(tmp_path.resolve()))
+        mock_clear_project_dir.assert_called_once_with()
+        assert mock_checker_cls.call_args.kwargs["developer_session"] is True
+        hook_data = mock_checker.check_tool_allowed.call_args.args[0]
+        assert hook_data["_daemon_cwd"] == str(tmp_path.resolve())
+        assert hook_data["tool_input"]["command"].endswith("EOF")
+
+    @patch("ai_guardian.violations.log_violation.log_violation")
+    @patch(
+        "ai_guardian.developer_session.is_trusted_developer_session", return_value=False
+    )
+    def test_project_policy_matches_direct_bash_policy(
+        self, mock_developer_session, mock_log_violation, tmp_path, monkeypatch
+    ):
+        project_dir = tmp_path / "project"
+        (project_dir / ".ai-guardian").mkdir(parents=True)
+        global_dir = tmp_path / "global"
+        global_dir.mkdir()
+        (global_dir / "ai-guardian.json").write_text(
+            json.dumps(
+                {
+                    "permissions": {"enabled": True, "rules": []},
+                    "self_protection": {"block_host_agent_cli": False},
+                }
+            )
+        )
+        (project_dir / ".ai-guardian" / "ai-guardian.json").write_text(
+            json.dumps(
+                {
+                    "permissions": {
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "matcher": "Bash",
+                                "mode": "deny",
+                                "patterns": ["gh issue *"],
+                            }
+                        ],
+                    }
+                }
+            )
+        )
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(global_dir))
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / "state"))
+
+        server = create_server()
+        tool = server._tool_manager._tools["check_command"]
+        command = "gh issue create --body <<'EOF'\nSee https://example.com\nEOF"
+        mcp_result = tool.fn(command=command, project_dir=str(project_dir))
+
+        from ai_guardian.config.utils import (
+            clear_project_dir_override,
+            set_project_dir_override,
+        )
+        from ai_guardian.tools.policy import ToolPolicyChecker
+
+        set_project_dir_override(str(project_dir))
+        try:
+            direct_allowed, _, _ = ToolPolicyChecker(
+                developer_session=False
+            ).check_tool_allowed(
+                {
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Bash",
+                    "tool_input": {"command": command},
+                }
+            )
+        finally:
+            clear_project_dir_override()
+
+        assert mcp_result["status"] == "blocked"
+        assert mcp_result["reason"] == "permission_denied"
+        assert direct_allowed is False
+        assert mock_developer_session.called
+        assert mock_log_violation.called
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    def test_invalid_project_context_is_policy_error(self, mock_checker_cls, tmp_path):
+        server = create_server()
+        tool = server._tool_manager._tools["check_command"]
+        result = tool.fn(command="gh --version", project_dir=str(tmp_path / "missing"))
+
+        assert result["status"] == "error"
+        assert result["reason"] == "policy_check_error"
+        mock_checker_cls.assert_not_called()
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    @patch("ai_guardian.mcp.identity.verify_active_attestation", return_value=False)
+    def test_verified_server_reports_identity_failure(
+        self, mock_verify, mock_checker_cls
+    ):
+        server = create_server(identity_verified=True)
+        tool = server._tool_manager._tools["check_command"]
+        result = tool.fn(command="gh --version")
+
+        assert result["status"] == "error"
+        assert result["reason"] == "identity_failure"
+        assert result["policy_decision"]["reason"] == "identity_failure"
+        mock_verify.assert_called_once_with("ai-guardian")
+        mock_checker_cls.assert_not_called()
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    @patch("ai_guardian.mcp.identity.verify_active_attestation", return_value=True)
+    def test_verified_server_checks_command(self, mock_verify, mock_checker_cls):
+        mock_checker = MagicMock()
+        mock_checker.check_tool_allowed.return_value = (True, None, "Bash")
+        mock_checker_cls.return_value = mock_checker
+
+        server = create_server(identity_verified=True)
+        tool = server._tool_manager._tools["check_command"]
+        result = tool.fn(command="gh --version")
+
+        assert result["status"] == "allowed"
+        mock_verify.assert_called_once_with("ai-guardian")
+
 
 class TestCheckPathHookDataFormat:
     """Verify check_path sends tool_input (not parameters) to ToolPolicyChecker."""

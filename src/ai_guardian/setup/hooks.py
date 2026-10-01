@@ -4403,11 +4403,14 @@ async function registerMcpTools(pi: ExtensionAPI, ctx: any): Promise<void> {
     const { StdioClientTransport } = await import(
       "@modelcontextprotocol/sdk/client/stdio.js"
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter((entry): entry is [string, string] =>
-        typeof entry[1] === "string",
+    const env = {
+      ...Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] =>
+          typeof entry[1] === "string",
+        ),
       ),
-    );
+      AI_GUARDIAN_PROJECT_DIR: ctx.cwd || process.cwd(),
+    };
     transport = new StdioClientTransport({
       command: GUARDIAN_BINARY,
       args: [...GUARDIAN_BINARY_ARGS, "mcp-server"],
