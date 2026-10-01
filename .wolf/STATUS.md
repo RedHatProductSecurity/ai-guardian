@@ -285,9 +285,17 @@ budget_tokens: 1000
 - Revalidated the complete 363-test affected set after the Windows fix; all passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Issue #2477 Complete
+
+- Reviewed Hermes, OWASP GenAI, Gitleaks, TruffleHog, LeakTK, Betterleaks, recent AI security research, and all scanner categories.
+- Added independently authored GitLab PAT v3 and Okta OAuth client-secret rules with positive, malformed, low-entropy, missing-context, and placeholder regression coverage.
+- Updated `AGENTS.md` review tracking and `CHANGELOG.md`; created follow-ups #2481 for secret formats and #2482 for SSRF unspecified-address/DNS/redirect policy.
+- Focused validation: 573 tests passed; Black, Ruff, Pylint, Mypy, annotation checks, and `git diff --check` passed.
+- Issue #2477 is closed; changes remain uncommitted and `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Run `daf complete` for issue #2472 when ready to commit and open the pull request.
+**Goal:** Run `daf complete` for issue #2477 when ready to commit and open the pull request.
 
 ### Open decisions
 - No commit or PR action has been requested in this session.

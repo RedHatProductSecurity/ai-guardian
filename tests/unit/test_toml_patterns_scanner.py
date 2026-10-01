@@ -466,6 +466,29 @@ class TestTomlPatternsGapFillingRules:
         token = "re_" + "a1B2c3D4" * 3
         assert self._find(f"TOKEN={token}", "resend-api-key")
 
+    # --- Issue #2477: GitLab PAT v3 and Okta OAuth client secrets ---
+
+    def test_gitlab_personal_token_v3_detected(self):
+        token = "glpat-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4" + ".a1.b2c3d4e5f"
+        assert self._find(f"TOKEN={token}", "gitlab-personal-token-v3")
+
+    def test_gitlab_personal_token_v3_low_entropy_rejected(self):
+        token = "glpat-" + "a" * 27 + ".a1.b2c3d4e5f"
+        assert not self._find(f"TOKEN={token}", "gitlab-personal-token-v3")
+
+    def test_okta_oauth_client_secret_detected(self):
+        secret = "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0"
+        assert self._find(f"OKTA_CLIENT_SECRET={secret}", "okta-oauth-client-secret")
+
+    def test_okta_oauth_client_secret_requires_okta_context(self):
+        secret = "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0"
+        assert not self._find(f"CLIENT_SECRET={secret}", "okta-oauth-client-secret")
+
+    def test_okta_oauth_client_secret_placeholder_rejected(self):
+        assert not self._find(
+            f"OKTA_CLIENT_SECRET={'X' * 40}", "okta-oauth-client-secret"
+        )
+
 
 class TestTomlPatternsMultiLineColumns:
     """Tests for column calculation when match spans multiple lines (#1902)."""

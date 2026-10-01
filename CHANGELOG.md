@@ -50,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Credential format coverage (#2477):** Add complete GitLab personal access
+  token v3 matching with entropy filtering and a narrowly scoped Okta OAuth
+  client-secret rule. The formats were independently authored from public
+  documentation after TruffleHog discovery; its AGPL-3.0 implementation was
+  not copied. Add positive, negative, and placeholder regression coverage.
+
 - **Pause-aware MCP action gating (#2472):** Add the `paused` proactive level
   and make MCP path, command, and trust checks observe global, directory, and
   timed daemon pauses without restarting. Paused responses clearly report that
