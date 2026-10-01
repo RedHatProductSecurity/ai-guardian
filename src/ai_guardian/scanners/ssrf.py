@@ -16,7 +16,8 @@ This module provides PATTERN-BASED FILTERING, not comprehensive SSRF protection.
 
 ❌ CANNOT DETECT:
   - Network calls inside MCP server implementations (after hook)
-  - HTTP redirects that happen during tool execution
+  - HTTP redirects that happen during tool execution (unless the network-aware
+    caller revalidates each redirect target)
   - Dynamic URL construction inside tools
   - IDE's own network requests (no hook visibility)
 
@@ -71,7 +72,7 @@ import re
 import socket
 import struct
 import urllib.parse
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, cast
 
 from ai_guardian.patterns import load_bundled_rules
 
@@ -83,7 +84,7 @@ class SSRFProtector:
     Detects and blocks SSRF attacks in tool calls.
 
     Immutable Core Protections (cannot be disabled):
-    - Private IP ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16
+    - Private and reserved IP ranges: 0.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16
     - Cloud metadata endpoints: 169.254.169.254, metadata.google.internal, fd00:ec2::254
     - Dangerous schemes: file://, gopher://, ftp://, data://
 
@@ -92,9 +93,10 @@ class SSRFProtector:
     - Allow localhost (override default block)
     """
 
-    # IMMUTABLE: Core private IP ranges (RFC 1918 + loopback + link-local)
+    # IMMUTABLE: Core private, reserved, loopback, and link-local ranges
     # These CANNOT be disabled via configuration
     CORE_BLOCKED_IP_RANGES = [
+        "0.0.0.0/8",  # Unspecified/reserved destination range (RFC 1122)
         "10.0.0.0/8",  # Private network (RFC 1918)
         "172.16.0.0/12",  # Private network (RFC 1918)
         "192.168.0.0/16",  # Private network (RFC 1918)
@@ -580,6 +582,72 @@ class SSRFProtector:
             # Not a valid IP address
             return False
 
+    @staticmethod
+    def _resolved_address_value(address: Any) -> Optional[str]:
+        """Extract an IP string from an address or ``getaddrinfo`` result."""
+        if isinstance(address, str):
+            return address
+        if isinstance(address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+            return str(address)
+
+        # socket.getaddrinfo() returns (family, type, proto, canonname,
+        # sockaddr), where sockaddr starts with the address for IPv4 and IPv6.
+        if isinstance(address, (tuple, list)) and address:
+            sockaddr = address[-1]
+            if isinstance(sockaddr, (tuple, list)) and sockaddr:
+                return str(sockaddr[0])
+
+        return None
+
+    def _check_resolved_addresses(
+        self, hostname: str, resolved_addresses: Iterable[Any]
+    ) -> Tuple[bool, str, bool]:
+        """Check every address returned for a hostname before network access.
+
+        The hook path does not perform DNS resolution. Network-aware callers can
+        pass the results of a fresh resolution here, including both A and AAAA
+        answers, and must repeat the check for every redirect target.
+        """
+        if isinstance(resolved_addresses, str):
+            resolved_addresses = [resolved_addresses]
+
+        saw_address = False
+        for address in resolved_addresses:
+            saw_address = True
+            resolved_ip = self._resolved_address_value(address)
+            if not resolved_ip:
+                return (
+                    True,
+                    f"failed to parse resolved address for '{hostname}'",
+                    True,
+                )
+
+            normalized_ip = self._normalize_ip(resolved_ip)
+            try:
+                ipaddress.ip_address(normalized_ip)
+            except ValueError:
+                return (
+                    True,
+                    f"failed to parse resolved address '{resolved_ip}' for '{hostname}'",
+                    True,
+                )
+
+            if self._is_ip_blocked(normalized_ip):
+                return (
+                    True,
+                    f"domain '{hostname}' resolves to blocked IP address '{normalized_ip}'",
+                    True,
+                )
+
+        if not saw_address:
+            return (
+                True,
+                f"no resolved address returned for '{hostname}'",
+                True,
+            )
+
+        return False, "", False
+
     def _is_valid_domain_pattern(self, pattern: str) -> bool:
         """
         Validate a wildcard domain pattern.
@@ -754,18 +822,26 @@ class SSRFProtector:
             logger.warning(f"Invalid path pattern: {pattern}")
             return False
 
-    def _check_url(self, url: str) -> Tuple[bool, str, bool]:
+    def _check_url(
+        self,
+        url: str,
+        resolved_addresses: Optional[Iterable[Any]] = None,
+    ) -> Tuple[bool, str, bool]:
         """
         Check if a URL is an SSRF attack.
 
         Evaluation order (deny-first approach):
         1. Check immutable core protections (dangerous schemes, metadata endpoints, private IPs)
-        2. Check deny-list (additional_blocked_domains only)
-        3. Check allow-list (allowed_domains) - can override step 2, NOT step 1
-        4. Check path-based rules (can provide granular control on allowed/blocked domains)
+        2. Check caller-provided resolved addresses before any allow-list decision
+        3. Check deny-list (additional_blocked_domains only)
+        4. Check allow-list (allowed_domains) - can override step 3, NOT steps 1-2
+        5. Check path-based rules (can provide granular control on allowed/blocked domains)
 
         Args:
             url: URL to check
+            resolved_addresses: Optional addresses returned by a fresh DNS
+                lookup for this URL's hostname. The hook path does not resolve
+                hostnames itself.
 
         Returns:
             Tuple of (is_ssrf, reason, is_immutable)
@@ -812,6 +888,16 @@ class SSRFProtector:
         if self._is_ip_blocked(hostname):
             return True, f"private IP address '{hostname}'", True
 
+        # A network-aware caller can revalidate all fresh A/AAAA results before
+        # connecting. This runs before domain allowlists so an allowed hostname
+        # cannot override an immutable resolved destination.
+        if resolved_addresses is not None:
+            resolved_result = self._check_resolved_addresses(
+                hostname, resolved_addresses
+            )
+            if resolved_result[0]:
+                return resolved_result
+
         # Check deny-list (additional_blocked_domains only)
         # This can be overridden by allow-list or path-based rules
         domain_blocked = self._is_domain_blocked(hostname)
@@ -852,6 +938,56 @@ class SSRFProtector:
 
         return False, "", False
 
+    def check_resolved_destination(
+        self, url: str, resolved_addresses: Optional[Iterable[Any]]
+    ) -> Tuple[bool, str, bool]:
+        """Revalidate a URL against caller-provided DNS results.
+
+        This method does not perform DNS or make a network request. Callers that
+        own network execution should pass every address from a fresh A/AAAA
+        lookup immediately before connecting. A blocked result is immutable and
+        cannot be changed by ``allowed_domains`` or the configured action mode.
+        """
+        if resolved_addresses is None:
+            return (
+                True,
+                f"no resolved address supplied for '{url}'",
+                True,
+            )
+        return self._check_url(url, resolved_addresses=resolved_addresses)
+
+    def check_redirect_chain(
+        self,
+        urls: Iterable[str],
+        resolved_addresses_by_url: Optional[Mapping[str, Iterable[Any]]] = None,
+    ) -> Tuple[bool, str, bool]:
+        """Check an initial URL and each supplied redirect target.
+
+        ``urls`` must be the absolute URL chain observed by the network-aware
+        caller. If ``resolved_addresses_by_url`` is supplied, its fresh A/AAAA
+        results are checked for each matching URL. The method never follows
+        redirects itself and therefore remains safe for hook use.
+        """
+        for url in urls:
+            resolved_addresses = None
+            if resolved_addresses_by_url is not None:
+                if url not in resolved_addresses_by_url:
+                    return (
+                        True,
+                        f"no resolved address supplied for redirect URL '{url}'",
+                        True,
+                    )
+                resolved_addresses = resolved_addresses_by_url[url]
+
+            if resolved_addresses_by_url is None:
+                result = self._check_url(url)
+            else:
+                result = self.check_resolved_destination(url, resolved_addresses)
+            if result[0]:
+                return result
+
+        return False, "", False
+
     @staticmethod
     def _format_ssrf_error(
         reason: str, url: str, command: str, immutable_note: str = ""
@@ -873,7 +1009,7 @@ class SSRFProtector:
             "  • Read local files via file:// URLs\n"
             "  • Bypass firewalls and network segmentation\n\n"
             "Blocked resources:\n"
-            "  • Private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)\n"
+            "  • Private/reserved IP ranges (0.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)\n"
             "  • Cloud metadata endpoints (169.254.169.254, metadata.google.internal)\n"
             "  • Dangerous schemes (file://, gopher://, ftp://, data://)\n"
             "  • Localhost (127.0.0.1, ::1)\n\n"

@@ -20,7 +20,7 @@ WebFetch(url="http://169.254.169.254")      # ❌ BLOCKED
 mcp__custom__fetch(url="http://internal")  # ❌ BLOCKED
 ```
 
-### What It CANNOT Protect Against
+### What It CANNOT Protect Against Automatically
 
 ❌ **MCP server internal calls**:
 ```python
@@ -31,7 +31,8 @@ mcp__notebooklm__research_start(source="web")  # ✅ ALLOWED (can't see internal
 
 ❌ **Other undetectable scenarios**:
 - Dynamic URL construction inside tools
-- HTTP redirects after tool execution starts
+- HTTP redirects after tool execution starts unless the network-aware caller
+  revalidates every redirect target
 - IDE's own network requests
 - Binary protocol inspection
 
@@ -101,6 +102,7 @@ These protections **CANNOT be disabled** via configuration:
 - `192.168.0.0/16` - Private network (Class C)
 - `127.0.0.0/8` - Loopback (localhost)
 - `169.254.0.0/16` - Link-local (AWS/Azure metadata)
+- `0.0.0.0/8` - Unspecified and reserved destination addresses
 
 **IPv6:**
 - `::1/128` - Loopback
@@ -131,6 +133,31 @@ These protections **CANNOT be disabled** via configuration:
 - `dict://` - DICT protocol
 - `ldap://` - LDAP protocol
 - `ldaps://` - Secure LDAP
+
+## DNS and Redirect Revalidation
+
+The PreToolUse hook deliberately does not perform DNS lookups or follow HTTP
+redirects. It only inspects the URL text, avoiding outbound network requests,
+hook latency, and a false sense of protection against time-of-check/time-of-use
+changes.
+
+Network-aware integrations that own the connection boundary can revalidate the
+destination with `SSRFProtector.check_resolved_destination(url, addresses)`.
+Pass every fresh IPv4 and IPv6 address returned immediately before connecting.
+Any private, loopback, link-local, metadata, IPv6-local, or `0.0.0.0/8`
+destination is an immutable block. A domain allow-list cannot override that
+result; it only applies to configurable domain deny-list entries.
+
+For redirects, pass the complete absolute URL chain to
+`SSRFProtector.check_redirect_chain()` and provide fresh addresses for each
+URL. Re-resolve and revalidate every redirect target rather than reusing the
+initial response's result. The helper does not follow redirects or make network
+requests, so runtime network policy or a sandbox is still required to close
+the time-of-check/time-of-use window.
+
+The scanner only treats an address as a destination when it appears in a URL.
+Ordinary bind/listen commands such as `python -m http.server --bind 0.0.0.0
+8000` are not URL targets and remain allowed.
 
 ## Configuration
 
@@ -702,12 +729,20 @@ openshell run --policy openshell-github-readwrite-policy.yaml -- claude-code
 
 ### Q: What about DNS rebinding attacks?
 
-**A:** AI Guardian does NOT perform DNS resolution (by design). This avoids:
+**A:** The PreToolUse hook does NOT perform DNS resolution (by design). This
+avoids:
 - Performance overhead
 - Network dependencies
 - TOCTOU (Time-of-Check-Time-of-Use) issues
 
-This means a public domain that resolves to a private IP would bypass protection. This is a known limitation. For complete protection, combine with:
+Network-aware integrations that own the connection boundary can pass fresh A
+and AAAA results to `check_resolved_destination()` before connecting. They must
+re-resolve and revalidate each redirect target, and still need a network
+sandbox or egress policy to prevent a later DNS change from winning the race.
+An allowed domain never overrides a blocked resolved address.
+
+For the hook-only path, a public domain that resolves to a private IP remains
+outside the hook's visibility. For complete protection, combine with:
 - Network egress filtering
 - DNS filtering
 - Runtime monitoring
@@ -732,8 +767,8 @@ This means a public domain that resolves to a private IP would bypass protection
 ### Q: Can attackers bypass this?
 
 **Known bypass vectors:**
-- DNS rebinding (domain resolves to private IP)
-- URL redirects (server redirects to metadata endpoint)
+- DNS rebinding when the network caller does not revalidate immediately before connecting
+- URL redirects when the network caller does not revalidate each target
 - URL shorteners (obscure destination)
 
 **Mitigations:**
@@ -767,9 +802,9 @@ SSRF protection inspired by:
 - Hook-based: Only inspects command strings and tool parameters
 - Cannot see MCP server internal network calls
 - Cannot intercept runtime network traffic
-- Does not perform DNS resolution (by design)
-- Cannot detect URL redirects during execution
-- Cannot detect DNS rebinding attacks
+- The hook does not perform DNS resolution (by design); callers can use the explicit revalidation helpers
+- Cannot enforce revalidation after a redirect during execution
+- Cannot eliminate DNS rebinding time-of-check/time-of-use races
 - Cannot detect dynamic URL construction inside tools
 
 **What This Means**:

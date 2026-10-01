@@ -95,13 +95,15 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
         ),
         "catches": [
             "Requests to private IP ranges (10.x, 172.16-31.x, 192.168.x)",
+            "Unspecified and reserved IPv4 destinations (0.0.0.0/8)",
             "Localhost and loopback addresses (127.x, ::1)",
             "Cloud metadata endpoints (169.254.169.254 — AWS/GCP/Azure IMDS)",
             "Internal DNS names (.internal, .local, .corp)",
             "Dangerous URL schemes (file://, gopher://, dict://)",
         ],
         "does_not_catch": [
-            "SSRF via DNS rebinding (IP checked at scan time, not resolution time)",
+            "DNS rebinding unless a network-aware caller revalidates fresh results",
+            "Redirect targets unless a network-aware caller revalidates each target",
             "Requests in encrypted payloads",
             "SSRF in non-Bash tools (only Bash commands are checked by default)",
         ],
