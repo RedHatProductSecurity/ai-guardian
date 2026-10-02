@@ -110,12 +110,12 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/redhatproductsecurity/ai-guardian:1.18.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.19.0
 ```
 
 Tag conventions:
 - `:latest` — tracks main branch (updated on every merge)
-- `:<version>` — pinned stable release (e.g. `1.18.0`)
+- `:<version>` — pinned stable release (e.g. `1.19.0`)
 
 ## Build Locally
 
@@ -124,10 +124,10 @@ Tag conventions:
 podman build -t ai-guardian container/
 
 # Specific version
-podman build --build-arg AI_GUARDIAN_VERSION=1.18.0 -t ai-guardian container/
+podman build --build-arg AI_GUARDIAN_VERSION=1.19.0 -t ai-guardian container/
 
 # Local wheel (copy the wheel into container/vendor/ first)
-WHEEL_PATH=dist/ai_guardian-1.18.0-py3-none-any.whl
+WHEEL_PATH=dist/ai_guardian-1.19.0-py3-none-any.whl
 WHEEL_NAME="$(basename "$WHEEL_PATH")"
 cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
 podman build --build-arg "AI_GUARDIAN_VERSION=$WHEEL_NAME" \
@@ -1416,7 +1416,7 @@ Access from the host: `http://localhost:63152`
 
 | Arg | Default | Description |
 |-----|---------|-------------|
-| `AI_GUARDIAN_VERSION` | `1.18.0` | PyPI version or `.whl` filename |
+| `AI_GUARDIAN_VERSION` | `1.19.0` | PyPI version or `.whl` filename |
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
 | `OPENCODE_VERSION` | `1.17.3` | OpenCode version for the normal image |

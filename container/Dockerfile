@@ -12,8 +12,8 @@
 # Build locally:
 #   Podman: podman build -t ai-guardian container/
 #   Docker:  docker build -t ai-guardian container/
-#   Podman: podman build --build-arg AI_GUARDIAN_VERSION=1.18.0 -t ai-guardian container/
-#   Docker:  docker build --build-arg AI_GUARDIAN_VERSION=1.18.0 -t ai-guardian container/
+#   Podman: podman build --build-arg AI_GUARDIAN_VERSION=1.19.0 -t ai-guardian container/
+#   Docker:  docker build --build-arg AI_GUARDIAN_VERSION=1.19.0 -t ai-guardian container/
 #
 # Run:
 #   Podman: podman run -it -p 63152 ai-guardian
@@ -44,7 +44,7 @@
 # ============================================================
 FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS builder
 
-ARG AI_GUARDIAN_VERSION=1.18.0
+ARG AI_GUARDIAN_VERSION=1.19.0
 ARG UV_VERSION=0.11.16
 ARG OPENCODE_VERSION=1.17.3
 ARG PI_VERSION=0.86.0

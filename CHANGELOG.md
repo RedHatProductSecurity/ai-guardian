@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-10-01
+
 ### Fixed
 - **MCP command-check context and diagnostics (#2471):** Evaluate commands
   against the caller's supplied project context and startup developer-session
@@ -4088,7 +4090,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.18.0...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.19.0...HEAD
+[1.19.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.19.0
 [1.18.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.18.0
 [1.17.1]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.17.1
 [1.17.0]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.16.0...v1.17.0
