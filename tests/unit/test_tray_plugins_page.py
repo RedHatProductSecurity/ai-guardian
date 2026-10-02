@@ -232,17 +232,6 @@ class TestGetBundledTemplates(TestCase):
 class TestNavRegistration(TestCase):
     """Tests that Tray Plugins appears in nav groups."""
 
-    def test_tui_nav_has_tray_plugins(self):
-        from ai_guardian.tui.app import NAV_GROUPS
-
-        config_group = next(
-            (items for name, items in NAV_GROUPS if name == "Configuration"),
-            None,
-        )
-        assert config_group is not None
-        labels = [label for label, _ in config_group]
-        assert "Tray Plugins" in labels
-
     def test_web_nav_has_tray_plugins(self):
         pytest.importorskip("nicegui", reason="NiceGUI not available")
         from ai_guardian.web.components.header import NAV_GROUPS

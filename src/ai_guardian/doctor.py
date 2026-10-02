@@ -1687,9 +1687,9 @@ class Doctor:
         missing = []
 
         try:
-            import textual  # noqa: F401
+            import nicegui  # noqa: F401
         except ImportError:
-            missing.append("textual")
+            missing.append("nicegui")
 
         try:
             import tree_sitter  # noqa: F401
@@ -1893,7 +1893,7 @@ class Doctor:
                 return CheckResult(
                     name="tkinter_support",
                     status=CheckStatus.WARN,
-                    message="tkinter unavailable — popups use Textual terminal fallback",
+                    message="tkinter unavailable — NiceGUI browser fallback is unavailable",
                     fix_hint=(
                         "Install tkinter for native popups: "
                         "brew install tcl-tk (macOS/pyenv), "
@@ -1907,7 +1907,7 @@ class Doctor:
 
             fallback = "NiceGUI"
         except ImportError:
-            fallback = "Textual"
+            fallback = "unavailable"
 
         return CheckResult(
             name="tkinter_support",
@@ -1991,7 +1991,7 @@ class Doctor:
             status=CheckStatus.WARN,
             message=(
                 f"Ask mode configured ({', '.join(ask_sections)}) "
-                "but tkinter/NiceGUI unavailable — Textual terminal fallback only"
+                "but tkinter/NiceGUI unavailable — ask actions cannot open a dialog"
             ),
             fix_hint=(
                 "Install tkinter for native ask dialogs:\n"

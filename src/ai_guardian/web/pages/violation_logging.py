@@ -1,4 +1,4 @@
-"""Violation Logging page — full config editing matching TUI."""
+"""Violation Logging page — full configuration editing."""
 
 import logging
 import json
@@ -90,7 +90,7 @@ def _format_remaining(dt):
 
 
 def create_violation_logging_page(service, daemon_name: str):
-    """Build the violation logging config page matching TUI."""
+    """Build the violation logging configuration page."""
 
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/violation-logging")
     create_header(daemon_name, drawer=sidebar)

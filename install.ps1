@@ -131,7 +131,7 @@ if ($Tkinter) {
     } else {
         Write-Host "  tkinter not found. Reinstall Python from https://www.python.org/downloads/"
         Write-Host "  and check 'tcl/tk and IDLE' during installation."
-        Write-Host "  Continuing without tkinter (NiceGUI browser or Textual terminal fallback)"
+        Write-Host "  Continuing without tkinter (NiceGUI browser or headless fallback)"
     }
 }
 
@@ -305,14 +305,13 @@ if ($LASTEXITCODE -eq 0) {
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  Popups:   NiceGUI (browser-based form)"
     } else {
-        Write-Host "  Popups:   Textual (terminal fallback)"
+        Write-Host "  Popups:   NiceGUI dependency unavailable (installation incomplete)"
     }
 }
 
 Write-Host ""
 Write-Host "  Popup override env vars:"
-Write-Host '    $env:AI_GUARDIAN_NO_TKINTER=1   skip tkinter, use NiceGUI or Textual'
-Write-Host '    $env:AI_GUARDIAN_NO_NICEGUI=1   skip NiceGUI, use Textual'
+Write-Host '    $env:AI_GUARDIAN_NO_TKINTER=1   skip tkinter, use NiceGUI'
 Write-Host ""
 Write-Host "  Next steps:"
 if (-not $IDE -and (-not $UpdatedAgents -or $UpdatedAgents.Count -eq 0)) {

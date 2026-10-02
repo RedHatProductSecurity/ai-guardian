@@ -969,7 +969,7 @@ def _handle_prompt_params(args):
         return 1
 
     try:
-        from ai_guardian.tui.tray_prompt import TrayPromptApp
+        from ai_guardian.ui.tray_prompt import TrayPromptApp
     except ImportError as e:
         prompt_logger.error("UI dependencies not available: %s", e)
         return 1
@@ -1002,12 +1002,6 @@ def _handle_prompt_params(args):
         title=getattr(args, "title", None),
         screen_bounds=screen_bounds,
     )
-
-    if app.needs_terminal and not sys.stdin.isatty():
-        prompt_logger.error(
-            "tkinter/NiceGUI not available and no interactive terminal for Textual fallback"
-        )
-        return 1
 
     result = app.run()
 
@@ -1051,17 +1045,15 @@ def _handle_prompt_ask(args):
         return 1
 
     try:
-        from ai_guardian.tui.ask_dialog import (
+        from ai_guardian.ui.ask_dialog import (
             AskViolationInfo,
             _TkinterAskDialog,
             _NiceGuiAskDialog,
-            _TextualAskDialog,
             _map_fallback_to_decision,
             AskResult,
         )
-        from ai_guardian.tui.display import (
+        from ai_guardian.ui.display import (
             _tkinter_available,
-            _nicegui_available,
             get_preferred_ui,
         )
     except ImportError as e:
@@ -1110,17 +1102,10 @@ def _handle_prompt_ask(args):
                 except Exception as e:
                     prompt_logger.warning("tkinter ask dialog failed: %s", e)
         elif preferred == "nicegui":
-            if _nicegui_available():
-                try:
-                    result = _NiceGuiAskDialog(violation, timeout).run()
-                except Exception as e:
-                    prompt_logger.warning("NiceGUI ask dialog failed: %s", e)
-        elif preferred == "textual":
-            if sys.stdin.isatty():
-                try:
-                    result = _TextualAskDialog(violation, timeout).run()
-                except Exception as e:
-                    prompt_logger.warning("Textual ask dialog failed: %s", e)
+            try:
+                result = _NiceGuiAskDialog(violation, timeout).run()
+            except Exception as e:
+                prompt_logger.warning("NiceGUI ask dialog failed: %s", e)
         else:
             if _tkinter_available():
                 try:
@@ -1128,17 +1113,11 @@ def _handle_prompt_ask(args):
                 except Exception as e:
                     prompt_logger.warning("tkinter ask dialog failed: %s", e)
 
-            if result is None and _nicegui_available():
+            if result is None:
                 try:
                     result = _NiceGuiAskDialog(violation, timeout).run()
                 except Exception as e:
                     prompt_logger.warning("NiceGUI ask dialog failed: %s", e)
-
-            if result is None and sys.stdin.isatty():
-                try:
-                    result = _TextualAskDialog(violation, timeout).run()
-                except Exception as e:
-                    prompt_logger.warning("Textual ask dialog failed: %s", e)
 
         if result is None:
             decision = _map_fallback_to_decision(fallback)
@@ -1191,14 +1170,10 @@ def _handle_tray_target_select(args):
         sel_logger.error("--targets must be a JSON array")
         return 1
 
-    if not sys.stdin.isatty():
-        sel_logger.error("tray-target-select requires an interactive terminal")
-        return 1
-
     try:
-        from ai_guardian.tui.tray_target_selector import TrayTargetSelectorApp
+        from ai_guardian.ui.tray_target_selector import TrayTargetSelectorApp
     except ImportError as e:
-        sel_logger.error("TUI dependencies not available: %s", e)
+        sel_logger.error("UI dependencies not available: %s", e)
         return 1
 
     app = TrayTargetSelectorApp(targets=targets)

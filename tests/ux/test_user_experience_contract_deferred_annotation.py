@@ -57,12 +57,8 @@ def test_unverified_temp_context_stays_config_only():
 
 
 def test_violation_views_use_verified_annotation_target():
-    from ai_guardian.tui.violations import ViolationDetailsModal
     from ai_guardian.web.pages.violations import _render_violation_card
 
-    tui_source = inspect.getsource(ViolationDetailsModal.compose)
     web_source = inspect.getsource(_render_violation_card)
-    assert "get_annotation_target" in tui_source
     assert "get_annotation_target" in web_source
-    assert "Suppress in Source..." in tui_source
     assert "Suppress in Source..." in web_source

@@ -1,6 +1,6 @@
 """Centralized help content for all AI Guardian scanner pages.
 
-Used by both the TUI HelpModal and the web console help panel.
+Used by the web console help panel and CLI help output.
 """
 
 from typing import Any, Dict
@@ -362,7 +362,7 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# Maps TUI panel IDs to doc URLs (only panels with dedicated docs)
+# Maps web console panel IDs to doc URLs (only panels with dedicated docs)
 PANEL_DOC_URLS: dict = {
     k: v["doc_url"]
     for k, v in {

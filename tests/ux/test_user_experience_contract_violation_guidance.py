@@ -1,6 +1,6 @@
 """UX contracts for actionable violation resolution guidance.
 
-These contracts describe what a user should see in the TUI and Web Console:
+These contracts describe what a user should see in the Web Console:
 specific review steps for each finding, a copyable config snippet when safe,
 and explicit investigation-only guidance for findings that must not be
 suppressed.
@@ -22,7 +22,7 @@ def test_every_violation_type_has_user_facing_resolution_guidance(violation_type
     """
     USER EXPERIENCE: every logged violation → actionable Details guidance.
 
-    The TUI and Web Console both call the shared resolver. Enum-backed types
+    The Web Console and CLI both call the shared resolver. Enum-backed types
     must not fall through to an empty or generic-only resolution section.
     """
     violation = {

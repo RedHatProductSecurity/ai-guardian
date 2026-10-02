@@ -821,7 +821,7 @@ if [ "$IDE" != "dummy-agent" ]; then
 
     # A later `podman exec`/`docker exec` process does not inherit exports made
     # by this entrypoint. Persist the effective source and write capability so
-    # a connected TUI or CLI sees the same sandbox snapshot semantics.
+    # a connected Web Console or CLI sees the same sandbox snapshot semantics.
     if ! python3 - "$CONFIG_METADATA_PATH" "$CONFIG_SOURCE" "$CONFIG_READ_ONLY" <<'PY'
 import json
 import os

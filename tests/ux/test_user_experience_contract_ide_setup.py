@@ -595,22 +595,17 @@ def test_linux_health_and_prompt_fallbacks_remain_visible_and_actionable():
         patch(
             "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=True
-        ),
         patch.object(prompt, "_show_native_fallback", return_value=None) as native,
         patch.object(
             prompt, "_show_tkinter", side_effect=RuntimeError("Tk failed")
         ) as tkinter,
         patch.object(prompt, "_show_nicegui", return_value="action") as browser,
-        patch.object(prompt, "_show_textual") as textual,
     ):
         assert prompt.show(tray_safe=True) == "action"
 
     native.assert_called_once_with()
     tkinter.assert_called_once_with()
     browser.assert_called_once_with()
-    textual.assert_not_called()
 
 
 def test_cursor_health_reports_user_install_scope_and_project_effective_scope():

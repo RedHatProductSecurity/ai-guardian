@@ -82,7 +82,7 @@ def _show_tkinter_message(
     import tkinter as tk
     from tkinter import ttk
 
-    from ai_guardian.tui.display import _ensure_tcl_library
+    from ai_guardian.ui.display import _ensure_tcl_library
 
     _ensure_tcl_library()
     root = tk.Tk()

@@ -2047,11 +2047,10 @@ Enabled by default. Scans conversation transcripts for threats that bypassed hoo
 
 ### How do I get native tray plugin popups?
 
-Install tkinter for your platform for the best experience (native OS dialogs). Without it, AI Guardian uses a three-tier fallback:
+Install tkinter for your platform for the best experience (native OS dialogs). Without it, AI Guardian uses the browser fallback:
 
 1. **tkinter** (native popup, no browser/terminal needed)
-2. **NiceGUI** (browser-based form, Python 3.10+ only)
-3. **Textual** (terminal prompt, all Python versions)
+2. **NiceGUI** (browser-based form)
 
 **Installing tkinter:**
 
@@ -2070,8 +2069,8 @@ tkinter is optional — the installer does not install it automatically. Use `in
 # Force NiceGUI browser form (skip tkinter even if installed)
 AI_GUARDIAN_NO_TKINTER=1 ai-guardian tray start
 
-# Force Textual terminal prompt (skip both tkinter and NiceGUI)
-AI_GUARDIAN_NO_TKINTER=1 AI_GUARDIAN_NO_NICEGUI=1 ai-guardian tray start
+# Force the NiceGUI browser form
+AI_GUARDIAN_PREFERRED_UI=nicegui ai-guardian tray start
 ```
 
 ---

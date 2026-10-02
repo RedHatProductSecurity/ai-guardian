@@ -28,7 +28,6 @@ from ai_guardian.theme import (
     quasar_severity,
     quasar_button,
     violation_badge,
-    textual_severity_class,
     get_images_dir,
     get_image_path,
     set_active_theme,
@@ -186,19 +185,6 @@ class TestQuasarAdapters:
         assert quasar_button("block") == "red-8"
         assert quasar_button("allow_once") == "green-8"
         assert quasar_button("view_file") == "grey"
-
-
-class TestTextualAdapter:
-    """Textual CSS class mapping."""
-
-    def test_textual_severity_class(self):
-        assert textual_severity_class("critical") == "status-error"
-        assert textual_severity_class("high") == "status-error"
-        assert textual_severity_class("warning") == "status-warn"
-        assert textual_severity_class("low") == "status-info"
-
-    def test_textual_severity_class_unknown(self):
-        assert textual_severity_class("unknown") == ""
 
 
 class TestImagePaths:

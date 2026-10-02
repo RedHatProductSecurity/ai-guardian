@@ -1140,7 +1140,6 @@ class TestShowDialog:
     def _enable_dialog_provider(self, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
         monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
-        monkeypatch.delenv("AI_GUARDIAN_NO_NICEGUI", raising=False)
 
     def test_headless_does_not_launch_dialog(self, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "headless")
@@ -1205,10 +1204,10 @@ class TestShowDialog:
             m.system.return_value = "Darwin"
             with (
                 mock.patch(
-                    "ai_guardian.tui.display.get_preferred_ui", return_value="auto"
+                    "ai_guardian.ui.display.get_preferred_ui", return_value="auto"
                 ),
                 mock.patch(
-                    "ai_guardian.tui.display._tkinter_available", return_value=False
+                    "ai_guardian.ui.display._tkinter_available", return_value=False
                 ),
                 mock.patch(
                     "ai_guardian.tray.dialog_placement.show_tkinter_message_subprocess"

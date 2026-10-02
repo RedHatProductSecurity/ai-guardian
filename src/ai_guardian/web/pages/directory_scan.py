@@ -317,7 +317,7 @@ def _local_scan_with_progress(
     import time
     from pathlib import Path as P
     from ai_guardian.scanners.file_scanner import FileScanner
-    from ai_guardian.tui.pattern_editor import config_section_for_rule_id
+    from ai_guardian.ui.pattern_editor import config_section_for_rule_id
     from ai_guardian.web.config_helpers import load_web_config
 
     def on_progress(file_path, index, total):
@@ -455,7 +455,7 @@ def _render_results(
 
 def _show_allow_all_dialog(config_section, findings):
     """Bulk Allow All of Type — show matched texts and suggest pattern."""
-    from ai_guardian.tui.pattern_editor import (
+    from ai_guardian.ui.pattern_editor import (
         validate_pattern,
         generate_config_preview,
         suggest_pattern,
@@ -547,7 +547,7 @@ def _show_allow_all_dialog(config_section, findings):
 def _show_ignore_all_files_dialog(config_section, findings):
     """Bulk Ignore All Files of Type — add to .aiguardignore.toml."""
     from nicegui import ui
-    from ai_guardian.tui.ignore_file_editor import (
+    from ai_guardian.ui.ignore_file_editor import (
         SCOPE_THIS_SCANNER,
         SCOPE_ALL_SCANNERS,
         SCANNER_LABELS,
@@ -556,7 +556,7 @@ def _show_ignore_all_files_dialog(config_section, findings):
         suggest_ignore_path,
     )
     from ai_guardian.aiguardignore import generate_aiguardignore_preview
-    from ai_guardian.tui.ask_dialog import _write_aiguardignore_text
+    from ai_guardian.ui.ask_dialog import _write_aiguardignore_text
 
     file_paths = list(
         set(f.get("file_path", "") for f in findings if f.get("file_path"))

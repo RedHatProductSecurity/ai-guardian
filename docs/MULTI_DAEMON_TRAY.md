@@ -94,7 +94,7 @@ at runtime. The exact directory and path allowlists live beside
 `DaemonState.get_package_max_mtime()` in `src/ai_guardian/daemon/state.py`.
 
 Client-only code stays out of the inventory: for example, the full
-`integrations/`, `tui/`, `web/`, and `tray/` trees, `daemon/client.py`,
+`integrations/`, `ui/`, `web/`, and `tray/` trees, `daemon/client.py`,
 `daemon/discovery.py`, `mcp/server.py`, and the daemon's CLI-only `auto_setup.py`
 and `desktop.py` helpers. A few individual files in those packages are included
 where the daemon server calls them directly.
@@ -677,8 +677,8 @@ show_ask_dialog()
 | Host OS | Dialog shown by tray |
 |---|---|
 | macOS 14+ | NiceGUI browser tab (tkinter suppressed — pystray is NSAccessory, cannot steal focus) |
-| Linux KDE/GNOME | tkinter / NiceGUI / Textual per `preferred_ui` config |
-| macOS < 14 | tkinter / NiceGUI / Textual per `preferred_ui` config |
+| Linux KDE/GNOME | tkinter / NiceGUI per `preferred_ui` config |
+| macOS < 14 | tkinter / NiceGUI per `preferred_ui` config |
 
 The full dialog is shown in all cases: Allow Once, Allow Always (with pattern
 editor), Suppress in Source, Ignore File, and Block. Pattern saving and source

@@ -17,7 +17,7 @@ from ai_guardian.scan_analyzer import (
     _scanner_for_rule_id,
     fingerprint_finding,
 )
-from ai_guardian.tui.source_annotator import (
+from ai_guardian.ui.source_annotator import (
     find_enclosing_multiline_string,
     get_comment_prefix,
     write_annotated_source,

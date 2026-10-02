@@ -108,7 +108,7 @@ command-line arguments.
 The opt-in is limited to the CLI boundary and does not disable protected-file,
 hook, cache, MCP identity, or other immutable protections.
 
-The TUI and Web Console expose this setting under **Configuration & CLI
+The Web Console exposes this setting under **Configuration & CLI
 Protection** in Global Settings. It is displayed but not editable while the
 project configuration scope is selected. Restart the daemon/session after
 changing it.
@@ -131,7 +131,7 @@ project overlays, SDK overlays, hook payloads, and command arguments cannot
 weaken it. Disabling host-CLI protection does not disable the existing
 agent-originated `ai-guardian` CLI guard or other immutable protections.
 
-The TUI and Web Console expose this setting under **Configuration & CLI
+The Web Console exposes this setting under **Configuration & CLI
 Protection**. It is inherited and read-only while project scope is selected.
 
 ### Supported Agent Configuration Protection
@@ -146,7 +146,7 @@ bridges, and documented relocated or explicitly selected configuration paths.
 Missing or malformed values remain enabled. An explicit global `false` opts out
 of this new broad protection only; immutable AI Guardian configuration, cache,
 package, hook, MCP identity, and agent-originated CLI protections remain active.
-Project overlays cannot weaken a globally enabled value, and the TUI and Web
+Project overlays cannot weaken a globally enabled value, and the Web Console
 Console display the project-scope value as inherited/read-only.
 
 ### 3. Legacy Local Configuration

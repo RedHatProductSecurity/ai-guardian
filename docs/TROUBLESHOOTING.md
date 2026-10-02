@@ -213,8 +213,8 @@ python -c "import tkinter; root = tkinter.Tk(); root.destroy(); print('OK')"
 
 **Force a specific popup backend:**
 ```bash
-AI_GUARDIAN_NO_TKINTER=1    # skip tkinter, use NiceGUI or Textual
-AI_GUARDIAN_NO_NICEGUI=1    # skip NiceGUI, use Textual
+AI_GUARDIAN_NO_TKINTER=1    # skip tkinter, use NiceGUI
+AI_GUARDIAN_PREFERRED_UI=nicegui  # explicitly use the browser dialog
 ```
 
 ### tkinter Not Available on Python 3.14 (uv)
@@ -228,7 +228,7 @@ AI_GUARDIAN_NO_NICEGUI=1    # skip NiceGUI, use Textual
 uv tool install ai-guardian --python 3.13
 ```
 
-Or use the NiceGUI/Textual fallback — the tray plugin cascade handles this automatically.
+The NiceGUI browser fallback handles this automatically.
 
 ### Linux Tray Health or Setup Prompt Has No Visible Result
 
@@ -240,7 +240,7 @@ notification service. Native dialogs also require a graphical session and an
 installed provider. AI Guardian prefers `kdialog` for KDE/Plasma sessions and
 `zenity` for GNOME and other Linux desktops, then tries the other provider;
 both providers can work over X11 or Wayland. Linux tray prompts then fall
-through to in-process Tkinter, NiceGUI in the browser, and Textual in a TTY.
+through to in-process Tkinter and NiceGUI in the browser.
 
 Check the session and available providers from the same environment that
 launches the tray:
@@ -273,7 +273,7 @@ export AI_GUARDIAN_NO_TKINTER=1
 ```
 
 Sandbox creation and deletion use the same provider policy. The create form
-falls back to NiceGUI or Textual, while upload/delete confirmations use the
+falls back to NiceGUI, while upload/delete confirmations use the
 native macOS dialog when Tkinter is unavailable. Long-running sandbox output
 continues without a progress window and is shown through the captured
 output/log fallback, so missing Tkinter does not prevent the runtime command

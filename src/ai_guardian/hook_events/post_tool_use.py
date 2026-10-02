@@ -670,7 +670,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     findings=pii_findings,
                 )
                 if pii_ask_result is not None:
-                    from ai_guardian.tui.ask_dialog import AskDecision
+                    from ai_guardian.ui.ask_dialog import AskDecision
 
                     if pii_ask_result.decision not in (
                         AskDecision.BLOCK,
@@ -855,7 +855,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             findings=post_pi_result.findings,
                         )
                         if post_pi_ask is not None:
-                            from ai_guardian.tui.ask_dialog import AskDecision
+                            from ai_guardian.ui.ask_dialog import AskDecision
 
                             if post_pi_ask.decision not in (
                                 AskDecision.BLOCK,
@@ -976,7 +976,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             },
                         )
                         if post_cp_ask is not None:
-                            from ai_guardian.tui.ask_dialog import AskDecision
+                            from ai_guardian.ui.ask_dialog import AskDecision
 
                             if post_cp_ask.decision not in (
                                 AskDecision.BLOCK,
@@ -1064,7 +1064,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 },
             )
             if post_ol_ask is not None:
-                from ai_guardian.tui.ask_dialog import AskDecision
+                from ai_guardian.ui.ask_dialog import AskDecision
 
                 if post_ol_ask.decision not in (
                     AskDecision.BLOCK,

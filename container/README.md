@@ -1293,7 +1293,7 @@ sandbox-local profile path. A missing explicit profile file is an error. A
 missing host `ai-guardian.json` is not an error when no profile is selected;
 the sandbox command reports the fallback and creates a local config. `--profile` and
 host-config sharing are mutually exclusive. When the host config is effective,
-the sandbox edits its own copy; the TUI, NiceGUI, and REST config APIs never
+the sandbox edits its own copy; the Web Console and REST config APIs never
 write back to the host file.
 
 ## Authentication

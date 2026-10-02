@@ -26,7 +26,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Configuration Cookbook](COOKBOOK.md) | Practical Q&A pairs for common configuration tasks |
 | [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage pinned secret scanner engines |
 | [TOML Pattern Engine](TOML_PATTERNS.md) | Built-in Python scanner with 267 pre-compiled TOML patterns |
-| [Console Guide](CONSOLE.md) | Interactive TUI for managing configuration |
+| [Console Guide](CONSOLE.md) | NiceGUI browser console for managing configuration |
 | [Hook Ordering](HOOKS.md) | How hooks work and ordering requirements |
 | [Troubleshooting](TROUBLESHOOTING.md) | Daemon, tray, container, and OpenShell issue resolution |
 

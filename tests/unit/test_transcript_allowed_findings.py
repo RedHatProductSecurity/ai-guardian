@@ -383,7 +383,7 @@ class TestLogAskDecisionAllowedFindings:
     def test_allow_once_records_finding(self):
         from ai_guardian.ask_mode import _log_ask_decision
         from ai_guardian.hook_processing import ViolationType
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         allowed_set = set()
         with mock.patch("ai_guardian.ask_mode.HAS_VIOLATION_LOGGER", True):
@@ -402,7 +402,7 @@ class TestLogAskDecisionAllowedFindings:
     def test_block_does_not_record(self):
         from ai_guardian.ask_mode import _log_ask_decision
         from ai_guardian.hook_processing import ViolationType
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         allowed_set = set()
         with mock.patch("ai_guardian.ask_mode.HAS_VIOLATION_LOGGER", True):
@@ -421,7 +421,7 @@ class TestLogAskDecisionAllowedFindings:
         """Without invocation_allowed_findings, allow decisions log without error."""
         from ai_guardian.ask_mode import _log_ask_decision
         from ai_guardian.hook_processing import ViolationType
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         with mock.patch("ai_guardian.ask_mode.HAS_VIOLATION_LOGGER", True):
             with mock.patch("ai_guardian.ask_mode.ViolationLogger"):

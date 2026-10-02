@@ -91,7 +91,7 @@ def _handle_ask_mode(
         return None
 
     try:
-        from ai_guardian.tui.ask_dialog import (
+        from ai_guardian.ui.ask_dialog import (
             show_ask_dialog,
             AskViolationInfo,
             AskDecision,
@@ -189,7 +189,7 @@ def _handle_ask_mode(
 
         if result.decision == AskDecision.IGNORE_FILE and result.ignore_path:
             if not getattr(result, "config_saved", False):
-                from ai_guardian.tui.ask_dialog import _save_ignore_path
+                from ai_guardian.ui.ask_dialog import _save_ignore_path
 
                 _save_ignore_path(result.ignore_path, result.ignore_scanner_types)
             from ai_guardian.config.loaders import _clear_config_cache
@@ -200,7 +200,7 @@ def _handle_ask_mode(
 
     except Exception as e:
         logger.warning(f"Ask dialog error, falling back to {fallback_action}: {e}")
-        from ai_guardian.tui.ask_dialog import (
+        from ai_guardian.ui.ask_dialog import (
             AskResult,
             AskDecision,
             _map_fallback_to_decision,
@@ -227,7 +227,7 @@ def _handle_ask_mode_multi(
     Returns the final AskResult (BLOCK if any blocked, ALLOW_ONCE if all allowed).
     Also returns the per-finding results list as result.per_finding_results.
     """
-    from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+    from ai_guardian.ui.ask_dialog import AskResult, AskDecision
     from ai_guardian.constants import parse_ask_action, ActionMode
 
     primary_action, _ = parse_ask_action(action_str)
@@ -388,7 +388,7 @@ _ASK_VIOLATION_LABELS = {
 
 def _format_ask_info_message(violation_type, decision, detail=""):
     """Format an informational message for an ask-mode allow decision."""
-    from ai_guardian.tui.ask_dialog import AskDecision
+    from ai_guardian.ui.ask_dialog import AskDecision
 
     label = _ASK_VIOLATION_LABELS.get(violation_type, str(violation_type))
     if decision == AskDecision.ALLOW_ALWAYS:
@@ -427,7 +427,7 @@ def _log_ask_decision(
     if not HAS_VIOLATION_LOGGER:
         return
     try:
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         from ai_guardian.violations.redact import (
             REDACT_VIOLATION_TYPES,

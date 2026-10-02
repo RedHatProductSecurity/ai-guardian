@@ -2119,10 +2119,7 @@ class TrayMenuBuilder:
         def _open_panel(panel=None):
             def action(_, __):
                 self._tray._check_and_autostart_daemon()
-                if (
-                    self._tray._has_web_console
-                    and self._tray._ensure_web_console_ready()
-                ):
+                if self._tray._ensure_web_console_ready():
                     web_page = (
                         tray_menu.PANEL_TO_WEB_PATH.get(panel, "") if panel else ""
                     )
@@ -2672,11 +2669,7 @@ class TrayMenuBuilder:
             def _mk_open_panel(panel=None, slot=idx):
                 def action(_, __):
                     self._tray._check_and_autostart_daemon()
-                    if (
-                        panel
-                        and self._tray._has_web_console
-                        and self._tray._ensure_web_console_ready()
-                    ):
+                    if panel and self._tray._ensure_web_console_ready():
                         web_page = tray_menu.PANEL_TO_WEB_PATH.get(panel, "")
                         daemon_name = (
                             self._tray._targets[slot].name
@@ -2697,10 +2690,7 @@ class TrayMenuBuilder:
             def _mk_web_console_action(slot=idx):
                 def action(_, __):
                     self._tray._check_and_autostart_daemon()
-                    if (
-                        self._tray._has_web_console
-                        and self._tray._ensure_web_console_ready()
-                    ):
+                    if self._tray._ensure_web_console_ready():
                         if slot < len(self._tray._targets):
                             tray_menu.open_web_console(self._tray._targets[slot].name)
                         return
@@ -2715,9 +2705,7 @@ class TrayMenuBuilder:
 
             def _mk_web_console_visible(slot=idx):
                 def check(_):
-                    return self._tray._has_web_console and slot < len(
-                        self._tray._targets
-                    )
+                    return slot < len(self._tray._targets)
 
                 return check
 

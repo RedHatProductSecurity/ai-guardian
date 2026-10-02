@@ -81,23 +81,7 @@ one causes a broken or incomplete feature.
 - [ ] `ai-guardian-example.json` — add fully-commented example block for the new section
 - [ ] All four profile templates: `src/ai_guardian/templates/profiles/{minimal,standard,strict,moderator}.json`
 
-### 9. TUI console
-- [ ] `src/ai_guardian/tui/<scanner>.py` — new `*Content(Container)` panel (config status, violations, inline help). Add `_apply_tooltips()` method that calls `CONFIG_FIELD_HELP.get("<scanner>.<field>")` and sets `.tooltip` on key widgets (enable toggle, action select, etc.). Call `_apply_tooltips()` from `on_mount()` after `load_config()`.
-- [ ] `src/ai_guardian/tui/app.py`:
-  - Add `("Label", "panel-<scanner>")` to the relevant `NAV_GROUPS` section
-  - Add `with Container(id="panel-<scanner>"): yield <Scanner>Content()` in the compose tree
-  - Add `"panel-<scanner>": ("...")` entry to `PANEL_DESCRIPTIONS`
-- [ ] `src/ai_guardian/tui/global_settings.py`:
-  - Add `("<scanner>", "gs_<scanner>", "emoji Label")` to `FEATURE_TOGGLES`
-  - Add `"<scanner>": {"schema_path": ..., "options": [...], "default": ...}` to `FEATURE_ACTIONS`
-- [ ] `src/ai_guardian/tui/violations.py`:
-  - Add `"<scanner>"` to `KNOWN_VIOLATION_TYPES`
-  - Handle `vtype == "<scanner>"` in `_extract_matched_from_violation()`
-  - Add `TabPane("Label", id="filter-<scanner>")` + `VerticalScroll(id="violations-list-<scanner>")` in compose
-  - Add load call in `load_all_filters()`
-- [ ] `tests/unit/test_tui.py` — update nav leaf count assertion
-
-### 10. Web console
+### 9. Web console
 - [ ] `src/ai_guardian/web/pages/<scanner>.py` — new `create_<scanner>_page(service, daemon_name)` with enable toggle, action selector, config options. Import `field_help_icon` from `ai_guardian.web.components.help_panel` and add `field_help_icon("<scanner>")` next to section headers and `field_help_icon("<scanner>.<field>")` next to individual field labels (action, ignore_files, ignore_tools, etc.).
 - [ ] `src/ai_guardian/web/app.py` — add `@ui.page("/{daemon_name}/<slug>")` route
 - [ ] `src/ai_guardian/web/components/header.py` — add `("Label", "/<slug>")` to the relevant nav group
@@ -116,18 +100,16 @@ one causes a broken or incomplete feature.
   - Add `"<scanner>": [("Field", "key"), ...]` to `DETAIL_FIELDS`
   - Handle `vtype == "<scanner>"` in `_extract_matched_from_violation()`
 
-### 11. Tests
+### 10. Tests
 - [ ] `tests/unit/test_<scanner>.py` — unit tests: clean input, known-bad input, config options (threshold, allowlist), suppression annotations, robustness (empty input, parse errors)
 
-### 12. Help tooltips
-- [ ] `src/ai_guardian/setup/config.py` — add `_comment_*` keys inside the scanner dict in `_get_default_config_template()` for each configurable field so they surface automatically as tooltips in both consoles
+### 11. Help tooltips
+- [ ] `src/ai_guardian/setup/config.py` — add `_comment_*` keys inside the scanner dict in `_get_default_config_template()` for each configurable field so they surface automatically as Web Console tooltips
 - [ ] `src/ai_guardian/help_content.py` → `_FIELD_HELP_SUPPLEMENT` — add any field that `setup/config.py` doesn't cover with a `_comment_*` key (use `"<scanner>.<field>"` keys)
-- [ ] `src/ai_guardian/tui/<scanner>.py` — `_apply_tooltips()` sets `.tooltip` on key widgets from `CONFIG_FIELD_HELP`
 - [ ] `src/ai_guardian/web/pages/<scanner>.py` — `field_help_icon("<scanner>.<field>")` called next to every section and field label
 - [ ] `src/ai_guardian/web/pages/global_settings.py` — existing loop calls `field_help_icon(section)` and `field_help_icon(f"{section}.action")` automatically for any new scanner added to `FEATURE_GROUPS`
-- [ ] `src/ai_guardian/tui/global_settings.py` — existing `_apply_tooltips()` loop covers any new scanner added to `FEATURES`
 
-### 13. Don't forget
+### 12. Don't forget
 - [ ] `.aiguardignore.toml` scanner type — add to `SCANNER_TYPES` in `aiguardignore.py` if file-content based
 - [ ] `docs/AGENT_SUPPORT.md` — add row to Violation Type Coverage Matrix
 - [ ] `CHANGELOG.md` — add entry under `[Unreleased]`

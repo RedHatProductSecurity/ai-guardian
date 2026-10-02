@@ -1,4 +1,4 @@
-"""Violations page — tabbed browser with details/correlation matching TUI."""
+"""Violations page — tabbed browser with details and correlation."""
 
 import json
 from collections import Counter
@@ -592,7 +592,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                         if not is_immutable_violation(violation) and (
                             v_file_path or annotation_target
                         ):
-                            from ai_guardian.tui.source_annotator import (
+                            from ai_guardian.ui.source_annotator import (
                                 get_comment_prefix,
                             )
 
@@ -683,7 +683,7 @@ async def _show_allow_always_flow(parent_dialog, violation, service, daemon_name
     start_column = blocked.get("start_column")
     end_column = blocked.get("end_column")
 
-    from ai_guardian.tui.pattern_editor import config_section_for_violation
+    from ai_guardian.ui.pattern_editor import config_section_for_violation
 
     config_section = config_section_for_violation(vtype)
     if not config_section:
@@ -824,7 +824,7 @@ def _show_pattern_editor_dialog(
     matched_text: str, config_section: str, file_path: str = ""
 ):
     """Open inline pattern editor dialog for allowlisting."""
-    from ai_guardian.tui.pattern_editor import (
+    from ai_guardian.ui.pattern_editor import (
         validate_pattern,
         generate_config_preview,
         suggest_pattern,
@@ -902,11 +902,11 @@ def _show_pattern_editor_dialog(
 def _show_config_editor_dialog(save_pat: str, config_section: str, file_path: str = ""):
     """Show config editor with pattern inserted for review and save."""
     import json as json_mod
-    from ai_guardian.tui.pattern_editor import (
+    from ai_guardian.ui.pattern_editor import (
         prepare_config_with_pattern,
         get_config_scope_options,
     )
-    from ai_guardian.tui.ask_dialog import _write_config_text
+    from ai_guardian.ui.ask_dialog import _write_config_text
     from ai_guardian.web.config_helpers import (
         _get_remote_project_dir,
         load_web_projects,
@@ -1015,7 +1015,7 @@ def _show_config_editor_dialog(save_pat: str, config_section: str, file_path: st
 def _show_suppress_in_source_flow(violation):
     """Show source annotation preview for a violation."""
     from nicegui import ui
-    from ai_guardian.tui.source_annotator import (
+    from ai_guardian.ui.source_annotator import (
         prepare_annotation,
         write_annotated_source,
     )
@@ -1116,7 +1116,7 @@ def _show_suppress_in_source_flow(violation):
 def _show_ignore_file_flow(violation):
     """Show ignore file editor for a violation."""
     from nicegui import ui
-    from ai_guardian.tui.ignore_file_editor import (
+    from ai_guardian.ui.ignore_file_editor import (
         SCOPE_THIS_SCANNER,
         SCOPE_ALL_SCANNERS,
         SCANNER_LABELS,
@@ -1124,9 +1124,9 @@ def _show_ignore_file_flow(violation):
         validate_ignore_path,
         suggest_ignore_path,
     )
-    from ai_guardian.tui.pattern_editor import config_section_for_violation
+    from ai_guardian.ui.pattern_editor import config_section_for_violation
     from ai_guardian.aiguardignore import generate_aiguardignore_preview
-    from ai_guardian.tui.ask_dialog import _write_aiguardignore_text
+    from ai_guardian.ui.ask_dialog import _write_aiguardignore_text
 
     blocked = violation.get("blocked", {})
     file_path = blocked.get("file_path", "") if isinstance(blocked, dict) else ""

@@ -57,7 +57,6 @@ class TestDefaultPluginSchema:
         templates = _template_files()
         names = {p.name for p in templates}
         assert "default-global.json" in names
-        assert "default-daemon-tui.json" in names
         assert "default-daemon-web.json" in names
 
 
@@ -139,14 +138,6 @@ class TestDefaultPluginContent:
         assert param["name"] == "scanner"
         assert "options" in param
 
-    def test_tui_variant_uses_terminal_for_doctor(self):
-        data = json.loads(
-            (_TEMPLATE_DIR / "default-daemon-tui.json").read_text(encoding="utf-8")
-        )
-        doctor = next(i for i in data["items"] if i["label"] == "View Doctor")
-        assert doctor["type"] == "terminal"
-        assert "--web" not in doctor["command"]
-
     def test_web_variant_uses_background_for_doctor(self):
         data = json.loads(
             (_TEMPLATE_DIR / "default-daemon-web.json").read_text(encoding="utf-8")
@@ -155,11 +146,6 @@ class TestDefaultPluginContent:
         assert doctor["type"] == "background"
         assert isinstance(doctor["command"], dict)
         assert "health-check" in doctor["command"]["darwin"]
-
-    def test_both_variants_same_plugin_name(self):
-        tui = json.loads((_TEMPLATE_DIR / "default-daemon-tui.json").read_text())
-        web = json.loads((_TEMPLATE_DIR / "default-daemon-web.json").read_text())
-        assert tui["name"] == web["name"]
 
 
 class TestDefaultPluginLoad:
@@ -181,30 +167,18 @@ class TestDefaultPluginLoad:
 
 
 class TestBundledPluginVariantSelection:
-    """Verify the web variant is preferred while the TUI fallback remains available."""
+    """Verify the browser-console plugin is bundled and loaded."""
 
     def test_web_variant_by_default(self):
-        with patch("ai_guardian.tray.plugins._HAS_WEB_CONSOLE", True):
-            from ai_guardian.tray.plugins import _load_bundled_plugins
+        from ai_guardian.tray.plugins import _load_bundled_plugins
 
-            plugins = _load_bundled_plugins()
+        plugins = _load_bundled_plugins()
         names = {p.name for p in plugins}
         assert "Maintenance" in names
         maint = next(p for p in plugins if p.name == "Maintenance")
         doctor = next(i for i in maint.items if i.label == "View Doctor")
         assert isinstance(doctor.command, dict)
         assert "health-check" in doctor.command["darwin"]
-
-    def test_tui_variant_is_available_as_fallback(self):
-        with patch("ai_guardian.tray.plugins._HAS_WEB_CONSOLE", False):
-            from ai_guardian.tray.plugins import _load_bundled_plugins
-
-            plugins = _load_bundled_plugins()
-        names = {p.name for p in plugins}
-        assert "Maintenance" in names
-        maint = next(p for p in plugins if p.name == "Maintenance")
-        doctor = next(i for i in maint.items if i.label == "View Doctor")
-        assert "--web" not in doctor.command
 
     def test_only_one_maintenance_loaded(self):
         from ai_guardian.tray.plugins import _load_bundled_plugins

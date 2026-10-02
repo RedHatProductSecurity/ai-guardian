@@ -11,7 +11,6 @@ readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 dependencies = [
-  "textual>=0.47.0",
   "jsonschema>=4.0.0",
   "requests>=2.28.0",
   "tomli>=2.0.0; python_version < '3.11'",
@@ -132,7 +131,7 @@ markers = [
 source = ["src/ai_guardian"]
 omit = [
     # Console modules (separate from core security logic)
-    "src/ai_guardian/tui/*",
+    "src/ai_guardian/ui/*",
     "src/ai_guardian/web/*",
 
     # Infrastructure/setup modules
@@ -180,8 +179,6 @@ ignore = [
 "src/ai_guardian/hook_processing.py" = ["F821"]
 "src/ai_guardian/cli_handlers.py" = ["F821"]
 "src/ai_guardian/setup.py" = ["F821"]
-"src/ai_guardian/tui/ask_dialog_textual.py" = ["F821"]
-"src/ai_guardian/tui/violation_logging.py" = ["F821"]
 
 [tool.mypy]
 # Type-check on the CI runtime. Runtime compatibility with Python 3.10 remains

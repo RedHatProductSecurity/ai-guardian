@@ -485,7 +485,7 @@ Data is stored in `~/.local/state/ai-guardian/latency.jsonl` alongside `violatio
 
 ### Console Dashboard
 
-Both the TUI (`ai-guardian console`) and web console (`ai-guardian console --web`) display latency metrics on the Security Dashboard, showing average hook execution time and per-check breakdowns.
+The Web Console (`ai-guardian console`) displays latency metrics on the Security Dashboard, showing average hook execution time and per-check breakdowns.
 
 ### Coverage, configuration, and restart behavior
 

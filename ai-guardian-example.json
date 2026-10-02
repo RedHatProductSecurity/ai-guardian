@@ -1056,7 +1056,7 @@
   "_comment_console": "Console settings",
   "console": {
     "preferred_ui": "auto",
-    "_comment_preferred_ui": "Preferred UI toolkit for dialogs. Options: auto, tkinter, nicegui, textual, headless. Env var override: AI_GUARDIAN_PREFERRED_UI",
+    "_comment_preferred_ui": "Preferred UI toolkit for dialogs. Options: auto, tkinter, nicegui, headless. Legacy textual values use nicegui. Env var override: AI_GUARDIAN_PREFERRED_UI",
     "editor_theme": "monokai",
     "_comment_editor_theme": "Color theme for the JSON config editor. Options: monokai, vscode_dark, dracula, github_light",
     "web": {
@@ -1174,7 +1174,7 @@
   },
 
   "_comment_violation_logging": "Log blocked operations for audit and review (NEW in v1.1.0)",
-  "_comment_violation_logging2": "All scanner findings are written to violations.jsonl for review in TUI/web console",
+  "_comment_violation_logging2": "All scanner findings are written to violations.jsonl for review in the web console",
   "violation_logging": {
     "enabled": true,
     "max_entries": 1000,

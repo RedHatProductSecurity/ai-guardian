@@ -608,7 +608,7 @@ def main():
         console_parser.add_argument(
             "--web",
             action="store_true",
-            help="Launch web console in browser instead of TUI (requires Python >= 3.10)",
+            help="Launch the web console in a browser (requires Python >= 3.10)",
         )
         console_parser.add_argument(
             "--port",
@@ -633,7 +633,7 @@ def main():
         tui_parser.add_argument(
             "--web",
             action="store_true",
-            help="Launch web console in browser instead of TUI (requires Python >= 3.10)",
+            help="Launch the web console in a browser (requires Python >= 3.10)",
         )
         tui_parser.add_argument(
             "--port",
@@ -1951,54 +1951,20 @@ def main():
                 traceback.print_exc()
                 return 1
 
-        # Handle tui/console command
+        # Handle tui/console command with the browser console on all supported runtimes.
         if args.command in ("tui", "console"):
-            if getattr(args, "web", False):
-                try:
-                    from ai_guardian.web import WebConsole, HAS_NICEGUI
-
-                    if not HAS_NICEGUI:
-                        print(
-                            "Error: Web console requires NiceGUI (Python >= 3.10).",
-                            file=sys.stderr,
-                        )
-                        return 1
-                    console = WebConsole()
-                    show = not getattr(args, "no_open", False)
-                    console.run(port=getattr(args, "port", 0), show=show)
-                    return 0
-                except ImportError as e:
-                    print(
-                        f"Error: Web console dependencies not available: {e}",
-                        file=sys.stderr,
-                    )
-                    print("Requires Python >= 3.10 with NiceGUI.", file=sys.stderr)
-                    return 1
-                except Exception as e:
-                    print(f"Error running web console: {e}", file=sys.stderr)
-                    return 1
-
-            if not sys.stdin.isatty():
-                print(
-                    "Error: Console requires an interactive terminal.", file=sys.stderr
-                )
-                print(
-                    "Run 'ai-guardian console' directly in your terminal.",
-                    file=sys.stderr,
-                )
-                return 1
             try:
-                from ai_guardian.tui import AIGuardianTUI
+                from ai_guardian.web import WebConsole
 
-                app = AIGuardianTUI()
-                initial_panel = getattr(args, "panel", None)
-                if initial_panel:
-                    app.initial_panel = initial_panel
-                app.run()
+                console = WebConsole()
+                show = not getattr(args, "no_open", False)
+                console.run(port=getattr(args, "port", 0), show=show)
                 return 0
             except ImportError as e:
-                print("Error: Console dependencies not available.", file=sys.stderr)
-                print(f"Details: {e}", file=sys.stderr)
+                print(
+                    f"Error: Web console dependencies not available: {e}",
+                    file=sys.stderr,
+                )
                 return 1
             except Exception as e:
                 print(f"Error running console: {e}", file=sys.stderr)

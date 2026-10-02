@@ -286,10 +286,6 @@ def _check_gnome_appindicator():
 class DaemonTray:
     """System tray icon for ai-guardian daemon."""
 
-    # Python 3.10 is the minimum supported runtime. The TUI remains the
-    # fallback when the web console cannot start.
-    _has_web_console = True
-
     def __init__(
         self,
         get_stats_callback,
@@ -1397,7 +1393,7 @@ class DaemonTray:
 
         def _show_and_respond():
             try:
-                from ai_guardian.tui.ask_dialog import (
+                from ai_guardian.ui.ask_dialog import (
                     AskViolationInfo,
                     _show_via_subprocess,
                     _map_fallback_to_decision,
@@ -1436,7 +1432,7 @@ class DaemonTray:
                 # so tkinter subprocesses can't steal focus. Force NiceGUI browser tab
                 # which is always foreground regardless of parent activation policy.
                 # On Linux/Windows, pystray is a regular process — tkinter works fine,
-                # so let preferred_ui auto-select (tkinter/NiceGUI/Textual per config).
+                # so let preferred_ui auto-select (tkinter/NiceGUI per config).
                 import platform as _platform
 
                 extra_env = {}
@@ -1444,7 +1440,7 @@ class DaemonTray:
                     # pystray = NSApplicationActivationPolicyAccessory on macOS 14+:
                     # tkinter subprocesses can't steal focus (activateIgnoringOtherApps_
                     # deprecated). Skip tkinter; preferred_ui otherwise respected
-                    # (NiceGUI browser tab, Textual, etc.).
+                    # (NiceGUI browser tab, etc.).
                     extra_env["AI_GUARDIAN_NO_TKINTER"] = "1"
                     logger.info(
                         "Remote ask %s: macOS — tkinter suppressed, using preferred_ui",

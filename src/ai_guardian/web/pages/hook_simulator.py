@@ -11,7 +11,7 @@ from nicegui import run, ui
 from ai_guardian.constants import CODEX_DISPLAY_NAME, HookEvent
 from ai_guardian.logging_utils import quiet_logging
 from ai_guardian.web.components.header import create_header, create_sidebar
-from ai_guardian.tui.hook_simulator import (
+from ai_guardian.ui.hook_simulator import (
     build_hook_data,
     parse_simulation_result,
     HOOK_EVENTS,

@@ -37,7 +37,7 @@ Add this section to the global `ai-guardian.json`:
 The feature is disabled by default. When `log_all_tool_calls` is false, only
 non-allow decisions are recorded.
 
-The settings are also available in the TUI under **Monitoring -> Compliance
+The settings are also available in the Web Console under **Monitoring -> Compliance
 Audit Logging**. In the Web Console, open the hamburger menu, choose
 **Monitoring**, and select **Compliance Audit Logging**. The route is
 `/<daemon-name>/audit-logging` when a daemon name is present.
@@ -52,7 +52,7 @@ Both consoles expose the same settings:
 - Select whether user ID, session ID, timestamp, tool parameters, decision reason,
   and hook type are included in each record.
 
-The TUI's **Export Now** button writes an export beside the configured JSONL
+The Web Console's **Export Now** button writes an export beside the configured JSONL
 file. The Web Console's **Export audit trail** button downloads the selected
 JSON or CSV export. Web export is intentionally enabled only when the selected
 daemon is local; it does not read the Web Console host's audit file while a

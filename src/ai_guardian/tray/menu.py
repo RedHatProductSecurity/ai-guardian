@@ -156,7 +156,7 @@ def daemon_status_label(
 
 
 def launch_console(panel=None):
-    """Launch the ai-guardian console in a new terminal window."""
+    """Launch the ai-guardian web console from a new terminal window."""
     from ai_guardian.daemon.multi_client import _launch_in_terminal
     from ai_guardian.tray.plugins import resolve_cli_cmd
 

@@ -641,7 +641,7 @@ class TestPromptAskProjectPath:
 
         with (
             mock.patch(
-                "ai_guardian.tui.display.get_preferred_ui",
+                "ai_guardian.ui.display.get_preferred_ui",
                 return_value="headless",
             ),
             mock.patch("ai_guardian.config.utils.set_project_dir_override") as mock_set,
@@ -675,7 +675,7 @@ class TestPromptAskProjectPath:
 
         with (
             mock.patch(
-                "ai_guardian.tui.display.get_preferred_ui",
+                "ai_guardian.ui.display.get_preferred_ui",
                 return_value="headless",
             ),
             mock.patch("ai_guardian.config.utils.set_project_dir_override") as mock_set,
@@ -707,7 +707,7 @@ class TestPromptAskProjectPath:
 
         with (
             mock.patch(
-                "ai_guardian.tui.display.get_preferred_ui",
+                "ai_guardian.ui.display.get_preferred_ui",
                 side_effect=RuntimeError("boom"),
             ),
             mock.patch("ai_guardian.config.utils.set_project_dir_override") as mock_set,

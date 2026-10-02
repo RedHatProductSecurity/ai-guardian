@@ -180,7 +180,7 @@ class TestLogAskDecisionRedacts:
     def test_secret_type_redacts_matched_text(self, mock_logger_cls):
         from ai_guardian.ask_mode import _log_ask_decision
         from ai_guardian.constants import ViolationType
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         mock_logger = MagicMock()
         mock_logger_cls.return_value = mock_logger
@@ -200,7 +200,7 @@ class TestLogAskDecisionRedacts:
     def test_pii_type_redacts_matched_text(self, mock_logger_cls):
         from ai_guardian.ask_mode import _log_ask_decision
         from ai_guardian.constants import ViolationType
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         mock_logger = MagicMock()
         mock_logger_cls.return_value = mock_logger
@@ -220,7 +220,7 @@ class TestLogAskDecisionRedacts:
     def test_non_secret_type_keeps_matched_text(self, mock_logger_cls):
         from ai_guardian.ask_mode import _log_ask_decision
         from ai_guardian.constants import ViolationType
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         mock_logger = MagicMock()
         mock_logger_cls.return_value = mock_logger

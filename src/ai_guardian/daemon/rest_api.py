@@ -1125,7 +1125,7 @@ class _RestHandler(BaseHTTPRequestHandler):
 
         try:
             from ai_guardian.scanners.file_scanner import FileScanner
-            from ai_guardian.tui.pattern_editor import config_section_for_rule_id
+            from ai_guardian.ui.pattern_editor import config_section_for_rule_id
             from ai_guardian.config.loaders import load_scanner_config
 
             cfg = load_scanner_config(project_root=project_dir)
@@ -1196,7 +1196,7 @@ class _RestHandler(BaseHTTPRequestHandler):
         timeout = int(body.get("timeout", 300))
 
         try:
-            from ai_guardian.tui.ask_dialog import (
+            from ai_guardian.ui.ask_dialog import (
                 AskViolationInfo,
                 _show_via_subprocess,
                 _map_fallback_to_decision,
@@ -1231,7 +1231,7 @@ class _RestHandler(BaseHTTPRequestHandler):
         daemon_state = self.server.daemon_state
         result = None
         if daemon_state and daemon_state.is_tray_registered():
-            from ai_guardian.tui.ask_dialog import _show_via_tray_forwarding
+            from ai_guardian.ui.ask_dialog import _show_via_tray_forwarding
 
             result = _show_via_tray_forwarding(violation, fallback, timeout)
 

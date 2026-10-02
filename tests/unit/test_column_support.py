@@ -468,7 +468,7 @@ class TestAskViolationInfoColumn(unittest.TestCase):
     """AskViolationInfo dataclass has start_column field."""
 
     def test_default_is_none(self):
-        from ai_guardian.tui.ask_dialog import AskViolationInfo
+        from ai_guardian.ui.ask_dialog import AskViolationInfo
 
         v = AskViolationInfo(
             violation_type="test",
@@ -479,7 +479,7 @@ class TestAskViolationInfoColumn(unittest.TestCase):
         self.assertIsNone(v.start_column)
 
     def test_column_set(self):
-        from ai_guardian.tui.ask_dialog import AskViolationInfo
+        from ai_guardian.ui.ask_dialog import AskViolationInfo
 
         v = AskViolationInfo(
             violation_type="test",
@@ -491,7 +491,7 @@ class TestAskViolationInfoColumn(unittest.TestCase):
         self.assertEqual(v.start_column, 5)
 
     def test_column_zero_is_valid(self):
-        from ai_guardian.tui.ask_dialog import AskViolationInfo
+        from ai_guardian.ui.ask_dialog import AskViolationInfo
 
         v = AskViolationInfo(
             violation_type="test",
@@ -583,7 +583,7 @@ class TestHandleAskModeColumn(unittest.TestCase):
     def test_column_passed_through(self):
         from unittest.mock import patch
         from ai_guardian.ask_mode import _handle_ask_mode
-        from ai_guardian.tui.ask_dialog import AskDecision, AskResult
+        from ai_guardian.ui.ask_dialog import AskDecision, AskResult
 
         mock_result = AskResult(decision=AskDecision.BLOCK)
         captured = {}
@@ -593,7 +593,7 @@ class TestHandleAskModeColumn(unittest.TestCase):
             return mock_result
 
         with patch(
-            "ai_guardian.tui.ask_dialog.show_ask_dialog", side_effect=capture_dialog
+            "ai_guardian.ui.ask_dialog.show_ask_dialog", side_effect=capture_dialog
         ):
             _handle_ask_mode(
                 "ask",

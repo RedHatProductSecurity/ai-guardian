@@ -1,10 +1,10 @@
-"""Tests for tray target selector TUI app and CLI handler."""
+"""Tests for the NiceGUI tray target selector and CLI handler."""
 
 import sys
 from unittest import mock
 
 
-from ai_guardian.tui.tray_target_selector import TrayTargetSelectorApp, _target_label
+from ai_guardian.ui.tray_target_selector import TrayTargetSelectorApp, _target_label
 
 
 class TestTargetLabel:
@@ -112,11 +112,19 @@ class TestHandleTrayTargetSelect:
         result = _handle_tray_target_select(args)
         assert result == 1
 
-    def test_rejects_non_tty(self):
+    def test_accepts_non_tty_for_browser_selector(self):
         from ai_guardian.cli_handlers import _handle_tray_target_select
 
         args = mock.MagicMock()
         args.targets = '[{"name": "a", "runtime": "local"}]'
-        with mock.patch.object(sys.stdin, "isatty", return_value=False):
+        args.output_file = None
+        with (
+            mock.patch.object(sys.stdin, "isatty", return_value=False),
+            mock.patch(
+                "ai_guardian.ui.tray_target_selector.TrayTargetSelectorApp"
+            ) as selector,
+        ):
+            selector.return_value.run.return_value = None
             result = _handle_tray_target_select(args)
-        assert result == 1
+        assert result == 0
+        selector.return_value.run.assert_called_once()

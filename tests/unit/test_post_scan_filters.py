@@ -206,7 +206,7 @@ class TestApplyPostScanPipeline:
         ctx.violation_logger.log_violation.assert_called_once()
 
     def test_ask_mode_block_preserves_block(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         ask_result = MagicMock()
         ask_result.decision = AskDecision.BLOCK
@@ -219,7 +219,7 @@ class TestApplyPostScanPipeline:
         assert decision.should_block
 
     def test_ask_mode_allow_sets_no_block(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         ask_result = MagicMock()
         ask_result.decision = AskDecision.ALLOW_ONCE
@@ -265,7 +265,7 @@ class TestApplyPostScanPipeline:
         assert "/tmp/test.py:42" in decision.warnings[0]
 
     def test_ask_decision_returned(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         ask_result = MagicMock()
         ask_result.decision = AskDecision.ALLOW_ALWAYS
@@ -278,7 +278,7 @@ class TestApplyPostScanPipeline:
         assert decision.ask_decision is ask_result
 
     def test_log_ask_decision_called(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         ask_result = MagicMock()
         ask_result.decision = AskDecision.ALLOW_ONCE
@@ -312,7 +312,7 @@ class TestApplyPostScanPipeline:
         ctx.violation_logger.log_violation.assert_not_called()
 
     def test_finding_fingerprints_forwarded(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         ask_result = MagicMock()
         ask_result.decision = AskDecision.ALLOW_ONCE
@@ -327,7 +327,7 @@ class TestApplyPostScanPipeline:
         assert call_kwargs["finding_fingerprints"] == fps
 
     def test_invocation_allowed_forwarded(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         ask_result = MagicMock()
         ask_result.decision = AskDecision.ALLOW_ONCE

@@ -48,7 +48,7 @@ body:
         - Tool Permissions
         - Daemon / Tray
         - Web Console
-        - TUI Console
+        - Web Console
         - Ask Dialog
         - CLI
         - SDK

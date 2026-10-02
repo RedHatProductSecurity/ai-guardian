@@ -1,6 +1,6 @@
 """Tests for load_scanner_config and scan endpoint config loading (#1797).
 
-Verifies that scan CLI, TUI, MCP, and daemon scan endpoints all load
+Verifies that scan CLI, Web Console, MCP, and daemon scan endpoints all load
 merged global + project config with .aiguardignore.toml paths merged
 into scanner sections.
 """

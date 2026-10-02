@@ -330,7 +330,7 @@ After starting the LGTM stack:
 
 ## Trace Viewer (Console)
 
-AI Guardian includes a built-in trace viewer accessible from both the TUI and web console.
+AI Guardian includes a built-in trace viewer in the Web Console.
 
 ### Web Console
 
@@ -340,7 +340,7 @@ Navigate to `http://{daemon-host}:{port}/traces` to browse SDK agent traces. The
 - Explicit **unavailable** token usage when the agent does not expose usage data
 - A **Send to Collector** button to push traces to the configured OTEL endpoint
 
-### TUI Console
+### Web Console
 
 Run `ai-guardian console --web` and navigate to the **SDK Traces** panel for the same functionality in a terminal interface.
 

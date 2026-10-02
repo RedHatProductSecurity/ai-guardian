@@ -1428,9 +1428,6 @@ class DaemonState:
             "reporting/sarif.py",
             "tray/__init__.py",
             "tray/plugins.py",
-            "tui/__init__.py",
-            "tui/ask_dialog.py",
-            "tui/pattern_editor.py",
         }
     )
     # Non-Python package resources read by daemon request and detection paths.

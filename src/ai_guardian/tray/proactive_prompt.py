@@ -14,10 +14,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Set
 
-from ai_guardian.tui.display import (
+from ai_guardian.ui.display import (
     _ensure_tcl_library,
-    _nicegui_available,
-    _textual_available,
     _tkinter_available,
     get_preferred_ui,
 )
@@ -365,10 +363,10 @@ def reset_ide_setup_state(
 class ProactivePromptDialog:
     """Prompt with action, snooze, and dismiss choices.
 
-    The normal UI cascade is Tkinter, NiceGUI, Textual, then a log-only
-    fallback. Tray-safe Linux prompts add the desktop-native dialog tier
-    first; if it is unavailable, they continue through Tkinter, NiceGUI, and
-    Textual. ``show`` returns a stable string for ordinary prompts. When IDE
+    The normal UI cascade is Tkinter, NiceGUI, then a log-only fallback.
+    Tray-safe Linux prompts add the desktop-native dialog tier first; if it is
+    unavailable, they continue through Tkinter and NiceGUI. ``show`` returns a
+    stable string for ordinary prompts. When IDE
     or profile choices are provided it returns a mapping containing the
     selected values.
     """
@@ -442,14 +440,13 @@ class ProactivePromptDialog:
         system = platform.system()
         preferred = get_preferred_ui()
         if preferred == "auto":
-            tiers = ["tkinter", "nicegui", "textual"]
+            tiers = ["tkinter", "nicegui"]
         else:
             tiers = [preferred]
 
         # On Linux, prefer a desktop-native prompt when the tray is running
         # in a graphical session. The native provider is selected by the
-        # desktop/session environment and falls through to Tkinter, NiceGUI,
-        # and Textual when it is unavailable.
+        # desktop/session environment and falls through to Tkinter or NiceGUI.
         native_attempted = False
         if tray_safe and system == "Linux" and preferred == "auto":
             native_attempted = True
@@ -473,7 +470,7 @@ class ProactivePromptDialog:
         # Internal Server Error instead of a setup prompt.
         if tray_safe and system == "Darwin":
             if preferred == "auto":
-                tiers = ["tkinter", "textual"]
+                tiers = ["tkinter", "nicegui"]
             elif preferred == "nicegui":
                 tiers = ["tkinter"]
             logger.info(
@@ -492,14 +489,10 @@ class ProactivePromptDialog:
                     if self.ide_choices or self._profile_options():
                         return self._show_ide_choices_tkinter()
                     return self._show_tkinter()
-                if tier == "nicegui" and _nicegui_available():
+                if tier == "nicegui":
                     if self.ide_choices or self._profile_options():
                         return self._show_ide_choices_nicegui()
                     return self._show_nicegui()
-                if tier == "textual" and _textual_available():
-                    if self.ide_choices or self._profile_options():
-                        return self._show_ide_choices_textual()
-                    return self._show_textual()
             except Exception as exc:
                 logger.warning(
                     "Proactive %s prompt unavailable on %s; trying the next "
@@ -906,134 +899,6 @@ class ProactivePromptDialog:
         done.wait(timeout=3600)
         return result["value"]
 
-    def _show_ide_choices_textual(self):
-        from textual.app import App, ComposeResult
-        from textual.containers import Horizontal, Vertical
-        from textual.widgets import Button, Checkbox, Label, Select
-
-        dialog = self
-
-        class ChoiceApp(App):
-            def compose(self) -> ComposeResult:
-                defaults = dialog._default_ide_selection()
-                default_install = set(defaults["install"])
-                default_never = set(defaults["never"])
-                with Vertical():
-                    yield Label(dialog.title)
-                    yield Label(dialog.message)
-                    profile_options = dialog._profile_options()
-                    if profile_options:
-                        yield Label("Security profile")
-                        yield Select(
-                            [
-                                (
-                                    dialog._profile_choice_label(option),
-                                    option["profile"] or "",
-                                )
-                                for option in profile_options
-                            ],
-                            value=dialog._default_profile_selection() or "",
-                            id="profile",
-                        )
-                    if dialog.ide_choices:
-                        with Horizontal():
-                            yield Label("Integration")
-                            yield Label("Install now")
-                            yield Label("Never install")
-                    for index, choice in enumerate(dialog.ide_choices):
-                        label = choice.get("name", choice["ide"])
-                        detail = choice.get("detail")
-                        if detail:
-                            label += f" — {detail}"
-                        with Horizontal():
-                            yield Label(label)
-                            yield Checkbox(
-                                "",
-                                value=choice["ide"] in default_install,
-                                id=f"install-{index}",
-                            )
-                            yield Checkbox(
-                                "",
-                                value=choice["ide"] in default_never,
-                                id=f"never-{index}",
-                            )
-                    with Horizontal():
-                        yield Button(dialog.action_label, id="action")
-                        for index, option in enumerate(dialog.snooze_options):
-                            yield Button(f"Later ({option})", id=f"snooze-{index}")
-                        if dialog.dismiss_label:
-                            yield Button(
-                                dialog.dismiss_label,
-                                id=(
-                                    "never"
-                                    if dialog.dismiss_label == "Never"
-                                    else "dismiss"
-                                ),
-                            )
-
-            def _selection(self):
-                install = []
-                never = []
-                for index, choice in enumerate(dialog.ide_choices):
-                    if self.query_one(f"install-{index}", Checkbox).value:
-                        install.append(choice["ide"])
-                    if self.query_one(f"never-{index}", Checkbox).value:
-                        never.append(choice["ide"])
-                profile = _PROFILE_NOT_SELECTED
-                if dialog._profile_options():
-                    selected = self.query_one("#profile", Select).value
-                    profile = (
-                        selected if isinstance(selected, str) and selected else None
-                    )
-                return dialog._ide_selection_result("action", install, never, profile)
-
-            def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-                checkbox_id = event.checkbox.id or ""
-                if "-" not in checkbox_id:
-                    return
-                kind, index = checkbox_id.rsplit("-", 1)
-                if kind not in {"install", "never"}:
-                    return
-                other_kind = "never" if kind == "install" else "install"
-                other = self.query_one(f"{other_kind}-{index}", Checkbox)
-                if event.checkbox.value:
-                    other.value = False
-                elif not other.value:
-                    event.checkbox.value = True
-
-            def on_button_pressed(self, event: Button.Pressed) -> None:
-                button_id = event.button.id or "dismiss"
-                if button_id == "action":
-                    value = self._selection()
-                elif button_id.startswith("snooze-"):
-                    index = int(button_id.rsplit("-", 1)[1])
-                    value = dialog._ide_selection_result(
-                        f"snooze_{dialog.snooze_options[index]}",
-                        profile=(
-                            None if dialog._profile_options() else _PROFILE_NOT_SELECTED
-                        ),
-                    )
-                else:
-                    value = (
-                        dialog._never_ide_selection()
-                        if button_id == "never"
-                        else dialog._ide_selection_result(
-                            "dismiss",
-                            profile=(
-                                None
-                                if dialog._profile_options()
-                                else _PROFILE_NOT_SELECTED
-                            ),
-                        )
-                    )
-                self.result = value
-                self.exit()
-
-        app = ChoiceApp()
-        app.result = self._ide_selection_result("dismiss")
-        app.run()
-        return app.result
-
     def _show_tkinter(self) -> str:
         import tkinter as tk
         from tkinter import ttk
@@ -1123,46 +988,3 @@ class ProactivePromptDialog:
         )
         done.wait(timeout=3600)
         return result["value"]
-
-    def _show_textual(self) -> str:
-        from textual.app import App, ComposeResult
-        from textual.containers import Horizontal, Vertical
-        from textual.widgets import Button, Label
-
-        dialog = self
-
-        class PromptApp(App):
-            def compose(self) -> ComposeResult:
-                with Vertical():
-                    yield Label(dialog.title)
-                    yield Label(dialog.message)
-                    with Horizontal():
-                        yield Button(dialog.action_label, id="action")
-                        for index, option in enumerate(dialog.snooze_options):
-                            yield Button(f"Later ({option})", id=f"snooze_{index}")
-                        if dialog.dismiss_label:
-                            yield Button(
-                                dialog.dismiss_label,
-                                id=(
-                                    "never"
-                                    if dialog.dismiss_label == "Never"
-                                    else "dismiss"
-                                ),
-                            )
-
-            def on_button_pressed(self, event: Button.Pressed) -> None:
-                button_id = event.button.id or "dismiss"
-                if button_id == "action":
-                    value = "action"
-                elif button_id.startswith("snooze_"):
-                    index = int(button_id.rsplit("_", 1)[1])
-                    value = f"snooze_{dialog.snooze_options[index]}"
-                else:
-                    value = "dismiss"
-                self.result = value
-                self.exit()
-
-        app = PromptApp()
-        app.result = "dismiss"
-        app.run()
-        return app.result
