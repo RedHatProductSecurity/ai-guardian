@@ -118,6 +118,11 @@ class TestInstallScriptContent:
     def test_has_no_setup_flag(self, script_content):
         assert "NO_SETUP" in script_content
 
+    def test_requires_python_310(self, script_content):
+        assert "sys.version_info >= (3, 10)" in script_content
+        assert "Python 3.10+ is required" in script_content
+        assert "Python 3.9+" not in script_content
+
 
 @_skip_no_bash
 class TestInstallScriptModes:
@@ -377,6 +382,12 @@ class TestInstallPs1:
     def test_ps1_contains_no_setup(self):
         content = PS1_SCRIPT.read_text()
         assert "NoSetup" in content
+
+    def test_ps1_requires_python_310(self):
+        content = PS1_SCRIPT.read_text()
+        assert "sys.version_info >= (3, 10)" in content
+        assert "Python 3.10+ is required" in content
+        assert "Python 3.9+" not in content
 
     def test_ps1_contains_detect_function(self):
         content = PS1_SCRIPT.read_text()

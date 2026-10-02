@@ -303,7 +303,7 @@ This eliminates false positives from patterns like `def __init__(self):` or `ski
 
 **Supported languages:** Python, JavaScript, TypeScript, Go, Rust, Java, Ruby, C/C++, Bash
 
-**Requires Python >= 3.10** — tree-sitter and its grammar packages are only available on Python 3.10+. On Python 3.9, files are scanned using full-text mode (current behavior). It is highly recommended to use Python 3.10 or later to get the most out of AI Guardian's security features.
+**Requires Python >= 3.10** — tree-sitter and its grammar packages are available on every supported runtime. Unknown file types still fall back to full-text scanning.
 
 **Auto-detected** from file extension — no configuration needed. Unknown file types fall back to full-text scanning.
 

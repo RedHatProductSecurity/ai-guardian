@@ -7,7 +7,7 @@
 > AI IDE security hook: controls MCP/skill permissions, blocks directories, detects prompt injection, scans secrets
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/ai-guardian.svg)](https://pypi.org/project/ai-guardian/)
 
 AI Guardian provides comprehensive protection for AI IDE interactions through multiple security layers.
@@ -81,7 +81,7 @@ uv pip install -e .[dev]
 uv run --extra dev python -m pytest tests/test_<module>.py -v
 
 # Run linters
-black --target-version py39 src/ai_guardian/ tests/
+black --target-version py310 src/ai_guardian/ tests/
 ruff check src/ai_guardian/ tests/ --fix
 ```
 
@@ -637,7 +637,8 @@ Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`
 
 ## Requirements
 
-- **Python 3.9+** (3.10+ highly recommended — several features including AST-aware scanning, MCP server, and web console require Python 3.10+)
+- **Python 3.10+**
+- **Python 3.9** is supported through the `1.19.x` release line only (`1.19.0` is the last stable release). Upgrade to Python 3.10+ before upgrading to `1.20.0` or later; otherwise pin `ai-guardian<1.20`.
 - **Windows**: Python 3.10, 3.13, and 3.14 are tested; other versions may work but are not CI-verified
 - **Scanner engine**: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, or gitguardian
 - **GNOME Linux**: AppIndicator extension for system tray icon ([setup steps](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#getting-started))

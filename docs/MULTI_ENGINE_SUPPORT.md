@@ -991,7 +991,7 @@ Benefits:
 ### Compatibility Tests
 - `tests/test_backward_compat.py` - No config change should break
 - `tests/test_migration.py` - Migration from hardcoded Gitleaks
-- Test matrix: Python 3.9-3.12, macOS/Linux/Windows
+- Test matrix: Python 3.10-3.14, macOS/Linux/Windows
 
 ### Test Fixtures
 ```

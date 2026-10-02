@@ -14,13 +14,7 @@ Usage in ai-guardian.json:
 import logging
 import os
 import re
-import sys
 from typing import List, Optional
-
-if sys.version_info >= (3, 11):
-    pass
-else:
-    pass
 
 from ai_guardian.patterns import BUNDLED_FILES
 from ai_guardian.patterns.cache import PatternCache

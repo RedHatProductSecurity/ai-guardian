@@ -98,7 +98,7 @@ The system tray includes a **Web Console** menu item that opens the web console 
 
 ### Requirements
 
-- Python >= 3.10 (NiceGUI dependency)
+- Python >= 3.10 (project minimum and NiceGUI dependency)
 - NiceGUI is included as a core dependency
 
 ### Coexistence with TUI
@@ -1950,7 +1950,7 @@ tput cols  # Should be >= 80
 tput lines # Should be >= 24
 
 # Check Python version
-python --version  # Should be >= 3.9
+python --version  # Should be >= 3.10
 
 # Run with debug logging
 ai-guardian tui --log-level DEBUG

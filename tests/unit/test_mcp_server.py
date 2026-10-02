@@ -15,11 +15,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
-    sys.version_info < (3, 10),
-    reason="MCP SDK requires Python >= 3.10",
-)
-
 from ai_guardian.mcp.server import (
     HookCheckMiddleware,
     _check_client_hooks,

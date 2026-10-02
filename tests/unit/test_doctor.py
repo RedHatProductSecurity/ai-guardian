@@ -129,16 +129,16 @@ class TestCheckPythonVersion:
         assert result.status == CheckStatus.PASS
         assert "3.12.1" in result.message
 
-    def test_warn_39(self, _isolate_config_dir):
+    def test_fail_39(self, _isolate_config_dir):
         with mock.patch("ai_guardian.doctor.sys") as mock_sys:
             mock_sys.version_info = (3, 9, 18, "final", 0)
             doctor = Doctor()
             result = doctor.check_python_version()
-        assert result.status == CheckStatus.WARN
+        assert result.status == CheckStatus.FAIL
         assert "3.9.18" in result.message
-        assert "AST-aware scanning disabled" in result.message
+        assert "unsupported" in result.message
         assert result.fix_hint is not None
-        assert "3.10+" in result.fix_hint
+        assert "Upgrade to Python 3.10+" in result.fix_hint
 
     def test_fail_38(self, _isolate_config_dir):
         with mock.patch("ai_guardian.doctor.sys") as mock_sys:
@@ -149,7 +149,7 @@ class TestCheckPythonVersion:
         assert "3.8.16" in result.message
         assert "unsupported" in result.message
         assert result.fix_hint is not None
-        assert "3.9+" in result.fix_hint
+        assert "3.10+" in result.fix_hint
 
     def test_fail_27(self, _isolate_config_dir):
         with mock.patch("ai_guardian.doctor.sys") as mock_sys:
@@ -1518,10 +1518,7 @@ class TestCheckConsoleDeps:
                 doctor = Doctor()
                 result = doctor.check_console_deps()
                 assert result.status == CheckStatus.WARN
-                if sys.version_info < (3, 10):
-                    assert "Python >= 3.10" in result.message
-                else:
-                    assert "tree-sitter-json" in result.message
+                assert "tree-sitter-json" in result.message
 
 
 class TestCheckConfigConsistency:

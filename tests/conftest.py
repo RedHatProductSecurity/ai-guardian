@@ -19,7 +19,7 @@ def _capture_package_logs(caplog):
     The ai_guardian package logger sets propagate=False so log messages
     don't reach root where caplog's handler lives.  pytest >=9.0 handles
     this automatically; this fixture provides the same behaviour on
-    pytest 8.x (used on Python 3.9 CI).
+    pytest 8.x (used on supported CI runtimes).
     """
     pkg_logger = logging.getLogger("ai_guardian")
     already_attached = caplog.handler in pkg_logger.handlers

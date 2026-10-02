@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Checkout code
@@ -32,6 +32,21 @@ jobs:
 
       - name: Verify version
         run: ai-guardian --version
+
+      - name: Verify supported Python metadata
+        run: |
+          python - <<'PY'
+          import importlib.metadata
+          import sys
+
+          assert sys.version_info >= (3, 10)
+          metadata = importlib.metadata.metadata("ai-guardian")
+          assert metadata["Requires-Python"] == ">=3.10"
+          assert "Programming Language :: Python :: 3.9" not in metadata.get_all(
+              "Classifier", []
+          )
+          print("Python support metadata: >=3.10")
+          PY
 
       - name: Verify doctor (no unexpected failures)
         run: |

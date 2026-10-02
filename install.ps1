@@ -57,7 +57,7 @@ if ($Help) {
     exit 0
 }
 
-# --- Step 1: Find Python 3.9+ ---
+# --- Step 1: Find Python 3.10+ ---
 
 Log "Checking Python version..."
 
@@ -65,7 +65,7 @@ $Python = $null
 foreach ($candidate in @("python", "python3", "py")) {
     $found = Get-Command $candidate -ErrorAction SilentlyContinue
     if ($found) {
-        $versionOk = & $found.Source -c "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)" 2>$null
+        $versionOk = & $found.Source -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" 2>$null
         if ($LASTEXITCODE -eq 0) {
             $Python = $found.Source
             break
@@ -77,7 +77,7 @@ if (-not $Python) {
     # Try the Windows Python Launcher
     $py = Get-Command "py" -ErrorAction SilentlyContinue
     if ($py) {
-        & py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)" 2>$null
+        & py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" 2>$null
         if ($LASTEXITCODE -eq 0) {
             $Python = "py"
         }
@@ -85,7 +85,7 @@ if (-not $Python) {
 }
 
 if (-not $Python) {
-    Err "Python 3.9+ is required but not found. Install from https://www.python.org/downloads/"
+    Err "Python 3.10+ is required but not found. Install from https://www.python.org/downloads/"
 }
 
 $PyVersion = & $Python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"
@@ -131,7 +131,7 @@ if ($Tkinter) {
     } else {
         Write-Host "  tkinter not found. Reinstall Python from https://www.python.org/downloads/"
         Write-Host "  and check 'tcl/tk and IDLE' during installation."
-        Write-Host "  Continuing without tkinter (NiceGUI browser fallback on Python 3.10+, Textual otherwise)"
+        Write-Host "  Continuing without tkinter (NiceGUI browser or Textual terminal fallback)"
     }
 }
 

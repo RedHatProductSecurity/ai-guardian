@@ -4933,11 +4933,11 @@ class TestMultiTargetExecution:
         assert result[0]["container_engine"] == "podman"
 
 
-class TestWebConsoleVersionGating:
-    """Console menu item visibility based on Python version."""
+class TestWebConsoleAvailability:
+    """Console menu behavior when the web console is unavailable or ready."""
 
-    def test_console_hidden_on_python_below_310(self):
-        """Console menu item is visible even when Python < 3.10 (falls back to TUI)."""
+    def test_console_falls_back_to_tui_when_web_console_unavailable(self):
+        """Console remains visible when the web console falls back to TUI."""
         tray = DaemonTray(
             get_stats_callback=lambda: {},
             stop_callback=lambda: None,
@@ -4968,8 +4968,8 @@ class TestWebConsoleVersionGating:
         finally:
             DaemonTray._has_web_console = saved
 
-    def test_console_shown_on_python_310_plus(self):
-        """Console visibility returns True on Python 3.10+ when ready."""
+    def test_console_shown_when_web_console_ready(self):
+        """Console visibility returns True when the web console is ready."""
         tray = DaemonTray(
             get_stats_callback=lambda: {},
             stop_callback=lambda: None,
@@ -5003,8 +5003,8 @@ class TestWebConsoleVersionGating:
         finally:
             DaemonTray._has_web_console = saved
 
-    def test_multi_daemon_console_hidden_below_310(self):
-        """Multi-daemon Console visibility returns False on Python < 3.10."""
+    def test_multi_daemon_console_hidden_when_web_console_unavailable(self):
+        """Multi-daemon Console visibility is false without web console support."""
         mc = mock.MagicMock()
         tray = DaemonTray(
             get_stats_callback=lambda: {},

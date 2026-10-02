@@ -1,7 +1,6 @@
 """Tests for violations page refresh button (#1390)."""
 
 import inspect
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -54,11 +53,12 @@ class TestTUIViolationsRefreshButton:
         )
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 10), reason="NiceGUI requires Python >= 3.10"
-)
 class TestWebViolationsRefreshButton:
     """Test refresh button in web console violations page."""
+
+    @pytest.fixture(autouse=True)
+    def _require_nicegui(self):
+        pytest.importorskip("nicegui", reason="NiceGUI not available")
 
     def test_create_violations_page_has_refresh_button(self):
         """Verify violations page source includes refresh button creation."""

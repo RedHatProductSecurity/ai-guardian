@@ -2,7 +2,6 @@
 Unit tests for prompt injection detection
 """
 
-import sys
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
@@ -1723,10 +1722,6 @@ class TestDetectorStoresDetails(unittest.TestCase):
         self.assertIsNone(detector.last_confidence)
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 10),
-    reason="AST scanning requires tree-sitter (Python >= 3.10)",
-)
 class TestAstAwareDetection(unittest.TestCase):
     """Tests for AST-aware prompt injection scanning (Issue #892)."""
 

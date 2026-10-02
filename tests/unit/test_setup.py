@@ -47,15 +47,6 @@ def test_onnxruntime_markers_select_available_wheels():
     cases = [
         (
             {
-                "python_version": "3.9",
-                "sys_platform": "linux",
-                "platform_machine": "x86_64",
-                "platform_release": "6.0",
-            },
-            "==1.19.2",
-        ),
-        (
-            {
                 "python_version": "3.10",
                 "sys_platform": "linux",
                 "platform_machine": "x86_64",
@@ -108,6 +99,16 @@ def test_onnxruntime_markers_select_available_wheels():
             if requirement.marker is None or requirement.marker.evaluate(environment)
         ]
         assert selected == ([] if expected is None else [expected])
+
+
+def test_package_metadata_requires_python_310():
+    """The package metadata and classifiers agree on the supported floor."""
+    project = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    metadata = tomllib.loads(project.read_text(encoding="utf-8"))["project"]
+
+    assert metadata["requires-python"] == ">=3.10"
+    assert "Programming Language :: Python :: 3.9" not in metadata["classifiers"]
+    assert "Programming Language :: Python :: 3.10" in metadata["classifiers"]
 
 
 class TestIDESetup:

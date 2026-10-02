@@ -9,7 +9,7 @@ description = "AI IDE security hook: blocks directories, scans secrets, and prot
 authors = [{name = "itdove team"}]
 readme = "README.md"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
   "textual>=0.47.0",
   "jsonschema>=4.0.0",
@@ -17,31 +17,30 @@ dependencies = [
   "tomli>=2.0.0; python_version < '3.11'",
   "tomli-w>=1.0.0",
   "pyyaml>=6.0.0",
-  "tree-sitter>=0.25.0; python_version >= '3.10'",
-  "tree-sitter-json>=0.24.0; python_version >= '3.10'",
-  "tree-sitter-python>=0.23; python_version >= '3.10'",
-  "tree-sitter-javascript>=0.23; python_version >= '3.10'",
-  "tree-sitter-typescript>=0.23; python_version >= '3.10'",
-  "tree-sitter-go>=0.23; python_version >= '3.10'",
-  "tree-sitter-rust>=0.23; python_version >= '3.10'",
-  "tree-sitter-java>=0.23; python_version >= '3.10'",
-  "tree-sitter-ruby>=0.23; python_version >= '3.10'",
-  "tree-sitter-c>=0.23; python_version >= '3.10'",
-  "tree-sitter-cpp>=0.23; python_version >= '3.10'",
-  "tree-sitter-bash>=0.23; python_version >= '3.10'",
+  "tree-sitter>=0.25.0",
+  "tree-sitter-json>=0.24.0",
+  "tree-sitter-python>=0.23",
+  "tree-sitter-javascript>=0.23",
+  "tree-sitter-typescript>=0.23",
+  "tree-sitter-go>=0.23",
+  "tree-sitter-rust>=0.23",
+  "tree-sitter-java>=0.23",
+  "tree-sitter-ruby>=0.23",
+  "tree-sitter-c>=0.23",
+  "tree-sitter-cpp>=0.23",
+  "tree-sitter-bash>=0.23",
   "pystray>=0.19.0",
   "Pillow>=9.0.0",
   "docker>=7.0,<9",
-  "mcp>=2.0.0; python_version >= '3.10'",
+  "mcp>=2.0.0",
   "rapidocr==3.9.2",
-  "onnxruntime==1.19.2; python_version < '3.10'",
   # 1.29.0 has macOS wheels only for macOS 14+ ARM64. Use the last
   # universal macOS release where compatible, and omit unsupported targets.
   "onnxruntime==1.23.2; python_version >= '3.10' and python_version < '3.11' and (sys_platform != 'darwin' or platform_release >= '22')",
   "onnxruntime==1.23.2; python_version >= '3.11' and python_version < '3.14' and sys_platform == 'darwin' and platform_release >= '22' and (platform_machine != 'arm64' or platform_release < '23')",
   "onnxruntime==1.29.0; python_version >= '3.11' and (sys_platform != 'darwin' or (platform_machine == 'arm64' and platform_release >= '23'))",
-  "nicegui>=3.0.4; python_version >= '3.10'",
-  "tokenizers>=0.15.0; python_version >= '3.10'",
+  "nicegui>=3.0.4",
+  "tokenizers>=0.15.0",
   "boto3>=1.28.0",
   "bandit>=1.7.0",
 ]
@@ -52,7 +51,6 @@ classifiers = [
   "Topic :: Security",
   "Topic :: Software Development",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -160,7 +158,7 @@ skip_covered = false
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
@@ -183,7 +181,7 @@ ignore = [
 "src/ai_guardian/tui/violation_logging.py" = ["F821"]
 
 [tool.mypy]
-# Type-check on the CI runtime. Runtime compatibility with Python 3.9 remains
+# Type-check on the CI runtime. Runtime compatibility with Python 3.10 remains
 # covered by the test matrix; this avoids parsing newer third-party stubs with
 # syntax unavailable to older mypy targets.
 python_version = "3.12"

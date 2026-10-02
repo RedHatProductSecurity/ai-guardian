@@ -775,11 +775,7 @@ class MCPServerToolInputFormatTests(TestCase):
 
     def test_check_path_allowed_for_non_protected_path(self):
         """check_path returns allowed for paths not matched by directory rules."""
-        import sys
         import tempfile
-
-        if sys.version_info < (3, 10):
-            pytest.skip("MCP SDK requires Python >= 3.10")
 
         from ai_guardian.mcp.server import create_server
 
@@ -795,12 +791,8 @@ class MCPServerToolInputFormatTests(TestCase):
 
     def test_check_path_denied_for_protected_path(self):
         """check_path returns denied for paths matching directory deny rules."""
-        import sys
         import tempfile
         import os
-
-        if sys.version_info < (3, 10):
-            pytest.skip("MCP SDK requires Python >= 3.10")
 
         from ai_guardian.mcp.server import create_server
 
@@ -839,11 +831,6 @@ class MCPServerToolInputFormatTests(TestCase):
 
     def test_check_command_blocked_for_secret_pattern(self):
         """check_command returns blocked when command contains secret patterns."""
-        import sys
-
-        if sys.version_info < (3, 10):
-            pytest.skip("MCP SDK requires Python >= 3.10")
-
         from ai_guardian.mcp.server import create_server
 
         config = {
@@ -876,11 +863,6 @@ class MCPServerToolInputFormatTests(TestCase):
 
     def test_check_command_allowed_for_safe_command(self):
         """check_command returns allowed for safe commands."""
-        import sys
-
-        if sys.version_info < (3, 10):
-            pytest.skip("MCP SDK requires Python >= 3.10")
-
         from ai_guardian.mcp.server import create_server
 
         server = create_server()

@@ -124,10 +124,10 @@
   digest. Keep a contract test comparing the workflow value to the Dockerfile
   instead of manually maintaining two independent digests.
 
-- **Python support transition:** The 1.19 line still supports Python 3.9, so
-  retain its compatibility job even if a transient CI run fails there. Version
-  1.20.0 will drop Python 3.9; remove the 3.9 CI matrix entries and update the
-  package support metadata together when that release work begins.
+- **Python support transition:** The 1.19 line still supports Python 3.9, while
+  1.20.0 now requires Python 3.10+. The last stable 3.9-compatible release is
+  1.19.0; keep upgrade guidance and the `ai-guardian<1.20` pin documented for
+  users who cannot upgrade their runtime.
 
 - **Multi-architecture OCI validation needs artifact cleanup:** The Ubuntu
   compatibility workflow exports normal and OpenShell images as large OCI
@@ -142,7 +142,9 @@
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
-- [2026-08-19] Do NOT use `str | None` union syntax in type hints — requires Python 3.10+. Project supports 3.9. Use `Optional[str]` from `typing` instead. CI catches this on Python 3.9 runner.
+- [2026-08-19] Python 3.9 support was retained through the 1.19.x line; do not
+  reintroduce 3.9-specific support claims into the 1.20.0+ metadata, installer,
+  CI, or documentation surfaces.
 - [2026-07-15] Always run `black --target-version py39` (not bare `black`). On Python < 3.15, black's safety check silently skips reformatting without `--target-version`, producing "files left unchanged" even when formatting is wrong. CI runs Python 3.15 where black reformats correctly, causing CI failure.
 - [2026-06-24] During release, update README install URLs to the release tag BEFORE creating the git tag. The tag snapshot is what PyPI publishes as the package README. In v1.12.0, URLs were updated after the tag, so PyPI shows `main` URLs instead of `v1.12.0`. Correct order: bump version → update CHANGELOG → update install URLs → commit → tag → push.
 - [2026-06-24] `cursor-verify-setup` in release_helper.py places debug hooks at the JSON top level instead of inside the `hooks:{}` object. Cursor only reads from `hooks:{}`. The cleanup also looks at top level. Both functions need fixing to operate inside `hooks:{}`. **FIXED in v1.12.2** — `_add_debug_hooks()` and `cleanup()` now operate on `settings["hooks"]`.

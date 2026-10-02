@@ -91,7 +91,7 @@ documented in `docs/README.md`.
 tests, container scenarios, or other unrelated tests. For user-facing changes,
 run the complete directly affected UX contract file in addition to the related
 unit tests. GitHub Actions runs all remaining validation on every PR across
-Python 3.9-3.14 and Windows.
+Python 3.10-3.14 and Windows.
 
 #### Which Tests to Run
 
@@ -165,9 +165,9 @@ pytest tests/unit/ -k "test_something" -v
 - Run coverage reports before submitting PRs
 - Add tests for new features and bug fixes
 
-#### NiceGUI / Web Console Tests (Python 3.9 Incompatibility)
+#### NiceGUI / Web Console Tests (Python >= 3.10)
 
-**NiceGUI requires Python >= 3.10.** Tests that import anything from `src/ai_guardian/web/` will fail on Python 3.9 because `from nicegui import ui` fails at module import time.
+**NiceGUI requires Python >= 3.10.** Tests that import anything from `src/ai_guardian/web/` should guard the optional dependency with `pytest.importorskip` so environments without NiceGUI skip cleanly.
 
 **Required pattern** — always guard web component imports with `pytest.importorskip`:
 
@@ -183,7 +183,7 @@ pytestmark = pytest.mark.skipif(
 )
 ```
 
-This ensures the test is **skipped** on Python 3.9 rather than **erroring**, which is the correct behavior — the web console is not supported on 3.9, and tests that exercise it should skip cleanly.
+This ensures the test is **skipped** when NiceGUI is unavailable rather than **erroring**. Python 3.10 is the minimum supported runtime, and tests that exercise the web console should skip cleanly in minimal environments.
 
 ### User Experience Contract Tests
 
@@ -505,19 +505,19 @@ When the user says "lint", it means run **ruff**, **black**, and **mypy**.
 The project uses multiple linters enforced by CI. **Run these after finishing all implementations:**
 
 ```bash
-# 1. Auto-fix formatting with black (--target-version py39 required —
+# 1. Auto-fix formatting with black (--target-version py310 required —
 #    without it, local Python < 3.15 skips reformatting silently and CI fails)
-black --target-version py39 src/ai_guardian/ tests/
+black --target-version py310 src/ai_guardian/ tests/
 
 # 2. Auto-fix safe lint issues with ruff
 ruff check src/ai_guardian/ tests/ --fix
 
 # 3. Re-run black (ruff fixes may need reformatting)
-black --target-version py39 src/ai_guardian/ tests/
+black --target-version py310 src/ai_guardian/ tests/
 
 # 4. Verify all checks pass
 ruff check src/ai_guardian/ tests/
-black --target-version py39 --check src/ai_guardian/ tests/
+black --target-version py310 --check src/ai_guardian/ tests/
 pylint src/ai_guardian/ --disable=all --enable=E \
   --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 \
   --output-format=text
@@ -573,7 +573,7 @@ ai-guardian/
 
 1. **Tests** (`.github/workflows/test.yml`)
    - Runs on: push to main, pull requests
-   - Tests: Python 3.9, 3.10, 3.11, 3.12, 3.13, 3.14
+   - Tests: Python 3.10, 3.11, 3.12, 3.13, 3.14
    - Coverage: Uploaded to Codecov
 
 2. **Lint** (`.github/workflows/lint.yml`)
@@ -587,7 +587,7 @@ ai-guardian/
 4. **Release Readiness** (`.github/workflows/release-readiness.yml`)
    - Runs on: workflow_dispatch, push to release-* branches
    - Jobs:
-     - **fresh-install**: Clean install across Python 3.9–3.14 (version, doctor, config profiles, patterns, show-config)
+     - **fresh-install**: Clean install across Python 3.10–3.14 (version, doctor, config profiles, patterns, show-config)
      - **upgrade-from-previous**: Upgrade from previous stable release, permissions migration
      - **multi-agent-setup**: All supported IDE/agent setup integrations (see [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md))
      - **daemon-lifecycle**: Start/status/reload/REST API (health, status, pause, resume)/stop
@@ -1210,9 +1210,9 @@ When adding any new feature, check:
 
 ### TUI and Web Console Coexistence
 
-**IMPORTANT**: The TUI console (`src/ai_guardian/tui/`) MUST NOT be removed while Python 3.9 is still supported. The web console (`src/ai_guardian/web/`) requires NiceGUI, which requires Python >= 3.10. macOS Xcode Command Line Tools bundles Python 3.9.6, so many macOS users will only have 3.9 available. The TUI (Textual) works on all supported Python versions including 3.9.
+**IMPORTANT**: The TUI console (`src/ai_guardian/tui/`) MUST remain available as the terminal fallback. The web console (`src/ai_guardian/web/`) requires NiceGUI and Python >= 3.10. The TUI (Textual) works on all supported Python versions and remains useful when a browser or native dialog cannot start.
 
-**Rule**: Both console UIs must be maintained in parallel until Python 3.9 support is dropped. New console panels must be added to both `tui/` and `web/pages/`.
+**Rule**: Both console UIs must be maintained in parallel. New console panels must be added to both `tui/` and `web/pages/`.
 
 ---
 

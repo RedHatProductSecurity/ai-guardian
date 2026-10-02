@@ -286,7 +286,9 @@ def _check_gnome_appindicator():
 class DaemonTray:
     """System tray icon for ai-guardian daemon."""
 
-    _has_web_console = sys.version_info >= (3, 10)
+    # Python 3.10 is the minimum supported runtime. The TUI remains the
+    # fallback when the web console cannot start.
+    _has_web_console = True
 
     def __init__(
         self,

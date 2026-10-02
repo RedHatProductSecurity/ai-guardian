@@ -74,10 +74,6 @@ class TestDetectLanguage(unittest.TestCase):
         assert detect_language("Dockerfile") is None
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 10),
-    reason="tree-sitter requires Python >= 3.10",
-)
 class TestExtractScannableContentPython(unittest.TestCase):
     """Tests for extracting scannable content from Python files."""
 
@@ -228,10 +224,6 @@ class TestLanguageCoverage(unittest.TestCase):
             ), f"Language '{lang}' is in EXTENSION_TO_LANGUAGE but missing from _GRAMMAR_IMPORTS"
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 10),
-    reason="tree-sitter requires Python >= 3.10",
-)
 class TestParserCaching(unittest.TestCase):
     """Tests for parser caching behavior."""
 
