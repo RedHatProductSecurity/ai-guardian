@@ -53,6 +53,15 @@ def test_supported_python_matrix_starts_at_310():
             assert version in workflow, (workflow_name, version)
 
 
+def test_smoke_install_lifecycle_uses_the_checked_out_wheel():
+    """The installer smoke test must validate this checkout, not stale PyPI metadata."""
+    workflow = (WORKFLOW_DIR / "smoke-tests.yml").read_text(encoding="utf-8")
+    lifecycle = workflow.split("  install-uninstall:", 1)[1]
+
+    assert "python -m build --wheel --outdir" in lifecycle
+    assert '--version "$RUNNER_TEMP"/ai-guardian-dist/*.whl' in lifecycle
+
+
 def test_ubuntu_26_compatibility_workflow_covers_release_risks():
     """The migration gate covers Python, scanners, smoke, and image builds."""
     workflow = (WORKFLOW_DIR / "ubuntu-26-compatibility.yml").read_text(
