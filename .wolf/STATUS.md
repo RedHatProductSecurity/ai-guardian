@@ -17,7 +17,8 @@ budget_tokens: 1000
 - Resolved private, reserved, metadata, loopback, link-local, IPv6-local, malformed, or empty destinations fail closed; domain allowlists cannot override immutable resolved addresses.
 - The hook remains pattern-only and performs no DNS lookup or redirect; runtime-aware callers and network controls own the remaining TOCTOU boundary.
 - TUI, Web Console, schema, setup profiles, example config, docs, changelog, and pattern listing now describe the policy.
-- Validation passed: 334 related tests, 3 setup-template tests, 167 final SSRF/UX tests; Ruff, Black, Pylint, Mypy, JSON validation, and diff checks.
+- Updated the stale bundled TOML expectation from 24 to 25 SSRF rules and corrected the pattern-count documentation after PR CI exposed the regression.
+- Validation passed: 808 bundled/pattern/config tests plus 334 related tests, 3 setup-template tests, and 167 final SSRF/UX tests; Ruff, Black, Pylint, Mypy, JSON validation, and diff checks.
 - DAF note and GitHub issue progress comment were recorded; `daf complete` owns commit, push, PR, and issue closure actions.
 
 ## 🚀 Next quest
@@ -33,7 +34,7 @@ Acceptance criteria are complete:
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2482`; worktree contains only this issue's uncommitted changes.
+- Branch: `2482`; worktree contains the issue changes plus the uncommitted bundled-rule-count correction.
 - Routine local validation avoids integration/container scenarios per `AGENTS.md`; pattern-server integration assertions are included for CI.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
