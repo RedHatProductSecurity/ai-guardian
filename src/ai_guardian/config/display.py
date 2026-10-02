@@ -14,7 +14,7 @@ Usage:
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ai_guardian.ide_paths import get_active_ide_home_env_var, resolve_ide_skill_dir
 
@@ -261,17 +261,21 @@ class ConfigDisplay:
         if label == "IMMUTABLE" and "_source" in rule:
             output.append(f"                source: {rule['_source']}")
 
-    def _format_directory_rules(self, output: List[str], section: Dict, show_all: bool):
+    def _format_directory_rules(
+        self, output: List[str], section: object, show_all: bool
+    ):
         """Format directory_rules section with rule labeling."""
         # Handle both old array format and new object format
         if isinstance(section, dict):
             action = section.get("action", "block")
             rules = section.get("rules", [])
             output.append(f"  action: {action}")
-        else:
+        elif isinstance(section, list):
             # Old array format
             rules = section
             output.append("  (using legacy array format)")
+        else:
+            rules = []
 
         if rules:
             output.append(f"  rules: ({len(rules)} total)")

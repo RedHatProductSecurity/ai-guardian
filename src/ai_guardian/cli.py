@@ -2533,7 +2533,7 @@ def main():
         # Handle mcp command (Issue #468)
         if args.command == "mcp":
             try:
-                from ai_guardian.mcp.audit import MCPAuditor
+                from ai_guardian.mcp.audit import MCPAuditor, ScanReport
 
                 if not hasattr(args, "mcp_command") or args.mcp_command is None:
                     mcp_parser.print_help()
@@ -2571,11 +2571,11 @@ def main():
                             )
                             return 1
 
-                    all_reports = []
+                    all_reports: list[ScanReport] = []
                     for server in targets:
-                        report = auditor.scan_source(server)
-                        if report:
-                            all_reports.append(report)
+                        scan_report = auditor.scan_source(server)
+                        if scan_report:
+                            all_reports.append(scan_report)
                         else:
                             print(
                                 f"Source not found for '{server.name}' (command: {server.command})"
@@ -2588,8 +2588,8 @@ def main():
                         ]
                         print(json.dumps(json_data, indent=2))
                     else:
-                        for report in all_reports:
-                            auditor.print_scan_report(report)
+                        for scan_report in all_reports:
+                            auditor.print_scan_report(scan_report)
 
                     if args.exit_code and any(r.findings for r in all_reports):
                         return 1

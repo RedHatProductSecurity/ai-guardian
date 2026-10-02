@@ -943,10 +943,6 @@ def _install_mcp_config(
     if config is None:
         config = {}
 
-    if not isinstance(config, dict):
-        logger.warning("MCP config %s must contain a mapping", config_path)
-        return
-
     # Add MCP server entry with absolute path
     abs_path = _resolve_binary_path()
     key = mcp_ide["config_key"]

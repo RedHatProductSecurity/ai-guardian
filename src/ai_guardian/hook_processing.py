@@ -57,7 +57,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from ai_guardian_hook_runtime import (
     build_failure_response,
@@ -353,27 +353,28 @@ def _get_agent_type(adapter, fallback="unknown"):
     value = getattr(adapter, "agent_type", None)
     if isinstance(value, str) and value:
         return value
-    if hasattr(value, "value") and isinstance(value.value, str) and value.value:
-        return value.value
+    enum_value = getattr(value, "value", None)
+    if isinstance(enum_value, str) and enum_value:
+        return enum_value
     return fallback
 
 
 # Deferred imports for hook_events and ask_mode modules — these modules import
 # from hook_processing, so module-level imports here would create circular deps.
 # Resolved lazily on first call to process_hook_data().
-_handle_ask_mode_auto = None
-_format_ask_info_message = None
-_log_ask_decision = None
-run_content_pipeline = None
-handle_post_tool_use = None
-_handle_session_end = None
-_handle_bootstrap_scan = None
-run_bash_exfil_scan = None
-run_exfil_detection_scan = None
-run_image_scan = None
-run_code_security_scan = None
-_build_permission_matched_text = None
-_get_directory_action_from_config = None
+_handle_ask_mode_auto: Optional[Callable[..., Any]] = None
+_format_ask_info_message: Optional[Callable[..., Any]] = None
+_log_ask_decision: Optional[Callable[..., Any]] = None
+run_content_pipeline: Optional[Callable[..., Any]] = None
+handle_post_tool_use: Optional[Callable[..., Any]] = None
+_handle_session_end: Optional[Callable[..., Any]] = None
+_handle_bootstrap_scan: Optional[Callable[..., Any]] = None
+run_bash_exfil_scan: Optional[Callable[..., Any]] = None
+run_exfil_detection_scan: Optional[Callable[..., Any]] = None
+run_image_scan: Optional[Callable[..., Any]] = None
+run_code_security_scan: Optional[Callable[..., Any]] = None
+_build_permission_matched_text: Optional[Callable[..., Any]] = None
+_get_directory_action_from_config: Optional[Callable[..., Any]] = None
 
 
 def _ensure_hook_events_imported():
@@ -702,7 +703,7 @@ def _check_directory_rules(file_path, config):
                 logger.warning(
                     "directory_exclusions is deprecated - use directory_rules instead"
                 )
-                _check_directory_rules._warned_deprecation = True
+                setattr(_check_directory_rules, "_warned_deprecation", True)
 
             # Prepend exclusions as allow rules (so they have lower priority than explicit rules)
             backward_compat_rule = {"mode": "allow", "paths": dir_exclusions["paths"]}
@@ -895,6 +896,7 @@ def check_directory_denied(file_path, config=None, hook_context=None):
                 )  # ALLOW - rule overrides marker
             else:
                 # No allow rule to override - block, warn, or log-only
+                assert denied_directory is not None
                 # Check action
                 if rule_action == ActionMode.WARN:
                     logger.warning(
@@ -1204,8 +1206,6 @@ def _should_skip_context_poisoning(cp_config, tool_identifier=None, file_path=No
 
     return False
 
-    return False
-
 
 def _build_directory_denied_message(file_path, denied_dir, matched_pattern):
     """Build a standardized directory access denied error message."""
@@ -1461,7 +1461,7 @@ def _scan_for_pii(text, pii_config, file_path=None):
         redactions = result.get("redactions", [])
         if redactions:
             # Group redactions by type, collecting line numbers
-            type_lines = {}
+            type_lines: Dict[str, List[int]] = {}
             for r in redactions:
                 rtype = r["type"]
                 line_num = r.get("line_number")
@@ -1971,6 +1971,19 @@ def _process_hook_data(hook_data, daemon_state=None):
               - For Cursor: output=JSON string, exit_code=0
     """
     _ensure_hook_events_imported()
+    assert _handle_ask_mode_auto is not None
+    assert _format_ask_info_message is not None
+    assert _log_ask_decision is not None
+    assert run_content_pipeline is not None
+    assert handle_post_tool_use is not None
+    assert _handle_session_end is not None
+    assert _handle_bootstrap_scan is not None
+    assert run_bash_exfil_scan is not None
+    assert run_exfil_detection_scan is not None
+    assert run_image_scan is not None
+    assert run_code_security_scan is not None
+    assert _build_permission_matched_text is not None
+    assert _get_directory_action_from_config is not None
     _latency_timer = None
     _latency_event = None
     _latency_tool = ""
@@ -2375,6 +2388,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                             if tool_input:
                                 if checked_tool_name == "Skill" or (
                                     tool_name == "Skill"
+                                    and checked_tool_name
                                     and checked_tool_name.startswith("Skill:")
                                 ):
                                     skill_name = tool_input.get("skill", "unknown")

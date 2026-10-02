@@ -17,6 +17,7 @@ system library at compile time. When unavailable, NiceGUI is used.
 
 import logging
 import os
+from typing import Any, Dict, Optional
 
 from ai_guardian.ui.display import (
     _tkinter_available,
@@ -103,6 +104,8 @@ class _TkinterPromptApp:
 
             ptype = param.get("type", "string")
             default = self._resolve_default(param.get("default", ""))
+            var: Any = None
+            widget: Any = None
 
             if ptype == "boolean":
                 var = tk.BooleanVar(value=str(default).lower() == "true")
@@ -133,7 +136,7 @@ class _TkinterPromptApp:
                 var = tk.StringVar(value=str(default) if default else "")
                 p_min = param.get("min")
                 p_max = param.get("max")
-                kwargs = {}
+                kwargs: Dict[str, Any] = {}
                 if p_min is not None:
                     kwargs["from_"] = float(p_min)
                 if p_max is not None:
@@ -386,12 +389,12 @@ class _NiceGuiPromptApp:
     def run(self):
         from nicegui import app, ui
 
-        result_holder = {"value": None}
+        result_holder: Dict[str, Optional[str]] = {"value": None}
         params = self._params
         extra_vars = self._extra_vars
         form_title = self._title
         command_template = self._command_template
-        widgets = {}
+        widgets: Dict[str, tuple[str, Any]] = {}
 
         @ui.page("/")
         def _form_page():

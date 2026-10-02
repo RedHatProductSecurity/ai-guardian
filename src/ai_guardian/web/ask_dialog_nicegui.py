@@ -381,8 +381,9 @@ class _NiceGuiAskDialog:
                     ui.label(icon).classes("text-2xl")
                     ui.label(build_dialog_title(v)).classes("text-xl font-bold")
                     if v.total_findings and v.total_findings > 1:
-                        remaining = v.total_findings - (v.finding_index or 0) - 1
-                        counter = f"{v.finding_index + 1} of {v.total_findings}"
+                        finding_index = v.finding_index or 0
+                        remaining = v.total_findings - finding_index - 1
+                        counter = f"{finding_index + 1} of {v.total_findings}"
                         if remaining > 0:
                             counter += f" ({remaining} more)"
                         ui.badge(counter, color="info").classes("ml-2")
@@ -511,11 +512,12 @@ class _NiceGuiAskDialog:
                     )
 
                     if v.file_path:
+                        file_path = v.file_path
 
                         def view_file():
                             from ai_guardian.ui.file_opener import open_in_editor
 
-                            open_in_editor(v.file_path, v.line_number)
+                            open_in_editor(file_path, v.line_number)
 
                         ui.button("View File", on_click=view_file).props(
                             f"color={quasar_button('view_file')}"
@@ -551,8 +553,7 @@ class _NiceGuiAskDialog:
             if dialog_self._timeout > 0:
 
                 def _auto_block():
-                    if dialog_self._result is None:
-                        dialog_self._result = AskResult(decision=AskDecision.BLOCK)
+                    dialog_self._result = AskResult(decision=AskDecision.BLOCK)
                     app.shutdown()
 
                 ui.timer(dialog_self._timeout, _auto_block, once=True)

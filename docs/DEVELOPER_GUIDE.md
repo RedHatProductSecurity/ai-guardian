@@ -78,6 +78,24 @@ pip install -e ".[dev]"
 uv pip install -e ".[dev]"
 ```
 
+### Type Checking
+
+The project runs Mypy with `strict = true` on Python 3.12. Strict body
+checking, unreachable-code detection, unused-ignore reporting, and all
+annotated-code checks are enforced in CI. The legacy `ui`, `web`, and `tray`
+integration modules have an explicit module-level exception for untyped
+function bodies because their callback/widget boundaries are still dynamic;
+annotated functions in those modules remain checked. The codebase also has
+explicit transitional exceptions for legacy untyped JSON and CLI boundaries;
+do not add per-line `type: ignore` comments when a real annotation or narrow
+cast can express the contract.
+
+Run the same check locally:
+
+```bash
+uv run --extra dev mypy src/ai_guardian/ src/ai_guardian_hook_runtime.py
+```
+
 ### Keep Your Fork in Sync
 
 ```bash

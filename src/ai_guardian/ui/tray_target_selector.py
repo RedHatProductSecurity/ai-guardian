@@ -1,6 +1,7 @@
 """NiceGUI target selector for multi-target tray plugin commands."""
 
 import json
+from typing import Any
 
 
 def _target_label(target: dict) -> str:
@@ -36,9 +37,9 @@ class TrayTargetSelectorApp:
     def run(self):
         from nicegui import app, ui
 
-        result_holder = {"value": None}
+        result_holder: dict[str, str | None] = {"value": None}
         finished = {"done": False}
-        checkboxes = []
+        checkboxes: list[Any] = []
 
         def close() -> None:
             finished["done"] = True

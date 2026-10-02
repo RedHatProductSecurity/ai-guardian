@@ -24,7 +24,7 @@ from typing import Optional
 
 try:
     import tomllib
-except ImportError:  # Python 3.9 and 3.10
+except ImportError:  # Python 3.10
     import tomli as tomllib
 
 

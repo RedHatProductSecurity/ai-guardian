@@ -10,6 +10,7 @@ import logging
 import threading
 import time
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.tray import notifications as tray_notifications
@@ -248,6 +249,7 @@ class TrayHealthMonitor:
         self._tray._dispatch_to_main(self._tray._refresh_menu)
 
         # Get tray version to sync to
+        tray_version: Optional[str]
         try:
             from ai_guardian import __version__ as tray_version
         except ImportError:
@@ -480,7 +482,7 @@ class TrayHealthMonitor:
         if not isinstance(verification, dict):
             return "verification unavailable"
 
-        attention = []
+        attention: List[str] = []
         events = verification.get("events", {})
         if isinstance(events, dict):
             attention.extend(
@@ -1014,7 +1016,7 @@ class TrayHealthMonitor:
         # periodic health tick can overlap the startup/manual worker while the
         # first check is still calculating its verification snapshot.
         with self._ide_setup_prompt_lock:
-            if self._ide_setup_prompt_in_progress:
+            if bool(self._ide_setup_prompt_in_progress):
                 return
             if (
                 self._ide_setup_check_in_progress
@@ -1083,7 +1085,7 @@ class TrayHealthMonitor:
                             "for now.\n\n"
                         )
                     message += "Set up their security hooks now?"
-                dialog_kwargs = {
+                dialog_kwargs: Dict[str, Any] = {
                     "title": "Set Up AI Guardian",
                     "message": message,
                     "action_label": (action_label if len(names) == 1 else "Submit"),
@@ -1399,7 +1401,9 @@ class TrayHealthMonitor:
                     snooze_options=("1h", "6h", "1d", "1w"),
                 )
                 result = dialog.show(tray_safe=True)
-                state.record(prompt_key, result)
+                state.record(
+                    prompt_key, result if isinstance(result, str) else "dismiss"
+                )
                 if result == "action":
                     self._do_self_upgrade()
             except Exception as exc:

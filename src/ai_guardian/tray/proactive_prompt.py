@@ -12,7 +12,7 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from ai_guardian.ui.display import (
     _ensure_tcl_library,
@@ -158,7 +158,7 @@ class ProactivePromptState:
                 data.pop(IDE_SETUP_EXCLUSIONS_KEY, None)
             self.save(data)
 
-    def update_ide_setup_status(self, status: Dict) -> None:
+    def update_ide_setup_status(self, status: object) -> None:
         """Persist the latest local IDE/setup reality snapshot."""
         if not isinstance(status, dict):
             return
@@ -379,7 +379,7 @@ class ProactivePromptDialog:
         dismiss_label: Optional[str],
         snooze_options: Optional[Iterable[str]] = None,
         ide_choices: Optional[Iterable[Dict[str, str]]] = None,
-        profile_choices: Optional[Iterable[Dict[str, str]]] = None,
+        profile_choices: Optional[Iterable[Any]] = None,
         screen_bounds=None,
     ):
         self.title = title
@@ -393,7 +393,7 @@ class ProactivePromptDialog:
 
     def _profile_options(self):
         """Return valid profile options plus an explicit skip choice."""
-        options = []
+        options: List[Dict[str, Any]] = []
         seen = set()
         for choice in self.profile_choices:
             if not isinstance(choice, dict):
@@ -713,15 +713,23 @@ class ProactivePromptDialog:
             never_var = tk.BooleanVar(value=key in default_never)
             install_vars[key] = install_var
             never_vars[key] = never_var
+
+            def select_install(k: str = key) -> None:
+                keep_one_selected(install_vars[k], never_vars[k])
+
             ttk.Checkbutton(
                 frame,
                 variable=install_var,
-                command=lambda k=key: keep_one_selected(install_vars[k], never_vars[k]),
+                command=select_install,
             ).grid(row=index, column=1, sticky="w", pady=2)
+
+            def select_never(k: str = key) -> None:
+                keep_one_selected(never_vars[k], install_vars[k])
+
             ttk.Checkbutton(
                 frame,
                 variable=never_var,
-                command=lambda k=key: keep_one_selected(never_vars[k], install_vars[k]),
+                command=select_never,
             ).grid(row=index, column=2, sticky="w", pady=2)
 
         def choose(value):
@@ -795,7 +803,7 @@ class ProactivePromptDialog:
 
         result = {"value": self._ide_selection_result("dismiss")}
         done = threading.Event()
-        controls = {}
+        controls: Dict[str, Any] = {}
         profile_control = None
         defaults = self._default_ide_selection()
         default_install = set(defaults["install"])

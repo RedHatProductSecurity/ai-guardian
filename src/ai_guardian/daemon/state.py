@@ -1281,7 +1281,7 @@ class DaemonState:
                 "most_recent_project_dir": (
                     max(
                         self._project_dir_last_seen,
-                        key=self._project_dir_last_seen.get,
+                        key=lambda d: self._project_dir_last_seen[d],
                     )
                     if self._project_dir_last_seen
                     else None

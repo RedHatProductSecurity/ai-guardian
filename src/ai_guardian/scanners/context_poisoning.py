@@ -68,8 +68,8 @@ DANGEROUS_ACTIONS = [
     r"\bignore\s+(?:all\s+)?(?:previous|prior|above)\s+(?:instructions?|rules?)\b",
 ]
 
-_COMPILED_PERSISTENCE = None
-_COMPILED_DANGEROUS = None
+_COMPILED_PERSISTENCE: Optional[List[re.Pattern[str]]] = None
+_COMPILED_DANGEROUS: Optional[List[re.Pattern[str]]] = None
 _PATTERN_LOCK = threading.Lock()
 
 
@@ -99,6 +99,8 @@ def _get_compiled_patterns():
             dangerous = toml_patterns.get("dangerous_action", DANGEROUS_ACTIONS)
             _COMPILED_PERSISTENCE = [re.compile(p, re.IGNORECASE) for p in persistence]
             _COMPILED_DANGEROUS = [re.compile(p, re.IGNORECASE) for p in dangerous]
+    assert _COMPILED_PERSISTENCE is not None
+    assert _COMPILED_DANGEROUS is not None
     return _COMPILED_PERSISTENCE, _COMPILED_DANGEROUS
 
 

@@ -61,7 +61,3 @@ def copy_to_system_clipboard(text: str) -> Tuple[Optional[str], Optional[str]]:
         if copy_osc52(text):
             return (None, "OSC 52")
         return ("Clipboard not supported on this platform", None)
-
-    if copy_osc52(text):
-        return (None, "OSC 52")
-    return ("Clipboard command failed", None)

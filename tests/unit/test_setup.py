@@ -129,6 +129,17 @@ def test_package_metadata_requires_python_310():
     assert "Programming Language :: Python :: 3.10" in metadata["classifiers"]
 
 
+def test_mypy_uses_strict_soundness_checks():
+    """The repository Mypy policy keeps strict body and reachability checks enabled."""
+    project = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    mypy_config = tomllib.loads(project.read_text(encoding="utf-8"))["tool"]["mypy"]
+
+    assert mypy_config["strict"] is True
+    assert mypy_config["check_untyped_defs"] is True
+    assert mypy_config["warn_unreachable"] is True
+    assert mypy_config["warn_unused_ignores"] is True
+
+
 class TestIDESetup:
     """Test cases for IDESetup class."""
 

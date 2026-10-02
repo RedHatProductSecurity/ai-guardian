@@ -181,10 +181,26 @@ ignore = [
 "src/ai_guardian/setup.py" = ["F821"]
 
 [tool.mypy]
-# Type-check on the CI runtime. Runtime compatibility with Python 3.10 remains
-# covered by the test matrix; this avoids parsing newer third-party stubs with
-# syntax unavailable to older mypy targets.
+# Run Mypy in strict mode on the CI runtime. Runtime compatibility with Python
+# 3.10 remains covered by the test matrix; this avoids parsing newer
+# third-party stubs with syntax unavailable to older Mypy targets.
+strict = true
 python_version = "3.12"
+
+# The codebase predates strict typing and still contains deliberately dynamic
+# JSON, CLI, and UI boundaries. Keep strict body checking and soundness checks
+# enabled while those boundaries are migrated incrementally. These exceptions
+# are intentionally explicit rather than using per-file ignores, so new type
+# errors in annotated code continue to fail CI.
+check_untyped_defs = true
+warn_unreachable = true
+disallow_any_generics = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+no_implicit_reexport = false
+warn_return_any = false
 implicit_optional = true
 show_error_codes = true
 warn_unused_ignores = true
@@ -194,6 +210,18 @@ warn_unused_ignores = true
 # all errors in ai_guardian source remain enforced.
 ignore_missing_imports = true
 follow_imports = "skip"
+
+# These modules are legacy UI integration boundaries with intentionally dynamic
+# callback and widget objects. Annotated functions still use strict checking;
+# untyped function bodies remain a staged migration area rather than being
+# hidden with per-line ignores.
+[[tool.mypy.overrides]]
+module = [
+  "ai_guardian.ui.*",
+  "ai_guardian.web.*",
+  "ai_guardian.tray.*",
+]
+check_untyped_defs = false
 
 [tool.ai-guardian.scanners]
 # Pinned versions used by `scanner install --use-pinned` and container builds.

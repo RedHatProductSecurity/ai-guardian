@@ -6,6 +6,7 @@ in a result loop.
 """
 
 import logging
+from typing import Any, Dict, Optional
 
 import ai_guardian.config.loaders as _loaders
 from ai_guardian.config.utils import is_feature_enabled
@@ -26,10 +27,12 @@ def _agent_type_value(adapter, ide_type):
     value = getattr(adapter, "agent_type", None)
     if isinstance(value, str) and value:
         return value
-    if hasattr(value, "value") and isinstance(value.value, str) and value.value:
-        return value.value
-    if hasattr(ide_type, "value"):
-        return ide_type.value
+    enum_value = getattr(value, "value", None)
+    if isinstance(enum_value, str) and enum_value:
+        return enum_value
+    ide_value = getattr(ide_type, "value", None)
+    if isinstance(ide_value, str) and ide_value:
+        return ide_value
     return str(ide_type or "unknown")
 
 
@@ -57,8 +60,8 @@ _FAIL_CLOSED_SCANNERS = frozenset(
 )
 
 # Derived from registry: violation_type string → ScannerName
-_VIOLATION_TYPE_TO_SCANNER = None
-_SCANNER_TO_VIOLATION_TYPE = None
+_VIOLATION_TYPE_TO_SCANNER: Optional[Dict[str, Any]] = None
+_SCANNER_TO_VIOLATION_TYPE: Optional[Dict[Any, ViolationType]] = None
 
 
 def _ensure_violation_maps():
@@ -123,6 +126,8 @@ def run_content_pipeline(
     warning_messages list is mutated in-place with any warnings.
     """
     _ensure_violation_maps()
+    assert _VIOLATION_TYPE_TO_SCANNER is not None
+    assert _SCANNER_TO_VIOLATION_TYPE is not None
 
     if ctx is not None:
         hook_data = ctx.hook_data

@@ -149,7 +149,7 @@ def build_allowlist_context(
     }
 
 
-def resolve_source_location(violation: Dict[str, Any]) -> Optional[Tuple[str, int]]:
+def resolve_source_location(violation: object) -> Optional[Tuple[str, int]]:
     """Resolve a saved allowlist context to the current source line.
 
     A preferred logged line is accepted when its hash still matches.  If the
@@ -194,7 +194,7 @@ def resolve_source_location(violation: Dict[str, Any]) -> Optional[Tuple[str, in
     return None
 
 
-def get_annotation_target(violation: Dict[str, Any]) -> Optional[Tuple[str, int]]:
+def get_annotation_target(violation: object) -> Optional[Tuple[str, int]]:
     """Return the safe source target used by the annotation buttons.
 
     Older violation records retain the legacy non-temporary path/line pair.

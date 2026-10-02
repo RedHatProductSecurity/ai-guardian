@@ -266,7 +266,7 @@ def _scan_config_exfil(content, file_path, line_number, sub_type, config, **_kwa
         return {"status": "not_found", "message": "Config scanner not available"}
 
     scanner = ConfigFileScanner(config.get("config_file_scanning", {}))
-    is_threat, reason = scanner.scan(file_path, content)
+    is_threat, _reason, _details = scanner.scan(file_path, content)
     if not is_threat:
         return {
             "status": "not_found",

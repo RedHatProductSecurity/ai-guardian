@@ -41,10 +41,12 @@ def _agent_type_value(adapter, ide_type):
     value = getattr(adapter, "agent_type", None)
     if isinstance(value, str) and value:
         return value
-    if hasattr(value, "value") and isinstance(value.value, str) and value.value:
-        return value.value
-    if hasattr(ide_type, "value"):
-        return ide_type.value
+    enum_value = getattr(value, "value", None)
+    if isinstance(enum_value, str) and enum_value:
+        return enum_value
+    ide_value = getattr(ide_type, "value", None)
+    if isinstance(ide_value, str) and ide_value:
+        return ide_value
     return str(ide_type or "unknown")
 
 
@@ -217,8 +219,8 @@ def handle_post_tool_use(ctx=None, **kwargs):
     # to prevent blocking/redaction of suppressed lines
     post_annotations_config = None
     post_secret_content = None
-    post_all_suppressed = set()
-    post_secret_suppressed = set()
+    post_all_suppressed: set[int] = set()
+    post_secret_suppressed: set[int] = set()
     original_tool_output = tool_output
     if HAS_ANNOTATIONS and pretool_ctx and pretool_ctx.get("file_path") and tool_output:
         post_annotations_config, _ = _loaders._load_annotations_config()

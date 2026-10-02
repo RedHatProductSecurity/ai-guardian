@@ -99,7 +99,7 @@ class CodeInspector(ABC):
 
 def is_code_finding_allowlisted(
     finding: CodeInspectionFinding,
-    allowlist: Sequence[Dict[str, Any]],
+    allowlist: Sequence[object],
     file_path: Optional[str] = None,
 ) -> bool:
     """Return whether a finding matches a code-inspection allowlist entry."""

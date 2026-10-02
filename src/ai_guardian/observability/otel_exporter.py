@@ -662,14 +662,10 @@ def _export_dir(args) -> int:
         out_name = entry.rsplit(".", 1)[0] + ext
         if output_dir:
             out_path = os.path.join(output_dir, out_name)
-            mode = "wb" if isinstance(data, bytes) else "w"
-            with open(out_path, mode) as fh:
+            with open(out_path, "wb") as fh:
                 fh.write(data)
         else:
-            if isinstance(data, bytes):
-                sys.stdout.buffer.write(data)
-            else:
-                print(data)
+            sys.stdout.buffer.write(data)
         count += 1
 
     print(f"Exported {count} trace(s)", file=sys.stderr)
@@ -880,8 +876,6 @@ class OtelSpanEmitter:
             if stop_reason is not None:
                 ctx["stop_reason"] = stop_reason
             result = self._metadata_fn(self._agent_name, ctx)
-            if not isinstance(result, dict):
-                return []
             return _attrs(*result.items())
         except Exception:
             logger.debug("OTEL metadata_fn failed", exc_info=True)

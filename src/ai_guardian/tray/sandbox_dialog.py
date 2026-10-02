@@ -235,6 +235,8 @@ def _status_item_screen(icon):
         return None
     try:
         status_item = getattr(icon, "_status_item", None)
+        if status_item is None:
+            return None
         button = status_item.button()
         window = button.window()
         return window.screen()
@@ -726,6 +728,7 @@ def _show_tkinter_form(
                 initialdir = _browse_initialdir(variable.get())
                 if initialdir:
                     options["initialdir"] = initialdir
+                selected: Any = None
                 if kind == "directory":
                     selected = filedialog.askdirectory(**options)
                 elif field.get("multiple"):

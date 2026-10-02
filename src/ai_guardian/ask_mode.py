@@ -175,11 +175,8 @@ def _handle_ask_mode(
                 from pathlib import Path as _Path
                 from ai_guardian.config.writer import save_ask_pattern
 
-                cp = (
-                    _Path(result.config_path)
-                    if getattr(result, "config_path", None)
-                    else None
-                )
+                config_path = getattr(result, "config_path", None)
+                cp = _Path(config_path) if isinstance(config_path, str) else None
                 save_ask_pattern(
                     config_section, result.allowlist_pattern, config_path=cp
                 )
