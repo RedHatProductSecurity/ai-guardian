@@ -127,6 +127,7 @@ class TestPatternLoaders:
         assert "dangerous_schemes" in immutable
 
         # Cloud metadata should be immutable
+        assert any("0.0.0.0/8" in str(r) for r in immutable["blocked_ip_ranges"])
         assert any("169.254.0.0/16" in str(r) for r in immutable["blocked_ip_ranges"])
         assert any(
             "metadata.google.internal" in str(d) for d in immutable["blocked_domains"]
@@ -209,6 +210,7 @@ class TestThreeTierMerge:
 
         # Immutable should still be present
         cidrs = [r["cidr"] for r in merged["blocked_ip_ranges"]]
+        assert "0.0.0.0/8" in cidrs  # Immutable
         assert "169.254.0.0/16" in cidrs  # Immutable
 
         # Server pattern should be there

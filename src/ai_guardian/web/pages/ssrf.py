@@ -12,6 +12,7 @@ from ai_guardian.web.config_helpers import load_web_config, save_web_config
 
 CORE_PROTECTIONS = {
     "Private IP Ranges": [
+        "0.0.0.0/8",
         "10.0.0.0/8",
         "172.16.0.0/12",
         "192.168.0.0/16",

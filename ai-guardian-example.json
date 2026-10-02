@@ -726,7 +726,8 @@
     "_comment": "⚠️ IMPORTANT: Pattern-based filtering only - cannot replace network-level security",
     "_limitation_1": "Can only inspect command strings and tool parameters",
     "_limitation_2": "Cannot detect MCP server internal network calls",
-    "_limitation_3": "Cannot block HTTP redirects or dynamic URL construction",
+    "_limitation_3": "The hook cannot follow or revalidate runtime HTTP redirects or dynamic URL construction",
+    "_revalidation": "Network-aware callers must pass fresh IPv4/IPv6 DNS results to SSRFProtector.check_resolved_destination() and revalidate every redirect target",
     "_recommendation": "For comprehensive SSRF protection, use firewall rules and MCP sandboxing",
     "_learn_more": "See docs/SSRF_PROTECTION.md for detailed limitations and recommendations",
 

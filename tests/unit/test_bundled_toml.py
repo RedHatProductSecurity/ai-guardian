@@ -17,7 +17,7 @@ EXPECTED_COUNTS = {
     "prompt-injection.toml": 73,
     "unicode.toml": 107,
     "config-exfil.toml": 10,  # Updated for Issue #1100: added curl @file patterns
-    "ssrf.toml": 24,
+    "ssrf.toml": 25,
 }
 
 

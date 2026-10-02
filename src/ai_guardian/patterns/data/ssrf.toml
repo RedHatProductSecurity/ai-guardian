@@ -5,6 +5,13 @@
 # --- Private/Reserved CIDR Ranges ---
 
 [[rules]]
+id = "ssrf-unspecified-ipv4"
+match_type = "cidr"
+cidr = "0.0.0.0/8"
+description = "Unspecified and reserved IPv4 destinations"
+tier = "immutable"
+
+[[rules]]
 id = "ssrf-private-class-a"
 match_type = "cidr"
 cidr = "10.0.0.0/8"

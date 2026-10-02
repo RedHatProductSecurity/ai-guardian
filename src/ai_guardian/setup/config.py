@@ -236,7 +236,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "ignore_tools": [],
             "max_image_size_mb": 10,
         },
-        "_comment_ssrf_protection": "Prevent SSRF attacks by blocking access to private networks, metadata endpoints, and dangerous URL schemes (NEW in v1.5.0)",
+        "_comment_ssrf_protection": "Prevent SSRF attacks by blocking access to private/reserved networks, metadata endpoints, and dangerous URL schemes (NEW in v1.5.0)",
         "ssrf_protection": {
             "enabled": True,
             "action": "block",

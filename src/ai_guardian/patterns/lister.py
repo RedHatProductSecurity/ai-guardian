@@ -346,7 +346,7 @@ class PatternLister:
             BuiltInGroup(
                 "Blocked IP ranges",
                 _count_toml_rules("ssrf", match_type="cidr"),
-                "RFC 1918 + loopback",
+                "RFC 1122/RFC 1918 + loopback",
             ),
             BuiltInGroup(
                 "Blocked domains",

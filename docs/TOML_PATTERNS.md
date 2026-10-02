@@ -45,7 +45,7 @@ AI Guardian ships with 267 pre-compiled rules across 6 categories:
 | `prompt-injection.toml` | Prompt injection | 73 | Jailbreaks, instruction override, exfiltration |
 | `unicode.toml` | Unicode attacks | 107 | Homoglyphs, zero-width chars, bidi overrides |
 | `config-exfil.toml` | Config exfiltration | 8 | Credential theft via curl, wget, aws s3 |
-| `ssrf.toml` | SSRF protection | 22 | Private IPs, cloud metadata, dangerous schemes |
+| `ssrf.toml` | SSRF protection | 25 | Private/reserved IPs, cloud metadata, dangerous schemes |
 
 ## Match Types
 

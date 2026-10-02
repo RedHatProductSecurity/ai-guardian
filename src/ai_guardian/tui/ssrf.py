@@ -145,7 +145,8 @@ class SSRFContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
                 )
                 yield Static(
                     "[dim]The following protections CANNOT be disabled:\n\n"
-                    "Private IP Ranges (RFC 1918):\n"
+                    "Private and Reserved IPv4 Ranges:\n"
+                    "  • 0.0.0.0/8 (Unspecified/reserved destinations)\n"
                     "  • 10.0.0.0/8 (Private network)\n"
                     "  • 172.16.0.0/12 (Private network)\n"
                     "  • 192.168.0.0/16 (Private network)\n"

@@ -252,6 +252,7 @@ class TestSSRFData:
 
         assert isinstance(CORE_PROTECTIONS, dict)
         assert "Private IP Ranges" in CORE_PROTECTIONS
+        assert "0.0.0.0/8" in CORE_PROTECTIONS["Private IP Ranges"]
         assert "Cloud Metadata Endpoints" in CORE_PROTECTIONS
         assert "Dangerous URL Schemes" in CORE_PROTECTIONS
 

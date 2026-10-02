@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SSRF destination revalidation (#2482):** Block the complete immutable
+  `0.0.0.0/8` destination range, add caller-owned DNS/redirect revalidation for
+  fresh IPv4 and IPv6 results, and document that domain allowlists cannot
+  override resolved private destinations or replace runtime network controls.
+
 - **Credential format coverage (#2477):** Add complete GitLab personal access
   token v3 matching with entropy filtering and a narrowly scoped Okta OAuth
   client-secret rule. The formats were independently authored from public

@@ -14,6 +14,8 @@ Tests cover:
 - Configuration overrides
 """
 
+import socket
+
 import pytest
 from ai_guardian.scanners.ssrf import SSRFProtector, check_ssrf
 
@@ -139,6 +141,28 @@ class TestPrivateIPRanges:
         assert should_block, f"Failed to block {description}"
 
     @pytest.mark.parametrize(
+        "ip",
+        ["0.0.0.0", "0.0.0.1", "0.255.255.255"],
+    )
+    def test_unspecified_ipv4_range_blocked(self, ip):
+        """All of 0.0.0.0/8 is an immutable destination block."""
+        protector = SSRFProtector()
+
+        should_block, msg = protector.check("Bash", {"command": f"curl http://{ip}/"})
+
+        assert should_block
+        assert ip in msg
+
+    def test_unspecified_ipv4_remains_blocked_with_localhost_allowed(self):
+        """allow_localhost only changes loopback, not 0.0.0.0/8."""
+        protector = SSRFProtector({"allow_localhost": True})
+
+        should_block, msg = protector.check("Bash", {"command": "curl http://0.0.0.0/"})
+
+        assert should_block
+        assert "0.0.0.0" in msg
+
+    @pytest.mark.parametrize(
         "ipv6_mapped,expected_ipv4,description",
         [
             (
@@ -161,6 +185,173 @@ class TestPrivateIPRanges:
 
         assert should_block, f"Failed to block {description} (maps to {expected_ipv4})"
         assert "SSRF" in msg or "blocked" in msg.lower()
+
+
+class TestResolvedDestinations:
+    """Tests for caller-owned DNS and redirect revalidation."""
+
+    def test_hook_does_not_resolve_domains(self, monkeypatch):
+        """The pre-tool hook remains pattern-only and makes no DNS requests."""
+
+        def fail_if_resolved(*_args, **_kwargs):
+            raise AssertionError("SSRF hook must not perform DNS resolution")
+
+        monkeypatch.setattr(socket, "getaddrinfo", fail_if_resolved)
+        protector = SSRFProtector()
+
+        should_block, msg = protector.check(
+            "Bash", {"command": "curl https://public.example/resource"}
+        )
+
+        assert not should_block
+        assert msg is None
+
+    def test_dns_rebinding_result_is_revalidated(self):
+        """A private answer later in a DNS result set cannot bypass the check."""
+        protector = SSRFProtector()
+
+        should_block, reason, is_immutable = protector.check_resolved_destination(
+            "https://public.example/resource",
+            ["198.51.100.10", "10.0.0.7"],
+        )
+
+        assert should_block
+        assert is_immutable
+        assert "10.0.0.7" in reason
+
+    def test_allowed_domain_cannot_override_resolved_private_address(self):
+        """Domain allowlists never override immutable resolved IP protections."""
+        protector = SSRFProtector(
+            {
+                "additional_blocked_domains": ["api.example"],
+                "allowed_domains": ["api.example"],
+            }
+        )
+
+        should_block, reason, is_immutable = protector.check_resolved_destination(
+            "https://api.example/resource", ["192.168.1.20"]
+        )
+
+        assert should_block
+        assert is_immutable
+        assert "192.168.1.20" in reason
+
+    def test_resolved_public_address_preserves_domain_allowlist(self):
+        """A configured domain allowlist still overrides a configurable deny-list."""
+        protector = SSRFProtector(
+            {
+                "additional_blocked_domains": ["api.example"],
+                "allowed_domains": ["api.example"],
+            }
+        )
+
+        should_block, reason, is_immutable = protector.check_resolved_destination(
+            "https://api.example/resource", ["198.51.100.20"]
+        )
+
+        assert not should_block
+        assert reason == ""
+        assert not is_immutable
+
+    def test_ipv6_dns_result_is_revalidated(self):
+        """IPv6 answers, including getaddrinfo-shaped results, are checked."""
+        protector = SSRFProtector()
+        ipv6_result = (
+            socket.AF_INET6,
+            socket.SOCK_STREAM,
+            6,
+            "",
+            ("fd00::20", 443, 0, 0),
+        )
+
+        should_block, reason, is_immutable = protector.check_resolved_destination(
+            "https://public.example/resource", [ipv6_result]
+        )
+
+        assert should_block
+        assert is_immutable
+        assert "fd00::20" in reason
+
+    def test_redirect_target_is_revalidated(self):
+        """Every URL in a caller-supplied redirect chain is checked."""
+        protector = SSRFProtector()
+        redirect_chain = [
+            "https://public.example/start",
+            "https://redirect.example/hop",
+        ]
+
+        should_block, reason, is_immutable = protector.check_redirect_chain(
+            redirect_chain,
+            {
+                redirect_chain[0]: ["198.51.100.10"],
+                redirect_chain[1]: ["::1"],
+            },
+        )
+
+        assert should_block
+        assert is_immutable
+        assert "::1" in reason
+
+    def test_redirect_chain_with_public_targets_is_allowed(self):
+        """Revalidation does not block public redirect targets."""
+        protector = SSRFProtector()
+        redirect_chain = [
+            "https://public.example/start",
+            "https://redirect.example/hop",
+        ]
+
+        should_block, reason, is_immutable = protector.check_redirect_chain(
+            redirect_chain,
+            {
+                redirect_chain[0]: ["198.51.100.10"],
+                redirect_chain[1]: ["2001:db8::10"],
+            },
+        )
+
+        assert not should_block
+        assert reason == ""
+        assert not is_immutable
+
+    def test_invalid_resolved_address_fails_closed(self):
+        """Malformed resolver output cannot be treated as a safe destination."""
+        protector = SSRFProtector()
+
+        should_block, reason, is_immutable = protector.check_resolved_destination(
+            "https://public.example/resource", ["not-an-ip"]
+        )
+
+        assert should_block
+        assert is_immutable
+        assert "failed to parse" in reason
+
+    def test_missing_resolved_address_fails_closed(self):
+        """An attempted revalidation with no DNS answers cannot authorize access."""
+        protector = SSRFProtector()
+
+        should_block, reason, is_immutable = protector.check_resolved_destination(
+            "https://public.example/resource", []
+        )
+
+        assert should_block
+        assert is_immutable
+        assert "no resolved address" in reason
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "python -m http.server --bind 0.0.0.0 8000",
+            "uvicorn app:app --host 0.0.0.0 --port 8000",
+            "nc -l 0.0.0.0 8080",
+        ],
+    )
+    def test_bind_and_listen_commands_are_not_false_positives(self, command):
+        """Unspecified bind addresses are not URL destinations."""
+        protector = SSRFProtector()
+
+        should_block, msg = protector.check("Bash", {"command": command})
+
+        assert not should_block
+        assert msg is None
 
 
 class TestCloudMetadataEndpoints:
