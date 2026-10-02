@@ -8,7 +8,7 @@ from ai_guardian.daemon.violation_rescan import (
     _extract_line_near,
     _find_nearest_redaction,
 )
-from ai_guardian.tui.pattern_editor import (
+from ai_guardian.ui.pattern_editor import (
     config_section_for_violation,
 )
 
@@ -236,7 +236,7 @@ class TestExtractMatchedFromViolation:
     """Test matched text extraction from violation data."""
 
     def _extract(self, violation):
-        from ai_guardian.tui.violations import _extract_matched_from_violation
+        from ai_guardian.web.pages.violations import _extract_matched_from_violation
 
         return _extract_matched_from_violation(violation)
 

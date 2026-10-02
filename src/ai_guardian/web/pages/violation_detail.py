@@ -273,7 +273,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
         )
         annotation_target = get_annotation_target(v)
         if not immutable and (v_file_path or annotation_target):
-            from ai_guardian.tui.source_annotator import get_comment_prefix
+            from ai_guardian.ui.source_annotator import get_comment_prefix
 
             if (
                 vtype not in _NO_SUPPRESSION_TYPES

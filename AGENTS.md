@@ -167,7 +167,10 @@ pytest tests/unit/ -k "test_something" -v
 
 #### NiceGUI / Web Console Tests (Python >= 3.10)
 
-**NiceGUI requires Python >= 3.10.** Tests that import anything from `src/ai_guardian/web/` should guard the optional dependency with `pytest.importorskip` so environments without NiceGUI skip cleanly.
+**NiceGUI requires Python >= 3.10 and is a core dependency.** Tests that import
+anything from `src/ai_guardian/web/` should still guard the dependency with
+`pytest.importorskip` so minimal environments without installed project
+dependencies skip cleanly.
 
 **Required pattern** — always guard web component imports with `pytest.importorskip`:
 
@@ -664,7 +667,7 @@ Dependabot automatically monitors and creates pull requests for dependency updat
 
 2. **Python Packages** (from `pyproject.toml`)
    - Monthly checks for package updates
-   - Covers: textual, jsonschema, requests, pyyaml, tomli, pytest, etc.
+   - Covers: nicegui, jsonschema, requests, pyyaml, tomli, pytest, etc.
    - Labels: `enhancement`, `dependabot`
    - Commit prefix: `deps:`
    - PR limit: 10 concurrent PRs
@@ -814,7 +817,7 @@ This approach ensures dependencies stay current while maintaining stability thro
 
 **What it monitors**:
 - GitHub Actions (actions/checkout, actions/setup-python, codecov/codecov-action, etc.)
-- Python packages (textual, jsonschema, requests, pyyaml, tomli, pytest, etc.)
+- Python packages (nicegui, jsonschema, requests, pyyaml, tomli, pytest, etc.)
 
 **Workflow**:
 1. Dependabot scans dependencies monthly
@@ -931,7 +934,7 @@ For dependencies not covered by automation or when you need to update immediatel
 **Check current versions**:
 ```bash
 # Python package versions
-pip list | grep -E "textual|jsonschema|requests"
+pip list | grep -E "nicegui|jsonschema|requests"
 
 # Scanner versions
 ai-guardian scanner list
@@ -993,7 +996,7 @@ cat versions.json | jq
   - Updated monthly or when security issues found
   - Always tested before updating
   
-- **Python packages**: Minimum versions (textual>=0.47.0)
+- **Python packages**: Minimum versions (nicegui>=3.0.4)
   - Allows automatic patch/minor updates
   - Tested via CI on every commit
   - Major versions require manual update and testing
@@ -1200,7 +1203,7 @@ When adding any new feature, check:
 
 - [ ] **MCP tool** — Is it read-only/query? Would AI benefit from calling it? → Add MCP tool in `mcp_server.py` + update skill
 - [ ] **Tray menu** — Does it produce a quick status or count? → Add to tray in `daemon/tray.py`
-- [ ] **Console panel** — Does it have configurable settings? → Add Console UI in `tui/` and `web/pages/`
+- [ ] **Console panel** — Does it have configurable settings? → Add a Web Console page in `web/pages/`
 - [ ] **CLI command** — Does it need a standalone command? → Add to CLI in `__init__.py`
 - [ ] **Multi-agent compatibility** — Does it affect hook responses or setup? → Follow the [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md) and test all applicable supported IDEs. Verify each adapter's `format_response()` contract.
 - [ ] **Agent documentation** — Adding or changing an IDE/agent? → Update the applicable tables in `docs/AGENT_SUPPORT.md` and keep the checklist's runtime, test, and release-readiness surfaces synchronized.
@@ -1208,11 +1211,15 @@ When adding any new feature, check:
 - [ ] **`.aiguardignore.toml` scanner type** — Adding a new violation/scanner type that scans file content (not URL-based or tool-based)? → Add it to `SCANNER_TYPES` in `src/ai_guardian/aiguardignore.py` so `.aiguardignore.toml` can filter it.
 - [ ] **Scanner integration** — Adding a third-party scanner engine or a built-in security detector? → Follow the [Scanner Integration Checklist](docs/SCANNER_INTEGRATION_CHECKLIST.md).
 
-### TUI and Web Console Coexistence
+### Web Console
 
-**IMPORTANT**: The TUI console (`src/ai_guardian/tui/`) MUST remain available as the terminal fallback. The web console (`src/ai_guardian/web/`) requires NiceGUI and Python >= 3.10. The TUI (Textual) works on all supported Python versions and remains useful when a browser or native dialog cannot start.
+**IMPORTANT**: The Web Console in `src/ai_guardian/web/` is the supported
+interactive console and requires the core NiceGUI dependency on Python >= 3.10.
+Shared dialog and UI helpers live in `src/ai_guardian/ui/`; headless mode is the
+non-interactive fallback.
 
-**Rule**: Both console UIs must be maintained in parallel. New console panels must be added to both `tui/` and `web/pages/`.
+**Rule**: New configurable console features must be added to the Web Console
+pages and covered by the corresponding web/UX tests.
 
 ---
 

@@ -174,30 +174,16 @@ def _get_bundled_plugins_dir() -> Optional[Path]:
         return None
 
 
-# Python 3.10 is the minimum supported runtime. Keep this flag so the loader
-# can still select the terminal variant when the web console is unavailable.
-_HAS_WEB_CONSOLE = True
-
-
 def _load_bundled_plugins(
     daemon_tags: Optional[List[str]] = None,
 ) -> List[Plugin]:
-    """Load bundled default plugins, selecting the right console variant.
-
-    Files named ``*-web.json`` are loaded by default. Files named
-    ``*-tui.json`` remain available as the terminal fallback.
-    Files without a ``-web`` or ``-tui`` suffix are always loaded.
-    """
+    """Load bundled default plugins for the browser console."""
     bundled_dir = _get_bundled_plugins_dir()
     if bundled_dir is None or not bundled_dir.is_dir():
         return []
 
-    skip_suffix = "-tui.json" if _HAS_WEB_CONSOLE else "-web.json"
-
     plugins = []
     for path in sorted(bundled_dir.glob("*.json")):
-        if path.name.endswith(skip_suffix):
-            continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
@@ -1023,7 +1009,7 @@ def show_dialog(title: str, message: str, *, screen_bounds=None) -> bool:
     """
     import subprocess
 
-    from ai_guardian.tui.display import get_preferred_ui
+    from ai_guardian.ui.display import get_preferred_ui
 
     if get_preferred_ui() == "headless":
         logger.debug("Skipping tray dialog in headless UI mode")
@@ -1033,7 +1019,7 @@ def show_dialog(title: str, message: str, *, screen_bounds=None) -> bool:
     try:
         if system == "Darwin":
             if screen_bounds is not None:
-                from ai_guardian.tui.display import (
+                from ai_guardian.ui.display import (
                     _tkinter_available,
                     get_preferred_ui,
                 )
@@ -1304,7 +1290,7 @@ def show_action_dialog(
     structured mapping as the other proactive-prompt UI implementations.
     Returns ``None`` when the native prompt could not be launched.
     """
-    from ai_guardian.tui.display import get_preferred_ui
+    from ai_guardian.ui.display import get_preferred_ui
 
     if get_preferred_ui() == "headless":
         logger.debug("Skipping tray action dialog in headless UI mode")

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ai_guardian.tui.pattern_editor import (
+from ai_guardian.ui.pattern_editor import (
     config_section_for_rule_id,
 )
 

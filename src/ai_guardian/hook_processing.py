@@ -2336,7 +2336,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                                 },
                             )
                             if perm_ask_result is not None:
-                                from ai_guardian.tui.ask_dialog import AskDecision
+                                from ai_guardian.ui.ask_dialog import AskDecision
 
                                 if perm_ask_result.decision not in (
                                     AskDecision.BLOCK,
@@ -2629,7 +2629,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                         },
                     )
                     if dir_ask_result is not None:
-                        from ai_guardian.tui.ask_dialog import AskDecision
+                        from ai_guardian.ui.ask_dialog import AskDecision
 
                         if dir_ask_result.decision not in (
                             AskDecision.BLOCK,

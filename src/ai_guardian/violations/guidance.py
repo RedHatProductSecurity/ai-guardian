@@ -1,7 +1,7 @@
 """Shared fix-guidance logic for violation resolution instructions.
 
 This module is the single source of truth for the config snippets and
-instructions shown to users in the TUI Console, Web Console, and CLI.
+instructions shown to users in the Web Console and CLI.
 
 IMPORTANT — self-protection rule (see AGENTS.md):
   These instructions must ONLY appear in user-facing channels.
@@ -38,8 +38,8 @@ def _is_temp_file_path(value: object) -> bool:
 def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
     """Return (instructions_text, config_snippet) for a violation type.
 
-    instructions_text is plain text (no Rich markup) so it works in TUI,
-    Web, and CLI.  Callers can wrap with Rich/HTML formatting as needed.
+    instructions_text is plain text (no Rich markup) so it works in Web and
+    CLI contexts. Callers can wrap with Rich/HTML formatting as needed.
 
     Returns generic review guidance for unknown violation types.
     """

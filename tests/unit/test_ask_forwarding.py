@@ -12,7 +12,7 @@ import pytest
 
 from ai_guardian.daemon.state import DaemonState, PendingPrompt
 from ai_guardian.daemon.multi_client import _is_loopback_host
-from ai_guardian.tui.ask_dialog import (
+from ai_guardian.ui.ask_dialog import (
     AskDecision,
     AskResult,
     AskViolationInfo,

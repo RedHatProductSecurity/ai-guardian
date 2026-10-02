@@ -325,7 +325,7 @@ class TestAskViolationInfoCounterFields:
     """AskViolationInfo has finding_index and total_findings."""
 
     def test_default_none(self):
-        from ai_guardian.tui.ask_dialog import AskViolationInfo
+        from ai_guardian.ui.ask_dialog import AskViolationInfo
 
         v = AskViolationInfo(
             violation_type="test",
@@ -337,7 +337,7 @@ class TestAskViolationInfoCounterFields:
         assert v.total_findings is None
 
     def test_set_counter(self):
-        from ai_guardian.tui.ask_dialog import AskViolationInfo
+        from ai_guardian.ui.ask_dialog import AskViolationInfo
 
         v = AskViolationInfo(
             violation_type="test",
@@ -355,13 +355,13 @@ class TestAskDecisionBlockAll:
     """BLOCK_ALL enum value exists and works."""
 
     def test_block_all_value(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         assert AskDecision.BLOCK_ALL == "block_all"
         assert AskDecision.BLOCK_ALL.value == "block_all"
 
     def test_block_all_distinct_from_block(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         assert AskDecision.BLOCK != AskDecision.BLOCK_ALL
 
@@ -369,10 +369,10 @@ class TestAskDecisionBlockAll:
 class TestHandleAskModeMulti:
     """_handle_ask_mode_multi loops through findings."""
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
     def test_single_finding_delegates(self, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_dialog.return_value = AskResult(decision=AskDecision.ALLOW_ONCE)
         findings = [{"matched_text": "secret123", "line_number": 1}]
@@ -387,10 +387,10 @@ class TestHandleAskModeMulti:
         assert result.decision == AskDecision.ALLOW_ONCE
         mock_dialog.assert_called_once()
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
     def test_all_allowed(self, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_dialog.return_value = AskResult(decision=AskDecision.ALLOW_ONCE)
         findings = [
@@ -408,10 +408,10 @@ class TestHandleAskModeMulti:
         assert result.decision == AskDecision.ALLOW_ONCE
         assert mock_dialog.call_count == 3
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
     def test_block_on_second_stops(self, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_dialog.side_effect = [
             AskResult(decision=AskDecision.ALLOW_ONCE),
@@ -432,10 +432,10 @@ class TestHandleAskModeMulti:
         assert result.decision == AskDecision.BLOCK
         assert mock_dialog.call_count == 2
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
     def test_block_all_stops_immediately(self, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_dialog.return_value = AskResult(decision=AskDecision.BLOCK_ALL)
         findings = [
@@ -452,11 +452,11 @@ class TestHandleAskModeMulti:
         assert result.decision == AskDecision.BLOCK
         assert mock_dialog.call_count == 1
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
     @patch("ai_guardian.config.writer.save_ask_pattern")
     def test_allow_always_saves_and_continues(self, mock_save, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_save.return_value = True
         mock_dialog.side_effect = [
@@ -490,10 +490,10 @@ class TestHandleAskModeMulti:
         )
         assert result is None
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
     def test_empty_findings_returns_none_like_single(self, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_dialog.return_value = AskResult(decision=AskDecision.ALLOW_ONCE)
         result = _handle_ask_mode_multi(
@@ -506,10 +506,10 @@ class TestHandleAskModeMulti:
         # Empty list → calls _handle_ask_mode with empty finding dict
         # This should still work (returns allow/block based on dialog)
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
     def test_finding_index_passed_to_dialog(self, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_dialog.return_value = AskResult(decision=AskDecision.ALLOW_ONCE)
         findings = [
@@ -535,11 +535,11 @@ class TestHandleAskModeMulti:
         assert violation_info2.finding_index == 1
         assert violation_info2.total_findings == 2
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
-    @patch("ai_guardian.tui.ask_dialog._save_ignore_path")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog._save_ignore_path")
     def test_ignore_file_skips_remaining_findings(self, mock_save, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_save.return_value = True
         ignore_result = AskResult(decision=AskDecision.IGNORE_FILE)
@@ -566,11 +566,11 @@ class TestHandleAskModeMulti:
         assert result.per_finding_results[1].decision == AskDecision.IGNORE_FILE
         assert result.per_finding_results[2].decision == AskDecision.IGNORE_FILE
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
-    @patch("ai_guardian.tui.ask_dialog._save_ignore_path")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog._save_ignore_path")
     def test_ignore_file_on_last_finding_still_allows(self, mock_save, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         mock_save.return_value = True
         allow_result = AskResult(decision=AskDecision.ALLOW_ONCE)
@@ -594,10 +594,10 @@ class TestHandleAskModeMulti:
         assert mock_dialog.call_count == 2
         assert len(result.per_finding_results) == 2
 
-    @patch("ai_guardian.tui.ask_dialog.show_ask_dialog")
+    @patch("ai_guardian.ui.ask_dialog.show_ask_dialog")
     def test_dialog_wait_ms_accumulated(self, mock_dialog):
         from ai_guardian.ask_mode import _handle_ask_mode_multi
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         r1 = AskResult(decision=AskDecision.ALLOW_ONCE)
         r1.dialog_wait_ms = 100.0

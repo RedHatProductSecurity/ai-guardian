@@ -2343,11 +2343,10 @@
             "auto",
             "tkinter",
             "nicegui",
-            "textual",
             "headless"
           ],
           "default": "auto",
-          "description": "Preferred UI toolkit for interactive dialogs (tray-prompt, ask-prompt). auto = cascade tkinter → NiceGUI → Textual → headless. tkinter/nicegui/textual = use only that toolkit (fall to headless if unavailable). headless = no UI dialogs, ask actions use configured fallback. Env var override: AI_GUARDIAN_PREFERRED_UI"
+          "description": "Preferred UI toolkit for interactive dialogs (tray-prompt, ask-prompt). auto = cascade tkinter → NiceGUI → headless. tkinter/nicegui = use only that toolkit. headless = no UI dialogs, ask actions use configured fallback. Env var override: AI_GUARDIAN_PREFERRED_UI"
         },
         "editor_theme": {
           "type": "string",

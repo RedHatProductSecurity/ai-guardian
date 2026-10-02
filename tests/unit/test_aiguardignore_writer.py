@@ -302,25 +302,25 @@ class TestWriteAiguardignoreText:
 
 class TestValidateIgnorePath:
     def test_valid_path(self):
-        from ai_guardian.tui.ignore_file_editor import validate_ignore_path
+        from ai_guardian.ui.ignore_file_editor import validate_ignore_path
 
         valid, msg = validate_ignore_path("src/test.py")
         assert valid
 
     def test_empty_path(self):
-        from ai_guardian.tui.ignore_file_editor import validate_ignore_path
+        from ai_guardian.ui.ignore_file_editor import validate_ignore_path
 
         valid, msg = validate_ignore_path("")
         assert not valid
 
     def test_traversal_path(self):
-        from ai_guardian.tui.ignore_file_editor import validate_ignore_path
+        from ai_guardian.ui.ignore_file_editor import validate_ignore_path
 
         valid, msg = validate_ignore_path("../etc/passwd")
         assert not valid
 
     def test_too_broad(self):
-        from ai_guardian.tui.ignore_file_editor import validate_ignore_path
+        from ai_guardian.ui.ignore_file_editor import validate_ignore_path
 
         valid, _ = validate_ignore_path("**")
         assert not valid
@@ -328,7 +328,7 @@ class TestValidateIgnorePath:
         assert not valid
 
     def test_glob_pattern_valid(self):
-        from ai_guardian.tui.ignore_file_editor import validate_ignore_path
+        from ai_guardian.ui.ignore_file_editor import validate_ignore_path
 
         valid, _ = validate_ignore_path("src/**/*.py")
         assert valid
@@ -336,7 +336,7 @@ class TestValidateIgnorePath:
 
 class TestResolveScannertypes:
     def test_this_scanner(self):
-        from ai_guardian.tui.ignore_file_editor import (
+        from ai_guardian.ui.ignore_file_editor import (
             resolve_scanner_types,
             SCOPE_THIS_SCANNER,
         )
@@ -345,7 +345,7 @@ class TestResolveScannertypes:
         assert result == ["secret_scanning"]
 
     def test_all_scanners(self):
-        from ai_guardian.tui.ignore_file_editor import (
+        from ai_guardian.ui.ignore_file_editor import (
             resolve_scanner_types,
             SCOPE_ALL_SCANNERS,
         )
@@ -354,7 +354,7 @@ class TestResolveScannertypes:
         assert result is None
 
     def test_select_scanners(self):
-        from ai_guardian.tui.ignore_file_editor import (
+        from ai_guardian.ui.ignore_file_editor import (
             resolve_scanner_types,
             SCOPE_SELECT_SCANNERS,
         )
@@ -369,17 +369,17 @@ class TestResolveScannertypes:
 
 class TestAskDecisionNewValues:
     def test_suppress_in_source_value(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         assert AskDecision.SUPPRESS_IN_SOURCE.value == "suppress_in_source"
 
     def test_ignore_file_value(self):
-        from ai_guardian.tui.ask_dialog import AskDecision
+        from ai_guardian.ui.ask_dialog import AskDecision
 
         assert AskDecision.IGNORE_FILE.value == "ignore_file"
 
     def test_ask_result_new_fields(self):
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         result = AskResult(
             decision=AskDecision.IGNORE_FILE,
@@ -390,7 +390,7 @@ class TestAskDecisionNewValues:
         assert result.ignore_scanner_types == ["secret_scanning"]
 
     def test_ask_result_source_annotation(self):
-        from ai_guardian.tui.ask_dialog import AskResult, AskDecision
+        from ai_guardian.ui.ask_dialog import AskResult, AskDecision
 
         result = AskResult(
             decision=AskDecision.SUPPRESS_IN_SOURCE,

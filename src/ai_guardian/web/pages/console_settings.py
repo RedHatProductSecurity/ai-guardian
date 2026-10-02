@@ -38,15 +38,13 @@ UI_TOOLKITS = {
     "auto": "Auto (cascade)",
     "tkinter": "Tkinter (native)",
     "nicegui": "NiceGUI (browser)",
-    "textual": "Textual (terminal)",
     "headless": "Headless (no UI)",
 }
 
 UI_TOOLKIT_DESCRIPTIONS = {
-    "auto": "Cascade: tkinter → NiceGUI → Textual → headless. Backward compatible default.",
+    "auto": "Cascade: tkinter → NiceGUI → headless.",
     "tkinter": "Native OS popup dialog. Requires Tcl/Tk system library.",
     "nicegui": "Browser-based dialog on a local port.",
-    "textual": "Terminal TUI dialog. Requires a TTY.",
     "headless": "No interactive dialogs. Ask actions use their configured fallback (block/warn/log-only).",
 }
 
@@ -74,8 +72,7 @@ def create_console_settings_page(service, daemon_name: str):
                 with ui.card().classes("w-full"):
                     ui.label("Color Theme").classes("text-lg font-bold")
                     ui.label(
-                        "UI color palette for TUI console, web console, "
-                        "and ask dialogs."
+                        "UI color palette for the web console and ask dialogs."
                     ).classes("text-xs text-grey-6")
 
                     color_current = config.get("console", {}).get(
@@ -154,6 +151,8 @@ def create_console_settings_page(service, daemon_name: str):
                     ).classes("text-xs text-grey-6")
 
                     ui_current = config.get("console", {}).get("preferred_ui", "auto")
+                    if ui_current not in UI_TOOLKITS:
+                        ui_current = "nicegui"
                     ui_sel = ui.select(
                         options=UI_TOOLKITS,
                         value=ui_current,

@@ -1,4 +1,4 @@
-"""Logs page — log viewer with level filtering, clear, open matching TUI."""
+"""Logs page — log viewer with level filtering, clear, and source navigation."""
 
 import platform
 import subprocess

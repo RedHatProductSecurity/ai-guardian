@@ -3,6 +3,8 @@
 import json
 from unittest.mock import patch
 
+import pytest
+
 from ai_guardian.constants import HookEvent
 from ai_guardian.daemon.state import DaemonState
 from ai_guardian.daemon.traces import HookTraceWriter
@@ -116,13 +118,13 @@ def test_unfinalized_trace_is_presented_as_interrupted():
     The status reads "INTERRUPTED", not "CRASHED", because the agent itself
     may be healthy and only the recording was not finalized.
     """
-    from ai_guardian.tui.traces import _format_trace_label
+    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
+    from ai_guardian.web.pages.traces import _display_stop_reason
 
-    label = _format_trace_label(
-        {"agent_name": "review-agent", "stop_reason": "crashed"}
-    )
-    assert "INTERRUPTED" in label
-    assert "CRASHED" not in label
+    label = _display_stop_reason("crashed")
+    # The helper returns a normalized internal value; the Web Console renders
+    # this value as the user-facing "INTERRUPTED" badge.
+    assert label == "interrupted"
 
 
 def test_missing_token_usage_is_presented_as_unavailable(tmp_path):

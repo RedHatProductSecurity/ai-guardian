@@ -1500,7 +1500,7 @@ class TestCheckConsoleDeps:
     def test_all_present(self, _isolate_config_dir):
         doctor = Doctor()
         result = doctor.check_console_deps()
-        # At minimum textual should be available since it's a core dep
+        # NiceGUI is a required dependency for the browser console.
         assert result.status in (CheckStatus.PASS, CheckStatus.WARN)
 
     def test_missing_deps(self, _isolate_config_dir):

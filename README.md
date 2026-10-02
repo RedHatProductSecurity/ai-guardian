@@ -56,8 +56,8 @@ ai-guardian tray start -b          # system tray (optional — manage daemons vi
 ### 4. Open the Console
 
 ```bash
-ai-guardian console --web                # web console (recommended, Python 3.10+)
-ai-guardian console (or ai-guardian tui) # terminal console (all Python versions)
+ai-guardian console                      # browser console (Python 3.10+)
+ai-guardian tui                           # compatibility alias for console
 ```
 
 Manage settings, view violations, and scan projects. See [docs/CONSOLE.md](docs/CONSOLE.md).
@@ -464,7 +464,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Violation Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) | JSON audit trail with unified policy decisions |
 | [Compliance Audit Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AUDIT_LOGGING.md) | Sanitized all-decision audit trail for SOC 2, GDPR, and HIPAA |
 | [Sanitize Command](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) | Clean sensitive data from files |
-| [Interactive Console](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | TUI for managing configuration visually |
+| [Interactive Console](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | NiceGUI browser console for managing configuration visually |
 | [Scanner Management](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Install and manage 8 scanner engines (including built-in toml-patterns) |
 | [Pre-commit Hook](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md) | Scan staged files for secrets before commit |
 | [Inline Annotations](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/ANNOTATIONS.md) | Suppress false positives with `ai-guardian:allow` and block annotations |
@@ -474,7 +474,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Project Config Overlay](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180) | Per-repo config with immutable fields and global-only section protection |
 | [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Discover and manage daemons across local, Podman/Docker, and Kubernetes |
 | [Desktop Shortcut & Autostart](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) | Install tray as desktop app with optional login startup |
-| [Tray Plugins](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) | Custom menu items with native tkinter popup forms (Textual terminal fallback), platform-aware commands |
+| [Tray Plugins](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) | Custom menu items with native tkinter or NiceGUI forms, platform-aware commands |
 | [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |
 | [Multi-Agent Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapters for 17 AI coding agents with normalized input/output |
 | [Container Image](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) | UBI-based image with supported agent integrations and scanners, published to quay.io |
@@ -490,7 +490,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Code Security Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Bandit/Semgrep-based detection of insecure code patterns (eval, weak crypto, injection) |
 | [Dummy Agent](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | LLM-free hook testing via interactive REPL with YAML scenario files |
 | [Kubernetes Deployment](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md) | Kustomize manifests for Kind, OpenShift, and production deployments |
-| [Security Instructions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Configurable agent context injection rules via TUI and web console |
+| [Security Instructions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Configurable agent context injection rules via the web console |
 | [Transcript Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability) | Scan IDE conversation transcripts for secrets/PII across 7+ IDEs |
 | [LeakTK Listen Mode](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Event-driven scanning with 40x latency reduction vs polling |
 | [Zero-Config Onboarding](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | `init --scan` scans the project and generates a tuned config |
@@ -638,7 +638,6 @@ Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`
 ## Requirements
 
 - **Python 3.10+**
-- **Python 3.9** is supported through the `1.19.x` release line only (`1.19.0` is the last stable release). Upgrade to Python 3.10+ before upgrading to `1.20.0` or later; otherwise pin `ai-guardian<1.20`.
 - **Windows**: Python 3.10, 3.13, and 3.14 are tested; other versions may work but are not CI-verified
 - **Scanner engine**: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, or gitguardian
 - **GNOME Linux**: AppIndicator extension for system tray icon ([setup steps](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#getting-started))
@@ -647,7 +646,7 @@ See [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-g
 
 ## Optional Dependencies
 
-ai-guardian works out of the box with built-in Python-native scanners, NiceGUI/Textual fallback dialogs, and heuristic prompt injection detection. These optional packages enable extra functionality:
+ai-guardian works out of the box with built-in Python-native scanners, the NiceGUI browser console, and heuristic prompt injection detection. These optional packages enable extra functionality:
 
 | Package | What it enables | Install |
 |---------|-----------------|---------|

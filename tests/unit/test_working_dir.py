@@ -150,7 +150,6 @@ class TestChooseDirectory:
     def _enable_directory_picker(self, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
         monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
-        monkeypatch.delenv("AI_GUARDIAN_NO_NICEGUI", raising=False)
 
     def test_tk_picker_activates_hidden_parent_on_captured_screen(self):
         from ai_guardian.daemon.working_dir import _show_tkinter_directory
@@ -164,7 +163,7 @@ class TestChooseDirectory:
         tkinter_module.filedialog = filedialog
 
         with (
-            mock.patch("ai_guardian.tui.display._ensure_tcl_library"),
+            mock.patch("ai_guardian.ui.display._ensure_tcl_library"),
             mock.patch.dict(
                 sys.modules,
                 {
@@ -216,10 +215,8 @@ class TestChooseDirectory:
         bounds = (1920, 37, 2560, 1380)
         mock_run.return_value = mock.Mock(returncode=0, stdout="/Users/dev/project\n")
         with (
-            mock.patch("ai_guardian.tui.display.get_preferred_ui", return_value="auto"),
-            mock.patch(
-                "ai_guardian.tui.display._tkinter_available", return_value=False
-            ),
+            mock.patch("ai_guardian.ui.display.get_preferred_ui", return_value="auto"),
+            mock.patch("ai_guardian.ui.display._tkinter_available", return_value=False),
             mock.patch(
                 "ai_guardian.daemon.working_dir._choose_directory_tkinter_subprocess"
             ) as picker,
@@ -234,7 +231,7 @@ class TestChooseDirectory:
     def test_headless_preference_skips_directory_picker(self, _mock_sys):
         with (
             mock.patch(
-                "ai_guardian.tui.display.get_preferred_ui", return_value="headless"
+                "ai_guardian.ui.display.get_preferred_ui", return_value="headless"
             ),
             mock.patch("ai_guardian.daemon.working_dir.subprocess.run") as mock_run,
         ):

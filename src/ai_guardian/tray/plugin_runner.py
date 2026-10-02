@@ -144,7 +144,7 @@ class TrayPluginMenuBuilder:
         (no subprocess overhead). Tkinter cannot be used in-process because
         pystray already owns NSApplication on macOS — tk.Tk() crashes when
         called after NSApplication.sharedApplication(). Falls back to
-        subprocess for tkinter and terminal for Textual.
+        subprocess for tkinter and browser mode for NiceGUI.
         """
         import json as json_mod
         import os
@@ -171,7 +171,7 @@ class TrayPluginMenuBuilder:
         run_on_target = plugin_item_dict.get("run_on_target", False)
         params = plugin_item_dict.get("params", [])
 
-        from ai_guardian.tui.display import select_ui_provider
+        from ai_guardian.ui.display import select_ui_provider
 
         provider = select_ui_provider("form", screen_bounds=screen_bounds)
         if provider == "headless":
@@ -229,7 +229,7 @@ class TrayPluginMenuBuilder:
 
             def _run_prompt_and_dispatch():
                 try:
-                    from ai_guardian.tui.tray_prompt import TrayPromptApp
+                    from ai_guardian.ui.tray_prompt import TrayPromptApp
 
                     app = TrayPromptApp(
                         params=params,
@@ -334,7 +334,7 @@ class TrayPluginMenuBuilder:
             )
 
     def _serialize_targets_for_selector(self):
-        """Serialize discovered targets to JSON dicts for the selector TUI."""
+        """Serialize discovered targets to JSON dicts for the browser selector."""
         return [
             {
                 "name": t.name,
@@ -357,7 +357,7 @@ class TrayPluginMenuBuilder:
 
         Uses direct in-process TrayPromptApp call when NiceGUI is available.
         Tkinter requires a subprocess (conflicts with pystray's NSApplication
-        on macOS). Falls back to Textual TUI in a terminal window.
+        on macOS). Falls back to NiceGUI in a browser window.
         """
         import json as json_mod
         import os
@@ -379,7 +379,7 @@ class TrayPluginMenuBuilder:
         run_on_target = plugin_item.run_on_target
         params = item_dict.get("params", [])
 
-        from ai_guardian.tui.display import select_ui_provider
+        from ai_guardian.ui.display import select_ui_provider
 
         provider = select_ui_provider("form", screen_bounds=screen_bounds)
         if provider == "headless":
@@ -434,7 +434,7 @@ class TrayPluginMenuBuilder:
 
             def _run_prompt_and_dispatch():
                 try:
-                    from ai_guardian.tui.tray_prompt import TrayPromptApp
+                    from ai_guardian.ui.tray_prompt import TrayPromptApp
 
                     app = TrayPromptApp(
                         params=params,

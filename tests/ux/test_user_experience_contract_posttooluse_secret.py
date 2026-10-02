@@ -766,16 +766,16 @@ class GitleaksAllowGuidanceTests(TestCase):
             "secret_scanning.enabled" not in msg
         ), "_build_secret_detected_message must NOT expose config section paths"
 
-    def test_tui_violations_gitleaks_allow_guidance(self):
+    def test_web_violations_gitleaks_allow_guidance(self):
         """
-        USER EXPERIENCE: TUI violations secret allowlisting says "inline" / "at the end"
+        USER EXPERIENCE: Web Console violations secret allowlisting says "inline" / "at the end"
 
-        Issue #416: The TUI said "Add comment before the line" which is wrong.
+        Issue #416: The old console said "Add comment before the line" which is wrong.
         Must say "Add inline comment at the end of the line" with an example
         showing the comment on the same line as the secret.
 
         The guidance text lives in the shared violation_guidance module
-        which the TUI imports and delegates to.
+        which the Web Console imports and delegates to.
         """
         import inspect
         from ai_guardian.violations import guidance as violation_guidance

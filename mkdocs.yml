@@ -98,7 +98,7 @@ nav:
       - Scanning Pipeline: api/scanning.md
       - Observability / OTEL: OBSERVABILITY.md
   - Console:
-      - TUI and Web Console: CONSOLE.md
+      - Web Console: CONSOLE.md
       - IDE Sessions and Agent Support: AGENT_SUPPORT.md
       - Hooks: HOOKS.md
       - MCP Security Advisor: MCP_SERVER.md

@@ -11,7 +11,7 @@ from ai_guardian.theme import (
     quasar_color,
     violation_badge,
 )
-from ai_guardian.tui.ask_dialog import (
+from ai_guardian.ui.ask_dialog import (
     AskDecision,
     AskViolationInfo,
     AskResult,
@@ -26,7 +26,7 @@ def _show_nicegui_config_editor(dialog_self, app, save_pat, config_section):
     """Show a NiceGUI config editor dialog with the pattern inserted in memory."""
     import json as json_mod
     from nicegui import ui
-    from ai_guardian.tui.pattern_editor import (
+    from ai_guardian.ui.pattern_editor import (
         prepare_config_with_pattern,
         get_config_scope_options,
     )
@@ -139,7 +139,7 @@ def _show_nicegui_config_editor(dialog_self, app, save_pat, config_section):
 def _show_nicegui_suppress_in_source(dialog_self, app, v):
     """Show source annotation preview in NiceGUI."""
     from nicegui import ui
-    from ai_guardian.tui.source_annotator import (
+    from ai_guardian.ui.source_annotator import (
         prepare_annotation,
         write_annotated_source,
     )
@@ -206,7 +206,7 @@ def _show_nicegui_suppress_in_source(dialog_self, app, v):
 def _show_nicegui_ignore_file(dialog_self, app, v):
     """Show ignore file editor in NiceGUI."""
     from nicegui import ui
-    from ai_guardian.tui.ignore_file_editor import (
+    from ai_guardian.ui.ignore_file_editor import (
         SCOPE_THIS_SCANNER,
         SCOPE_ALL_SCANNERS,
         SCANNER_LABELS,
@@ -364,7 +364,7 @@ class _NiceGuiAskDialog:
 
         @ui.page("/")
         def main_page():
-            from ai_guardian.tui.pattern_editor import (
+            from ai_guardian.ui.pattern_editor import (
                 validate_pattern,
                 generate_config_preview,
                 suggest_pattern,
@@ -513,7 +513,7 @@ class _NiceGuiAskDialog:
                     if v.file_path:
 
                         def view_file():
-                            from ai_guardian.tui.file_opener import open_in_editor
+                            from ai_guardian.ui.file_opener import open_in_editor
 
                             open_in_editor(v.file_path, v.line_number)
 
@@ -521,7 +521,7 @@ class _NiceGuiAskDialog:
                             f"color={quasar_button('view_file')}"
                         )
 
-                        from ai_guardian.tui.source_annotator import get_comment_prefix
+                        from ai_guardian.ui.source_annotator import get_comment_prefix
 
                         if get_comment_prefix(v.file_path) is not None:
 

@@ -80,30 +80,3 @@ class TestDetailPageUsesMatchViolations:
 
         source = inspect.getsource(create_ide_session_detail_page)
         assert "reversed_map" in source
-
-
-class TestTuiSessionViolations:
-    """Verify TUI IDE sessions panel loads violations."""
-
-    def test_load_violations_method_exists(self):
-        from ai_guardian.tui.ide_sessions import IDESessionsContent
-
-        assert hasattr(IDESessionsContent, "_load_session_violations")
-
-    def test_render_violations_method_exists(self):
-        from ai_guardian.tui.ide_sessions import IDESessionsContent
-
-        assert hasattr(IDESessionsContent, "_render_detail_with_violations")
-
-    def test_show_detail_calls_load_violations(self):
-        from ai_guardian.tui.ide_sessions import IDESessionsContent
-
-        source = inspect.getsource(IDESessionsContent._show_session_detail)
-        assert "_load_session_violations" in source
-
-    def test_render_violations_shows_count(self):
-        from ai_guardian.tui.ide_sessions import IDESessionsContent
-
-        source = inspect.getsource(IDESessionsContent._render_detail_with_violations)
-        assert "Violations:" in source
-        assert "bold red" in source

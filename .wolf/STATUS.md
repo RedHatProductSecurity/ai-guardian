@@ -2,50 +2,43 @@
 description: session handoff, regenerate with /handoff when a quest finishes
 budget_tokens: 1000
 ---
-# STATUS — ai-guardian
+# STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-10-02
 
 ---
 
-## ✅ Done
+## Done
 
-- Issue #2419 decision is implemented on branch `2419`; PR #2487 is open.
-- Release `1.20.0` now requires Python >=3.10. Release `1.19.0` in the `1.19.x` line is documented as the last stable Python 3.9-compatible release.
-- Updated package metadata/dependencies, both installers, doctor messaging, tray compatibility branches, CI/release matrices, Ubuntu 26 migration coverage, docs, changelog, and release skill references.
-- Retained the TUI as the fallback when the web console cannot start; removed obsolete Python 3.9 version gates and test skips.
-- Added release-readiness metadata verification and regression coverage for the minimum version, installer checks, doctor failure behavior, dependency markers, and CI matrices.
-- Diagnosed PR #2487's Install/Uninstall Lifecycle failure: pip 25 parsed Linux kernel release `6.17.0-1022-azure` as a PEP 440 version while resolving ONNX Runtime markers.
-- Replaced numeric `platform_release` comparisons with safe string gates, added regression coverage, and changed the smoke lifecycle to build/install the checked-out wheel instead of stale PyPI metadata.
-- Committed and pushed the CI remediation as `b24a3190` to branch `2419`; PR checks are running.
-- DAF note and GitHub issue progress comment were recorded; `daf complete` owns commit, push, PR, and issue closure actions.
+- Issue #2419 Python 3.10+ policy and its release-readiness work are complete on the existing development history.
+- Issue #2424 migrated the supported interactive UI from Textual/TUI to the NiceGUI Web Console.
+- Shared dialog, tray, clipboard, selector, and hook-simulator helpers now live under `src/ai_guardian/ui/`.
+- The `src/ai_guardian/tui/` package, Textual dependency, TUI plugin template, and TUI-only tests were removed.
+- The `tui` CLI command remains as a browser-console compatibility alias; persisted `textual` dialog settings migrate to `nicegui`.
+- Installers, schema, example config, doctor output, current documentation, developer guidance, and scanner checklist were updated.
+- Compile checks, packaging, affected tests, schema/setup tests, ruff, Black, pylint, mypy, and diff checks pass.
+- The wheel build succeeded and contains `ui/` and `web/` packages without `tui/` or Textual artifacts.
 
-## 🚀 Next quest
+## Next Quest
 
-Monitor PR #2487 checks and address any remaining remote failures.
-
-Acceptance criteria are complete: the breaking-change policy, last compatible release,
-upgrade guidance, runtime metadata, installer/doctor/docs updates, CI matrices,
-compatibility audit, and clean-install/upgrade checks are all documented or covered.
+- Review the complete diff for final scope and user-owned changes.
+- If approved, commit and push through the DAF workflow; no commit or PR has been created in this session.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2419`; CI remediation is committed as `b24a3190` and the worktree is clean.
-- Pull request: https://github.com/RedHatProductSecurity/ai-guardian/pull/2487
-- Routine local validation avoids integration/container scenarios per `AGENTS.md`; pattern-server integration assertions are included for CI.
+- Branch: `2424`
+- HEAD: `d710aa8a`
+- Worktree is intentionally dirty with the issue #2424 changes.
+- NiceGUI is a core dependency; `uv.lock` is ignored by this repository and was regenerated locally.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
-## External blockers
-
-- None. The fix is validated locally; GitHub checks are pending.
-
-## Useful commands
+## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_doctor.py tests/unit/test_setup.py tests/test_install_script.py -q
-uv run --extra dev python -m pytest tests/unit/test_workflow_runner_policy.py -q
+uv run --extra dev python -m pytest tests/unit/test_cli_console.py -q
+uv run --extra dev python -m pytest tests/unit/test_setup.py tests/unit/test_json_schema.py tests/unit/test_config_validation.py -q
 ruff check src/ai_guardian/ tests/
 black --target-version py310 --check src/ai_guardian/ tests/
 mypy src/ai_guardian/
@@ -53,6 +46,6 @@ mypy src/ai_guardian/
 
 ## References
 
-- `.wolf/cerebrum.md` — user preferences and project learnings
-- `.wolf/anatomy.md` — token-efficient file index
-- `.wolf/buglog.json` — known bugs and fixes
+- `.wolf/cerebrum.md` - user preferences and project learnings
+- `.wolf/buglog.json` - known bugs and fixes
+- `AGENTS.md` - repository contribution rules

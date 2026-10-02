@@ -39,8 +39,8 @@ Options:
     --profile PROFILE   Security profile: @minimal, @standard (default), @strict
     --version VERSION   Install a specific version or a local .whl file
     --tkinter           Install tkinter for native popup dialogs (recommended)
-                        Without it, NiceGUI browser form or Textual terminal
-                        fallback is used
+                         Without it, NiceGUI browser form or headless fallback
+                         is used
     --gobject           Install python3-gobject for system tray on Linux (optional)
                         Without it, tray features are unavailable on Linux
     -h, --help          Show this help message
@@ -487,7 +487,7 @@ if [ "$INSTALL_TKINTER" = true ]; then
 
     if [ "$HAS_DISPLAY" = false ]; then
         echo "  Skipping tkinter — no display detected (headless environment)"
-        echo "  Tray plugin forms will use NiceGUI browser form or Textual terminal fallback"
+        echo "  Tray plugin forms will use NiceGUI browser form or headless fallback"
     elif "$PYTHON" -c "import tkinter" 2>/dev/null; then
         ok "tkinter already available"
     else
@@ -501,7 +501,7 @@ if [ "$INSTALL_TKINTER" = true ]; then
                     echo "    - Use system Python (/usr/bin/python3) which includes tkinter"
                     echo "    - Install Homebrew (https://brew.sh) then: brew install tcl-tk"
                     echo "    - Download Tcl/Tk from https://www.tcl.tk/software/tcltk/"
-                    echo "  Continuing without tkinter (NiceGUI browser or Textual terminal fallback)"
+                    echo "  Continuing without tkinter (NiceGUI browser or headless fallback)"
                 fi
                 ;;
             Linux)
@@ -509,26 +509,26 @@ if [ "$INSTALL_TKINTER" = true ]; then
                     PY_MINOR=$("$PYTHON" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
                     sudo dnf install -y "python${PY_MINOR}-tkinter" 2>/dev/null && ok "tkinter installed via dnf" || {
                         sudo dnf install -y python3-tkinter 2>/dev/null && ok "tkinter installed via dnf" || \
-                            echo "  Could not install tkinter via dnf. Continuing with Textual fallback."
+                            echo "  Could not install tkinter via dnf. Continuing with NiceGUI fallback."
                     }
                 elif command -v apt-get >/dev/null 2>&1; then
                     sudo apt-get install -y python3-tk 2>/dev/null && ok "tkinter installed via apt" || \
-                        echo "  Could not install tkinter via apt. Continuing with Textual fallback."
+                        echo "  Could not install tkinter via apt. Continuing with NiceGUI fallback."
                 elif command -v apk >/dev/null 2>&1; then
                     sudo apk add py3-tkinter 2>/dev/null && ok "tkinter installed via apk" || \
-                        echo "  Could not install tkinter via apk. Continuing with Textual fallback."
+                        echo "  Could not install tkinter via apk. Continuing with NiceGUI fallback."
                 else
                     echo "  Could not detect package manager. Install tkinter manually:"
                     echo "    RHEL/Fedora: dnf install python3-tkinter"
                     echo "    Debian/Ubuntu: apt install python3-tk"
                     echo "    Alpine: apk add py3-tkinter"
-                    echo "  Continuing without tkinter (NiceGUI browser or Textual terminal fallback)"
+                    echo "  Continuing without tkinter (NiceGUI browser or headless fallback)"
                 fi
                 ;;
             *)
                 echo "  tkinter should be included with your Python installation."
                 echo "  If not, reinstall Python from https://www.python.org/downloads/"
-                echo "  Continuing without tkinter (NiceGUI browser or Textual terminal fallback)"
+                echo "  Continuing without tkinter (NiceGUI browser or headless fallback)"
                 ;;
         esac
     fi
@@ -652,7 +652,7 @@ if "$PYTHON" -c "import tkinter" 2>/dev/null; then
 elif "$PYTHON" -c "import nicegui" 2>/dev/null; then
     echo "  Popups:   NiceGUI (browser-based form)"
 else
-    echo "  Popups:   Textual (terminal fallback)"
+    echo "  Popups:   NiceGUI dependency unavailable (installation incomplete)"
 fi
 if [ -n "$RESTARTED" ]; then
     echo "  Restarted: $RESTARTED"
@@ -688,8 +688,7 @@ if [ "$(uname -s)" = "Linux" ] && [ "${HEADERS_HAS_DISPLAY:-}" != false ]; then
 fi
 echo ""
 echo "  Popup override env vars:"
-echo "    AI_GUARDIAN_NO_TKINTER=1   skip tkinter, use NiceGUI or Textual"
-echo "    AI_GUARDIAN_NO_NICEGUI=1   skip NiceGUI, use Textual"
+echo "    AI_GUARDIAN_NO_TKINTER=1   skip tkinter, use NiceGUI"
 echo ""
 echo "  Next steps:"
 if [ -z "$IDE" ] && { [ -z "${UPDATED+x}" ] || [ ${#UPDATED[@]} -eq 0 ]; }; then

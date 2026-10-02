@@ -490,8 +490,8 @@ class TestGetPackageMaxMtime:
         state.record_source_mtime()
         assert state._source_mtime > 0.0
 
-    def test_excludes_tui_files(self, tmp_path):
-        """tui/ changes must not trigger daemon-restart warning (#1465)."""
+    def test_excludes_ui_files(self, tmp_path):
+        """UI changes must not trigger daemon-restart warning (#1465)."""
         from ai_guardian.daemon.state import DaemonState
         import ai_guardian
 
@@ -506,12 +506,12 @@ class TestGetPackageMaxMtime:
         import os
 
         os.utime(str(daemon_py), (1000.0, 1000.0))
-        # TUI file — newer mtime (should be excluded)
-        tui_dir = pkg_dir / "tui"
-        tui_dir.mkdir()
-        tui_py = tui_dir / "app.py"
-        tui_py.write_text("")
-        os.utime(str(tui_py), (9999.0, 9999.0))
+        # UI file — newer mtime (should be excluded)
+        ui_dir = pkg_dir / "ui"
+        ui_dir.mkdir()
+        ui_py = ui_dir / "display.py"
+        ui_py.write_text("")
+        os.utime(str(ui_py), (9999.0, 9999.0))
         pkg_init = pkg_dir / "__init__.py"
         pkg_init.write_text("")
         os.utime(str(pkg_init), (100.0, 100.0))
@@ -521,7 +521,7 @@ class TestGetPackageMaxMtime:
         ):
             mtime = DaemonState.get_package_max_mtime()
 
-        assert mtime <= 1000.0, "tui/ file should not affect max mtime"
+        assert mtime <= 1000.0, "ui/ file should not affect max mtime"
 
     def test_includes_hook_processing(self, tmp_path):
         """hook_processing.py changes must be detected (#1465)."""
@@ -565,8 +565,8 @@ class TestGetPackageMaxMtime:
             ("sdk/run_context.py", True),
             ("setup/mcp.py", True),
             ("tools/policy.py", True),
-            ("tui/ask_dialog.py", True),
-            ("tui/app.py", False),
+            ("ui/ask_dialog.py", False),
+            ("ui/display.py", False),
             ("tray/__init__.py", True),
             ("tray/plugins.py", True),
             ("tray/app.py", False),

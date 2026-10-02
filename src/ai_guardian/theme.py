@@ -1,7 +1,7 @@
-"""Unified visual theme for all AI Guardian UI toolkits.
+"""Unified visual theme for AI Guardian's native and web UI.
 
 Single source of truth for colors, severity badges, violation icons,
-and button semantics. Imported by tkinter, NiceGUI, and Textual UIs.
+and button semantics. Imported by tkinter and NiceGUI components.
 """
 
 from pathlib import Path
@@ -358,22 +358,6 @@ def violation_badge(violation_type: str) -> tuple:
     """Return (icon, color_hex) for a violation type."""
     badge = VIOLATION_BADGES.get(violation_type, {"color": INFO, "icon": "❓"})
     return badge["icon"], badge["color"]
-
-
-# ---------------------------------------------------------------------------
-# Textual CSS adapter
-# ---------------------------------------------------------------------------
-def textual_severity_class(severity: str) -> str:
-    """Map a severity to a Textual CSS class name."""
-    _map = {
-        "critical": "status-error",
-        "high": "status-error",
-        "warning": "status-warn",
-        "medium": "status-warn",
-        "low": "status-info",
-        "info": "status-info",
-    }
-    return _map.get(severity, "")
 
 
 # ---------------------------------------------------------------------------

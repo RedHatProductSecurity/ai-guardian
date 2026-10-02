@@ -48,11 +48,11 @@ _file_handler.setFormatter(
     )
 )
 
-# Suppress stderr output when --json is requested or running Console TUI (keep file logging)
+# Suppress stderr output when --json is requested or running the web console.
 _stderr_handler = logging.StreamHandler(sys.stderr)
 _stderr_handler.setFormatter(logging.Formatter("%(message)s"))
-_is_tui_mode = any(cmd in sys.argv for cmd in ("console", "tui"))
-if _is_tui_mode:
+_is_console_mode = any(cmd in sys.argv for cmd in ("console", "tui"))
+if _is_console_mode:
     _stderr_handler.setLevel(logging.CRITICAL + 1)
 elif "--json" in sys.argv:
     _stderr_handler.setLevel(logging.WARNING)

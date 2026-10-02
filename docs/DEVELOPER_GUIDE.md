@@ -25,7 +25,7 @@ AI Guardian protects AI-assisted coding tools through multiple layers:
 │  ┌────────────────────┐  ┌─────────────────────────┐ │
 │  │ Detection layers   │  │ Management interfaces   │ │
 │  │ • Secret scanning  │  │ • CLI (ai-guardian)      │ │
-│  │ • Prompt injection │  │ • Console (TUI)          │ │
+│  │ • Prompt injection │  │ • Web Console (NiceGUI)  │ │
 │  │ • SSRF protection  │  │ • MCP Server             │ │
 │  │ • Directory rules  │  │ • System tray            │ │
 │  │ • Tool policy      │  │ • Profiles               │ │
@@ -44,7 +44,7 @@ AI Guardian protects AI-assisted coding tools through multiple layers:
 | Hooks entry point | `src/ai_guardian/__init__.py` | PreToolUse / PostToolUse hook handlers |
 | CLI | `src/ai_guardian/cli.py` | Command-line interface |
 | Daemon | `src/ai_guardian/daemon/` | Background service for faster hook responses |
-| Console (TUI) | `src/ai_guardian/tui/` | Interactive terminal UI for configuration |
+| Web Console | `src/ai_guardian/web/` | Browser UI for configuration and daemon management |
 | MCP Server | `src/ai_guardian/mcp/` | MCP security advisor tools |
 | Scanner engines | `src/ai_guardian/scanners/` | Multi-engine secret scanning and pinned scanner installation |
 | Custom Scanner SDK | `src/ai_guardian/scanners/sdk.py` | Python-based scanner base class |
@@ -232,7 +232,7 @@ When adding a new feature, check whether it needs any of these surfaces:
 | Surface | When to add | Location |
 |---------|-------------|----------|
 | MCP tool | Read-only/query operation AI would benefit from calling | `src/ai_guardian/mcp/` |
-| Console panel | Feature has configurable settings | `src/ai_guardian/tui/` |
+| Console panel | Feature has configurable settings | `src/ai_guardian/web/pages/` |
 | System tray | Feature produces a quick status or count | `src/ai_guardian/tray/` |
 | CLI command | Feature needs a standalone command | `src/ai_guardian/cli.py` |
 
@@ -342,7 +342,7 @@ ai-guardian/
 │   ├── templates/           # Config templates
 │   ├── tools/               # Tool policy and patterns
 │   ├── tray/                # macOS/Linux system tray
-│   ├── tui/                 # Interactive Console (Textual)
+│   ├── ui/                  # Shared dialog and UI helpers
 │   ├── violations/          # Violation tracking and guidance
 │   └── web/                 # Web console (NiceGUI)
 ├── tests/

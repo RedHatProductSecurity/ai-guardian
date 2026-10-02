@@ -289,7 +289,7 @@ def apply_post_scan_pipeline(
         )
 
         if ask_result is not None:
-            from ai_guardian.tui.ask_dialog import AskDecision
+            from ai_guardian.ui.ask_dialog import AskDecision
 
             if ask_result.decision not in (
                 AskDecision.BLOCK,

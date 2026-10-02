@@ -341,9 +341,8 @@ repositories are mounted directly and do not show this upload confirmation.
 Tray sandbox dialogs use the shared display-provider policy. In `auto` mode on
 macOS, simple confirmations use the native Cocoa/AppleScript dialog when no
 display placement is required; a placed tray dialog uses isolated Tkinter when
-available and then the native fallback. The complex create form uses Tkinter,
-NiceGUI, or Textual in that order, and Textual opens in a terminal when the
-tray process has no TTY. Tkinter is optional: `AI_GUARDIAN_NO_TKINTER=1` and
+available and then the native fallback. The complex create form uses Tkinter
+or NiceGUI in that order. Tkinter is optional: `AI_GUARDIAN_NO_TKINTER=1` and
 `console.preferred_ui` are respected by sandbox forms, upload confirmations,
 delete confirmations, progress, and captured output. `preferred_ui=headless`
 leaves the form/confirmation cancelled and lets operations use the captured
@@ -758,7 +757,7 @@ Both runtimes use the same configuration precedence:
 
 The host config is never written back. When it supplies the initial config, the
 daemon reports `config_source=host` and `config_read_only=false`; edits made in
-the TUI, NiceGUI, or REST API affect only the sandbox's copy. OpenShell uploads
+the Web Console or REST API affect only the sandbox's copy. OpenShell uploads
 the snapshot, while containers use a read-only bind mount for the staging file
 before copying it into the writable active config path.
 

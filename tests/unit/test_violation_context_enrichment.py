@@ -470,8 +470,8 @@ class TestToolPolicyViolationIds(unittest.TestCase):
                 self.assertEqual(context.get("session_id"), "sess_policy_test")
 
 
-class TestTUIViolationDisplay(unittest.TestCase):
-    """Test TUI violation card data structure for new fields."""
+class TestWebViolationDisplay(unittest.TestCase):
+    """Test web-console violation card data structure for new fields."""
 
     def test_secret_redaction_violation_has_command(self):
         """Violation data for Bash secret_redaction should include command field."""

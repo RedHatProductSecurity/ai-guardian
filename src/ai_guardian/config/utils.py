@@ -555,7 +555,7 @@ def get_config_source() -> str:
     """Return the source selected for the effective configuration.
 
     Sandboxed runtimes set ``AI_GUARDIAN_CONFIG_SOURCE`` during startup.  The
-    persisted metadata is used by newly connected TUI processes, which do not
+    persisted metadata is used by newly connected console processes, which do not
     inherit environment changes made by a container entrypoint.  The legacy
     host-config marker remains a final fallback for older images.
     """

@@ -284,12 +284,6 @@ def test_tray_prompt_uses_native_fallback_on_macos_when_foreground_ui_unavailabl
         patch(
             "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=False
-        ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._textual_available", return_value=False
-        ),
         patch.object(
             dialog, "_show_native_fallback", return_value="action"
         ) as fallback,
@@ -311,12 +305,6 @@ def test_linux_tray_prompt_uses_native_fallback_when_ui_tiers_fail():
         patch(
             "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=False
-        ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._textual_available", return_value=False
-        ),
         patch.object(
             dialog, "_show_native_fallback", return_value="action"
         ) as fallback,
@@ -336,9 +324,6 @@ def test_tray_prompt_uses_tkinter_subprocess_before_nicegui_on_macos():
         patch(
             "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=True
-        ) as nicegui_available,
         patch.object(
             dialog, "_show_tkinter_subprocess", return_value="action"
         ) as tkinter,
@@ -348,7 +333,6 @@ def test_tray_prompt_uses_tkinter_subprocess_before_nicegui_on_macos():
 
     tkinter.assert_called_once_with()
     nicegui.assert_not_called()
-    nicegui_available.assert_not_called()
 
 
 def test_tkinter_subprocess_failure_returns_none_for_fallback():
@@ -387,12 +371,6 @@ def test_tkinter_subprocess_failure_falls_back_to_native_macos_prompt():
         patch(
             "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._nicegui_available"
-        ) as nicegui_available,
-        patch(
-            "ai_guardian.tray.proactive_prompt._textual_available", return_value=False
-        ),
         patch("subprocess.run", return_value=failed) as subprocess_run,
         patch.object(
             dialog, "_show_native_fallback", return_value="action"
@@ -402,7 +380,6 @@ def test_tkinter_subprocess_failure_falls_back_to_native_macos_prompt():
 
     subprocess_run.assert_called_once()
     fallback.assert_called_once_with()
-    nicegui_available.assert_not_called()
 
 
 def test_tkinter_subprocess_failure_logs_complete_diagnostic(caplog):
@@ -427,12 +404,6 @@ def test_prompt_falls_back_to_headless_when_ui_unavailable():
         ),
         patch(
             "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
-        ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=False
-        ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._textual_available", return_value=False
         ),
     ):
         assert dialog.show() == "dismiss"

@@ -1641,7 +1641,7 @@ class TestSandboxDialogFallback:
         from ai_guardian.tray.sandbox_dialog import _copy_sandbox_log
 
         with mock.patch(
-            "ai_guardian.tui.app.copy_to_system_clipboard",
+            "ai_guardian.ui.clipboard.copy_to_system_clipboard",
             return_value=(None, "xclip"),
         ) as copy_to_clipboard:
             message = _copy_sandbox_log("runtime output")
@@ -1780,7 +1780,7 @@ class TestSandboxDialogFallback:
         from ai_guardian.tray.sandbox_dialog import show_sandbox_progress
 
         with mock.patch(
-            "ai_guardian.tui.display._tkinter_available", return_value=False
+            "ai_guardian.ui.display._tkinter_available", return_value=False
         ):
             progress = show_sandbox_progress("Title", "Message")
 
@@ -1792,9 +1792,9 @@ class TestSandboxDialogFallback:
 
         progress = object()
         with (
-            mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True),
             mock.patch(
-                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+                "ai_guardian.ui.display.select_ui_provider", return_value="tkinter"
             ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_progress_subprocess",
@@ -1806,19 +1806,11 @@ class TestSandboxDialogFallback:
         assert result is progress
         show_progress.assert_called_once_with("Title", "Message")
 
-    def test_form_returns_none_when_tkinter_is_unavailable(self):
+    def test_form_returns_none_when_ui_is_headless(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_form
 
-        with (
-            mock.patch(
-                "ai_guardian.tui.display._tkinter_available", return_value=False
-            ),
-            mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=False
-            ),
-            mock.patch(
-                "ai_guardian.tui.display._textual_installed", return_value=False
-            ),
+        with mock.patch(
+            "ai_guardian.ui.display.select_ui_provider", return_value="headless"
         ):
             assert show_sandbox_form("Title", "Message", []) is None
 
@@ -1826,9 +1818,9 @@ class TestSandboxDialogFallback:
         from ai_guardian.tray.sandbox_dialog import show_sandbox_form
 
         with (
-            mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True),
             mock.patch(
-                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+                "ai_guardian.ui.display.select_ui_provider", return_value="tkinter"
             ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess",
@@ -1840,19 +1832,11 @@ class TestSandboxDialogFallback:
         assert result == {"runtime": "container"}
         show_form.assert_called_once_with("Title", "Message", [])
 
-    def test_confirmation_returns_false_when_tkinter_is_unavailable(self):
+    def test_confirmation_returns_false_when_ui_is_headless(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_confirmation
 
-        with (
-            mock.patch(
-                "ai_guardian.tui.display._tkinter_available", return_value=False
-            ),
-            mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=False
-            ),
-            mock.patch(
-                "ai_guardian.tui.display._textual_installed", return_value=False
-            ),
+        with mock.patch(
+            "ai_guardian.ui.display.select_ui_provider", return_value="headless"
         ):
             assert show_sandbox_confirmation("ag-test", "container") is False
 
@@ -1860,9 +1844,9 @@ class TestSandboxDialogFallback:
         from ai_guardian.tray.sandbox_dialog import show_sandbox_confirmation
 
         with (
-            mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True),
             mock.patch(
-                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+                "ai_guardian.ui.display.select_ui_provider", return_value="tkinter"
             ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_confirmation_subprocess",
@@ -1879,19 +1863,11 @@ class TestSandboxDialogFallback:
             "ag-test",
         )
 
-    def test_upload_confirmation_returns_false_when_tkinter_is_unavailable(self):
+    def test_upload_confirmation_returns_false_when_ui_is_headless(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_upload_confirmation
 
-        with (
-            mock.patch(
-                "ai_guardian.tui.display._tkinter_available", return_value=False
-            ),
-            mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=False
-            ),
-            mock.patch(
-                "ai_guardian.tui.display._textual_installed", return_value=False
-            ),
+        with mock.patch(
+            "ai_guardian.ui.display.select_ui_provider", return_value="headless"
         ):
             assert show_sandbox_upload_confirmation("Upload summary") is False
 
@@ -1901,9 +1877,9 @@ class TestSandboxDialogFallback:
         from ai_guardian.tray.sandbox_dialog import show_sandbox_upload_confirmation
 
         with (
-            mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True),
             mock.patch(
-                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+                "ai_guardian.ui.display.select_ui_provider", return_value="tkinter"
             ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_upload_confirmation_subprocess",
@@ -1923,7 +1899,7 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch(
-                "ai_guardian.tui.display.select_ui_provider", return_value="nicegui"
+                "ai_guardian.ui.display.select_ui_provider", return_value="nicegui"
             ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_nicegui_form",
@@ -1940,7 +1916,7 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch(
-                "ai_guardian.tui.display.select_ui_provider", return_value="native"
+                "ai_guardian.ui.display.select_ui_provider", return_value="native"
             ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_native_confirmation",
@@ -1960,7 +1936,7 @@ class TestSandboxDialogFallback:
         from ai_guardian.tray.sandbox_dialog import show_sandbox_form
 
         with mock.patch(
-            "ai_guardian.tui.display.select_ui_provider", return_value="headless"
+            "ai_guardian.ui.display.select_ui_provider", return_value="headless"
         ):
             assert show_sandbox_form("Title", "Message", []) is None
 

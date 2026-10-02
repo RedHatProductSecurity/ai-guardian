@@ -134,7 +134,7 @@ Controls how aggressively the AI uses proactive security checks. Higher levels a
 Configure via:
 - `ai-guardian.json`: `"mcp_server": {"proactive_level": "low"}`
 - Tray menu: MCP submenu → Proactive radio buttons
-- TUI/Web Console: MCP Servers panel → Proactive Level selector
+- Web Console: MCP Servers panel -> Proactive Level selector
 
 An active global daemon pause or applicable directory pause temporarily overrides
 the configured `low`, `medium`, or `high` level and reports the effective level

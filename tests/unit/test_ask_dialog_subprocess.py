@@ -2,7 +2,7 @@
 
 from unittest import mock
 
-from ai_guardian.tui.ask_dialog import AskViolationInfo, _show_via_subprocess
+from ai_guardian.ui.ask_dialog import AskViolationInfo, _show_via_subprocess
 
 
 def test_ask_subprocess_uses_current_interpreter_not_path_ai_guardian(tmp_path):

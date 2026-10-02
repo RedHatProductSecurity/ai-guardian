@@ -2938,7 +2938,6 @@ class TestPluginMenuItems:
         """Allow provider-dispatch tests to exercise their mocked backends."""
         monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
         monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
-        monkeypatch.delenv("AI_GUARDIAN_NO_NICEGUI", raising=False)
 
     def _make_tray(self, targets=None, multi_client=None):
         tray = DaemonTray(
@@ -3359,19 +3358,14 @@ class TestPluginMenuItems:
             "type": "terminal",
             "params": [{"name": "env", "hint": "Environment", "default": "dev"}],
         }
-        with mock.patch(
-            "ai_guardian.tui.display._tkinter_available", return_value=True
-        ):
-            with mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=False
-            ):
-                with mock.patch("subprocess.Popen") as mock_popen:
-                    with mock.patch("sys.executable", "/usr/bin/python3"):
-                        tray._plugins._execute_plugin_command_with_params(item_dict)
-                        mock_popen.assert_called_once()
-                        cmd = mock_popen.call_args[0][0]
-                        assert "prompt" in cmd and "--mode" in cmd
-                        assert "--output-file" in " ".join(cmd)
+        with mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True):
+            with mock.patch("subprocess.Popen") as mock_popen:
+                with mock.patch("sys.executable", "/usr/bin/python3"):
+                    tray._plugins._execute_plugin_command_with_params(item_dict)
+                    mock_popen.assert_called_once()
+                    cmd = mock_popen.call_args[0][0]
+                    assert "prompt" in cmd and "--mode" in cmd
+                    assert "--output-file" in " ".join(cmd)
 
     def test_execute_plugin_modal_forwards_clicked_display_context(self):
         tray = self._make_tray()
@@ -3382,9 +3376,7 @@ class TestPluginMenuItems:
             "params": [],
         }
         bounds = (1920, 37, 2560, 1380)
-        with mock.patch(
-            "ai_guardian.tui.display._tkinter_available", return_value=True
-        ):
+        with mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True):
             with mock.patch("subprocess.Popen") as mock_popen:
                 with mock.patch("sys.executable", "/usr/bin/python3"):
                     tray._plugins._execute_plugin_command_with_params(
@@ -3395,31 +3387,9 @@ class TestPluginMenuItems:
 
         assert command[command.index("--screen-bounds") + 1] == json.dumps(bounds)
 
-    def test_execute_plugin_command_with_params_textual_fallback(self):
-        """Falls back to _launch_in_terminal when tkinter and NiceGUI unavailable."""
-        tray = self._make_tray()
-        item_dict = {
-            "label": "Deploy",
-            "command": "deploy {tray.env}",
-            "type": "terminal",
-            "params": [{"name": "env", "hint": "Environment", "default": "dev"}],
-        }
-        with mock.patch(
-            "ai_guardian.tui.display._tkinter_available", return_value=False
-        ):
-            with mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=False
-            ):
-                with mock.patch(
-                    "ai_guardian.daemon.multi_client._launch_in_terminal"
-                ) as mock_launch:
-                    with mock.patch("sys.executable", "/usr/bin/python3"):
-                        tray._plugins._execute_plugin_command_with_params(item_dict)
-                        mock_launch.assert_called_once()
-
     def test_execute_plugin_command_with_params_nicegui_direct_call(self):
         """Uses direct TrayPromptApp call when tkinter unavailable but NiceGUI available."""
-        import ai_guardian.tui.tray_prompt  # noqa: F401 — pre-import before mocking display
+        import ai_guardian.ui.tray_prompt  # noqa: F401 — pre-import before mocking display
 
         tray = self._make_tray()
         item_dict = {
@@ -3429,20 +3399,15 @@ class TestPluginMenuItems:
             "params": [{"name": "env", "hint": "Environment", "default": "dev"}],
         }
         with mock.patch(
-            "ai_guardian.tui.display._tkinter_available", return_value=False
+            "ai_guardian.ui.display._tkinter_available", return_value=False
         ):
-            with mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=True
-            ):
-                with mock.patch(
-                    "ai_guardian.tui.tray_prompt.TrayPromptApp"
-                ) as mock_app:
-                    mock_app.return_value.run.return_value = None
-                    tray._plugins._execute_plugin_command_with_params(item_dict)
-                    import time
+            with mock.patch("ai_guardian.ui.tray_prompt.TrayPromptApp") as mock_app:
+                mock_app.return_value.run.return_value = None
+                tray._plugins._execute_plugin_command_with_params(item_dict)
+                import time
 
-                    time.sleep(0.1)
-                    mock_app.assert_called_once()
+                time.sleep(0.1)
+                mock_app.assert_called_once()
 
     def test_execute_plugin_command_with_params_headless_skips_prompt(self):
         tray = self._make_tray()
@@ -3454,7 +3419,7 @@ class TestPluginMenuItems:
         }
         with (
             mock.patch(
-                "ai_guardian.tui.display.get_preferred_ui", return_value="headless"
+                "ai_guardian.ui.display.get_preferred_ui", return_value="headless"
             ),
             mock.patch("subprocess.Popen") as mock_popen,
             mock.patch("ai_guardian.daemon.multi_client._launch_in_terminal") as launch,
@@ -3472,16 +3437,11 @@ class TestPluginMenuItems:
             "type": "terminal",
             "params": [],
         }
-        with mock.patch(
-            "ai_guardian.tui.display._tkinter_available", return_value=True
-        ):
-            with mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=False
-            ):
-                with mock.patch("subprocess.Popen") as mock_popen:
-                    with mock.patch("sys.executable", "/usr/bin/python3"):
-                        tray._plugins._execute_plugin_command_with_params(item_dict)
-                        mock_popen.assert_called_once()
+        with mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True):
+            with mock.patch("subprocess.Popen") as mock_popen:
+                with mock.patch("sys.executable", "/usr/bin/python3"):
+                    tray._plugins._execute_plugin_command_with_params(item_dict)
+                    mock_popen.assert_called_once()
 
     def test_execute_plugin_command_with_params_no_match(self):
         tray = self._make_tray()
@@ -3493,14 +3453,11 @@ class TestPluginMenuItems:
         }
         with mock.patch("platform.system", return_value="Darwin"):
             with mock.patch(
-                "ai_guardian.tui.display._tkinter_available", return_value=True
+                "ai_guardian.ui.display._tkinter_available", return_value=True
             ):
-                with mock.patch(
-                    "ai_guardian.tui.display._nicegui_available", return_value=False
-                ):
-                    with mock.patch("subprocess.Popen") as mock_popen:
-                        tray._plugins._execute_plugin_command_with_params(item_dict)
-                        mock_popen.assert_not_called()
+                with mock.patch("subprocess.Popen") as mock_popen:
+                    tray._plugins._execute_plugin_command_with_params(item_dict)
+                    mock_popen.assert_not_called()
 
     def test_execute_plugin_command_with_params_dispatches_on_submit(self):
         """Watcher thread dispatches command when output file has content."""
@@ -3512,20 +3469,15 @@ class TestPluginMenuItems:
             "type": "terminal",
             "params": [],
         }
-        with mock.patch(
-            "ai_guardian.tui.display._tkinter_available", return_value=True
-        ):
-            with mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=False
-            ):
-                with mock.patch("subprocess.Popen") as mock_popen:
-                    with mock.patch("sys.executable", "/usr/bin/python3"):
-                        tray._plugins._execute_plugin_command_with_params(item_dict)
-                        cmd = mock_popen.call_args[0][0]
-                        output_file_idx = cmd.index("--output-file") + 1
-                        output_path = cmd[output_file_idx]
-                        with open(output_path, "w") as f:
-                            f.write("deploy prod")
+        with mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True):
+            with mock.patch("subprocess.Popen") as mock_popen:
+                with mock.patch("sys.executable", "/usr/bin/python3"):
+                    tray._plugins._execute_plugin_command_with_params(item_dict)
+                    cmd = mock_popen.call_args[0][0]
+                    output_file_idx = cmd.index("--output-file") + 1
+                    output_path = cmd[output_file_idx]
+                    with open(output_path, "w") as f:
+                        f.write("deploy prod")
 
         import time
 
@@ -3551,20 +3503,15 @@ class TestPluginMenuItems:
             "type": "terminal",
             "params": [],
         }
-        with mock.patch(
-            "ai_guardian.tui.display._tkinter_available", return_value=True
-        ):
-            with mock.patch(
-                "ai_guardian.tui.display._nicegui_available", return_value=False
-            ):
-                with mock.patch("subprocess.Popen") as mock_popen:
-                    with mock.patch("sys.executable", "/usr/bin/python3"):
-                        tray._plugins._execute_plugin_command_with_params(item_dict)
-                        cmd = mock_popen.call_args[0][0]
-                        output_file_idx = cmd.index("--output-file") + 1
-                        output_path = cmd[output_file_idx]
-                        with open(output_path, "w") as f:
-                            pass
+        with mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True):
+            with mock.patch("subprocess.Popen") as mock_popen:
+                with mock.patch("sys.executable", "/usr/bin/python3"):
+                    tray._plugins._execute_plugin_command_with_params(item_dict)
+                    cmd = mock_popen.call_args[0][0]
+                    output_file_idx = cmd.index("--output-file") + 1
+                    output_path = cmd[output_file_idx]
+                    with open(output_path, "w") as f:
+                        pass
 
         with mock.patch("ai_guardian.tray.plugins.execute_plugin_command") as mock_exec:
             time.sleep(1.5)
@@ -4933,112 +4880,6 @@ class TestMultiTargetExecution:
         assert result[0]["container_engine"] == "podman"
 
 
-class TestWebConsoleAvailability:
-    """Console menu behavior when the web console is unavailable or ready."""
-
-    def test_console_falls_back_to_tui_when_web_console_unavailable(self):
-        """Console remains visible when the web console falls back to TUI."""
-        tray = DaemonTray(
-            get_stats_callback=lambda: {},
-            stop_callback=lambda: None,
-            pause_callback=lambda mins: None,
-        )
-        tray._targets = [
-            DaemonTarget(name="local", runtime="local", status="running"),
-        ]
-        saved = DaemonTray._has_web_console
-        try:
-            DaemonTray._has_web_console = False
-            with (
-                mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
-                mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
-                mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
-            ):
-                mock_pystray.MenuItem = mock.MagicMock()
-                mock_pystray.Menu = mock.MagicMock()
-                mock_pystray.Menu.SEPARATOR = mock.MagicMock()
-                tray._menu._build_single_daemon_menu_items()
-
-                for call in mock_pystray.MenuItem.call_args_list:
-                    if isinstance(call[0][0], str) and call[0][0] == "Console":
-                        vis = call[1].get("visible") or call[0][2]
-                        assert vis(None) is True
-                        return
-                pytest.fail("Console menu item not found")
-        finally:
-            DaemonTray._has_web_console = saved
-
-    def test_console_shown_when_web_console_ready(self):
-        """Console visibility returns True when the web console is ready."""
-        tray = DaemonTray(
-            get_stats_callback=lambda: {},
-            stop_callback=lambda: None,
-            pause_callback=lambda mins: None,
-        )
-        tray._targets = [
-            DaemonTarget(name="local", runtime="local", status="running"),
-        ]
-        saved = DaemonTray._has_web_console
-        try:
-            DaemonTray._has_web_console = True
-            with (
-                mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
-                mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
-                mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
-                mock.patch.object(
-                    DaemonTray, "_is_web_console_ready", return_value=True
-                ),
-            ):
-                mock_pystray.MenuItem = mock.MagicMock()
-                mock_pystray.Menu = mock.MagicMock()
-                mock_pystray.Menu.SEPARATOR = mock.MagicMock()
-                tray._menu._build_single_daemon_menu_items()
-
-                for call in mock_pystray.MenuItem.call_args_list:
-                    if isinstance(call[0][0], str) and call[0][0] == "Console":
-                        vis = call[1].get("visible") or call[0][2]
-                        assert vis(None) is True
-                        return
-                pytest.fail("Console menu item not found")
-        finally:
-            DaemonTray._has_web_console = saved
-
-    def test_multi_daemon_console_hidden_when_web_console_unavailable(self):
-        """Multi-daemon Console visibility is false without web console support."""
-        mc = mock.MagicMock()
-        tray = DaemonTray(
-            get_stats_callback=lambda: {},
-            stop_callback=lambda: None,
-            pause_callback=lambda mins: None,
-            multi_client=mc,
-        )
-        tray._targets = [
-            DaemonTarget(name="local", runtime="local", status="running"),
-            DaemonTarget(name="remote", runtime="container", status="running"),
-        ]
-        saved = DaemonTray._has_web_console
-        try:
-            DaemonTray._has_web_console = False
-            with (
-                mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
-                mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
-                mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
-            ):
-                mock_pystray.MenuItem = mock.MagicMock()
-                mock_pystray.Menu = mock.MagicMock()
-                mock_pystray.Menu.SEPARATOR = mock.MagicMock()
-                tray._menu._build_multi_daemon_menu_items()
-
-                for call in mock_pystray.MenuItem.call_args_list:
-                    if isinstance(call[0][0], str) and call[0][0] == "Console":
-                        vis = call[1].get("visible") or call[0][2]
-                        assert vis(None) is False
-                        return
-                pytest.fail("Console menu item not found in multi-daemon menu")
-        finally:
-            DaemonTray._has_web_console = saved
-
-
 class TestWebConsoleAutoRestart:
     """Web console auto-restart when dead (#1370)."""
 
@@ -5092,95 +4933,76 @@ class TestWebConsoleAutoRestart:
 
     def test_single_daemon_open_panel_restarts_web_console(self):
         tray = self._make_tray()
-        saved = DaemonTray._has_web_console
-        try:
-            DaemonTray._has_web_console = True
-            with (
-                mock.patch.object(
-                    tray, "_ensure_web_console_ready", return_value=True
-                ) as mock_ensure,
-                mock.patch.object(tray, "_check_and_autostart_daemon"),
-                mock.patch("ai_guardian.tray.menu.open_web_console") as mock_open,
-                mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
-                mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
-                mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
-            ):
-                mock_pystray.MenuItem = mock.MagicMock()
-                mock_pystray.Menu = mock.MagicMock()
-                mock_pystray.Menu.SEPARATOR = mock.MagicMock()
-                items = tray._menu._build_single_daemon_menu_items()
+        with (
+            mock.patch.object(
+                tray, "_ensure_web_console_ready", return_value=True
+            ) as mock_ensure,
+            mock.patch.object(tray, "_check_and_autostart_daemon"),
+            mock.patch("ai_guardian.tray.menu.open_web_console") as mock_open,
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_single_daemon_menu_items()
 
-                for call in mock_pystray.MenuItem.call_args_list:
-                    if isinstance(call[0][0], str) and call[0][0] == "Console":
-                        action_fn = call[0][1]
-                        action_fn(None, None)
-                        mock_ensure.assert_called()
-                        mock_open.assert_called_once()
-                        return
-                pytest.fail("Console menu item not found")
-        finally:
-            DaemonTray._has_web_console = saved
+            for call in mock_pystray.MenuItem.call_args_list:
+                if isinstance(call[0][0], str) and call[0][0] == "Console":
+                    action_fn = call[0][1]
+                    action_fn(None, None)
+                    mock_ensure.assert_called()
+                    mock_open.assert_called_once()
+                    return
+            pytest.fail("Console menu item not found")
 
-    def test_single_daemon_falls_back_to_tui_when_restart_fails(self):
+    def test_single_daemon_falls_back_to_terminal_console_when_restart_fails(self):
         tray = self._make_tray()
-        saved = DaemonTray._has_web_console
-        try:
-            DaemonTray._has_web_console = True
-            with (
-                mock.patch.object(
-                    tray, "_ensure_web_console_ready", return_value=False
-                ),
-                mock.patch.object(tray, "_check_and_autostart_daemon"),
-                mock.patch("ai_guardian.tray.menu.open_web_console") as mock_open,
-                mock.patch("ai_guardian.tray.menu.launch_console") as mock_tui,
-                mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
-                mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
-                mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
-            ):
-                mock_pystray.MenuItem = mock.MagicMock()
-                mock_pystray.Menu = mock.MagicMock()
-                mock_pystray.Menu.SEPARATOR = mock.MagicMock()
-                tray._menu._build_single_daemon_menu_items()
+        with (
+            mock.patch.object(tray, "_ensure_web_console_ready", return_value=False),
+            mock.patch.object(tray, "_check_and_autostart_daemon"),
+            mock.patch("ai_guardian.tray.menu.open_web_console") as mock_open,
+            mock.patch("ai_guardian.tray.menu.launch_console") as mock_console,
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_single_daemon_menu_items()
 
-                for call in mock_pystray.MenuItem.call_args_list:
-                    if isinstance(call[0][0], str) and call[0][0] == "Console":
-                        action_fn = call[0][1]
-                        action_fn(None, None)
-                        mock_open.assert_not_called()
-                        mock_tui.assert_called_once()
-                        return
-                pytest.fail("Console menu item not found")
-        finally:
-            DaemonTray._has_web_console = saved
+            for call in mock_pystray.MenuItem.call_args_list:
+                if isinstance(call[0][0], str) and call[0][0] == "Console":
+                    action_fn = call[0][1]
+                    action_fn(None, None)
+                    mock_open.assert_not_called()
+                    mock_console.assert_called_once()
+                    return
+            pytest.fail("Console menu item not found")
 
     def test_multi_daemon_console_visible_when_dead(self):
         """Console menu stays visible even when web console is dead (#1370)."""
         tray = self._make_tray(multi=True)
-        saved = DaemonTray._has_web_console
-        try:
-            DaemonTray._has_web_console = True
-            with (
-                mock.patch.object(
-                    DaemonTray, "_is_web_console_ready", return_value=False
-                ),
-                mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
-                mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
-                mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
-            ):
-                mock_pystray.MenuItem = mock.MagicMock()
-                mock_pystray.Menu = mock.MagicMock()
-                mock_pystray.Menu.SEPARATOR = mock.MagicMock()
-                tray._menu._build_multi_daemon_menu_items()
+        with (
+            mock.patch.object(DaemonTray, "_is_web_console_ready", return_value=False),
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_multi_daemon_menu_items()
 
-                for call in mock_pystray.MenuItem.call_args_list:
-                    if isinstance(call[0][0], str) and call[0][0] == "Console":
-                        vis = call[1].get("visible")
-                        if vis and callable(vis):
-                            assert vis(None) is True
-                            return
-                pytest.fail("Console menu item not found in multi-daemon menu")
-        finally:
-            DaemonTray._has_web_console = saved
+            for call in mock_pystray.MenuItem.call_args_list:
+                if isinstance(call[0][0], str) and call[0][0] == "Console":
+                    vis = call[1].get("visible")
+                    if vis and callable(vis):
+                        assert vis(None) is True
+                        return
+            pytest.fail("Console menu item not found in multi-daemon menu")
 
 
 class TestGreyedOutMenuItems:

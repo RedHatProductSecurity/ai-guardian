@@ -118,7 +118,7 @@ def choose_directory(
     """
     system = platform.system()
     try:
-        from ai_guardian.tui.display import get_preferred_ui
+        from ai_guardian.ui.display import get_preferred_ui
 
         if get_preferred_ui() == "headless":
             return None
@@ -139,7 +139,7 @@ def _choose_directory_macos(
     *,
     screen_bounds=None,
 ) -> Optional[str]:
-    from ai_guardian.tui.display import _tkinter_available, get_preferred_ui
+    from ai_guardian.ui.display import _tkinter_available, get_preferred_ui
 
     if (
         screen_bounds is not None
@@ -238,7 +238,7 @@ def _show_tkinter_directory(current, title, screen_bounds):
     from tkinter import filedialog
 
     from ai_guardian.tray.dialog_placement import _place_window_on_screen
-    from ai_guardian.tui.display import _ensure_tcl_library
+    from ai_guardian.ui.display import _ensure_tcl_library
 
     _ensure_tcl_library()
     root = tk.Tk()
