@@ -726,10 +726,6 @@ class MCPBlockReasonUXTest(TestCase):
             or "alternative" in instructions.lower()
         ), "Skill must forbid suggesting alternative access methods"
 
-    @pytest.mark.skipif(
-        sys.version_info < (3, 10),
-        reason="MCP SDK requires Python >= 3.10",
-    )
     def test_violations_provide_actual_block_reason(self):
         """
         USER EXPERIENCE: get_violations() returns the actual block reason
@@ -783,10 +779,6 @@ class MCPBlockReasonUXTest(TestCase):
             assert violation["line"] == 3, "Line number must be included when available"
             assert violation["policy_decision"]["decision"] == "block"
 
-    @pytest.mark.skipif(
-        sys.version_info < (3, 10),
-        reason="MCP SDK requires Python >= 3.10",
-    )
     def test_file_content_prompt_injection_reports_scanned_path(self):
         """
         USER EXPERIENCE: File-content prompt injection → location is reported.

@@ -47,28 +47,28 @@ def test_onnxruntime_markers_select_available_wheels():
     cases = [
         (
             {
-                "python_version": "3.9",
-                "sys_platform": "linux",
-                "platform_machine": "x86_64",
-                "platform_release": "6.0",
-            },
-            "==1.19.2",
-        ),
-        (
-            {
                 "python_version": "3.10",
                 "sys_platform": "linux",
                 "platform_machine": "x86_64",
-                "platform_release": "6.0",
+                "platform_release": "6.17.0-1022-azure",
             },
             "==1.23.2",
+        ),
+        (
+            {
+                "python_version": "3.12",
+                "sys_platform": "linux",
+                "platform_machine": "x86_64",
+                "platform_release": "6.17.0-1022-azure",
+            },
+            "==1.29.0",
         ),
         (
             {
                 "python_version": "3.13",
                 "sys_platform": "darwin",
                 "platform_machine": "x86_64",
-                "platform_release": "23.0",
+                "platform_release": "23.6.0",
             },
             "==1.23.2",
         ),
@@ -77,7 +77,7 @@ def test_onnxruntime_markers_select_available_wheels():
                 "python_version": "3.13",
                 "sys_platform": "darwin",
                 "platform_machine": "arm64",
-                "platform_release": "22.0",
+                "platform_release": "22.6.0",
             },
             "==1.23.2",
         ),
@@ -86,7 +86,7 @@ def test_onnxruntime_markers_select_available_wheels():
                 "python_version": "3.14",
                 "sys_platform": "darwin",
                 "platform_machine": "arm64",
-                "platform_release": "23.0",
+                "platform_release": "23.6.0",
             },
             "==1.29.0",
         ),
@@ -95,7 +95,16 @@ def test_onnxruntime_markers_select_available_wheels():
                 "python_version": "3.14",
                 "sys_platform": "darwin",
                 "platform_machine": "x86_64",
-                "platform_release": "23.0",
+                "platform_release": "23.6.0",
+            },
+            None,
+        ),
+        (
+            {
+                "python_version": "3.13",
+                "sys_platform": "darwin",
+                "platform_machine": "arm64",
+                "platform_release": "21.6.0",
             },
             None,
         ),
@@ -108,6 +117,16 @@ def test_onnxruntime_markers_select_available_wheels():
             if requirement.marker is None or requirement.marker.evaluate(environment)
         ]
         assert selected == ([] if expected is None else [expected])
+
+
+def test_package_metadata_requires_python_310():
+    """The package metadata and classifiers agree on the supported floor."""
+    project = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    metadata = tomllib.loads(project.read_text(encoding="utf-8"))["project"]
+
+    assert metadata["requires-python"] == ">=3.10"
+    assert "Programming Language :: Python :: 3.9" not in metadata["classifiers"]
+    assert "Programming Language :: Python :: 3.10" in metadata["classifiers"]
 
 
 class TestIDESetup:

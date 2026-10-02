@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **ONNX Runtime install markers:** Avoid parsing non-PEP 440 Linux kernel
+  release strings as versions during dependency resolution. The installer
+  smoke test now builds and installs the wheel from the checked-out source.
+
+### Changed
+- **Python support policy (#2419):** AI Guardian `1.20.0` requires Python
+  3.10 or newer. This is a documented breaking support change; the `1.19.x`
+  release line (`1.19.0` last stable) is the last compatible line for Python
+  3.9. Upgrade Python before upgrading to `1.20.0` or later, or pin
+  `ai-guardian<1.20`.
+
 ## [1.19.0] - 2026-10-01
 
 ### Fixed

@@ -203,7 +203,7 @@ python .claude/skills/release/release_helper.py update-version "1.2.0"
 - Restart Claude Code if needed
 
 **Helper script errors**:
-- Verify Python 3.9+ installed
+- Verify Python 3.10+ installed
 - Check you're in the ai-guardian repository directory
 
 **Version calculation wrong**:

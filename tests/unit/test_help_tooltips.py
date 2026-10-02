@@ -70,9 +70,7 @@ class TestConfigFieldHelp:
         assert "secret_scanning.action" not in CONFIG_FIELD_HELP
 
 
-nicegui = pytest.importorskip(
-    "nicegui", reason="NiceGUI not available (Python 3.9 not supported)"
-)
+nicegui = pytest.importorskip("nicegui", reason="NiceGUI not available")
 
 
 class TestFieldHelpIconFunction:

@@ -124,10 +124,10 @@
   digest. Keep a contract test comparing the workflow value to the Dockerfile
   instead of manually maintaining two independent digests.
 
-- **Python support transition:** The 1.19 line still supports Python 3.9, so
-  retain its compatibility job even if a transient CI run fails there. Version
-  1.20.0 will drop Python 3.9; remove the 3.9 CI matrix entries and update the
-  package support metadata together when that release work begins.
+- **Python support transition:** The 1.19 line still supports Python 3.9, while
+  1.20.0 now requires Python 3.10+. The last stable 3.9-compatible release is
+  1.19.0; keep upgrade guidance and the `ai-guardian<1.20` pin documented for
+  users who cannot upgrade their runtime.
 
 - **Multi-architecture OCI validation needs artifact cleanup:** The Ubuntu
   compatibility workflow exports normal and OpenShell images as large OCI
@@ -142,7 +142,9 @@
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
-- [2026-08-19] Do NOT use `str | None` union syntax in type hints — requires Python 3.10+. Project supports 3.9. Use `Optional[str]` from `typing` instead. CI catches this on Python 3.9 runner.
+- [2026-08-19] Python 3.9 support was retained through the 1.19.x line; do not
+  reintroduce 3.9-specific support claims into the 1.20.0+ metadata, installer,
+  CI, or documentation surfaces.
 - [2026-07-15] Always run `black --target-version py39` (not bare `black`). On Python < 3.15, black's safety check silently skips reformatting without `--target-version`, producing "files left unchanged" even when formatting is wrong. CI runs Python 3.15 where black reformats correctly, causing CI failure.
 - [2026-06-24] During release, update README install URLs to the release tag BEFORE creating the git tag. The tag snapshot is what PyPI publishes as the package README. In v1.12.0, URLs were updated after the tag, so PyPI shows `main` URLs instead of `v1.12.0`. Correct order: bump version → update CHANGELOG → update install URLs → commit → tag → push.
 - [2026-06-24] `cursor-verify-setup` in release_helper.py places debug hooks at the JSON top level instead of inside the `hooks:{}` object. Cursor only reads from `hooks:{}`. The cleanup also looks at top level. Both functions need fixing to operate inside `hooks:{}`. **FIXED in v1.12.2** — `_add_debug_hooks()` and `cleanup()` now operate on `settings["hooks"]`.
@@ -225,3 +227,5 @@
 - [2026-08-19] **Config-driven provider selection (#2079):** `create_client()` in `_extractor.py` now accepts `provider` and `provider_config` kwargs. `provider` selects the LLM backend (Anthropic family: `direct`/`anthropic`/`vertex`/`bedrock`/`foundry`; OpenAI-compatible: `openai`/`azure`/`ollama`/`llamacpp`/`vllm`). `provider_config` dict overrides env var names (`api_key_env`, `base_url`, `project_id_env`, `region_env`). `AI_GUARDIAN_SDK_PROVIDER` env var overrides both code arg and config. `guarded()` reads `sdk.provider` + `sdk.provider_config` from merged config and passes to `create_client()`. OpenAI-compatible providers create `openai.OpenAI()` (or `AzureOpenAI` for azure) with `base_url` from `provider_config`. Anthropic family providers create the corresponding Anthropic SDK client. For local servers (ollama/llamacpp/vllm), `api_key` defaults to `"not-needed"` unless `api_key_env` is set.
 
 - [2026-08-12] **ScannerRegistry Phase 5 — unified scan_content() (#1932):** `scanners/pipeline.py:scan_content()` now registry-driven with 8 content scanners (PI, CP, SC, OL, CD, CFS, Secret, PII) instead of hardcoded 3. Calls `entry.run_fn()` directly (dispatcher eliminated in #2050). `_get_content_pipeline()` filters registry entries by hook_event (when provided) or by `_CONTENT_SCANNER_NAMES` + input availability (SDK path). New params: `hook_event`, `tool_identifier`, `latency_timer`, `content_overrides` (per-scanner text substitution), `scanner_kwargs` (per-scanner extra kwargs), `registry` (injectable). `content_pipeline.py:run_content_pipeline()` now calls `scan_content()` for raw detection, then iterates results for post-processing (apply_post_scan_pipeline, response formatting, PII redaction, transcript scanning, context saving). Config resolution via `_resolve_scanner_config_for_entry()` uses `entry.config_section` + `_load_config_section()` generically. `scan_file()` simplified: calls `scan_content()` with file_path (SC/CFS now included automatically). Results include non-detected items with error_message (for scanner-not-installed warnings). Error results have `extra["scan_error"]` for fail-closed handling.
+
+- **PEP 508 platform-release markers:** Do not compare `platform_release` numerically in project dependencies. pip versions can evaluate every branch on Linux and parse kernel strings such as `6.17.0-1022-azure` as invalid PEP 440 versions. Use safe string gates and test the exact runner release; build smoke tests must install the checked-out wheel rather than stale PyPI metadata.

@@ -5,49 +5,49 @@ budget_tokens: 1000
 # STATUS — ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-01
+> Last updated: 2026-10-02
 
 ---
 
 ## ✅ Done
 
-- Issue #2482 implementation is complete on branch `2482`; no commit or PR was created.
-- SSRF now treats the complete `0.0.0.0/8` range as immutable in bundled and pattern-server paths.
-- `SSRFProtector.check_resolved_destination()` revalidates caller-supplied fresh A/AAAA results; `check_redirect_chain()` checks every supplied absolute redirect target.
-- Resolved private, reserved, metadata, loopback, link-local, IPv6-local, malformed, or empty destinations fail closed; domain allowlists cannot override immutable resolved addresses.
-- The hook remains pattern-only and performs no DNS lookup or redirect; runtime-aware callers and network controls own the remaining TOCTOU boundary.
-- TUI, Web Console, schema, setup profiles, example config, docs, changelog, and pattern listing now describe the policy.
-- Updated the stale bundled TOML expectation from 24 to 25 SSRF rules and corrected the pattern-count documentation after PR CI exposed the regression.
-- Validation passed: 808 bundled/pattern/config tests plus 334 related tests, 3 setup-template tests, and 167 final SSRF/UX tests; Ruff, Black, Pylint, Mypy, JSON validation, and diff checks.
+- Issue #2419 decision is implemented on branch `2419`; PR #2487 is open.
+- Release `1.20.0` now requires Python >=3.10. Release `1.19.0` in the `1.19.x` line is documented as the last stable Python 3.9-compatible release.
+- Updated package metadata/dependencies, both installers, doctor messaging, tray compatibility branches, CI/release matrices, Ubuntu 26 migration coverage, docs, changelog, and release skill references.
+- Retained the TUI as the fallback when the web console cannot start; removed obsolete Python 3.9 version gates and test skips.
+- Added release-readiness metadata verification and regression coverage for the minimum version, installer checks, doctor failure behavior, dependency markers, and CI matrices.
+- Diagnosed PR #2487's Install/Uninstall Lifecycle failure: pip 25 parsed Linux kernel release `6.17.0-1022-azure` as a PEP 440 version while resolving ONNX Runtime markers.
+- Replaced numeric `platform_release` comparisons with safe string gates, added regression coverage, and changed the smoke lifecycle to build/install the checked-out wheel instead of stale PyPI metadata.
+- Committed and pushed the CI remediation as `b24a3190` to branch `2419`; PR checks are running.
 - DAF note and GitHub issue progress comment were recorded; `daf complete` owns commit, push, PR, and issue closure actions.
 
 ## 🚀 Next quest
 
-Run `daf complete` for issue #2482 when ready to commit and open the pull request.
+Monitor PR #2487 checks and address any remaining remote failures.
 
-Acceptance criteria are complete:
-
-- `0.0.0.0/8` selected as the immutable unspecified IPv4 policy.
-- DNS rebinding, redirect, IPv6, allowlist, malformed-result, and bind/listen regressions are covered.
-- Runtime/network boundary and no-false-positive behavior are documented.
+Acceptance criteria are complete: the breaking-change policy, last compatible release,
+upgrade guidance, runtime metadata, installer/doctor/docs updates, CI matrices,
+compatibility audit, and clean-install/upgrade checks are all documented or covered.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2482`; worktree contains the issue changes plus the uncommitted bundled-rule-count correction.
+- Branch: `2419`; CI remediation is committed as `b24a3190` and the worktree is clean.
+- Pull request: https://github.com/RedHatProductSecurity/ai-guardian/pull/2487
 - Routine local validation avoids integration/container scenarios per `AGENTS.md`; pattern-server integration assertions are included for CI.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
 ## External blockers
 
-- None. The remaining workflow step is `daf complete`.
+- None. The fix is validated locally; GitHub checks are pending.
 
 ## Useful commands
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_ssrf_protection.py tests/ux/test_ssrf_revalidation_contract.py -q
+uv run --extra dev python -m pytest tests/unit/test_doctor.py tests/unit/test_setup.py tests/test_install_script.py -q
+uv run --extra dev python -m pytest tests/unit/test_workflow_runner_policy.py -q
 ruff check src/ai_guardian/ tests/
-black --target-version py39 --check src/ai_guardian/ tests/
+black --target-version py310 --check src/ai_guardian/ tests/
 mypy src/ai_guardian/
 ```
 

@@ -156,20 +156,12 @@ class Doctor:
         major, minor, micro = sys.version_info[:3]
         version_str = f"{major}.{minor}.{micro}"
 
-        if (major, minor) < (3, 9):
-            return CheckResult(
-                name="python_version",
-                status=CheckStatus.FAIL,
-                message=f"Python {version_str} — unsupported (requires 3.9+)",
-                fix_hint="Upgrade to Python 3.9+ (3.10+ recommended)",
-            )
-
         if (major, minor) < (3, 10):
             return CheckResult(
                 name="python_version",
-                status=CheckStatus.WARN,
-                message=f"Python {version_str} — AST-aware scanning disabled (requires 3.10+)",
-                fix_hint="Upgrade to Python 3.10+ for reduced false positives on source code",
+                status=CheckStatus.FAIL,
+                message=f"Python {version_str} — unsupported (requires 3.10+)",
+                fix_hint="Upgrade to Python 3.10+",
             )
 
         return CheckResult(
@@ -1710,15 +1702,10 @@ class Doctor:
             missing.append("tree-sitter-json")
 
         if missing:
-            ts_missing = [m for m in missing if m.startswith("tree-sitter")]
-            if ts_missing and sys.version_info < (3, 10):
-                hint = "AST scanning requires Python >= 3.10"
-            else:
-                hint = f"Not available: {', '.join(missing)}"
             return CheckResult(
                 name="console_deps",
                 status=CheckStatus.WARN,
-                message=hint,
+                message=f"Not available: {', '.join(missing)}",
             )
 
         return CheckResult(

@@ -2,10 +2,11 @@
 
 import json
 import os
-import sys
 import tempfile
 from pathlib import Path
-from unittest import TestCase, mock, skipIf
+from unittest import TestCase, mock
+
+import pytest
 
 
 class TestListPluginFiles(TestCase):
@@ -242,8 +243,8 @@ class TestNavRegistration(TestCase):
         labels = [label for label, _ in config_group]
         assert "Tray Plugins" in labels
 
-    @skipIf(sys.version_info < (3, 10), "Web console requires Python 3.10+")
     def test_web_nav_has_tray_plugins(self):
+        pytest.importorskip("nicegui", reason="NiceGUI not available")
         from ai_guardian.web.components.header import NAV_GROUPS
 
         config_group = next(

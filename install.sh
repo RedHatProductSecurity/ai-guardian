@@ -39,8 +39,8 @@ Options:
     --profile PROFILE   Security profile: @minimal, @standard (default), @strict
     --version VERSION   Install a specific version or a local .whl file
     --tkinter           Install tkinter for native popup dialogs (recommended)
-                        Without it, NiceGUI browser form is used (Python 3.10+)
-                        or Textual terminal fallback (Python 3.9)
+                        Without it, NiceGUI browser form or Textual terminal
+                        fallback is used
     --gobject           Install python3-gobject for system tray on Linux (optional)
                         Without it, tray features are unavailable on Linux
     -h, --help          Show this help message
@@ -215,13 +215,13 @@ if [ -z "$INSTALL_MODE" ]; then
     fi
 fi
 
-# --- Step 1: Find Python 3.9+ ---
+# --- Step 1: Find Python 3.10+ ---
 
 find_python() {
     local py
     for py in python3 python; do
         if command -v "$py" >/dev/null 2>&1; then
-            if "$py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)" 2>/dev/null; then
+            if "$py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" 2>/dev/null; then
                 echo "$py"
                 return
             fi
@@ -232,7 +232,7 @@ find_python() {
 
 log "Checking Python version..."
 PYTHON=$(find_python) || {
-    err "Python 3.9+ is required but not found."
+    err "Python 3.10+ is required but not found."
     echo "  Install Python from https://www.python.org/downloads/"
     exit 1
 }
@@ -487,7 +487,7 @@ if [ "$INSTALL_TKINTER" = true ]; then
 
     if [ "$HAS_DISPLAY" = false ]; then
         echo "  Skipping tkinter — no display detected (headless environment)"
-        echo "  Tray plugin forms will use NiceGUI browser form (Python 3.10+) or Textual terminal fallback"
+        echo "  Tray plugin forms will use NiceGUI browser form or Textual terminal fallback"
     elif "$PYTHON" -c "import tkinter" 2>/dev/null; then
         ok "tkinter already available"
     else
@@ -501,7 +501,7 @@ if [ "$INSTALL_TKINTER" = true ]; then
                     echo "    - Use system Python (/usr/bin/python3) which includes tkinter"
                     echo "    - Install Homebrew (https://brew.sh) then: brew install tcl-tk"
                     echo "    - Download Tcl/Tk from https://www.tcl.tk/software/tcltk/"
-                    echo "  Continuing without tkinter (NiceGUI browser fallback on Python 3.10+, Textual otherwise)"
+                    echo "  Continuing without tkinter (NiceGUI browser or Textual terminal fallback)"
                 fi
                 ;;
             Linux)
@@ -522,13 +522,13 @@ if [ "$INSTALL_TKINTER" = true ]; then
                     echo "    RHEL/Fedora: dnf install python3-tkinter"
                     echo "    Debian/Ubuntu: apt install python3-tk"
                     echo "    Alpine: apk add py3-tkinter"
-                    echo "  Continuing without tkinter (NiceGUI browser fallback on Python 3.10+, Textual otherwise)"
+                    echo "  Continuing without tkinter (NiceGUI browser or Textual terminal fallback)"
                 fi
                 ;;
             *)
                 echo "  tkinter should be included with your Python installation."
                 echo "  If not, reinstall Python from https://www.python.org/downloads/"
-                echo "  Continuing without tkinter (NiceGUI browser fallback on Python 3.10+, Textual otherwise)"
+                echo "  Continuing without tkinter (NiceGUI browser or Textual terminal fallback)"
                 ;;
         esac
     fi

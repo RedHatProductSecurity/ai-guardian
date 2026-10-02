@@ -748,13 +748,21 @@ Development versions on `main` branch always have the `-dev` suffix:
 
 This helps distinguish development builds from stable releases.
 
+### Python Support Policy
+
+Release `1.20.0` raises the minimum supported Python version from 3.9 to
+3.10. This is a breaking support change under the project's compatibility
+policy. The `1.19.x` release line (`1.19.0` last stable) is the last line compatible with Python 3.9.
+Users must upgrade to Python 3.10 or newer before installing `1.20.0` or a
+later release; users who cannot upgrade should pin `ai-guardian<1.20`.
+
 ## GitHub Actions CI/CD
 
 ### Workflows
 
 The repository includes four GitHub Actions workflows:
 
-1. **test.yml** - Runs tests on Python 3.9, 3.10, 3.11, 3.12
+1. **test.yml** - Runs tests on Python 3.10, 3.11, 3.12, 3.13, 3.14
    - Triggered on: push to main, pull requests
    - Includes coverage reporting
 
@@ -775,12 +783,9 @@ All Linux release-readiness, wheel, PyPI, and container publishing jobs are
 pinned to `ubuntu-24.04`. This keeps release artifacts and trusted-publishing
 jobs independent of the moving `ubuntu-latest` image label. The
 `.github/workflows/ubuntu-26-compatibility.yml` workflow separately exercises
-Python 3.9 on the pinned Ubuntu baseline and Python 3.10 through 3.14,
-scanners, smoke tests, scenario containers, Docker Buildx, and QEMU on
-`ubuntu-26.04`; release readiness invokes it as a migration gate while normal
-release and publishing jobs remain pinned. Python 3.9 remains on the baseline
-because the current setup-python version manifest does not provide it for
-Ubuntu 26.04.
+Python 3.10 through 3.14, scanners, smoke tests, scenario containers, Docker
+Buildx, and QEMU on `ubuntu-26.04`; release readiness invokes it as a
+migration gate while normal release and publishing jobs remain pinned.
 
 ### Setting Up PyPI Trusted Publishing
 

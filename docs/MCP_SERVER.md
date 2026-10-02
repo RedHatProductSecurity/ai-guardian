@@ -296,8 +296,8 @@ Both interfaces share the same underlying logic — same sanitization, same dest
 
 ## Requirements
 
-- **Direct install** (`ai-guardian mcp-server`): Python >=3.10 (MCP SDK requirement). ai-guardian itself still supports Python 3.9 for all other features (hooks, CLI, Console, scanning).
-- **Via uvx** (`uvx ai-guardian mcp-server`): No Python version requirement — uvx manages its own environment. This is the recommended method for users on Python 3.9.
+- **Direct install** (`ai-guardian mcp-server`): Python >=3.10.
+- **Via uvx** (`uvx ai-guardian mcp-server`): uvx manages an isolated Python environment. This can be used when the host runtime cannot be upgraded, but the `1.19.x` release line is the last AI Guardian release compatible with Python 3.9.
 - For S3 export: `uv pip install boto3` (or `pip install boto3`)
 - For GCS export: Google Application Default Credentials (`gcloud auth application-default login`) or `GOOGLE_APPLICATION_CREDENTIALS` env var. No extra packages needed.
 

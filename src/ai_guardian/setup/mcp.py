@@ -683,7 +683,7 @@ def verify_mcp_config(
 
 
 def _load_toml_text(text: str) -> Dict:
-    """Parse TOML using the stdlib parser or the Python 3.9 backport."""
+    """Parse TOML using the stdlib parser or the Python 3.10 backport."""
     try:
         import tomllib
     except ImportError:

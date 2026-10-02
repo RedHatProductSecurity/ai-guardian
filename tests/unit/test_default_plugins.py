@@ -2,7 +2,6 @@
 
 import json
 import shutil
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -36,10 +35,8 @@ def _template_files():
 
 
 def _active_daemon_file():
-    """Return the daemon plugin file that would be loaded for this Python."""
-    if sys.version_info >= (3, 10):
-        return _TEMPLATE_DIR / "default-daemon-web.json"
-    return _TEMPLATE_DIR / "default-daemon-tui.json"
+    """Return the default daemon plugin for supported runtimes."""
+    return _TEMPLATE_DIR / "default-daemon-web.json"
 
 
 class TestDefaultPluginSchema:
@@ -184,9 +181,9 @@ class TestDefaultPluginLoad:
 
 
 class TestBundledPluginVariantSelection:
-    """Verify the right daemon variant is loaded based on Python version."""
+    """Verify the web variant is preferred while the TUI fallback remains available."""
 
-    def test_web_variant_on_310(self):
+    def test_web_variant_by_default(self):
         with patch("ai_guardian.tray.plugins._HAS_WEB_CONSOLE", True):
             from ai_guardian.tray.plugins import _load_bundled_plugins
 
@@ -198,7 +195,7 @@ class TestBundledPluginVariantSelection:
         assert isinstance(doctor.command, dict)
         assert "health-check" in doctor.command["darwin"]
 
-    def test_tui_variant_on_39(self):
+    def test_tui_variant_is_available_as_fallback(self):
         with patch("ai_guardian.tray.plugins._HAS_WEB_CONSOLE", False):
             from ai_guardian.tray.plugins import _load_bundled_plugins
 

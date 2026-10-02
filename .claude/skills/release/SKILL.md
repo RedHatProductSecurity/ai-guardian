@@ -282,7 +282,7 @@ Before creating the release branch, trigger the automated release readiness work
      ```
 
 **Jobs validated**:
-- `fresh-install` — Clean install across Python 3.9–3.14
+- `fresh-install` — Clean install across Python 3.10–3.14
 - `upgrade-from-previous` — Upgrade from last stable release
 - `multi-agent-setup` — All IDE adapters (claude, cursor, copilot, etc.)
 - `daemon-lifecycle` — Daemon start/status/reload/pause/resume/stop

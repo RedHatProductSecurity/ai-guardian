@@ -135,7 +135,6 @@ Image scanning is configured in `ai-guardian.json` under the `image_scanning` se
 AI Guardian pins RapidOCR to `3.9.2`. ONNX Runtime is pinned per Python and
 platform so supported interpreters use available wheels:
 
-- `1.19.2` on Python 3.9 and older supported interpreters
 - `1.23.2` on Python 3.10, and on Python 3.11-3.13 for macOS 13+ Intel or
   ARM64
 - `1.29.0` on Python 3.11 and newer for Linux/Windows and macOS 14+ ARM64

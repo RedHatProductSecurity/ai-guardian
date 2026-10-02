@@ -1,6 +1,5 @@
 """Tests for MCP client lifecycle management (integrations/mcp_client.py)."""
 
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -216,10 +215,6 @@ class TestCallToolNotConnected:
         assert "not connected" in result
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 10),
-    reason="MCP requires Python >= 3.10",
-)
 class TestDeferredLoading:
     """Tests for defer_loading MCP server lifecycle."""
 
@@ -416,10 +411,6 @@ class TestDeferredLoading:
             manager.stop()
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 10),
-    reason="MCP requires Python >= 3.10",
-)
 class TestMCPClientManagerLifecycle:
     """Integration-style tests using mocked MCP transports."""
 

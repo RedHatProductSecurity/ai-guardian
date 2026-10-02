@@ -39,6 +39,29 @@ def test_test_workflow_keeps_coverage_on_the_pinned_linux_matrix():
     assert "matrix.os == 'ubuntu-latest'" not in workflow
 
 
+def test_supported_python_matrix_starts_at_310():
+    """CI matrices cover the supported floor without claiming Python 3.9."""
+    for workflow_name in ("test.yml", "release-readiness.yml"):
+        workflow = (WORKFLOW_DIR / workflow_name).read_text(encoding="utf-8")
+        matrix_line = next(
+            line
+            for line in workflow.splitlines()
+            if "python-version:" in line and "[" in line
+        )
+        assert "3.9" not in matrix_line, workflow_name
+        for version in ("3.10", "3.11", "3.12", "3.13", "3.14"):
+            assert version in workflow, (workflow_name, version)
+
+
+def test_smoke_install_lifecycle_uses_the_checked_out_wheel():
+    """The installer smoke test must validate this checkout, not stale PyPI metadata."""
+    workflow = (WORKFLOW_DIR / "smoke-tests.yml").read_text(encoding="utf-8")
+    lifecycle = workflow.split("  install-uninstall:", 1)[1]
+
+    assert "python -m build --wheel --outdir" in lifecycle
+    assert '--version "$RUNNER_TEMP"/ai-guardian-dist/*.whl' in lifecycle
+
+
 def test_ubuntu_26_compatibility_workflow_covers_release_risks():
     """The migration gate covers Python, scanners, smoke, and image builds."""
     workflow = (WORKFLOW_DIR / "ubuntu-26-compatibility.yml").read_text(
@@ -47,8 +70,8 @@ def test_ubuntu_26_compatibility_workflow_covers_release_risks():
 
     assert "runs-on: ubuntu-26.04" in workflow
     assert "runs-on: ${{ matrix.os }}" in workflow
-    assert "os: ubuntu-24.04" in workflow
-    assert "python-version: '3.9'" in workflow
+    assert "os: ubuntu-24.04" not in workflow
+    assert "python-version: '3.9'" not in workflow
     for version in ("3.10", "3.11", "3.12", "3.13", "3.14"):
         assert f"os: ubuntu-26.04\n            python-version: '{version}'" in workflow
     assert "ai-guardian scanner install gitleaks --use-pinned" in workflow

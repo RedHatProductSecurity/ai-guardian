@@ -174,7 +174,9 @@ def _get_bundled_plugins_dir() -> Optional[Path]:
         return None
 
 
-_HAS_WEB_CONSOLE = sys.version_info >= (3, 10)
+# Python 3.10 is the minimum supported runtime. Keep this flag so the loader
+# can still select the terminal variant when the web console is unavailable.
+_HAS_WEB_CONSOLE = True
 
 
 def _load_bundled_plugins(
@@ -182,8 +184,8 @@ def _load_bundled_plugins(
 ) -> List[Plugin]:
     """Load bundled default plugins, selecting the right console variant.
 
-    Files named ``*-web.json`` are loaded on Python >= 3.10 (web console).
-    Files named ``*-tui.json`` are loaded on Python < 3.10 (TUI fallback).
+    Files named ``*-web.json`` are loaded by default. Files named
+    ``*-tui.json`` remain available as the terminal fallback.
     Files without a ``-web`` or ``-tui`` suffix are always loaded.
     """
     bundled_dir = _get_bundled_plugins_dir()

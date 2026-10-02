@@ -563,9 +563,14 @@ jobs:
           echo "TEST_TMPDIR=$TMPDIR" >> $GITHUB_ENV
           mkdir -p "$TMPDIR/claude"
 
+      - name: Build current wheel
+        run: |
+          python -m pip install --quiet build
+          python -m build --wheel --outdir "$RUNNER_TEMP/ai-guardian-dist"
+
       - name: "Install via install.sh --venv"
         run: |
-          bash install.sh --venv --no-setup
+          bash install.sh --venv --version "$RUNNER_TEMP"/ai-guardian-dist/*.whl --no-setup
           source "$HOME/.ai-guardian-venv/bin/activate"
           ai-guardian --version
           echo "Install: PASS"

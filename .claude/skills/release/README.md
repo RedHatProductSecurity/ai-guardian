@@ -88,7 +88,7 @@ pytest tests/test_release_helper.py -v
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - Access to the AI Guardian repository
 - Git command line tools
 

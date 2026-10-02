@@ -1,7 +1,6 @@
 """Tests for effective config provenance and formatting (Issue #1259)."""
 
 import json
-import sys
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -256,12 +255,12 @@ class TestFormatScalar:
         assert _format_scalar(["a", "b"]) == '["a", "b"]'
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 10),
-    reason="NiceGUI requires Python 3.10+",
-)
 class TestWebConfigEffective:
     """Tests for web config_effective.py module-level functions."""
+
+    @pytest.fixture(autouse=True)
+    def _require_nicegui(self):
+        pytest.importorskip("nicegui", reason="NiceGUI not available")
 
     def test_load_effective_data_error(self):
         from ai_guardian.web.pages.config_effective import _load_effective_data
