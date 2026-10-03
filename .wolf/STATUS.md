@@ -61,33 +61,49 @@ budget_tokens: 1000
 - The host's apparently working Codex session is not using that API key: host
   Codex `0.157.0` reports `auth_mode=chatgpt` with OAuth tokens, while the
   OpenShell image uses Codex `0.154.0` with the API-key provider.
+- OpenCode runtime selection was validated without AI Guardian-specific
+  environment variables: the active `opencode` executable reports V1
+  `1.18.34`, while placing the installed V2 executable first on `PATH` reports
+  V2 `2.0.22`. Setup, CLI doctor, and Console health all share this resolver.
+- The live daemon and tray were restarted without `OPENCODE_CONFIG_DIR` or
+  `AI_GUARDIAN_OPENCODE_VERSION`. The current default V1 OpenCode config is not
+  configured, so health correctly reports `OpenCode: not configured; MCP: healthy`.
+- PR #2495 is open and ready for review. Build, lint, smoke, container, and
+  integration checks passed; the Python/Windows test matrix is currently
+  failing on the remote run and needs review before merge.
 
 ## Next Quest
 
+- Review and commit/push the pending runtime-detection documentation and test
+  clarification if it should be included in PR #2495.
+- Investigate the failing Python/Windows CI matrix jobs before merge; the local
+  affected OpenCode tests pass.
 - Either add/check credits for the OpenAI organization and rerun the API-key
   smoke request, or deliberately provision the sandbox with the working Codex
   OAuth provider. No source workaround should be added for the quota error.
 - Exercise the ready `ag-codex` sandbox through the tray and complete the
   remaining lifecycle smoke evidence.
-- Review the pushed issue #2470 branch and complete the DAF handoff or PR
-  creation if required.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
 - Branch: `2470`
-- HEAD: `ccfb00e9`
+- HEAD: `ccfb00e9` with uncommitted updates in `docs/OPENCODE.md`,
+  `src/ai_guardian/opencode_support.py`, and
+  `tests/unit/test_opencode_support.py`
 - The issue #2470 implementation, tests, documentation, workflow, container,
-  and policy changes are committed and pushed to `origin/2470`; no PR has been
-  created.
+  and policy changes are committed and pushed to `origin/2470`; PR #2495 is
+  open. The three runtime-detection clarification files listed above are not
+  committed yet.
 - NiceGUI is a core dependency; `uv.lock` is ignored by this repository and was regenerated locally.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_opencode_support.py tests/unit/test_opencode_transcript.py tests/unit/test_ide_sessions.py tests/unit/test_cli_version_check.py tests/unit/test_ide_registry.py tests/unit/test_setup.py tests/unit/test_container_scripts.py tests/ux/test_user_experience_contract_opencode_self_protection.py -q
-AI_GUARDIAN_TEST_IDE=opencode AI_GUARDIAN_OPENCODE_VERSION=1.18.31 uv run --extra dev python -m pytest tests/integration/test_ide_hooks_e2e.py -q
+uv run --extra dev python -m pytest tests/unit/test_opencode_support.py tests/unit/test_doctor.py tests/unit/test_daemon_multi_client.py -q
+AI_GUARDIAN_TEST_IDE=opencode uv run --extra dev python -m pytest tests/integration/test_ide_hooks_e2e.py -q
+uv run --extra dev python -m pytest tests/ux/test_user_experience_contract_ide_setup.py -q
 uv run --extra dev python -m pytest tests/unit/test_container_manual.py tests/unit/test_openshell_manual.py tests/unit/test_sandbox_command.py tests/unit/test_sandbox_tray.py tests/unit/test_cli_ide_setup.py -q
 ruff check src/ai_guardian/ tests/
 black --target-version py310 --check src/ai_guardian/ tests/

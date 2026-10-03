@@ -34,6 +34,9 @@ def opencode_generation(version: Optional[str]) -> str:
 
 def detect_opencode_version(executable: Optional[str] = None) -> Optional[str]:
     """Read the installed OpenCode CLI version without raising on failures."""
+    # The override is useful for isolated version-matrix tests. Normal setup,
+    # doctor, and console health checks leave it unset and inspect the active
+    # ``opencode`` executable instead.
     configured = os.environ.get("AI_GUARDIAN_OPENCODE_VERSION")
     if configured:
         return parse_opencode_version(configured)

@@ -261,7 +261,8 @@ def test_opencode_generation_boundaries():
     assert opencode_generation(None) == "unknown"
 
 
-def test_detect_opencode_version_uses_cli_output():
+def test_detect_opencode_version_uses_cli_output_without_override(monkeypatch):
+    monkeypatch.delenv("AI_GUARDIAN_OPENCODE_VERSION", raising=False)
     completed = mock.Mock(stdout="2.0.22\n", stderr="", returncode=0)
     with mock.patch(
         "ai_guardian.opencode_support.shutil.which", return_value="opencode"

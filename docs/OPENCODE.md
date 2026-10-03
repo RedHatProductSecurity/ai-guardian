@@ -6,6 +6,12 @@ writing the managed plugin. An unavailable or unrecognized CLI version uses the
 V1 compatibility template, unless an existing generated V2 plugin can be
 identified and preserved.
 
+`ai-guardian setup --ide opencode`, `ai-guardian doctor`, and the Console health
+check all use the same runtime resolver. It runs the active `opencode --version`
+command; users do not need to set an AI Guardian environment variable. If V1 and
+V2 are both installed under different executable names, the version resolved as
+`opencode` first on `PATH` is the active target for that invocation.
+
 ## Host Plugin Contracts
 
 | Generation | CLI/package | Plugin package | Config key | Generated hooks |
@@ -98,7 +104,9 @@ The generated V2 source is also type-checked against the published
 `@opencode/plugin@2.0.22` declarations. Release readiness validates the normal
 image's pinned V1 executable; V2 remains a host-plugin contract only.
 
-The isolated host matrix currently passes both generated plugin generations:
+The isolated host matrix currently passes both generated plugin generations. The
+version variable below is a test-only override used to exercise both contracts;
+normal users leave it unset:
 
 ```bash
 AI_GUARDIAN_TEST_IDE=opencode \
