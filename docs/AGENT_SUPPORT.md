@@ -47,7 +47,7 @@ upstream distinction.
 | Augment Code | `--ide augment` | Full | N/A | **Complete** |
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | **Complete** |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | **Complete** |
-| OpenCode | `--ide opencode` | Plugin | N/A | **Complete** |
+| OpenCode V1/V2 | `--ide opencode` | Version-aware plugin | N/A | **Host contracts complete; normal-image V1 supported; OpenShell out of scope** |
 | Pi | `--ide pi` | Managed extension (hooks + MCP tool bridge; eight callbacks) | Managed extension (`@modelcontextprotocol/sdk` pinned) | **Complete** |
 | Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
@@ -75,7 +75,7 @@ home. With no variables set, the existing defaults below are unchanged.
 | Junie | `JUNIE_HOME` | MCP: `<dir>/mcp.json` | Guidelines remain project-local at `.junie/guidelines`; `JUNIE_CONFIG_LOCATION` is an additive upstream search path, not a replacement selected by AI Guardian |
 | AiderDesk | `AIDER_DESK_DIR`, then `AIDER_DESK_HOME_DIR` | Extension: `<dir>/extensions/ai-guardian`; MCP: `<dir>/settings.json` | Project transcript history remains `.aider.chat.history.md` |
 | OpenClaw | `OPENCLAW_STATE_DIR`, then `OPENCLAW_HOME`; `OPENCLAW_CONFIG_PATH` is an explicit MCP file | Plugin: `<state>/plugins/ai-guardian`; MCP: the exact `OPENCLAW_CONFIG_PATH`, otherwise `<state>/settings.json` | Explicit config-file selection does not redirect plugin state |
-| OpenCode | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory) | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins`; shared bridge: `<config-dir>/ai-guardian` | Project-local config remains project-local |
+| OpenCode V1/V2 | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory); V2 may also use `OPENCODE_DB` | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins`; shared bridge: `<config-dir>/ai-guardian`; V2 local discovery: `.opencode/plugins/` | Project-local config remains project-local; V2 database discovery uses `opencode debug paths db` when available |
 | Pi | `PI_CODING_AGENT_DIR` for the agent home; `PI_CODING_AGENT_SESSION_DIR` for sessions | Managed extension: `<dir>/extensions/ai-guardian/index.ts` plus `package.json`; sessions: `<session-dir>/*.jsonl` | Project extension remains under `<project>/.pi/extensions/ai-guardian`; MCP is bridged through the managed extension |
 | Windsurf | No documented home relocation variable; `WINDSURF_TRANSCRIPTS_DIR` is transcript-only | Existing defaults remain unchanged | Project hooks/settings retain their existing scope |
 | Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
@@ -122,7 +122,7 @@ bridge contracts because their host SDKs are not repository dependencies.
 | `kiro` | Dedicated Kiro adapter and script-hook setup/reconciliation | Kiro JSONL; browser session adapter | Isolated script-event matrix; project-local hook scope |
 | `aiderdesk` | Extension bridge/package registration and shared TypeScript process/response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
 | `openclaw` | Plugin bridge/package registration, rules setup, and shared TypeScript process/response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
-| `opencode` | Plugin bridge, SQLite/session setup, and shared TypeScript process/response boundary | OpenCode SQLite; browser session adapter | Generated plugin/registration E2E boundary; project/user config reconciliation |
+| `opencode` | Version-aware V1/V2 plugin bridge, SQLite/session setup, and shared TypeScript process/response boundary | OpenCode SQLite with V1 fallback and V2 runtime path discovery; browser session adapter | Generated plugin/registration E2E boundary; V1/V2 config-key reconciliation |
 | `pi` | Dedicated adapter, managed extension/MCP bridge, and Claude-compatible response boundary | Pi JSONL; browser session adapter | Generated extension/registration E2E boundary; project/user trust and pinned SDK dependency diagnostics |
 | `augment` | Dedicated adapter/tool-name mapping and Pre/Post command-hook setup | No local transcript; server-side storage documented | Isolated Pre/Post matrix; local-hook and no-local-transcript limitation |
 | `crush` | Dedicated adapter and PreToolUse-only setup/response contract | No transcript/session adapter; upstream surface is partial | Isolated PreToolUse matrix; Windows generated-hook structure and partial-surface limitation |
@@ -328,7 +328,7 @@ environment should provide `run_id` in their hook events when supported.
 |-------|--------|-------------|
 | Claude Code | JSONL | Provided by IDE in hook data |
 | Cursor | SQLite | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` |
-| OpenCode | SQLite | `~/.local/share/opencode/opencode.db` (or `$OPENCODE_HOME/opencode.db`) |
+| OpenCode V1/V2 | SQLite | V1: `~/.local/share/opencode/opencode.db` (or `$OPENCODE_HOME/opencode.db`); V2: `$OPENCODE_DB` or `opencode debug paths db`, with the V1 path as fallback |
 | Copilot CLI | JSONL | `~/.copilot/session-state/events.jsonl` |
 | Codex | JSONL | `~/.codex/sessions/YYYY/MM/DD/*.jsonl` |
 | Cline / ZooCode | JSON array | `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/tasks/<task_id>/api_conversation_history.json` |
@@ -532,6 +532,21 @@ when the daemon starts, previously configured integrations are regenerated if
 their artifacts are stale or incomplete. Unconfigured IDE directories are not
 populated automatically.
 
+OpenCode setup detects the installed CLI generation before rendering the host
+plugin. OpenCode V1 is the `1.x` `opencode-ai` runtime and uses
+`@opencode-ai/plugin` plus the singular `plugin` configuration key. OpenCode V2
+is the `2.x` `@opencode/cli` runtime and uses `@opencode/plugin`,
+`Plugin.define({ id, setup })`, domain hooks, and the plural `plugins` key.
+Unknown or unavailable CLI versions retain the V1 compatibility fallback; an
+existing generated V2 plugin is preserved when the runtime cannot report a
+version. The two generations cannot share one active `opencode` executable on
+the same PATH. OpenCode is supported on the host and in the normal image only;
+the OpenShell image does not install or advertise OpenCode.
+
+See [OpenCode Support](OPENCODE.md) for the runtime support record, exact
+container versions, database path precedence, generated V1/V2 hook contracts,
+and validation limitations.
+
 ### Crush (Charmbracelet) — PreToolUse only
 
 Crush currently implements only the `PreToolUse` hook event. PostToolUse, UserPromptSubmit, and other events are proposed but not yet available (see their `docs/hooks/FUTURE.md`). This means post-tool redaction, prompt scanning, and transcript scanning are not enforced. ai-guardian's MCP advisory server provides supplementary coverage.
@@ -562,7 +577,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Junie | Low | MCP only, no hook enforcement |
 | AiderDesk | Low | Extension-based, limited testing |
 | OpenClaw | Low | Plugin-based, limited testing |
-| OpenCode | Medium | Tested — plugin hooks install and work correctly |
+| OpenCode | Medium | V1/V2 generated contracts, setup reconciliation, and path discovery are tested; real V2 host/container runtime and provider smoke evidence remain pending |
 | Pi | Low | Extension-based; generated bridge and session parsing are covered, but host-runtime testing is limited |
 | Crush | Low | Compatible with Claude Code format; only PreToolUse available |
 
@@ -619,7 +634,7 @@ JSON object so error payloads are not echoed.
 | Kiro | Exit code 2 (PreToolUse) or 1 (other) + stderr | stderr = error message |
 | Windsurf | Exit code 2 + stderr | stderr = error message |
 | Codex | Same as Claude Code for shared events; `PermissionRequest` uses the Codex nested deny decision | Pre-tool denials use `hookSpecificOutput.permissionDecision`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
-| OpenCode | Same as Claude Code | Same as Claude Code |
+| OpenCode V1/V2 | V1: Claude-compatible JSON bridge; V2: domain-hook throw/mutation | V1: Claude-compatible JSON bridge; V2: thrown block or mutable `event.result` |
 | Pi | Same as Claude Code | Same as Claude Code via the generated extension |
 | Crush | Same as Claude Code | Same as Claude Code |
 | Antigravity CLI | Flat JSON `decision` field (required — an absent decision denies) | `{"decision": "deny", "reason": "..."}`; a clean check returns `{"decision": "ask"}` |

@@ -558,6 +558,53 @@ class TestCheckHooks:
         )
         assert opencode["status"] == CheckStatus.WARN.value
 
+    def test_opencode_healthy_setup_is_reported_configured(
+        self, _isolate_config_dir, tmp_path, monkeypatch
+    ):
+        """A healthy verified OpenCode plugin must not report unreadable config."""
+        config_dir = tmp_path / "opencode"
+        plugin_dir = config_dir / "plugins"
+        bridge_dir = config_dir / "ai-guardian"
+        plugin_dir.mkdir(parents=True)
+        bridge_dir.mkdir()
+        plugin_path = plugin_dir / "ai-guardian.ts"
+        plugin_path.write_text(
+            "// ai-guardian-opencode-generation: v1\n" "// ai-guardian --ide opencode\n"
+        )
+        (bridge_dir / "ai-guardian-bridge.ts").write_text("bridge\n")
+        (config_dir / "opencode.json").write_text(
+            json.dumps(
+                {
+                    "plugin": [str(plugin_path)],
+                    "mcp": {"ai-guardian": {}},
+                }
+            )
+        )
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(config_dir))
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["opencode"],
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks.detect_opencode_runtime",
+                return_value={
+                    "version": "1.18.34",
+                    "generation": "v1",
+                    "package": "opencode-ai",
+                },
+            ),
+        ):
+            result = Doctor().check_hooks()
+
+        assert result.status == CheckStatus.PASS
+        assert "OpenCode: configured; MCP: healthy" in result.message
+        opencode = next(
+            item for item in result.integrations if item["ide"] == "opencode"
+        )
+        assert opencode["status"] == CheckStatus.PASS.value
+
     def test_partial_hooks(self, _isolate_config_dir, tmp_path):
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir()

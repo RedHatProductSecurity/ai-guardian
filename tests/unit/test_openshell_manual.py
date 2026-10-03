@@ -29,10 +29,6 @@ def _args(**overrides):
     values = {
         "prompt": "hello",
         "codex_model": None,
-        "opencode_agent": "build",
-        "opencode_model": "openai/gpt-5.6-luna",
-        "openai_model": "gpt-5.6-luna",
-        "anthropic_model": "claude-sonnet-4-6",
     }
     values.update(overrides)
     return argparse.Namespace(**values)
@@ -48,11 +44,7 @@ def _qualification_args(**overrides):
         "executor": "openshell",
         "timeout": 10,
         "keep": False,
-        "anthropic_model": "claude-sonnet-4-6",
-        "opencode_model": "openai/gpt-5.6-luna",
-        "openai_model": "gpt-5.6-luna",
         "codex_model": None,
-        "opencode_agent": "build",
         "provider": [],
     }
     values.update(overrides)
@@ -63,20 +55,8 @@ def test_manual_runner_has_expected_cases():
     runner = _load_runner()
 
     assert set(runner.CASES) == {
-        "claude",
         "codex",
-        "copilot",
-        "opencode-claude",
-        "opencode-openai",
-        "opencode-openai-api-key",
-        "pi-anthropic",
-        "pi-openai",
-        "pi-openai-codex",
     }
-    assert runner.CASES["pi-openai-codex"].known_failure is True
-    assert runner.CASES["opencode-openai-api-key"].requires_codex_api_key is True
-    assert runner.CASES["copilot"].requires_gateway_provider is True
-    assert runner.CASES["opencode-claude"].opencode_profile == "claude"
 
 
 def test_manual_runner_builds_requested_cli_commands():
@@ -89,62 +69,23 @@ def test_manual_runner_builds_requested_cli_commands():
         "--skip-git-repo-check",
         "hello",
     ]
-    assert runner.build_cli_command(runner.CASES["opencode-openai"], args) == [
-        "opencode",
-        "--agent",
-        "build",
-        "run",
-        "hello",
-        "--model",
-        "openai/gpt-5.6-luna",
-    ]
-    assert runner.build_cli_command(runner.CASES["opencode-claude"], args) == [
-        "opencode",
-        "--agent",
-        "claude",
-        "run",
-        "hello",
-        "--model",
-        "claude-sonnet-4-6",
-    ]
-    assert runner.build_cli_command(runner.CASES["opencode-openai-api-key"], args) == [
-        "opencode",
-        "--agent",
-        "build",
-        "run",
-        "hello",
-        "--model",
-        "openai/gpt-5.6-luna",
-    ]
-    assert runner.build_cli_command(runner.CASES["pi-openai-codex"], args) == [
-        "pi",
-        "-p",
-        "hello",
-        "--model",
-        "gpt-5.6-luna",
-        "--provider",
-        "openai-codex",
-    ]
 
 
 def test_manual_runner_parses_provider_overrides_without_values():
     runner = _load_runner()
 
-    assert runner.parse_provider_overrides(
-        ["opencode-openai=my-openai", "pi-anthropic=my-anthropic"]
-    ) == {
-        "opencode-openai": "my-openai",
-        "pi-anthropic": "my-anthropic",
+    assert runner.parse_provider_overrides(["codex=codex-provider"]) == {
+        "codex": "codex-provider",
     }
 
 
 def test_manual_runner_generates_names_within_openshell_limit():
     runner = _load_runner()
 
-    name = runner.sandbox_name("pi-openai-codex")
+    name = runner.sandbox_name("codex")
 
     assert len(name) <= 19
-    assert name.startswith("ag-pioc-")
+    assert name.startswith("ag-cdx-")
 
 
 def test_manual_runner_closes_stdin_for_noninteractive_commands():
@@ -168,21 +109,14 @@ def test_manual_runner_checks_for_partial_sandbox_after_failed_create():
     assert run.call_args.kwargs["capture_output"] is True
 
 
-def test_qualification_matrix_is_the_three_documented_provider_rows():
+def test_qualification_matrix_is_the_codex_provider_row():
     runner = _load_runner()
 
-    assert tuple(case.id for case in runner.QUALIFICATION_CASES) == (
-        "claude-vertex",
-        "codex-openshell",
-        "opencode-claude-vertex",
-    )
+    assert tuple(case.id for case in runner.QUALIFICATION_CASES) == ("codex-openshell",)
     assert [case.provider_class for case in runner.QUALIFICATION_CASES] == [
-        "google-vertex-ai",
         "openshell-codex",
-        "google-vertex-ai",
     ]
     assert all(case.requires_provider for case in runner.QUALIFICATION_CASES)
-    assert runner.QUALIFICATION_CASES[-1].profile == "claude"
 
 
 def test_compatibility_report_validation_rejects_raw_output():
@@ -217,11 +151,7 @@ def test_compatibility_report_records_image_digest_and_managed_cli_versions():
     assert metadata["digest"] == "unknown"
     assert metadata["base_digest"].startswith("sha256:")
     assert metadata["bundled_cli_versions"] == {
-        "claude": "inherited-from-base",
-        "copilot": "inherited-from-base",
         "codex": "0.154.0",
-        "opencode": "1.18.31",
-        "pi": "0.86.0",
     }
 
 
@@ -288,7 +218,7 @@ def test_qualification_case_checks_detection_restart_and_cleanup_without_output(
             runner.QUALIFICATION_CASES[0],
             args,
             ["ai-guardian"],
-            {"claude": "vertex-provider"},
+            {"codex": "codex-provider"},
         )
 
     assert result["result"] == "passed"
@@ -300,7 +230,7 @@ def test_qualification_case_checks_detection_restart_and_cleanup_without_output(
     assert result["steps"]["cleanup"]["status"] == "passed"
 
 
-def test_qualification_mode_writes_the_three_row_sanitized_report(tmp_path):
+def test_qualification_mode_writes_the_codex_report(tmp_path):
     runner = _load_runner()
     args = _qualification_args(report=tmp_path / "compatibility.json")
 
@@ -316,8 +246,8 @@ def test_qualification_mode_writes_the_three_row_sanitized_report(tmp_path):
             runner,
             "_run_quiet",
             side_effect=[
-                SimpleNamespace(returncode=0, stdout="OpenShell 0.0.116", stderr=""),
-                SimpleNamespace(returncode=0, stdout="OpenShell 0.0.116", stderr=""),
+                SimpleNamespace(returncode=0, stdout="OpenShell 0.1.3", stderr=""),
+                SimpleNamespace(returncode=0, stdout="OpenShell 0.1.3", stderr=""),
             ],
         ),
         patch.object(runner, "_command_available", return_value=True),
@@ -328,8 +258,6 @@ def test_qualification_mode_writes_the_three_row_sanitized_report(tmp_path):
     report = json.loads(args.report.read_text(encoding="utf-8"))
     assert report["sanitized"] is True
     assert [case["id"] for case in report["cases"]] == [
-        "claude-vertex",
         "codex-openshell",
-        "opencode-claude-vertex",
     ]
     assert "api_key" not in json.dumps(report).lower()

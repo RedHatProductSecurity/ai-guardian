@@ -37,10 +37,10 @@ other CLIs, document whether `--agent-provider NAME`, an additional profile, or
 a model selector exists.
 
 For OpenShell, keep the selector limited to the clients present in the
-published image. The current selector is `claude`, `copilot`, `codex`,
-`opencode`, and `pi`; host/container-only integrations and custom-image agents
-must remain out of the default OpenShell list until their image, policy, auth,
-and runtime evidence is complete.
+published image. The current selector is `codex` only. Claude support is
+deferred until OpenShell `0.1.3`; host/container-only integrations and
+custom-image agents must remain out of the default OpenShell list until their
+image, policy, auth, and runtime evidence is complete.
 
 ### Current Grok Build boundary
 

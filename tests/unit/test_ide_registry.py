@@ -63,7 +63,6 @@ def test_openshell_cli_registry_matches_the_published_image_scope():
         "claude",
         "copilot",
         "codex",
-        "opencode",
         "pi",
     )
     assert set(SUPPORTED_OPENSHELL_CLI_IDE_TYPES).issubset(set(SUPPORTED_CLI_IDE_TYPES))

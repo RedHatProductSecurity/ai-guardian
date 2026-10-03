@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Check the explicitly managed CLI versions in the OpenShell image.
+"""Check explicitly managed CLI versions in the support images.
 
-The OpenShell Dockerfile is the source of truth for the pinned versions.  This
-check reads its build arguments and compares them with stable versions
-published in the npm registry.  It intentionally covers only the CLI clients
-that the derived image explicitly installs or overrides; clients inherited
-from the OpenShell base image and GUI/editor integrations are outside this
-image-version check.
+The Dockerfiles are the source of truth for pinned versions. This check reads
+their build arguments and compares them with stable versions published in the
+npm registry. It intentionally covers only CLI clients explicitly installed
+by each image.
 
 Exit codes:
     0: All registry checks succeeded and no newer versions were found.
@@ -26,10 +24,11 @@ import requests
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DOCKERFILE = REPOSITORY_ROOT / "container" / "Dockerfile.openshell"
+DEFAULT_NORMAL_DOCKERFILE = REPOSITORY_ROOT / "container" / "Dockerfile"
 
-# Keep this mapping limited to clients whose versions are explicit Dockerfile
-# build arguments.
-CLI_VERSION_SPECS = {
+# Keep each mapping limited to clients whose versions are explicit build
+# arguments in that image.
+OPENSHELL_CLI_VERSION_SPECS = {
     "CODEX_VERSION": {
         "package": "@openai/codex",
         "name": "Codex CLI",
@@ -37,21 +36,20 @@ CLI_VERSION_SPECS = {
         "source": "npm registry",
         "registry": "https://www.npmjs.com/package/%40openai/codex",
     },
+}
+
+NORMAL_CLI_VERSION_SPECS = {
     "OPENCODE_VERSION": {
         "package": "opencode-ai",
-        "name": "OpenCode",
+        "name": "OpenCode V1",
         "lookup": "opencode-ai",
         "source": "npm registry",
         "registry": "https://www.npmjs.com/package/opencode-ai",
     },
-    "PI_VERSION": {
-        "package": "@earendil-works/pi-coding-agent",
-        "name": "Pi coding agent",
-        "lookup": "@earendil-works/pi-coding-agent",
-        "source": "npm registry",
-        "registry": "https://www.npmjs.com/package/%40earendil-works/pi-coding-agent",
-    },
 }
+
+# Backward-compatible public name for callers checking the OpenShell image.
+CLI_VERSION_SPECS = OPENSHELL_CLI_VERSION_SPECS
 
 _ARG_PATTERN = re.compile(
     r"^\s*ARG\s+(?P<name>[A-Z][A-Z0-9_]*_VERSION)=(?P<version>[^\s#]+)",
@@ -63,22 +61,32 @@ _SEMVER_PATTERN = re.compile(
 )
 
 
-def load_pinned_versions(dockerfile: Path) -> Dict[str, str]:
-    """Read the version build arguments used by the OpenShell Dockerfile."""
+def _specs_for_dockerfile(dockerfile: Path) -> Dict[str, dict]:
+    """Return the version specs belonging to a support image."""
+    if dockerfile.resolve() == DEFAULT_NORMAL_DOCKERFILE.resolve():
+        return NORMAL_CLI_VERSION_SPECS
+    return OPENSHELL_CLI_VERSION_SPECS
+
+
+def load_pinned_versions(
+    dockerfile: Path, specs: Optional[Dict[str, dict]] = None
+) -> Dict[str, str]:
+    """Read explicit CLI version arguments from a support Dockerfile."""
     contents = dockerfile.read_text(encoding="utf-8")
+    specs = specs or _specs_for_dockerfile(dockerfile)
     discovered = {
         match.group("name"): match.group("version")
         for match in _ARG_PATTERN.finditer(contents)
     }
 
-    missing = [name for name in CLI_VERSION_SPECS if name not in discovered]
+    missing = [name for name in specs if name not in discovered]
     if missing:
         missing_args = ", ".join(missing)
         raise ValueError(
             f"Dockerfile is missing CLI version argument(s): {missing_args}"
         )
 
-    return {name: discovered[name] for name in CLI_VERSION_SPECS}
+    return {name: discovered[name] for name in specs}
 
 
 def _parse_semver(version: str) -> Optional[Tuple[int, int, int, Optional[str]]]:
@@ -154,13 +162,15 @@ def check_versions(
     Returns ``(results, has_updates, has_errors)``.  ``version_lookup`` is
     injectable so unit tests do not require network access.
     """
-    pinned_versions = load_pinned_versions(dockerfile)
+    specs = _specs_for_dockerfile(dockerfile)
+    pinned_versions = load_pinned_versions(dockerfile, specs)
     results: Dict[str, dict] = {}
     has_updates = False
     has_errors = False
 
-    print("Checking OpenShell CLI version updates...\n")
-    for build_arg, spec in CLI_VERSION_SPECS.items():
+    image_name = "normal" if specs is NORMAL_CLI_VERSION_SPECS else "OpenShell"
+    print(f"Checking {image_name} CLI version updates...\n")
+    for build_arg, spec in specs.items():
         pinned_version = pinned_versions[build_arg]
         latest_version = version_lookup(spec["lookup"])
         comparison = (
@@ -202,14 +212,36 @@ def check_versions(
     return results, has_updates, has_errors
 
 
+def check_all_versions(
+    output_file: Optional[Path] = None,
+    version_lookup: Callable[[str], Optional[str]] = get_latest_cli_version,
+) -> Tuple[Dict[str, dict], bool, bool]:
+    """Check the OpenShell and normal support-image pins together."""
+    combined: Dict[str, dict] = {}
+    has_updates = False
+    has_errors = False
+    for dockerfile in (DEFAULT_DOCKERFILE, DEFAULT_NORMAL_DOCKERFILE):
+        results, updates, errors = check_versions(
+            dockerfile, version_lookup=version_lookup
+        )
+        combined.update(results)
+        has_updates = has_updates or updates
+        has_errors = has_errors or errors
+
+    if output_file is not None:
+        output_file.write_text(json.dumps(combined, indent=2) + "\n", encoding="utf-8")
+        print(f"Results written to {output_file}")
+    return combined, has_updates, has_errors
+
+
 def main() -> int:
     """Run the command-line version check."""
-    parser = argparse.ArgumentParser(description="Check OpenShell CLI versions")
+    parser = argparse.ArgumentParser(description="Check support-image CLI versions")
     parser.add_argument(
         "--dockerfile",
         type=Path,
-        default=DEFAULT_DOCKERFILE,
-        help="OpenShell Dockerfile containing the version pins",
+        default=None,
+        help="Specific Dockerfile to check; by default, check both support images",
     )
     parser.add_argument(
         "--output",
@@ -220,10 +252,13 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        _, has_updates, has_errors = check_versions(args.dockerfile, args.output)
+        if args.dockerfile is None:
+            _, has_updates, has_errors = check_all_versions(args.output)
+        else:
+            _, has_updates, has_errors = check_versions(args.dockerfile, args.output)
     except (OSError, ValueError) as error:
         print(
-            f"Error: unable to check OpenShell CLI versions: {error}", file=sys.stderr
+            f"Error: unable to check support-image CLI versions: {error}", file=sys.stderr
         )
         return 2
 
@@ -231,10 +266,10 @@ def main() -> int:
         print("\n⚠️  One or more CLI version checks could not be completed")
         return 2
     if has_updates:
-        print("\n⚠️  New OpenShell CLI versions are available")
+        print("\n⚠️  New support-image CLI versions are available")
         return 1
 
-    print("\n✅ All pinned OpenShell CLI versions are current")
+    print("\n✅ All pinned support-image CLI versions are current")
     return 0
 
 

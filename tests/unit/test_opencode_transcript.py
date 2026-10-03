@@ -106,6 +106,59 @@ class TestGetOpenCodeDbPath(unittest.TestCase):
                     result = get_opencode_db_path()
                     self.assertIsNone(result)
 
+    def test_explicit_database_path_override(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "custom.db")
+            sqlite3.connect(db_path).close()
+            with mock.patch.dict(os.environ, {"OPENCODE_DB": db_path}):
+                self.assertEqual(get_opencode_db_path(), db_path)
+
+    def test_v2_debug_path_lookup(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "v2.db")
+            sqlite3.connect(db_path).close()
+            env = dict(os.environ)
+            env.pop("OPENCODE_HOME", None)
+            env.pop("OPENCODE_DB", None)
+            with mock.patch.dict(os.environ, env, clear=True):
+                with (
+                    mock.patch(
+                        "ai_guardian.scanners.transcript.opencode.shutil.which",
+                        return_value="opencode",
+                    ),
+                    mock.patch(
+                        "ai_guardian.scanners.transcript.opencode.subprocess.run",
+                        return_value=mock.Mock(stdout=f"{db_path}\n", stderr=""),
+                    ),
+                ):
+                    self.assertEqual(get_opencode_db_path(), db_path)
+
+    def test_v2_debug_path_lookup_accepts_quoted_stderr(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "v2.db")
+            sqlite3.connect(db_path).close()
+            env = dict(os.environ)
+            env.pop("OPENCODE_HOME", None)
+            env.pop("OPENCODE_DB", None)
+            with mock.patch.dict(os.environ, env, clear=True):
+                with (
+                    mock.patch(
+                        "ai_guardian.scanners.transcript.opencode.shutil.which",
+                        return_value="opencode",
+                    ),
+                    mock.patch(
+                        "ai_guardian.scanners.transcript.opencode.subprocess.run",
+                        return_value=mock.Mock(
+                            stdout="", stderr=f"database: '{db_path}'\n"
+                        ),
+                    ),
+                ):
+                    self.assertEqual(get_opencode_db_path(), db_path)
+
+    def test_in_memory_database_is_not_discoverable(self):
+        with mock.patch.dict(os.environ, {"OPENCODE_DB": ":memory:"}, clear=True):
+            self.assertIsNone(get_opencode_db_path())
+
     def test_no_env_no_default(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             env = dict(os.environ)

@@ -58,15 +58,15 @@ validated. This is a runtime-support boundary, not a package-license restriction
 
 | CLI/scenario | Provider/authentication | Status |
 | --- | --- | --- |
-| `codex` | Gateway Codex provider from OAuth or OpenAI API-key login | Supported; v0.1.2 API-key qualification passed |
-| `opencode` + OpenAI model | Existing provider or Codex API-key auto-setup | Supported; v0.1.2 qualification passed |
+| `codex` | Native OpenShell Codex provider | Supported on qualified OpenShell releases |
 
-The tray updates its CLI and Pi-provider choices when Runtime changes and
-rejects unsupported combinations before creating a sandbox. Credential absence
-is reported separately from an unsupported scenario.
+The tray updates its CLI choices when Runtime changes and rejects unsupported
+combinations before creating a sandbox. Credential absence is reported
+separately from an unsupported scenario.
 
 OpenShell is the default runtime for new sandboxes, including the tray's
-Create sandbox form. Its selector exposes only the qualified combinations above.
+Create sandbox form. Its selector exposes only Codex; Claude support is deferred
+until OpenShell `0.1.3`, and OpenCode is not an OpenShell option.
 Use `--runtime container` explicitly when Docker/Podman
 is required; the container runtime remains available as a simpler fallback.
 
@@ -74,11 +74,13 @@ is required; the container runtime remains available as a simpler fallback.
 
 - For `--runtime container`, install Docker or Podman. The command uses
   `CONTAINER_ENGINE` when set, otherwise it defaults to `podman`.
-- For `--runtime openshell`, install the OpenShell CLI and connect it to an
-  OpenShell gateway, both at v0.1.2 or newer. The command uses `OPENSHELL_CLI`
+- For `--runtime openshell`, install a supported OpenShell CLI and connect it to
+  an OpenShell gateway. The command uses `OPENSHELL_CLI`
   when set, otherwise it invokes `openshell`.
-- Import provider profiles into the active gateway before creation. Codex needs
-  `codex` and `openai`; Claude Vertex needs `google-cloud`.
+- OpenShell CLI and gateway releases must be `0.1.2` or newer. Older releases
+  are outside the supported boundary.
+- Import the Codex provider profiles into the active gateway before creation.
+  Codex needs `codex` and `openai`.
 - Make local provider credentials available before creation. Credentials are
   stored by the gateway and are never passed as command arguments.
 - The default images are
@@ -243,24 +245,6 @@ ai-guardian sandbox connect guardian-codex
 codex exec --skip-git-repo-check "hello"
 ```
 
-### OpenCode with OpenAI
-
-> OpenCode is not currently supported for OpenShell v0.1.2. This section is
-> retained as provider-profile reference only; it is not a qualified workflow.
-
-```bash
-ai-guardian sandbox create \
-    --runtime openshell \
-    --name guardian-opencode \
-    --cli opencode \
-    --opencode-agent-profile build \
-    --repo .
-ai-guardian sandbox connect guardian-opencode
-
-# Inside the sandbox:
-opencode --agent build run "hello" --model openai/gpt-5.6-luna
-```
-
 For multiple policy overlays, repeat the option in the same create command:
 
 ```bash
@@ -270,11 +254,12 @@ ai-guardian sandbox create --runtime openshell --name guardian-codex \
     --policy ./policy-two.yaml
 ```
 
-The `--cli` option selects the executable. Use
-`--cli opencode --opencode-agent-profile NAME` when selecting an OpenCode
-agent profile; `--agent` remains a legacy alias. For Pi, use
-`--agent-provider NAME` to select Pi's model provider. The OpenShell
-`--provider` option remains separate and attaches an OpenShell gateway provider.
+The `--cli` option selects the executable. For the normal container runtime,
+use `--cli opencode --opencode-agent-profile NAME` when selecting an OpenCode
+agent profile; `--agent` remains a legacy alias. OpenCode is not supported by
+the OpenShell runtime. For Container Pi, use `--agent-provider NAME` to select
+Pi's model provider. The OpenShell `--provider` option attaches a gateway
+provider for Codex.
 
 The runtime option is optional for lifecycle commands. When supplied, it may
 appear before or after the lifecycle verb:
@@ -351,10 +336,8 @@ working-directory picker also skips its display-placement Tk parent when Tk is
 disabled and uses the native picker instead.
 
 The form separates the selected **CLI** from the **OpenCode agent profile** and
-the CLI's **model provider**. For OpenShell, the form exposes only the qualified
-`codex` and OpenCode/OpenAI combinations documented above. When `opencode` is
-selected, the `build` profile is used. Select `codex` in the **CLI** field for
-the native OpenAI Codex agent.
+the CLI's **model provider**. OpenShell exposes Codex only. When `opencode` is
+selected for the normal container runtime, the `build` profile is used.
 
 On macOS with multiple displays, modal windows opened from the tray menu open
 on the display containing the tray menu interaction. This includes About and
@@ -428,8 +411,8 @@ Common options for `sandbox create` are:
 | `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Creation defaults to OpenShell; lifecycle commands auto-detect it by name when omitted. |
 | `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
 | `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |
-| `--cli NAME` | Select the CLI executable. Optional; defaults to Claude for OpenShell and Codex for containers. |
-| `--opencode-agent-profile NAME` | OpenCode agent profile. Required with `--cli opencode`; valid only with that CLI and does not select the executable. |
+| `--cli NAME` | Select the CLI executable. Optional; defaults to Codex for both runtimes. |
+| `--opencode-agent-profile NAME` | OpenCode agent profile for the normal container runtime. Required with `--cli opencode`; valid only with that CLI and does not select the executable. |
 | `--agent NAME` | Legacy alias for `--opencode-agent-profile`. |
 | `--image IMAGE` | Override the runtime image. `--base` is an alias. An explicit value is passed through unchanged; an invalid reference fails instead of falling back to the default. |
 | `--repo DIR` | Mount the repository into a container or upload it to OpenShell at `/sandbox/repo`. |
@@ -438,22 +421,21 @@ Common options for `sandbox create` are:
 | `--restore-config latest` | Restore the latest saved snapshot for the named sandbox as its initial configuration. Requires `--name`; cannot be combined with `--profile` or `--config-dir`. |
 | `--config-dir DIR` | Use `ai-guardian.json` from DIR as the initial config snapshot when no sandbox-local config exists. `--guardian-home` is an alias. |
 | `--env KEY=VALUE` | Add an environment value; repeatable. |
-| `--agent-provider NAME` | Select the model provider used by Pi. Container supports `anthropic`, `openai`, and `openai-codex`; OpenShell supports `anthropic` and experimental direct-API `openai`. |
+| `--agent-provider NAME` | Select the model provider used by Pi in Container sandboxes. Container supports `anthropic`, `openai`, and `openai-codex`; OpenShell does not expose Pi. |
 | `--provider NAME` | Attach an OpenShell gateway provider; repeatable. |
 | `--openshell-provider NAME` | Alias for `--provider`. |
 | `--policy FILE` | Add an OpenShell policy overlay; repeatable. The baseline and selected-CLI fragments are included automatically. |
 | `--label KEY=VALUE` | Add a runtime label; repeatable. |
-| `--model MODEL` | Select the CLI model; for OpenShell inference routes, defaults to `$AI_GUARDIAN_OPEN_SHELL_MODEL` or `claude-sonnet-4-6`. |
-| `--api-key KEY` | Pass a direct Anthropic key to container setup, or use it only while creating an OpenShell Claude provider. It is never placed in sandbox runtime arguments. |
+| `--model MODEL` | Select the CLI model; OpenShell uses `$AI_GUARDIAN_OPEN_SHELL_MODEL` when set or the CLI default. |
+| `--api-key KEY` | Pass a direct Anthropic key to Container setup. It is never placed in sandbox runtime arguments. |
 
 In the tray's **Create sandbox** form, **CLI** is a runtime-dependent dropdown:
-Container exposes its broader CLI set, while OpenShell contains `claude`,
-`copilot`, `codex`, `opencode`, and `pi`. Selecting `opencode` enables the
+Container exposes its broader CLI set, while OpenShell contains `codex` only.
+Selecting `opencode` enables the
 **OpenCode agent profile** field; selecting `pi` enables the **Pi provider**
-field. The provider choices are runtime-dependent: Container contains
-`anthropic`, `openai`, and `openai-codex`; OpenShell contains `anthropic`,
-`openai`, and experimental `openai-codex`. Unsupported combinations are
-rejected before sandbox creation.
+field. Container provider choices are `anthropic`, `openai`, and
+`openai-codex`; OpenShell uses gateway providers for Codex. Unsupported
+combinations are rejected before sandbox creation.
 
 The **Image / base** field remains editable for registry references, local
 Dockerfile paths, and community sandbox names. Its **Browse...** button lists
@@ -492,41 +474,26 @@ Gateway-only credentials require an explicit existing provider, for example
 `--provider ai-guardian-openai`; omitting it does not attach credentials to an
 already-created sandbox. Existing providers can always be selected explicitly
 with repeatable `--provider` options. Running sandboxes may require a restart
-or recreation after provider credentials change. Claude
-Vertex AI setup is selected by `ANTHROPIC_VERTEX_PROJECT_ID` or
-`VERTEX_AI_PROJECT_ID`; it creates or updates and attaches a gateway-managed
-`google-cloud` provider from ADC, then binds native Vertex endpoints to that
-provider. OpenShell v0.1.2 injects only opaque credentials and projects the
-non-secret project and region values into the workload. Real provider values
-and credentials are kept out of the sandbox's `--env` and `--upload` arguments.
-Claude Code receives `CLAUDE_CODE_USE_VERTEX=1` and uses standard Google ADC
-through OpenShell's metadata/provider path; no `inference.local` route or
-`openshell inference` command is used. Run `claude --bare` explicitly, matching
-OpenShell's documented provider-backed workflow; AI Guardian does not install a
-    persistent wrapper. Explicit automated `claude --print ...` commands passed
-    during creation still receive `--bare` when it is missing.
+or recreation after provider credentials change. Provider values and credentials
+remain in the gateway and are not passed in sandbox command arguments or
+uploaded to the sandbox.
 
-The active gateway must import OpenShell's `google-cloud` provider profile
-before sandbox creation. Import it once per gateway:
+For Codex, import both provider profiles before the first sandbox. Set
+`OPENSHELL_VERSION` to the exact supported release being qualified:
 
 ```bash
-openshell profile import \
-    --url https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/google-cloud.yaml \
+export OPENSHELL_VERSION=0.1.2
+curl -fsSL \
+    "https://raw.githubusercontent.com/NVIDIA/OpenShell/v${OPENSHELL_VERSION}/providers/codex.yaml" \
+    -o /tmp/openshell-codex.yaml
+curl -fsSL \
+    "https://raw.githubusercontent.com/NVIDIA/OpenShell/v${OPENSHELL_VERSION}/providers/openai.yaml" \
+    -o /tmp/openshell-openai.yaml
+openshell provider profile import \
+    --file /tmp/openshell-codex.yaml \
     --global
-```
-
-The host must also have Google Application Default Credentials available so
-OpenShell can store refresh material in its gateway credential store. ADC files
-and secret values are not uploaded to the sandbox.
-
-For Codex, import both provider profiles before the first sandbox:
-
-```bash
-openshell profile import \
-    --url https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/codex.yaml \
-    --global
-openshell profile import \
-    --url https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/openai.yaml \
+openshell provider profile import \
+    --file /tmp/openshell-openai.yaml \
     --global
 ```
 
@@ -534,77 +501,9 @@ AI Guardian selects `codex` for local OAuth credentials and `openai` for a
 Codex API-key login. The provider value remains in the gateway; it is never
 placed in sandbox command arguments.
 
-Pi's `--agent-provider` selection is independent of the OpenShell gateway
-provider. For Pi's Anthropic-compatible native provider, select the implemented
-provider explicitly and pass the Pi provider and model separately:
-
-```bash
-ai-guardian sandbox create --runtime openshell \
-    --cli pi \
-    --agent-provider anthropic \
-    --model claude-sonnet-4-6 \
-    --provider ai-guardian-claude \
-    --repo .
-```
-
-The named OpenShell provider must already exist on the active gateway. Other Pi
-providers remain Pi providers; they are not reinterpreted as Claude inference
-and are not advertised by the OpenShell form. The experimental Pi `openai`
-route requires an OpenAI API-key provider. `openai-codex` is not supported with
-OpenShell resolver-backed OAuth and is not offered by the tray. OpenShell's
-Codex provider exposes resolver-backed credentials for native Codex; for a
-ChatGPT Plus/Pro subscription, select `--cli codex` for the fully supported
-native path.
-
-OpenCode is a CLI with its own agent profiles and model/provider selection.
-The profile is required whenever `--cli opencode` is selected. Use the explicit
-two-level form when an OpenCode profile should use Claude:
-
-```bash
-ai-guardian sandbox create --runtime openshell \
-    --cli opencode \
-    --opencode-agent-profile claude \
-    --model claude-sonnet-4-6 \
-    --provider vertex-provider \
-    --repo .
-```
-
-This `opencode` + `claude` + Claude/Vertex combination is part of manual
-qualification. The
-`--cli` value selects the executable; `--opencode-agent-profile claude` selects the tested
-OpenCode profile; and `--model` plus `--provider` select the inference backend.
-
-Here `--opencode-agent-profile claude` is an OpenCode agent profile; `--model`
-selects the provider-native model. OpenCode's `build` and `plan` names are
-profiles, not providers. OpenShell v0.1.2 does not provide a virtual inference
-endpoint, so OpenCode must be configured for the attached provider's native
-endpoint and the selected model. OpenCode has no Claude-style `--bare` flag;
-launch it normally, or use `opencode --agent NAME`.
-
-### OpenCode with OpenAI
-
-For gateway-managed OpenAI credentials, attach an existing OpenShell provider
-explicitly. Do not put `OPENAI_API_KEY` in the sandbox environment:
-
-```bash
-ai-guardian sandbox create --runtime openshell \
-    --name guardian-opencode \
-    --base localhost/ai-guardian-openshell:review-2474 \
-    --cli opencode \
-    --opencode-agent-profile build \
-    --model openai/gpt-5.6-luna \
-    --provider ai-guardian-openai \
-    --repo .
-ai-guardian sandbox exec guardian-opencode -- \
-    opencode --agent build run "hello" --model openai/gpt-5.6-luna
-```
-
-An existing OpenAI provider such as `ai-guardian-openai` must already exist on
-active OpenShell gateway. Its
-credential remains gateway-managed; only provider name is passed to sandbox.
-Tray **Create sandbox** discovers compatible OpenAI provider instances and
-selects one automatically when exactly one exists. CLI commands do not infer
-this provider unless matching local credentials are available.
+The named OpenShell provider must already exist on the active gateway. The Codex
+provider exposes resolver-backed credentials for native Codex; for a ChatGPT
+Plus/Pro subscription, select `--cli codex` for the supported native path.
 
 ## Manual Live Provider Smoke Tests
 
@@ -624,57 +523,34 @@ python container/tests/test_openshell_agents.py \
     --case codex
 ```
 
-Available cases are `claude`, `codex`, `copilot`, `opencode-claude`,
-`opencode-openai`,
-`opencode-openai-api-key`, `pi-anthropic`, `pi-openai`, and `pi-openai-codex`.
-Run multiple cases with `--all`. Generic OpenCode can use an existing
-OpenAI-compatible gateway provider, for example:
-
-```bash
-python container/tests/test_openshell_agents.py \
-    --case opencode-openai \
-    --provider opencode-openai=my-openai-provider
-```
-
-Alternatively, omit `--provider` when the host Codex login is API-key based;
-the sandbox command will create or reuse `ai-guardian-codex` for an
-OpenAI-shaped model. A Codex OAuth login does not provide an OpenAI Platform
-API key, so use the native `codex` case for that login.
+The available case is `codex`. The sandbox command will create or reuse the
+configured gateway provider when credentials permit;
+provider names remain gateway-side and are not written to sandbox arguments.
 
 The default executor is `openshell sandbox exec`, which works across gateway
 compute drivers. `--executor podman` is available only when the active gateway
-exposes the sandbox as a local Podman container. The Pi `openai-codex` case is
-reported as an expected failure while Pi cannot consume OpenShell resolver-backed
-OAuth credentials; native `codex` is the supported ChatGPT subscription path.
+exposes the sandbox as a local Podman container.
 
 ### Versioned compatibility qualification
 
 The OpenShell integration remains experimental and is supported only by
-versioned manual qualification. AI Guardian does not promise generic
-OpenShell compatibility or block a sandbox solely because its OpenShell
-version differs from a qualified version.
+versioned manual qualification on OpenShell CLI and gateway releases v0.1.2
+or newer. Older releases are outside the supported boundary. Beyond that
+minimum, AI Guardian does not promise generic OpenShell compatibility solely
+because a version differs from a qualified release.
 
-The qualification matrix has three rows:
+The qualification matrix covers the supported OpenShell client:
 
 | Row | Agent/profile | Provider class | Result source |
 | --- | --- | --- | --- |
-| `claude-vertex` | Claude Code / default | Google Vertex AI | Manual provider run |
 | `codex-openshell` | Codex / native | OpenShell Codex provider | Manual provider run |
-| `opencode-claude-vertex` | OpenCode / `claude` | Google Vertex AI | Manual provider run |
 
-The current v0.1.2 qualification status is recorded as follows:
+Codex qualification applies only to the OpenShell CLI and gateway release
+recorded in the report. Claude support is deferred until OpenShell `0.1.3`.
 
 | AI Guardian | OpenShell CLI/gateway | OpenShell base digest | CI contract | Manual qualification |
 | --- | --- | --- | --- | --- |
-| `1.19.0-dev` image | `0.1.2` | NVIDIA Ubuntu 24.04 pinned digest | Credential-free | Codex and OpenCode/OpenAI passed; Claude/Vertex blocked by NVIDIA/OpenShell#3973 |
-
-Additional client status:
-
-| Client | Result |
-| --- | --- |
-| Pi/OpenAI | Not qualified; Pi client connection failure while direct OpenAI API requests succeed |
-| OpenCode/Claude/Vertex | Not qualified; depends on OpenShell Vertex metadata |
-| Pi/Claude/Vertex | Not qualified |
+| `1.19.0-dev` image | Recorded release | NVIDIA Ubuntu 24.04 pinned digest | Credential-free | Codex qualification is provider-dependent |
 
 Run the matrix against the exact image tag being qualified. Provider values are
 gateway profile names only; credentials remain owned by the developer's
@@ -684,9 +560,7 @@ OpenShell gateway and are never arguments to the runner:
 python container/tests/test_openshell_agents.py \
     --qualify \
     --image quay.io/redhatproductsecurity/ai-guardian-openshell:1.18.0 \
-    --provider claude=ai-guardian-google-vertex-ai \
     --provider codex=ai-guardian-codex \
-    --provider opencode-claude=ai-guardian-google-vertex-ai \
     --report openshell-compatibility-report.json
 ```
 
@@ -861,7 +735,7 @@ namespaces or when you want to force a specific runtime:
 
 ```bash
 ai-guardian sandbox status guardian-codex
-ai-guardian sandbox status --json guardian-claude
+  ai-guardian sandbox status --json guardian-codex
 ai-guardian sandbox list --json
 ai-guardian sandbox list --runtime container --json
 ai-guardian sandbox list --runtime openshell --json
@@ -904,11 +778,11 @@ session, so exiting either shell does not replace or terminate the sandbox's
 main process:
 
 ```bash
-ai-guardian sandbox stop guardian-claude
-ai-guardian sandbox start guardian-claude
-ai-guardian sandbox restart guardian-claude
-ai-guardian sandbox exec guardian-claude -- env
-ai-guardian sandbox delete guardian-claude
+ai-guardian sandbox stop guardian-codex
+ai-guardian sandbox start guardian-codex
+ai-guardian sandbox restart guardian-codex
+ai-guardian sandbox exec guardian-codex -- env
+ai-guardian sandbox delete guardian-codex
 ```
 
 Do not use `delete` when the sandbox may be needed again; use `stop` instead.

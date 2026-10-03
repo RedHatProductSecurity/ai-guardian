@@ -20,6 +20,7 @@ from ai_guardian.constants import (
     MANAGED_HOOK_EVENTS_BY_IDE,
 )
 from ai_guardian.ide_paths import resolve_ide_config_path
+from ai_guardian.opencode_support import detect_opencode_runtime
 from ai_guardian.setup.utils import (
     _create_vbs_wrapper,
     _is_ai_guardian_command,
@@ -65,6 +66,7 @@ def _tag_antigravity_events(template_hooks: Dict) -> Dict:
 ANTIGRAVITY_HOOK_NAME = "ai-guardian"
 _TYPESCRIPT_VERSION_TOKEN = "__AI_GUARDIAN_VERSION__"
 _TYPESCRIPT_VERSION_MARKER = "// ai-guardian-generated-version:"
+_OPENCODE_GENERATION_MARKER = "// ai-guardian-opencode-generation:"
 _PI_MCP_ENABLED_TOKEN = "__AI_GUARDIAN_PI_MCP_ENABLED__"
 
 logger = logging.getLogger(__name__)
@@ -285,6 +287,18 @@ def _typescript_source_version(source: str) -> Optional[str]:
         if line.startswith(_TYPESCRIPT_VERSION_MARKER):
             return line.split(":", 1)[1].strip()
     return None
+
+
+def _opencode_plugin_generation(source: str) -> str:
+    """Identify the OpenCode plugin contract used by generated source."""
+    for line in source.splitlines()[:8]:
+        if line.startswith(_OPENCODE_GENERATION_MARKER):
+            return line.split(":", 1)[1].strip()
+    if '"@opencode/plugin"' in source or "'@opencode/plugin'" in source:
+        return "v2"
+    if '"@opencode-ai/plugin"' in source or "'@opencode-ai/plugin'" in source:
+        return "v1"
+    return "unknown"
 
 
 class IDESetup:
@@ -1049,7 +1063,10 @@ class IDESetup:
 
         config_path = Path(config_path_str).expanduser()
         if not integrity:
-            if self.check_hooks_configured(config_path, ide_type):
+            if (
+                self.check_hooks_configured(config_path, ide_type)
+                and ide_type != "opencode"
+            ):
                 return True, f"{ide_name}: configured"
             verification = self.verify_hooks_for_ide(
                 ide_type, scope=scope, project_dir=project_dir
@@ -1057,6 +1074,12 @@ class IDESetup:
             diagnostics = verification.get("diagnostics", [])
             if diagnostics:
                 return False, f"{ide_name}: needs attention ({diagnostics[0]})"
+            if ide_type == "opencode" and verification.get("healthy") is True:
+                # OpenCode must always be verified instead of using the older
+                # marker-only fast path so runtime/plugin generation mismatches
+                # are detected. A healthy verification is still a configured
+                # result; do not fall through to the empty-detail fallback.
+                return True, f"{ide_name}: configured"
             if verification["events"] and all(
                 status == "missing" for status in verification["events"].values()
             ):
@@ -1292,6 +1315,12 @@ class IDESetup:
             return result
         path = Path(path_value).expanduser()
         if config.get("plugin_file"):
+            runtime = detect_opencode_runtime() if ide_type == "opencode" else {}
+            runtime_generation = runtime.get("generation", "unknown")
+            if ide_type == "opencode":
+                result["opencode_version"] = runtime.get("version")
+                result["opencode_generation"] = runtime_generation
+                result["opencode_package"] = runtime.get("package")
             host_config_path = _resolve_opencode_config()
             host_config, host_config_error = _load_cli_config(host_config_path)
             result["host_config_path"] = str(host_config_path)
@@ -1309,10 +1338,28 @@ class IDESetup:
                 content = plugin_file.read_text(encoding="utf-8")
             except OSError:
                 content = ""
+            plugin_generation = _opencode_plugin_generation(content)
+            if (
+                ide_type == "opencode"
+                and runtime_generation in {"v1", "v2"}
+                and plugin_generation in {"v1", "v2"}
+                and runtime_generation != plugin_generation
+            ):
+                result["diagnostics"].append(
+                    "OpenCode runtime "
+                    f"{runtime_generation} does not match installed plugin "
+                    f"{plugin_generation}"
+                )
+            if ide_type == "opencode":
+                result["plugin_generation"] = plugin_generation
             if not bridge_file.is_file() or not self.check_hooks_configured(
                 path, ide_type
             ):
                 status = "missing"
+            elif result["diagnostics"]:
+                status = "changed"
+            elif plugin_generation not in {"v1", "v2"}:
+                status = "changed"
             elif not (
                 f"--ide {ide_type}" in content
                 or f'AI_GUARDIAN_IDE_TYPE: "{ide_type}"' in content
@@ -1761,6 +1808,14 @@ class IDESetup:
                 return False
             if "ai-guardian" not in plugin_source:
                 return False
+            runtime_generation = detect_opencode_runtime().get("generation", "unknown")
+            plugin_generation = _opencode_plugin_generation(plugin_source)
+            if (
+                runtime_generation in {"v1", "v2"}
+                and plugin_generation in {"v1", "v2"}
+                and runtime_generation != plugin_generation
+            ):
+                return True
             if _typescript_source_version(
                 plugin_source
             ) is None and not self.check_hooks_configured(config_path, ide_type):
@@ -2471,13 +2526,26 @@ class IDESetup:
                         return False
                 except Exception:
                     return False
+                plugin_generation = _opencode_plugin_generation(content)
+                runtime_generation = detect_opencode_runtime().get(
+                    "generation", "unknown"
+                )
+                if (
+                    runtime_generation in {"v1", "v2"}
+                    and plugin_generation in {"v1", "v2"}
+                    and runtime_generation != plugin_generation
+                ):
+                    return False
                 config_file = _resolve_opencode_config()
                 if not config_file.exists():
                     return False
                 cfg, config_error = _load_cli_config(config_file)
                 if config_error or cfg is None:
                     return False
-                registered_plugins = cfg.get("plugin", cfg.get("plugins", []))
+                registration_key = "plugins" if plugin_generation == "v2" else "plugin"
+                registered_plugins = cfg.get(registration_key, [])
+                if not isinstance(registered_plugins, list):
+                    return False
                 return str(plugin_file) in registered_plugins
 
             if ide_config.get("extension_file"):
@@ -2628,11 +2696,34 @@ class IDESetup:
         """
         return _strip_jsonc_comments(text)
 
+    @staticmethod
+    def _opencode_generation(plugin_file: Optional[Path] = None) -> str:
+        """Select OpenCode's plugin generation without losing an existing V2 setup."""
+        runtime = detect_opencode_runtime()
+        generation = runtime.get("generation")
+        if generation in {"v1", "v2"}:
+            return generation
+
+        if plugin_file is not None and plugin_file.is_file():
+            try:
+                generation = _opencode_plugin_generation(
+                    plugin_file.read_text(encoding="utf-8")
+                )
+            except OSError:
+                generation = "unknown"
+            if generation in {"v1", "v2"}:
+                return generation
+
+        # V1 is the compatibility fallback when the CLI is not installed or
+        # cannot report its version.  Existing V2 artifacts are preserved above.
+        return "v1"
+
     def _register_opencode_plugin(
         self,
         plugin_file: Path,
         plugins_dir: Path,
         dry_run: bool = False,
+        generation: Optional[str] = None,
     ) -> Optional[str]:
         """Register plugin in opencode.json/opencode.jsonc config.
 
@@ -2640,9 +2731,15 @@ class IDESetup:
         """
         config_file = _resolve_opencode_config()
         plugin_path = str(plugin_file)
+        generation = generation or self._opencode_generation(plugin_file)
+        config_key = "plugins" if generation == "v2" else "plugin"
+        alternate_key = "plugin" if config_key == "plugins" else "plugins"
 
         if dry_run:
-            return f"  Register plugin in: {config_file}\n"
+            return (
+                f"  Register plugin in: {config_file} "
+                f"(OpenCode {generation}; {config_key})\n"
+            )
 
         config, config_error = _load_cli_config(config_file)
         if config_error:
@@ -2659,13 +2756,23 @@ class IDESetup:
                 "Fix the file before rerunning setup."
             )
 
-        plugins = config.get("plugin", config.get("plugins", []))
-        needs_write = "plugins" in config or "plugin" not in config
+        plugins = []
+        for key in (config_key, alternate_key):
+            entries = config.get(key, [])
+            if isinstance(entries, list):
+                for entry in entries:
+                    if entry not in plugins:
+                        plugins.append(entry)
+        needs_write = (
+            config_key not in config
+            or alternate_key in config
+            or config.get(config_key) != plugins
+        )
         if plugin_path not in plugins:
             plugins.append(plugin_path)
             needs_write = True
-        config.pop("plugins", None)
-        config["plugin"] = plugins
+        config.pop(alternate_key, None)
+        config[config_key] = plugins
         if needs_write:
             config_file.parent.mkdir(parents=True, exist_ok=True)
             config_file.write_text(
@@ -2713,6 +2820,13 @@ class IDESetup:
             "bridge_file", "ai-guardian-bridge.ts"
         )
         legacy_bridge_file = plugins_dir / "ai-guardian-bridge.ts"
+        runtime = detect_opencode_runtime() if ide_type == "opencode" else {}
+        generation = (
+            runtime.get("generation")
+            if runtime.get("generation") in {"v1", "v2"}
+            else self._opencode_generation(plugin_file)
+        )
+        version = runtime.get("version")
 
         if ide_type == "opencode":
             config_diagnostic = _opencode_setup_diagnostic(_resolve_opencode_config())
@@ -2721,12 +2835,18 @@ class IDESetup:
 
         if dry_run:
             message = f"[DRY RUN] Would configure {ide_name} plugin:\n"
+            if ide_type == "opencode":
+                detected = f" {version}" if version else " (CLI version unavailable)"
+                message += f"  Use OpenCode {generation}{detected} plugin contract\n"
             message += f"  Create: {plugin_file}\n"
             message += f"  Create: {bridge_file}\n"
             if ide_type == "opencode" and legacy_bridge_file.is_file():
                 message += f"  Remove stale generated bridge: {legacy_bridge_file}\n"
             reg_msg = self._register_opencode_plugin(
-                plugin_file, plugins_dir, dry_run=True
+                plugin_file,
+                plugins_dir,
+                dry_run=True,
+                generation=generation,
             )
             if reg_msg:
                 message += reg_msg
@@ -2736,12 +2856,17 @@ class IDESetup:
 
         abs_path = _resolve_binary_path()
         plugin_file.write_text(
-            _render_typescript_source(_OPENCODE_PLUGIN_TS), encoding="utf-8"
+            _render_typescript_source(
+                _OPENCODE_PLUGIN_V2_TS if generation == "v2" else _OPENCODE_PLUGIN_TS
+            ),
+            encoding="utf-8",
         )
         bridge_file.parent.mkdir(parents=True, exist_ok=True)
         bridge_file.write_text(self._render_guardian_bridge(abs_path), encoding="utf-8")
 
-        registration_error = self._register_opencode_plugin(plugin_file, plugins_dir)
+        registration_error = self._register_opencode_plugin(
+            plugin_file, plugins_dir, generation=generation
+        )
         if registration_error:
             return False, registration_error
 
@@ -2750,6 +2875,8 @@ class IDESetup:
         message = f"✓ Successfully configured {ide_name} plugin at {plugin_file}\n"
         message += f"  Created shared bridge: {bridge_file}\n"
         if ide_type == "opencode":
+            detected = f" {version}" if version else " (CLI version unavailable)"
+            message += f"  OpenCode {generation}{detected} plugin contract selected\n"
             if self._remove_legacy_opencode_bridge(plugins_dir):
                 message += f"  Removed stale bridge: {legacy_bridge_file}\n"
             elif legacy_bridge_file.is_file():
@@ -4601,6 +4728,7 @@ _PI_HOOKS_ONLY_PACKAGE_JSON = """\
 # OpenCode plugin file contents (Issue #640)
 _OPENCODE_PLUGIN_TS = """\
 // ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
+// ai-guardian-opencode-generation: v1
 import type { Plugin } from '@opencode-ai/plugin';
 import { createGuardianBridge } from '../ai-guardian/ai-guardian-bridge';
 
@@ -4689,6 +4817,156 @@ export const AiGuardian: Plugin = async (ctx) => {
     },
   };
 };
+"""
+
+_OPENCODE_PLUGIN_V2_TS = """\
+// ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
+// ai-guardian-opencode-generation: v2
+import { Plugin } from '@opencode/plugin';
+import { createGuardianBridge } from '../ai-guardian/ai-guardian-bridge';
+
+const guardian = createGuardianBridge({ ideType: 'opencode' });
+const OPENCODE_VERSION = '2.0.0';
+
+type JsonRecord = Record<string, unknown>;
+
+function textValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
+
+function contentText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object') return textValue(value);
+  const record = value as JsonRecord;
+  if (typeof record.output === 'string') return record.output;
+  if (typeof record.text === 'string') return record.text;
+  if (Array.isArray(record.content)) {
+    return record.content
+      .map((part) => {
+        if (!part || typeof part !== 'object') return '';
+        const item = part as JsonRecord;
+        return typeof item.text === 'string' ? item.text : '';
+      })
+      .filter(Boolean)
+      .join('\\n');
+  }
+  return JSON.stringify(value) || '';
+}
+
+function hookData(
+  hookEventName: string,
+  cwd: string,
+  extra: JsonRecord = {},
+  opencodeVersion: string = OPENCODE_VERSION,
+): JsonRecord {
+  return {
+    hook_event_name: hookEventName,
+    opencode_version: opencodeVersion,
+    hook_source: 'opencode',
+    cwd,
+    ...extra,
+  };
+}
+
+function resultWithReplacement(original: unknown, replacement: unknown): unknown {
+  if (original && typeof original === 'object' && !Array.isArray(original)) {
+    const record = original as JsonRecord;
+    if ('output' in record) {
+      return { ...record, output: replacement };
+    }
+    if ('content' in record) {
+      return {
+        ...record,
+        content: [{ type: 'text', text: textValue(replacement) }],
+      };
+    }
+  }
+  return { output: replacement };
+}
+
+export default Plugin.define({
+  id: 'ai-guardian',
+  async setup(ctx) {
+    const cwd = ctx.location.directory || process.cwd();
+    const opencodeVersion = ctx.app.version;
+
+    await ctx.session.hook('prompt', (event) => {
+      const prompt = event.prompt?.text || '';
+      if (!prompt) return;
+      const result = guardian.run(hookData('message.submit', cwd, {
+        prompt,
+        session_id: event.sessionID,
+      }, opencodeVersion));
+      if (result.blocked) {
+        throw new Error(result.error || 'Blocked by ai-guardian');
+      }
+    });
+
+    await ctx.tool.hook('execute.before', (event) => {
+      if (event.tool?.startsWith('ai-guardian')) return;
+      const input = (event.input || {}) as JsonRecord;
+      const result = guardian.run(hookData('tool.execute.before', cwd, {
+        tool_name: event.tool,
+        tool_use: { name: event.tool, input },
+        session_id: event.sessionID,
+        tool_use_id: event.id,
+      }, opencodeVersion));
+      if (result.blocked) {
+        throw new Error(result.error || 'Blocked by ai-guardian');
+      }
+    });
+
+    await ctx.tool.hook('execute.after', (event) => {
+      if (event.tool?.startsWith('ai-guardian')) return;
+      const input = (event.input || {}) as JsonRecord;
+      const output =
+        event.status === 'completed'
+          ? contentText(event.result)
+          : textValue(event.error.message);
+      const result = guardian.run(hookData('tool.execute.after', cwd, {
+        tool_name: event.tool,
+        tool_use: { name: event.tool, input },
+        tool_response: { output },
+        session_id: event.sessionID,
+        tool_use_id: event.id,
+      }, opencodeVersion));
+      if (result.blocked) {
+        throw new Error(result.error || 'Blocked by ai-guardian');
+      }
+      if (event.status === 'completed' && result.updatedOutput !== undefined) {
+        event.result = resultWithReplacement(
+          event.result,
+          result.updatedOutput,
+        ) as typeof event.result;
+      }
+    });
+
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+          const record = event as unknown as JsonRecord;
+          if (record.type !== 'session.idle' && record.type !== 'session.deleted') continue;
+          const properties = (record.properties || {}) as JsonRecord;
+          const sessionID = textValue(
+            properties.sessionID || properties.sessionId || record.sessionID,
+          );
+          if (sessionID) {
+            guardian.run(
+              hookData('SessionEnd', cwd, { session_id: sessionID }, opencodeVersion),
+            );
+          }
+        }
+      } catch {
+        // The subscription is expected to end when the plugin is unloaded.
+      }
+    })();
+
+    return () => controller.abort();
+  },
+});
 """
 
 _OPENCLAW_PACKAGE_JSON = """\

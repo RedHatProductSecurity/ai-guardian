@@ -30,34 +30,7 @@ from ai_guardian.tray import plugins as tray_plugins
 logger = logging.getLogger(__name__)
 
 
-def _get_openshell_openai_providers() -> tuple:
-    """Return existing OpenAI provider instances usable by OpenCode."""
-    try:
-        result = subprocess.run(
-            ["openshell", "provider", "list", "--output", "json"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        payload = json.loads(result.stdout) if result.returncode == 0 else {}
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
-        return ()
-
-    providers = payload.get("providers", []) if isinstance(payload, dict) else []
-    names = {
-        str(provider["name"])
-        for provider in providers
-        if isinstance(provider, dict)
-        and provider.get("type") == "openai"
-        and "codex" not in str(provider.get("name", "")).lower()
-        and provider.get("name")
-    }
-    return tuple(sorted(names, key=str.casefold))
-
-
-# Tray advertises only OpenShell scenarios qualified against v0.1.2. Other
-# bundled clients remain available through the CLI for manual qualification.
+# Tray exposes only the currently supported OpenShell CLI.
 TRAY_OPENSHELL_CLI_CHOICES = ("codex",)
 TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
     "container": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["container"],
@@ -1058,35 +1031,19 @@ class TrayMenuBuilder:
             repo_default = os.path.expanduser("~")
         profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
         opencode_agent_choices = (
-            ("", "build") if runtime == "openshell" else ("", "build", "plan", "claude")
+            ("",) if runtime == "openshell" else ("", "build", "plan", "claude")
         )
         agent_provider_choices = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
         if agent_provider not in agent_provider_choices:
             agent_provider = ""
-        if runtime == "openshell" and cli == "pi" and not agent_provider:
-            agent_provider = "anthropic"
-        if runtime == "openshell" and cli == "opencode" and not opencode_agent:
-            opencode_agent = "build"
         model_default = os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", "")
-        if runtime == "openshell" and cli == "opencode" and not model_default:
-            model_default = "openai/gpt-5.6-luna"
-        openai_providers = _get_openshell_openai_providers()
-        openshell_provider_choices_by_cli = {
-            "codex": ("",),
-            "opencode": openai_providers or ("",),
-        }
+        openshell_provider_choices_by_cli = {"codex": ("",)}
         openshell_provider_choices = (
             openshell_provider_choices_by_cli.get(cli, ("",))
             if runtime == "openshell"
             else ()
         )
-        providers_default = (
-            openai_providers[0]
-            if runtime == "openshell"
-            and cli == "opencode"
-            and len(openai_providers) == 1
-            else ""
-        )
+        providers_default = ""
         from ai_guardian.sandbox import _generated_openshell_name
 
         name_default = _generated_openshell_name(cli)
@@ -1205,12 +1162,6 @@ class TrayMenuBuilder:
                 "name": "model",
                 "label": "Inference model",
                 "default": model_default,
-                "dynamic_default": {
-                    "field": "cli",
-                    "value_by": {
-                        "opencode": "openai/gpt-5.6-luna",
-                    },
-                },
                 "help": "CLI model or OpenShell inference model; empty uses the default.",
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
@@ -1355,7 +1306,7 @@ class TrayMenuBuilder:
         opencode_agent = str(values.get("agent") or "").strip() or None
         agent_provider = str(values.get("agent_provider") or "").strip() or None
         cli_value = str(values.get("cli") or "").strip() or None
-        cli = cli_value or ("claude" if runtime == "openshell" else "codex")
+        cli = cli_value or "codex"
         supported_cli_types = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME.get(runtime, ())
         if cli not in supported_cli_types:
             self._sandbox_error(
@@ -1373,16 +1324,6 @@ class TrayMenuBuilder:
             )
             finish_flow()
             return
-        if runtime == "openshell" and cli == "pi":
-            supported_providers = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
-            if agent_provider not in supported_providers:
-                self._sandbox_error(
-                    "Create AI Guardian sandbox",
-                    "OpenShell Pi supports only the anthropic or openai provider.",
-                    **self._screen_bounds_kwargs(screen_bounds),
-                )
-                finish_flow()
-                return
         agent_profile = opencode_agent if cli == "opencode" else None
         if cli == "opencode" and not agent_profile:
             self._sandbox_error(
@@ -1425,10 +1366,6 @@ class TrayMenuBuilder:
             provider = provider.strip()
             if provider:
                 provider_names.append(provider)
-        if runtime == "openshell" and cli == "opencode" and not provider_names:
-            openai_providers = _get_openshell_openai_providers()
-            if len(openai_providers) == 1:
-                provider_names.append(openai_providers[0])
         environment_values = []
         environment = str(values.get("environment") or "").strip()
         for entry in environment.replace("\n", ",").split(","):

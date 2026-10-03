@@ -755,6 +755,16 @@ class TestOpenCodeSessionAdapter:
             "output_tokens": 7,
         }
 
+    def test_v2_explicit_database_path(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "opencode-v2.db"
+        self._create_db(db_path)
+        monkeypatch.setenv("OPENCODE_DB", str(db_path))
+
+        sessions = OpenCodeSessionAdapter().discover()
+
+        assert len(sessions) == 1
+        assert sessions[0]["file_path"] == str(db_path)
+
     def test_filters_sessions_by_project(self, tmp_path):
         db_path = tmp_path / "opencode.db"
         self._create_db(db_path)

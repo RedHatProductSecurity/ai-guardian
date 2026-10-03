@@ -62,13 +62,9 @@
         "bundled_cli_versions": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["claude", "copilot", "codex", "opencode", "pi"],
-          "properties": {
-            "claude": { "type": "string", "minLength": 1 },
-            "copilot": { "type": "string", "minLength": 1 },
-            "codex": { "type": "string", "minLength": 1 },
-            "opencode": { "type": "string", "minLength": 1 },
-            "pi": { "type": "string", "minLength": 1 }
+           "required": ["codex"],
+           "properties": {
+             "codex": { "type": "string", "minLength": 1 }
           }
         }
       }
@@ -101,10 +97,10 @@
         ],
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
-          "agent": { "type": "string", "enum": ["claude", "codex", "opencode"] },
+          "agent": { "type": "string", "enum": ["codex"] },
           "profile": { "type": "string", "minLength": 1 },
-          "provider_class": { "type": "string", "enum": ["google-vertex-ai", "openshell-codex"] },
-          "model_family": { "type": "string", "enum": ["Claude", "Codex"] },
+          "provider_class": { "type": "string", "enum": ["openshell-codex"] },
+          "model_family": { "type": "string", "enum": ["Codex"] },
           "result": { "enum": ["passed", "failed", "skipped"] },
           "steps": {
             "type": "object",

@@ -177,20 +177,12 @@ OPENAI_API_KEY=... \
     ./run.sh --agent codex --repo $(pwd)
 
 # Preferred OpenShell sandbox (published image; local build is also supported)
-# OpenShell defaults to Claude; select Codex or Pi explicitly when needed.
-# Experimental: OpenShell integration is still evolving. Claude, Codex, Pi, and
-# OpenCode using Claude have been tested; verify current compatibility before
-# important work.
+# OpenShell currently supports Codex only; Claude support is deferred until 0.1.3.
 openshell settings set --global --key providers_v2_enabled --value true
 podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 ai-guardian sandbox create --runtime openshell \
     --image quay.io/redhatproductsecurity/ai-guardian-openshell:latest \
     --cli codex --repo $(pwd)
-
-# Or use Pi through the Anthropic-compatible OpenShell inference route.
-ai-guardian sandbox create --runtime openshell \
-    --image quay.io/redhatproductsecurity/ai-guardian-openshell:latest \
-    --cli pi --repo $(pwd)
 
 # Or build and select a local OpenShell image
 podman build -f container/Dockerfile.openshell \
@@ -289,66 +281,14 @@ isolated snapshot rather than binding the host checkout; the shell starts in
 without writing files back to the host. Pass `-- codex` to launch Codex
 directly instead of opening the shell.
 
-OpenShell integration is experimental. The documented workflows have been
-tested with Claude Code through Google Vertex AI, Codex through its OpenShell
-provider, Pi through its Anthropic-compatible OpenShell route, and OpenCode
-using Claude through Vertex AI. Claude
-marketplace/plugin installation has also been tested with the read-only GitHub
-overlay described below.
+OpenShell integration is experimental and currently supports Codex only. Claude
+support is deferred until OpenShell `0.1.3`; Pi, Copilot, and OpenCode remain
+outside the current OpenShell contract.
 
-For Claude Code through Google Vertex AI, set the GCP project and launch with
-the OpenShell image. The subcommand creates or updates and attaches the gateway
-provider, then supplies native Vertex settings to the CLI; the host ADC file is
-consumed by the gateway and is not mounted into the sandbox. The
-`ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION`, and
-`CLAUDE_CODE_USE_VERTEX=1` values select Vertex; credentials remain gateway-
-managed:
-
-```bash
-export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
-export CLOUD_ML_REGION=global
-
-ai-guardian sandbox create --runtime openshell \
-    --base localhost/ai-guardian-openshell:latest \
-    --cli claude \
-    --model claude-sonnet-4-6 \
-    --repo .
-```
-
-From the resulting shell, start Claude normally. OpenShell's provider supplies
-the credential path, while AI Guardian sets the native Vertex environment. AI
-Guardian does not install a persistent shell wrapper. Use the subcommand's
-`--model` option (default `claude-sonnet-4-6`) to select the model.
-
-If using a locally built image, rebuild it after pulling this change so the
-OpenShell inference environment fallback is included.
-
-Claude's background self-updater is disabled in OpenShell because the image
-installation is read-only. To update Claude Code, rebuild the OpenShell image
-and create a new sandbox; the subcommand sets `DISABLE_AUTOUPDATER=1`
-automatically.
-
-OpenCode is not currently supported for OpenShell v0.1.2. Its bundled provider
-profiles do not expose a compatible OpenCode credential boundary. Use Codex for
-the currently qualified OpenShell path; OpenCode requires a separately
-provisioned custom OpenShell provider profile.
-
-The Claude/Vertex policy does not grant GitHub access by default. The command
-above is sufficient for Claude requests, Vertex inference, and an ordinary
-Claude session. Marketplace or plugin installation and refresh are different:
-you must add the read-only GitHub overlay because the Anthropic marketplace is
-fetched from GitHub. Without this overlay, model requests still work but
-marketplace installation or refresh fails due to OpenShell's deny-by-default
-network policy. The read/write GitHub policy and GitHub provider are not
-required for the public catalog:
-
-```bash
-ai-guardian sandbox create --runtime openshell \
-    --base localhost/ai-guardian-openshell:latest \
-    --cli claude \
-    --policy ./container/openshell-github-readonly-policy.yaml \
-    --repo .
-```
+OpenCode is supported through the host integration and the normal Docker/Podman
+image, whose V1 executable is pinned at `1.18.34`. OpenCode is outside the
+OpenShell runtime scope; see the [OpenCode support record](docs/OPENCODE.md) for
+the V1/V2 plugin contracts and exact limitations.
 
 For Codex ChatGPT/OAuth credentials, enable OpenShell Providers v2 once on the
 active gateway:
@@ -376,15 +316,6 @@ For a Codex-only sandbox, no GitHub policy is required. The subcommand applies
 the shared base policy and selected Codex policy automatically. Add the
 read-only or read/write GitHub policy only when the sandbox needs GitHub
 access.
-
-Claude Code can use Google Vertex AI by selecting `--cli claude` and setting
-`ANTHROPIC_VERTEX_PROJECT_ID`; the OpenShell subcommand creates the required
-gateway provider from Google ADC credentials. See the container guide for the
-complete Vertex AI example.
-
-For proprietary agents such as Claude Code, select the agent explicitly and
-review its terms before enabling the runtime consent flow. See the container
-guide for the supported agent matrix.
 
 ```bash
 # Pinned release
@@ -498,6 +429,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [ML Prompt Injection Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | One-command `ai-guardian ml setup` installs model + dependencies |
 | [Crush IDE Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapter for Charmbracelet Crush with MCP advisory |
 | [Pi IDE Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Managed extension hooks, pinned MCP bridge, and JSONL transcript scanning |
+| [OpenCode Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENCODE.md) | Version-aware V1/V2 plugin contracts, transcript discovery, and runtime support boundaries |
 | [Event-Driven Tray Updates](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Tray refreshes on daemon state changes instead of polling |
 | [Scan & Configure UI](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | Web console workflow to scan a project and generate config |
 
