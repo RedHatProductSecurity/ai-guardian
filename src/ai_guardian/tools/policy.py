@@ -1275,7 +1275,7 @@ class ToolPolicyChecker:
             return str(pattern_entry)
 
     def _is_pattern_valid(
-        self, pattern_entry: Union[str, Dict], current_time: Optional[datetime] = None
+        self, pattern_entry: object, current_time: Optional[datetime] = None
     ) -> bool:
         """
         Check if a pattern entry is still valid (not expired).

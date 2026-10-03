@@ -515,8 +515,8 @@ class AuditLogger:
 
     def log_hook_decision(
         self,
-        hook_data: Mapping[str, Any],
-        result: Mapping[str, Any],
+        hook_data: object,
+        result: object,
         *,
         adapter: Any = None,
         normalized: Any = None,

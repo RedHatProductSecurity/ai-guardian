@@ -240,7 +240,7 @@ def load_merged_plugins(
     return merged
 
 
-def _parse_plugin(data: dict, filename: str) -> Optional[Plugin]:
+def _parse_plugin(data: object, filename: str) -> Optional[Plugin]:
     """Parse and validate a plugin dict from a JSON file."""
     if not isinstance(data, dict):
         logger.warning("Skipping %s: expected JSON object", filename)
@@ -282,7 +282,7 @@ def _parse_plugin(data: dict, filename: str) -> Optional[Plugin]:
     return Plugin(name=name, items=items, tags=tags, scope=scope, id=plugin_id)
 
 
-def _parse_item(raw: dict, filename: str, index: int) -> Optional[PluginItem]:
+def _parse_item(raw: object, filename: str, index: int) -> Optional[PluginItem]:
     """Parse and validate a single plugin item.
 
     An item is one of:
@@ -385,7 +385,7 @@ def _parse_item(raw: dict, filename: str, index: int) -> Optional[PluginItem]:
     )
 
 
-def _parse_param(raw: dict) -> Optional[PluginParam]:
+def _parse_param(raw: object) -> Optional[PluginParam]:
     """Parse a single parameter definition."""
     if not isinstance(raw, dict):
         return None
@@ -648,7 +648,7 @@ def filter_plugins_by_tags(
     return result
 
 
-def resolve_command(command: Union[str, Dict[str, str]]) -> Optional[str]:
+def resolve_command(command: object) -> Optional[str]:
     """Resolve a command spec to a platform-specific string.
 
     Args:

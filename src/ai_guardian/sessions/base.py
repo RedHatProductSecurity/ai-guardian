@@ -119,7 +119,7 @@ class StepCollector(list):
             "assistant": [],
             "fallback": [],
         }
-        self.summary = {
+        self.summary: Dict[str, Any] = {
             "title": "",
             "model": "",
             "message_count": 0,
@@ -135,7 +135,7 @@ class StepCollector(list):
             },
         }
 
-    def append(self, step):
+    def append(self, step: Any) -> None:
         step_type = step.get("type") if isinstance(step, dict) else None
         if step_type == "user":
             self.summary["user_messages"] += 1

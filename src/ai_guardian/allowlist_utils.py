@@ -33,7 +33,7 @@ def extract_pattern_string(pattern_entry: Union[str, Dict]) -> str:
 
 
 def is_allowlist_pattern_valid(
-    pattern_entry: Union[str, Dict], current_time: Optional[datetime] = None
+    pattern_entry: object, current_time: Optional[datetime] = None
 ) -> bool:
     """Check if a pattern entry is still valid (not expired).
 

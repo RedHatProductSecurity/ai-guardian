@@ -86,7 +86,7 @@ class BaseAgentAdapter(HookAdapter):
         return text
 
     @staticmethod
-    def _event_name(hook_event: HookEvent) -> str:
+    def _event_name(hook_event: HookEvent | str) -> str:
         if isinstance(hook_event, HookEvent):
             return hook_event.display_name
         try:

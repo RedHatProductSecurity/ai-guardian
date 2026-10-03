@@ -44,7 +44,7 @@ class ClaudeSessionAdapter(SessionAdapter):
         if not base or not base.is_dir():
             return []
 
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
         project_dirs = []
 
         if project_path:
@@ -453,7 +453,7 @@ class CursorSessionAdapter(SessionAdapter):
         if not db_path.exists():
             return []
 
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
         try:
             import sqlite3
 
@@ -603,7 +603,7 @@ class CopilotSessionAdapter(SessionAdapter):
         if not base or not base.is_dir():
             return []
 
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
         patterns = [
             base / "workspaceStorage" / "*" / "chatSessions" / "*.jsonl",
             base / "globalStorage" / "emptyWindowChatSessions" / "*.jsonl",
@@ -818,7 +818,7 @@ class CodexSessionAdapter(SessionAdapter):
         if not base or not base.is_dir():
             return []
 
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
         try:
             jsonl_files = sorted(
                 base.rglob("*.jsonl"),
@@ -1039,7 +1039,11 @@ class CodexSessionAdapter(SessionAdapter):
     @staticmethod
     def _extract_title_candidates(record):
         """Extract title candidates from one Codex rollout record."""
-        candidates = {"explicit": [], "user": [], "assistant": []}
+        candidates: Dict[str, List[Any]] = {
+            "explicit": [],
+            "user": [],
+            "assistant": [],
+        }
         if not isinstance(record, dict):
             return candidates
 
@@ -1257,7 +1261,7 @@ class GeminiSessionAdapter(SessionAdapter):
         if not base or not base.is_dir():
             return []
 
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
         try:
             session_files = sorted(
                 list(base.rglob("session-*.json"))
@@ -1391,7 +1395,7 @@ class ClineSessionAdapter(SessionAdapter):
     }
 
     def discover(self, project_path=None, limit=100):
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
 
         search_dirs = []
         cline_home = (
@@ -1738,7 +1742,7 @@ class OpenCodeSessionAdapter(SessionAdapter):
         except OSError:
             return []
 
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
         try:
             with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
                 query = (
@@ -1997,7 +2001,7 @@ class PiSessionAdapter(SessionAdapter):
         resolved_project = (
             os.path.realpath(os.path.expanduser(project_path)) if project_path else None
         )
-        sessions = []
+        sessions: List[Dict[str, Any]] = []
         for path in jsonl_files:
             header = self._read_header(path)
             if header.get("type") != "session":

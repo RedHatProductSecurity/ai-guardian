@@ -186,13 +186,13 @@ def is_mcp_installed():
             get_mcp_config_path,
         )
 
-        claude_settings = Path(
-            resolve_ide_config_path(
-                "claude", "~/.claude/settings.json", filename="settings.json"
-            )
-        ).expanduser()
-        if has_mcp_entry(claude_settings, "mcpServers"):
-            return True
+        claude_settings_path = resolve_ide_config_path(
+            "claude", "~/.claude/settings.json", filename="settings.json"
+        )
+        if claude_settings_path:
+            claude_settings = Path(claude_settings_path).expanduser()
+            if has_mcp_entry(claude_settings, "mcpServers"):
+                return True
 
         for ide_type, ide_config in _MCP_IDE_CONFIGS.items():
             if ide_type in ("codex", "cursor"):

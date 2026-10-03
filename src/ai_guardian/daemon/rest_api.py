@@ -13,6 +13,7 @@ import socketserver
 import threading
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,19 @@ _ALL_CHECKS = list(_VALID_CHECKS)
 REST_AUTH_HEADER = "X-AI-Guardian-Token"
 
 
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    """Thread-per-request server carrying daemon state for handlers."""
+
+    daemon_threads = True
+    daemon_state: Any
+    instance_name: Optional[str]
+    auth_token: Optional[str]
+
+
 class _RestHandler(BaseHTTPRequestHandler):
     """HTTP request handler for daemon REST API."""
+
+    server: _ThreadedHTTPServer
 
     def log_message(self, format, *args):
         logger.debug(format, *args)
@@ -135,8 +147,8 @@ class _RestHandler(BaseHTTPRequestHandler):
             agent_name = qs.get("agent_name", [None])[0]
             directory = qs.get("directory", [None])[0]
             limit_str = qs.get("limit", [None])[0]
-            limit = int(limit_str) if limit_str else None
-            self._send_json(self._get_traces(agent_name, directory, limit))
+            trace_limit: Optional[int] = int(limit_str) if limit_str else None
+            self._send_json(self._get_traces(agent_name, directory, trace_limit))
         elif path.startswith("/api/traces/"):
             filename = path[len("/api/traces/") :]
             qs = urllib.parse.parse_qs(parsed.query)
@@ -1589,12 +1601,6 @@ class DaemonRestAPI:
 
     def start(self) -> int:
         """Start HTTP server in background thread. Returns bound port."""
-
-        class _ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
-            """Thread-per-request so long-running handlers (e.g. ask-dialog
-            wait) don't block health checks or pending-prompts polls."""
-
-            daemon_threads = True
 
         self._server = _ThreadedHTTPServer((self._host, self._port), _RestHandler)
         self._server.daemon_state = self._state

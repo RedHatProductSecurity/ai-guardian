@@ -249,7 +249,7 @@ def _load_config_file():
     try:
         # Resolve paths
         config_dir = get_config_dir()
-        global_path = config_dir / "ai-guardian.json"
+        global_path: Optional[Path] = config_dir / "ai-guardian.json"
 
         if _get_mtime(global_path) is None:
             global_path = None

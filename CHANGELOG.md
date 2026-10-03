@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   make the NiceGUI browser console the supported interactive UI. The `tui`
   command remains a compatibility alias, and persisted `textual` dialog
   preferences migrate to `nicegui`.
+- **Strict Mypy baseline (#2401):** Enable strict Mypy soundness checks,
+  including checking untyped function bodies and unreachable-code detection.
+  Existing dynamic JSON, CLI, and UI boundaries retain explicit transitional
+  exceptions while their annotations are migrated.
 
 ## [1.19.0] - 2026-10-01
 

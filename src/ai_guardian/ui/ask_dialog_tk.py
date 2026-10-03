@@ -5,6 +5,7 @@ and inline config editor.
 """
 
 import platform
+from typing import Any
 
 from ai_guardian.theme import (
     ANNOTATION_FG,
@@ -271,7 +272,8 @@ class _TkinterAskDialog:
     def _on_view_file(self):
         from ai_guardian.ui.file_opener import open_in_editor
 
-        open_in_editor(self._violation.file_path, self._violation.line_number)
+        if self._violation.file_path:
+            open_in_editor(self._violation.file_path, self._violation.line_number)
 
     def _show_config_editor(self, root, save_pat):
         """Show a full config editor with the pattern inserted in memory."""
@@ -520,7 +522,7 @@ class _TkinterAskDialog:
 
         do_test()
 
-        _debounce_id = [None]
+        _debounce_id: list[Any] = [None]
 
         def _on_pattern_change(*_args):
             if _debounce_id[0] is not None:
@@ -562,8 +564,11 @@ class _TkinterAskDialog:
         )
 
         v = self._violation
+        if not v.file_path:
+            return
+        file_path = v.file_path
         violation_line = v.line_number or 1
-        result = prepare_annotation(v.file_path, violation_line)
+        result = prepare_annotation(file_path, violation_line)
         if result is None:
             return
 
@@ -685,7 +690,7 @@ class _TkinterAskDialog:
 
         def on_save():
             text = source_text.get("1.0", "end-1c")
-            if write_annotated_source(v.file_path, text):
+            if write_annotated_source(file_path, text):
                 self._result = AskResult(
                     decision=AskDecision.SUPPRESS_IN_SOURCE,
                     source_annotation_saved=True,
@@ -725,6 +730,8 @@ class _TkinterAskDialog:
         )
 
         v = self._violation
+        if not v.file_path:
+            return
         rel_path = suggest_ignore_path(v.file_path)
 
         root.withdraw()
@@ -810,13 +817,8 @@ class _TkinterAskDialog:
 
             show_select = scope_var.get() == SCOPE_SELECT_SCANNERS
             if show_select:
-                scanner_frame.pack(
-                    fill="x",
-                    pady=(0, 5),
-                    before=(
-                        preview_text.master if hasattr(preview_text, "master") else None
-                    ),
-                )
+                before = preview_text.master
+                scanner_frame.pack(fill="x", pady=(0, 5), before=before)
             else:
                 scanner_frame.pack_forget()
 

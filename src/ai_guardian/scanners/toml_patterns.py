@@ -135,7 +135,7 @@ class TomlPatternsScanner(Scanner):
         raw_findings = self._cache.scan(
             content, categories=["secrets"], file_ext=file_ext
         )
-        findings = []
+        findings: List[Finding] = []
         for f in raw_findings:
             if self._stopwords and f.category == "secrets":
                 matched_lower = f.matched_text.lower()
@@ -175,15 +175,15 @@ class TomlPatternsScanner(Scanner):
             from ai_guardian.allowlist_utils import check_allowlist
 
             content_lines = content.splitlines()
-            filtered = []
-            for f in findings:
-                line_idx = f.line_number - 1
+            filtered: List[Finding] = []
+            for finding in findings:
+                line_idx = finding.line_number - 1
                 if 0 <= line_idx < len(content_lines):
                     if check_allowlist(
                         content_lines[line_idx], self._compiled_allowlist
                     ):
                         continue
-                filtered.append(f)
+                filtered.append(finding)
             findings = filtered
 
         return findings

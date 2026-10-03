@@ -1568,8 +1568,6 @@ class IDESetup:
         verification = self.verify_hooks_for_ide(
             ide_type, scope=scope, project_dir=project_dir
         )
-        if not isinstance(verification, dict):
-            return verification
 
         if ide_type == "cursor":
             from ai_guardian.setup.mcp import verify_cursor_mcp_config

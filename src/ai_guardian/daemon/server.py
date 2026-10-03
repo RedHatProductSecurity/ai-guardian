@@ -14,6 +14,7 @@ import signal
 import socket
 import threading
 from pathlib import Path
+from typing import Any, Dict
 
 from ai_guardian.daemon import (
     get_pid_path,
@@ -339,9 +340,12 @@ class DaemonServer:
 
     def _accept_loop(self):
         """Main accept loop — blocks until stop() is called."""
+        server_socket = self._server_socket
+        if server_socket is None:
+            return
         while self._running:
             try:
-                client_sock, addr = self._server_socket.accept()
+                client_sock, addr = server_socket.accept()
                 thread = threading.Thread(
                     target=self._handle_client,
                     args=(client_sock,),
@@ -717,7 +721,7 @@ class DaemonServer:
         """Write PID file with process info."""
         pid_path = get_pid_path()
         pid_path.parent.mkdir(parents=True, exist_ok=True)
-        pid_info = {"pid": os.getpid()}
+        pid_info: Dict[str, Any] = {"pid": os.getpid()}
         if self._use_tcp and self._tcp_port:
             pid_info["port"] = self._tcp_port
         if self._rest_port:

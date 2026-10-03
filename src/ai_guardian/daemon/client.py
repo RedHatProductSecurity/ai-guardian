@@ -601,7 +601,8 @@ def start_daemon_background():
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=(
-                    subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+                    getattr(subprocess, "DETACHED_PROCESS", 0)
+                    | getattr(subprocess, "CREATE_NO_WINDOW", 0)
                 ),
             )
         else:

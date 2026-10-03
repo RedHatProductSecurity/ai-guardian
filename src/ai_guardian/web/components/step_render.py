@@ -2,6 +2,7 @@
 
 import json
 import urllib.parse
+from typing import Any
 
 from nicegui import ui
 
@@ -145,7 +146,7 @@ def render_violation_summary(violations, daemon_name=""):
                 "text-xs font-bold text-red"
             )
 
-        by_type = {}
+        by_type: dict[str, list[dict[str, Any]]] = {}
         for v in violations:
             vtype = v.get("violation_type", "unknown")
             by_type.setdefault(vtype, []).append(v)

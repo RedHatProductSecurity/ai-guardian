@@ -29,15 +29,12 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-# Handle tomllib import for Python 3.11+ and fallback to tomli
-if sys.version_info >= (3, 11):
+try:
     import tomllib
-else:
-    try:
-        import tomli as tomllib
-    except ImportError:
-        logger.error("tomli package required for Python < 3.11 but not available")
-        tomllib = None
+except ImportError:
+    import tomli
+
+    tomllib = tomli
 
 try:
     import requests
@@ -214,27 +211,6 @@ class ScannerInstaller:
         Returns:
             Scanner configuration dict with versions and repos
         """
-        if tomllib is None:
-            logger.warning("tomllib not available, using fallback configuration")
-            return {
-                "gitleaks": "8.30.1",
-                "betterleaks": "1.3.1",
-                "leaktk": "0.3.4",
-                "trufflehog": "3.88.0",
-                "detect-secrets": "1.5.0",
-                "secretlint": "13.0.5",
-                "gitguardian": "1.54.0",
-                "repos": {
-                    "gitleaks": "gitleaks/gitleaks",
-                    "betterleaks": "betterleaks/betterleaks",
-                    "leaktk": "leaktk/leaktk",
-                    "trufflehog": "trufflesecurity/trufflehog",
-                    "detect-secrets": "Yelp/detect-secrets",
-                    "secretlint": "secretlint/secretlint",
-                    "gitguardian": "GitGuardian/ggshield",
-                },
-            }
-
         # Try bundled pyproject.toml first (installed via wheel),
         # then fall back to development path (editable install)
         candidates = [

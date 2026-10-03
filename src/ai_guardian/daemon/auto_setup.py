@@ -5,6 +5,7 @@ import os
 import platform
 import subprocess
 import sys
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -65,15 +66,15 @@ def _start_tray_background():
     cmd = get_executable_command() + ["tray", "start"]
     logger.debug("Starting tray: %s", " ".join(cmd))
 
-    kwargs = dict(
+    kwargs: Dict[str, Any] = dict(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
     if platform.system() == "Windows":
-        kwargs["creationflags"] = (
-            subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            subprocess, "CREATE_NO_WINDOW", 0
         )
     else:
         kwargs["start_new_session"] = True

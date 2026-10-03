@@ -15,10 +15,11 @@ import os
 import re
 import urllib.request
 import urllib.error
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
-MODEL_REGISTRY = {
+MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
     "protectai/deberta-v3-base-prompt-injection-v2": {
         "hf_repo": "protectai/deberta-v3-base-prompt-injection-v2",
         "files": {

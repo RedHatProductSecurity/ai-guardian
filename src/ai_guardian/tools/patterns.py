@@ -709,7 +709,7 @@ def _is_python_executable(token: str) -> bool:
 
 
 def _python_code_targets_cli(
-    code: str,
+    code: object,
     target_executables: FrozenSet[str],
     module_prefixes: FrozenSet[str],
 ) -> bool:
@@ -971,7 +971,7 @@ def _contains_target_cli_in_tokens(
 
 
 def _contains_target_cli_in_command_string(
-    value: str,
+    value: object,
     target_executables: FrozenSet[str],
     module_prefixes: FrozenSet[str],
     depth: int,

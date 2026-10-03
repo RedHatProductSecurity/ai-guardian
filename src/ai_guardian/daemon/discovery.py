@@ -1019,7 +1019,7 @@ class DaemonDiscovery:
         # process runs as another user. OpenShell's sandbox image keeps HOME at
         # /sandbox, so prefer that path for managed sandboxes. For ordinary
         # containers retain the conventional root-first lookup.
-        token_paths = (
+        token_paths: Tuple[str, ...] = (
             "/root/.local/state/ai-guardian/daemon.token",
             "/sandbox/.local/state/ai-guardian/daemon.token",
         )
@@ -1618,10 +1618,12 @@ class DaemonDiscovery:
 
         self._running = True
         self._callback = callback
-        self._refresh_event = threading.Event()
+        refresh_event = threading.Event()
+        done_lock = threading.Lock()
+        self._refresh_event = refresh_event
         self._last_refresh = 0.0
         self._pending_done = []
-        self._done_lock = threading.Lock()
+        self._done_lock = done_lock
 
         def _loop():
             try:
@@ -1632,11 +1634,11 @@ class DaemonDiscovery:
                 logger.debug("Initial discovery error: %s", e)
                 callback([])
 
-            while self._running:
-                self._refresh_event.wait()
-                if not self._running:
+            while bool(self._running):
+                refresh_event.wait()
+                if not bool(self._running):
                     break
-                self._refresh_event.clear()
+                refresh_event.clear()
 
                 try:
                     targets = self.discover_all()
@@ -1646,7 +1648,7 @@ class DaemonDiscovery:
                     logger.debug("Background discovery error: %s", e)
                     callback([])
                 finally:
-                    with self._done_lock:
+                    with done_lock:
                         for evt in self._pending_done:
                             evt.set()
                         self._pending_done.clear()
@@ -1663,16 +1665,18 @@ class DaemonDiscovery:
             wait: If True, block until discovery completes (up to timeout)
             timeout: Max seconds to wait when wait=True
         """
-        if not self._running or not hasattr(self, "_refresh_event"):
+        refresh_event = self._refresh_event
+        done_lock = self._done_lock
+        if not self._running or refresh_event is None or done_lock is None:
             return
 
         done = None
         if wait:
             done = threading.Event()
-            with self._done_lock:
+            with done_lock:
                 self._pending_done.append(done)
 
-        self._refresh_event.set()
+        refresh_event.set()
 
         if done:
             done.wait(timeout=timeout)
@@ -1680,7 +1684,7 @@ class DaemonDiscovery:
     def stop(self):
         """Stop background discovery and container event streaming."""
         self._running = False
-        if hasattr(self, "_refresh_event"):
+        if self._refresh_event is not None:
             self._refresh_event.set()
         if self._thread:
             self._thread.join(timeout=3)
@@ -1719,7 +1723,7 @@ class DaemonDiscovery:
         """Stream container events, triggering callback on relevant changes."""
         RECONNECT_DELAY = 10.0
 
-        while self._event_stream_running:
+        while bool(self._event_stream_running):
             try:
                 events = client.events(
                     decode=True,
@@ -1729,7 +1733,7 @@ class DaemonDiscovery:
                     },
                 )
                 for event in events:
-                    if not self._event_stream_running:
+                    if not bool(self._event_stream_running):
                         break
                     attrs = event.get("Actor", {}).get("Attributes", {})
                     if attrs.get("ai-guardian.daemon") == "true":

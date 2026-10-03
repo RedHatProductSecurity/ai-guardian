@@ -52,7 +52,7 @@ class CodexAdapter(BaseAgentAdapter):
         return CODEX_DISPLAY_NAME
 
     @classmethod
-    def can_handle(cls, hook_data: Dict) -> bool:
+    def can_handle(cls, hook_data: object) -> bool:
         if not isinstance(hook_data, dict):
             return False
 
