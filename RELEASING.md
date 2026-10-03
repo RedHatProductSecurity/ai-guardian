@@ -779,13 +779,19 @@ The repository includes four GitHub Actions workflows:
 
 ### Ubuntu Runner Policy
 
-All Linux release-readiness, wheel, PyPI, and container publishing jobs are
-pinned to `ubuntu-24.04`. This keeps release artifacts and trusted-publishing
-jobs independent of the moving `ubuntu-latest` image label. The
-`.github/workflows/ubuntu-26-compatibility.yml` workflow separately exercises
-Python 3.10 through 3.14, scanners, smoke tests, scenario containers, Docker
-Buildx, and QEMU on `ubuntu-26.04`; release readiness invokes it as a
-migration gate while normal release and publishing jobs remain pinned.
+All GitHub Actions Linux release-readiness, wheel, PyPI, and container
+publishing jobs are pinned to `ubuntu-26.04`. This keeps release artifacts and
+trusted-publishing jobs independent of the moving `ubuntu-latest` image label.
+The `.github/workflows/container-build-validation.yml` workflow exercises
+scanners, smoke tests, scenario containers, Docker Buildx, QEMU, and
+multi-architecture image builds on the same runner; release readiness invokes
+it as an explicit gate. The supported Python 3.10 through 3.14 matrix runs in
+the standard test workflow on `ubuntu-26.04`.
+
+The Read the Docs build remains separately configured for `ubuntu-24.04` in
+`.readthedocs.yaml`; that setting is not a GitHub Actions runner policy.
+The pinned NVIDIA Ubuntu 24.04 base in `container/Dockerfile.openshell` is
+likewise a runtime image choice and is unrelated to hosted runner selection.
 
 ### Setting Up PyPI Trusted Publishing
 

@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   smoke test now builds and installs the wheel from the checked-out source.
 
 ### Changed
+- **Ubuntu 26.04 runner migration (#2491):** Move all intended GitHub Actions
+  Linux jobs to the available `ubuntu-26.04` runner, including tests, lint,
+  release readiness, publishing, scanners, smoke tests, scenarios, and
+  maintenance workflows. Replace the temporary compatibility workflow with a
+  focused reusable container-build validation gate covering Buildx, QEMU, and
+  multi-architecture images.
+
 - **Python support policy (#2419):** AI Guardian `1.20.0` requires Python
   3.10 or newer. This is a documented breaking support change; the `1.19.x`
   release line (`1.19.0` last stable) is the last compatible line for Python
