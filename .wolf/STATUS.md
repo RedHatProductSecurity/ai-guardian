@@ -74,8 +74,8 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Review and commit/push the pending runtime-detection documentation and test
-  clarification if it should be included in PR #2495.
+- Monitor PR #2495's fresh CI run and investigate any remaining Python/Windows
+  matrix failures before merge.
 - Investigate the failing Python/Windows CI matrix jobs before merge; the local
   affected OpenCode tests pass.
 - Either add/check credits for the OpenAI organization and rerun the API-key
@@ -88,13 +88,11 @@ budget_tokens: 1000
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
 - Branch: `2470`
-- HEAD: `ccfb00e9` with uncommitted updates in `docs/OPENCODE.md`,
-  `src/ai_guardian/opencode_support.py`, and
-  `tests/unit/test_opencode_support.py`
+- HEAD: `1587094b`
 - The issue #2470 implementation, tests, documentation, workflow, container,
   and policy changes are committed and pushed to `origin/2470`; PR #2495 is
-  open. The three runtime-detection clarification files listed above are not
-  committed yet.
+  open. Runtime-detection documentation and test clarification are included in
+  commit `1587094b`.
 - NiceGUI is a core dependency; `uv.lock` is ignored by this repository and was regenerated locally.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
