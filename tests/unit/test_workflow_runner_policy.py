@@ -5,10 +5,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
-PINNED_WORKFLOWS = (
+MIGRATED_WORKFLOWS = (
     "build-container.yml",
     "build-wheel.yml",
     "cli-version-health.yml",
+    "container-build-validation.yml",
     "integration-tests.yml",
     "lint.yml",
     "parser-compat.yml",
@@ -22,21 +23,23 @@ PINNED_WORKFLOWS = (
 )
 
 
-def test_linux_workflows_do_not_use_the_moving_ubuntu_label():
-    """Existing Linux jobs stay on the deterministic Ubuntu 24.04 image."""
-    for workflow_name in PINNED_WORKFLOWS:
+def test_linux_workflows_use_the_ubuntu_26_runner():
+    """All repository Linux workflow jobs use the Ubuntu 26.04 image."""
+    for workflow_name in MIGRATED_WORKFLOWS:
         workflow = (WORKFLOW_DIR / workflow_name).read_text(encoding="utf-8")
         assert "ubuntu-latest" not in workflow, workflow_name
-        assert "ubuntu-24.04" in workflow, workflow_name
+        assert "ubuntu-24.04" not in workflow, workflow_name
+        assert "ubuntu-26.04" in workflow, workflow_name
 
 
 def test_test_workflow_keeps_coverage_on_the_pinned_linux_matrix():
     """Coverage uploads must follow the pinned matrix label."""
     workflow = (WORKFLOW_DIR / "test.yml").read_text(encoding="utf-8")
 
-    assert "os: [ubuntu-24.04]" in workflow
-    assert "matrix.os == 'ubuntu-24.04'" in workflow
+    assert "os: [ubuntu-26.04]" in workflow
+    assert "matrix.os == 'ubuntu-26.04'" in workflow
     assert "matrix.os == 'ubuntu-latest'" not in workflow
+    assert "pytest tests/ -v" in workflow
 
 
 def test_supported_python_matrix_starts_at_310():
@@ -62,22 +65,17 @@ def test_smoke_install_lifecycle_uses_the_checked_out_wheel():
     assert '--version "$RUNNER_TEMP"/ai-guardian-dist/*.whl' in lifecycle
 
 
-def test_ubuntu_26_compatibility_workflow_covers_release_risks():
-    """The migration gate covers Python, scanners, smoke, and image builds."""
-    workflow = (WORKFLOW_DIR / "ubuntu-26-compatibility.yml").read_text(
+def test_container_build_validation_covers_release_risks():
+    """The release gate covers scanners, smoke, and multi-architecture builds."""
+    workflow = (WORKFLOW_DIR / "container-build-validation.yml").read_text(
         encoding="utf-8"
     )
 
     assert "runs-on: ubuntu-26.04" in workflow
-    assert "runs-on: ${{ matrix.os }}" in workflow
-    assert "os: ubuntu-24.04" not in workflow
-    assert "python-version: '3.9'" not in workflow
-    for version in ("3.10", "3.11", "3.12", "3.13", "3.14"):
-        assert f"os: ubuntu-26.04\n            python-version: '{version}'" in workflow
+    assert "ubuntu-24.04" not in workflow
     assert "ai-guardian scanner install gitleaks --use-pinned" in workflow
     assert "ai-guardian scanner install betterleaks --use-pinned" in workflow
     assert "ai-guardian scanner install leaktk --use-pinned" in workflow
-    assert "pytest tests/ -v" in workflow
     assert "ai-guardian doctor --smoke-test" in workflow
     assert "run-scenarios.sh" in workflow
     assert "docker/setup-qemu-action@v4" in workflow
@@ -85,9 +83,9 @@ def test_ubuntu_26_compatibility_workflow_covers_release_risks():
     assert "--platform linux/amd64,linux/arm64" in workflow
 
 
-def test_release_readiness_calls_ubuntu_26_compatibility_gate():
-    """Release readiness must include the migration gate explicitly."""
+def test_release_readiness_calls_container_build_validation_gate():
+    """Release readiness must include the container validation gate explicitly."""
     workflow = (WORKFLOW_DIR / "release-readiness.yml").read_text(encoding="utf-8")
 
-    assert "ubuntu-26-compatibility:" in workflow
-    assert "uses: ./.github/workflows/ubuntu-26-compatibility.yml" in workflow
+    assert "container-build-validation:" in workflow
+    assert "uses: ./.github/workflows/container-build-validation.yml" in workflow

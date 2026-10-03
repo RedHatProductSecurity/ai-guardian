@@ -330,11 +330,14 @@ Pip-installed ai-guardian on users' systems stays protected even if malicious co
 
 #### Ubuntu Runner Policy
 
-- Linux CI, release-readiness, wheel, PyPI, container, smoke, and scheduled maintenance jobs use the pinned `ubuntu-24.04` runner.
+- All GitHub Actions Linux CI, release-readiness, wheel, PyPI, container, smoke, and scheduled maintenance jobs use the pinned `ubuntu-26.04` runner.
 - `ubuntu-latest` is not used by repository Linux workflow jobs, so the Ubuntu image migration cannot change release artifacts or coverage behavior unexpectedly.
-- `ubuntu-26-compatibility.yml` runs Python 3.10-3.14 plus scanner, CLI smoke, scenario-container, Docker Buildx, and QEMU checks on `ubuntu-26.04`.
-- Release readiness calls the Ubuntu 26.04 workflow as an explicit migration gate; it is separate from the pinned release and publishing jobs.
+- GitHub-hosted Ubuntu 26.04 availability and the required Buildx toolchain are confirmed by the upstream [runner-images migration notice](https://github.com/actions/runner-images/issues/14748).
+- `container-build-validation.yml` runs scanner, CLI smoke, scenario-container, Docker Buildx, QEMU, and multi-architecture image checks on `ubuntu-26.04`.
+- Release readiness calls the container validation workflow as an explicit gate, while the supported Python 3.10-3.14 matrix runs directly in the standard test workflow.
 - `windows-latest` and `macos-latest` remain only in their platform-specific compatibility matrices.
+- `.readthedocs.yaml` remains on `ubuntu-24.04` because it configures the separate Read the Docs build environment, not a GitHub Actions runner.
+- The pinned NVIDIA Ubuntu 24.04 base in `container/Dockerfile.openshell` is a runtime image choice, not a GitHub Actions runner.
 
 ### Dependabot
 
