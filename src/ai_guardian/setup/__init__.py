@@ -13,7 +13,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ai_guardian.config.utils import get_cache_dir, get_config_dir
 
@@ -138,6 +138,191 @@ from ai_guardian.setup.hooks import (  # noqa: F811,F401
 )
 
 
+def _clean_ide_types(value: Any) -> List[str]:
+    """Return unique IDE keys while preserving the discovery order."""
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    return list(dict.fromkeys(item for item in value if isinstance(item, str)))
+
+
+def _list_installed_ides_for_setup(setup: IDESetup) -> List[str]:
+    """Discover installed integrations using the same evidence as the tray."""
+    for method_name in ("list_installed_ides", "list_detected_ides"):
+        method = getattr(setup, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            raw_discovered = method()
+        except Exception as exc:
+            logger.warning("Unable to discover installed IDEs: %s", exc)
+            continue
+        # Older test doubles and third-party callers may not implement the
+        # installed-integration method yet.  Fall back only for an invalid
+        # result; an empty, valid result is an authoritative no-op.
+        if isinstance(raw_discovered, (list, tuple, set)):
+            return _clean_ide_types(raw_discovered)
+    return []
+
+
+def _discover_unconfigured_ides(setup: IDESetup) -> Tuple[List[str], List[str]]:
+    """Return installed integrations whose hooks or MCP are not healthy."""
+    installed = _list_installed_ides_for_setup(setup)
+    unconfigured: List[str] = []
+    checker = getattr(setup, "check_hooks_for_ide", None)
+    for ide_type in installed:
+        try:
+            status = checker(ide_type, integrity=True) if callable(checker) else False
+        except Exception as exc:
+            # A failed integrity check should remain actionable.  The setup
+            # implementation performs its own format validation before writing
+            # an existing host configuration, so a malformed file is not
+            # silently overwritten.
+            logger.warning(
+                "Unable to verify %s setup; treating it as pending: %s",
+                ide_type,
+                exc,
+            )
+            unconfigured.append(ide_type)
+            continue
+
+        if isinstance(status, tuple):
+            configured = bool(status[0]) if status else False
+        elif isinstance(status, dict):
+            configured = status.get("healthy") is True
+        else:
+            configured = status is True
+        if not configured:
+            unconfigured.append(ide_type)
+    return installed, unconfigured
+
+
+def _select_automatic_setup_ides(
+    setup: IDESetup,
+    unconfigured: List[str],
+    *,
+    interactive: bool,
+    dry_run: bool,
+    force: bool,
+) -> Optional[List[str]]:
+    """Select automatic setup targets, defaulting to all pending integrations."""
+    if len(unconfigured) == 1:
+        name = setup.IDE_CONFIGS.get(unconfigured[0], {}).get("name", unconfigured[0])
+        print(f"Detected IDE needing setup: {name}")
+        return list(unconfigured)
+
+    print("Installed IDE/CLI integrations that need AI Guardian setup:")
+    for index, ide_type in enumerate(unconfigured, 1):
+        name = setup.IDE_CONFIGS.get(ide_type, {}).get("name", ide_type)
+        print(f"  {index}. {name}")
+
+    # --yes is represented by ``interactive=False``. Dry-run also avoids a
+    # prompt because it cannot apply any of the selected changes; ``--force``
+    # only controls overwrite behavior and must not silently select every IDE.
+    if not interactive or dry_run:
+        print("Configuring all unconfigured integrations.")
+        return list(unconfigured)
+
+    try:
+        choice = (
+            input(
+                "\nSelect integrations to configure [Enter=all, numbers, or s=skip]: "
+            )
+            .strip()
+            .lower()
+        )
+    except (EOFError, KeyboardInterrupt):
+        print("\nSetup skipped.")
+        return None
+
+    if not choice or choice in {"a", "all", "y", "yes"}:
+        return list(unconfigured)
+    if choice in {"s", "skip", "n", "no", "none", "q", "quit"}:
+        print("Setup skipped.")
+        return None
+
+    tokens = choice.replace(",", " ").split()
+    try:
+        indexes = [int(token) for token in tokens]
+    except ValueError:
+        print(
+            "Error: Enter 'all', 'skip', or a comma-separated list of numbers.",
+            file=sys.stderr,
+        )
+        return None
+    if not indexes or any(index < 1 or index > len(unconfigured) for index in indexes):
+        print("Error: Invalid integration selection.", file=sys.stderr)
+        return None
+
+    selected = list(dict.fromkeys(unconfigured[index - 1] for index in indexes))
+    return selected
+
+
+def _setup_single_ide(
+    setup: IDESetup,
+    ide_type: str,
+    *,
+    dry_run: bool,
+    force: bool,
+    no_mcp: Optional[bool],
+    rules: Optional[bool],
+    scope: str,
+    project_dir: Optional[str],
+) -> bool:
+    """Install one integration's hooks, MCP registration, and optional rules."""
+    if ide_type not in setup.IDE_CONFIGS:
+        print(f"Error: Unknown IDE type: {ide_type}", file=sys.stderr)
+        print(f"Supported IDEs: {', '.join(setup.IDE_CONFIGS.keys())}", file=sys.stderr)
+        return False
+
+    scope, project_dir, target_error = _normalize_project_setup_target(
+        ide_type, scope, project_dir
+    )
+    if target_error:
+        print(f"Error: {target_error}", file=sys.stderr)
+        return False
+
+    hook_kwargs: Dict[str, Any] = {"dry_run": dry_run, "force": force}
+    if ide_type == "pi":
+        hook_kwargs["enable_mcp"] = not bool(no_mcp)
+    if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
+        hook_kwargs.update({"scope": scope, "project_dir": project_dir})
+    success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
+    mcp_repair = False
+    if not success and ide_type in ("codex", "cursor", "pi"):
+        try:
+            hook_verification = setup.verify_hooks_for_ide(
+                ide_type,
+                scope=scope if _supports_project_scope(ide_type) else "user",
+                project_dir=project_dir if _supports_project_scope(ide_type) else None,
+            )
+            mcp_repair = (
+                isinstance(hook_verification, dict)
+                and hook_verification.get("healthy") is True
+            )
+        except Exception as exc:
+            logger.debug(
+                "Unable to verify existing %s hooks during setup repair: %s",
+                ide_type,
+                exc,
+            )
+            mcp_repair = False
+    print(message)
+
+    setup_success = bool(success or mcp_repair)
+    if setup_success:
+        mcp_kwargs: Dict[str, Any] = {"dry_run": dry_run}
+        if no_mcp:
+            mcp_kwargs["no_mcp"] = True
+        if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
+            mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
+        _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
+
+    if setup_success and rules:
+        _handle_rules_setup(ide_type, dry_run=dry_run, force=force)
+
+    return setup_success
+
+
 def setup_hooks(
     ide_type: Optional[str] = None,
     remote_config_url: Optional[str] = None,
@@ -166,11 +351,13 @@ def setup_hooks(
     Setup IDE hooks with optional remote config and default config creation.
 
     Args:
-        ide_type: Supported IDE type or None for auto-detect
+        ide_type: Supported IDE type or None to set up installed integrations
+            that fail hook/MCP integrity checks
         remote_config_url: Optional remote config URL to add
         dry_run: If True, show what would be changed without applying
         force: If True, overwrite existing hooks
-        interactive: If True, prompt user for confirmation
+        interactive: If True, prompt for confirmation and multi-integration
+            selection
         migrate_pattern_server: If True, check and migrate old pattern_server config
         create_config: If True, create default ai-guardian.json config
         permissive: If True with create_config, use permissive config (permissions disabled)
@@ -191,6 +378,25 @@ def setup_hooks(
     Returns:
         bool: True if successful, False otherwise
     """
+    if profile and not create_config and not list_profiles and not save_profile:
+        if json_output:
+            print(
+                json.dumps(
+                    {
+                        "success": False,
+                        "error": "--profile requires --create-config",
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            print("Error: --profile requires --create-config", file=sys.stderr)
+            print(
+                "Usage: ai-guardian setup --create-config --profile @strict",
+                file=sys.stderr,
+            )
+        return False
+
     # JSON output mode: clean JSON only, no log text (Issue #518)
     if json_output and not list_profiles and not save_profile:
         return _setup_hooks_json_output(
@@ -207,6 +413,7 @@ def setup_hooks(
         )
 
     setup = IDESetup()
+    config_needs_reload = False
 
     # Handle profile listing if requested
     if list_profiles:
@@ -236,15 +443,6 @@ def setup_hooks(
         success, message = _save_profile(save_profile, config)
         print(message)
         return success
-
-    # Validate --profile usage
-    if profile and not create_config:
-        print("Error: --profile requires --create-config", file=sys.stderr)
-        print(
-            "Usage: ai-guardian setup --create-config --profile @strict",
-            file=sys.stderr,
-        )
-        return False
 
     if profile and permissive:
         print(
@@ -347,17 +545,7 @@ def setup_hooks(
         print(message)
         if not config_success:
             return False
-        else:
-            # If only creating config (no IDE setup or remote config), return early
-            if (
-                ide_type is None
-                and not remote_config_url
-                and not migrate_pattern_server
-                and not no_mcp
-            ):
-                if config_success:
-                    _notify_daemon_reload()
-                return config_success
+        config_needs_reload = not dry_run
 
     # Handle pattern_server migration if requested
     if migrate_pattern_server:
@@ -369,6 +557,8 @@ def setup_hooks(
             return False
         # If only migrating (no IDE setup or remote config), return early
         if ide_type is None and not remote_config_url:
+            if config_needs_reload and not dry_run:
+                _notify_daemon_reload()
             return success
 
     # Handle remote config setup if requested
@@ -379,71 +569,98 @@ def setup_hooks(
             return False
         # If only setting up remote config (no IDE setup), return early
         if ide_type is None and not migrate_pattern_server:
+            if config_needs_reload and not dry_run:
+                _notify_daemon_reload()
             return success
 
-    # Auto-detect IDE if not specified
-    if not ide_type:
-        detected_ides = setup.list_detected_ides()
-
-        if not detected_ides:
+    automatic_detection = ide_type is None
+    if automatic_detection:
+        installed_ides, unconfigured_ides = _discover_unconfigured_ides(setup)
+        if not installed_ides:
+            if create_config:
+                print(
+                    "No installed supported IDE/CLI integrations found; "
+                    "configuration was created without installing hooks."
+                )
+                if config_needs_reload:
+                    _notify_daemon_reload()
+                return True
             print(
-                "Error: No IDE detected. Please install Claude Code or Cursor IDE.",
+                "Error: No installed supported IDE/CLI integration was found."
+                " Specify an IDE with --ide after installing one.",
                 file=sys.stderr,
             )
-            print("\nSupported IDEs:", file=sys.stderr)
-            print("  - Claude Code: https://claude.ai/code", file=sys.stderr)
-            print("  - Cursor: https://cursor.sh", file=sys.stderr)
+            print("\nSupported integrations:", file=sys.stderr)
+            for name in setup.IDE_CONFIGS.values():
+                print(f"  - {name.get('name', 'unknown')}", file=sys.stderr)
+            return False
+        if not unconfigured_ides:
+            print("All installed IDE/CLI integrations are already configured.")
+            if config_needs_reload:
+                _notify_daemon_reload()
+            return True
+        selected_ides = _select_automatic_setup_ides(
+            setup,
+            unconfigured_ides,
+            interactive=interactive,
+            dry_run=dry_run,
+            force=force,
+        )
+        if not selected_ides:
+            if config_needs_reload:
+                _notify_daemon_reload()
+            return False
+    elif isinstance(ide_type, str):
+        selected_ides = [ide_type]
+    else:
+        print("Error: IDE type is required.", file=sys.stderr)
+        return False
+
+    # Validate all targets before prompting or changing any integration.
+    for selected_ide in selected_ides:
+        if selected_ide not in setup.IDE_CONFIGS:
+            print(f"Error: Unknown IDE type: {selected_ide}", file=sys.stderr)
+            print(
+                f"Supported IDEs: {', '.join(setup.IDE_CONFIGS.keys())}",
+                file=sys.stderr,
+            )
+            if config_needs_reload:
+                _notify_daemon_reload()
             return False
 
-        elif len(detected_ides) == 1:
-            ide_type = detected_ides[0]
-            print(f"Detected IDE: {setup.IDE_CONFIGS[ide_type]['name']}")
+        _, _, target_error = _normalize_project_setup_target(
+            selected_ide, scope, project_dir
+        )
+        if target_error:
+            print(f"Error: {target_error}", file=sys.stderr)
+            if config_needs_reload:
+                _notify_daemon_reload()
+            return False
 
-        else:
-            # Multiple IDEs detected
-            print("Multiple IDEs detected:")
-            for i, ide in enumerate(detected_ides, 1):
-                print(f"  {i}. {setup.IDE_CONFIGS[ide]['name']}")
-
-            if interactive and not dry_run:
-                try:
-                    choice = input("\nSelect IDE (1-{}): ".format(len(detected_ides)))
-                    idx = int(choice) - 1
-                    if 0 <= idx < len(detected_ides):
-                        ide_type = detected_ides[idx]
-                    else:
-                        print("Error: Invalid selection", file=sys.stderr)
-                        return False
-                except (ValueError, KeyboardInterrupt):
-                    print("\nError: Invalid input", file=sys.stderr)
-                    return False
-            else:
-                print(
-                    "\nError: Multiple IDEs detected. Please specify with --ide flag.",
-                    file=sys.stderr,
-                )
-                return False
-
-    # Validate IDE type
-    if ide_type not in setup.IDE_CONFIGS:
-        print(f"Error: Unknown IDE type: {ide_type}", file=sys.stderr)
-        print(f"Supported IDEs: {', '.join(setup.IDE_CONFIGS.keys())}", file=sys.stderr)
-        return False
-
-    scope, project_dir, target_error = _normalize_project_setup_target(
-        ide_type, scope, project_dir
+    # A single automatic target keeps the historical confirmation prompt.  A
+    # multi-target selection is itself the confirmation, just like the tray.
+    single_target_confirmation = len(selected_ides) == 1 and (
+        not automatic_detection or len(unconfigured_ides) == 1
     )
-    if target_error:
-        print(f"Error: {target_error}", file=sys.stderr)
-        return False
-
-    # Confirm with user if interactive
-    if interactive and not dry_run and not force:
-        ide_name = setup.IDE_CONFIGS[ide_type]["name"]
+    if single_target_confirmation and interactive and not dry_run and not force:
+        selected_ide = selected_ides[0]
+        normalized_scope, normalized_project, target_error = (
+            _normalize_project_setup_target(selected_ide, scope, project_dir)
+        )
+        if target_error:
+            print(f"Error: {target_error}", file=sys.stderr)
+            if config_needs_reload:
+                _notify_daemon_reload()
+            return False
+        ide_name = setup.IDE_CONFIGS[selected_ide]["name"]
         ide_config_path = setup.get_config_path(
-            ide_type,
-            scope=scope if _supports_project_scope(ide_type) else "user",
-            project_dir=project_dir if _supports_project_scope(ide_type) else None,
+            selected_ide,
+            scope=(
+                normalized_scope if _supports_project_scope(selected_ide) else "user"
+            ),
+            project_dir=(
+                normalized_project if _supports_project_scope(selected_ide) else None
+            ),
         )
 
         print(f"\nThis will configure ai-guardian hooks for {ide_name}")
@@ -453,58 +670,30 @@ def setup_hooks(
             response = input("\nContinue? [y/N]: ")
             if response.lower() not in ["y", "yes"]:
                 print("Aborted.")
+                if config_needs_reload:
+                    _notify_daemon_reload()
                 return False
         except KeyboardInterrupt:
             print("\nAborted.")
+            if config_needs_reload:
+                _notify_daemon_reload()
             return False
 
-    # Setup IDE hooks
-    hook_kwargs: Dict[str, Any] = {"dry_run": dry_run, "force": force}
-    if ide_type == "pi":
-        hook_kwargs["enable_mcp"] = not bool(no_mcp)
-    if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
-        hook_kwargs.update({"scope": scope, "project_dir": project_dir})
-    success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
-    mcp_repair = False
-    if not success and ide_type in ("codex", "cursor", "pi"):
-        try:
-            hook_verification = setup.verify_hooks_for_ide(
-                ide_type,
-                scope=scope if _supports_project_scope(ide_type) else "user",
-                project_dir=project_dir if _supports_project_scope(ide_type) else None,
-            )
-            mcp_repair = (
-                isinstance(hook_verification, dict)
-                and hook_verification.get("healthy") is True
-            )
-        except Exception as exc:
-            logger.debug(
-                "Unable to verify existing %s hooks during setup repair: %s",
-                ide_type,
-                exc,
-            )
-            mcp_repair = False
-    print(message)
-
-    # MCP server always installed by default (Issue #477, #808, #1377)
-    setup_success = success or mcp_repair
-    if setup_success:
-        if no_mcp:
-            mcp_kwargs: Dict[str, Any] = {"no_mcp": True, "dry_run": dry_run}
-            if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
-                mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
-            _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
-        else:
-            mcp_kwargs = {"dry_run": dry_run}
-            if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
-                mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
-            _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
-
-    # Handle rules/guidelines file installation (Issue #637)
-    if setup_success and rules:
-        _handle_rules_setup(ide_type, dry_run=dry_run, force=force)
-
-    if setup_success and not dry_run:
+    setup_results = [
+        _setup_single_ide(
+            setup,
+            selected_ide,
+            dry_run=dry_run,
+            force=force,
+            no_mcp=no_mcp,
+            rules=rules,
+            scope=scope,
+            project_dir=project_dir,
+        )
+        for selected_ide in selected_ides
+    ]
+    setup_success = bool(setup_results) and all(setup_results)
+    if (any(setup_results) or config_needs_reload) and not dry_run:
         _notify_daemon_reload()
 
     return setup_success
@@ -555,10 +744,13 @@ def _setup_hooks_json_output(
                     f.write("\n")
             get_cache_dir().mkdir(parents=True, exist_ok=True)
 
-    # Auto-detect IDE if not specified
+    # Auto-detect IDE if not specified. JSON mode is always non-interactive,
+    # so it configures every pending integration and reports each result.
     if ide_type is None:
-        detected_ides = setup.list_detected_ides()
-        if not detected_ides:
+        installed_ides, unconfigured_ides = _discover_unconfigured_ides(setup)
+        result["installed"] = installed_ides
+        result["needs_setup"] = unconfigured_ides
+        if not installed_ides:
             if create_config:
                 print(json.dumps(result, indent=2))
                 return True
@@ -572,25 +764,58 @@ def _setup_hooks_json_output(
                 )
             )
             return False
-        elif len(detected_ides) == 1:
-            ide_type = detected_ides[0]
-        else:
-            if create_config:
-                print(json.dumps(result, indent=2))
-                return True
-            print(
-                json.dumps(
-                    {
-                        "success": False,
-                        "error": (
-                            f"Multiple IDEs detected: {', '.join(detected_ides)}. "
-                            "Specify --ide flag."
-                        ),
-                    },
-                    indent=2,
-                )
+        if not unconfigured_ides:
+            result["configured"] = installed_ides
+            result["message"] = (
+                "All installed IDE/CLI integrations are already configured."
             )
-            return False
+            print(json.dumps(result, indent=2))
+            return True
+        for selected_ide in unconfigured_ides:
+            _, _, target_error = _normalize_project_setup_target(
+                selected_ide, scope, project_dir
+            )
+            if target_error:
+                result["success"] = False
+                result["error"] = target_error
+                print(json.dumps(result, indent=2))
+                return False
+        if len(unconfigured_ides) > 1:
+            child_results = []
+            for selected_ide in unconfigured_ides:
+                child_output = io.StringIO()
+                with (
+                    contextlib.redirect_stdout(child_output),
+                    contextlib.redirect_stderr(io.StringIO()),
+                ):
+                    child_success = _setup_hooks_json_output(
+                        ide_type=selected_ide,
+                        dry_run=dry_run,
+                        force=force,
+                        create_config=False,
+                        no_mcp=no_mcp,
+                        rules=rules,
+                        scope=scope,
+                        project_dir=project_dir,
+                    )
+                try:
+                    child_result = json.loads(child_output.getvalue())
+                except (TypeError, ValueError):
+                    child_result = {
+                        "success": bool(child_success),
+                        "ide": selected_ide,
+                        "error": "IDE setup did not produce valid JSON output.",
+                    }
+                child_results.append(child_result)
+            result["ides"] = unconfigured_ides
+            result["results"] = child_results
+            result["success"] = bool(child_results) and all(
+                isinstance(child, dict) and child.get("success") is True
+                for child in child_results
+            )
+            print(json.dumps(result, indent=2))
+            return result["success"]
+        ide_type = unconfigured_ides[0]
 
     if ide_type not in setup.IDE_CONFIGS:
         print(

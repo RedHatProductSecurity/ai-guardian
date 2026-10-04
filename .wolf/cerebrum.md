@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-03
+> Last updated: 2026-10-04
 
 ## User Preferences
 
@@ -313,3 +313,10 @@
   `~/.codex/auth.json`. The OpenShell sandbox intentionally uses API-key auth
   (`0.154.0`), so a working host session is not evidence that the API-key
   organization has inference credits.
+
+- [2026-10-04] **CLI setup auto-detection (#2494):** Plain setup must use
+  `IDESetup.list_installed_ides()` plus `check_hooks_for_ide(..., integrity=True)`
+  like the tray, so healthy integrations are never rewritten. Non-interactive
+  setup configures all pending integrations; interactive multi-setup defaults to
+  all but accepts a numbered subset or skip. Keep legacy `--create-config`-only
+  behavior isolated from hook setup unless an integration target is selected.

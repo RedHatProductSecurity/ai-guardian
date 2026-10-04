@@ -95,6 +95,9 @@ def test_setup_help_explains_codex_scope(capsys):
     assert "desktop app" in output
     assert "regular ChatGPT mode is not protected" in output
     assert "Shared MCP configuration does not imply hook enforcement" in output
+    normalized = " ".join(output.split())
+    assert "skips configured integrations" in normalized
+    assert "configure all detected unconfigured integrations" in normalized
 
 
 def test_cursor_project_setup_option_reaches_setup_orchestrator():

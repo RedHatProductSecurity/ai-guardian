@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Automatic CLI/IDE setup discovery (#2494):** Make plain `ai-guardian setup`
+  reuse tray installation and integrity checks, skip healthy integrations,
+  prompt for a selectable subset when several need setup, and let `--yes` or
+  `--json` configure pending integrations non-interactively.
 - **Two-step IDE/CLI setup postponement (#2496):** Add a Later action to the
   setup prompt, open a separate 1h/6h/1d/1w delay chooser, default closed
   prompts to a one-hour snooze, and preserve explicit permanent dismissal

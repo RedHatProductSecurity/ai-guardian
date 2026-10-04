@@ -372,7 +372,10 @@ def main():
                 "supported IDE. OpenAI Codex (CLI + Desktop) means Codex CLI and "
                 "Codex mode in the ChatGPT desktop app; regular ChatGPT mode is "
                 "not protected by Codex lifecycle hooks. Shared MCP configuration "
-                "does not imply hook enforcement."
+                "does not imply hook enforcement. Without --ide, setup detects "
+                "installed integrations that are not healthy, skips configured "
+                "integrations, and lets you select which pending integrations to "
+                "configure."
             ),
         )
         setup_parser.add_argument(
@@ -397,12 +400,15 @@ def main():
             "--force", action="store_true", help="Overwrite existing hooks and config"
         )
         setup_parser.add_argument(
-            "--yes", "-y", action="store_true", help="Skip confirmation prompts"
+            "--yes",
+            "-y",
+            action="store_true",
+            help="Skip prompts and configure all detected unconfigured integrations",
         )
         setup_parser.add_argument(
             "--create-config",
             action="store_true",
-            help="Create default ai-guardian.json config file",
+            help="Create default config before automatic or targeted IDE setup",
         )
         setup_parser.add_argument(
             "--permissive",
@@ -440,7 +446,7 @@ def main():
             "--json",
             action="store_true",
             dest="json_output",
-            help="Output only raw JSON config (use with --create-config)",
+            help="Output machine-readable setup results without prompting",
         )
         setup_parser.add_argument(
             "--profile",
