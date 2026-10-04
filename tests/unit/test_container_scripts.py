@@ -236,7 +236,7 @@ class TestContainerLaunchers:
         assert "FROM ${BASE_IMAGE}\n\nARG BASE_IMAGE\n" in dockerfile
         assert "uv pip install --python /sandbox/.venv/bin/python" in dockerfile
         assert "ARG CLAUDE_VERSION" not in dockerfile
-        assert "ARG CODEX_VERSION=0.154.0" in dockerfile
+        assert "ARG CODEX_VERSION=0.160.0" in dockerfile
         assert "ARG PI_VERSION" not in dockerfile
         assert "ARG COPILOT_VERSION" not in dockerfile
         assert "npm install --global --prefix /usr" in dockerfile

@@ -328,7 +328,7 @@ installs Codex explicitly:
 
 | Build argument | Package | Default |
 |----------------|---------|---------|
-| `CODEX_VERSION` | `@openai/codex` | `0.154.0` |
+| `CODEX_VERSION` | `@openai/codex` | `0.160.0` |
 
 These are pinned rather than installed through a mutable `latest` tag so an
 image can be reproduced and rolled back. Override the managed version
@@ -340,7 +340,7 @@ for the normal-image and host integration record.
 
 ```bash
 podman build -f container/Dockerfile.openshell \
-    --build-arg CODEX_VERSION=0.154.0 \
+    --build-arg CODEX_VERSION=0.160.0 \
     -t localhost/ai-guardian-openshell:latest container/
 ```
 
@@ -350,7 +350,7 @@ read/write GitHub policy is applied to the selected Codex agent:
 
 ```bash
 podman build -f container/Dockerfile.openshell \
-    --build-arg CODEX_VERSION=0.154.0 \
+    --build-arg CODEX_VERSION=0.160.0 \
     -t localhost/ai-guardian-openshell:dev \
     container/
 

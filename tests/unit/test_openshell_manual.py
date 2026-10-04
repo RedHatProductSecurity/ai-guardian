@@ -151,7 +151,7 @@ def test_compatibility_report_records_image_digest_and_managed_cli_versions():
     assert metadata["digest"] == "unknown"
     assert metadata["base_digest"].startswith("sha256:")
     assert metadata["bundled_cli_versions"] == {
-        "codex": "0.154.0",
+        "codex": "0.160.0",
     }
 
 
