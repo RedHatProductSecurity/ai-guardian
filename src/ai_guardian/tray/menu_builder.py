@@ -36,6 +36,20 @@ TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
     "container": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["container"],
     "openshell": TRAY_OPENSHELL_CLI_CHOICES,
 }
+_SANDBOX_CONFIG_SOURCE_CHOICES = (
+    "Host/default",
+    "Latest saved snapshot",
+)
+_SANDBOX_DEFAULT_CONFIG_SOURCE = _SANDBOX_CONFIG_SOURCE_CHOICES[0]
+
+
+def _normalize_sandbox_config_source(value):
+    """Return a valid initial-config choice for a sandbox form."""
+    candidate = str(value or "").strip()
+    if candidate in _SANDBOX_CONFIG_SOURCE_CHOICES:
+        return candidate
+    return _SANDBOX_DEFAULT_CONFIG_SOURCE
+
 
 try:
     import pystray
@@ -860,7 +874,10 @@ class TrayMenuBuilder:
         ]
         for policy in policies:
             command.extend(["--policy", policy])
-        if values.get("config_source") == "Latest saved snapshot":
+        if (
+            _normalize_sandbox_config_source(values.get("config_source"))
+            == "Latest saved snapshot"
+        ):
             command.extend(["--restore-config", "latest"])
 
         environment_count = len(
@@ -1011,6 +1028,9 @@ class TrayMenuBuilder:
 
     def _sandbox_create_fields(self, values=None):
         """Return the create form fields used by the main tray menu."""
+        config_source = _normalize_sandbox_config_source(
+            values.get("config_source") if isinstance(values, dict) else None
+        )
         runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
         if runtime not in {"container", "openshell"}:
             runtime = "openshell"
@@ -1238,8 +1258,8 @@ class TrayMenuBuilder:
                 "name": "config_source",
                 "label": "Initial config",
                 "type": "choice",
-                "choices": ("Host/default", "Latest saved snapshot"),
-                "default": "Host/default",
+                "choices": _SANDBOX_CONFIG_SOURCE_CHOICES,
+                "default": config_source,
             },
             {
                 "name": "port",
@@ -1255,7 +1275,11 @@ class TrayMenuBuilder:
         if values:
             for field in fields:
                 name = field.get("name")
-                if name in values and values[name] is not None:
+                if (
+                    name != "config_source"
+                    and name in values
+                    and values[name] is not None
+                ):
                     field["default"] = values[name]
         return fields
 
@@ -1271,7 +1295,7 @@ class TrayMenuBuilder:
         runtime = values.get("runtime")
         name = str(values.get("name") or "").strip()
         profile = str(values.get("profile") or "").strip()
-        config_source = str(values.get("config_source") or "Host/default")
+        config_source = _normalize_sandbox_config_source(values.get("config_source"))
         restore = config_source == "Latest saved snapshot"
         if restore and profile:
             self._sandbox_error(

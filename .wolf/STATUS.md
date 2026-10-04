@@ -11,6 +11,12 @@ budget_tokens: 1000
 
 ## Done
 
+- Issue #2493 now normalizes the sandbox create form's Initial config choice to
+  `Host/default` for fresh and invalid state, preserves an explicit Latest saved
+  snapshot selection during upload-cancel reopen, and aligns Tkinter/NiceGUI
+  choice rendering with regression coverage.
+- Focused sandbox validation passes: 151 tests, Ruff, Black, Pylint error checks,
+  and Mypy. Changes remain uncommitted on branch `2493` for `daf complete`.
 - Issue #2470 now supports OpenCode V1 and V2 from the single `opencode` setup
   integration, selecting the plugin contract from the installed CLI version and
   preserving an existing V2 artifact when detection is unavailable.
@@ -98,17 +104,17 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Review and commit the uncommitted #2494 implementation, then open its pull
-  request if desired.
-- The seven-test OpenCode V1 contract class in the full setup file remains a
-  pre-existing V1/V2 baseline mismatch; the #2494-focused tests pass.
+- Run `daf complete` outside the active agent session when ready to commit and
+  publish the #2493 implementation.
+- The prior #2494 handoff remains in the historical context below; its changes
+  are not part of the active #2493 worktree.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2494`
-- HEAD: `252b9084`; issue #2494 source, test, documentation, and changelog
-  changes are uncommitted on this feature branch.
+- Branch: `2493`
+- HEAD: `6841ef54`; issue #2493 source and test changes are uncommitted on this
+  feature branch.
 - Structured Linux setup prompts now remain on Tkinter/NiceGUI so native
   zenity/kdialog fallbacks cannot drop IDE/profile choices; setup and upgrade
   prompt workers share a non-blocking serialization lock.
@@ -150,4 +156,4 @@ uv run --extra dev python -c 'from pathlib import Path; import yaml; [yaml.safe_
 - `AGENTS.md` - repository contribution rules
 - GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2496`
 - Prior GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2494`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2493`

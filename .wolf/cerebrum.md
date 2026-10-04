@@ -320,3 +320,8 @@
   setup configures all pending integrations; interactive multi-setup defaults to
   all but accepts a numbered subset or skip. Keep legacy `--create-config`-only
   behavior isolated from hook setup unless an integration target is selected.
+
+- [2026-10-04] **Sandbox form choice defaults (#2493):** Reopened tray forms can
+  carry an empty or invalid choice value between providers. Normalize the
+  initial-config choice before rendering and make Tkinter/NiceGUI use the same
+  first-choice fallback while preserving an explicit snapshot selection.
