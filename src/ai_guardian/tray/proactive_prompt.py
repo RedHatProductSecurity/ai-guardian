@@ -368,7 +368,9 @@ class ProactivePromptDialog:
     unavailable, they continue through Tkinter and NiceGUI. ``show`` returns a
     stable string for ordinary prompts. When IDE
     or profile choices are provided it returns a mapping containing the
-    selected values.
+    selected values. Setup prompts can opt into a two-step snooze flow where
+    ``Later`` opens a separate delay selector and closing the first prompt
+    defaults to the shortest delay.
     """
 
     def __init__(
@@ -381,6 +383,7 @@ class ProactivePromptDialog:
         ide_choices: Optional[Iterable[Dict[str, str]]] = None,
         profile_choices: Optional[Iterable[Any]] = None,
         screen_bounds=None,
+        two_step_snooze: bool = False,
     ):
         self.title = title
         self.message = message
@@ -390,6 +393,7 @@ class ProactivePromptDialog:
         self.ide_choices = tuple(ide_choices or ())
         self.profile_choices = tuple(profile_choices or ())
         self.screen_bounds = screen_bounds
+        self.two_step_snooze = bool(two_step_snooze and self.snooze_options)
 
     def _profile_options(self):
         """Return valid profile options plus an explicit skip choice."""
@@ -427,6 +431,23 @@ class ProactivePromptDialog:
                 return option["profile"]
         return options[0]["profile"] if options else None
 
+    def _default_snooze_result(self) -> str:
+        """Return the safe fallback when a two-step prompt is closed."""
+        if self.snooze_options:
+            return f"snooze_{self.snooze_options[0]}"
+        return "dismiss"
+
+    def _normalize_two_step_result(self, result):
+        """Normalize a provider result from the optional two-step flow."""
+        if not self.two_step_snooze:
+            return result
+        if isinstance(result, dict) and result.get("result") == "later":
+            result = dict(result)
+            result["result"] = self._default_snooze_result()
+        elif result == "later":
+            result = self._default_snooze_result()
+        return result
+
     @staticmethod
     def _profile_choice_label(option):
         """Format a profile option for the interactive selectors."""
@@ -453,7 +474,7 @@ class ProactivePromptDialog:
             try:
                 result = self._show_native_fallback()
                 if result is not None:
-                    return result
+                    return self._normalize_two_step_result(result)
             except Exception as exc:
                 logger.warning(
                     "Native Linux proactive prompt failed; trying the next "
@@ -484,15 +505,19 @@ class ProactivePromptDialog:
                     if tray_safe and system in {"Darwin", "Windows"}:
                         result = self._show_tkinter_subprocess()
                         if result is not None:
-                            return result
+                            return self._normalize_two_step_result(result)
                         continue
                     if self.ide_choices or self._profile_options():
-                        return self._show_ide_choices_tkinter()
-                    return self._show_tkinter()
+                        return self._normalize_two_step_result(
+                            self._show_ide_choices_tkinter()
+                        )
+                    return self._normalize_two_step_result(self._show_tkinter())
                 if tier == "nicegui":
                     if self.ide_choices or self._profile_options():
-                        return self._show_ide_choices_nicegui()
-                    return self._show_nicegui()
+                        return self._normalize_two_step_result(
+                            self._show_ide_choices_nicegui()
+                        )
+                    return self._normalize_two_step_result(self._show_nicegui())
             except Exception as exc:
                 logger.warning(
                     "Proactive %s prompt unavailable on %s; trying the next "
@@ -512,12 +537,12 @@ class ProactivePromptDialog:
             try:
                 result = self._show_native_fallback()
                 if result is not None:
-                    return result
+                    return self._normalize_two_step_result(result)
             except Exception as exc:
                 logger.warning("Native %s proactive prompt failed: %s", system, exc)
 
         logger.info("%s: %s", self.title, self.message)
-        return "dismiss"
+        return self._default_snooze_result() if self.two_step_snooze else "dismiss"
 
     def _show_native_fallback(self) -> Optional[object]:
         """Show an actionable native fallback when tray UI tiers fail."""
@@ -532,6 +557,7 @@ class ProactivePromptDialog:
             ide_choices=self.ide_choices,
             profile_choices=self._profile_options(),
             screen_bounds=self.screen_bounds,
+            two_step_snooze=self.two_step_snooze,
         )
 
     def _show_tkinter_subprocess(self) -> Optional[object]:
@@ -550,6 +576,7 @@ class ProactivePromptDialog:
                 "ide_choices": self.ide_choices,
                 "profile_choices": self.profile_choices,
                 "screen_bounds": self.screen_bounds,
+                "two_step_snooze": self.two_step_snooze,
             }
         )
         child = (
@@ -559,7 +586,7 @@ class ProactivePromptDialog:
             "d=ProactivePromptDialog(p['title'], p['message'], "
             "p['action_label'], p['dismiss_label'], p['snooze_options'], "
             "p.get('ide_choices'), p.get('profile_choices'), "
-            "p.get('screen_bounds')); "
+            "p.get('screen_bounds'), p.get('two_step_snooze', False)); "
             "value=(d._show_ide_choices_tkinter() if (p.get('ide_choices') "
             "or p.get('profile_choices')) "
             "else d._show_tkinter()); "
@@ -646,7 +673,10 @@ class ProactivePromptDialog:
 
         _ensure_tcl_library()
 
-        result = {"value": self._ide_selection_result("dismiss")}
+        initial_result = (
+            self._default_snooze_result() if self.two_step_snooze else "dismiss"
+        )
+        result = {"value": self._ide_selection_result(initial_result)}
         root = tk.Tk()
         root.title(self.title)
         root.resizable(False, False)
@@ -746,6 +776,11 @@ class ProactivePromptDialog:
                 result["value"] = self._ide_selection_result(
                     value, install, never, profile
                 )
+            elif value == "later":
+                result["value"] = self._ide_selection_result(
+                    value,
+                    profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+                )
             else:
                 result["value"] = (
                     self._never_ide_selection()
@@ -763,7 +798,13 @@ class ProactivePromptDialog:
             text=self.action_label,
             command=lambda: choose("action"),
         ).grid(row=button_row, column=0, padx=(0, 8), pady=(14, 0), sticky="w")
-        if self.snooze_options:
+        if self.two_step_snooze:
+            ttk.Button(
+                frame,
+                text="Later",
+                command=lambda: choose("later"),
+            ).grid(row=button_row, column=1, padx=(0, 8), pady=(14, 0), sticky="w")
+        elif self.snooze_options:
             snooze = tk.StringVar(value=self.snooze_options[0])
             ttk.OptionMenu(frame, snooze, snooze.get(), *self.snooze_options).grid(
                 row=button_row, column=1, padx=(0, 8), pady=(14, 0), sticky="w"
@@ -781,8 +822,11 @@ class ProactivePromptDialog:
                     "never" if self.dismiss_label == "Never" else "dismiss"
                 ),
             ).grid(row=button_row + 1, column=0, pady=(8, 0), sticky="w")
-        root.protocol("WM_DELETE_WINDOW", lambda: choose("dismiss"))
-        root.bind("<Escape>", lambda _event: choose("dismiss"))
+        close_result = (
+            self._default_snooze_result() if self.two_step_snooze else "dismiss"
+        )
+        root.protocol("WM_DELETE_WINDOW", lambda: choose(close_result))
+        root.bind("<Escape>", lambda _event: choose(close_result))
         root.update_idletasks()
         _place_window_on_screen(
             root,
@@ -796,12 +840,24 @@ class ProactivePromptDialog:
         root.after(50, root.focus_force)
         root.after(150, lambda: root.attributes("-topmost", False))
         root.mainloop()
+        if (
+            self.two_step_snooze
+            and isinstance(result["value"], dict)
+            and result["value"].get("result") == "later"
+        ):
+            result["value"] = self._ide_selection_result(
+                self._show_snooze_tkinter(),
+                profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+            )
         return result["value"]
 
     def _show_ide_choices_nicegui(self):
         from nicegui import app, ui
 
-        result = {"value": self._ide_selection_result("dismiss")}
+        initial_result = (
+            self._default_snooze_result() if self.two_step_snooze else "dismiss"
+        )
+        result = {"value": self._ide_selection_result(initial_result)}
         done = threading.Event()
         controls: Dict[str, Any] = {}
         profile_control = None
@@ -832,6 +888,11 @@ class ProactivePromptDialog:
                 result["value"] = self._ide_selection_result(
                     value, install, never, profile
                 )
+            elif value == "later":
+                result["value"] = self._ide_selection_result(
+                    value,
+                    profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+                )
             else:
                 result["value"] = (
                     self._never_ide_selection()
@@ -843,6 +904,16 @@ class ProactivePromptDialog:
                 )
             done.set()
             app.shutdown()
+
+        if self.two_step_snooze:
+            on_disconnect = getattr(app, "on_disconnect", None)
+            if callable(on_disconnect):
+
+                def handle_disconnect():
+                    done.set()
+                    app.shutdown()
+
+                on_disconnect(handle_disconnect)
 
         with ui.card().classes("min-w-[620px]"):
             ui.label(self.title).classes("text-h6")
@@ -884,11 +955,14 @@ class ProactivePromptDialog:
                 )
             with ui.row():
                 ui.button(self.action_label, on_click=lambda: choose("action"))
-                for option in self.snooze_options:
-                    ui.button(
-                        f"Later ({option})",
-                        on_click=lambda option=option: choose(f"snooze_{option}"),
-                    )
+                if self.two_step_snooze:
+                    ui.button("Later", on_click=lambda: choose("later"))
+                else:
+                    for option in self.snooze_options:
+                        ui.button(
+                            f"Later ({option})",
+                            on_click=lambda option=option: choose(f"snooze_{option}"),
+                        )
                 if self.dismiss_label:
                     ui.button(
                         self.dismiss_label,
@@ -905,6 +979,64 @@ class ProactivePromptDialog:
             host="127.0.0.1",
         )
         done.wait(timeout=3600)
+        if (
+            self.two_step_snooze
+            and isinstance(result["value"], dict)
+            and result["value"].get("result") == "later"
+        ):
+            result["value"] = self._ide_selection_result(
+                self._show_snooze_nicegui(),
+                profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+            )
+        return result["value"]
+
+    def _show_snooze_tkinter(self) -> str:
+        """Show the second Tkinter step that selects a snooze duration."""
+        from functools import partial
+        import tkinter as tk
+        from tkinter import ttk
+
+        _ensure_tcl_library()
+
+        result = {"value": self._default_snooze_result()}
+        root = tk.Tk()
+        root.title("Remind me later")
+        root.resizable(False, False)
+        frame = ttk.Frame(root, padding=16)
+        frame.grid(row=0, column=0, sticky="nsew")
+        ttk.Label(
+            frame,
+            text="When should AI Guardian ask again?",
+            justify="left",
+            wraplength=420,
+        ).grid(row=0, column=0, columnspan=len(self.snooze_options), pady=(0, 14))
+
+        def choose(option):
+            result["value"] = f"snooze_{option}"
+            root.destroy()
+
+        for column, option in enumerate(self.snooze_options):
+            ttk.Button(
+                frame,
+                text=option,
+                command=partial(choose, option),
+            ).grid(row=1, column=column, padx=(0, 8) if column else 0)
+
+        root.protocol("WM_DELETE_WINDOW", root.destroy)
+        root.bind("<Escape>", lambda _event: root.destroy())
+        root.update_idletasks()
+        _place_window_on_screen(
+            root,
+            self.screen_bounds,
+            root.winfo_reqwidth(),
+            root.winfo_reqheight(),
+        )
+        root.lift()
+        root.focus_force()
+        root.attributes("-topmost", True)
+        root.after(50, root.focus_force)
+        root.after(150, lambda: root.attributes("-topmost", False))
+        root.mainloop()
         return result["value"]
 
     def _show_tkinter(self) -> str:
@@ -913,7 +1045,11 @@ class ProactivePromptDialog:
 
         _ensure_tcl_library()
 
-        result = {"value": "dismiss"}
+        result = {
+            "value": (
+                self._default_snooze_result() if self.two_step_snooze else "dismiss"
+            )
+        }
         root = tk.Tk()
         root.title(self.title)
         root.resizable(False, False)
@@ -933,7 +1069,11 @@ class ProactivePromptDialog:
         ttk.Button(
             frame, text=self.action_label, command=lambda: choose("action")
         ).grid(row=1, column=0, padx=(0, 8))
-        if self.snooze_options:
+        if self.two_step_snooze:
+            ttk.Button(frame, text="Later", command=lambda: choose("later")).grid(
+                row=1, column=1, padx=(0, 8)
+            )
+        elif self.snooze_options:
             ttk.OptionMenu(frame, snooze, snooze.get(), *self.snooze_options).grid(
                 row=1, column=1, padx=(0, 8)
             )
@@ -946,8 +1086,11 @@ class ProactivePromptDialog:
             ttk.Button(
                 frame, text=self.dismiss_label, command=lambda: choose("dismiss")
             ).grid(row=1, column=3)
-        root.protocol("WM_DELETE_WINDOW", lambda: choose("dismiss"))
-        root.bind("<Escape>", lambda _event: choose("dismiss"))
+        close_result = (
+            self._default_snooze_result() if self.two_step_snooze else "dismiss"
+        )
+        root.protocol("WM_DELETE_WINDOW", lambda: choose(close_result))
+        root.bind("<Escape>", lambda _event: choose(close_result))
         root.update_idletasks()
         _place_window_on_screen(
             root,
@@ -961,12 +1104,56 @@ class ProactivePromptDialog:
         root.after(50, root.focus_force)
         root.after(150, lambda: root.attributes("-topmost", False))
         root.mainloop()
+        if self.two_step_snooze and result["value"] == "later":
+            return self._show_snooze_tkinter()
+        return result["value"]
+
+    def _show_snooze_nicegui(self) -> str:
+        """Show the second NiceGUI step that selects a snooze duration."""
+        from nicegui import app, ui
+
+        result = {"value": self._default_snooze_result()}
+        done = threading.Event()
+
+        def choose(option):
+            result["value"] = f"snooze_{option}"
+            done.set()
+            app.shutdown()
+
+        on_disconnect = getattr(app, "on_disconnect", None)
+        if callable(on_disconnect):
+
+            def handle_disconnect():
+                done.set()
+                app.shutdown()
+
+            on_disconnect(handle_disconnect)
+
+        with ui.card():
+            ui.label("Remind me later").classes("text-h6")
+            ui.label("When should AI Guardian ask again?")
+            with ui.row():
+                for option in self.snooze_options:
+                    ui.button(option, on_click=lambda option=option: choose(option))
+
+        ui.run(
+            title="Remind me later",
+            reload=False,
+            show=True,
+            port=0,
+            host="127.0.0.1",
+        )
+        done.wait(timeout=3600)
         return result["value"]
 
     def _show_nicegui(self) -> str:
         from nicegui import app, ui
 
-        result = {"value": "dismiss"}
+        result = {
+            "value": (
+                self._default_snooze_result() if self.two_step_snooze else "dismiss"
+            )
+        }
         done = threading.Event()
 
         def choose(value):
@@ -974,16 +1161,29 @@ class ProactivePromptDialog:
             done.set()
             app.shutdown()
 
+        if self.two_step_snooze:
+            on_disconnect = getattr(app, "on_disconnect", None)
+            if callable(on_disconnect):
+
+                def handle_disconnect():
+                    done.set()
+                    app.shutdown()
+
+                on_disconnect(handle_disconnect)
+
         with ui.card():
             ui.label(self.title).classes("text-h6")
             ui.label(self.message)
             with ui.row():
                 ui.button(self.action_label, on_click=lambda: choose("action"))
-                for option in self.snooze_options:
-                    ui.button(
-                        f"Later ({option})",
-                        on_click=lambda option=option: choose(f"snooze_{option}"),
-                    )
+                if self.two_step_snooze:
+                    ui.button("Later", on_click=lambda: choose("later"))
+                else:
+                    for option in self.snooze_options:
+                        ui.button(
+                            f"Later ({option})",
+                            on_click=lambda option=option: choose(f"snooze_{option}"),
+                        )
                 if self.dismiss_label:
                     ui.button(self.dismiss_label, on_click=lambda: choose("dismiss"))
 
@@ -995,4 +1195,6 @@ class ProactivePromptDialog:
             host="127.0.0.1",
         )
         done.wait(timeout=3600)
+        if self.two_step_snooze and result["value"] == "later":
+            return self._show_snooze_nicegui()
         return result["value"]

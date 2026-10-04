@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Two-step IDE/CLI setup postponement (#2496):** Add a Later action to the
+  setup prompt, open a separate 1h/6h/1d/1w delay chooser, default closed
+  prompts to a one-hour snooze, and preserve explicit permanent dismissal
+  across Tkinter, NiceGUI, macOS, and Linux tray dialog providers.
 - **OpenCode V2 support (#2470):** Detect OpenCode 1.x versus 2.x during
   setup, generate the matching plugin lifecycle contract, reconcile the V1
   `plugin` and V2 `plugins` configuration keys, and discover V2 database paths

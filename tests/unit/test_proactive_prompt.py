@@ -1,9 +1,11 @@
 """Tests for reusable proactive tray prompts."""
 
 import json
+import sys
+import types
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
 
 import pytest
@@ -360,6 +362,24 @@ def test_tkinter_subprocess_payload_includes_tray_screen_bounds():
     assert payload["screen_bounds"] == [1920, 37, 2560, 1380]
 
 
+def test_tkinter_subprocess_payload_includes_two_step_snooze():
+    dialog = ProactivePromptDialog(
+        "Title",
+        "Message",
+        "Set Up Now",
+        "Don't Ask Again",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
+    )
+    completed = SimpleNamespace(returncode=0, stdout="snooze_6h\n", stderr="")
+
+    with patch("subprocess.run", return_value=completed) as run:
+        assert dialog._show_tkinter_subprocess() == "snooze_6h"
+
+    payload = json.loads(run.call_args.args[0][-1])
+    assert payload["two_step_snooze"] is True
+
+
 def test_tkinter_subprocess_failure_falls_back_to_native_macos_prompt():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     failed = SimpleNamespace(returncode=1, stdout="", stderr="Tk failed")
@@ -407,6 +427,217 @@ def test_prompt_falls_back_to_headless_when_ui_unavailable():
         ),
     ):
         assert dialog.show() == "dismiss"
+
+
+def test_tkinter_two_step_later_opens_delay_selection():
+    class FakeRoot:
+        next_action = "later"
+
+        def __init__(self):
+            self.buttons = {}
+            self.close_handler = None
+
+        def title(self, _title):
+            pass
+
+        def resizable(self, *_args):
+            pass
+
+        def grid(self, *_args, **_kwargs):
+            pass
+
+        def protocol(self, _name, callback):
+            self.close_handler = callback
+
+        def bind(self, *_args):
+            pass
+
+        def update_idletasks(self):
+            pass
+
+        def winfo_reqwidth(self):
+            return 200
+
+        def winfo_reqheight(self):
+            return 100
+
+        def lift(self):
+            pass
+
+        def focus_force(self):
+            pass
+
+        def attributes(self, *_args):
+            pass
+
+        def after(self, _delay, callback):
+            callback()
+
+        def destroy(self):
+            pass
+
+        def mainloop(self):
+            if self.next_action == "later":
+                self.buttons["Later"]()
+            else:
+                self.close_handler()
+
+    class FakeFrame:
+        def __init__(self, parent, **_kwargs):
+            self.parent = parent
+
+        def grid(self, *_args, **_kwargs):
+            pass
+
+    class FakeLabel:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def grid(self, *_args, **_kwargs):
+            pass
+
+    class FakeButton:
+        def __init__(self, frame, **kwargs):
+            frame.parent.buttons[kwargs["text"]] = kwargs["command"]
+
+        def grid(self, *_args, **_kwargs):
+            pass
+
+    class FakeStringVar:
+        def __init__(self, value=""):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+    tkinter = types.ModuleType("tkinter")
+    tkinter.Tk = FakeRoot
+    tkinter.StringVar = FakeStringVar
+    ttk = types.ModuleType("tkinter.ttk")
+    ttk.Frame = FakeFrame
+    ttk.Label = FakeLabel
+    ttk.Button = FakeButton
+    tkinter.ttk = ttk
+
+    dialog = ProactivePromptDialog(
+        "Set Up AI Guardian",
+        "Hooks are missing.",
+        "Set Up Now",
+        "Don't Ask Again",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
+    )
+    with (
+        patch.dict(sys.modules, {"tkinter": tkinter, "tkinter.ttk": ttk}),
+        patch("ai_guardian.tray.proactive_prompt._ensure_tcl_library"),
+        patch("ai_guardian.tray.proactive_prompt._place_window_on_screen"),
+        patch.object(
+            dialog, "_show_snooze_tkinter", return_value="snooze_6h"
+        ) as snooze,
+    ):
+        assert dialog._show_tkinter() == "snooze_6h"
+
+    snooze.assert_called_once_with()
+
+    FakeRoot.next_action = "close"
+    with (
+        patch.dict(sys.modules, {"tkinter": tkinter, "tkinter.ttk": ttk}),
+        patch("ai_guardian.tray.proactive_prompt._ensure_tcl_library"),
+        patch("ai_guardian.tray.proactive_prompt._place_window_on_screen"),
+        patch.object(dialog, "_show_snooze_tkinter") as snooze,
+    ):
+        assert dialog._show_tkinter() == "snooze_1h"
+
+    snooze.assert_not_called()
+
+
+def test_nicegui_two_step_later_opens_delay_selection():
+    class FakeContext:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def classes(self, *_args):
+            return self
+
+    class FakeUI:
+        def __init__(self):
+            self.buttons = []
+
+        def card(self):
+            return FakeContext()
+
+        def label(self, *_args):
+            return FakeContext()
+
+        def row(self):
+            return FakeContext()
+
+        def button(self, label, on_click):
+            self.buttons.append((label, on_click))
+            return MagicMock()
+
+        def run(self, **_kwargs):
+            next(label for label, callback in self.buttons if label == "Later")
+            for label, callback in self.buttons:
+                if label == "Later":
+                    callback()
+                    return
+
+    class FakeApp:
+        def on_disconnect(self, callback):
+            self.disconnect = callback
+
+        def shutdown(self):
+            pass
+
+    nicegui = types.ModuleType("nicegui")
+    nicegui.ui = FakeUI()
+    nicegui.app = FakeApp()
+    dialog = ProactivePromptDialog(
+        "Set Up AI Guardian",
+        "Hooks are missing.",
+        "Set Up Now",
+        "Don't Ask Again",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
+    )
+    with (
+        patch.dict(sys.modules, {"nicegui": nicegui}),
+        patch.object(
+            dialog, "_show_snooze_nicegui", return_value="snooze_1d"
+        ) as snooze,
+    ):
+        assert dialog._show_nicegui() == "snooze_1d"
+
+    assert [label for label, _callback in nicegui.ui.buttons] == [
+        "Set Up Now",
+        "Later",
+        "Don't Ask Again",
+    ]
+    snooze.assert_called_once_with()
+
+
+def test_two_step_prompt_falls_back_to_one_hour_when_ui_unavailable():
+    dialog = ProactivePromptDialog(
+        "Title",
+        "Message",
+        "Set Up Now",
+        "Don't Ask Again",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
+    )
+    with (
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
+        ),
+    ):
+        assert dialog.show() == "snooze_1h"
 
 
 def test_multi_ide_prompt_defaults_to_install_now():
@@ -1124,12 +1355,10 @@ def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
             "ai_guardian.tray.proactive_prompt._state_path",
             return_value=tmp_path / "proactive_prompts.json",
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
-            return_value="snooze_1h",
-        ),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
         patch("ai_guardian.tray.health.threading.Thread") as thread,
     ):
+        dialog.return_value.show.return_value = "snooze_1h"
         thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
             "target"
         ]()
@@ -1137,6 +1366,7 @@ def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
 
     state = ProactivePromptState(tmp_path / "proactive_prompts.json")
     assert not state.available("ide_setup_cursor")
+    assert dialog.call_args.kwargs["two_step_snooze"] is True
 
 
 def test_multi_ide_setup_prompt_snoozes_structured_prompt(tmp_path):

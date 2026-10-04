@@ -1091,6 +1091,7 @@ class TrayHealthMonitor:
                     "action_label": (action_label if len(names) == 1 else "Submit"),
                     "dismiss_label": "Don't Ask Again" if len(names) == 1 else None,
                     "snooze_options": ("1h", "6h", "1d", "1w"),
+                    "two_step_snooze": True,
                 }
                 if profile_choices:
                     dialog_kwargs["profile_choices"] = profile_choices

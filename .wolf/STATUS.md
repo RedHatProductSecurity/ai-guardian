@@ -5,7 +5,7 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-03
+> Last updated: 2026-10-04
 
 ---
 
@@ -86,33 +86,45 @@ budget_tokens: 1000
   image in commit `50df159f`, which is pushed to `origin/2470`.
 - PR #2495 is open and ready for review. Build, lint, smoke, container, and
   integration checks are rerunning for the CI correction.
+- Issue #2496 now uses a two-step Later flow for IDE/CLI setup prompts across
+  Tkinter, NiceGUI, macOS Cocoa, and Linux native fallbacks. Closing defaults
+  to a one-hour snooze while explicit Don't Ask Again remains permanent.
+- Issue #2496 coverage includes provider-specific unit tests, IDE setup UX
+  contracts, changelog documentation, and a passing focused validation set.
 
 ## Next Quest
 
-- Monitor PR #2495's fresh CI run and investigate any remaining Python/Windows
-  matrix failures before merge.
-- Either add/check credits for the OpenAI organization and rerun the API-key
-  smoke request, or deliberately provision the sandbox with the working Codex
-  OAuth provider. No source workaround should be added for the quota error.
-- Exercise the ready `ag-codex` sandbox through the tray and complete the
-  remaining lifecycle smoke evidence.
+- Run `daf complete` for issue #2496 when ready to commit and publish the
+  feature branch; this session has intentionally left source changes
+  uncommitted.
+- Continue the prior #2470 PR #2495 CI monitoring and OpenShell/Codex smoke
+  follow-up after completing #2496.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2470`
-- HEAD: `50df159f`
-- The issue #2470 implementation, tests, documentation, workflow, container,
-  policy changes, doctor reporting, daemon routing, review fixes, and the CI
-  test-contract correction are
-  committed and pushed to `origin/2470`; PR #2495 is open. The working tree
-  is clean before this handoff update.
+- Branch: `2496`
+- HEAD: `adc3d542`
+- The issue #2496 implementation is uncommitted in the working tree. Issue
+  #2496 is labeled `done` and has a completion comment; no commit or PR was
+  created because DAF handles those through `daf complete`.
+- The prior issue #2470 implementation, tests, documentation, workflow,
+  container, policy changes, doctor reporting, daemon routing, review fixes,
+  and CI test-contract correction remain committed and pushed to `origin/2470`;
+  PR #2495 is open.
 - NiceGUI is a core dependency; `uv.lock` is ignored by this repository and was regenerated locally.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
 ## Validation
 
 ```bash
+uv run --extra dev python -m pytest tests/unit/test_proactive_prompt.py tests/unit/test_tray_plugins.py tests/ux/test_user_experience_contract_ide_setup.py -q
+ruff check src/ai_guardian/ tests/
+black --target-version py310 --check src/ai_guardian/ tests/
+mypy src/ai_guardian/
+pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text
+
+# Prior #2470 validation
 uv run --extra dev python -m pytest tests/unit/test_opencode_support.py tests/unit/test_doctor.py tests/unit/test_daemon_multi_client.py tests/unit/test_metrics.py -q
 AI_GUARDIAN_TEST_IDE=opencode uv run --extra dev python -m pytest tests/integration/test_ide_hooks_e2e.py -q
 uv run --extra dev python -m pytest tests/ux/test_user_experience_contract_ide_setup.py -q
@@ -129,4 +141,5 @@ uv run --extra dev python -c 'from pathlib import Path; import yaml; [yaml.safe_
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`
+- GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2496`
+- Prior GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`

@@ -1327,6 +1327,79 @@ class TestShowActionDialog:
         assert "--extra-button" in command
         assert "Later (1h)" in command
 
+    def test_linux_two_step_prompt_opens_delay_selection(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
+            ):
+                first = mock.Mock(returncode=0, stdout="Later", stderr="")
+                second = mock.Mock(returncode=0, stdout="6h", stderr="")
+                with mock.patch(
+                    "subprocess.run", side_effect=[first, second]
+                ) as mock_run:
+                    result = show_action_dialog(
+                        "Set Up AI Guardian",
+                        "Hooks are missing.",
+                        "Set Up Now",
+                        "Don't Ask Again",
+                        snooze_options=("1h", "6h", "1d", "1w"),
+                        two_step_snooze=True,
+                    )
+
+        assert result == "snooze_6h"
+        first_command = mock_run.call_args_list[0].args[0]
+        second_command = mock_run.call_args_list[1].args[0]
+        assert "Later" in first_command
+        assert "Later (1h)" not in first_command
+        assert "Don't Ask Again" in first_command
+        assert "1h" in second_command
+        assert "6h" in second_command
+        assert "1d" in second_command
+        assert "1w" in second_command
+
+    def test_linux_two_step_close_defaults_to_one_hour(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
+            ):
+                with mock.patch("subprocess.run") as mock_run:
+                    mock_run.return_value = mock.Mock(
+                        returncode=1, stdout="", stderr=""
+                    )
+                    result = show_action_dialog(
+                        "Set Up AI Guardian",
+                        "Hooks are missing.",
+                        "Set Up Now",
+                        "Don't Ask Again",
+                        snooze_options=("1h", "6h", "1d", "1w"),
+                        two_step_snooze=True,
+                    )
+
+        assert result == "snooze_1h"
+
+    def test_linux_two_step_explicit_dismissal_remains_permanent(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
+            ):
+                with mock.patch("subprocess.run") as mock_run:
+                    mock_run.return_value = mock.Mock(
+                        returncode=0, stdout="Don't Ask Again", stderr=""
+                    )
+                    result = show_action_dialog(
+                        "Set Up AI Guardian",
+                        "Hooks are missing.",
+                        "Set Up Now",
+                        "Don't Ask Again",
+                        snooze_options=("1h", "6h", "1d", "1w"),
+                        two_step_snooze=True,
+                    )
+
+        assert result == "dismiss"
+
     def test_linux_structured_prompt_uses_safe_default_choices(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Linux"
@@ -1523,6 +1596,34 @@ class TestShowActionDialog:
         assert "Number(control.never.state)" in script
         assert "Number(control.install.state)" in script
         assert 'String(payload.dismiss_label) === "Never"' in script
+
+    def test_macos_two_step_prompt_uses_a_second_delay_dialog(self):
+        native_result = {
+            "result": "snooze_6h",
+            "install": [],
+            "never": [],
+        }
+        with mock.patch("ai_guardian.tray.plugins.platform") as platform_mock:
+            platform_mock.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = json.dumps(native_result) + "\n"
+                result = show_action_dialog(
+                    "Set Up AI Guardian",
+                    "Hooks are missing.",
+                    "Set Up Now",
+                    "Don't Ask Again",
+                    snooze_options=("1h", "6h", "1d", "1w"),
+                    two_step_snooze=True,
+                )
+
+        assert result == "snooze_6h"
+        script = mock_run.call_args.args[0][4]
+        assert '"two_step_snooze": true' in script
+        assert "function selectedSnooze()" in script
+        assert "Remind me later" in script
+        assert "When should AI Guardian ask again?" in script
+        assert "!payload.two_step_snooze" in script
 
 
 class TestPluginTags:
