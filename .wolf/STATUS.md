@@ -62,22 +62,28 @@ budget_tokens: 1000
   Codex `0.157.0` reports `auth_mode=chatgpt` with OAuth tokens, while the
   OpenShell image uses Codex `0.154.0` with the API-key provider.
 - OpenCode runtime selection was validated without AI Guardian-specific
-  environment variables: the active `opencode` executable reports V1
+  environment variables: the active shell `opencode` executable reports V1
   `1.18.34`, while placing the installed V2 executable first on `PATH` reports
-  V2 `2.0.22`. Setup, CLI doctor, and Console health all share this resolver.
-- The live daemon and tray were restarted without `OPENCODE_CONFIG_DIR` or
-  `AI_GUARDIAN_OPENCODE_VERSION`. The current default V1 OpenCode config is not
-  configured, so health correctly reports `OpenCode: not configured; MCP: healthy`.
+  V2 `2.0.22`. Setup and standalone CLI doctor use their own process context;
+  daemon-backed Console health now uses the daemon process context.
+- The live daemon and tray currently have the V2 runtime context and the daemon
+  health endpoint reports `CLI: opencode 2.0.22 (v2)`. A previously reused Web
+  Console process retained the V1 context, which is now prevented from changing
+  daemon-backed health results.
+- Doctor now probes installed CLI-capable integrations for their executable
+  version, adds structured `cli` metadata, and shows the same version in CLI,
+  JSON, and Console health output. OpenCode includes its detected V1/V2
+  generation without changing hook health status.
 - PR #2495 is open and ready for review. Build, lint, smoke, container, and
-  integration checks passed; the Python/Windows test matrix is currently
-  failing on the remote run and needs review before merge.
+  integration checks passed; the latest Python/Windows matrix state was queued
+  or in progress at the last check, while the affected local tests pass.
 
 ## Next Quest
 
+- Review the uncommitted doctor CLI-version and daemon-backed Console health
+  changes, then commit/push them if they are approved for PR #2495.
 - Monitor PR #2495's fresh CI run and investigate any remaining Python/Windows
   matrix failures before merge.
-- Investigate the failing Python/Windows CI matrix jobs before merge; the local
-  affected OpenCode tests pass.
 - Either add/check credits for the OpenAI organization and rerun the API-key
   smoke request, or deliberately provision the sandbox with the working Codex
   OAuth provider. No source workaround should be added for the quota error.
@@ -88,18 +94,19 @@ budget_tokens: 1000
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
 - Branch: `2470`
-- HEAD: `1587094b`
+- HEAD: `76b01e7a`
 - The issue #2470 implementation, tests, documentation, workflow, container,
   and policy changes are committed and pushed to `origin/2470`; PR #2495 is
-  open. Runtime-detection documentation and test clarification are included in
-  commit `1587094b`.
+  open. The working tree contains uncommitted doctor CLI-version reporting,
+  regression tests, daemon routing, changelog, troubleshooting documentation,
+  and buglog updates.
 - NiceGUI is a core dependency; `uv.lock` is ignored by this repository and was regenerated locally.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_opencode_support.py tests/unit/test_doctor.py tests/unit/test_daemon_multi_client.py -q
+uv run --extra dev python -m pytest tests/unit/test_opencode_support.py tests/unit/test_doctor.py tests/unit/test_daemon_multi_client.py tests/unit/test_metrics.py -q
 AI_GUARDIAN_TEST_IDE=opencode uv run --extra dev python -m pytest tests/integration/test_ide_hooks_e2e.py -q
 uv run --extra dev python -m pytest tests/ux/test_user_experience_contract_ide_setup.py -q
 uv run --extra dev python -m pytest tests/unit/test_container_manual.py tests/unit/test_openshell_manual.py tests/unit/test_sandbox_command.py tests/unit/test_sandbox_tray.py tests/unit/test_cli_ide_setup.py -q

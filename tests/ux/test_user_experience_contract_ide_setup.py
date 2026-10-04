@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
+from ai_guardian.daemon.discovery import DaemonTarget
+from ai_guardian.daemon.multi_client import MultiDaemonClient
 from ai_guardian.doctor import (
     CheckStatus,
     Doctor,
@@ -93,6 +95,92 @@ def test_doctor_reports_mcp_status_for_generic_local_clients(tmp_path):
     assert "OpenCode: configured; MCP: missing" in result.message
     opencode = next(item for item in result.integrations if item["ide"] == "opencode")
     assert opencode["status"] == CheckStatus.WARN.value
+
+
+def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
+    """
+    USER EXPERIENCE: Installed CLI -> doctor and Console health show its version.
+
+    The Console renders the same structured integration message returned by the
+    local health endpoint, so the CLI and JSON contracts must expose identical
+    version information without changing the hook status.
+    """
+    plugin_dir = tmp_path / "opencode" / "plugins"
+    plugin_dir.mkdir(parents=True)
+    verification = {"mcp_status": "healthy"}
+
+    with (
+        patch(
+            "ai_guardian.setup.IDESetup.list_detected_ides",
+            return_value=["opencode"],
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.get_config_path",
+            return_value=str(plugin_dir),
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.check_hooks_for_ide",
+            return_value=(True, "OpenCode: configured"),
+        ),
+        patch("ai_guardian.setup.mcp.verify_mcp_config", return_value=verification),
+        patch.object(
+            Doctor,
+            "_detect_cli_runtime",
+            return_value={
+                "executable": "opencode",
+                "version": "2.0.22",
+                "generation": "v2",
+            },
+        ),
+    ):
+        result = Doctor().check_hooks()
+
+    assert result.status == CheckStatus.PASS
+    assert "CLI: opencode 2.0.22 (v2)" in result.message
+    opencode = next(item for item in result.integrations if item["ide"] == "opencode")
+    assert opencode["cli"] == {
+        "executable": "opencode",
+        "version": "2.0.22",
+        "generation": "v2",
+    }
+
+    report = DoctorReport(checks=[result])
+    assert "CLI: opencode 2.0.22 (v2)" in format_human(report)
+    structured = json.loads(format_json(report))["checks"][0]["integrations"]
+    structured_opencode = next(item for item in structured if item["ide"] == "opencode")
+    assert structured_opencode["cli"]["version"] == "2.0.22"
+
+
+def test_console_health_uses_the_running_local_daemon_runtime():
+    """
+    USER EXPERIENCE: Tray Console -> health reflects the selected daemon.
+
+    A Web Console process can outlive a tray restart and retain an older PATH.
+    Local health must therefore come from the running daemon whenever its REST
+    endpoint is available, rather than from the Console process itself.
+    """
+    report = {
+        "checks": [
+            {
+                "name": "hooks",
+                "integrations": [
+                    {
+                        "ide": "opencode",
+                        "message": "CLI: opencode 2.0.22 (v2)",
+                    }
+                ],
+            }
+        ],
+        "version": "1.20.0-dev",
+    }
+    target = DaemonTarget(name="local", runtime="local", port=63152)
+
+    with patch.object(MultiDaemonClient, "_rest_request", return_value=report):
+        result = MultiDaemonClient().get_health_check(target)
+
+    assert result["checks"][0]["integrations"][0]["message"] == (
+        "CLI: opencode 2.0.22 (v2)"
+    )
 
 
 def test_local_daemon_prompts_for_installed_unconfigured_ide():

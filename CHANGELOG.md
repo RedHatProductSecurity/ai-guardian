@@ -13,8 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `plugin` and V2 `plugins` configuration keys, and discover V2 database paths
   through `OPENCODE_DB` or `opencode debug paths db` without replacing the
   existing V1 integration.
+- **CLI version visibility in doctor:** Report detected versions for installed
+  CLI integrations in human-readable and structured hook health output. OpenCode
+  also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **Tray Console health runtime context:** Local Console health checks now run
+  through the active daemon REST endpoint before falling back to the Console
+  process, preventing stale tray-launched processes from reporting an older CLI
+  runtime such as OpenCode V1 instead of the daemon's V2 runtime.
 - **ONNX Runtime install markers:** Avoid parsing non-PEP 440 Linux kernel
   release strings as versions during dependency resolution. The installer
   smoke test now builds and installs the wheel from the checked-out source.

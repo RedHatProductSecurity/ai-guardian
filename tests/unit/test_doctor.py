@@ -38,6 +38,54 @@ class TestCheckStatus:
         assert CheckStatus.SKIP.value == "skip"
 
 
+class TestCliRuntime:
+    def test_reads_generic_cli_version(self):
+        integration = next(
+            item for item in SUPPORTED_IDE_REGISTRY if item.key == "claude"
+        )
+        completed = mock.Mock(stdout="Claude Code 2.1.4\n", stderr="")
+
+        with (
+            mock.patch(
+                "ai_guardian.doctor.shutil.which", return_value="/usr/bin/claude"
+            ),
+            mock.patch(
+                "ai_guardian.doctor.subprocess.run", return_value=completed
+            ) as run,
+        ):
+            runtime = Doctor._detect_cli_runtime(integration)
+
+        assert runtime == {"executable": "claude", "version": "2.1.4"}
+        run.assert_called_once_with(
+            ["/usr/bin/claude", "--version"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=5,
+        )
+
+    def test_reports_opencode_generation(self):
+        integration = next(
+            item for item in SUPPORTED_IDE_REGISTRY if item.key == "opencode"
+        )
+
+        with mock.patch(
+            "ai_guardian.opencode_support.detect_opencode_runtime",
+            return_value={
+                "executable": "/usr/local/bin/opencode",
+                "version": "2.0.22",
+                "generation": "v2",
+            },
+        ):
+            runtime = Doctor._detect_cli_runtime(integration)
+
+        assert runtime == {
+            "executable": "opencode",
+            "version": "2.0.22",
+            "generation": "v2",
+        }
+
+
 class TestCheckResult:
     def test_defaults(self):
         r = CheckResult(name="test", status=CheckStatus.PASS, message="ok")

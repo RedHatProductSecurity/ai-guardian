@@ -1096,6 +1096,13 @@ class MultiDaemonClient:
     ) -> Optional[dict]:
         """Run health checks on a daemon."""
         if target.runtime == "local":
+            # Run local health checks in the daemon process so runtime-sensitive
+            # diagnostics (for example, OpenCode V1/V2) use the daemon's
+            # environment rather than a stale Web Console subprocess.
+            params = "?fix=true" if fix else ""
+            result = self._rest_request(target, "GET", f"/api/health-check{params}")
+            if result is not None:
+                return result
             return self._local_health_check(fix)
         params = "?fix=true" if fix else ""
         return self._rest_request(target, "GET", f"/api/health-check{params}")

@@ -4,7 +4,7 @@ Common issues with the AI Guardian daemon, system tray, container deployments, a
 
 ## General Diagnostics
 
-Run `ai-guardian doctor` for a comprehensive health check covering config validation, scanner availability, hook installation, permissions, unknown config keys, and more. Use `--json` for machine-readable output.
+Run `ai-guardian doctor` for a comprehensive health check covering config validation, scanner availability, hook installation, permissions, unknown config keys, and more. Installed CLI integrations include their detected executable version; OpenCode also reports its V1 or V2 generation. For the tray-launched Console, local health is evaluated by the active daemon so it reflects the daemon's runtime context. Use `--json` for machine-readable output.
 
 ```bash
 ai-guardian doctor

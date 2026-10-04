@@ -22,6 +22,18 @@
   target for that invocation. The version environment variable is retained
   only as an isolated test-matrix override.
 
+- **Doctor CLI version reporting:** Doctor enriches installed CLI-capable hook
+  integration records with best-effort `cli` metadata and appends the same
+  version text to the existing integration message. Probe failures never alter
+  hook health status; OpenCode reuses its runtime resolver and reports `v1` or
+  `v2` generation when recognized.
+
+- **Console health runtime context:** The local Web Console can outlive the
+  tray and retain a stale `PATH`. When a local daemon REST endpoint is
+  available, `MultiDaemonClient.get_health_check()` must query that daemon
+  first; only use the Console-process Doctor fallback when the endpoint is
+  unavailable.
+
 - **OpenCode hook normalization (#2425):** OpenCode built-in tools arrive as lowercase names (`read`, `write`, `edit`, `bash`) with camelCase arguments such as `filePath`; normalize both adapter input and raw policy calls before immutable protection evaluates them.
 
 - **IDE detection must separate installation evidence from protection status:** Project metadata such as OpenWolf's `.cursor/rules/` is not proof of an IDE installation. Require an IDE-owned config file or artifact for discovery, then use structured hook/MCP verification to determine whether AI Guardian is configured.
