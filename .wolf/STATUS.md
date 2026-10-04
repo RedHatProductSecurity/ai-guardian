@@ -74,14 +74,18 @@ budget_tokens: 1000
   version, adds structured `cli` metadata, and shows the same version in CLI,
   JSON, and Console health output. OpenCode includes its detected V1/V2
   generation without changing hook health status.
+- Addressed the CodeRabbit review findings for #2470: cached OpenCode version
+  probes, robust V2 database-path discovery, safe V2 error-event handling, and
+  the current Codex-only OpenShell registry expectation. Commit `815ed01a` is
+  pushed to `origin/2470`.
+- Review-fix validation passes: 122 OpenCode/transcript/registry tests, 276
+  doctor/daemon/IDE UX tests, Ruff, Black, Pylint, Mypy, and diff checks.
 - PR #2495 is open and ready for review. Build, lint, smoke, container, and
   integration checks passed; the latest Python/Windows matrix state was queued
   or in progress at the last check, while the affected local tests pass.
 
 ## Next Quest
 
-- Review the uncommitted doctor CLI-version and daemon-backed Console health
-  changes, then commit/push them if they are approved for PR #2495.
 - Monitor PR #2495's fresh CI run and investigate any remaining Python/Windows
   matrix failures before merge.
 - Either add/check credits for the OpenAI organization and rerun the API-key
@@ -94,12 +98,11 @@ budget_tokens: 1000
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
 - Branch: `2470`
-- HEAD: `76b01e7a`
+- HEAD: `815ed01a`
 - The issue #2470 implementation, tests, documentation, workflow, container,
-  and policy changes are committed and pushed to `origin/2470`; PR #2495 is
-  open. The working tree contains uncommitted doctor CLI-version reporting,
-  regression tests, daemon routing, changelog, troubleshooting documentation,
-  and buglog updates.
+  policy changes, doctor reporting, daemon routing, and review fixes are
+  committed and pushed to `origin/2470`; PR #2495 is open. The working tree
+  is clean before this handoff update.
 - NiceGUI is a core dependency; `uv.lock` is ignored by this repository and was regenerated locally.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
