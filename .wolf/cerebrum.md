@@ -82,6 +82,13 @@
 
 - **Display tier detection (#2424):** Shared dialog selection lives in `ui/display.py`; it supports Tkinter, NiceGUI, and headless mode. Existing persisted `textual` values migrate to NiceGUI. When mocking provider selection, set `AI_GUARDIAN_PREFERRED_UI=auto` explicitly because the suite-wide fixture forces headless mode.
 
+- **Linux tray proactive setup prompts (#2497):** Native zenity/kdialog dialogs
+  support only the simple action flow. Structured IDE/profile setup must stay on
+  one rich provider for both the setup and snooze steps; returning native
+  default selections silently loses user choices. Tray setup and upgrade
+  workers also share a non-blocking prompt lock so periodic refreshes do not
+  open competing modals.
+
 - **Browser target selection (#2424):** `tray-target-select` launches the NiceGUI selector and must not require `stdin.isatty()`, because tray and remote invocations may have no controlling terminal. Tests should set `args.output_file = None` when using `MagicMock` CLI arguments.
 
 - **Windows test patterns:** (1) `open(f, 'a')` writes `\r\n` on Windows — use `'ab'` mode with `.encode('utf-8')` for byte-accurate position tracking. (2) `patch.dict('os.environ', {}, clear=True)` removes USERPROFILE/HOMEDRIVE/HOMEPATH on Windows — preserve home-related vars with a `_minimal_env()` helper. (3) `tempfile.NamedTemporaryFile(dir="/tmp")` fails on Windows — omit `dir` to use platform default. (4) Tests relying on `/etc`, `/dev`, `HOME` env var, or XDG paths need `skipif(sys.platform == "win32")`. (5) `_read_shell_path()` checks `SHELL` env var which is unset on Windows — tests must `monkeypatch.setenv("SHELL", "/bin/bash")`.

@@ -1400,7 +1400,7 @@ class TestShowActionDialog:
 
         assert result == "dismiss"
 
-    def test_linux_structured_prompt_uses_safe_default_choices(self):
+    def test_linux_structured_prompt_defers_to_rich_ui_provider(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Linux"
             with mock.patch.dict(
@@ -1424,12 +1424,36 @@ class TestShowActionDialog:
                         ),
                     )
 
-        assert result == {
-            "result": "action",
-            "install": ["claude", "cursor"],
-            "never": [],
-            "profile": "@standard",
-        }
+        assert result is None
+        mock_run.assert_not_called()
+
+    def test_linux_two_step_prompt_uses_kdialog_for_both_steps(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "KDE"}, clear=False
+            ):
+                first = mock.Mock(returncode=0, stdout="later", stderr="")
+                second = mock.Mock(returncode=0, stdout="6h", stderr="")
+                with mock.patch(
+                    "subprocess.run", side_effect=[first, second]
+                ) as mock_run:
+                    result = show_action_dialog(
+                        "Set Up AI Guardian",
+                        "Hooks are missing.",
+                        "Set Up Now",
+                        "Don't Ask Again",
+                        snooze_options=("1h", "6h", "1d", "1w"),
+                        two_step_snooze=True,
+                    )
+
+        assert result == "snooze_6h"
+        assert [call.args[0][0] for call in mock_run.call_args_list] == [
+            "kdialog",
+            "kdialog",
+        ]
+        assert "1h" in mock_run.call_args_list[1].args[0]
+        assert "6h" in mock_run.call_args_list[1].args[0]
 
     def test_linux_action_prompt_falls_back_to_kdialog(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:

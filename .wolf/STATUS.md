@@ -94,20 +94,22 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Run `daf complete` for issue #2496 when ready to commit and publish the
-  feature branch; this session has intentionally left source changes
-  uncommitted.
-- Continue the prior #2470 PR #2495 CI monitoring and OpenShell/Codex smoke
-  follow-up after completing #2496.
+- Open a pull request for issue #2497 if review is desired; the implementation
+  is committed and pushed.
+- Perform live Fedora GNOME/KDE X11/Wayland validation if an affected desktop
+  environment is available; focused provider simulations are passing locally.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2496`
-- HEAD: `adc3d542`
-- The issue #2496 implementation is uncommitted in the working tree. Issue
-  #2496 is labeled `done` and has a completion comment; no commit or PR was
-  created because DAF handles those through `daf complete`.
+- Branch: `2497-fedora-tray-prompts`
+- HEAD: `d0094f11`; issue #2497 source changes are committed and pushed to
+  `origin/2497-fedora-tray-prompts`.
+- Structured Linux setup prompts now remain on Tkinter/NiceGUI so native
+  zenity/kdialog fallbacks cannot drop IDE/profile choices; setup and upgrade
+  prompt workers share a non-blocking serialization lock.
+- Focused validation: 417 tray/setup unit and UX tests; Ruff, Black, Pylint,
+  Mypy, and `git diff --check` pass.
 - The prior issue #2470 implementation, tests, documentation, workflow,
   container, policy changes, doctor reporting, daemon routing, review fixes,
   and CI test-contract correction remain committed and pushed to `origin/2470`;
@@ -143,3 +145,4 @@ uv run --extra dev python -c 'from pathlib import Path; import yaml; [yaml.safe_
 - `AGENTS.md` - repository contribution rules
 - GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2496`
 - Prior GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2497`

@@ -1380,14 +1380,17 @@ def show_action_dialog(
 ) -> Optional[object]:
     """Show an actionable native prompt on macOS or Linux.
 
-    This is the last-resort UI for prompts invoked from a tray.  macOS uses
+    This is the last-resort UI for prompts invoked from a tray. macOS uses
     native Cocoa controls. Linux uses a question dialog from zenity or
-    kdialog; structured Linux prompts use their default install/profile
-    choices because those tools do not provide the same combined controls.
+    kdialog for simple actions. Structured Linux prompts return ``None``
+    because those providers cannot render the required install/profile
+    controls; the caller must keep the entire flow on a rich UI provider.
 
     Returns ``"action"``, ``"dismiss"``, or ``"snooze_<option>"`` for a
-    simple prompt.  A prompt with IDE or profile choices returns the same
-    structured mapping as the other proactive-prompt UI implementations.
+    simple prompt. On macOS, a prompt with IDE or profile choices returns the
+    same structured mapping as the other proactive-prompt UI implementations;
+    structured Linux prompts return ``None`` so the caller can select a rich
+    fallback.
     When ``two_step_snooze`` is enabled, the first prompt exposes a single
     ``Later`` action and opens a separate delay-selection prompt.
     Returns ``None`` when the native prompt could not be launched.
@@ -1412,6 +1415,12 @@ def show_action_dialog(
         and (choice.get("profile") is not None or choice.get("name"))
     )
     if system == "Linux":
+        if ide_choices or profile_choices:
+            logger.info(
+                "Skipping native Linux proactive prompt because the selected "
+                "provider cannot render structured setup choices"
+            )
+            return None
         return _show_linux_action_dialog(
             title,
             message,
