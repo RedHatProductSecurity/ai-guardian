@@ -15,10 +15,7 @@ import check_cli_versions as cli_versions  # noqa: E402
 def test_load_pinned_versions_reads_openshell_dockerfile():
     pinned = cli_versions.load_pinned_versions(cli_versions.DEFAULT_DOCKERFILE)
 
-    assert pinned == {
-        "CODEX_VERSION": "0.154.0",
-        "PI_VERSION": "0.86.0",
-    }
+    assert pinned == {"CODEX_VERSION": "0.154.0"}
 
 
 def test_load_pinned_versions_reads_normal_opencode_pin():
@@ -44,7 +41,6 @@ def test_compare_versions(first, second, expected):
 def test_check_versions_writes_report_and_detects_updates(tmp_path):
     latest = {
         "@openai/codex": "0.155.0",
-        "@earendil-works/pi-coding-agent": "0.86.0",
     }
     report = tmp_path / "cli-versions.json"
 
@@ -56,7 +52,6 @@ def test_check_versions_writes_report_and_detects_updates(tmp_path):
     assert has_updates is True
     assert has_errors is False
     assert results["CODEX_VERSION"]["status"] == "OUTDATED"
-    assert results["PI_VERSION"]["status"] == "OK"
     assert report.exists()
 
 
@@ -64,7 +59,6 @@ def test_check_all_versions_includes_normal_opencode(tmp_path):
     latest = {
         "@openai/codex": "0.154.0",
         "opencode-ai": "1.18.34",
-        "@earendil-works/pi-coding-agent": "0.86.0",
     }
 
     results, has_updates, has_errors = cli_versions.check_all_versions(
