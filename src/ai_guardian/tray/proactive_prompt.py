@@ -364,13 +364,14 @@ class ProactivePromptDialog:
     """Prompt with action, snooze, and dismiss choices.
 
     The normal UI cascade is Tkinter, NiceGUI, then a log-only fallback.
-    Tray-safe Linux prompts add the desktop-native dialog tier first; if it is
-    unavailable, they continue through Tkinter and NiceGUI. ``show`` returns a
-    stable string for ordinary prompts. When IDE
+    Tray-safe Linux prompts add the desktop-native dialog tier first for
+    simple prompts; structured setup prompts stay on a rich UI provider so
+    native zenity/kdialog fallbacks cannot silently discard IDE or profile
+    choices. ``show`` returns a stable string for ordinary prompts. When IDE
     or profile choices are provided it returns a mapping containing the
     selected values. Setup prompts can opt into a two-step snooze flow where
-    ``Later`` opens a separate delay selector and closing the first prompt
-    defaults to the shortest delay.
+    ``Later`` opens a separate delay selector using the same UI provider and
+    closing the first prompt defaults to the shortest delay.
     """
 
     def __init__(
@@ -460,16 +461,29 @@ class ProactivePromptDialog:
 
         system = platform.system()
         preferred = get_preferred_ui()
+        has_structured_choices = bool(self.ide_choices or self._profile_options())
         if preferred == "auto":
             tiers = ["tkinter", "nicegui"]
+        elif preferred in {"tkinter", "nicegui"} and has_structured_choices:
+            # A structured setup dialog needs a rich fallback when Tkinter is
+            # unavailable. Native Linux dialogs cannot render these controls.
+            tiers = ["tkinter", "nicegui"]
+            if preferred == "nicegui":
+                tiers.reverse()
         else:
             tiers = [preferred]
 
         # On Linux, prefer a desktop-native prompt when the tray is running
-        # in a graphical session. The native provider is selected by the
-        # desktop/session environment and falls through to Tkinter or NiceGUI.
+        # in a graphical session. Native providers only support the simple
+        # action flow; structured setup prompts use one rich provider for both
+        # the setup and snooze steps.
         native_attempted = False
-        if tray_safe and system == "Linux" and preferred == "auto":
+        if (
+            tray_safe
+            and system == "Linux"
+            and preferred == "auto"
+            and not has_structured_choices
+        ):
             native_attempted = True
             try:
                 result = self._show_native_fallback()
@@ -533,6 +547,7 @@ class ProactivePromptDialog:
             and system in {"Darwin", "Linux"}
             and preferred != "headless"
             and not native_attempted
+            and not (system == "Linux" and has_structured_choices)
         ):
             try:
                 result = self._show_native_fallback()

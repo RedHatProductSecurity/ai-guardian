@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **Consistent Fedora tray setup prompts (#2497):** Keep structured Linux
+  setup and snooze flows on one rich UI provider, avoid silently dropping
+  install/profile choices in native dialogs, and serialize setup and upgrade
+  prompts so periodic refreshes cannot open competing modals.
 - **Scanner version CI checks:** Authenticate GitHub release lookups with the
   read-only Actions token so public API rate limits do not turn valid pinned
   scanner versions into false CI failures.

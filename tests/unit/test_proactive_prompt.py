@@ -316,6 +316,44 @@ def test_linux_tray_prompt_uses_native_fallback_when_ui_tiers_fail():
     fallback.assert_called_once_with()
 
 
+def test_linux_structured_tray_prompt_keeps_rich_ui_for_all_steps():
+    dialog = ProactivePromptDialog(
+        "Set Up AI Guardian",
+        "Hooks are missing.",
+        "Set Up Now",
+        "Don't Ask Again",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        profile_choices=(
+            {"profile": "@standard", "name": "Standard"},
+            {"profile": None, "name": "Skip"},
+        ),
+        two_step_snooze=True,
+    )
+    expected = {
+        "result": "action",
+        "install": [],
+        "never": [],
+        "profile": "@standard",
+    }
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
+        ),
+        patch.object(
+            dialog, "_show_ide_choices_tkinter", return_value=expected
+        ) as tkinter,
+        patch.object(dialog, "_show_native_fallback") as native,
+    ):
+        assert dialog.show(tray_safe=True) == expected
+
+    tkinter.assert_called_once_with()
+    native.assert_not_called()
+
+
 def test_tray_prompt_uses_tkinter_subprocess_before_nicegui_on_macos():
     dialog = ProactivePromptDialog("Title", "Message", "Set Up", "Cancel")
     with (
@@ -935,6 +973,58 @@ def test_upgrade_prompt_records_snooze_for_local_tray(tmp_path):
 
     state = ProactivePromptState(tmp_path / "proactive_prompts.json")
     assert not state.available("upgrade_v9.9.9")
+
+
+def test_upgrade_prompt_waits_for_active_ide_setup_prompt():
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    monitor._pypi_latest = "9.9.9"
+    monitor._proactive_prompt_lock.acquire()
+
+    try:
+        with (
+            patch.object(monitor, "_is_self_upgrade_available", return_value=True),
+            patch("ai_guardian.tray.health.threading.Thread") as thread,
+        ):
+            monitor._check_self_upgrade_notification()
+
+        thread.assert_not_called()
+        assert monitor._upgrade_prompt_in_progress is False
+    finally:
+        monitor._proactive_prompt_lock.release()
+
+
+def test_ide_setup_prompt_waits_for_active_upgrade_prompt(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    monitor._proactive_prompt_lock.acquire()
+
+    try:
+        with (
+            patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+            patch.object(monitor, "_has_user_config", return_value=True),
+            patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
+            patch.object(
+                monitor,
+                "_verify_ide_setup",
+                return_value={
+                    "healthy": False,
+                    "events": {"PreToolUse": "missing"},
+                    "obsolete": [],
+                },
+            ),
+            patch(
+                "ai_guardian.tray.proactive_prompt._state_path",
+                return_value=tmp_path / "proactive_prompts.json",
+            ),
+            patch("ai_guardian.tray.health.threading.Thread") as thread,
+        ):
+            monitor._check_ide_setup_notification()
+
+        thread.assert_not_called()
+        assert monitor._ide_setup_prompt_in_progress is False
+    finally:
+        monitor._proactive_prompt_lock.release()
 
 
 @pytest.mark.parametrize("runtime", ["container", "kubernetes", "manual"])

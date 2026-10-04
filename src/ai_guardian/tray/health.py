@@ -36,6 +36,7 @@ class TrayHealthMonitor:
         self._self_upgrade_in_progress = False
         self._upgrade_notified_version = None
         self._upgrade_prompt_in_progress = False
+        self._proactive_prompt_lock = threading.Lock()
         self._ide_setup_prompt_lock = threading.Lock()
         self._ide_setup_prompt_in_progress = False
         self._ide_setup_check_in_progress = False
@@ -1023,6 +1024,12 @@ class TrayHealthMonitor:
                 and self._ide_setup_check_thread is not threading.current_thread()
             ):
                 return
+            if not self._proactive_prompt_lock.acquire(blocking=False):
+                logger.debug(
+                    "Skipping IDE setup prompt because another proactive "
+                    "tray prompt is already active"
+                )
+                return
             self._ide_setup_prompt_in_progress = True
 
         codex_mcp_only = False
@@ -1294,12 +1301,21 @@ class TrayHealthMonitor:
                     self._ide_setup_prompt_in_progress = False
                     self._ide_setup_check_in_progress = False
                     self._ide_setup_check_thread = None
+                self._proactive_prompt_lock.release()
 
-        threading.Thread(
-            target=_show_prompt,
-            daemon=True,
-            name="ide-setup-prompt",
-        ).start()
+        try:
+            threading.Thread(
+                target=_show_prompt,
+                daemon=True,
+                name="ide-setup-prompt",
+            ).start()
+        except Exception:
+            with self._ide_setup_prompt_lock:
+                self._ide_setup_prompt_in_progress = False
+                self._ide_setup_check_in_progress = False
+                self._ide_setup_check_thread = None
+            self._proactive_prompt_lock.release()
+            raise
 
     def _self_upgrade_label(self):
         """Dynamic label for the self-upgrade menu item."""
@@ -1385,6 +1401,12 @@ class TrayHealthMonitor:
             return
 
         self._upgrade_notified_version = version
+        if not self._proactive_prompt_lock.acquire(blocking=False):
+            logger.debug(
+                "Skipping upgrade prompt because another proactive tray "
+                "prompt is already active"
+            )
+            return
         self._upgrade_prompt_in_progress = True
 
         def _show_prompt():
@@ -1411,9 +1433,15 @@ class TrayHealthMonitor:
                 logger.warning("Upgrade prompt failed: %s", exc)
             finally:
                 self._upgrade_prompt_in_progress = False
+                self._proactive_prompt_lock.release()
 
-        threading.Thread(
-            target=_show_prompt,
-            daemon=True,
-            name="upgrade-prompt",
-        ).start()
+        try:
+            threading.Thread(
+                target=_show_prompt,
+                daemon=True,
+                name="upgrade-prompt",
+            ).start()
+        except Exception:
+            self._upgrade_prompt_in_progress = False
+            self._proactive_prompt_lock.release()
+            raise

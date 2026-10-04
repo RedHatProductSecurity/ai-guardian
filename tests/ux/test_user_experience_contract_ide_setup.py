@@ -699,6 +699,58 @@ def test_linux_health_and_prompt_fallbacks_remain_visible_and_actionable():
     browser.assert_called_once_with()
 
 
+def test_linux_structured_setup_prompt_keeps_one_rich_provider_for_snooze():
+    """
+    USER EXPERIENCE: Linux structured setup -> consistent provider flow.
+
+    Scenario:
+    1. Fedora detects an unconfigured integration while the tray is running.
+    2. The setup prompt includes profile or per-IDE controls and a Later action.
+    3. The user chooses Later and then selects a snooze duration.
+
+    Expected User Experience:
+    - Native zenity/kdialog fallbacks are not used for controls they cannot
+      render.
+    - The setup step and delay selector use the same rich provider.
+    - Profile, install, and snooze selections are not silently replaced by
+      native-provider defaults.
+    """
+    prompt = ProactivePromptDialog(
+        "Set Up AI Guardian",
+        "Hooks are missing.",
+        "Set Up Now",
+        "Don't Ask Again",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        profile_choices=(
+            {"profile": "@standard", "name": "Standard"},
+            {"profile": None, "name": "Skip"},
+        ),
+        two_step_snooze=True,
+    )
+    result = {
+        "result": "snooze_6h",
+        "install": [],
+        "never": [],
+        "profile": None,
+    }
+
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
+        ),
+        patch.object(prompt, "_show_ide_choices_tkinter", return_value=result) as rich,
+        patch.object(prompt, "_show_native_fallback") as native,
+    ):
+        assert prompt.show(tray_safe=True) == result
+
+    rich.assert_called_once_with()
+    native.assert_not_called()
+
+
 def test_cursor_health_reports_user_install_scope_and_project_effective_scope():
     """
     USER EXPERIENCE: Cursor health -> distinguish installation and effective scopes.
