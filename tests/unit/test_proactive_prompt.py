@@ -220,6 +220,64 @@ def test_prompt_uses_tkinter_first():
     show.assert_called_once_with()
 
 
+def test_structured_prompt_does_not_fallback_from_explicit_tkinter():
+    dialog = ProactivePromptDialog(
+        "Set Up AI Guardian",
+        "Hooks are missing.",
+        "Set Up Now",
+        "Don't Ask Again",
+        ide_choices=({"ide": "claude", "label": "Claude Code"},),
+    )
+    with (
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui",
+            return_value="tkinter",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available",
+            return_value=False,
+        ),
+        patch.object(
+            dialog, "_show_ide_choices_nicegui", return_value="action"
+        ) as nicegui,
+    ):
+        assert dialog.show() == "dismiss"
+
+    nicegui.assert_not_called()
+
+
+def test_structured_prompt_does_not_fallback_from_explicit_nicegui():
+    dialog = ProactivePromptDialog(
+        "Set Up AI Guardian",
+        "Hooks are missing.",
+        "Set Up Now",
+        "Don't Ask Again",
+        ide_choices=({"ide": "claude", "label": "Claude Code"},),
+    )
+    with (
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui",
+            return_value="nicegui",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available",
+            return_value=True,
+        ),
+        patch.object(
+            dialog, "_show_ide_choices_tkinter", return_value="action"
+        ) as tkinter,
+        patch.object(
+            dialog,
+            "_show_ide_choices_nicegui",
+            side_effect=RuntimeError("NiceGUI unavailable"),
+        ) as nicegui,
+    ):
+        assert dialog.show() == "dismiss"
+
+    nicegui.assert_called_once_with()
+    tkinter.assert_not_called()
+
+
 def test_tray_prompt_uses_tkinter_subprocess():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (

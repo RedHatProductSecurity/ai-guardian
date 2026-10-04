@@ -465,11 +465,10 @@ class ProactivePromptDialog:
         if preferred == "auto":
             tiers = ["tkinter", "nicegui"]
         elif preferred in {"tkinter", "nicegui"} and has_structured_choices:
-            # A structured setup dialog needs a rich fallback when Tkinter is
-            # unavailable. Native Linux dialogs cannot render these controls.
-            tiers = ["tkinter", "nicegui"]
-            if preferred == "nicegui":
-                tiers.reverse()
+            # Explicit preferences are exclusive. Native Linux dialogs cannot
+            # render structured setup controls, but the selected rich provider
+            # must not silently fall back to another configured toolkit.
+            tiers = [preferred]
         else:
             tiers = [preferred]
 
