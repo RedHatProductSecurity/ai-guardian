@@ -42,6 +42,8 @@ jobs:
           pip install requests
 
       - name: Check scanner versions exist
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python scripts/check_scanner_versions.py
 
@@ -198,6 +200,8 @@ jobs:
       - name: Check for version updates
         id: check-versions
         continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python scripts/check_scanner_versions.py --check-updates --output versions.json
           echo "exit_code=$?" >> $GITHUB_OUTPUT

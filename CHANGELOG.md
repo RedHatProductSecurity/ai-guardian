@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **Scanner version CI checks:** Authenticate GitHub release lookups with the
+  read-only Actions token so public API rate limits do not turn valid pinned
+  scanner versions into false CI failures.
 - **Tray Console health runtime context:** Local Console health checks now run
   through the active daemon REST endpoint before falling back to the Console
   process, preventing stale tray-launched processes from reporting an older CLI
