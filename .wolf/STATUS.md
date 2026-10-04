@@ -80,9 +80,12 @@ budget_tokens: 1000
   pushed to `origin/2470`.
 - Review-fix validation passes: 122 OpenCode/transcript/registry tests, 276
   doctor/daemon/IDE UX tests, Ruff, Black, Pylint, Mypy, and diff checks.
+- The first post-review CI run failed uniformly because
+  `tests/unit/test_cli_version_check.py` still expected the removed
+  `PI_VERSION` OpenShell pin. The test contract now matches the Codex-only
+  image in commit `50df159f`, which is pushed to `origin/2470`.
 - PR #2495 is open and ready for review. Build, lint, smoke, container, and
-  integration checks passed; the latest Python/Windows matrix state was queued
-  or in progress at the last check, while the affected local tests pass.
+  integration checks are rerunning for the CI correction.
 
 ## Next Quest
 
@@ -98,9 +101,10 @@ budget_tokens: 1000
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
 - Branch: `2470`
-- HEAD: `815ed01a`
+- HEAD: `50df159f`
 - The issue #2470 implementation, tests, documentation, workflow, container,
-  policy changes, doctor reporting, daemon routing, and review fixes are
+  policy changes, doctor reporting, daemon routing, review fixes, and the CI
+  test-contract correction are
   committed and pushed to `origin/2470`; PR #2495 is open. The working tree
   is clean before this handoff update.
 - NiceGUI is a core dependency; `uv.lock` is ignored by this repository and was regenerated locally.

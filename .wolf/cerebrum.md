@@ -39,6 +39,11 @@
   before regex fallback and must not let a legacy `OPENCODE_HOME` path hide
   the active V2 database. V2 error hooks must handle missing or scalar errors.
 
+- **OpenShell version checks:** When an image is intentionally narrowed to one
+  CLI, update both the Dockerfile-derived version-check fixture and registry
+  lookup fixtures. The checker correctly ignores packages not explicitly
+  installed by that image.
+
 - **OpenCode hook normalization (#2425):** OpenCode built-in tools arrive as lowercase names (`read`, `write`, `edit`, `bash`) with camelCase arguments such as `filePath`; normalize both adapter input and raw policy calls before immutable protection evaluates them.
 
 - **IDE detection must separate installation evidence from protection status:** Project metadata such as OpenWolf's `.cursor/rules/` is not proof of an IDE installation. Require an IDE-owned config file or artifact for discovery, then use structured hook/MCP verification to determine whether AI Guardian is configured.
