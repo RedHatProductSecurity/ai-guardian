@@ -94,8 +94,8 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Run `daf complete` for issue #2497 when ready to commit and publish the
-  Fedora tray prompt fix; source changes remain intentionally uncommitted.
+- Open a pull request for issue #2497 if review is desired; the implementation
+  is committed and pushed.
 - Perform live Fedora GNOME/KDE X11/Wayland validation if an affected desktop
   environment is available; focused provider simulations are passing locally.
 
@@ -103,8 +103,8 @@ budget_tokens: 1000
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
 - Branch: `2497-fedora-tray-prompts`
-- HEAD: `adf73962` (based on `origin/main`); issue #2497 source changes are
-  uncommitted for DAF completion.
+- HEAD: `d0094f11`; issue #2497 source changes are committed and pushed to
+  `origin/2497-fedora-tray-prompts`.
 - Structured Linux setup prompts now remain on Tkinter/NiceGUI so native
   zenity/kdialog fallbacks cannot drop IDE/profile choices; setup and upgrade
   prompt workers share a non-blocking serialization lock.
