@@ -4,9 +4,12 @@ import os
 import re
 import shutil
 import subprocess
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 _VERSION_PATTERN = re.compile(r"(?<!\d)v?(\d+)\.(\d+)\.(\d+)(?!\d)")
+_VERSION_CACHE: Dict[
+    Tuple[Optional[str], Optional[str], Optional[str]], Optional[str]
+] = {}
 
 
 def parse_opencode_version(output: str) -> Optional[str]:
@@ -32,6 +35,11 @@ def opencode_generation(version: Optional[str]) -> str:
     return "unknown"
 
 
+def clear_opencode_version_cache() -> None:
+    """Clear cached CLI version probes, primarily for tests and upgrades."""
+    _VERSION_CACHE.clear()
+
+
 def detect_opencode_version(executable: Optional[str] = None) -> Optional[str]:
     """Read the installed OpenCode CLI version without raising on failures."""
     # The override is useful for isolated version-matrix tests. Normal setup,
@@ -39,25 +47,36 @@ def detect_opencode_version(executable: Optional[str] = None) -> Optional[str]:
     # ``opencode`` executable instead.
     configured = os.environ.get("AI_GUARDIAN_OPENCODE_VERSION")
     if configured:
-        return parse_opencode_version(configured)
+        binary = None
+    else:
+        binary = executable or shutil.which("opencode")
 
-    binary = executable or shutil.which("opencode")
-    if not binary:
-        return None
-    try:
-        result = subprocess.run(
-            [binary, "--version"],
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
+    cache_key = (executable, binary, configured)
+    if cache_key in _VERSION_CACHE:
+        return _VERSION_CACHE[cache_key]
 
-    return parse_opencode_version(
-        "\n".join(filter(None, (result.stdout, result.stderr)))
-    )
+    if configured:
+        version = parse_opencode_version(configured)
+    elif not binary:
+        version = None
+    else:
+        try:
+            result = subprocess.run(
+                [binary, "--version"],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            version = None
+        else:
+            version = parse_opencode_version(
+                "\n".join(filter(None, (result.stdout, result.stderr)))
+            )
+
+    _VERSION_CACHE[cache_key] = version
+    return version
 
 
 def detect_opencode_runtime(executable: Optional[str] = None) -> Dict[str, Any]:
@@ -79,6 +98,7 @@ def detect_opencode_runtime(executable: Optional[str] = None) -> Dict[str, Any]:
 
 
 __all__ = [
+    "clear_opencode_version_cache",
     "detect_opencode_runtime",
     "detect_opencode_version",
     "opencode_generation",

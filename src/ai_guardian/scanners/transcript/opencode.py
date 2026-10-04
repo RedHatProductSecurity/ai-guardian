@@ -48,6 +48,9 @@ def _query_opencode_db_path() -> Optional[str]:
     output = "\n".join(((result.stdout or ""), (result.stderr or "")))
     for line in output.splitlines():
         candidate = line.strip().strip("'\"")
+        direct_path = os.path.expanduser(os.path.expandvars(candidate))
+        if direct_path.endswith(".db") and os.path.isfile(direct_path):
+            return direct_path
         match = _DB_PATH_PATTERN.search(candidate)
         if not match:
             continue
@@ -76,8 +79,6 @@ def get_opencode_db_path() -> Optional[str]:
         check=os.path.exists,
         env_suffix="opencode.db",
     )
-    if os.environ.get("OPENCODE_HOME"):
-        return legacy_path
     return _query_opencode_db_path() or legacy_path
 
 

@@ -4921,10 +4921,13 @@ export default Plugin.define({
     await ctx.tool.hook('execute.after', (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
       const input = (event.input || {}) as JsonRecord;
+      const error = event.error as unknown;
       const output =
         event.status === 'completed'
           ? contentText(event.result)
-          : textValue(event.error.message);
+          : error && typeof error === 'object' && 'message' in error
+            ? textValue((error as JsonRecord).message)
+            : textValue(error);
       const result = guardian.run(hookData('tool.execute.after', cwd, {
         tool_name: event.tool,
         tool_use: { name: event.tool, input },

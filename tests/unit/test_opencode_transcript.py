@@ -95,16 +95,43 @@ class TestGetOpenCodeDbPath(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "opencode.db")
             sqlite3.connect(db_path).close()
-            with mock.patch.dict(os.environ, {"OPENCODE_HOME": tmpdir}):
-                result = get_opencode_db_path()
-                self.assertEqual(result, db_path)
+            with (
+                mock.patch.dict(os.environ, {"OPENCODE_HOME": tmpdir}),
+                mock.patch(
+                    "ai_guardian.scanners.transcript.opencode._query_opencode_db_path",
+                    return_value=None,
+                ),
+            ):
+                self.assertEqual(get_opencode_db_path(), db_path)
+
+    def test_v2_debug_path_takes_precedence_over_legacy_home(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            legacy_dir = os.path.join(tmpdir, "legacy")
+            os.makedirs(legacy_dir)
+            legacy_path = os.path.join(legacy_dir, "opencode.db")
+            v2_path = os.path.join(tmpdir, "v2.db")
+            sqlite3.connect(legacy_path).close()
+            sqlite3.connect(v2_path).close()
+            with (
+                mock.patch.dict(os.environ, {"OPENCODE_HOME": legacy_dir}),
+                mock.patch(
+                    "ai_guardian.scanners.transcript.opencode._query_opencode_db_path",
+                    return_value=v2_path,
+                ),
+            ):
+                self.assertEqual(get_opencode_db_path(), v2_path)
 
     def test_env_var_missing_db(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with mock.patch.dict(os.environ, {"OPENCODE_HOME": tmpdir}):
-                with mock.patch("os.path.exists", return_value=False):
-                    result = get_opencode_db_path()
-                    self.assertIsNone(result)
+            with (
+                mock.patch.dict(os.environ, {"OPENCODE_HOME": tmpdir}),
+                mock.patch("os.path.exists", return_value=False),
+                mock.patch(
+                    "ai_guardian.scanners.transcript.opencode._query_opencode_db_path",
+                    return_value=None,
+                ),
+            ):
+                self.assertIsNone(get_opencode_db_path())
 
     def test_explicit_database_path_override(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -115,6 +142,26 @@ class TestGetOpenCodeDbPath(unittest.TestCase):
 
     def test_v2_debug_path_lookup(self):
         with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "v2.db")
+            sqlite3.connect(db_path).close()
+            env = dict(os.environ)
+            env.pop("OPENCODE_HOME", None)
+            env.pop("OPENCODE_DB", None)
+            with mock.patch.dict(os.environ, env, clear=True):
+                with (
+                    mock.patch(
+                        "ai_guardian.scanners.transcript.opencode.shutil.which",
+                        return_value="opencode",
+                    ),
+                    mock.patch(
+                        "ai_guardian.scanners.transcript.opencode.subprocess.run",
+                        return_value=mock.Mock(stdout=f"{db_path}\n", stderr=""),
+                    ),
+                ):
+                    self.assertEqual(get_opencode_db_path(), db_path)
+
+    def test_v2_debug_path_lookup_accepts_direct_path_with_spaces(self):
+        with tempfile.TemporaryDirectory(prefix="open code ") as tmpdir:
             db_path = os.path.join(tmpdir, "v2.db")
             sqlite3.connect(db_path).close()
             env = dict(os.environ)
@@ -164,9 +211,14 @@ class TestGetOpenCodeDbPath(unittest.TestCase):
             env = dict(os.environ)
             env.pop("OPENCODE_HOME", None)
             with mock.patch.dict(os.environ, env, clear=True):
-                with mock.patch("os.path.exists", return_value=False):
-                    result = get_opencode_db_path()
-                    self.assertIsNone(result)
+                with (
+                    mock.patch("os.path.exists", return_value=False),
+                    mock.patch(
+                        "ai_guardian.scanners.transcript.opencode._query_opencode_db_path",
+                        return_value=None,
+                    ),
+                ):
+                    self.assertIsNone(get_opencode_db_path())
 
 
 class TestExtractTextFromPart(unittest.TestCase):

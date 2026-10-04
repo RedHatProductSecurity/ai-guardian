@@ -10,12 +10,20 @@ from ai_guardian.constants import HookEvent
 from ai_guardian.hook_adapters import detect_adapter
 from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
 from ai_guardian.opencode_support import (
+    clear_opencode_version_cache,
     detect_opencode_runtime,
     detect_opencode_version,
     opencode_generation,
     parse_opencode_version,
 )
 from ai_guardian.setup.hooks import IDESetup, _OPENCODE_PLUGIN_V2_TS
+
+
+@pytest.fixture(autouse=True)
+def _reset_opencode_version_cache():
+    clear_opencode_version_cache()
+    yield
+    clear_opencode_version_cache()
 
 
 class TestOpenCodeDetection:
@@ -275,6 +283,31 @@ def test_detect_opencode_version_uses_cli_output_without_override(monkeypatch):
     assert run.call_args.args[0] == ["opencode", "--version"]
 
 
+def test_detect_opencode_version_caches_and_invalidates_runtime_context(monkeypatch):
+    monkeypatch.delenv("AI_GUARDIAN_OPENCODE_VERSION", raising=False)
+    completed = mock.Mock(stdout="2.0.22\n", stderr="", returncode=0)
+    with (
+        mock.patch(
+            "ai_guardian.opencode_support.shutil.which",
+            return_value="/usr/local/bin/opencode",
+        ),
+        mock.patch(
+            "ai_guardian.opencode_support.subprocess.run", return_value=completed
+        ) as run,
+    ):
+        assert detect_opencode_version() == "2.0.22"
+        assert detect_opencode_version() == "2.0.22"
+        monkeypatch.setenv("AI_GUARDIAN_OPENCODE_VERSION", "1.18.34")
+        assert detect_opencode_version() == "1.18.34"
+        assert run.call_count == 1
+
+        clear_opencode_version_cache()
+        monkeypatch.delenv("AI_GUARDIAN_OPENCODE_VERSION")
+        assert detect_opencode_version() == "2.0.22"
+
+    assert run.call_count == 2
+
+
 def test_detect_opencode_runtime_reports_v2_package():
     with mock.patch(
         "ai_guardian.opencode_support.detect_opencode_version",
@@ -301,6 +334,8 @@ def test_v2_plugin_template_uses_domain_hooks():
     assert "tool_use_id: event.id" in _OPENCODE_PLUGIN_V2_TS
     assert "event.callID" not in _OPENCODE_PLUGIN_V2_TS
     assert "event.status === 'completed'" in _OPENCODE_PLUGIN_V2_TS
+    assert "const error = event.error as unknown" in _OPENCODE_PLUGIN_V2_TS
+    assert "'message' in error" in _OPENCODE_PLUGIN_V2_TS
     assert "event.result =" in _OPENCODE_PLUGIN_V2_TS
 
 
