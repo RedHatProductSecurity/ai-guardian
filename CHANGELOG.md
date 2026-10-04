@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving the underlying container image reference used for selection.
 
 ### Changed
+- **OpenShell Codex CLI (#2478):** Update the pinned `@openai/codex` client from
+  `0.154.0` to `0.160.0`. OpenShell remains intentionally limited to the
+  Codex CLI; OpenCode and Pi stay available only through the normal image.
 - **OpenCode container boundary (#2470):** Pin OpenCode V1 `1.18.34` in the
   normal Docker/Podman image and remove OpenCode from the OpenShell image,
   policy, and qualification matrix. OpenShell support now targets releases

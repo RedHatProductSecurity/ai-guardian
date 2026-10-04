@@ -11,6 +11,16 @@ budget_tokens: 1000
 
 ## Done
 
+- Issue #2478 updated the Codex-only OpenShell image from `@openai/codex`
+  `0.154.0` to current stable `0.160.0`. The container README, changelog, and
+  CLI-version fixtures now match the pin; OpenCode and Pi remain normal-image
+  integrations only.
+- Rebuilt `localhost/ai-guardian-openshell:2478`. The bundled Codex reports
+  `0.160.0`, its OCI label matches, and the image contains no OpenCode, Pi,
+  Claude, or Copilot executable. The live version monitor reports all managed
+  support-image CLI pins current.
+- Focused OpenShell/version tests pass (93 tests), as do Ruff, Black, Pylint,
+  Mypy, and diff checks.
 - Issue #2493 now normalizes the sandbox create form's Initial config choice to
   `Host/default` for fresh and invalid state, preserves an explicit Latest saved
   snapshot selection during upload-cancel reopen, and aligns Tkinter/NiceGUI
@@ -105,22 +115,18 @@ budget_tokens: 1000
 ## Next Quest
 
 - Run `daf complete` outside the active agent session when ready to commit and
-  publish the #2493 implementation.
-- The prior #2494 handoff remains in the historical context below; its changes
-  are not part of the active #2493 worktree.
+  publish the #2478 implementation.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2493`
-- HEAD: `6841ef54`; issue #2493 source and test changes are uncommitted on this
-  feature branch.
-- Structured Linux setup prompts now remain on Tkinter/NiceGUI so native
-  zenity/kdialog fallbacks cannot drop IDE/profile choices; setup and upgrade
-  prompt workers share a non-blocking serialization lock.
-- Focused validation: 153 setup/tray/proactive unit and UX tests (152 passed,
-  1 skipped), plus 338 setup unit tests with seven unrelated OpenCode contract
-  tests deselected; Ruff, Black, Pylint, Mypy, and `git diff --check` pass.
+- Branch: `2478`
+- HEAD: `a9c216ea`; issue #2478 changes are uncommitted on this feature branch.
+- OpenShell is intentionally Codex-only. The current stable npm pin is
+  `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
+  superseded before implementation.
+- The generated `docs/notebooklm-export.md` remains intentionally untouched;
+  refresh it only during the release process.
 - The prior issue #2470 implementation, tests, documentation, workflow,
   container, policy changes, doctor reporting, daemon routing, review fixes,
   and CI test-contract correction remain committed and pushed to `origin/2470`;
@@ -131,22 +137,13 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_proactive_prompt.py tests/unit/test_tray_plugins.py tests/ux/test_user_experience_contract_ide_setup.py -q
+uv run --extra dev python -m pytest tests/unit/test_container_scripts.py tests/unit/test_cli_version_check.py tests/unit/test_openshell_manual.py -q
 ruff check src/ai_guardian/ tests/
 black --target-version py310 --check src/ai_guardian/ tests/
 mypy src/ai_guardian/
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text
-
-# Prior #2470 validation
-uv run --extra dev python -m pytest tests/unit/test_opencode_support.py tests/unit/test_doctor.py tests/unit/test_daemon_multi_client.py tests/unit/test_metrics.py -q
-AI_GUARDIAN_TEST_IDE=opencode uv run --extra dev python -m pytest tests/integration/test_ide_hooks_e2e.py -q
-uv run --extra dev python -m pytest tests/ux/test_user_experience_contract_ide_setup.py -q
-uv run --extra dev python -m pytest tests/unit/test_container_manual.py tests/unit/test_openshell_manual.py tests/unit/test_sandbox_command.py tests/unit/test_sandbox_tray.py tests/unit/test_cli_ide_setup.py -q
-ruff check src/ai_guardian/ tests/
-black --target-version py310 --check src/ai_guardian/ tests/
-mypy src/ai_guardian/
-pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text
-uv run --extra dev python -c 'from pathlib import Path; import yaml; [yaml.safe_load(path.read_text(encoding="utf-8")) for path in sorted(Path(".github/workflows").glob("*.yml"))]'
+podman build -f container/Dockerfile.openshell -t localhost/ai-guardian-openshell:2478 container/
+python scripts/check_cli_versions.py --output /tmp/opencode/cli-versions-2478-final.json
 ```
 
 ## References

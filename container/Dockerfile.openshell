@@ -26,7 +26,7 @@ FROM ${BASE_IMAGE}
 ARG BASE_IMAGE
 ARG AI_GUARDIAN_VERSION=1.19.0
 ARG UV_VERSION=0.11.16
-ARG CODEX_VERSION=0.154.0
+ARG CODEX_VERSION=0.160.0
 
 # The supported OpenShell workload is intentionally minimal. Install every
 # runtime dependency needed by the support image instead of relying on a

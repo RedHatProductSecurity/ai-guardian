@@ -325,3 +325,8 @@
   carry an empty or invalid choice value between providers. Normalize the
   initial-config choice before rendering and make Tkinter/NiceGUI use the same
   first-choice fallback while preserving an explicit snapshot selection.
+
+- [2026-10-04] **OpenShell Codex pin maintenance (#2478):** The issue's
+  generated `0.159.3` target was superseded by npm's `0.160.0` release before
+  implementation. Check the live version monitor before pinning maintenance
+  updates, while keeping the OpenShell image Codex-only.
