@@ -194,8 +194,8 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
 
     Expected User Experience:
     - User sees "Set Up AI Guardian".
-    - User can choose "Set Up Now", choose a snooze duration via "Later...",
-      or "Don't Ask Again".
+    - User can choose "Set Up Now", choose "Later" and then select 1h, 6h,
+      1d, or 1w, or choose "Don't Ask Again".
     - Remote-only daemon targets do not show this prompt.
     """
     tray = SimpleNamespace(_standalone=True, _targets=[])
@@ -241,6 +241,7 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
         action_label="Set Up Now",
         dismiss_label="Don't Ask Again",
         snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
     )
 
 
@@ -446,6 +447,7 @@ def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_pat
         action_label="Set Up MCP",
         dismiss_label="Don't Ask Again",
         snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
     )
 
 
@@ -503,6 +505,7 @@ def test_manual_health_check_works_without_daemon_for_multiple_ides():
         action_label="Submit",
         dismiss_label=None,
         snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
         ide_choices=[
             {
                 "ide": "claude",
@@ -895,7 +898,8 @@ def test_multiple_integrations_show_per_ide_install_or_never_choices(tmp_path):
     - Each integration appears with the same Install now/Never install
       checkbox columns in Tkinter and the macOS native fallback.
     - Install now is selected by default and Never install is clear by default.
-    - The Later control has a visible snooze-duration dropdown.
+    - The first dialog has a Later button; the follow-up dialog offers 1h, 6h,
+      1d, and 1w.
     - Submit applies the per-integration Install now/Never install choices.
     - Only the selected integration is configured.
     - The Never install choice is persisted for future automatic checks.
@@ -946,6 +950,7 @@ def test_multiple_integrations_show_per_ide_install_or_never_choices(tmp_path):
         action_label="Submit",
         dismiss_label=None,
         snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
         ide_choices=[
             {
                 "ide": "claude",

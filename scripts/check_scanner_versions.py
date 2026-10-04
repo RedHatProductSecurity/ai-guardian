@@ -17,6 +17,7 @@ Exit codes:
 import sys
 import json
 import argparse
+import os
 import requests
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -31,12 +32,24 @@ except ImportError:  # Python 3.10
 LINUX_CONTAINER_PLATFORMS = ("linux_x64", "linux_arm64")
 
 
+def _github_api_headers() -> dict[str, str]:
+    """Return standard GitHub API headers, using a token when available."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def get_latest_version(repo: str) -> Optional[str]:
     """Get latest version from GitHub releases."""
     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
 
     try:
-        response = requests.get(api_url, timeout=10)
+        response = requests.get(api_url, timeout=10, headers=_github_api_headers())
         response.raise_for_status()
         data = response.json()
         tag = data.get('tag_name', '')
@@ -53,7 +66,7 @@ def get_latest_leaktk_pattern_version() -> Optional[str]:
     api_url = "https://api.github.com/repos/leaktk/patterns/contents/target/patterns/gitleaks"
 
     try:
-        response = requests.get(api_url, timeout=10)
+        response = requests.get(api_url, timeout=10, headers=_github_api_headers())
         response.raise_for_status()
         contents = response.json()
 
@@ -82,7 +95,7 @@ def get_version_age(repo: str, version: str) -> Optional[int]:
     api_url = f"https://api.github.com/repos/{repo}/releases/tags/v{version}"
 
     try:
-        response = requests.get(api_url, timeout=10)
+        response = requests.get(api_url, timeout=10, headers=_github_api_headers())
         response.raise_for_status()
         data = response.json()
 
@@ -186,7 +199,7 @@ def check_scanner_exists(repo: str, version: str, scanner_name: str, platform: s
     api_url = f"https://api.github.com/repos/{repo}/releases/tags/v{version}"
 
     try:
-        response = requests.get(api_url, timeout=10)
+        response = requests.get(api_url, timeout=10, headers=_github_api_headers())
 
         if response.status_code == 404:
             return {

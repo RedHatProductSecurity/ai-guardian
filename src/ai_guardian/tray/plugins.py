@@ -999,6 +999,63 @@ def _subprocess_succeeded(result, operation: str) -> bool:
     return False
 
 
+def _show_linux_snooze_dialog(options: Tuple[str, ...], provider: str) -> str:
+    """Show the delay-selection step for a Linux native setup prompt."""
+    import subprocess
+
+    if not options:
+        return "dismiss"
+
+    default_result = f"snooze_{options[0]}"
+    if provider == "zenity":
+        command = [
+            "zenity",
+            "--question",
+            "--title",
+            "Remind me later",
+            "--text",
+            "When should AI Guardian ask again?",
+            "--ok-label",
+            options[0],
+            "--cancel-label",
+            "Close",
+        ]
+        for option in options[1:]:
+            command.extend(["--extra-button", option])
+    else:
+        command = [
+            "kdialog",
+            "--title",
+            "Remind me later",
+            "--menu",
+            "When should AI Guardian ask again?",
+        ]
+        for option in options:
+            command.extend([option, option])
+
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=3600,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning(
+            "Linux snooze selection command %s could not start: %s (%s)",
+            command[0],
+            type(exc).__name__,
+            _ui_environment_context(),
+        )
+        return default_result
+
+    stdout = getattr(result, "stdout", "")
+    stdout = stdout.strip() if isinstance(stdout, str) else ""
+    if stdout in options:
+        return f"snooze_{stdout}"
+    return default_result
+
+
 def show_dialog(title: str, message: str, *, screen_bounds=None) -> bool:
     """Show a modal dialog box. Returns True on success.
 
@@ -1179,6 +1236,7 @@ def _show_linux_action_dialog(
     ide_choices: Iterable[Dict[str, str]],
     profile_choices: Iterable[Dict[str, str]],
     screen_bounds=None,
+    two_step_snooze: bool = False,
 ) -> Optional[object]:
     """Show a simple actionable prompt using zenity or kdialog on Linux."""
     import subprocess
@@ -1195,23 +1253,43 @@ def _show_linux_action_dialog(
         "--ok-label",
         action_label,
         "--cancel-label",
-        dismiss_label or "Cancel",
+        "Close" if two_step_snooze else (dismiss_label or "Cancel"),
     ]
-    for label in later_labels:
-        zenity_command.extend(["--extra-button", label])
+    if two_step_snooze:
+        if options:
+            zenity_command.extend(["--extra-button", "Later"])
+        if dismiss_label:
+            zenity_command.extend(["--extra-button", dismiss_label])
+    else:
+        for label in later_labels:
+            zenity_command.extend(["--extra-button", label])
     commands = {
         "zenity": zenity_command,
-        "kdialog": [
-            "kdialog",
-            "--title",
-            title,
-            "--yesno",
-            message,
-            "--yes-label",
-            action_label,
-            "--no-label",
-            dismiss_label or "Cancel",
-        ],
+        "kdialog": (
+            [
+                "kdialog",
+                "--title",
+                title,
+                "--menu",
+                message,
+                "action",
+                action_label,
+            ]
+            + (["later", "Later"] if options else [])
+            + (["dismiss", dismiss_label] if dismiss_label else [])
+            if two_step_snooze
+            else [
+                "kdialog",
+                "--title",
+                title,
+                "--yesno",
+                message,
+                "--yes-label",
+                action_label,
+                "--no-label",
+                dismiss_label or "Cancel",
+            ]
+        ),
     }
 
     for provider in _linux_dialog_provider_order():
@@ -1238,6 +1316,27 @@ def _show_linux_action_dialog(
         if not isinstance(returncode, int) or returncode == 0:
             stdout = getattr(result, "stdout", "")
             stdout = stdout.strip() if isinstance(stdout, str) else ""
+            if two_step_snooze:
+                if provider == "zenity":
+                    if stdout == "Later":
+                        selected = _show_linux_snooze_dialog(options, provider)
+                    elif dismiss_label and stdout == dismiss_label:
+                        selected = "dismiss"
+                    else:
+                        selected = "action"
+                else:
+                    if stdout == "later":
+                        selected = _show_linux_snooze_dialog(options, provider)
+                    elif dismiss_label and stdout == "dismiss":
+                        selected = "dismiss"
+                    else:
+                        selected = "action"
+                return _linux_action_result(
+                    selected,
+                    ide_choices,
+                    profile_choices,
+                    dismiss_label,
+                )
             return _linux_action_result(
                 later_labels.get(stdout, "action"),
                 ide_choices,
@@ -1246,7 +1345,7 @@ def _show_linux_action_dialog(
             )
         if returncode == 1 and not stderr:
             return _linux_action_result(
-                "dismiss",
+                "snooze_1h" if two_step_snooze and options else "dismiss",
                 ide_choices,
                 profile_choices,
                 dismiss_label,
@@ -1277,6 +1376,7 @@ def show_action_dialog(
     ide_choices: Iterable[Dict[str, str]] = (),
     profile_choices: Iterable[Dict[str, str]] = (),
     screen_bounds=None,
+    two_step_snooze: bool = False,
 ) -> Optional[object]:
     """Show an actionable native prompt on macOS or Linux.
 
@@ -1288,6 +1388,8 @@ def show_action_dialog(
     Returns ``"action"``, ``"dismiss"``, or ``"snooze_<option>"`` for a
     simple prompt.  A prompt with IDE or profile choices returns the same
     structured mapping as the other proactive-prompt UI implementations.
+    When ``two_step_snooze`` is enabled, the first prompt exposes a single
+    ``Later`` action and opens a separate delay-selection prompt.
     Returns ``None`` when the native prompt could not be launched.
     """
     from ai_guardian.ui.display import get_preferred_ui
@@ -1319,6 +1421,7 @@ def show_action_dialog(
             ide_choices,
             profile_choices,
             screen_bounds,
+            two_step_snooze,
         )
     if system != "Darwin":
         return None
@@ -1331,6 +1434,7 @@ def show_action_dialog(
         ide_choices,
         profile_choices,
         screen_bounds,
+        two_step_snooze,
     )
     if ide_choices or profile_choices:
         return result
@@ -1348,6 +1452,7 @@ def _show_native_choice_dialog(
     ide_choices: Iterable[Dict[str, str]],
     profile_choices: Iterable[Dict[str, str]],
     screen_bounds=None,
+    two_step_snooze: bool = False,
 ) -> Optional[object]:
     """Show a structured proactive prompt using native macOS controls.
 
@@ -1368,6 +1473,7 @@ def _show_native_choice_dialog(
         ide_choices,
         profile_choices,
         screen_bounds,
+        two_step_snooze,
     )
     if cocoa_result is not None:
         return cocoa_result
@@ -1387,6 +1493,7 @@ def _show_native_cocoa_choice_dialog(
     ide_choices: Iterable[Dict[str, str]],
     profile_choices: Iterable[Dict[str, str]],
     screen_bounds=None,
+    two_step_snooze: bool = False,
 ) -> Optional[object]:
     """Show the structured prompt with native Cocoa controls on macOS."""
     import subprocess
@@ -1403,6 +1510,7 @@ def _show_native_cocoa_choice_dialog(
         "ide_choices": ide_choices,
         "profile_choices": profile_choices,
         "screen_bounds": screen_bounds,
+        "two_step_snooze": two_step_snooze,
     }
     payload_script = json.dumps(payload, ensure_ascii=False)
 
@@ -1495,6 +1603,21 @@ function selectedProfile(profilePopup) {
     return payload.profile_choices[index].profile;
 }
 
+function selectedSnooze() {
+    var delayAlert = $.NSAlert.alloc.init;
+    delayAlert.setMessageText("Remind me later");
+    delayAlert.setInformativeText("When should AI Guardian ask again?");
+    payload.snooze_options.forEach(function(option) {
+        delayAlert.addButtonWithTitle(String(option));
+    });
+    var response = Number(delayAlert.runModal);
+    var index = response - 1000;
+    if (index < 0 || index >= payload.snooze_options.length) {
+        index = 0;
+    }
+    return "snooze_" + payload.snooze_options[index];
+}
+
 function placeWindowOnTargetScreen(window) {
     if (!payload.screen_bounds || payload.screen_bounds.length !== 4) {
         return;
@@ -1539,7 +1662,8 @@ function showDialog() {
     var tableHeight = payload.ide_choices.length > 0
         ? 42 + payload.ide_choices.length * rowHeight
         : 0;
-    var footerHeight = payload.snooze_options.length > 0 ? 48 : 16;
+    var footerHeight = payload.snooze_options.length > 0 &&
+        !payload.two_step_snooze ? 48 : 16;
     var accessoryHeight = profileHeight + tableHeight + footerHeight;
     var accessoryWidth = 820;
     var accessory = $.NSView.alloc.initWithFrame(
@@ -1600,7 +1724,7 @@ function showDialog() {
     }
 
     var snoozePopup = null;
-    if (payload.snooze_options.length > 0) {
+    if (payload.snooze_options.length > 0 && !payload.two_step_snooze) {
         addLabel(accessory, "Later", 0, 12, 80, 22, 13);
         snoozePopup = addPopup(accessory, payload.snooze_options, 90, 10, 170);
     }
@@ -1628,12 +1752,23 @@ function showDialog() {
     var response = Number(alert.runModal);
     var firstButton = 1000;
     var secondButton = 1001;
+    var laterButton = payload.snooze_options.length > 0 ? 1001 : -1;
     var dismissButton = payload.snooze_options.length > 0 ? 1002 : 1001;
 
-    if (payload.snooze_options.length > 0 && response === secondButton) {
+    if (payload.snooze_options.length > 0 && !payload.two_step_snooze &&
+        response === secondButton) {
         var snoozeIndex = Number(snoozePopup.indexOfSelectedItem);
         return {
             result: "snooze_" + payload.snooze_options[snoozeIndex],
+            install: [],
+            never: [],
+        };
+    }
+
+    if (payload.snooze_options.length > 0 && payload.two_step_snooze &&
+        response === laterButton) {
+        return {
+            result: selectedSnooze(),
             install: [],
             never: [],
         };
@@ -1655,7 +1790,13 @@ function showDialog() {
         };
     }
     if (response !== firstButton) {
-        return {result: "dismiss", install: [], never: []};
+        return {
+            result: payload.two_step_snooze && payload.snooze_options.length > 0
+                ? "snooze_" + payload.snooze_options[0]
+                : "dismiss",
+            install: [],
+            never: [],
+        };
     }
 
     var install = [];

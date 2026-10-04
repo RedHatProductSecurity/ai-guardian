@@ -89,6 +89,32 @@ def test_check_scanner_exists_matches_release_asset(
     assert result["download_url"] == f"https://github.com/test/{asset_name}"
 
 
+@mock.patch("scripts.check_scanner_versions.requests.get")
+def test_check_scanner_exists_uses_github_token(mock_get, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    response = mock.Mock(status_code=200)
+    response.raise_for_status.return_value = None
+    response.json.return_value = {
+        "assets": [
+            {
+                "name": "gitleaks_8.30.1_linux_x64.tar.gz",
+                "browser_download_url": "https://github.com/test/gitleaks.tar.gz",
+                "size": 1024,
+            }
+        ]
+    }
+    mock_get.return_value = response
+
+    result = check_scanner_exists(
+        "gitleaks/gitleaks", "8.30.1", "gitleaks", platform="linux_x64"
+    )
+
+    assert result["exists"] is True
+    assert mock_get.call_args.kwargs["headers"]["Authorization"] == (
+        "Bearer test-token"
+    )
+
+
 def test_check_existence_requires_both_linux_container_assets(
     tmp_path, monkeypatch, capsys
 ):
