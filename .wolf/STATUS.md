@@ -91,25 +91,30 @@ budget_tokens: 1000
   to a one-hour snooze while explicit Don't Ask Again remains permanent.
 - Issue #2496 coverage includes provider-specific unit tests, IDE setup UX
   contracts, changelog documentation, and a passing focused validation set.
+- Issue #2494 now makes plain `ai-guardian setup` reuse installed integration
+  detection and integrity checks, skip healthy integrations, select some/all
+  pending targets interactively, and support `--yes`, `--json`, profiles, and
+  config creation across the selected integrations.
 
 ## Next Quest
 
-- Open a pull request for issue #2497 if review is desired; the implementation
-  is committed and pushed.
-- Perform live Fedora GNOME/KDE X11/Wayland validation if an affected desktop
-  environment is available; focused provider simulations are passing locally.
+- Review and commit the uncommitted #2494 implementation, then open its pull
+  request if desired.
+- The seven-test OpenCode V1 contract class in the full setup file remains a
+  pre-existing V1/V2 baseline mismatch; the #2494-focused tests pass.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2497-fedora-tray-prompts`
-- HEAD: `d0094f11`; issue #2497 source changes are committed and pushed to
-  `origin/2497-fedora-tray-prompts`.
+- Branch: `2494`
+- HEAD: `252b9084`; issue #2494 source, test, documentation, and changelog
+  changes are uncommitted on this feature branch.
 - Structured Linux setup prompts now remain on Tkinter/NiceGUI so native
   zenity/kdialog fallbacks cannot drop IDE/profile choices; setup and upgrade
   prompt workers share a non-blocking serialization lock.
-- Focused validation: 417 tray/setup unit and UX tests; Ruff, Black, Pylint,
-  Mypy, and `git diff --check` pass.
+- Focused validation: 153 setup/tray/proactive unit and UX tests (152 passed,
+  1 skipped), plus 338 setup unit tests with seven unrelated OpenCode contract
+  tests deselected; Ruff, Black, Pylint, Mypy, and `git diff --check` pass.
 - The prior issue #2470 implementation, tests, documentation, workflow,
   container, policy changes, doctor reporting, daemon routing, review fixes,
   and CI test-contract correction remain committed and pushed to `origin/2470`;
@@ -145,4 +150,4 @@ uv run --extra dev python -c 'from pathlib import Path; import yaml; [yaml.safe_
 - `AGENTS.md` - repository contribution rules
 - GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2496`
 - Prior GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2497`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2494`

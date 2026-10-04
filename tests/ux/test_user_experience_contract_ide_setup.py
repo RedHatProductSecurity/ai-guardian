@@ -15,6 +15,7 @@ from ai_guardian.doctor import (
     format_json,
 )
 from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
+from ai_guardian.setup import setup_hooks
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.health import TrayHealthMonitor
 from ai_guardian.tray.menu_builder import TrayMenuBuilder
@@ -285,6 +286,74 @@ def test_setup_modal_shows_cli_config_parse_error():
     assert "Current hook status:" in message
     assert "Invalid JSON" in message
     assert config_path in message
+
+
+def test_cli_setup_prompts_for_only_unconfigured_integrations():
+    """
+    USER EXPERIENCE: Plain CLI setup -> choose among pending integrations.
+
+    Scenario:
+    1. The user runs ``ai-guardian setup`` without ``--ide``.
+    2. Two supported local integrations are installed, but only one lacks
+       healthy AI Guardian hooks.
+    3. The CLI checks integrity before writing and offers the pending target.
+
+    Expected User Experience:
+    - Healthy integrations are not rewritten.
+    - The pending integration is configured after confirmation.
+    - The command does not require repeated ``--ide`` invocations.
+    """
+    with (
+        patch("ai_guardian.setup.IDESetup") as setup_class,
+        patch("ai_guardian.setup._handle_mcp_setup"),
+        patch("ai_guardian.setup._notify_daemon_reload"),
+        patch("builtins.input", return_value="y"),
+    ):
+        setup = setup_class.return_value
+        setup.list_installed_ides.return_value = ["claude", "cursor"]
+        setup.IDE_CONFIGS = {
+            "claude": {"name": "Claude Code"},
+            "cursor": {"name": "Cursor IDE/CLI"},
+        }
+        setup.check_hooks_for_ide.side_effect = [
+            (True, "Claude Code: configured"),
+            (False, "Cursor IDE/CLI: not configured"),
+        ]
+        setup.get_config_path.return_value = "/tmp/cursor/hooks.json"
+        setup.setup_ide_hooks.return_value = (True, "configured")
+
+        assert setup_hooks(interactive=True) is True
+
+    setup.setup_ide_hooks.assert_called_once_with("cursor", dry_run=False, force=False)
+
+
+def test_cli_setup_yes_configures_all_pending_integrations():
+    """
+    USER EXPERIENCE: ``setup --yes`` -> configure every pending integration.
+
+    Machine-oriented and explicitly non-interactive invocations must not stop
+    merely because more than one installed integration needs setup.
+    """
+    with (
+        patch("ai_guardian.setup.IDESetup") as setup_class,
+        patch("ai_guardian.setup._handle_mcp_setup"),
+        patch("ai_guardian.setup._notify_daemon_reload"),
+    ):
+        setup = setup_class.return_value
+        setup.list_installed_ides.return_value = ["claude", "cursor"]
+        setup.IDE_CONFIGS = {
+            "claude": {"name": "Claude Code"},
+            "cursor": {"name": "Cursor IDE/CLI"},
+        }
+        setup.check_hooks_for_ide.return_value = (False, "needs setup")
+        setup.setup_ide_hooks.return_value = (True, "configured")
+
+        assert setup_hooks(interactive=False) is True
+
+    assert [call.args[0] for call in setup.setup_ide_hooks.call_args_list] == [
+        "claude",
+        "cursor",
+    ]
 
 
 def test_cursor_cloud_setup_requires_explicit_project_selection():

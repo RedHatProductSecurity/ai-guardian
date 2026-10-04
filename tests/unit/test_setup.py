@@ -2570,6 +2570,142 @@ class TestSetupHooks:
             assert success is True
             mock_instance.setup_ide_hooks.assert_called_once()
 
+    def test_setup_hooks_auto_detect_excludes_healthy_integrations(self, capsys):
+        """Automatic setup must not rewrite integrations that are healthy."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.list_installed_ides.return_value = ["claude", "cursor"]
+            mock_instance.IDE_CONFIGS = {
+                "claude": {"name": "Claude Code"},
+                "cursor": {"name": "Cursor IDE/CLI"},
+            }
+            mock_instance.check_hooks_for_ide.side_effect = [
+                (True, "Claude Code: configured"),
+                (False, "Cursor IDE/CLI: not configured"),
+            ]
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+
+            assert setup_hooks(interactive=False) is True
+
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            "cursor", dry_run=False, force=False
+        )
+        assert "Claude Code" not in capsys.readouterr().out.split("Success", 1)[-1]
+
+    def test_setup_hooks_auto_detect_no_unconfigured_is_successful_noop(self, capsys):
+        """Healthy installed integrations produce an informative no-op."""
+        with mock.patch("ai_guardian.setup.IDESetup") as MockSetup:
+            mock_instance = MockSetup.return_value
+            mock_instance.list_installed_ides.return_value = ["claude"]
+            mock_instance.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+            mock_instance.check_hooks_for_ide.return_value = (
+                True,
+                "Claude Code: configured",
+            )
+
+            assert setup_hooks(interactive=False) is True
+
+        mock_instance.setup_ide_hooks.assert_not_called()
+        assert "already configured" in capsys.readouterr().out
+
+    def test_setup_hooks_auto_detect_interactive_selects_subset(self):
+        """Interactive multi-setup accepts a targeted selection."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+            mock.patch("builtins.input", return_value="1"),
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.list_installed_ides.return_value = ["claude", "cursor"]
+            mock_instance.IDE_CONFIGS = {
+                "claude": {"name": "Claude Code"},
+                "cursor": {"name": "Cursor IDE/CLI"},
+            }
+            mock_instance.check_hooks_for_ide.return_value = (
+                False,
+                "needs setup",
+            )
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+
+            assert setup_hooks(interactive=True) is True
+
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            "claude", dry_run=False, force=False
+        )
+
+    def test_setup_hooks_auto_detect_yes_configures_all_pending(self):
+        """Non-interactive setup configures every pending integration."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.list_installed_ides.return_value = ["claude", "cursor"]
+            mock_instance.IDE_CONFIGS = {
+                "claude": {"name": "Claude Code"},
+                "cursor": {"name": "Cursor IDE/CLI"},
+            }
+            mock_instance.check_hooks_for_ide.return_value = (
+                False,
+                "needs setup",
+            )
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+
+            assert setup_hooks(interactive=False) is True
+
+        assert [
+            call.args[0] for call in mock_instance.setup_ide_hooks.call_args_list
+        ] == [
+            "claude",
+            "cursor",
+        ]
+
+    def test_setup_hooks_auto_detect_skip_does_not_write_hooks(self):
+        """The multi-integration skip choice leaves all hooks untouched."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("builtins.input", return_value="s"),
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.list_installed_ides.return_value = ["claude", "cursor"]
+            mock_instance.IDE_CONFIGS = {
+                "claude": {"name": "Claude Code"},
+                "cursor": {"name": "Cursor IDE/CLI"},
+            }
+            mock_instance.check_hooks_for_ide.return_value = (
+                False,
+                "needs setup",
+            )
+
+            assert setup_hooks(interactive=True) is False
+
+        mock_instance.setup_ide_hooks.assert_not_called()
+
+    def test_setup_hooks_force_keeps_multi_selection_interactive(self):
+        """Force permits overwrites without changing target selection UX."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+            mock.patch("builtins.input", return_value="2"),
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.list_installed_ides.return_value = ["claude", "cursor"]
+            mock_instance.IDE_CONFIGS = {
+                "claude": {"name": "Claude Code"},
+                "cursor": {"name": "Cursor IDE/CLI"},
+            }
+            mock_instance.check_hooks_for_ide.return_value = (False, "needs setup")
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+
+            assert setup_hooks(interactive=True, force=True) is True
+
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            "cursor", dry_run=False, force=True
+        )
+
     def test_setup_hooks_explicit_ide(self, tmp_path):
         """Test explicit IDE specification."""
         with mock.patch("ai_guardian.setup.IDESetup") as MockSetup:
@@ -3292,7 +3428,11 @@ class TestCreateDefaultConfig:
 
         config_file = tmp_path / "ai-guardian.json"
 
-        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}):
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}),
+        ):
+            MockSetup.return_value.list_installed_ides.return_value = []
             success = setup_hooks(
                 ide_type=None,
                 create_config=True,
@@ -3331,6 +3471,57 @@ class TestCreateDefaultConfig:
                 assert success is True
                 assert config_file.exists()
                 mock_instance.setup_ide_hooks.assert_called_once()
+
+    def test_setup_hooks_auto_detect_create_config_profile_before_all_hooks(self):
+        """Create one selected profile before configuring every pending IDE."""
+        calls = []
+
+        def create_config(**kwargs):
+            calls.append(("config", kwargs))
+            return True, "Profile created"
+
+        def setup_ide_hooks(ide_type, **kwargs):
+            calls.append(("hooks", ide_type, kwargs))
+            return True, "Success"
+
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch(
+                "ai_guardian.setup.create_default_config",
+                side_effect=create_config,
+            ),
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+            mock.patch("ai_guardian.setup._notify_daemon_reload"),
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.list_installed_ides.return_value = ["claude", "cursor"]
+            mock_instance.IDE_CONFIGS = {
+                "claude": {"name": "Claude Code"},
+                "cursor": {"name": "Cursor IDE/CLI"},
+            }
+            mock_instance.check_hooks_for_ide.return_value = (False, "needs setup")
+            mock_instance.setup_ide_hooks.side_effect = setup_ide_hooks
+
+            assert (
+                setup_hooks(
+                    create_config=True,
+                    profile="@strict",
+                    interactive=False,
+                )
+                is True
+            )
+
+        assert calls[0] == (
+            "config",
+            {
+                "permissive": False,
+                "dry_run": False,
+                "json_output": False,
+                "profile": "@strict",
+                "force": False,
+            },
+        )
+        assert [call[1] for call in calls[1:]] == ["claude", "cursor"]
 
     def test_setup_multiple_ides_preserves_config(self, tmp_path):
         """Test setting up multiple IDEs sequentially preserves config (Issue #668)."""
@@ -3383,7 +3574,11 @@ class TestCreateDefaultConfig:
 
         config_file = tmp_path / "ai-guardian.json"
 
-        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}):
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}),
+        ):
+            MockSetup.return_value.list_installed_ides.return_value = []
             success = setup_hooks(
                 ide_type=None,
                 remote_config_url=None,
@@ -3402,13 +3597,17 @@ class TestCreateDefaultConfig:
 
         cache_dir = tmp_path / "cache" / "ai-guardian"
 
-        with mock.patch.dict(
-            os.environ,
-            {
-                "AI_GUARDIAN_CONFIG_DIR": str(tmp_path),
-                "AI_GUARDIAN_CACHE_DIR": str(cache_dir),
-            },
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch.dict(
+                os.environ,
+                {
+                    "AI_GUARDIAN_CONFIG_DIR": str(tmp_path),
+                    "AI_GUARDIAN_CACHE_DIR": str(cache_dir),
+                },
+            ),
         ):
+            MockSetup.return_value.list_installed_ides.return_value = []
             setup_hooks(
                 ide_type=None,
                 remote_config_url=None,
@@ -3490,7 +3689,11 @@ class TestCreateDefaultConfig:
         config_file = tmp_path / "ai-guardian.json"
         config_file.write_text('{"custom": "value"}')
 
-        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}):
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}),
+        ):
+            MockSetup.return_value.list_installed_ides.return_value = []
             success = setup_hooks(
                 ide_type=None,
                 remote_config_url=None,
@@ -3512,7 +3715,11 @@ class TestCreateDefaultConfig:
         config_file = tmp_path / "ai-guardian.json"
         config_file.write_text('{"custom": "value"}')
 
-        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}):
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}),
+        ):
+            MockSetup.return_value.list_installed_ides.return_value = []
             success = setup_hooks(
                 ide_type=None,
                 remote_config_url=None,
@@ -3854,6 +4061,19 @@ class TestSetupHooksProfiles:
 class TestSetupJsonOutput:
     """Test that setup --json outputs clean JSON with no log text (Issue #518)."""
 
+    def test_json_profile_without_create_config_is_machine_readable(self, capsys):
+        """JSON mode preserves incompatible profile validation without prompting."""
+        from ai_guardian.setup import setup_hooks
+
+        assert setup_hooks(profile="@strict", json_output=True) is False
+
+        captured = capsys.readouterr()
+        assert json.loads(captured.out) == {
+            "success": False,
+            "error": "--profile requires --create-config",
+        }
+        assert captured.err == ""
+
     def test_json_output_ide_explicit(self, tmp_path, capsys):
         """setup --ide claude --json outputs parseable JSON only."""
         ide_config_file = tmp_path / "settings.json"
@@ -3943,6 +4163,57 @@ class TestSetupJsonOutput:
         assert stripped.endswith("}")
         # Must be valid JSON
         json.loads(stripped)
+
+    def test_json_output_auto_detects_and_configures_all_pending(
+        self, tmp_path, capsys
+    ):
+        """JSON setup configures pending integrations without prompting."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+            mock.patch(
+                "ai_guardian.setup._resolve_binary_path",
+                return_value="/usr/local/bin/ai-guardian",
+            ),
+            mock.patch("builtins.input") as prompt,
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {
+                "claude": {"name": "Claude Code"},
+                "cursor": {"name": "Cursor IDE/CLI"},
+            }
+            mock_instance.list_installed_ides.return_value = ["claude", "cursor"]
+            mock_instance.check_hooks_for_ide.return_value = (False, "needs setup")
+            mock_instance.get_config_path.return_value = str(tmp_path / "hooks.json")
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+            mock_instance._last_merged_config = {"hooks": {}}
+
+            assert setup_hooks(json_output=True) is True
+
+        result = json.loads(capsys.readouterr().out)
+        assert result["ides"] == ["claude", "cursor"]
+        assert [item["ide"] for item in result["results"]] == ["claude", "cursor"]
+        assert all(item["success"] is True for item in result["results"])
+        prompt.assert_not_called()
+
+    def test_json_output_auto_detects_healthy_integrations_as_noop(self, capsys):
+        """JSON setup reports a successful no-op when everything is healthy."""
+        with mock.patch("ai_guardian.setup.IDESetup") as MockSetup:
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+            mock_instance.list_installed_ides.return_value = ["claude"]
+            mock_instance.check_hooks_for_ide.return_value = (
+                True,
+                "Claude Code: configured",
+            )
+
+            assert setup_hooks(json_output=True) is True
+
+        result = json.loads(capsys.readouterr().out)
+        assert result["success"] is True
+        assert result["configured"] == ["claude"]
+        assert "already configured" in result["message"]
+        mock_instance.setup_ide_hooks.assert_not_called()
 
     def test_json_output_includes_mcp(self, tmp_path, capsys):
         """setup --ide claude --json always includes MCP server config."""
@@ -4143,11 +4414,13 @@ class TestSetupDaemonReload:
 
     def test_create_config_calls_daemon_reload(self, tmp_path, capsys):
         with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
             mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}),
             mock.patch(
                 "ai_guardian.daemon.client.send_reload_config", return_value=True
             ) as mock_reload,
         ):
+            MockSetup.return_value.list_installed_ides.return_value = []
             success = setup_hooks(create_config=True, interactive=False)
 
         assert success is True
@@ -4156,11 +4429,13 @@ class TestSetupDaemonReload:
 
     def test_create_config_no_reload_when_daemon_not_running(self, tmp_path, capsys):
         with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
             mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}),
             mock.patch(
                 "ai_guardian.daemon.client.send_reload_config", return_value=False
             ) as mock_reload,
         ):
+            MockSetup.return_value.list_installed_ides.return_value = []
             success = setup_hooks(create_config=True, interactive=False)
 
         assert success is True
@@ -4169,12 +4444,14 @@ class TestSetupDaemonReload:
 
     def test_reload_silences_exceptions(self, tmp_path, capsys):
         with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
             mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(tmp_path)}),
             mock.patch(
                 "ai_guardian.daemon.client.send_reload_config",
                 side_effect=Exception("fail"),
             ),
         ):
+            MockSetup.return_value.list_installed_ides.return_value = []
             success = setup_hooks(create_config=True, interactive=False)
 
         assert success is True

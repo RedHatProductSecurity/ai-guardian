@@ -1947,6 +1947,10 @@ ai-guardian setup --create-config --profile @strict
 
 This overwrites `~/.config/ai-guardian/ai-guardian.json`. Back up your existing config first if you have customizations.
 
+When supported integrations are detected, the selected profile is created
+before the automatic setup prompt and is reused for every integration selected
+there. Use `--ide` for a targeted setup/repair.
+
 ---
 
 ## MCP Server
@@ -1964,6 +1968,21 @@ ai-guardian setup --ide claude --no-mcp
 ```
 
 Since v1.10.0, `ai-guardian setup` installs the MCP server by default.
+
+### How do I set up all installed agents?
+
+Run setup without `--ide` to inspect supported local CLI/IDE installations. AI
+Guardian verifies each integration first, skips healthy integrations, and asks
+which pending integrations to configure when more than one needs setup:
+
+```bash
+ai-guardian setup
+```
+
+Press Enter at the multi-integration prompt to configure all pending targets,
+enter comma-separated numbers for a subset, or enter `s` to skip. For scripts
+and automation, use `--yes` to configure all pending integrations without a
+prompt, or `--json` for machine-readable per-integration results.
 
 ### How do I change the proactive check level?
 

@@ -744,6 +744,16 @@ ai-guardian setup --ide <agent-name>
 
 Agent names: `claude`, `cursor`, `copilot`, `grok`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `pi`, `augment`, `crush`, `junie`
 
+Running `ai-guardian setup` without `--ide` uses the same local installation
+evidence as tray health checks, verifies hook and MCP integrity, and excludes
+healthy integrations from setup. If several installed integrations need setup,
+the interactive command defaults to all and accepts a comma-separated selection
+or `s` to skip. Use `--yes` to configure every pending integration without a
+prompt. `--json` is also non-interactive and reports machine-readable setup
+results. When combined with automatic setup, `--create-config` (and its
+optional `--profile`) is applied once before the selected integrations are
+configured.
+
 ### Config File Locations
 
 | Agent | Config Path |

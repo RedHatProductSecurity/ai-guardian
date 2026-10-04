@@ -480,6 +480,7 @@ ai-guardian setup --list-profiles                           # List available pro
 
 ```bash
 ai-guardian setup                    # Auto-detect IDE
+ai-guardian setup --yes              # Configure all detected unconfigured IDEs/CLIs
 ai-guardian setup --ide claude       # Claude Code
 ai-guardian setup --ide cursor       # Cursor IDE
 ai-guardian setup --ide copilot      # GitHub Copilot
@@ -491,7 +492,17 @@ ai-guardian ide-setup sync --json     # Print the synchronized status as JSON
 ai-guardian ide-setup reset --ide claude  # Reset Claude setup prompt decisions
 ```
 
-Run `ai-guardian setup` after upgrading to get the latest hooks. The MCP security advisor server is installed by default — the AI can check security proactively before acting. Use `--no-mcp` to skip. See [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) for details and [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) for other setup options.
+Run `ai-guardian setup` after upgrading to get the latest hooks. Without
+`--ide`, it checks installed integrations, skips healthy ones, and prompts when
+one or more still need setup; `--yes` configures all pending integrations.
+If `--create-config` is supplied (optionally with `--profile`), the security
+configuration is created first and then reused for every selected integration.
+The MCP security advisor server is installed by default — the AI can check
+security proactively before acting. Use `--no-mcp` to skip. See
+[docs/AGENT_SUPPORT.md#setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#setup)
+for automatic detection details and
+[docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md)
+for MCP options.
 
 ### OpenAI Codex coverage
 
