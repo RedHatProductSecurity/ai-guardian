@@ -918,6 +918,60 @@ class TestSandboxTrayMenu:
         reopen.assert_called_once_with(values, (1, 2, 3, 4))
         run_create.assert_not_called()
 
+    def test_reopened_create_form_preserves_explicit_snapshot_choice(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-test",
+            "config_source": "Latest saved snapshot",
+        }
+
+        with mock.patch.object(tray._menu, "_start_sandbox_form") as start_form:
+            tray._menu._reopen_sandbox_create_form(values, None)
+
+        fields = start_form.call_args.args[2]
+        config_source = next(
+            field for field in fields if field["name"] == "config_source"
+        )
+        assert config_source["default"] == "Latest saved snapshot"
+
+    def test_create_form_config_source_defaults_are_isolated_and_valid(self):
+        tray = _make_tray([])
+
+        fresh_fields = tray._menu._sandbox_create_fields()
+        snapshot_fields = tray._menu._sandbox_create_fields(
+            {"config_source": "Latest saved snapshot"}
+        )
+        empty_fields = tray._menu._sandbox_create_fields({"config_source": ""})
+
+        def config_source_default(fields):
+            return next(
+                field["default"] for field in fields if field["name"] == "config_source"
+            )
+
+        assert config_source_default(fresh_fields) == "Host/default"
+        assert config_source_default(snapshot_fields) == "Latest saved snapshot"
+        assert config_source_default(empty_fields) == "Host/default"
+
+    def test_form_choice_default_falls_back_to_first_provider_choice(self):
+        from ai_guardian.tray.sandbox_dialog import _choice_default
+
+        field = {
+            "name": "config_source",
+            "type": "choice",
+            "default": "",
+        }
+        choices = ("Host/default", "Latest saved snapshot")
+
+        assert _choice_default(field, choices) == "Host/default"
+        assert (
+            _choice_default(
+                {**field, "default": "Latest saved snapshot"},
+                choices,
+            )
+            == "Latest saved snapshot"
+        )
+
     def test_create_streams_output_and_closes_progress_on_success(self):
         tray = _make_tray([])
         progress = mock.MagicMock()

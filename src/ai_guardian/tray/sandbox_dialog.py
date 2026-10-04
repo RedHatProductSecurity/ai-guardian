@@ -701,7 +701,10 @@ def _show_tkinter_form(
             widgets = [control]
         elif kind == "choice":
             choices = [str(choice) for choice in field.get("choices", ())]
-            variable = tk.StringVar(value=str(default))
+            choice_default = _choice_default(field, choices)
+            variable = tk.StringVar(
+                value="" if choice_default is None else choice_default
+            )
             control = ttk.Combobox(
                 frame,
                 textvariable=variable,
@@ -709,8 +712,6 @@ def _show_tkinter_form(
                 state="normal" if field.get("editable") else "readonly",
                 width=int(field.get("width", 44)),
             )
-            if choices and str(default) not in choices and not field.get("editable"):
-                variable.set(choices[0])
             control.grid(row=row, column=1, sticky="w", pady=4)
             widgets = [control]
         elif kind == "image":
@@ -1523,6 +1524,17 @@ def _field_choices(field: Dict[str, Any], values: Dict[str, Any]):
     return tuple(str(choice) for choice in choices)
 
 
+def _choice_default(field: Dict[str, Any], choices) -> Optional[str]:
+    """Return a choice default that is valid for the rendered provider."""
+    default = field.get("default", "")
+    normalized = "" if default is None else str(default)
+    if field.get("editable"):
+        return normalized or None
+    if normalized in choices:
+        return normalized
+    return choices[0] if choices else None
+
+
 def _form_label(field: Dict[str, Any]) -> str:
     """Build a consistent label for the non-Tk sandbox form providers."""
     label = str(field.get("label", field.get("name", "")))
@@ -1613,10 +1625,11 @@ def _show_nicegui_form(
                     widgets[name] = ("bool", widget)
                 elif kind == "choice":
                     choices = list(_field_choices(field, current_values))
+                    choice_default = _choice_default(field, choices)
                     if field.get("editable"):
                         widget = ui.select(
                             options=choices,
-                            value=str(default) if default else None,
+                            value=choice_default,
                             label=label,
                             with_input=True,
                             new_value_mode="add-unique",
@@ -1624,7 +1637,7 @@ def _show_nicegui_form(
                     else:
                         widget = ui.select(
                             options=choices,
-                            value=str(default) if default in choices else None,
+                            value=choice_default,
                             label=label,
                         ).classes("w-full")
                     widgets[name] = ("choice", widget)
