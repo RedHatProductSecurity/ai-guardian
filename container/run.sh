@@ -19,6 +19,11 @@ IDE="${AI_GUARDIAN_AGENT:-${AI_GUARDIAN_IDE:-codex}}"
 PROFILE="${AI_GUARDIAN_PROFILE:-}"
 REST_PORT="${AI_GUARDIAN_REST_PORT:-63152}"
 CONTAINER_ENGINE="${CONTAINER_ENGINE:-podman}"
+USERNS_ARGS=()
+if [[ "$(basename "$CONTAINER_ENGINE")" = "podman" ]]; then
+    # Preserve access to user-only host files mounted into rootless containers.
+    USERNS_ARGS=(--userns=keep-id)
+fi
 REPO_PATH=""
 API_KEY="${ANTHROPIC_API_KEY:-}"
 API_KEY_FROM_FLAG="false"
@@ -324,6 +329,7 @@ echo ""
 
 if [[ ${#volume_args[@]} -gt 0 ]]; then
     exec "$CONTAINER_ENGINE" run -it --rm \
+        "${USERNS_ARGS[@]}" \
         -p "${REST_PORT}" \
         "${env_args[@]}" \
         "${volume_args[@]}" \
@@ -332,6 +338,7 @@ if [[ ${#volume_args[@]} -gt 0 ]]; then
 fi
 
 exec "$CONTAINER_ENGINE" run -it --rm \
+    "${USERNS_ARGS[@]}" \
     -p "${REST_PORT}" \
     "${env_args[@]}" \
     "${IMAGE}" \

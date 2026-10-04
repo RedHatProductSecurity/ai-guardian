@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +32,9 @@ from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY, get_ide_integration
 
 logger = logging.getLogger(__name__)
+
+_CLI_VERSION_PATTERN = re.compile(r"(?<!\d)v?(\d+\.\d+\.\d+)(?!\d)")
+_CLI_VERSION_TIMEOUT_SECONDS = 5
 
 
 class CheckStatus(enum.Enum):
@@ -1245,6 +1249,7 @@ class Doctor:
                     any_configured = True
                 all_configured = False
 
+        self._add_cli_runtime_info(integration_results, results)
         detail_str = "; ".join(results)
 
         if not any_installed:
@@ -1278,6 +1283,92 @@ class Doctor:
                 fix_hint="Run: ai-guardian setup",
                 integrations=integration_results,
             )
+
+    @staticmethod
+    def _parse_cli_version(output: str) -> Optional[str]:
+        """Extract the first semantic version from CLI output."""
+        match = _CLI_VERSION_PATTERN.search(output or "")
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _detect_cli_runtime(integration) -> Optional[Dict[str, Any]]:
+        """Best-effort version probe for an installed CLI integration."""
+        if not integration.cli_capable:
+            return None
+
+        if integration.key == "opencode":
+            from ai_guardian.opencode_support import detect_opencode_runtime
+
+            runtime = detect_opencode_runtime()
+            if not runtime.get("executable") and not runtime.get("version"):
+                return None
+            result: Dict[str, Any] = {
+                "executable": integration.cli_executables[0],
+                "version": runtime.get("version"),
+            }
+            generation = runtime.get("generation")
+            if generation and generation != "unknown":
+                result["generation"] = generation
+            return result
+
+        for executable in integration.cli_executables:
+            binary = shutil.which(executable)
+            if not binary:
+                continue
+            try:
+                completed = subprocess.run(
+                    [binary, "--version"],
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                    timeout=_CLI_VERSION_TIMEOUT_SECONDS,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                logger.debug("Could not read %s version: %s", executable, exc)
+                return {"executable": executable, "version": None}
+
+            output = "\n".join(
+                value for value in (completed.stdout, completed.stderr) if value
+            )
+            return {
+                "executable": executable,
+                "version": Doctor._parse_cli_version(output),
+            }
+
+        return None
+
+    @staticmethod
+    def _format_cli_runtime(runtime: Dict[str, Any]) -> str:
+        executable = runtime.get("executable", "CLI")
+        version = runtime.get("version")
+        if not version:
+            return f"CLI: {executable} (version unavailable)"
+        generation = runtime.get("generation")
+        generation_suffix = f" ({generation})" if generation else ""
+        return f"CLI: {executable} {version}{generation_suffix}"
+
+    def _add_cli_runtime_info(
+        self,
+        integration_results: List[Dict[str, Any]],
+        results: List[str],
+    ) -> None:
+        """Add detected CLI versions without changing hook health status."""
+        for index, result in enumerate(integration_results):
+            if not result.get("installed"):
+                continue
+            integration = get_ide_integration(result.get("ide", ""))
+            if integration is None:
+                continue
+            runtime = self._detect_cli_runtime(integration)
+            if runtime is None:
+                continue
+
+            result["cli"] = runtime
+            cli_message = self._format_cli_runtime(runtime)
+            message = result.get("message", "")
+            result["message"] = f"{message}; {cli_message}" if message else cli_message
+            results[index] = f"{result.get('display_name', result.get('name', ''))}: "
+            results[index] += result["message"]
 
     @staticmethod
     def _has_ide_install_evidence(

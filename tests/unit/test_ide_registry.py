@@ -59,13 +59,7 @@ def test_canonical_registry_is_unique_and_complete():
 
 
 def test_openshell_cli_registry_matches_the_published_image_scope():
-    assert SUPPORTED_OPENSHELL_CLI_IDE_TYPES == (
-        "claude",
-        "copilot",
-        "codex",
-        "opencode",
-        "pi",
-    )
+    assert SUPPORTED_OPENSHELL_CLI_IDE_TYPES == ("codex",)
     assert set(SUPPORTED_OPENSHELL_CLI_IDE_TYPES).issubset(set(SUPPORTED_CLI_IDE_TYPES))
 
 

@@ -9,7 +9,10 @@ message ``tokens`` objects to extract session usage.
 import json
 import logging
 import os
+import re
+import shutil
 import sqlite3
+import subprocess
 from typing import Dict, List, Optional, Tuple
 
 from ai_guardian.scanners.transcript.base import TranscriptAdapter
@@ -21,18 +24,62 @@ from ai_guardian.scanners.transcript.common import (
 
 logger = logging.getLogger(__name__)
 
+_DB_PATH_PATTERN = re.compile(
+    r"(?P<path>(?:[A-Za-z]:[\\/]|/|~[\\/]|\.{1,2}[\\/])[^\s'\"]+\.db)"
+)
+
+
+def _query_opencode_db_path() -> Optional[str]:
+    """Ask an installed OpenCode runtime for its active database path."""
+    executable = shutil.which("opencode")
+    if not executable:
+        return None
+    try:
+        result = subprocess.run(
+            [executable, "debug", "paths", "db"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    output = "\n".join(((result.stdout or ""), (result.stderr or "")))
+    for line in output.splitlines():
+        candidate = line.strip().strip("'\"")
+        direct_path = os.path.expanduser(os.path.expandvars(candidate))
+        if direct_path.endswith(".db") and os.path.isfile(direct_path):
+            return direct_path
+        match = _DB_PATH_PATTERN.search(candidate)
+        if not match:
+            continue
+        path = os.path.expandvars(match.group("path")).strip("'\"")
+        if os.path.isfile(os.path.expanduser(path)):
+            return os.path.expanduser(path)
+    return None
+
 
 def get_opencode_db_path() -> Optional[str]:
     """Find OpenCode SQLite database path.
 
-    Checks OPENCODE_HOME env var first, then default XDG location.
+    Checks explicit V2 database configuration and the runtime's path command
+    before retaining the V1 ``OPENCODE_HOME`` and XDG fallbacks.
     """
-    return _discover_path(
+    explicit_db = os.environ.get("OPENCODE_DB")
+    if explicit_db:
+        if explicit_db == ":memory:":
+            return None
+        explicit_path = os.path.expanduser(os.path.expandvars(explicit_db))
+        return explicit_path if os.path.isfile(explicit_path) else None
+
+    legacy_path = _discover_path(
         "OPENCODE_HOME",
         "~/.local/share/opencode/opencode.db",
         check=os.path.exists,
         env_suffix="opencode.db",
     )
+    return _query_opencode_db_path() or legacy_path
 
 
 def _extract_token_usage(data: dict) -> Optional[Dict[str, int]]:

@@ -89,6 +89,34 @@ class TestPerformanceRouting:
 
 
 class TestHealthCheckRouting:
+    @mock.patch.object(MultiDaemonClient, "_local_health_check")
+    @mock.patch.object(MultiDaemonClient, "_rest_request")
+    def test_local_health_check_prefers_running_daemon(
+        self, mock_rest_request, mock_local_health_check
+    ):
+        daemon_report = {
+            "checks": [
+                {
+                    "name": "hooks",
+                    "integrations": [
+                        {
+                            "ide": "opencode",
+                            "message": "CLI: opencode 2.0.22 (v2)",
+                        }
+                    ],
+                }
+            ],
+            "version": "1.20.0-dev",
+        }
+        mock_rest_request.return_value = daemon_report
+        target = DaemonTarget(name="local", runtime="local", port=63152)
+
+        result = MultiDaemonClient().get_health_check(target)
+
+        assert result == daemon_report
+        mock_rest_request.assert_called_once_with(target, "GET", "/api/health-check")
+        mock_local_health_check.assert_not_called()
+
     def test_local_health_check_preserves_hook_integrations(self):
         from ai_guardian.doctor import CheckResult, CheckStatus, DoctorReport
 

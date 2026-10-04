@@ -9,6 +9,21 @@ import pytest
 from ai_guardian.constants import HookEvent
 from ai_guardian.hook_adapters import detect_adapter
 from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
+from ai_guardian.opencode_support import (
+    clear_opencode_version_cache,
+    detect_opencode_runtime,
+    detect_opencode_version,
+    opencode_generation,
+    parse_opencode_version,
+)
+from ai_guardian.setup.hooks import IDESetup, _OPENCODE_PLUGIN_V2_TS
+
+
+@pytest.fixture(autouse=True)
+def _reset_opencode_version_cache():
+    clear_opencode_version_cache()
+    yield
+    clear_opencode_version_cache()
 
 
 class TestOpenCodeDetection:
@@ -145,6 +160,18 @@ class TestOpenCodeNormalization:
         expected_value = tool_input.get(canonical_key, tool_input.get("filePath"))
         assert normalized.tool_input[canonical_key] == expected_value
 
+    def test_v2_malformed_payload_is_safe(self):
+        normalized = OpenCodeAdapter().normalize_input(
+            {
+                "hook_event_name": "unknown.v2.event",
+                "opencode_version": "2.0.22",
+                "tool_use": {"input": "not-an-object"},
+            }
+        )
+
+        assert normalized.event == HookEvent.PRE_TOOL_USE
+        assert normalized.tool_input == {}
+
 
 class TestOpenCodeResponseFormatting:
     """Test OpenCode response formatting (inherits BaseAgentAdapter format)."""
@@ -206,6 +233,17 @@ class TestOpenCodeResponseFormatting:
         data = json.loads(result["output"])
         assert "SECURITY RULES" in data["systemMessage"]
 
+    def test_posttooluse_warning_is_allowed(self):
+        result = OpenCodeAdapter().format_response(
+            has_secrets=False,
+            hook_event=HookEvent.POST_TOOL_USE,
+            warning_message="Review this output",
+            violation_type="secret_detected",
+        )
+        data = json.loads(result["output"])
+        assert result.get("_blocked", False) is False
+        assert data["systemMessage"] == "Review this output"
+
     def test_violation_type_metadata(self):
         result = OpenCodeAdapter().format_response(
             has_secrets=True,
@@ -214,3 +252,182 @@ class TestOpenCodeResponseFormatting:
             violation_type="secret_detected",
         )
         assert result["_violation_type"] == "secret_detected"
+
+
+def test_parse_opencode_version_accepts_cli_prefixes():
+    assert parse_opencode_version("opencode 2.0.22") == "2.0.22"
+    assert parse_opencode_version("OpenCode v1.18.31") == "1.18.31"
+
+
+def test_parse_opencode_version_rejects_missing_version():
+    assert parse_opencode_version("OpenCode development build") is None
+
+
+def test_opencode_generation_boundaries():
+    assert opencode_generation("1.18.31") == "v1"
+    assert opencode_generation("2.0.0") == "v2"
+    assert opencode_generation(None) == "unknown"
+
+
+def test_detect_opencode_version_uses_cli_output_without_override(monkeypatch):
+    monkeypatch.delenv("AI_GUARDIAN_OPENCODE_VERSION", raising=False)
+    completed = mock.Mock(stdout="2.0.22\n", stderr="", returncode=0)
+    with mock.patch(
+        "ai_guardian.opencode_support.shutil.which", return_value="opencode"
+    ):
+        with mock.patch(
+            "ai_guardian.opencode_support.subprocess.run", return_value=completed
+        ) as run:
+            assert detect_opencode_version() == "2.0.22"
+    run.assert_called_once()
+    assert run.call_args.args[0] == ["opencode", "--version"]
+
+
+def test_detect_opencode_version_caches_and_invalidates_runtime_context(monkeypatch):
+    monkeypatch.delenv("AI_GUARDIAN_OPENCODE_VERSION", raising=False)
+    completed = mock.Mock(stdout="2.0.22\n", stderr="", returncode=0)
+    with (
+        mock.patch(
+            "ai_guardian.opencode_support.shutil.which",
+            return_value="/usr/local/bin/opencode",
+        ),
+        mock.patch(
+            "ai_guardian.opencode_support.subprocess.run", return_value=completed
+        ) as run,
+    ):
+        assert detect_opencode_version() == "2.0.22"
+        assert detect_opencode_version() == "2.0.22"
+        monkeypatch.setenv("AI_GUARDIAN_OPENCODE_VERSION", "1.18.34")
+        assert detect_opencode_version() == "1.18.34"
+        assert run.call_count == 1
+
+        clear_opencode_version_cache()
+        monkeypatch.delenv("AI_GUARDIAN_OPENCODE_VERSION")
+        assert detect_opencode_version() == "2.0.22"
+
+    assert run.call_count == 2
+
+
+def test_detect_opencode_runtime_reports_v2_package():
+    with mock.patch(
+        "ai_guardian.opencode_support.detect_opencode_version",
+        return_value="2.0.22",
+    ):
+        with mock.patch(
+            "ai_guardian.opencode_support.shutil.which", return_value="opencode"
+        ):
+            assert detect_opencode_runtime() == {
+                "executable": "opencode",
+                "version": "2.0.22",
+                "generation": "v2",
+                "package": "@opencode/cli",
+                "supported": True,
+            }
+
+
+def test_v2_plugin_template_uses_domain_hooks():
+    assert "from '@opencode/plugin'" in _OPENCODE_PLUGIN_V2_TS
+    assert "Plugin.define" in _OPENCODE_PLUGIN_V2_TS
+    assert "ctx.session.hook('prompt'" in _OPENCODE_PLUGIN_V2_TS
+    assert "ctx.tool.hook('execute.before'" in _OPENCODE_PLUGIN_V2_TS
+    assert "ctx.tool.hook('execute.after'" in _OPENCODE_PLUGIN_V2_TS
+    assert "tool_use_id: event.id" in _OPENCODE_PLUGIN_V2_TS
+    assert "event.callID" not in _OPENCODE_PLUGIN_V2_TS
+    assert "event.status === 'completed'" in _OPENCODE_PLUGIN_V2_TS
+    assert "const error = event.error as unknown" in _OPENCODE_PLUGIN_V2_TS
+    assert "'message' in error" in _OPENCODE_PLUGIN_V2_TS
+    assert "event.result =" in _OPENCODE_PLUGIN_V2_TS
+
+
+def test_v2_registration_uses_plural_plugins_key(tmp_path):
+    config_file = tmp_path / "opencode.json"
+    config_file.write_text('{"plugin": ["/old/plugin.ts"]}\n', encoding="utf-8")
+    plugin_file = tmp_path / "plugins" / "ai-guardian.ts"
+    plugin_file.parent.mkdir()
+    plugin_file.write_text("// generated plugin\n", encoding="utf-8")
+
+    setup = IDESetup()
+    with mock.patch(
+        "ai_guardian.setup.hooks._resolve_opencode_config", return_value=config_file
+    ):
+        setup._register_opencode_plugin(
+            plugin_file, plugin_file.parent, generation="v2"
+        )
+
+    config = json.loads(config_file.read_text(encoding="utf-8"))
+    assert "plugin" not in config
+    assert config["plugins"] == ["/old/plugin.ts", str(plugin_file)]
+
+
+def test_v2_verification_requires_plural_plugins_key(tmp_path):
+    plugins_dir = tmp_path / "plugins"
+    plugins_dir.mkdir()
+    plugin_file = plugins_dir / "ai-guardian.ts"
+    plugin_file.write_text(_OPENCODE_PLUGIN_V2_TS, encoding="utf-8")
+    config_file = tmp_path / "opencode.json"
+    config_file.write_text(json.dumps({"plugin": [str(plugin_file)]}), encoding="utf-8")
+
+    setup = IDESetup()
+    with (
+        mock.patch(
+            "ai_guardian.setup.hooks._resolve_opencode_config", return_value=config_file
+        ),
+        mock.patch(
+            "ai_guardian.setup.hooks.detect_opencode_runtime",
+            return_value={"generation": "v2", "version": "2.0.22"},
+        ),
+    ):
+        assert setup.check_hooks_configured(plugins_dir, "opencode") is False
+
+    config_file.write_text(
+        json.dumps({"plugins": [str(plugin_file)]}), encoding="utf-8"
+    )
+    with (
+        mock.patch(
+            "ai_guardian.setup.hooks._resolve_opencode_config", return_value=config_file
+        ),
+        mock.patch(
+            "ai_guardian.setup.hooks.detect_opencode_runtime",
+            return_value={"generation": "v2", "version": "2.0.22"},
+        ),
+    ):
+        assert setup.check_hooks_configured(plugins_dir, "opencode") is True
+
+
+def test_setup_renders_v2_plugin_and_keeps_v1_bridge_location(tmp_path):
+    plugins_dir = tmp_path / "plugins"
+    config_file = tmp_path / "opencode.jsonc"
+
+    setup = IDESetup()
+    with (
+        mock.patch(
+            "ai_guardian.setup.hooks._resolve_opencode_config", return_value=config_file
+        ),
+        mock.patch(
+            "ai_guardian.setup.hooks.detect_opencode_runtime",
+            return_value={
+                "version": "2.0.22",
+                "generation": "v2",
+                "package": "@opencode/cli",
+            },
+        ),
+        mock.patch(
+            "ai_guardian.setup.hooks._resolve_binary_path", return_value="ai-guardian"
+        ),
+        mock.patch.object(
+            setup, "verify_gitleaks_installed", return_value=(True, "gitleaks ok")
+        ),
+    ):
+        success, message = setup._setup_plugin_file(
+            "opencode",
+            IDESetup.IDE_CONFIGS["opencode"],
+            plugins_dir,
+        )
+
+    assert success is True
+    assert "OpenCode v2 2.0.22" in message
+    source = (plugins_dir / "ai-guardian.ts").read_text(encoding="utf-8")
+    assert "@opencode/plugin" in source
+    assert (tmp_path / "ai-guardian" / "ai-guardian-bridge.ts").is_file()
+    config = json.loads(config_file.read_text(encoding="utf-8"))
+    assert config["plugins"] == [str(plugins_dir / "ai-guardian.ts")]

@@ -1177,8 +1177,7 @@ def main():
             dest="cli",
             help=(
                 "CLI executable to configure (for example, opencode or "
-                "claude); defaults to Claude for OpenShell and Codex for "
-                "containers"
+                "claude); defaults to Codex for both runtimes"
             ),
         )
         sandbox_create_parser.add_argument(
@@ -1232,7 +1231,7 @@ def main():
             "--model",
             help=(
                 "Model selected by the CLI or OpenShell inference route "
-                "(default: $AI_GUARDIAN_OPEN_SHELL_MODEL or claude-sonnet-4-6)"
+                "(default: $AI_GUARDIAN_OPEN_SHELL_MODEL or the CLI default)"
             ),
         )
         sandbox_create_parser.add_argument(
@@ -1240,8 +1239,7 @@ def main():
             dest="agent_provider",
             help=(
                 "Provider selected by the CLI; Container Pi supports "
-                "anthropic/openai/openai-codex, while OpenShell Pi supports "
-                "anthropic and experimental direct-API openai"
+                "anthropic/openai/openai-codex"
             ),
         )
         sandbox_create_parser.add_argument(

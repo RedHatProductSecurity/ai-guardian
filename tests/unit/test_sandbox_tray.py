@@ -2,6 +2,7 @@
 
 import io
 import os
+from datetime import datetime
 from types import SimpleNamespace
 from unittest import mock
 
@@ -667,15 +668,15 @@ class TestSandboxTrayMenu:
             "runtime": "openshell",
             "name": "ag-test",
             "agent": "",
-            "cli": "claude",
+            "cli": "codex",
             "agent_provider": "",
             "repo": "/tmp/repo",
             "config_dir": "",
             "image": "localhost/ai-guardian:openshell",
-            "model": "claude-sonnet-4-6",
+            "model": "",
             "profile": "",
             "policies": "/tmp/read-only.yaml, /tmp/network.yaml",
-            "providers": "ai-guardian-claude, ai-guardian-github",
+            "providers": "ai-guardian-codex, ai-guardian-github",
             "environment": "DEBUG=1, TERM=xterm",
             "labels": "team=security, owner=ai",
             "config_source": "Latest saved snapshot",
@@ -703,15 +704,15 @@ class TestSandboxTrayMenu:
         args = create.call_args.args[0]
         assert args.runtime == "openshell"
         assert args.name == "ag-test"
-        assert args.cli == "claude"
+        assert args.cli == "codex"
         assert args.opencode_agent is None
         assert args.agent_provider is None
         assert args.repo == "/tmp/repo"
         assert args.config_dir is None
         assert args.image == "localhost/ai-guardian:openshell"
-        assert args.model == "claude-sonnet-4-6"
+        assert args.model is None
         assert args.policy == ["/tmp/read-only.yaml", "/tmp/network.yaml"]
-        assert args.provider == ["ai-guardian-claude", "ai-guardian-github"]
+        assert args.provider == ["ai-guardian-codex", "ai-guardian-github"]
         assert args.environment == ["DEBUG=1", "TERM=xterm"]
         assert args.label == ["team=security", "owner=ai"]
         assert args.restore_config == "latest"
@@ -777,7 +778,7 @@ class TestSandboxTrayMenu:
         values = {
             "runtime": "openshell",
             "name": "ag-test",
-            "cli": "claude",
+            "cli": "codex",
             "repo": str(repo),
         }
         preparation = mock.MagicMock()
@@ -979,41 +980,6 @@ class TestSandboxTrayMenu:
         )
         show_log.assert_not_called()
 
-    def test_create_form_maps_opencode_cli_and_agent(self):
-        tray = _make_tray([])
-        values = {
-            "runtime": "openshell",
-            "name": "ag-opencode",
-            "cli": "opencode",
-            "agent": "build",
-            "repo": "",
-            "config_dir": "",
-            "image": "",
-            "model": "",
-            "profile": "",
-            "policies": "",
-            "providers": "",
-            "environment": "",
-            "labels": "",
-            "config_source": "Host/default",
-            "port": "",
-        }
-        with (
-            mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
-            mock.patch(
-                "ai_guardian.tray.menu_builder._get_openshell_openai_providers",
-                return_value=("ai-guardian-openai",),
-            ),
-            mock.patch.object(tray._menu, "_show_sandbox_progress", return_value=None),
-        ):
-            tray._menu._complete_sandbox_create_form(values)
-
-        args = create.call_args.args[0]
-        assert args.cli == "opencode"
-        assert args.opencode_agent == "build"
-        assert args.provider == ["ai-guardian-openai"]
-        assert args.fresh_config is True
-
     def test_create_form_defaults_missing_config_source_to_host(self):
         tray = _make_tray([])
         values = {
@@ -1031,44 +997,13 @@ class TestSandboxTrayMenu:
         assert args.restore_config is None
         assert args.fresh_config is True
 
-    def test_create_form_auto_attaches_existing_openai_provider(self):
-        tray = _make_tray([])
-        values = {
-            "runtime": "openshell",
-            "name": "ag-opencode",
-            "cli": "opencode",
-            "agent": "build",
-            "repo": "",
-            "config_dir": "",
-            "image": "",
-            "model": "openai/gpt-5.6-luna",
-            "profile": "",
-            "policies": "",
-            "providers": "",
-            "environment": "",
-            "labels": "",
-            "config_source": "Host/default",
-            "port": "",
-        }
-        with (
-            mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
-            mock.patch(
-                "ai_guardian.tray.menu_builder._get_openshell_openai_providers",
-                return_value=("ai-guardian-openai",),
-            ),
-            mock.patch.object(tray._menu, "_show_sandbox_progress", return_value=None),
-        ):
-            tray._menu._complete_sandbox_create_form(values)
-
-        assert create.call_args.args[0].provider == ["ai-guardian-openai"]
-
-    def test_create_form_rejects_unsupported_openshell_pi_provider(self):
+    def test_create_form_rejects_unsupported_openshell_cli(self):
         tray = _make_tray([])
         values = {
             "runtime": "openshell",
             "name": "ag-pi",
             "cli": "pi",
-            "agent_provider": "openai-codex",
+            "agent_provider": "",
             "repo": "",
             "config_dir": "",
             "image": "",
@@ -1089,7 +1024,9 @@ class TestSandboxTrayMenu:
             tray._menu._complete_sandbox_create_form(values)
 
         show_error.assert_called_once()
-        assert "only the anthropic or openai provider" in show_error.call_args.args[1]
+        assert "CLI 'pi' is not supported for openshell sandboxes" in (
+            show_error.call_args.args[1]
+        )
         create.assert_not_called()
 
     def test_create_form_exposes_policy_file_field(self):
@@ -1129,7 +1066,7 @@ class TestSandboxTrayMenu:
 
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["type"] == "choice"
-        assert agent_field["choices"] == ("", "build")
+        assert agent_field["choices"] == ("",)
         assert agent_field["editable"] is True
         assert agent_field["default"] == ""
         assert agent_field["required"] is True
@@ -1175,7 +1112,7 @@ class TestSandboxTrayMenu:
         provider_field = next(
             field for field in fields if field["name"] == "agent_provider"
         )
-        assert provider_field["default"] == "openai"
+        assert provider_field["default"] == ""
         assert next(field for field in fields if field["name"] == "name")[
             "default"
         ] == ("ag-codex")
@@ -1361,15 +1298,18 @@ class TestSandboxTrayMenu:
         assert _browse_initialdir("") is None
 
     def test_local_image_choices_use_ai_guardian_image_label(self):
-        from ai_guardian.tray.sandbox_dialog import _local_image_choices
+        from ai_guardian.tray.sandbox_dialog import (
+            _format_local_image_choice,
+            _local_image_choices,
+        )
 
         result = SimpleNamespace(
             returncode=0,
             stdout=(
-                "localhost/ai-guardian-openshell:dev\n"
-                "<none>:<none>\n"
-                "localhost/ai-guardian:dev\n"
-                "localhost/ai-guardian-openshell:dev\n"
+                "localhost/ai-guardian-openshell:dev\t2026-10-03 16:00:00 +0000 UTC\n"
+                "<none>:<none>\t2026-10-03 15:00:00 +0000 UTC\n"
+                "localhost/ai-guardian:dev\t2026-10-02 16:00:00 +0000 UTC\n"
+                "localhost/ai-guardian-openshell:dev\t2026-10-01 16:00:00 +0000 UTC\n"
             ),
         )
         with (
@@ -1380,9 +1320,23 @@ class TestSandboxTrayMenu:
             ) as run,
         ):
             assert _local_image_choices() == [
-                "localhost/ai-guardian-openshell:dev",
-                "localhost/ai-guardian:dev",
+                (
+                    "localhost/ai-guardian-openshell:dev",
+                    "2026-10-03 16:00:00 +0000 UTC",
+                ),
+                ("localhost/ai-guardian:dev", "2026-10-02 16:00:00 +0000 UTC"),
             ]
+            local_time = datetime.strptime(
+                "2026-10-03 16:00:00 +0000", "%Y-%m-%d %H:%M:%S %z"
+            ).astimezone()
+            timezone_name = local_time.tzname() or local_time.strftime("%z")
+            assert _format_local_image_choice(
+                "localhost/ai-guardian-openshell:dev",
+                "2026-10-03 16:00:00 +0000 UTC",
+            ) == (
+                "localhost/ai-guardian-openshell:dev "
+                f"(created {local_time:%Y-%m-%d %H:%M:%S} {timezone_name})"
+            )
 
         run.assert_called_once_with(
             [
@@ -1392,7 +1346,7 @@ class TestSandboxTrayMenu:
                 "--filter",
                 "label=ai-guardian.support-image=true",
                 "--format",
-                "{{.Repository}}:{{.Tag}}",
+                "{{.Repository}}:{{.Tag}}\t{{.CreatedAt}}",
             ],
             capture_output=True,
             text=True,

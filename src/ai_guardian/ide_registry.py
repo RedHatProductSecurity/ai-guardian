@@ -420,14 +420,8 @@ SUPPORTED_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
 )
 # The OpenShell image currently bundles these terminal clients. Keep this
 # separate from the broader host/container CLI registry so the OpenShell
-# selector cannot advertise agents that require a custom image.
-SUPPORTED_OPENSHELL_CLI_IDE_TYPES: Tuple[str, ...] = (
-    "claude",
-    "copilot",
-    "codex",
-    "opencode",
-    "pi",
-)
+# selector cannot advertise agents that are outside its supported scope.
+SUPPORTED_OPENSHELL_CLI_IDE_TYPES: Tuple[str, ...] = ("codex",)
 # Runtime-specific sandbox selectors. Keep this matrix close to the canonical
 # CLI registry so the CLI validator and tray form cannot advertise different
 # runtime capabilities.
@@ -437,7 +431,7 @@ SANDBOX_CLI_IDE_TYPES_BY_RUNTIME = {
 }
 SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME = {
     "container": ("", "anthropic", "openai", "openai-codex"),
-    "openshell": ("anthropic", "openai"),
+    "openshell": (),
 }
 ALL_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in ALL_IDE_REGISTRY

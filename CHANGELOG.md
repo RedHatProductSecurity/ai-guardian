@@ -7,12 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **OpenCode V2 support (#2470):** Detect OpenCode 1.x versus 2.x during
+  setup, generate the matching plugin lifecycle contract, reconcile the V1
+  `plugin` and V2 `plugins` configuration keys, and discover V2 database paths
+  through `OPENCODE_DB` or `opencode debug paths db` without replacing the
+  existing V1 integration.
+- **CLI version visibility in doctor:** Report detected versions for installed
+  CLI integrations in human-readable and structured hook health output. OpenCode
+  also reports whether the active CLI uses the V1 or V2 plugin contract.
+
 ### Fixed
+- **Tray Console health runtime context:** Local Console health checks now run
+  through the active daemon REST endpoint before falling back to the Console
+  process, preventing stale tray-launched processes from reporting an older CLI
+  runtime such as OpenCode V1 instead of the daemon's V2 runtime.
 - **ONNX Runtime install markers:** Avoid parsing non-PEP 440 Linux kernel
   release strings as versions during dependency resolution. The installer
   smoke test now builds and installs the wheel from the checked-out source.
+- **Rootless Podman sandbox config staging:** Use Podman `keep-id` user
+  namespaces for managed sandbox and launcher commands so user-only host
+  configuration snapshots remain readable without changing host permissions.
+- **OpenShell API-key provider refresh:** Keep Codex OAuth and OpenAI API-key
+  credentials in separate gateway provider instances so an existing OAuth
+  provider is not refreshed with an incompatible credential type.
+- **OpenShell workload identity:** Use a dedicated no-supplementary-groups
+  sandbox account in the OpenShell image so OpenShell's capability-free launch
+  accepts the resolved workload identity under Podman.
+- **Sandbox image picker timestamps:** Show local-time creation timestamps while
+  preserving the underlying container image reference used for selection.
 
 ### Changed
+- **OpenCode container boundary (#2470):** Pin OpenCode V1 `1.18.34` in the
+  normal Docker/Podman image and remove OpenCode from the OpenShell image,
+  policy, and qualification matrix. OpenShell support now targets releases
+  `0.1.2` or newer.
 - **Ubuntu 26.04 runner migration (#2491):** Move all intended GitHub Actions
   Linux jobs to the available `ubuntu-26.04` runner, including tests, lint,
   release readiness, publishing, scanners, smoke tests, scenarios, and
@@ -50,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup health, and stop setup before replacing an existing invalid file.
 
 ### Changed
+- **OpenShell CLI boundary (#2470):** The dedicated OpenShell image, selector,
+  tray, and qualification matrix now support Codex only. Claude support is
+  deferred until OpenShell `0.1.3`; OpenCode remains supported through host
+  setup and the normal Docker/Podman image only.
 - **OpenShell v0.1.2 workload compatibility (#2460):** Move the dedicated
   image from the retired Community base to a pinned NVIDIA Ubuntu 24.04 base,
   install workload dependencies explicitly, and remove managed

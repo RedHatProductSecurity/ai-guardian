@@ -22,10 +22,7 @@ from ai_guardian.sandbox import (
     _initial_config_source,
     _load_snapshot_config,
     _openshell_create,
-    _openshell_explicit_command,
-    _openshell_inference_cli,
     _openshell_provider_environment,
-    _vertex_settings,
     _expose_openshell_service,
     _run,
     _runtime,
@@ -310,7 +307,7 @@ def test_sandbox_create_reserves_agent_for_opencode_profiles():
         _validate_create_options(args)
 
 
-def test_sandbox_create_requires_agent_for_opencode():
+def test_sandbox_create_rejects_opencode_for_openshell():
     args = _args(
         sandbox_command="create",
         runtime="openshell",
@@ -319,7 +316,7 @@ def test_sandbox_create_requires_agent_for_opencode():
 
     with pytest.raises(
         ValueError,
-        match="--opencode-agent-profile/--agent is required with --cli opencode",
+        match="CLI 'opencode' is not supported for openshell sandboxes",
     ):
         _validate_create_options(args)
 
@@ -338,7 +335,7 @@ def test_sandbox_create_rejects_cli_not_supported_by_openshell():
         _validate_create_options(args)
 
 
-def test_sandbox_create_rejects_unsupported_openshell_pi_provider():
+def test_sandbox_create_rejects_unsupported_openshell_cli():
     args = _args(
         sandbox_command="create",
         runtime="openshell",
@@ -346,10 +343,7 @@ def test_sandbox_create_rejects_unsupported_openshell_pi_provider():
         agent_provider="openai-codex",
     )
 
-    with pytest.raises(
-        ValueError,
-        match="OpenShell Pi requires --agent-provider anthropic or openai",
-    ):
+    with pytest.raises(ValueError, match="supported CLIs: codex"):
         _validate_create_options(args)
 
 
@@ -698,6 +692,7 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
     assert "--name" in command
     assert command[command.index("--name") + 1] == "demo"
     assert "ai-guardian.name=demo" in command
+    assert "--userns=keep-id" in command
     assert "--publish" in command
     assert command[command.index("--publish") + 1] == "8123:63152"
     assert f"{config_path}:/sandbox/.config/ai-guardian.host.json:ro,z" in command
@@ -786,31 +781,6 @@ def test_container_create_forwards_vertex_auth_and_mounts_adc(tmp_path):
         f"GOOGLE_APPLICATION_CREDENTIALS={CONTAINER_GOOGLE_CREDENTIALS_PATH}" in command
     )
     assert f"{adc_path}:{CONTAINER_GOOGLE_CREDENTIALS_PATH}:ro,z" in command
-
-
-def test_vertex_settings_use_explicit_environment_values():
-    args = _args(
-        environment=[
-            "VERTEX_AI_PROJECT_ID=explicit-project",
-            "VERTEX_AI_REGION=us-central1",
-        ]
-    )
-
-    with patch.dict(
-        os.environ,
-        {
-            "ANTHROPIC_VERTEX_PROJECT_ID": "",
-            "VERTEX_AI_PROJECT_ID": "",
-            "CLOUD_ML_REGION": "",
-            "VERTEX_AI_REGION": "",
-        },
-        clear=False,
-    ):
-        assert _vertex_settings(args) == (
-            "explicit-project",
-            "us-central1",
-            "claude-sonnet-4-6",
-        )
 
 
 def test_container_create_uses_latest_saved_config_snapshot(tmp_path):
@@ -1191,48 +1161,6 @@ def test_container_create_preserves_explicit_command():
     ]
 
 
-def test_openshell_automated_claude_print_gets_bare_without_shell_wrapper():
-    args = _args(
-        runtime="openshell",
-        cli="claude",
-        command_args=["--", "claude", "--print", "hello"],
-    )
-
-    assert _openshell_explicit_command(args) == [
-        "claude",
-        "--bare",
-        "--print",
-        "hello",
-    ]
-
-
-def test_openshell_interactive_claude_command_is_not_rewritten():
-    args = _args(
-        runtime="openshell",
-        cli="claude",
-        command_args=["--", "claude"],
-    )
-
-    assert _openshell_explicit_command(args) == ["claude"]
-
-
-def test_openshell_explicit_opencode_command_uses_selected_agent_profile():
-    args = _args(
-        runtime="openshell",
-        cli="opencode",
-        opencode_agent="build",
-        command_args=["--", "opencode", "run", "hello"],
-    )
-
-    assert _openshell_explicit_command(args) == [
-        "opencode",
-        "--agent",
-        "build",
-        "run",
-        "hello",
-    ]
-
-
 def test_openshell_create_exposes_gateway_managed_service(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -1245,7 +1173,7 @@ def test_openshell_create_exposes_gateway_managed_service(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        cli="claude",
+        cli="codex",
         profile=None,
         config_dir=str(config_dir),
         repo=str(repo),
@@ -1254,7 +1182,7 @@ def test_openshell_create_exposes_gateway_managed_service(tmp_path):
         api_key=None,
         environment=["DEBUG=1"],
         policy=[str(policy)],
-        provider=["ai-guardian-claude"],
+        provider=["ai-guardian-codex"],
         label=["team=security"],
     )
 
@@ -1293,7 +1221,7 @@ def test_openshell_create_exposes_gateway_managed_service(tmp_path):
         create_command[index + 1]
         for index, value in enumerate(create_command[:-1])
         if value == "--provider"
-    ] == ["ai-guardian-claude"]
+    ] == ["ai-guardian-codex"]
     policy_argument = create_command[create_command.index("--policy") + 1]
     assert Path(policy_argument).name == "policy.yaml"
     assert policy_argument != str(policy)
@@ -1339,8 +1267,8 @@ def test_openshell_create_composes_baseline_overlay_and_agent_policy(tmp_path):
     )
     agent_dir = tmp_path / "agents"
     agent_dir.mkdir()
-    (agent_dir / "claude.yaml").write_text(
-        "version: 1\nnetwork_policies:\n  claude:\n    endpoints: []\n",
+    (agent_dir / "codex.yaml").write_text(
+        "version: 1\nnetwork_policies:\n  codex:\n    endpoints: []\n",
         encoding="utf-8",
     )
     overlay = tmp_path / "overlay.yaml"
@@ -1358,7 +1286,7 @@ def test_openshell_create_composes_baseline_overlay_and_agent_policy(tmp_path):
         },
         clear=False,
     ):
-        policy_path, policy_dir = _compose_openshell_policy(args, "claude")
+        policy_path, policy_dir = _compose_openshell_policy(args, "codex")
         try:
             policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
         finally:
@@ -1366,39 +1294,7 @@ def test_openshell_create_composes_baseline_overlay_and_agent_policy(tmp_path):
 
     assert policy["version"] == 1
     assert policy["filesystem_policy"]["read_write"] == ["/sandbox"]
-    assert set(policy["network_policies"]) == {"base", "overlay", "claude"}
-
-
-def test_opencode_provider_owns_openai_endpoints(tmp_path):
-    base = tmp_path / "base.yaml"
-    base.write_text("version: 1\nnetwork_policies: {}\n", encoding="utf-8")
-    agent_dir = tmp_path / "agents"
-    agent_dir.mkdir()
-    (agent_dir / "opencode.yaml").write_text(
-        "version: 1\nnetwork_policies:\n  openai:\n"
-        "    endpoints:\n      - host: api.openai.com\n"
-        "        port: 443\n    binaries:\n      - path: /usr/bin/opencode\n",
-        encoding="utf-8",
-    )
-    args = _args()
-
-    with patch.dict(
-        os.environ,
-        {
-            "AI_GUARDIAN_OPEN_SHELL_BASE_POLICY": str(base),
-            "AI_GUARDIAN_OPEN_SHELL_AGENT_POLICY_DIR": str(agent_dir),
-        },
-        clear=False,
-    ):
-        policy_path, policy_dir = _compose_openshell_policy(
-            args, "opencode", provider_attached=True
-        )
-        try:
-            policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
-        finally:
-            shutil.rmtree(policy_dir)
-
-    assert "openai" not in policy["network_policies"]
+    assert set(policy["network_policies"]) == {"base", "overlay", "codex"}
 
 
 def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
@@ -1430,442 +1326,6 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         assert Path(command[command.index("--policy") + 1]).name == "policy.yaml"
     finally:
         shutil.rmtree(policy_dir)
-
-
-def test_openshell_opencode_provider_does_not_force_anthropic_route(tmp_path):
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="opencode-demo",
-        cli="opencode",
-        model="gpt-5",
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        profile=None,
-        image="example/ai-guardian-openshell:test",
-        environment=[],
-        policy=[],
-        provider=["opencode-provider"],
-        label=[],
-    )
-
-    command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert name == "opencode-demo"
-        assert uploads is False
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        assert "ANTHROPIC_BASE_URL=https://inference.local/v1" not in command
-        assert "ANTHROPIC_API_KEY=unused" not in command
-        assert command[command.index("--provider") + 1] == "opencode-provider"
-        assert "--no-credential-warnings" not in command
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_opencode_auto_attaches_codex_api_key_provider(tmp_path):
-    codex_home = tmp_path / ".codex"
-    codex_home.mkdir()
-    (codex_home / "auth.json").write_text(
-        json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": "api-secret"}),
-        encoding="utf-8",
-    )
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="opencode-codex-key",
-        cli="opencode",
-        opencode_agent="build",
-        model="openai/gpt-5",
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        profile=None,
-        image="example/ai-guardian-openshell:test",
-        environment=[f"CODEX_HOME={codex_home}"],
-        policy=[],
-        provider=[],
-        label=[],
-    )
-
-    with (
-        patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
-        patch(
-            "ai_guardian.sandbox._openshell_provider_profiles",
-            return_value=["codex", "openai"],
-        ),
-        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
-        patch("ai_guardian.sandbox._run", return_value=0) as run,
-    ):
-        command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert name == "opencode-codex-key"
-        assert uploads is False
-        assert command[command.index("--provider") + 1] == "ai-guardian-codex"
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        assert "--no-auto-providers" in command
-        provider_command = run.call_args.args[0]
-        assert provider_command[provider_command.index("--type") + 1] == "openai"
-        assert "--from-existing" in provider_command
-        assert "api-secret" not in provider_command
-        assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_opencode_non_openai_model_keeps_generic_provider_route(tmp_path):
-    codex_home = tmp_path / ".codex"
-    codex_home.mkdir()
-    (codex_home / "auth.json").write_text(
-        json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": "api-secret"}),
-        encoding="utf-8",
-    )
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="opencode-generic",
-        cli="opencode",
-        opencode_agent="build",
-        model="google/gemini-2.5-pro",
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        profile=None,
-        image="example/ai-guardian-openshell:test",
-        environment=[f"CODEX_HOME={codex_home}"],
-        policy=[],
-        provider=[],
-        label=[],
-    )
-
-    with patch("ai_guardian.sandbox._ensure_openshell_cli_provider") as ensure:
-        command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert name == "opencode-generic"
-        assert uploads is False
-        assert "--provider" not in command
-        assert "--auto-providers" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        ensure.assert_not_called()
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_opencode_claude_agent_uses_native_provider(tmp_path):
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="opencode-claude-demo",
-        cli="opencode",
-        opencode_agent="claude",
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        profile=None,
-        image="example/ai-guardian-openshell:test",
-        environment=[],
-        policy=[],
-        provider=["vertex-provider"],
-        label=[],
-    )
-
-    command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert name == "opencode-claude-demo"
-        assert uploads is False
-        assert "AI_GUARDIAN_OPENCODE_AGENT=claude" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        assert not any("inference.local" in value for value in command)
-        assert command[command.index("--provider") + 1] == "vertex-provider"
-        assert "--no-credential-warnings" in command
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_opencode_claude_model_uses_native_provider(tmp_path):
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="opencode-model-demo",
-        cli="opencode",
-        opencode_agent="build",
-        model="claude-sonnet-4-6",
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        profile=None,
-        image="example/ai-guardian-openshell:test",
-        environment=[],
-        policy=[],
-        provider=["vertex-provider"],
-        label=[],
-    )
-
-    command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert name == "opencode-model-demo"
-        assert uploads is False
-        assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
-        assert not any("inference.local" in value for value in command)
-        assert "--no-credential-warnings" in command
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_opencode_default_model_uses_native_provider(tmp_path):
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="opencode-default-model-demo",
-        cli="opencode",
-        opencode_agent="build",
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        profile=None,
-        image="example/ai-guardian-openshell:test",
-        environment=[],
-        policy=[],
-        provider=["vertex-provider"],
-        label=[],
-    )
-
-    command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert name == "opencode-default-model-demo"
-        assert uploads is False
-        assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        assert not any("inference.local" in value for value in command)
-        assert "--no-credential-warnings" in command
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_pi_uses_native_anthropic_provider(tmp_path):
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="pi-demo",
-        cli="pi",
-        profile=None,
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        image="example/ai-guardian-openshell:test",
-        agent_provider="anthropic",
-        model="claude-sonnet-4-6",
-        environment=[],
-        policy=[],
-        provider=["pi-provider"],
-        label=[],
-    )
-
-    command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert _openshell_inference_cli(args, "pi") == "claude"
-        assert name == "pi-demo"
-        assert uploads is False
-        assert "PI_CODING_AGENT_DIR=/sandbox/.pi/agent" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        assert not any("inference.local" in value for value in command)
-        assert command[command.index("--provider") + 1] == "pi-provider"
-        assert "--no-credential-warnings" in command
-        policy_path = Path(command[command.index("--policy") + 1])
-        policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
-        assert "anthropic" in policy["network_policies"]
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_pi_openai_uses_openai_inference_provider_from_pi_auth_file(tmp_path):
-    pi_agent_dir = tmp_path / ".pi" / "agent"
-    pi_agent_dir.mkdir(parents=True)
-    (pi_agent_dir / "auth.json").write_text(
-        json.dumps({"openai": {"type": "api_key", "key": "api-key-placeholder"}}),
-        encoding="utf-8",
-    )
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="pi-openai-demo",
-        cli="pi",
-        profile=None,
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        image="example/ai-guardian-openshell:test",
-        agent_provider="openai",
-        model="gpt-5",
-        environment=[],
-        policy=[],
-        provider=[],
-        label=[],
-    )
-
-    with (
-        patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
-        patch(
-            "ai_guardian.sandbox._openshell_provider_profiles",
-            return_value=["codex", "openai"],
-        ),
-        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
-        patch("ai_guardian.sandbox._run", return_value=0) as run,
-    ):
-        command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert _openshell_inference_cli(args, "pi") == "openai"
-        assert name == "pi-openai-demo"
-        assert uploads is False
-        assert "AI_GUARDIAN_AGENT_PROVIDER=openai" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        assert not any("inference.local" in value for value in command)
-        assert "OPENAI_API_KEY=unused" not in command
-        assert command[command.index("--provider") + 1] == "ai-guardian-openai"
-        assert "--no-credential-warnings" in command
-        assert "--no-auto-providers" in command
-        provider_command = run.call_args.args[0]
-        assert provider_command[provider_command.index("--type") + 1] == "openai"
-        assert "--from-existing" in provider_command
-        assert "api-key-placeholder" not in provider_command
-        assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-key-placeholder"
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_pi_openai_auto_uses_codex_api_key_provider(tmp_path):
-    codex_home = tmp_path / ".codex"
-    codex_home.mkdir()
-    (codex_home / "auth.json").write_text(
-        json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": "api-secret"}),
-        encoding="utf-8",
-    )
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="pi-openai-codex-key",
-        cli="pi",
-        profile=None,
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        image="example/ai-guardian-openshell:test",
-        agent_provider="openai",
-        model="gpt-5",
-        environment=[f"CODEX_HOME={codex_home}"],
-        policy=[],
-        provider=[],
-        label=[],
-    )
-
-    with (
-        patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
-        patch(
-            "ai_guardian.sandbox._openshell_provider_profiles",
-            return_value=["codex", "openai"],
-        ),
-        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
-        patch("ai_guardian.sandbox._run", return_value=0) as run,
-    ):
-        command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert name == "pi-openai-codex-key"
-        assert uploads is False
-        assert command[command.index("--provider") + 1] == "ai-guardian-codex"
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        assert "OPENAI_BASE_URL=https://inference.local/v1" not in command
-        assert "OPENAI_API_KEY=unused" not in command
-        assert "--no-credential-warnings" in command
-        provider_command = run.call_args.args[0]
-        assert provider_command[provider_command.index("--type") + 1] == "openai"
-        assert "--from-existing" in provider_command
-        assert "api-secret" not in provider_command
-        assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_pi_openai_codex_creates_codex_provider_from_pi_oauth(tmp_path):
-    pi_agent_dir = tmp_path / ".pi" / "agent"
-    pi_agent_dir.mkdir(parents=True)
-    (pi_agent_dir / "auth.json").write_text(
-        json.dumps(
-            {
-                "openai-codex": {
-                    "type": "oauth",
-                    "access": "access-placeholder",
-                    "refresh": "refresh-placeholder",
-                    "expires": 4102444800,
-                    "accountId": "account-placeholder",
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="pi-codex-demo",
-        cli="pi",
-        profile=None,
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        image="example/ai-guardian-openshell:test",
-        agent_provider="openai-codex",
-        model=None,
-        environment=[],
-        policy=[],
-        provider=[],
-        label=[],
-    )
-
-    with (
-        patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
-        patch(
-            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
-        ),
-        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
-        patch("ai_guardian.sandbox._run", return_value=0) as run,
-    ):
-        command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert _openshell_inference_cli(args, "pi") == "openai-codex"
-        assert name == "pi-codex-demo"
-        assert uploads is False
-        assert "AI_GUARDIAN_AGENT_PROVIDER=openai-codex" in command
-        assert "AI_GUARDIAN_OPEN_SHELL_PROVIDER=true" in command
-        assert command[command.index("--provider") + 1] == "ai-guardian-openai-codex"
-        assert "--no-auto-providers" in command
-        provider_command = run.call_args.args[0]
-        assert provider_command[provider_command.index("--type") + 1] == "codex"
-        assert "--from-existing" in provider_command
-        assert all(
-            secret not in provider_command
-            for secret in (
-                "access-placeholder",
-                "refresh-placeholder",
-                "account-placeholder",
-            )
-        )
-        provider_environment = run.call_args.kwargs["env"]
-        assert provider_environment["CODEX_AUTH_ACCESS_TOKEN"] == "access-placeholder"
-        assert provider_environment["CODEX_AUTH_REFRESH_TOKEN"] == "refresh-placeholder"
-        assert provider_environment["CODEX_AUTH_ACCOUNT_ID"] == "account-placeholder"
-    finally:
-        shutil.rmtree(policy_dir)
-
-
-def test_openshell_pi_rejects_unimplemented_provider(tmp_path):
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="pi-unsupported-demo",
-        cli="pi",
-        profile=None,
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        image="example/ai-guardian-openshell:test",
-        agent_provider="google",
-        model="gemini-2.5-pro",
-        environment=[],
-        policy=[],
-        provider=[],
-        label=[],
-    )
-
-    with pytest.raises(ValueError, match="currently supports the anthropic"):
-        _openshell_create(args)
 
 
 def test_existing_openshell_codex_provider_refreshes_local_credentials(tmp_path):
@@ -1936,48 +1396,43 @@ def test_existing_openshell_codex_provider_refreshes_api_key(tmp_path):
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
         patch("ai_guardian.sandbox._run", return_value=0) as run,
     ):
-        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-openai"
 
     command = run.call_args.args[0]
     assert command[:4] == [
         "openshell",
         "provider",
         "update",
-        "ai-guardian-codex",
+        "ai-guardian-openai",
     ]
     assert command[command.index("--credential") + 1] == "OPENAI_API_KEY"
     assert "api-secret" not in command
     assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
 
 
-def test_openshell_pi_without_provider_does_not_create_claude_provider(tmp_path):
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="pi-direct",
-        cli="pi",
-        profile=None,
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        image="example/ai-guardian-openshell:test",
-        environment=[],
-        policy=[],
-        provider=[],
-        label=[],
+def test_missing_openshell_api_key_profile_lists_setup_guidance(tmp_path):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": "api-secret"}),
+        encoding="utf-8",
     )
+    args = _args(environment=[f"CODEX_HOME={codex_home}"])
 
-    with patch("ai_guardian.sandbox._ensure_openshell_cli_provider") as ensure:
-        command, name, uploads, policy_dir = _openshell_create(args)
-    try:
-        assert _openshell_inference_cli(args, "pi") == ""
-        assert name == "pi-direct"
-        assert uploads is False
-        assert "AI_GUARDIAN_AGENT_PROVIDER" not in command
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
-        assert "--auto-providers" in command
-        ensure.assert_not_called()
-    finally:
-        shutil.rmtree(policy_dir)
+    with patch(
+        "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+    ):
+        with pytest.raises(ValueError) as error:
+            _ensure_openshell_cli_provider(args, "codex")
+
+    message = str(error.value)
+    assert "available profiles: codex" in message
+    assert (
+        "openshell provider profile import --file /path/to/openai.yaml --global"
+        in message
+    )
+    assert "docs/Sandbox.md#manual-live-provider-smoke-tests" in message
+    assert "api-secret" not in message
 
 
 def test_openshell_provider_environment_bridges_codex_oauth_without_command_leak(
@@ -2059,136 +1514,12 @@ def test_openshell_provider_environment_bridges_codex_api_key_without_command_le
             clear=True,
         ),
     ):
-        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-openai"
 
     command = run.call_args.args[0]
     assert "api-secret" not in command
-    assert "--from-existing" in command
+    assert command[command.index("--credential") + 1] == "OPENAI_API_KEY"
     assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
-
-
-def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
-    adc_path = tmp_path / ".config" / "gcloud" / "application_default_credentials.json"
-    adc_path.parent.mkdir(parents=True)
-    adc_path.write_text("{}\n", encoding="utf-8")
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="vertex-demo",
-        cli="claude",
-        profile=None,
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        port=None,
-        image="example/ai-guardian-openshell:test",
-        api_key=None,
-        environment=[],
-        policy=[],
-        provider=[],
-        label=[],
-    )
-
-    with (
-        patch.dict(
-            os.environ,
-            {
-                "HOME": str(tmp_path),
-                "USERPROFILE": str(tmp_path),
-                "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
-                "CLOUD_ML_REGION": "us-central1",
-            },
-            clear=True,
-        ),
-        patch(
-            "ai_guardian.sandbox._openshell_provider_profiles",
-            return_value=["google-cloud"],
-        ),
-        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
-        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
-        patch(
-            "ai_guardian.sandbox.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0),
-        ) as run,
-    ):
-        assert handle_sandbox_command(args) == 0
-
-    provider_create = run.call_args_list[0]
-    assert provider_create.args[0] == [
-        "openshell",
-        "provider",
-        "create",
-        "--name",
-        "ai-guardian-google-cloud",
-        "--type",
-        "google-cloud",
-        "--from-gcloud-adc",
-        "--config",
-        "project_id=test-project",
-        "--config",
-        "region=us-central1",
-    ]
-    create_command = run.call_args_list[1].args[0]
-    assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in create_command
-    assert "CLAUDE_CODE_USE_VERTEX=1" in create_command
-    assert "ANTHROPIC_VERTEX_PROJECT_ID=test-project" in create_command
-    assert "CLOUD_ML_REGION=us-central1" in create_command
-    assert "GCE_METADATA_HOST=127.0.0.1:8174" in create_command
-    assert "GCE_METADATA_IP=127.0.0.1:8174" in create_command
-    assert "METADATA_SERVER_DETECTION=assume-present" in create_command
-    assert "--provider" in create_command
-    assert "ai-guardian-google-cloud" in create_command
-    assert "--no-credential-warnings" in create_command
-    assert str(adc_path) not in create_command
-
-
-def test_openshell_vertex_provider_updates_explicit_provider_and_model(tmp_path):
-    args = _args(
-        sandbox_command="create",
-        runtime="openshell",
-        name="vertex-demo",
-        cli="claude",
-        model="claude-haiku-4-5",
-        profile=None,
-        config_dir=str(tmp_path / "config"),
-        repo=None,
-        port=None,
-        image="example/ai-guardian-openshell:test",
-        api_key=None,
-        environment=[],
-        policy=[],
-        provider=["vertex-provider"],
-        label=[],
-    )
-
-    with (
-        patch.dict(
-            os.environ,
-            {
-                "HOME": str(tmp_path),
-                "USERPROFILE": str(tmp_path),
-                "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
-                "CLOUD_ML_REGION": "global",
-            },
-            clear=True,
-        ),
-        patch(
-            "ai_guardian.sandbox._configure_openshell_vertex_provider"
-        ) as configure_provider,
-        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
-        patch(
-            "ai_guardian.sandbox.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0),
-        ),
-    ):
-        assert handle_sandbox_command(args) == 0
-
-    configure_provider.assert_called_once_with(
-        args,
-        "vertex-provider",
-        "test-project",
-        "global",
-        output=None,
-    )
 
 
 def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
@@ -2205,7 +1536,7 @@ def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        cli="claude",
+        cli="codex",
         restore_config="latest",
         config_dir=None,
         repo=None,
@@ -2222,7 +1553,7 @@ def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
         patch.dict(os.environ, {"AI_GUARDIAN_STATE_DIR": str(state_dir)}, clear=False),
         patch(
             "ai_guardian.sandbox._ensure_openshell_cli_provider",
-            return_value="ai-guardian-claude",
+            return_value="ai-guardian-codex",
         ),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
@@ -2305,7 +1636,7 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        cli="claude",
+        cli="codex",
         profile=None,
         config_dir=str(config_dir),
         repo=None,
@@ -2341,7 +1672,8 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
         "--from",
         "example/ai-guardian-openshell:test",
     ]
-    assert "DISABLE_AUTOUPDATER=1" in command
+    assert "CODEX_HOME=/sandbox/.codex" in command
+    assert "AI_GUARDIAN_CODEX_SANDBOX_MODE=danger-full-access" in command
     assert "AI_GUARDIAN_HOST_CONFIG_MOUNTED=false" in command
     assert "--auto-providers" in command
     assert Path(command[command.index("--policy") + 1]).name == "policy.yaml"
@@ -2353,7 +1685,7 @@ def test_openshell_create_preserves_name_after_collision():
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        cli="claude",
+        cli="codex",
         profile=None,
         config_dir=None,
         repo=None,
@@ -2464,7 +1796,7 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        cli="claude",
+        cli="codex",
         profile=None,
         config_dir=str(config_dir),
         repo=None,
@@ -2481,7 +1813,7 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
     with (
         patch(
             "ai_guardian.sandbox._ensure_openshell_cli_provider",
-            return_value="ai-guardian-claude",
+            return_value="ai-guardian-codex",
         ),
         patch(
             "ai_guardian.sandbox._expose_openshell_service", return_value=0
@@ -2523,7 +1855,7 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
     service.assert_called_once_with(args, "demo", output=None)
 
 
-def test_openshell_create_does_not_put_api_keys_in_runtime_arguments(capsys):
+def test_openshell_create_rejects_api_keys_without_leaking_them(capsys):
     args = _args(
         sandbox_command="create",
         runtime="openshell",
@@ -2541,24 +1873,10 @@ def test_openshell_create_does_not_put_api_keys_in_runtime_arguments(capsys):
         command_args=[],
     )
 
-    with (
-        patch(
-            "ai_guardian.sandbox._ensure_openshell_cli_provider",
-            return_value="ai-guardian-claude",
-        ),
-        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
-        patch(
-            "ai_guardian.sandbox.subprocess.run",
-            side_effect=[
-                subprocess.CompletedProcess([], 0),
-                subprocess.CompletedProcess([], 0),
-            ],
-        ) as run,
-    ):
-        assert handle_sandbox_command(args) == 0
+    with (patch("ai_guardian.sandbox.subprocess.run") as run,):
+        assert handle_sandbox_command(args) == 2
 
-    for call in run.call_args_list:
-        assert "sensitive-test-value" not in call.args[0]
+    run.assert_not_called()
     assert "sensitive-test-value" not in capsys.readouterr().out
 
 

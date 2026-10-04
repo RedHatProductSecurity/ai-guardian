@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
@@ -469,6 +470,26 @@ def _dynamic_default_value(specification: Dict[str, Any], value: str) -> Optiona
     )
 
 
+def _format_local_image_choice(reference: str, created_at: str) -> str:
+    """Return the image reference with optional creation metadata for display."""
+    created_at = str(created_at or "").strip()
+    if not created_at:
+        return reference
+
+    # Podman and Docker report ``CreatedAt`` in UTC with a trailing timezone
+    # name. Convert it using the host timezone before showing it in the picker.
+    parse_value = created_at[:-4] if created_at.endswith(" UTC") else created_at
+    try:
+        parsed = datetime.strptime(parse_value, "%Y-%m-%d %H:%M:%S %z")
+    except ValueError:
+        display_date = created_at
+    else:
+        local_time = parsed.astimezone()
+        timezone_name = local_time.tzname() or local_time.strftime("%z")
+        display_date = f"{local_time:%Y-%m-%d %H:%M:%S} {timezone_name}"
+    return f"{reference} (created {display_date})"
+
+
 def _local_image_choices():
     """Return locally available AI Guardian support-image references.
 
@@ -480,6 +501,7 @@ def _local_image_choices():
     configured_engine = os.environ.get("CONTAINER_ENGINE")
     engines = [configured_engine] if configured_engine else ["podman", "docker"]
     choices = []
+    seen_references = set()
     for engine in engines:
         if not engine:
             continue
@@ -492,7 +514,7 @@ def _local_image_choices():
                     "--filter",
                     "label=ai-guardian.support-image=true",
                     "--format",
-                    "{{.Repository}}:{{.Tag}}",
+                    "{{.Repository}}:{{.Tag}}\t{{.CreatedAt}}",
                 ],
                 capture_output=True,
                 text=True,
@@ -504,10 +526,12 @@ def _local_image_choices():
         if result.returncode != 0:
             continue
         for line in (result.stdout or "").splitlines():
-            image = line.strip()
-            if not image or image.startswith("<none>") or image in choices:
+            image, separator, created_at = line.partition("\t")
+            image = image.strip()
+            if not image or image.startswith("<none>") or image in seen_references:
                 continue
-            choices.append(image)
+            seen_references.add(image)
+            choices.append((image, created_at.strip() if separator else ""))
     return choices
 
 
@@ -547,13 +571,14 @@ def _show_local_image_picker(
     scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=listbox.yview)
     scrollbar.grid(row=0, column=1, sticky="ns")
     listbox.configure(yscrollcommand=scrollbar.set)
-    for image in choices:
-        listbox.insert(tk.END, image)
+    for reference, created_at in choices:
+        listbox.insert(tk.END, _format_local_image_choice(reference, created_at))
 
     current = str(variable.get() or "")
-    if current in choices:
-        listbox.selection_set(choices.index(current))
-        listbox.see(choices.index(current))
+    references = [reference for reference, _created_at in choices]
+    if current in references:
+        listbox.selection_set(references.index(current))
+        listbox.see(references.index(current))
     elif choices:
         listbox.selection_set(0)
 
@@ -572,7 +597,7 @@ def _show_local_image_picker(
     def select() -> None:
         selected = listbox.curselection()
         if selected:
-            variable.set(listbox.get(selected[0]))
+            variable.set(references[selected[0]])
         close()
 
     ttk.Button(buttons, text="Cancel", command=close).grid(row=0, column=0, sticky="w")

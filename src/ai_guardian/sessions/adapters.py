@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ai_guardian.ide_paths import get_ide_home
+from ai_guardian.opencode_support import detect_opencode_runtime
 from ai_guardian.sessions.base import (
     SessionAdapter,
     StepCollector,
@@ -1729,12 +1730,29 @@ class OpenCodeSessionAdapter(SessionAdapter):
         "file": "opencode.db",
     }
 
-    def discover(self, project_path=None, limit=100):
+    def _database_path(self) -> Optional[Path]:
+        """Resolve the active V2 database before using the V1 directory layout."""
+        explicit_db = os.environ.get("OPENCODE_DB")
+        if explicit_db == ":memory:":
+            return None
+        if explicit_db:
+            return Path(os.path.expandvars(explicit_db)).expanduser()
+
+        if detect_opencode_runtime().get("generation") == "v2":
+            from ai_guardian.scanners.transcript.opencode import get_opencode_db_path
+
+            active_path = get_opencode_db_path()
+            if active_path:
+                return Path(active_path)
+
         base = self.resolve_session_dir()
-        if not base:
+        return base / "opencode.db" if base else None
+
+    def discover(self, project_path=None, limit=100):
+        db_path = self._database_path()
+        if not db_path:
             return []
 
-        db_path = base / "opencode.db"
         if not db_path.is_file():
             return []
         try:

@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-08-20
+> Last updated: 2026-10-03
 
 ## User Preferences
 
@@ -13,6 +13,36 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **OpenCode runtime selection (#2470):** User-facing setup, CLI doctor, and
+  Console health checks do not require an AI Guardian-specific environment
+  variable. They resolve the active `opencode` executable and run
+  `opencode --version`; if V1 and V2 are intentionally installed under
+  different command names, the executable resolved first on `PATH` is the
+  target for that invocation. The version environment variable is retained
+  only as an isolated test-matrix override.
+
+- **Doctor CLI version reporting:** Doctor enriches installed CLI-capable hook
+  integration records with best-effort `cli` metadata and appends the same
+  version text to the existing integration message. Probe failures never alter
+  hook health status; OpenCode reuses its runtime resolver and reports `v1` or
+  `v2` generation when recognized.
+
+- **Console health runtime context:** The local Web Console can outlive the
+  tray and retain a stale `PATH`. When a local daemon REST endpoint is
+  available, `MultiDaemonClient.get_health_check()` must query that daemon
+  first; only use the Console-process Doctor fallback when the endpoint is
+  unavailable.
+
+- **OpenCode review hardening:** Cache version probes by executable and test
+  override context; V2 database discovery must accept a direct existing path
+  before regex fallback and must not let a legacy `OPENCODE_HOME` path hide
+  the active V2 database. V2 error hooks must handle missing or scalar errors.
+
+- **OpenShell version checks:** When an image is intentionally narrowed to one
+  CLI, update both the Dockerfile-derived version-check fixture and registry
+  lookup fixtures. The checker correctly ignores packages not explicitly
+  installed by that image.
 
 - **OpenCode hook normalization (#2425):** OpenCode built-in tools arrive as lowercase names (`read`, `write`, `edit`, `bash`) with camelCase arguments such as `filePath`; normalize both adapter input and raw policy calls before immutable protection evaluates them.
 
@@ -76,7 +106,24 @@
   loader across every supported integration, preserve the existing file, and
   surface the path/format-specific diagnostic before any write.
 
+- **OpenCode Doctor status:** OpenCode must bypass the marker-only hook fast
+  path so V1/V2 runtime and plugin generation mismatches are detected. When
+  that full verification is healthy, `check_hooks_for_ide()` must still return
+  `OpenCode: configured`; otherwise the generic empty-detail fallback reports
+  the misleading `configuration unreadable` warning even with healthy MCP.
+
 - **Runtime-specific container entrypoints (#2446):** The normal and OpenShell images share `container/entrypoint.sh`; when a CLI is intentionally normal-container-only, the OpenShell image must set an explicit runtime marker and the entrypoint must filter that CLI from its supported arrays.
+
+- **OpenShell provider credential types:** OpenShell `0.1.2` codex providers
+  accept the OAuth credential set, while Codex API-key sessions use the
+  `openai` profile. Automatic setup must keep `ai-guardian-codex` and
+  `ai-guardian-openai` as separate provider instances; updating an OAuth
+  provider with `OPENAI_API_KEY` fails with an invalid-argument error.
+
+- **OpenShell workload identity:** OpenShell clears supplementary groups before
+  capability-free launch. The NVIDIA Ubuntu base's `ubuntu` UID has default
+  supplementary groups, so the dedicated image must create/use a separate
+  `sandbox` account with only its primary group.
 
 - **Policy must use normalized tool fields:** Hook processing adds canonical
   `tool_name`/`tool_input` fields alongside native payload keys before invoking
@@ -137,6 +184,13 @@
   second, especially when a new normal-container-only CLI increases image size.
 
 - **Full-suite CI timeout triage:** When a CI run times out at an existing test and the current diff creates no threads or processes, compare with the preceding passing PR and rerun the canceled jobs before changing production code. The Python 3.9/3.12 timeout on PR #2438 passed on rerun with no source changes.
+
+- **OpenCode V2 plugin API:** `@opencode/plugin@2.0.22` tool hook events use
+  `id`, not the V1-style `callID`; `execute.after` is a completed/error union,
+  so generated hooks must narrow before reading or mutating `result`. Validate
+  generated TypeScript against the published declarations, not only string
+  contract tests. The local ignored `.opencode/package.json` now carries both
+  the V1 and V2 plugin pins.
 
 ## Do-Not-Repeat
 
@@ -233,3 +287,22 @@
 - **PEP 508 platform-release markers:** Do not compare `platform_release` numerically in project dependencies. pip versions can evaluate every branch on Linux and parse kernel strings such as `6.17.0-1022-azure` as invalid PEP 440 versions. Use safe string gates and test the exact runner release; build smoke tests must install the checked-out wheel rather than stale PyPI metadata.
 
 - **Ubuntu runner migration (#2491):** Once Ubuntu 26.04 is available, all GitHub Actions Linux jobs use the explicit `ubuntu-26.04` label. The former compatibility workflow is intentionally repurposed as `container-build-validation.yml` so release readiness retains scanner, scenario, QEMU, Buildx, and multi-architecture coverage without duplicating the supported Python matrix.
+
+- [2026-10-03] **Rootless Podman host-config mounts:** A host `0600` config bind-mounted into an image running as UID 1000 appears as UID 0 without `--userns=keep-id`, causing entrypoint staging to fail. Apply the flag only to Podman commands; do not weaken host permissions or add a writable host copy.
+
+- [2026-10-03] **OpenShell Codex credential selection:** The sandbox creator intentionally selects the `openai` gateway profile for Codex API-key credentials and `codex` for local OAuth. Do not silently fall back between credential types when a profile is missing; the active gateway must have the matching imported profile or the user must select an existing provider explicitly.
+
+- [2026-10-03] **OpenShell 0.1.2 gateway migration:** The RPM upgrade preserves an existing schema-v1 `~/.config/openshell/gateway.toml` and refuses to start until it is manually migrated to `[openshell] version = 2` with scalar `compute_driver`. Keep a backup before changing the user config.
+
+- [2026-10-03] **OpenShell provider credential verification:** Provider-backed
+  credentials appear in the sandbox as opaque placeholders. A raw `curl`
+  request without an explicit bearer header returns missing authentication; when
+  the placeholder is supplied from `OPENAI_API_KEY` in the header, `/v1/models`
+  returns HTTP 200. Codex therefore reaches OpenAI correctly; its remaining
+  failure, `You have no credits remaining`, is an account billing/quota issue.
+
+- [2026-10-03] **Host Codex auth comparison:** The host Codex reports
+  `auth_mode=chatgpt` with OAuth tokens (`codex-cli 0.157.0`) and no API key in
+  `~/.codex/auth.json`. The OpenShell sandbox intentionally uses API-key auth
+  (`0.154.0`), so a working host session is not evidence that the API-key
+  organization has inference credits.
