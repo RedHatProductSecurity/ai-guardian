@@ -31,20 +31,28 @@ from ai_guardian.middleware.config import (
     project_profile_for_middleware,
     resolve_scanner_ownership,
 )
-from ai_guardian.middleware.bootstrap import (
+from ai_guardian.middleware.openshell.v0_1_2.bootstrap import (
     OpenShellBootstrapError,
     bootstrap_openshell,
 )
 from ai_guardian.middleware.dedup import FindingDeduplicator, FindingKey
-from ai_guardian.middleware.proto import extension_pb2
-from ai_guardian.middleware.proto import supervisor_middleware_pb2 as pb2
+from ai_guardian.middleware.openshell.v0_1_2.proto import extension_pb2
+from ai_guardian.middleware.openshell.v0_1_2.proto import (
+    supervisor_middleware_pb2 as pb2,
+)
 from ai_guardian.middleware.semantic import SemanticContentScanner
-from ai_guardian.middleware.server import (
+from ai_guardian.middleware.openshell.server import (
     MiddlewareServerSecurity,
     MiddlewareService,
     JwtAuthInterceptor,
-    _status_middleware_background,
     create_server,
+)
+from ai_guardian.middleware.openshell.v0_1_2.server import (
+    _status_middleware_background,
+)
+from ai_guardian.middleware.openshell.registry import (
+    OpenShellCompatibilityError,
+    select_adapter,
 )
 from ai_guardian.scanners.scan_result import ScanResult
 
@@ -175,6 +183,7 @@ def test_operator_policy_loads_yaml_without_loading_workload_configuration(tmp_p
     path.write_text(
         """
 profile_id: standard
+openshell_version: 0.2.1
 registration_name: content-guard
 provider_endpoints: [provider.example]
 require_effective_policy: true
@@ -188,7 +197,26 @@ jwt:
     policy, raw = load_operator_policy(path)
     assert policy.profile_id == "standard"
     assert policy.provider_endpoints == ("provider.example",)
+    assert raw["openshell_version"] == "0.2.1"
+    adapter, target, source = select_adapter(config_path=path)
+    assert str(adapter.version) == "0.1.2"
+    assert str(target) == "0.2.1"
+    assert source == "middleware config"
     assert raw["tls"]["cert_file"] == "/etc/ai-guardian/tls.crt"
+
+
+@pytest.mark.parametrize("release", ["0.1.2", "0.2.1", "0.9.0"])
+def test_openshell_adapter_falls_back_within_release_major(release):
+    adapter, target, _source = select_adapter(release)
+
+    assert str(target) == release
+    assert str(adapter.version) == "0.1.2"
+
+
+@pytest.mark.parametrize("release", ["0.0.9", "1.0.0"])
+def test_openshell_adapter_rejects_unsupported_release_family(release):
+    with pytest.raises(OpenShellCompatibilityError, match="no OpenShell middleware"):
+        select_adapter(release)
 
 
 def test_validate_config_rejects_operator_security_overrides():
@@ -476,7 +504,9 @@ def test_jwt_requires_openshell_extension_claims():
         algorithm="HS256",
         headers={"typ": "openshell-ext+jwt"},
     )
-    with patch("ai_guardian.middleware.server.time.time", return_value=now):
+    with patch(
+        "ai_guardian.middleware.openshell.v0_1_2.server.time.time", return_value=now
+    ):
         assert interceptor.validate_token(token)["caller_kind"] == "gateway"
 
     bad_typ = jwt.encode(
@@ -697,7 +727,8 @@ def test_cli_exposes_operator_managed_middleware_server():
             "sys.argv", ["ai-guardian", "middleware-server", "--config", "policy.json"]
         ),
         patch(
-            "ai_guardian.middleware.server.run_middleware_server", return_value=0
+            "ai_guardian.middleware.openshell.server.run_middleware_server",
+            return_value=0,
         ) as run,
     ):
         assert main() == 0
@@ -713,7 +744,8 @@ def test_cli_exposes_canonical_openshell_middleware_lifecycle_flags():
             ["ai-guardian", "openshell-middleware", "--status"],
         ),
         patch(
-            "ai_guardian.middleware.server.run_middleware_server", return_value=0
+            "ai_guardian.middleware.openshell.server.run_middleware_server",
+            return_value=0,
         ) as run,
     ):
         assert main() == 0

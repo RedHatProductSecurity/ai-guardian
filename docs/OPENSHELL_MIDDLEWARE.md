@@ -24,6 +24,7 @@ Create an operator-owned configuration such as
 
 ```yaml
 profile_id: strict
+openshell_version: 0.2.1  # optional; otherwise detect `openshell --version`
 registration_name: content-guard
 provider_endpoints:
   - api.openai.com
@@ -54,6 +55,14 @@ existing AI Guardian profile (`minimal`, `standard`, `strict`, or `moderator`)
 and only its semantic scanner sections are projected into the service. Hook,
 filesystem, network, process, credential, and interactive-dialog settings are
 not imported. Profiles containing an interactive `ask` action are rejected.
+
+The middleware uses versioned OpenShell adapters. It selects the newest
+adapter not newer than the configured or installed release when the release's
+first version component matches the adapter family. Therefore OpenShell
+`0.2.1` falls back to the checked-in `0.1.2` adapter, while `1.0.0` is rejected
+until a compatible adapter is added. Protocol and capability negotiation still
+validates the fallback at runtime and fails closed on an incompatible contract.
+Use `--openshell-version VERSION` to override local CLI detection.
 
 Start the external service:
 
@@ -299,8 +308,10 @@ authorize a destination or credential.
 ## Compatibility and operations
 
 - The protobuf contracts are vendored from OpenShell v0.1.2 under
-  `src/ai_guardian/middleware/proto/`; the runtime dependency is optional for
-  normal hook and SDK installations.
+  `src/ai_guardian/middleware/openshell/v0_1_2/proto/`; the adapter registry can
+  reuse that implementation for later compatible releases without duplicating
+  the code. The runtime dependency is optional for normal hook and SDK
+  installations.
 - Keep the service and gateway on compatible extension protocol major versions.
 - Advertise at least the OpenShell gateway's required capabilities during
   `Describe`; unsupported requirements are rejected before traffic is served.

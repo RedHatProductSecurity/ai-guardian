@@ -9,10 +9,15 @@ pytest.importorskip("jwt")
 pytest.importorskip("google.protobuf")
 
 from ai_guardian.middleware.config import MiddlewarePolicy
-from ai_guardian.middleware.proto import supervisor_middleware_pb2 as pb2
+from ai_guardian.middleware.openshell.v0_1_2.proto import (
+    supervisor_middleware_pb2 as pb2,
+)
 from ai_guardian.middleware.semantic import SemanticContentScanner
-from ai_guardian.middleware.server import MiddlewareService
-from ai_guardian.middleware.server import MiddlewareServerSecurity, create_server
+from ai_guardian.middleware.openshell.server import MiddlewareService
+from ai_guardian.middleware.openshell.server import (
+    MiddlewareServerSecurity,
+    create_server,
+)
 from ai_guardian.scanners.scan_result import ScanResult
 
 

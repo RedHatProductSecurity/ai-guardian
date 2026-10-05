@@ -1,4 +1,4 @@
-"""Operator-managed OpenShell supervisor middleware."""
+"""Reusable semantic middleware components and protocol adapters."""
 
 from ai_guardian.middleware.config import (
     MiddlewarePolicy,

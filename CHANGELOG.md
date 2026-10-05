@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fail-closed behavior. An explicit `--bootstrap-openshell` mode can generate
   the gateway registration and sandbox policy for local development. The
   `openshell-middleware` command also supports detached start, status, stop,
-  and restart lifecycle operations. See `docs/OPENSHELL_MIDDLEWARE.md`.
+  and restart lifecycle operations. Versioned adapters reuse the latest
+  compatible implementation across same-major OpenShell releases. See
+  `docs/OPENSHELL_MIDDLEWARE.md`.
 - **Automatic CLI/IDE setup discovery (#2494):** Make plain `ai-guardian setup`
   reuse tray installation and integrity checks, skip healthy integrations,
   prompt for a selectable subset when several need setup, and let `--yes` or

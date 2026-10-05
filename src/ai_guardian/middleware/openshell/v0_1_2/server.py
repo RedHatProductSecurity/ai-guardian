@@ -23,11 +23,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, cast
 
 from ai_guardian import __version__
-from ai_guardian.middleware.bootstrap import (
+from .bootstrap import (
     OpenShellBootstrapError,
     bootstrap_openshell,
 )
-from ai_guardian.middleware.config import (
+from ...config import (
     MAX_PAYLOAD_BYTES,
     OPEN_SHELL_PROTOCOL_MAJOR,
     OPEN_SHELL_PROTOCOL_MINOR,
@@ -37,9 +37,9 @@ from ai_guardian.middleware.config import (
     load_operator_policy,
     resolve_scanner_ownership,
 )
-from ai_guardian.middleware.dedup import FindingDeduplicator
-from ai_guardian.middleware.dedup import FindingKey
-from ai_guardian.middleware.semantic import (
+from ...dedup import FindingDeduplicator
+from ...dedup import FindingKey
+from ...semantic import (
     ContentEvaluation,
     ContentFinding,
     SemanticContentScanner,
@@ -50,9 +50,9 @@ try:  # Optional: normal hook/SDK installations need not carry gRPC.
     import jwt
     from google.protobuf import duration_pb2, json_format, struct_pb2
 
-    from ai_guardian.middleware.proto import extension_pb2
-    from ai_guardian.middleware.proto import supervisor_middleware_pb2 as pb2
-    from ai_guardian.middleware.proto import supervisor_middleware_pb2_grpc as pb2_grpc
+    from .proto import extension_pb2
+    from .proto import supervisor_middleware_pb2 as pb2
+    from .proto import supervisor_middleware_pb2_grpc as pb2_grpc
 
     _GRPC_AVAILABLE = True
 except (ImportError, RuntimeError):  # pragma: no cover - optional dependency boundary
@@ -1826,11 +1826,24 @@ def run_middleware_server(args) -> int:
             f"({transport}, profile={policy.profile_id}, digest={policy.profile_digest[:12]})",
             flush=True,
         )
-        server.start()
+        shutdown_requested = False
+        previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+        def _handle_sigterm(_signum, _frame):
+            nonlocal shutdown_requested
+            shutdown_requested = True
+            server.stop(grace=1)
+
+        signal.signal(signal.SIGTERM, _handle_sigterm)
         try:
+            server.start()
+            if shutdown_requested:
+                server.stop(grace=1)
             server.wait_for_termination()
         except KeyboardInterrupt:
             server.stop(grace=1)
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
         return 0
     except (OSError, RuntimeError) as exc:
         logger.error(

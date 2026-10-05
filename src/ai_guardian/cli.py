@@ -1392,10 +1392,12 @@ def main():
             aliases=["middleware-server"],
             help="Run the operator-managed OpenShell semantic middleware service",
             description=(
-                "Run AI Guardian as an external NVIDIA OpenShell v0.1.2 supervisor "
-                "middleware service. This starts the gRPC service; OpenShell gateway "
-                "registration and sandbox policy attachment remain operator-managed "
-                "unless --bootstrap-openshell is explicitly supplied."
+                "Run AI Guardian as an external NVIDIA OpenShell supervisor "
+                "middleware service. A versioned adapter is selected from the "
+                "installed or configured OpenShell release. This starts the gRPC "
+                "service; OpenShell gateway registration and sandbox policy "
+                "attachment remain operator-managed unless --bootstrap-openshell "
+                "is explicitly supplied."
             ),
         )
         middleware_server_parser.add_argument(
@@ -1404,6 +1406,14 @@ def main():
             help=(
                 "Operator-managed JSON/YAML middleware configuration "
                 "(required to start or restart)"
+            ),
+        )
+        middleware_server_parser.add_argument(
+            "--openshell-version",
+            metavar="VERSION",
+            help=(
+                "Override the detected OpenShell release used for adapter selection "
+                "(for example: 0.2.1)"
             ),
         )
         middleware_server_parser.add_argument(
@@ -2650,7 +2660,9 @@ def main():
         # Handle external OpenShell supervisor middleware (Issue #2484)
         if args.command in ("openshell-middleware", "middleware-server"):
             try:
-                from ai_guardian.middleware.server import run_middleware_server
+                from ai_guardian.middleware.openshell.server import (
+                    run_middleware_server,
+                )
 
                 return run_middleware_server(args)
             except (ImportError, RuntimeError) as exc:

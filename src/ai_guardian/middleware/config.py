@@ -585,6 +585,7 @@ def load_operator_policy(
                 "tls",
                 "jwt",
                 "allow_insecure_transport",
+                "openshell_version",
             }
         }
     if not isinstance(policy_raw, Mapping):
