@@ -312,6 +312,22 @@ def test_describe_negotiates_protocol_and_advertises_bindings():
     }
 
 
+def test_describe_encodes_multi_second_timeout_as_duration():
+    service = _service(_policy(timeout_ms=5000))
+    gateway = extension_pb2.PeerMetadata(
+        protocol_version=extension_pb2.ProtocolVersion(major=1, minor=0),
+        supported_capabilities=["openshell.supervisor-middleware.contract"],
+    )
+
+    response = service.Describe(
+        pb2.MiddlewareDescribeRequest(gateway=gateway), FakeContext()
+    )
+
+    assert response.bindings
+    assert all(binding.request_timeout.seconds == 5 for binding in response.bindings)
+    assert all(binding.request_timeout.nanos == 0 for binding in response.bindings)
+
+
 def test_describe_rejects_incompatible_gateway():
     service = _service()
     gateway = extension_pb2.PeerMetadata(

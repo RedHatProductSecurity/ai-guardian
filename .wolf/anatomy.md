@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72110 tok)
+- `CHANGELOG.md` — Change log (~72168 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -1169,7 +1169,7 @@
 
 - `__init__.py` — OpenShell v0.1.2 supervisor-middleware adapter implementation. (~20 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4066 tok)
-- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~21504 tok)
+- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~21532 tok)
 
 ## src/ai_guardian/middleware/openshell/v0_1_2/proto/
 
