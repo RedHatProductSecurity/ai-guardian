@@ -22,12 +22,14 @@ export interface OpenCodeEventOptions {
   toast?: (message: string) => void
 }
 
+/** Return an object value without exposing unsafe casts to callers. */
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
 }
 
+/** Read the V2 data envelope, falling back to the V1 properties envelope. */
 function eventData(event: OpenCodeEvent): Record<string, unknown> {
   const data = record(event.data)
   if (Object.keys(data).length > 0) return data
@@ -68,19 +70,23 @@ export function extractSessionId(source: unknown): string {
   return ""
 }
 
+/** Return the event discriminator when OpenCode supplied one. */
 function eventType(event: OpenCodeEvent): string {
   return typeof event.type === "string" ? event.type : ""
 }
 
+/** Persist one V2 usage snapshot without counting repeated deliveries twice. */
 function recordV2Usage(directory: string, event: OpenCodeEvent): void {
   const data = eventData(event)
   const sessionId = typeof data.sessionID === "string" ? data.sessionID : ""
   if (!sessionId || !data.tokens) return
 
-  // V2 publishes usage as a session event rather than the V1
-  // message.updated/info payload. The event id is stable for this durable
-  // update and keeps repeated deliveries idempotent in the usage store.
-  const id = typeof event.id === "string" ? event.id : `${sessionId}:${Date.now()}`
+  // V2 publishes cumulative usage as a session event rather than the V1
+  // message.updated/info payload. Current V2 events do not carry an id, so
+  // use one stable per-session identity and replace that session snapshot.
+  // Preserve event ids when a future V2 payload provides one.
+  const eventId = typeof event.id === "string" && event.id ? event.id : undefined
+  const id = eventId ?? `session:${sessionId}`
   recordUsage(directory, {
     id,
     role: "assistant",
@@ -89,9 +95,11 @@ function recordV2Usage(directory: string, event: OpenCodeEvent): void {
     modelID: data.modelID,
     tokens: data.tokens,
     time: { completed: event.created },
+    replaceSnapshot: eventId === undefined,
   })
 }
 
+/** Apply one OpenCode lifecycle or usage event to the OpenWolf state. */
 export async function handleOpenCodeEvent(
   directory: string,
   event: OpenCodeEvent,
@@ -167,14 +175,17 @@ export async function handleOpenCodeEvent(
   }
 }
 
+/** Return the directory containing OpenWolf hook session state. */
 function pathForHooks(directory: string): string {
   return path.join(getWolfDir(directory), "hooks")
 }
 
+/** Normalize tool arguments to an object for V1 and V2 callers. */
 function toolArgs(value: unknown): Record<string, unknown> {
   return record(value)
 }
 
+/** Record the pre-execution state for OpenCode read, write, and edit tools. */
 export function handleOpenCodeToolBefore(
   directory: string,
   sessionId: string,
@@ -200,6 +211,7 @@ export function handleOpenCodeToolBefore(
   }
 }
 
+/** Extract readable text from OpenCode's result shapes. */
 function contentText(value: unknown): string {
   if (typeof value === "string") return value
   if (!value || typeof value !== "object") return value === undefined ? "" : String(value)
@@ -218,6 +230,7 @@ function contentText(value: unknown): string {
   return JSON.stringify(value) || ""
 }
 
+/** Record tool output and post-execution state for OpenCode file tools. */
 export function handleOpenCodeToolAfter(
   directory: string,
   sessionId: string,
@@ -245,18 +258,21 @@ export function handleOpenCodeToolAfter(
   }
 }
 
+/** Flush the session state for a stop event that bypasses the event stream. */
 export function handleOpenCodeStop(directory: string, source: unknown): void {
   if (!wolfDirExists(directory)) return
   const sessionId = extractSessionId(source)
   if (sessionId) handleStop(directory, sessionId)
 }
 
+/** Return approved OPENWOLF.md content wrapped for the OpenCode context hook. */
 export function openWolfSystemText(directory: string): string | undefined {
   if (!wolfDirExists(directory)) return
   const openwolfPath = path.join(getWolfDir(directory), "OPENWOLF.md")
   try {
     if (!fs.existsSync(openwolfPath)) return
     const openwolfContent = approvedMemory(getWolfDir(directory), "OPENWOLF.md")
+    if (!openwolfContent) return
     return `\n<openwolf-protocol>\n${openwolfContent}\n</openwolf-protocol>`
   } catch {}
 }

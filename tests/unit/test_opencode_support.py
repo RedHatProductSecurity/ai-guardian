@@ -2,6 +2,7 @@
 
 import json
 import os
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -17,6 +18,10 @@ from ai_guardian.opencode_support import (
     parse_opencode_version,
 )
 from ai_guardian.setup.hooks import IDESetup, _OPENCODE_PLUGIN_V2_TS
+
+OPENWOLF_PLUGIN_DIR = (
+    Path(__file__).resolve().parents[2] / ".opencode" / "plugins" / "openwolf"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -337,6 +342,28 @@ def test_v2_plugin_template_uses_domain_hooks():
     assert "const error = event.error as unknown" in _OPENCODE_PLUGIN_V2_TS
     assert "'message' in error" in _OPENCODE_PLUGIN_V2_TS
     assert "event.result =" in _OPENCODE_PLUGIN_V2_TS
+
+
+def test_openwolf_plugin_review_regressions_are_present():
+    """Keep usage, context, and event-loop review fixes in the project plugin."""
+    core = (OPENWOLF_PLUGIN_DIR / "core.ts").read_text(encoding="utf-8")
+    index = (OPENWOLF_PLUGIN_DIR / "index.ts").read_text(encoding="utf-8")
+    usage = (OPENWOLF_PLUGIN_DIR / "usage.ts").read_text(encoding="utf-8")
+
+    assert "const id = eventId ?? `session:${sessionId}`" in core
+    assert "replaceSnapshot: eventId === undefined" in core
+    assert "if (!openwolfContent) return" in core
+    assert (
+        'const id = typeof event.id === "string" ? event.id : `${sessionId}:'
+        not in core
+    )
+    assert "if (!info.replaceSnapshot)" in usage
+    assert (
+        "for await (const event of ctx.event.subscribe({ signal: controller.signal })) {\n"
+        "        try {\n"
+        "          await handleOpenCodeEvent"
+    ) in index
+    assert "console.warn(String(error))" in index
 
 
 def test_v2_registration_uses_plural_plugins_key(tmp_path):
