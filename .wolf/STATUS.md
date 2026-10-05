@@ -19,6 +19,10 @@ budget_tokens: 1000
   `0.160.0`, its OCI label matches, and the image contains no OpenCode, Pi,
   Claude, or Copilot executable. The live version monitor reports all managed
   support-image CLI pins current.
+- OpenWolf's OpenCode integration is now on branch `openwolf-plugin-layout` in
+  PR #2504. The implementation uses `.opencode/plugins/openwolf/`, adds the
+  V2 bridge, preserves V1/V2 event handling, and passes the focused OpenCode
+  support tests.
 - Focused OpenShell/version tests pass (93 tests), as do Ruff, Black, Pylint,
   Mypy, and diff checks.
 - Issue #2493 now normalizes the sandbox create form's Initial config choice to
@@ -114,14 +118,14 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Run `daf complete` outside the active agent session when ready to commit and
-  publish the #2478 implementation.
+- Review and merge PR #2504, or address any requested changes in the
+  `.opencode/plugins/openwolf/` integration.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2478`
-- HEAD: `a9c216ea`; issue #2478 changes are uncommitted on this feature branch.
+- Branch: `openwolf-plugin-layout`
+- HEAD: current PR commit; PR #2504 is open with the OpenWolf plugin migration.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
