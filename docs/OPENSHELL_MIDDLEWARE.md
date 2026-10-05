@@ -123,7 +123,31 @@ changed, then create the sandbox with the generated policy:
 
 ```bash
 systemctl --user restart openshell-gateway
-openshell sandbox create --name guarded --policy /tmp/content-guard-policy.yaml
+openshell sandbox create \
+  --name guarded \
+  --from localhost/ai-guardian-openshell:dev \
+  --policy /tmp/content-guard-policy.yaml \
+  --tty
+```
+
+The `--from` image must be a long-lived OpenShell workload image. For local
+AI Guardian qualification, `localhost/ai-guardian-openshell:dev` is the
+support image built from `container/Dockerfile.openshell`; it supplies the
+dedicated capability-free `sandbox` account and the AI Guardian/Codex
+entrypoint. Using the gateway's generic Ubuntu default image can exit before
+the OpenShell supervisor confirms the sandbox. The policy is still accepted,
+but the sandbox workload is not ready. For a Codex sandbox with a gateway
+provider, the AI Guardian wrapper also adds the managed image and provider
+attachment:
+
+```bash
+ai-guardian sandbox create \
+  --runtime openshell \
+  --name guarded-codex \
+  --cli codex \
+  --image localhost/ai-guardian-openshell:dev \
+  --provider ai-guardian-openai \
+  --policy /tmp/content-guard-policy.yaml
 ```
 
 A systemd user or system service can use a unit like this (adjust paths and the
@@ -245,7 +269,10 @@ network_middlewares:
 Create or update the sandbox using the normal OpenShell CLI:
 
 ```bash
-openshell sandbox create --name guarded --policy policy.yaml
+openshell sandbox create \
+  --name guarded \
+  --from <long-lived-workload-image> \
+  --policy policy.yaml
 ```
 
 There is no `openshell middleware install` command in OpenShell v0.1.2. Normal
