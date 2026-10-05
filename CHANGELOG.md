@@ -37,10 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
-- **OpenShell middleware sandbox example (#2484):** Use the AI Guardian
-  OpenShell support image when creating a policy-attached local sandbox, rather
-  than relying on a generic default image that may exit before supervisor
-  confirmation.
+- **OpenShell middleware sandbox example (#2484):** Show an explicit TTY or
+  long-lived command for policy-attached sandbox creation so non-interactive
+  launches do not exit before supervisor confirmation.
 - **OpenShell middleware timeout encoding (#2484):** Encode multi-second
   `timeout_ms` values as normalized protobuf `Duration` seconds and nanoseconds
   so gateway registration negotiation accepts valid timeouts above one second.

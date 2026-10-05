@@ -125,19 +125,23 @@ changed, then create the sandbox with the generated policy:
 systemctl --user restart openshell-gateway
 openshell sandbox create \
   --name guarded \
-  --from localhost/ai-guardian-openshell:dev \
   --policy /tmp/content-guard-policy.yaml \
   --tty
 ```
 
-The `--from` image must be a long-lived OpenShell workload image. For local
-AI Guardian qualification, `localhost/ai-guardian-openshell:dev` is the
-support image built from `container/Dockerfile.openshell`; it supplies the
-dedicated capability-free `sandbox` account and the AI Guardian/Codex
-entrypoint. Using the gateway's generic Ubuntu default image can exit before
-the OpenShell supervisor confirms the sandbox. The policy is still accepted,
-but the sandbox workload is not ready. For a Codex sandbox with a gateway
-provider, the AI Guardian wrapper also adds the managed image and provider
+Use `--tty` for an interactive create. In a non-interactive terminal, provide
+an explicit long-lived command instead of relying on the default shell:
+
+```bash
+openshell sandbox create \
+  --name guarded \
+  --policy /tmp/content-guard-policy.yaml \
+  --no-tty -- sleep 60
+```
+
+The policy controls network middleware attachment; it does not select the
+workload command. For a Codex sandbox with a gateway provider, the AI Guardian
+wrapper adds the managed OpenShell image, Codex setup, and provider
 attachment:
 
 ```bash
@@ -271,9 +275,13 @@ Create or update the sandbox using the normal OpenShell CLI:
 ```bash
 openshell sandbox create \
   --name guarded \
-  --from <long-lived-workload-image> \
-  --policy policy.yaml
+  --policy policy.yaml \
+  --tty
 ```
+
+For non-interactive creation, pass a long-lived command after `--`, for
+example `--no-tty -- sleep 60`, or use the workload image and command required
+by the selected agent.
 
 There is no `openshell middleware install` command in OpenShell v0.1.2. Normal
 operation keeps the external service, gateway registration, and policy
