@@ -330,3 +330,10 @@
   generated `0.159.3` target was superseded by npm's `0.160.0` release before
   implementation. Check the live version monitor before pinning maintenance
   updates, while keeping the OpenShell image Codex-only.
+
+- [2026-10-05] **OpenShell supervisor middleware (#2484):** External services
+  use the v0.1.2 `Describe`/`ValidateConfig`/HTTP/WebSocket contracts and are
+  registered by gateway TOML plus sandbox policy, not an OpenShell install
+  command. Extension JWTs require the exact `openshell-ext+jwt` type, opaque
+  audience, gateway issuer, and the complete `iss`/`aud`/`sub`/`iat`/`exp`/
+  `jti`/`caller_kind` claim set; only supervisor callers carry `sandbox_id`.
