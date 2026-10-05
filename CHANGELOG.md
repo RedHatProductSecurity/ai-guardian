@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenShell supervisor middleware (#2484):** Add an optional, external
+  OpenShell v0.1.2 gRPC service for semantic provider-content scanning and
+  response redaction. The operator-managed service supports protocol
+  negotiation, effective-policy validation, TLS/EdDSA JWT authentication,
+  bounded HTTP/WebSocket/streaming payloads, scanner ownership routing, and
+  fail-closed behavior. An explicit `--bootstrap-openshell` mode can generate
+  the gateway registration and sandbox policy for local development. The
+  `openshell-middleware` command also supports detached start, status, stop,
+  and restart lifecycle operations. See `docs/OPENSHELL_MIDDLEWARE.md`.
 - **Automatic CLI/IDE setup discovery (#2494):** Make plain `ai-guardian setup`
   reuse tray installation and integrity checks, skip healthy integrations,
   prompt for a selectable subset when several need setup, and let `--yes` or
@@ -26,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **OpenShell middleware plaintext binding (#2484):** Reject wildcard listen
+  addresses when TLS/JWT authentication is disabled, preventing an accidental
+  unauthenticated listener on every host interface. Deployment examples now
+  use a specific reachable interface for local development.
 - **Consistent Fedora tray setup prompts (#2497):** Keep structured Linux
   setup and snooze flows on one rich UI provider, avoid silently dropping
   install/profile choices in native dialogs, and serialize setup and upgrade

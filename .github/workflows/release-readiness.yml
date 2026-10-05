@@ -874,3 +874,29 @@ jobs:
               if proc.stderr:
                   print(f"stderr (truncated): {proc.stderr[:500]}")
           PYEOF
+
+  openshell-middleware:
+    name: OpenShell Supervisor Middleware
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install middleware extra
+        run: |
+          python -m pip install --upgrade pip
+          pip install '.[middleware]'
+
+      - name: Verify middleware command surface
+        run: ai-guardian openshell-middleware --help
+
+      - name: Run middleware protocol contracts
+        run: |
+          python -m pytest tests/unit/test_middleware.py tests/ux/test_user_experience_contract_openshell_middleware.py -q

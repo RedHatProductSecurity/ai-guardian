@@ -80,6 +80,12 @@ all-providers = [
   "anthropic>=0.30.0",
   "openai>=1.0.0",
 ]
+middleware = [
+  # Apache-2.0 gRPC transport plus MIT JWT validation for OpenShell extensions.
+  "grpcio>=1.84,<2",
+  "protobuf>=7.35.1,<8",
+  "PyJWT>=2.8.0",
+]
 otel = [
   "opentelemetry-api>=1.20.0",
   "opentelemetry-sdk>=1.20.0",
@@ -185,6 +191,7 @@ ignore = [
 # 3.10 remains covered by the test matrix; this avoids parsing newer
 # third-party stubs with syntax unavailable to older Mypy targets.
 strict = true
+exclude = "^src/ai_guardian/middleware/proto/"
 python_version = "3.12"
 
 # The codebase predates strict typing and still contains deliberately dynamic
