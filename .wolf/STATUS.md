@@ -141,13 +141,12 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_container_scripts.py tests/unit/test_cli_version_check.py tests/unit/test_openshell_manual.py -q
+uv run --extra dev python -m pytest tests/unit/test_opencode_support.py -q
 ruff check src/ai_guardian/ tests/
 black --target-version py310 --check src/ai_guardian/ tests/
 mypy src/ai_guardian/
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text
-podman build -f container/Dockerfile.openshell -t localhost/ai-guardian-openshell:2478 container/
-python scripts/check_cli_versions.py --output /tmp/opencode/cli-versions-2478-final.json
+git diff --check
 ```
 
 ## References

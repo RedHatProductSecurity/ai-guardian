@@ -74,7 +74,11 @@ export async function setupOpenWolfV2(ctx: V2Context): Promise<(() => void) | vo
   void (async () => {
     try {
       for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
-        await handleOpenCodeEvent(directory, event as unknown as Record<string, unknown>)
+        try {
+          await handleOpenCodeEvent(directory, event as unknown as Record<string, unknown>)
+        } catch (error) {
+          console.warn(String(error))
+        }
       }
     } catch {
       // Subscription ends normally when OpenCode unloads the plugin.

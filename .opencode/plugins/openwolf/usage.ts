@@ -13,11 +13,13 @@ export function recordUsage(directory: string, info: any): void {
   const tmp = file + "." + crypto.randomUUID() + ".tmp"
   const message = { id: info.id, sessionID: info.sessionID, role: info.role, providerID: info.providerID, modelID: info.modelID, tokens: info.tokens, time: info.time }
   const committed = withFileLock(file + ".lock", HOOK_LOCK_BUDGET_MS, () => {
-    try {
-      const previous = JSON.parse(fs.readFileSync(file,"utf8"))?.message
-      if (previous?.time?.completed && !info.time?.completed) return true
-      if ((previous?.time?.completed ?? 0) > (info.time?.completed ?? 0)) return true
-    } catch {}
+    if (!info.replaceSnapshot) {
+      try {
+        const previous = JSON.parse(fs.readFileSync(file,"utf8"))?.message
+        if (previous?.time?.completed && !info.time?.completed) return true
+        if ((previous?.time?.completed ?? 0) > (info.time?.completed ?? 0)) return true
+      } catch {}
+    }
   try {
     const fd = fs.openSync(tmp, "wx", 0o600)
     try { fs.writeFileSync(fd, JSON.stringify({ version: 1, directory, message })); fs.fsyncSync(fd) } finally { fs.closeSync(fd) }
