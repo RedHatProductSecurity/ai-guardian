@@ -27,7 +27,7 @@ try:  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility
     _toml = importlib.import_module("tomli")
 
-from ai_guardian.middleware.config import MiddlewarePolicy
+from ...config import MiddlewarePolicy
 
 _MIDDLEWARE_HEADER = re.compile(r"(?m)^\[\[openshell\.supervisor\.middleware\]\]\s*$")
 _TABLE_HEADER = re.compile(r"(?m)^\s*\[")

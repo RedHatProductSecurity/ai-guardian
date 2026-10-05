@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1170 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1191 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72084 tok)
+- `CHANGELOG.md` — Change log (~72110 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -24,8 +24,8 @@
 - `Makefile` — Make build targets (~62 tok)
 - `mkdocs.yml` (~1153 tok)
 - `NOTICE` (~55 tok)
-- `pyproject.toml` — Python project configuration (~2619 tok)
-- `README.md` — Project documentation (~10577 tok)
+- `pyproject.toml` — Python project configuration (~2629 tok)
+- `README.md` — Project documentation (~10584 tok)
 - `RELEASING.md` — Release Management Process (~7903 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
@@ -921,7 +921,7 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1443 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~3025 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~3209 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
@@ -1028,7 +1028,7 @@
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12000 tok)
-- `cli.py` — main (~32133 tok)
+- `cli.py` — main (~32261 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
@@ -1141,12 +1141,45 @@
 
 ## src/ai_guardian/middleware/
 
-- `__init__.py` — Operator-managed OpenShell supervisor middleware. (~134 tok)
+- `__init__.py` — Reusable semantic middleware components and protocol adapters. (~138 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4071 tok)
-- `config.py` — Configuration and scanner-ownership rules for supervisor middleware. (~6288 tok)
+- `config.py` — Configuration and scanner-ownership rules for supervisor middleware. (~6299 tok)
 - `dedup.py` — Pre-persistence deduplication for explicit hook/middleware defense-in-depth. (~653 tok)
 - `semantic.py` — Provider-payload normalization and semantic content scanning. (~3667 tok)
 - `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~21420 tok)
+
+## src/ai_guardian/middleware/openshell/
+
+- `__init__.py` — Version-selected NVIDIA OpenShell supervisor-middleware adapters. (~93 tok)
+- `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4065 tok)
+- `registry.py` — OpenShell release-to-adapter selection. (~1768 tok)
+- `server.py` — Stable facade for version-selected OpenShell middleware adapters. (~415 tok)
+
+## src/ai_guardian/middleware/openshell/proto/
+
+- `__init__.py` — Pinned OpenShell v0.1.2 supervisor-middleware protobuf bindings. (~32 tok)
+- `extension_pb2_grpc.py` — Client and server classes corresponding to protobuf-defined services. (~258 tok)
+- `extension_pb2.py` — Generated protocol buffer code. (~505 tok)
+- `extension.proto` — SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. (~313 tok)
+- `supervisor_middleware_pb2_grpc.py` — Client and server classes corresponding to protobuf-defined services. (~3896 tok)
+- `supervisor_middleware_pb2.py` — Generated protocol buffer code. (~6692 tok)
+- `supervisor_middleware.proto` — SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. (~8349 tok)
+
+## src/ai_guardian/middleware/openshell/v0_1_2/
+
+- `__init__.py` — OpenShell v0.1.2 supervisor-middleware adapter implementation. (~20 tok)
+- `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4066 tok)
+- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~21504 tok)
+
+## src/ai_guardian/middleware/openshell/v0_1_2/proto/
+
+- `__init__.py` — Pinned OpenShell v0.1.2 supervisor-middleware protobuf bindings. (~32 tok)
+- `extension_pb2_grpc.py` — Client and server classes corresponding to protobuf-defined services. (~258 tok)
+- `extension_pb2.py` — Generated protocol buffer code. (~505 tok)
+- `extension.proto` — SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. (~313 tok)
+- `supervisor_middleware_pb2_grpc.py` — Client and server classes corresponding to protobuf-defined services. (~3896 tok)
+- `supervisor_middleware_pb2.py` — Generated protocol buffer code. (~6692 tok)
+- `supervisor_middleware.proto` — SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. (~8349 tok)
 
 ## src/ai_guardian/middleware/proto/
 
