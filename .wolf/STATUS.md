@@ -23,6 +23,10 @@ budget_tokens: 1000
   PR #2504. The implementation uses `.opencode/plugins/openwolf/`, adds the
   V2 bridge, preserves V1/V2 event handling, and passes the focused OpenCode
   support tests.
+- Addressed all four actionable CodeRabbit findings for PR #2504 in commit
+  `36515c65`: stable session usage snapshots, empty-context suppression,
+  per-event failure isolation, and PR-specific validation notes. Added focused
+  regression coverage and completed the PR template sections.
 - Focused OpenShell/version tests pass (93 tests), as do Ruff, Black, Pylint,
   Mypy, and diff checks.
 - Issue #2493 now normalizes the sandbox create form's Initial config choice to
@@ -118,14 +122,14 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Review and merge PR #2504, or address any requested changes in the
-  `.opencode/plugins/openwolf/` integration.
+- Wait for CI/CodeRabbit follow-up on PR #2504, then merge the reviewed branch.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
 - Branch: `openwolf-plugin-layout`
-- HEAD: current PR commit; PR #2504 is open with the OpenWolf plugin migration.
+- HEAD: `36515c65`; PR #2504 is open with the OpenWolf plugin migration and
+  review fixes.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
@@ -141,11 +145,12 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_opencode_support.py -q
+uv run --extra dev python -m pytest tests/unit/test_opencode_support.py -q  # 37 passed
 ruff check src/ai_guardian/ tests/
 black --target-version py310 --check src/ai_guardian/ tests/
 mypy src/ai_guardian/
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text
+python -m json.tool .wolf/buglog.json > /dev/null
 git diff --check
 ```
 
