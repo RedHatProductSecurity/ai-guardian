@@ -1292,7 +1292,9 @@ else:
 
 
 def _duration(timeout_ms: int):
-    return duration_pb2.Duration(nanos=timeout_ms * 1_000_000)
+    total_nanos = timeout_ms * 1_000_000
+    seconds, nanos = divmod(total_nanos, 1_000_000_000)
+    return duration_pb2.Duration(seconds=seconds, nanos=nanos)
 
 
 def _bind_host(bind: str) -> str:

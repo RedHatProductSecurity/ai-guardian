@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **OpenShell middleware timeout encoding (#2484):** Encode multi-second
+  `timeout_ms` values as normalized protobuf `Duration` seconds and nanoseconds
+  so gateway registration negotiation accepts valid timeouts above one second.
 - **OpenShell middleware plaintext binding (#2484):** Reject wildcard listen
   addresses when TLS/JWT authentication is disabled, preventing an accidental
   unauthenticated listener on every host interface. Deployment examples now
