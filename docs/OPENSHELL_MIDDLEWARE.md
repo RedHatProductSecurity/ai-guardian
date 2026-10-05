@@ -125,6 +125,7 @@ changed, then create the sandbox with the generated policy:
 systemctl --user restart openshell-gateway
 openshell sandbox create \
   --name guarded \
+  --from localhost/ai-guardian-openshell:dev \
   --policy /tmp/content-guard-policy.yaml \
   --tty
 ```
@@ -135,14 +136,18 @@ an explicit long-lived command instead of relying on the default shell:
 ```bash
 openshell sandbox create \
   --name guarded \
+  --from localhost/ai-guardian-openshell:dev \
   --policy /tmp/content-guard-policy.yaml \
   --no-tty -- sleep 60
 ```
 
 The policy controls network middleware attachment; it does not select the
-workload command. For a Codex sandbox with a gateway provider, the AI Guardian
-wrapper adds the managed OpenShell image, Codex setup, and provider
-attachment:
+workload command. In OpenShell v0.1.2, the generic Ubuntu default image can
+fail in the supervisor's delegated workload path with `Permission denied` when
+a network middleware policy is attached. Use the AI Guardian support image, or
+another image known to support OpenShell's capability-free delegated launch.
+For a Codex sandbox with a gateway provider, the AI Guardian wrapper adds the
+managed OpenShell image, Codex setup, and provider attachment:
 
 ```bash
 ai-guardian sandbox create \
@@ -275,6 +280,7 @@ Create or update the sandbox using the normal OpenShell CLI:
 ```bash
 openshell sandbox create \
   --name guarded \
+  --from localhost/ai-guardian-openshell:dev \
   --policy policy.yaml \
   --tty
 ```
