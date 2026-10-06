@@ -6,6 +6,8 @@ Split from tray.py (Issue #1542). TrayHealthMonitor holds version mismatch,
 upgrade, and notification state. It receives a back-reference to DaemonTray.
 """
 
+import contextlib
+import io
 import logging
 import threading
 import time
@@ -1230,17 +1232,22 @@ class TrayHealthMonitor:
                         isinstance(setup_events, dict)
                         and any(status == "changed" for status in setup_events.values())
                     )
+                    setup_output = io.StringIO()
                     try:
-                        if needs_force:
-                            setup_success = setup_hooks(
-                                ide_type=ide_type,
-                                interactive=False,
-                                force=True,
-                            )
-                        else:
-                            setup_success = setup_hooks(
-                                ide_type=ide_type, interactive=False
-                            )
+                        with (
+                            contextlib.redirect_stdout(setup_output),
+                            contextlib.redirect_stderr(setup_output),
+                        ):
+                            if needs_force:
+                                setup_success = setup_hooks(
+                                    ide_type=ide_type,
+                                    interactive=False,
+                                    force=True,
+                                )
+                            else:
+                                setup_success = setup_hooks(
+                                    ide_type=ide_type, interactive=False
+                                )
                         setup_success = bool(setup_success)
                     except Exception as exc:
                         logger.warning("IDE setup failed for %s: %s", ide_type, exc)
@@ -1255,6 +1262,18 @@ class TrayHealthMonitor:
                             exc,
                         )
                         verification = None
+                    if not setup_success:
+                        setup_diagnostic = setup_output.getvalue().strip()
+                        if setup_diagnostic:
+                            if not isinstance(verification, dict):
+                                verification = {"healthy": False}
+                            diagnostics = verification.get("diagnostics", [])
+                            if not isinstance(diagnostics, (list, tuple, set)):
+                                diagnostics = []
+                            else:
+                                diagnostics = list(diagnostics)
+                            diagnostics.append(setup_diagnostic)
+                            verification["diagnostics"] = diagnostics
                     setup_results.append(
                         {
                             "ide": ide_type,

@@ -788,6 +788,23 @@ file path and format. `ai-guardian doctor` and tray setup health surface the
 diagnostic, while setup stops before rewriting the existing host file. Missing
 files remain valid setup targets.
 
+### Host configuration backups and recovery
+
+Before setup or MCP removal rewrites an existing host CLI configuration, AI
+Guardian saves the exact original bytes beside the file as
+`<config-file>.backup`. Existing backup files are never overwritten; later
+snapshots use `.backup.1`, `.backup.2`, and so on. This preserves the original
+pre-setup file when one flow performs more than one mutation, including
+OpenCode plugin and MCP registration. Backups retain JSONC comments, trailing
+commas, and the source file's permissions.
+
+If a backup cannot be created, setup stops before changing that host file and
+reports the affected path and failure in the CLI or tray result. New files,
+dry runs, and already-correct configurations do not create unnecessary
+backups. To recover, stop the affected host CLI, copy the desired numbered
+backup back to its original configuration path, and rerun setup only after
+confirming the restored file is valid.
+
 ### Cursor desktop, CLI, and agent scope
 
 Cursor uses the same command-hook JSON protocol and `hooks.json` event names

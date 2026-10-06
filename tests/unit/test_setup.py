@@ -408,6 +408,22 @@ class TestIDESetup:
 
         assert backup_path is None
 
+    def test_backup_config_preserves_bytes_and_existing_snapshots(self, tmp_path):
+        """Backups retain exact bytes and never replace an older snapshot."""
+        setup = IDESetup()
+        config_file = tmp_path / "config.jsonc"
+        original = b'// keep this comment\n{"enabled": true,}\n'
+        config_file.write_bytes(original)
+
+        first_backup = setup.backup_config(config_file)
+        config_file.write_bytes(b'{"enabled": false}\n')
+        second_backup = setup.backup_config(config_file)
+
+        assert first_backup == tmp_path / "config.jsonc.backup"
+        assert second_backup == tmp_path / "config.jsonc.backup.1"
+        assert first_backup.read_bytes() == original
+        assert second_backup.read_bytes() == b'{"enabled": false}\n'
+
     def test_merge_hooks_claude_existing(self):
         """Test merging Claude Code hooks into existing config."""
         setup = IDESetup()
@@ -1411,6 +1427,48 @@ class TestIDESetupParametrized:
         backup_file = config_file.with_suffix(".json.backup")
         assert backup_file.exists()
 
+    def test_setup_ide_hooks_stops_when_existing_config_backup_fails(self, tmp_path):
+        """A failed hook backup leaves the existing host config unchanged."""
+        setup = IDESetup()
+        config_file = tmp_path / "config.json"
+        original = b'{"userSetting": true}\n'
+        config_file.write_bytes(original)
+        ide_override = self._make_ide_config_override(setup, "claude", config_file)
+
+        with (
+            mock.patch.object(setup, "IDE_CONFIGS", ide_override),
+            mock.patch.object(setup, "backup_config", return_value=None),
+        ):
+            success, message = setup.setup_ide_hooks("claude", force=True)
+
+        assert success is False
+        assert str(config_file) in message
+        assert "backup" in message.lower()
+        assert config_file.read_bytes() == original
+
+    def test_setup_ide_hooks_noop_does_not_create_backup(self, tmp_path):
+        """A repeated identical hook merge does not rewrite or back up."""
+        setup = IDESetup()
+        config_file = tmp_path / "config.json"
+        ide_override = self._make_ide_config_override(setup, "claude", config_file)
+
+        with (
+            mock.patch.object(setup, "IDE_CONFIGS", ide_override),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_binary_path",
+                return_value="ai-guardian",
+            ),
+            mock.patch.object(
+                setup, "verify_gitleaks_installed", return_value=(True, "available")
+            ),
+        ):
+            assert setup.setup_ide_hooks("claude", force=True)[0] is True
+            original = config_file.read_bytes()
+            assert setup.setup_ide_hooks("claude", force=True)[0] is True
+
+        assert config_file.read_bytes() == original
+        assert not (tmp_path / "config.json.backup").exists()
+
     # ── setup_ide_hooks already-configured (JSON-based) ──────────────────
 
     @pytest.mark.parametrize(
@@ -2081,6 +2139,9 @@ class TestCodexSetup:
             "enabled": True,
         }
         assert project_config.read_text(encoding="utf-8") == project_before
+        assert (codex_home / "config.toml.backup").read_text(encoding="utf-8") == (
+            'model = "user-model"\n\n[mcp_servers.other]\ncommand = "other"\n'
+        )
 
     def test_codex_mcp_install_reenables_existing_disabled_entry(
         self, monkeypatch, tmp_path
@@ -2112,6 +2173,29 @@ class TestCodexSetup:
         installed = tomllib.loads(global_config.read_text(encoding="utf-8"))
         assert installed["mcp_servers"]["ai-guardian"]["enabled"] is True
         assert installed["mcp_servers"]["other"]["command"] == "other"
+
+    def test_codex_mcp_install_stops_when_backup_fails(self, monkeypatch, tmp_path):
+        """Codex MCP setup does not modify an existing TOML file without backup."""
+        from ai_guardian.setup.mcp import _install_mcp_config
+
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        global_config = codex_home / "config.toml"
+        original = b'model = "user-model"\n\n[mcp_servers.other]\ncommand = "other"\n'
+        global_config.write_bytes(original)
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        setup = IDESetup()
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_binary_path",
+                return_value="/usr/local/bin/ai-guardian",
+            ),
+            mock.patch.object(setup, "backup_config", return_value=None),
+        ):
+            _install_mcp_config(setup, "codex")
+
+        assert global_config.read_bytes() == original
 
     def test_codex_mcp_verification_rejects_disabled_entry(self, tmp_path):
         """Codex health reports an explicitly disabled server as inactive."""
@@ -2282,6 +2366,58 @@ class TestCodexSetup:
         assert remaining["model"] == "user-model"
         assert "ai-guardian" not in remaining["mcp_servers"]
         assert remaining["mcp_servers"]["other"]["command"] == "other"
+        assert (codex_home / "config.toml.backup").read_text(encoding="utf-8") == (
+            'model = "user-model"\n\n'
+            "[mcp_servers.ai-guardian]\n"
+            'command = "/usr/local/bin/ai-guardian"\n'
+            'args = ["mcp-server"]\n\n'
+            "[mcp_servers.other]\n"
+            'command = "other"\n'
+        )
+
+    def test_native_toml_mcp_setup_and_removal_keep_numbered_backups(self, tmp_path):
+        """Native TOML setup/removal retains the original and intermediate bytes."""
+        from ai_guardian.setup.mcp import (
+            _install_toml_mcp_config,
+            _remove_toml_mcp_config,
+        )
+
+        config_file = tmp_path / "config.toml"
+        original = b'model = "user-model"\n\n[mcp_servers.other]\ncommand = "other"\n'
+        config_file.write_bytes(original)
+        setup = IDESetup()
+
+        with mock.patch(
+            "ai_guardian.setup.mcp._resolve_binary_path",
+            return_value="/usr/bin/ai-guardian",
+        ):
+            _install_toml_mcp_config(config_file, "mcp_servers", setup=setup)
+            after_install = config_file.read_bytes()
+            _remove_toml_mcp_config(config_file, "mcp_servers", setup=setup)
+
+        assert (tmp_path / "config.toml.backup").read_bytes() == original
+        assert (tmp_path / "config.toml.backup.1").read_bytes() == after_install
+        assert config_file.read_bytes() != after_install
+
+    def test_native_toml_mcp_setup_stops_when_backup_fails(self, tmp_path):
+        """Native TOML setup leaves an existing file unchanged on backup failure."""
+        from ai_guardian.setup.mcp import _install_toml_mcp_config
+
+        config_file = tmp_path / "config.toml"
+        original = b'model = "user-model"\n'
+        config_file.write_bytes(original)
+        setup = IDESetup()
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+            mock.patch.object(setup, "backup_config", return_value=None),
+        ):
+            _install_toml_mcp_config(config_file, "mcp_servers", setup=setup)
+
+        assert config_file.read_bytes() == original
 
     def test_codex_mcp_install_migrates_stale_project_root_json(
         self, monkeypatch, tmp_path
@@ -4740,6 +4876,117 @@ class TestOpenCodeMcpConfig:
         assert config_file.read_bytes() == before
         assert not plugins_dir.exists()
 
+    def test_opencode_plugin_backup_preserves_jsonc_before_write(self, tmp_path):
+        """OpenCode plugin registration backs up the exact JSONC source."""
+        plugins_dir = tmp_path / "plugins"
+        config_file = tmp_path / "opencode.jsonc"
+        original = b'// providers remain\n{"provider": {"local": {},},}\n'
+        config_file.write_bytes(original)
+        setup = IDESetup()
+
+        with (
+            mock.patch.object(setup, "get_config_path", return_value=str(plugins_dir)),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_opencode_config",
+                return_value=config_file,
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks.detect_opencode_runtime",
+                return_value={"generation": "v1", "version": "1.18.34"},
+            ),
+            mock.patch.object(
+                setup, "verify_gitleaks_installed", return_value=(True, "available")
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+        ):
+            success, message = setup.setup_ide_hooks("opencode", force=True)
+
+        assert success is True
+        assert "Successfully configured OpenCode" in message
+        assert (tmp_path / "opencode.jsonc.backup").read_bytes() == original
+        updated = json.loads(config_file.read_text(encoding="utf-8"))
+        assert updated["provider"] == {"local": {}}
+        assert updated["plugin"] == [str(plugins_dir / "ai-guardian.ts")]
+
+    def test_opencode_plugin_stops_when_backup_fails(self, tmp_path):
+        """OpenCode plugin registration leaves the host config untouched."""
+        plugins_dir = tmp_path / "plugins"
+        config_file = tmp_path / "opencode.json"
+        original = b'{"provider": {"local": {}}}\n'
+        config_file.write_bytes(original)
+        setup = IDESetup()
+
+        with (
+            mock.patch.object(setup, "get_config_path", return_value=str(plugins_dir)),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_opencode_config",
+                return_value=config_file,
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks.detect_opencode_runtime",
+                return_value={"generation": "v1", "version": "1.18.34"},
+            ),
+            mock.patch.object(setup, "backup_config", return_value=None),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+        ):
+            success, message = setup.setup_ide_hooks("opencode", force=True)
+
+        assert success is False
+        assert str(config_file) in message
+        assert "backup" in message.lower()
+        assert config_file.read_bytes() == original
+
+    def test_opencode_setup_keeps_original_backup_across_plugin_and_mcp_writes(
+        self, tmp_path
+    ):
+        """A combined setup keeps the pre-flow bytes in the first backup."""
+        plugins_dir = tmp_path / "plugins"
+        config_file = tmp_path / "opencode.jsonc"
+        original = b'// preserve before setup\n{"provider": {"local": {},},}\n'
+        config_file.write_bytes(original)
+
+        with (
+            mock.patch.object(
+                IDESetup, "get_config_path", return_value=str(plugins_dir)
+            ),
+            mock.patch.object(
+                IDESetup, "verify_gitleaks_installed", return_value=(True, "available")
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_opencode_config",
+                return_value=config_file,
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_opencode_config",
+                return_value=config_file,
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks.detect_opencode_runtime",
+                return_value={"generation": "v1", "version": "1.18.34"},
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+            mock.patch("ai_guardian.setup._notify_daemon_reload"),
+        ):
+            assert setup_hooks(ide_type="opencode", interactive=False, force=True)
+
+        intermediate = (tmp_path / "opencode.jsonc.backup.1").read_bytes()
+        assert (tmp_path / "opencode.jsonc.backup").read_bytes() == original
+        assert b'"plugin"' in intermediate
+        assert b'"mcp"' in config_file.read_bytes()
+
     @pytest.mark.parametrize(
         "suffix, contents, expected",
         [
@@ -4802,6 +5049,138 @@ class TestOpenCodeMcpConfig:
         assert not jsonc_path.exists()
         config = json.loads(legacy.read_text())
         assert "ai-guardian" in config["mcp"]
+
+    def test_opencode_jsonc_mcp_backup_preserves_original_bytes(self, tmp_path):
+        """OpenCode MCP setup backs up JSONC before normalizing its write."""
+        from ai_guardian.setup import _install_mcp_config
+
+        config_file = tmp_path / "opencode.jsonc"
+        original = b'// user comment\n{"mcp": {"other": {"enabled": true,},},}\n'
+        config_file.write_bytes(original)
+
+        setup = IDESetup()
+        with (
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_opencode_config",
+                return_value=config_file,
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+        ):
+            _install_mcp_config(setup, "opencode")
+
+        assert (tmp_path / "opencode.jsonc.backup").read_bytes() == original
+        updated = json.loads(config_file.read_text(encoding="utf-8"))
+        assert updated["mcp"]["other"] == {"enabled": True}
+        assert updated["mcp"]["ai-guardian"]["command"] == [
+            "/usr/bin/ai-guardian",
+            "mcp-server",
+        ]
+
+    def test_opencode_mcp_stops_when_backup_fails(self, tmp_path):
+        """OpenCode MCP setup does not rewrite a file without a backup."""
+        from ai_guardian.setup import _install_mcp_config
+
+        config_file = tmp_path / "opencode.json"
+        original = b'{"mcp": {"other": {}}}\n'
+        config_file.write_bytes(original)
+        setup = IDESetup()
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_opencode_config",
+                return_value=config_file,
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+            mock.patch.object(setup, "backup_config", return_value=None),
+        ):
+            _install_mcp_config(setup, "opencode")
+
+        assert config_file.read_bytes() == original
+
+    def test_opencode_mcp_noop_does_not_create_backup(self, tmp_path):
+        """An idempotent OpenCode MCP setup preserves formatting and backups."""
+        from ai_guardian.setup import _install_mcp_config
+
+        config_file = tmp_path / "opencode.jsonc"
+        config_file.write_bytes(
+            b'// preserve\n{"mcp": {"ai-guardian": {'
+            b'"type": "local", "command": ["/usr/bin/ai-guardian", '
+            b'"mcp-server"], "enabled": true,},},}\n'
+        )
+        setup = IDESetup()
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_opencode_config",
+                return_value=config_file,
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+        ):
+            _install_mcp_config(setup, "opencode")
+
+        assert not (tmp_path / "opencode.jsonc.backup").exists()
+        assert config_file.read_bytes().startswith(b"// preserve")
+
+    def test_generic_mcp_removal_creates_backup(self, tmp_path):
+        """Removing a generic MCP entry backs up the complete source first."""
+        from ai_guardian.setup import _remove_mcp_config
+        from ai_guardian.setup.mcp import _MCP_IDE_CONFIGS
+
+        config_file = tmp_path / "mcp.json"
+        original = (
+            b'{"mcpServers": {"ai-guardian": {"command": "old"}, '
+            b'"other": {"command": "other"}}}\n'
+        )
+        config_file.write_bytes(original)
+        setup = IDESetup()
+
+        with mock.patch.dict(
+            _MCP_IDE_CONFIGS,
+            {"claude": {"config_file": str(config_file), "config_key": "mcpServers"}},
+            clear=True,
+        ):
+            _remove_mcp_config(setup, "claude")
+
+        assert (tmp_path / "mcp.json.backup").read_bytes() == original
+        updated = json.loads(config_file.read_text(encoding="utf-8"))
+        assert "ai-guardian" not in updated["mcpServers"]
+        assert updated["mcpServers"]["other"] == {"command": "other"}
+
+    def test_generic_mcp_removal_stops_when_backup_fails(self, tmp_path):
+        """Generic MCP removal leaves the host file unchanged on backup failure."""
+        from ai_guardian.setup import _remove_mcp_config
+        from ai_guardian.setup.mcp import _MCP_IDE_CONFIGS
+
+        config_file = tmp_path / "mcp.json"
+        original = b'{"mcpServers": {"ai-guardian": {"command": "old"}}}\n'
+        config_file.write_bytes(original)
+        setup = IDESetup()
+
+        with (
+            mock.patch.dict(
+                _MCP_IDE_CONFIGS,
+                {
+                    "claude": {
+                        "config_file": str(config_file),
+                        "config_key": "mcpServers",
+                    }
+                },
+                clear=True,
+            ),
+            mock.patch.object(setup, "backup_config", return_value=None),
+        ):
+            _remove_mcp_config(setup, "claude")
+
+        assert config_file.read_bytes() == original
 
     def test_prefers_json_when_both_exist(self, tmp_path):
         """When both .json and .jsonc exist, write to .json."""

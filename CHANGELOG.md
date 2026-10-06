@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **Host CLI setup backups (#2505):** Back up existing hook and MCP JSON/JSONC/
+  TOML configurations byte-for-byte before every mutation, stop safely when a
+  backup fails, retain numbered snapshots across repeated writes, and surface
+  the affected path in CLI and tray setup results.
 - **OpenShell middleware sandbox qualification (#2484):** Document the
   Community workload image, Codex provider prerequisites, the explicit `curl`
   probe policy required to reach L7, one-step create/connect commands, the

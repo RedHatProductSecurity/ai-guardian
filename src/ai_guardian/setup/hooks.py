@@ -22,6 +22,7 @@ from ai_guardian.constants import (
 from ai_guardian.ide_paths import resolve_ide_config_path
 from ai_guardian.opencode_support import detect_opencode_runtime
 from ai_guardian.setup.utils import (
+    _create_config_backup,
     _create_vbs_wrapper,
     _is_ai_guardian_command,
     _load_cli_config,
@@ -914,6 +915,7 @@ class IDESetup:
     def __init__(self):
         """Initialize IDE setup manager."""
         self._last_merged_config: Optional[Dict] = None
+        self._last_backup_error: Optional[str] = None
 
     @staticmethod
     def _codex_project_root(cwd: Optional[str] = None) -> Optional[Path]:
@@ -2048,32 +2050,41 @@ class IDESetup:
 
     def backup_config(self, config_path: Path) -> Optional[Path]:
         """
-        Create backup of existing config file.
+        Create a byte-for-byte backup of an existing config file.
 
         Args:
             config_path: Path to config file
 
         Returns:
-            Path or None: Path to backup file or None if failed
+            Path or None: Path to backup file, or None when the file is
+                missing or the backup could not be created.  Callers that are
+                about to replace an existing file must stop when this returns
+                None and ``_last_backup_error`` is set.
         """
-        try:
-            if not config_path.exists():
-                return None
+        self._last_backup_error = None
+        backup_path, error = _create_config_backup(config_path)
+        self._last_backup_error = error
+        if error:
+            print(error, file=sys.stderr)
+        return backup_path
 
-            backup_path = config_path.with_suffix(config_path.suffix + ".backup")
+    def _backup_before_write(
+        self, config_path: Path, operation: str = "Setup"
+    ) -> Tuple[bool, Optional[Path], Optional[str]]:
+        """Back up an existing host config before a setup write."""
+        if not config_path.exists():
+            return True, None, None
 
-            # Read and write to create backup
-            with open(config_path, "r", encoding="utf-8") as src:
-                content = src.read()
+        backup_path = self.backup_config(config_path)
+        if backup_path is None:
+            error = self._last_backup_error or (
+                f"Unable to create backup for existing configuration {config_path}"
+            )
+            message = f"{operation} stopped before modifying {config_path}: {error}"
+            return False, None, message
 
-            with open(backup_path, "w", encoding="utf-8") as dst:
-                dst.write(content)
-
-            return backup_path
-
-        except Exception as e:
-            print(f"Error creating backup: {e}", file=sys.stderr)
-            return None
+        print(f"✓ Backup created: {backup_path}", file=sys.stderr)
+        return True, backup_path, None
 
     def merge_hooks(
         self, existing_config: Dict, ai_guardian_hooks: Dict, ide_type: str
@@ -2775,6 +2786,11 @@ class IDESetup:
         config[config_key] = plugins
         if needs_write:
             config_file.parent.mkdir(parents=True, exist_ok=True)
+            backup_ok, _, backup_error = self._backup_before_write(
+                config_file, operation="OpenCode plugin registration"
+            )
+            if not backup_ok:
+                return backup_error
             config_file.write_text(
                 json.dumps(config, indent=2) + "\n", encoding="utf-8"
             )
@@ -3313,6 +3329,7 @@ class IDESetup:
             )
             if schema_error:
                 return False, schema_error
+            original_config = deepcopy(existing_config)
 
             obsolete_removed = []
             if force:
@@ -3384,11 +3401,18 @@ class IDESetup:
                 message += json.dumps(merged_config, indent=2)
                 return True, message
 
-            # Create backup if file exists
-            if config_path.exists():
-                backup_path = self.backup_config(config_path)
-                if backup_path:
-                    print(f"✓ Backup created: {backup_path}", file=sys.stderr)
+            if original_config == merged_config:
+                return (
+                    True,
+                    f"{ide_name} hooks already match the requested configuration at "
+                    f"{config_path}; no changes needed.",
+                )
+
+            backup_ok, _, backup_error = self._backup_before_write(
+                config_path, operation=f"{ide_name} hook setup"
+            )
+            if not backup_ok:
+                return False, backup_error or "Unable to back up host configuration"
 
             # Ensure parent directory exists
             config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3580,11 +3604,11 @@ class IDESetup:
             # Ensure parent directory exists
             config_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Create backup if file exists
-            if config_path.exists():
-                backup_path = self.backup_config(config_path)
-                if backup_path:
-                    print(f"✓ Backup created: {backup_path}", file=sys.stderr)
+            backup_ok, _, backup_error = self._backup_before_write(
+                config_path, operation="Remote configuration setup"
+            )
+            if not backup_ok:
+                return False, backup_error or "Unable to back up configuration"
 
             # Write config
             with open(config_path, "w", encoding="utf-8") as f:
@@ -3655,9 +3679,11 @@ class IDESetup:
                 except KeyboardInterrupt:
                     return False, "\nMigration cancelled"
 
-            backup_path = self.backup_config(config_path)
-            if backup_path:
-                print(f"✓ Backup created: {backup_path}", file=sys.stderr)
+            backup_ok, backup_path, backup_error = self._backup_before_write(
+                config_path, operation="Pattern server migration"
+            )
+            if not backup_ok:
+                return False, backup_error or "Unable to back up configuration"
 
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(updated_config, f, indent=2)
