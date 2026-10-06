@@ -25,7 +25,9 @@ package from local plugin files, while accepting a plain default-exported
 `{ id, setup }` object. The file is loaded from the global `plugins` directory;
 the `plugins` config key is for package or plugin-directory entries, not this
 single TypeScript file. Setup removes an old explicit AI Guardian file entry
-and preserves unrelated configured plugins.
+and preserves compatible unrelated configured plugins. If another local
+TypeScript file entry is present, setup leaves the configuration unchanged and
+asks the user to migrate that entry explicitly before retrying.
 
 V2 tool hooks use the V2 `event.id` call identifier. Successful after-tool
 events expose a mutable `event.result`; failed after-tool events expose

@@ -2794,6 +2794,17 @@ class IDESetup:
                     if entry not in plugins:
                         plugins.append(entry)
         if generation == "v2":
+            if any(
+                isinstance(entry, str)
+                and entry != plugin_path
+                and Path(entry).suffix.lower() == ".ts"
+                for entry in plugins
+            ):
+                return (
+                    "OpenCode V2 setup cannot migrate local TypeScript plugin "
+                    "file entries automatically. Migrate them explicitly "
+                    "before rerunning setup."
+                )
             # V2 discovers ai-guardian.ts from plugins_dir. Remove a stale
             # explicit file entry because configured paths must be packages.
             plugins = [entry for entry in plugins if entry != plugin_path]

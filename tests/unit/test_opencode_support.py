@@ -331,6 +331,7 @@ def test_detect_opencode_runtime_reports_v2_package():
 
 
 def test_v2_plugin_template_uses_domain_hooks():
+    """The V2 template exports the direct plugin object and domain hooks."""
     assert "from '@opencode/plugin'" not in _OPENCODE_PLUGIN_V2_TS
     assert "export default {" in _OPENCODE_PLUGIN_V2_TS
     assert "id: 'ai-guardian'" in _OPENCODE_PLUGIN_V2_TS
@@ -347,6 +348,7 @@ def test_v2_plugin_template_uses_domain_hooks():
 
 
 def test_v2_prompt_blocks_add_safe_model_visible_refusal_notice():
+    """Blocked prompts add a fixed transcript notice before they are rejected."""
     prompt_hook = _OPENCODE_PLUGIN_V2_TS.split(
         "await ctx.session.hook('prompt'", maxsplit=1
     )[1].split("await ctx.tool.hook('execute.before'", maxsplit=1)[0]
@@ -363,6 +365,7 @@ def test_v2_prompt_blocks_add_safe_model_visible_refusal_notice():
 
 
 def test_v2_tool_blocks_add_safe_pre_and_post_refusal_notices():
+    """Blocked tool stages add safe notices without exposing their contents."""
     before_hook = _OPENCODE_PLUGIN_V2_TS.split(
         "await ctx.tool.hook('execute.before'", maxsplit=1
     )[1].split("await ctx.tool.hook('execute.after'", maxsplit=1)[0]
@@ -413,6 +416,7 @@ def test_openwolf_plugin_review_regressions_are_present():
 
 
 def test_v2_registration_removes_direct_file_entry_and_preserves_packages(tmp_path):
+    """V2 removes its file entry while retaining compatible package entries."""
     config_file = tmp_path / "opencode.json"
     plugin_file = tmp_path / "plugins" / "ai-guardian.ts"
     plugin_file.parent.mkdir()
@@ -434,7 +438,43 @@ def test_v2_registration_removes_direct_file_entry_and_preserves_packages(tmp_pa
     assert config["plugins"] == ["/existing/plugin-package"]
 
 
+def test_v2_registration_refuses_unrelated_typescript_file_migration(tmp_path):
+    """V2 leaves config unchanged when another local TypeScript file is present."""
+    config_file = tmp_path / "opencode.json"
+    plugin_file = tmp_path / "plugins" / "ai-guardian.ts"
+    unrelated_file = tmp_path / "other-plugin.ts"
+    plugin_file.parent.mkdir()
+    plugin_file.write_text("// generated plugin\n", encoding="utf-8")
+    unrelated_file.write_text("// user plugin\n", encoding="utf-8")
+    original = (
+        json.dumps(
+            {
+                "plugins": [str(plugin_file), "/existing/plugin-package"],
+                "plugin": [str(unrelated_file)],
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    config_file.write_text(original, encoding="utf-8")
+
+    setup = IDESetup()
+    with mock.patch(
+        "ai_guardian.setup.hooks._resolve_opencode_config", return_value=config_file
+    ):
+        message = setup._register_opencode_plugin(
+            plugin_file, plugin_file.parent, generation="v2"
+        )
+
+    assert message == (
+        "OpenCode V2 setup cannot migrate local TypeScript plugin file entries "
+        "automatically. Migrate them explicitly before rerunning setup."
+    )
+    assert config_file.read_text(encoding="utf-8") == original
+
+
 def test_v2_verification_uses_plugin_directory_auto_discovery(tmp_path):
+    """V2 setup verification relies on the discovered plugin file itself."""
     plugins_dir = tmp_path / "plugins"
     plugins_dir.mkdir()
     plugin_file = plugins_dir / "ai-guardian.ts"
@@ -456,6 +496,7 @@ def test_v2_verification_uses_plugin_directory_auto_discovery(tmp_path):
 
 
 def test_v2_doctor_status_discloses_runtime_load_is_unverified(tmp_path):
+    """Doctor reports that configured V2 files do not prove server activation."""
     config_dir = tmp_path / "opencode"
     plugins_dir = config_dir / "plugins"
     bridge_dir = config_dir / "ai-guardian"
@@ -486,6 +527,7 @@ def test_v2_doctor_status_discloses_runtime_load_is_unverified(tmp_path):
 
 
 def test_setup_renders_v2_plugin_and_keeps_v1_bridge_location(tmp_path):
+    """V2 setup writes the plugin and bridge without a direct config entry."""
     plugins_dir = tmp_path / "plugins"
     config_file = tmp_path / "opencode.jsonc"
 

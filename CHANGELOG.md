@@ -58,7 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-discovery instead of registering a TypeScript file as a package
   directory, and avoid the V2 plugin API import that the server resolver
   cannot load. Doctor now distinguishes configured plugin files from verified
-  server activation.
+  server activation, and setup refuses to rewrite V2 configuration when an
+  unrelated local TypeScript plugin file would be migrated implicitly.
 - **Strict Mypy optional parameters (#2510):** Remove the legacy implicit-
   optional compatibility override and annotate nullable defaults explicitly
   across scanner, setup, daemon, policy, hook, and configuration-scope APIs.

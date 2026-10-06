@@ -563,6 +563,7 @@ def _assert_runtime_case(
 
 
 def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
+    """Assert the generated plugin or extension satisfies its IDE contract."""
     config = setup.IDE_CONFIGS[ide_type]
     root = Path(setup.get_config_path(ide_type)).expanduser()
     if ide_type == "pi":
