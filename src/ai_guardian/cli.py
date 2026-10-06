@@ -298,7 +298,8 @@ def _add_middleware_service_options(parser):
         metavar="FILE",
         help=(
             "Operator-managed JSON/YAML middleware configuration "
-            "(required to start or restart)"
+            "(required for a new start; restart reuses the previous background "
+            "configuration when omitted)"
         ),
     )
     parser.add_argument(
