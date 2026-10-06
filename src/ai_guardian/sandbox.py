@@ -1206,14 +1206,15 @@ def _ensure_openshell_cli_provider(
                 provider_name,
                 "--from-existing",
             ]
-        if provider_environment.get("OPENAI_API_KEY") or all(
+        has_oauth_credentials = provider_type == "codex" and all(
             provider_environment.get(key)
             for key in (
                 "CODEX_AUTH_ACCESS_TOKEN",
                 "CODEX_AUTH_REFRESH_TOKEN",
                 "CODEX_AUTH_ACCOUNT_ID",
             )
-        ):
+        )
+        if provider_environment.get("OPENAI_API_KEY") or has_oauth_credentials:
             _emit_output(
                 f"Refreshing existing OpenShell provider from local credentials: {provider_name}",
                 output=output,

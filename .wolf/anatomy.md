@@ -1047,7 +1047,7 @@
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
 - `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
-- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~24127 tok)
+- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~24150 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)

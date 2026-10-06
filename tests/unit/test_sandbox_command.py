@@ -1455,10 +1455,11 @@ def test_explicit_openshell_oauth_selection_does_not_fall_back_to_api_key(
     assert "OPENAI_API_KEY" not in run.call_args.kwargs["env"]
 
 
-def test_explicit_openshell_api_key_selection_requires_a_key():
+def test_explicit_openshell_api_key_selection_requires_a_key(tmp_path):
     args = _args(environment=[], openshell_auth="api-key")
 
     with (
+        patch.dict(os.environ, {"CODEX_HOME": str(tmp_path)}, clear=False),
         patch(
             "ai_guardian.sandbox._openshell_provider_profiles",
             return_value=["codex", "openai"],
@@ -1467,6 +1468,43 @@ def test_explicit_openshell_api_key_selection_requires_a_key():
         pytest.raises(ValueError, match="no OPENAI_API_KEY"),
     ):
         _ensure_openshell_cli_provider(args, "codex")
+
+
+def test_explicit_openshell_api_key_reuses_existing_provider_without_oauth_refresh(
+    tmp_path,
+):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": "access-secret",
+                    "refresh_token": "refresh-secret",
+                    "account_id": "account-secret",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = _args(environment=[], openshell_auth="api-key")
+
+    with (
+        patch.dict(
+            os.environ,
+            {"HOME": str(tmp_path), "CODEX_HOME": str(codex_home)},
+            clear=True,
+        ),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["codex", "openai"],
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
+        patch("ai_guardian.sandbox._run") as run,
+    ):
+        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-openai"
+
+    run.assert_not_called()
 
 
 def test_missing_openshell_api_key_profile_lists_setup_guidance(tmp_path):
