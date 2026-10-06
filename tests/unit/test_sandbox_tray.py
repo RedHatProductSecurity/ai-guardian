@@ -20,6 +20,7 @@ from ai_guardian.tray.menu import (
     launch_sandbox_create_command,
 )
 from ai_guardian.tray.menu_builder import (
+    TRAY_OPENSHELL_AUTH_CHOICES,
     TRAY_OPENSHELL_CLI_CHOICES,
     TrayMenuBuilder,
 )
@@ -669,6 +670,7 @@ class TestSandboxTrayMenu:
             "name": "ag-test",
             "agent": "",
             "cli": "codex",
+            "openshell_auth": "OAuth",
             "agent_provider": "",
             "repo": "/tmp/repo",
             "config_dir": "",
@@ -705,6 +707,7 @@ class TestSandboxTrayMenu:
         assert args.runtime == "openshell"
         assert args.name == "ag-test"
         assert args.cli == "codex"
+        assert args.openshell_auth == "oauth"
         assert args.opencode_agent is None
         assert args.agent_provider is None
         assert args.repo == "/tmp/repo"
@@ -744,6 +747,24 @@ class TestSandboxTrayMenu:
         show_error.assert_called_once()
         assert "no configuration snapshot found" in show_error.call_args.args[1]
         run_create.assert_not_called()
+
+    def test_create_form_maps_api_key_authentication_selection(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-test",
+            "cli": "codex",
+            "openshell_auth": "API key",
+            "repo": "",
+            "providers": "",
+            "config_source": "Host/default",
+        }
+
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.openshell_auth == "api_key"
 
     def test_create_form_shows_runtime_log_when_direct_create_fails(self):
         tray = _make_tray([])
@@ -1110,6 +1131,20 @@ class TestSandboxTrayMenu:
         assert cli_field["default"] == "codex"
         assert cli_field["required"] is True
 
+        auth_field = next(
+            field for field in fields if field["name"] == "openshell_auth"
+        )
+        assert auth_field["type"] == "choice"
+        assert auth_field["choices"] == TRAY_OPENSHELL_AUTH_CHOICES
+        assert auth_field["default"] == "OAuth"
+        assert auth_field["required"] is True
+        assert auth_field["enabled_when"] == {
+            "field": "runtime",
+            "values": ("openshell",),
+        }
+        assert "ai-guardian-codex" in auth_field["help"]
+        assert "ai-guardian-openai" in auth_field["help"]
+
         name_field = next(field for field in fields if field["name"] == "name")
         assert name_field["default"] == "ag-codex"
         dynamic_default = name_field["dynamic_default"]
@@ -1223,6 +1258,10 @@ class TestSandboxTrayMenu:
         }
         assert profile_field["clear_when_disabled"] is True
         provider_field = next(field for field in fields if field["name"] == "providers")
+        assert provider_field["label"] == "OpenShell provider override"
+        assert provider_field["type"] == "text"
+        assert provider_field["default"] == ""
+        assert "Codex authentication" in provider_field["help"]
         assert provider_field["enabled_when"] == {
             "field": "runtime",
             "values": ("openshell",),

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenShell tray authentication selector:** Add an explicit Codex OAuth/API-key
+  choice to the Create sandbox form. OAuth maps to the `codex` profile and
+  `ai-guardian-codex`; API key maps to `openai` and `ai-guardian-openai`, even
+  when the tray process does not inherit the interactive shell environment.
 - **OpenShell supervisor middleware (#2484):** Add an optional, external
   OpenShell v0.1.2 gRPC service for semantic provider-content scanning and
   response redaction. The operator-managed service supports protocol
@@ -47,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **OpenShell setup guidance:** Document local gateway installation and startup,
+  put the required Providers v2/profile-import sequence before the first
+  sandbox example, clarify automatic OAuth/API-key provider selection, and link
+  missing-profile errors directly to the setup instructions.
 - **OpenCode V2 prompt refusal feedback:** Add a safe synthetic AI Guardian
   refusal notice to the transcript before rejecting a blocked prompt, so the
   next model turn knows the original request was refused without receiving its

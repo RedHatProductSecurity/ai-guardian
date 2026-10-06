@@ -9,6 +9,9 @@
 - Dev install must use `uv tool install --editable .` — `uv tool install --force .` copies a snapshot; subsequent source changes are NOT reflected in the binary.
 - When DAF metadata labels a repository issue as JIRA but the user identifies it as GitHub, use the repository-qualified `gh issue view` flow.
 - Pi OpenShell remains unqualified; local v0.1.2 validation must use supported Codex or OpenCode paths instead.
+- Sandbox documentation should lead with short, case-based setup recipes and
+  prerequisites for each runtime/authentication path; keep lifecycle and
+  advanced reference details below the first-use steps.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
@@ -132,6 +135,30 @@
   `openai` profile. Automatic setup must keep `ai-guardian-codex` and
   `ai-guardian-openai` as separate provider instances; updating an OAuth
   provider with `OPENAI_API_KEY` fails with an invalid-argument error.
+
+- **OpenShell provider setup:** Importing a provider profile does not create a
+  provider instance. An explicit `--provider` passed to `ai-guardian sandbox
+  create` requires a matching `openshell provider create` instance, while
+  staged setup can create or reuse one when matching local credentials exist.
+
+- **OpenShell tray provider flow:** The tray Create sandbox form leaves its
+  OpenShell provider value empty and relies on staged setup; Codex OAuth maps to
+  `ai-guardian-codex`, while a local Codex `OPENAI_API_KEY` maps to
+  `ai-guardian-openai`. The separate Pi provider field is disabled for
+  OpenShell.
+
+- **OpenShell gateway setup:** The official installer provisions and starts a
+  local gateway. On Linux, check/restart the `openshell-gateway` systemd user
+  service and start `podman.socket` for rootless Podman; on macOS, use the
+  Homebrew `openshell` service. The old `/openshell/get-started/quickstart`
+  documentation URL is stale; use `/openshell/latest/about/installation`.
+
+- **OpenShell release pinning:** For a deterministic AI Guardian fresh-machine
+  setup, install the qualified baseline with
+  `OPENSHELL_VERSION=v0.1.2` and import provider manifests from `v0.1.2`. The
+  `providers_v2_enabled` setting is a v0.1.2 command only; newer releases may
+  reject it as an unknown setting, while an existing provider profile is safe
+  to reuse.
 
 - **OpenShell workload identity:** OpenShell clears supplementary groups before
   capability-free launch. The NVIDIA Ubuntu base's `ubuntu` UID has default

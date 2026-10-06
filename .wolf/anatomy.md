@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1191 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1192 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72846 tok)
+- `CHANGELOG.md` — Change log (~72998 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -25,7 +25,7 @@
 - `mkdocs.yml` (~1153 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2622 tok)
-- `README.md` — Project documentation (~10584 tok)
+- `README.md` — Project documentation (~10681 tok)
 - `RELEASING.md` — Release Management Process (~7903 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
@@ -798,7 +798,7 @@
 - `entrypoint.sh` (~8491 tok)
 - `openshell-github-readonly-policy.yaml` — /info/refs*" } (~371 tok)
 - `openshell-github-readwrite-policy.yaml` — /info/refs*" } (~380 tok)
-- `README.md` — Project documentation (~13481 tok)
+- `README.md` — Project documentation (~13649 tok)
 - `run-scenarios.sh` (~313 tok)
 - `run.sh` (~3500 tok)
 
@@ -869,7 +869,7 @@
 ## container/tests/
 
 - `openshell-compatibility.schema.json` (~1459 tok)
-- `README.md` — Project documentation (~2490 tok)
+- `README.md` — Project documentation (~2535 tok)
 - `test_container_agents.py` — Run opt-in live Docker/Podman CLI smoke tests. (~4115 tok)
 - `test_openshell_agents.py` — Run opt-in live OpenShell CLI/provider smoke tests. (~10380 tok)
 
@@ -927,7 +927,8 @@
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
 - `README.md` — Project documentation (~1485 tok)
 - `requirements.txt` — Python dependencies (~36 tok)
-- `Sandbox.md` — Sandbox CLI (~9584 tok)
+- `Sandbox.md` — Sandbox CLI (~3269 tok)
+- `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2439 tok)
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
 - `SDK.md` — AI Guardian SDK (~21559 tok)
@@ -1028,7 +1029,7 @@
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12000 tok)
-- `cli.py` — Declares with (~33003 tok)
+- `cli.py` — Declares with (~33116 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
@@ -1046,7 +1047,7 @@
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
 - `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
-- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~23605 tok)
+- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~24150 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)
@@ -1363,7 +1364,7 @@
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1078 tok)
 - `health.py` — URL configuration (~16972 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — URL configuration (~36787 tok)
+- `menu_builder.py` — URL configuration (~37078 tok)
 - `menu.py` — URL configuration (~2947 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
 - `plugin_runner.py` — Declares TrayPluginMenuBuilder (~8890 tok)

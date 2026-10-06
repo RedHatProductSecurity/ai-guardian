@@ -46,7 +46,7 @@ OPENSHELL_ENTRYPOINT = "/usr/local/bin/entrypoint.sh"
 OPENSHELL_SERVICE_NAME = "ai-guardian"
 OPENSHELL_PROVIDER_DOC_URL = (
     "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/Sandbox.md"
-    "#manual-live-provider-smoke-tests"
+    "#openshell-provider-setup"
 )
 CONTAINER_GOOGLE_CREDENTIALS_PATH = (
     "/sandbox/.config/gcloud/application_default_credentials.json"
@@ -202,6 +202,26 @@ def _agent_provider(args, cli: str) -> Optional[str]:
     if selected is None and cli == "pi":
         selected = os.environ.get("AI_GUARDIAN_AGENT_PROVIDER")
     return str(selected or "").strip() or None
+
+
+def _normalize_openshell_auth_mode(value: Any) -> Optional[str]:
+    """Normalize an explicit OpenShell Codex authentication selection."""
+    selected = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not selected:
+        return None
+    if selected == "oauth":
+        return "oauth"
+    if selected in {"api_key", "apikey"}:
+        return "api_key"
+    raise ValueError(
+        "unsupported OpenShell authentication mode "
+        f"'{value}'; choose OAuth or API key"
+    )
+
+
+def _openshell_auth_mode(args) -> Optional[str]:
+    """Return the explicit OpenShell authentication mode, if selected."""
+    return _normalize_openshell_auth_mode(getattr(args, "openshell_auth", None))
 
 
 def _openshell_explicit_command(args) -> List[str]:
@@ -1139,18 +1159,25 @@ def _ensure_openshell_cli_provider(
             "create a compatible provider and pass it with --provider NAME"
         )
 
-    profiles = _openshell_provider_profiles(args)
-    provider_type = "codex"
-    if provider_type not in profiles:
-        raise ValueError(_openshell_missing_profile_error(provider_type, profiles))
-
     provider_environment = _openshell_provider_environment(args, "codex")
-    if provider_environment.get("OPENAI_API_KEY"):
+    auth_mode = _openshell_auth_mode(args)
+    if auth_mode == "oauth":
+        # An API key in the host environment or Codex auth file must not
+        # silently override an explicit OAuth selection from the tray.
+        provider_environment.pop("OPENAI_API_KEY", None)
+        provider_type = "codex"
+    elif auth_mode == "api_key":
+        provider_type = "openai"
+    elif provider_environment.get("OPENAI_API_KEY"):
         # OpenShell v0.1.2 codex profile declares OAuth credentials only.
         # API-key Codex sessions must use the openai profile.
         provider_type = "openai"
-        if "openai" not in profiles:
-            raise ValueError(_openshell_missing_profile_error(provider_type, profiles))
+    else:
+        provider_type = "codex"
+
+    profiles = _openshell_provider_profiles(args)
+    if provider_type not in profiles:
+        raise ValueError(_openshell_missing_profile_error(provider_type, profiles))
 
     # Keep OAuth and API-key credentials in separate provider instances. An
     # existing Codex provider cannot be updated with the OpenAI API-key
@@ -1158,7 +1185,8 @@ def _ensure_openshell_cli_provider(
     provider_name = (
         "ai-guardian-openai" if provider_type == "openai" else f"ai-guardian-{cli}"
     )
-    if _openshell_provider_exists(args, provider_name):
+    provider_exists = _openshell_provider_exists(args, provider_name)
+    if provider_exists:
         if provider_environment.get("OPENAI_API_KEY"):
             # Keep API-key values in the provider subprocess environment;
             # OpenShell reads the named credential from that environment.
@@ -1178,14 +1206,15 @@ def _ensure_openshell_cli_provider(
                 provider_name,
                 "--from-existing",
             ]
-        if provider_environment.get("OPENAI_API_KEY") or all(
+        has_oauth_credentials = provider_type == "codex" and all(
             provider_environment.get(key)
             for key in (
                 "CODEX_AUTH_ACCESS_TOKEN",
                 "CODEX_AUTH_REFRESH_TOKEN",
                 "CODEX_AUTH_ACCOUNT_ID",
             )
-        ):
+        )
+        if provider_environment.get("OPENAI_API_KEY") or has_oauth_credentials:
             _emit_output(
                 f"Refreshing existing OpenShell provider from local credentials: {provider_name}",
                 output=output,
@@ -1205,21 +1234,34 @@ def _ensure_openshell_cli_provider(
         )
         return provider_name
 
-    if not provider_environment.get("OPENAI_API_KEY"):
-        codex_home = _openshell_environment_path(os.environ, "CODEX_HOME", ".codex")
-        auth_path = codex_home / "auth.json"
-        try:
-            auth = json.loads(auth_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            auth = {}
-        tokens = auth.get("tokens", {}) if isinstance(auth, dict) else {}
-        if isinstance(tokens, dict) and tokens.get("access_token"):
-            if _openshell_providers_v2_enabled(args) is False:
-                raise ValueError(
-                    "Codex OAuth credentials were found, but OpenShell Providers v2 is "
-                    "disabled on the active gateway. Enable it with: openshell settings "
-                    "set --global --key providers_v2_enabled --value true"
-                )
+    if provider_type == "openai" and not provider_environment.get("OPENAI_API_KEY"):
+        raise ValueError(
+            "OpenShell API-key authentication was selected, but no OPENAI_API_KEY "
+            "was found in the tray/CLI environment or local Codex auth state"
+        )
+
+    if provider_type == "codex":
+        missing_oauth_credentials = [
+            key
+            for key in (
+                "CODEX_AUTH_ACCESS_TOKEN",
+                "CODEX_AUTH_REFRESH_TOKEN",
+                "CODEX_AUTH_ACCOUNT_ID",
+            )
+            if not provider_environment.get(key)
+        ]
+        if missing_oauth_credentials:
+            raise ValueError(
+                "OpenShell OAuth authentication was selected, but local Codex OAuth "
+                "credentials are incomplete; run `codex login` before creating the "
+                "sandbox"
+            )
+        if _openshell_providers_v2_enabled(args) is False:
+            raise ValueError(
+                "Codex OAuth credentials were found, but OpenShell Providers v2 is "
+                "disabled on the active gateway. Enable it with: openshell settings "
+                "set --global --key providers_v2_enabled --value true"
+            )
 
     _emit_output(
         f"Creating OpenShell provider from existing local credentials: {provider_name}",
@@ -1881,9 +1923,14 @@ def _openshell_create(
     explicit_providers = list(getattr(args, "provider", None) or [])
     provider_names = explicit_providers[:]
     provider_attached = bool(provider_names)
+    selected_auth_mode = _openshell_auth_mode(args)
     should_auto_create_provider = bool(
         not provider_names
-        and (uploads_requested or _openshell_cli_has_credentials(args, cli))
+        and (
+            uploads_requested
+            or _openshell_cli_has_credentials(args, cli)
+            or selected_auth_mode is not None
+        )
     )
     if should_auto_create_provider:
         provider_names = [_ensure_openshell_cli_provider(args, cli, output=output)]
@@ -2055,6 +2102,11 @@ def _validate_create_options(args) -> None:
         raise ValueError(
             "--opencode-agent-profile/--agent is required with --cli opencode"
         )
+    openshell_auth = _openshell_auth_mode(args)
+    if openshell_auth and runtime != OPENSHELL_RUNTIME:
+        raise ValueError("--openshell-auth is supported for OpenShell sandboxes only")
+    if openshell_auth and cli != DEFAULT_OPENSHELL_CLI:
+        raise ValueError("--openshell-auth is supported with --cli codex only")
     agent_provider = _agent_provider(args, cli)
     if agent_provider and cli != "pi":
         raise ValueError("--agent-provider is supported only with --cli pi")

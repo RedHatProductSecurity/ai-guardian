@@ -29,8 +29,12 @@ Before running an OpenShell case, check the gateway:
 
 ```bash
 openshell status
+# OpenShell 0.1.2 only; newer releases may report this key as unknown.
 openshell settings set --global --key providers_v2_enabled --value true
 ```
+
+If a newer OpenShell release reports `unknown setting key
+'providers_v2_enabled'`, skip that setting command.
 
 ## Run A Case
 

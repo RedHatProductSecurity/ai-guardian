@@ -11,6 +11,32 @@ budget_tokens: 1000
 
 ## Done
 
+- OpenShell Codex authentication is now explicit in the tray Create sandbox
+  form: OAuth maps to the managed `ai-guardian-codex` provider and API key maps
+  to `ai-guardian-openai`. The same choice is available through
+  `--openshell-auth`, while an optional provider override remains available for
+  existing gateway instances. Provider setup docs and regression tests now
+  distinguish `codex`/`openai` profiles from the prefixed instances.
+- Reworked `docs/Sandbox.md` into short, case-based setup recipes with
+  prerequisites for Container OAuth/API-key, OpenShell OAuth/API-key, and tray
+  creation; lifecycle, options, snapshots, and troubleshooting now follow the
+  first-use paths.
+- Committed the sandbox/authentication and documentation work as `4e9e78ba`,
+  pushed `docs/restore-openshell-sandbox-setup`, and opened PR #2514.
+- Addressed both CodeRabbit findings in `d822f60e`: provider refresh now
+  requires credentials matching the selected provider type, and the API-key
+  test isolates `CODEX_HOME`; the focused sandbox/tray suite now passes 155
+  tests.
+- Restored the missing OpenShell provider-instance setup commands to
+  `docs/Sandbox.md` on branch `docs/restore-openshell-sandbox-setup`; the
+  documentation now covers both Codex OAuth and API-key provider creation
+  before `ai-guardian sandbox create --provider`, and records the tray's
+  automatic provider selection behavior. The first-create sequence now enables
+  Providers v2/imports profiles, and missing-profile errors link directly to it.
+  It also documents the official local gateway installer, Linux/macOS service
+  checks, rootless Podman socket startup, and remote gateway registration. The
+  fresh-machine recipe now pins the installer and provider manifests to the
+  same OpenShell v0.1.2 release and explains newer-setting compatibility.
 - PR #2513 review follow-up is implemented and pushed in commit `15644bf1`.
   OpenCode V2 setup now refuses to rewrite configuration when an unrelated
   local TypeScript plugin file would be migrated implicitly, preserves the
@@ -147,15 +173,12 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Wait for the fresh PR #2513 CI run for commit `15644bf1`, especially the
-  Windows Python 3.10 matrix job that previously timed out in the existing Pi
-  UX contract. No Pi/tray production change is warranted unless the rerun
-  produces a reproducible assertion failure.
+- Await review of PR #2514.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `fix/opencode-v2-plugin-loading`
+- Branch: `docs/restore-openshell-sandbox-setup`
 - PR #2513 review fix and the related OpenWolf session bookkeeping are
   committed together on this branch.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
@@ -173,7 +196,7 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_opencode_support.py -q  # 37 passed
+uv run --extra dev python -m pytest tests/unit/test_sandbox_command.py tests/unit/test_sandbox_tray.py -q  # 154 passed
 ruff check src/ai_guardian/ tests/
 black --target-version py310 --check src/ai_guardian/ tests/
 mypy src/ai_guardian/
