@@ -5,11 +5,23 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-04
+> Last updated: 2026-10-06
 
 ---
 
 ## Done
+
+- OpenShell middleware lifecycle now matches the daemon with `start`, `stop`,
+  `status`, and `restart` subcommands. Background starts persist sanitized
+  restart arguments and the config path in the XDG-backed private state file;
+  bare `restart` reuses them without persisting CLI JWT secrets.
+- The OpenShell middleware qualification guide was restructured into one linear
+  Community-image proof path with shared XDG/Console audit instructions,
+  conditional gateway restart guidance, and the one-step sandbox create flow
+  without `--tty --detach`.
+- Branch `2484` is pushed through commits `9bfcc90f` and `324cc27a`. Focused
+  middleware/UX coverage passes (45 tests), as do Ruff, Black, Pylint, Mypy,
+  JSON validation, and diff checks.
 
 - Issue #2478 updated the Codex-only OpenShell image from `@openai/codex`
   `0.154.0` to current stable `0.160.0`. The container README, changelog, and
@@ -122,14 +134,14 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Wait for CI/CodeRabbit follow-up on PR #2504, then merge the reviewed branch.
+- Wait for review/CI follow-up on the OpenShell middleware branch `2484`.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `openwolf-plugin-layout`
-- HEAD: `36515c65`; PR #2504 is open with the OpenWolf plugin migration and
-  review fixes.
+- Branch: `2484`
+- HEAD: `324cc27a`; the OpenShell middleware lifecycle, XDG restart state, and
+  documentation restructuring are pushed to `origin/2484`.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
