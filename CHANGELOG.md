@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **Strict Mypy optional parameters (#2510):** Remove the legacy implicit-
+  optional compatibility override and annotate nullable defaults explicitly
+  across scanner, setup, daemon, policy, hook, and configuration-scope APIs.
 - **Host CLI setup backups (#2505):** Back up existing hook and MCP JSON/JSONC/
   TOML configurations byte-for-byte before every mutation, stop safely when a
   backup fails, retain numbered snapshots across repeated writes, and surface

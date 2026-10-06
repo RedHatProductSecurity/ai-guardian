@@ -194,9 +194,9 @@ def suggest_domain(url_or_text: str) -> str:
 
 
 def get_config_scope_options(
-    project_dir: str = None,
-    active_project_dirs: list = None,
-) -> list:
+    project_dir: str | None = None,
+    active_project_dirs: list[str] | None = None,
+) -> list[tuple[str, str]]:
     """Return available config scope options as (label, path_str) tuples.
 
     Always includes global config. Includes project config when one exists

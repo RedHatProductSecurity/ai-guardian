@@ -148,7 +148,7 @@ def _walk_commands(obj, predicate, transform, *, copy=True):
         return obj
 
 
-def _substitute_command(obj, abs_path: str, ide_type: str = None):
+def _substitute_command(obj, abs_path: str, ide_type: Optional[str] = None):
     """Recursively replace bare 'ai-guardian' command values with abs_path.
 
     When *ide_type* is provided the ``--ide <name>`` flag is appended so the

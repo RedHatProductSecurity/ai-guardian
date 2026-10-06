@@ -1702,7 +1702,7 @@ class ToolPolicyChecker:
         return msg
 
     def _format_immutable_deny_message(
-        self, check_value: str, tool_name: str, matched_pattern: str = None
+        self, check_value: str, tool_name: str, matched_pattern: str | None = None
     ) -> str:
         """
         Format error message for immutable deny (cannot be overridden).
