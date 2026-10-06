@@ -535,13 +535,17 @@ populated automatically.
 OpenCode setup detects the installed CLI generation before rendering the host
 plugin. OpenCode V1 is the `1.x` `opencode-ai` runtime and uses
 `@opencode-ai/plugin` plus the singular `plugin` configuration key. OpenCode V2
-is the `2.x` `@opencode/cli` runtime and uses `@opencode/plugin`,
-`Plugin.define({ id, setup })`, domain hooks, and the plural `plugins` key.
-Unknown or unavailable CLI versions retain the V1 compatibility fallback; an
-existing generated V2 plugin is preserved when the runtime cannot report a
-version. The two generations cannot share one active `opencode` executable on
-the same PATH. OpenCode is supported on the host and in the normal image only;
-the OpenShell image does not install or advertise OpenCode.
+is the `2.x` `@opencode/cli` runtime. Its local plugin is auto-discovered from
+the plugins directory and exports the `{ id, setup }` object directly without
+importing the plugin package; some V2 server builds fail to resolve that package
+from local plugins. Setup removes a stale explicit file entry from the `plugins`
+configuration while preserving other package entries. Doctor verifies the
+generated files and reports that server activation is unverified. Unknown or
+unavailable CLI versions retain the V1 compatibility fallback; an existing
+generated V2 plugin is preserved when the runtime cannot report a version. The
+two generations cannot share one active `opencode` executable on the same PATH.
+OpenCode is supported on the host and in the normal image only; the OpenShell
+image does not install or advertise OpenCode.
 
 See [OpenCode Support](OPENCODE.md) for the runtime support record, exact
 container versions, database path precedence, generated V1/V2 hook contracts,

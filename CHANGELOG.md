@@ -47,6 +47,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **OpenCode V2 prompt refusal feedback:** Add a safe synthetic AI Guardian
+  refusal notice to the transcript before rejecting a blocked prompt, so the
+  next model turn knows the original request was refused without receiving its
+  contents.
+- **OpenCode V2 tool refusal feedback:** Add safe transcript notices for blocked
+  pre-tool calls and withheld post-tool results, with fixed tool errors that
+  tell the model why the operation failed without exposing its contents.
+- **OpenCode V2 plugin loading (#2495):** Use OpenCode's local plugin
+  auto-discovery instead of registering a TypeScript file as a package
+  directory, and avoid the V2 plugin API import that the server resolver
+  cannot load. Doctor now distinguishes configured plugin files from verified
+  server activation, and setup refuses to rewrite V2 configuration when an
+  unrelated local TypeScript plugin file would be migrated implicitly.
 - **Strict Mypy optional parameters (#2510):** Remove the legacy implicit-
   optional compatibility override and annotate nullable defaults explicitly
   across scanner, setup, daemon, policy, hook, and configuration-scope APIs.

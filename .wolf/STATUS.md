@@ -11,6 +11,12 @@ budget_tokens: 1000
 
 ## Done
 
+- PR #2513 review follow-up is implemented and pushed in commit `15644bf1`.
+  OpenCode V2 setup now refuses to rewrite configuration when an unrelated
+  local TypeScript plugin file would be migrated implicitly, preserves the
+  original file, documents explicit migration, and adds regression coverage.
+  Focused OpenCode, setup, integration, UX, Pi, Black, Ruff, Pylint, Mypy,
+  JSON, and diff checks pass locally.
 - Issue #2510 now removes the legacy `implicit_optional` Mypy compatibility
   override and makes nullable defaults explicit with Python 3.10 typing across
   scanner, setup, daemon, policy, hook, and configuration-scope APIs.
@@ -141,14 +147,17 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Run `daf complete` for issue #2510 when the user is ready to commit and open
-  the pull request. No commit has been created in this session.
+- Wait for the fresh PR #2513 CI run for commit `15644bf1`, especially the
+  Windows Python 3.10 matrix job that previously timed out in the existing Pi
+  UX contract. No Pi/tray production change is warranted unless the rerun
+  produces a reproducible assertion failure.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2510`
-- HEAD: `ae9c7f3b`; issue #2510 changes are uncommitted in this workspace.
+- Branch: `fix/opencode-v2-plugin-loading`
+- PR #2513 review fix and the related OpenWolf session bookkeeping are
+  committed together on this branch.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
@@ -178,6 +187,7 @@ git diff --check
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
+- GitHub PR: `https://github.com/RedHatProductSecurity/ai-guardian/pull/2513`
 - GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2496`
 - Prior GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`
 - Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2510`

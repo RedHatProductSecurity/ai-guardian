@@ -661,8 +661,8 @@ class IDESetup:
             "config_dir_env_var": "OPENCODE_CONFIG_DIR",
             "config_filename": None,
             "plugin_file": True,
-            # OpenCode V1 auto-loads every direct TypeScript file in this
-            # directory, so keep helper exports outside the discovery path.
+            # OpenCode discovers local plugins from this directory. Keep the
+            # bridge outside it so OpenCode does not load the helper itself.
             "bridge_file": "../ai-guardian/ai-guardian-bridge.ts",
         },
         "pi": {
@@ -1079,8 +1079,13 @@ class IDESetup:
             if ide_type == "opencode" and verification.get("healthy") is True:
                 # OpenCode must always be verified instead of using the older
                 # marker-only fast path so runtime/plugin generation mismatches
-                # are detected. A healthy verification is still a configured
-                # result; do not fall through to the empty-detail fallback.
+                # are detected. V2 artifact checks cannot confirm that the host
+                # loaded the plugin module.
+                if verification.get("plugin_runtime_status") == "unverified":
+                    return (
+                        True,
+                        f"{ide_name}: plugin files configured; runtime load not verified",
+                    )
                 return True, f"{ide_name}: configured"
             if verification["events"] and all(
                 status == "missing" for status in verification["events"].values()
@@ -1354,6 +1359,8 @@ class IDESetup:
                 )
             if ide_type == "opencode":
                 result["plugin_generation"] = plugin_generation
+                if runtime_generation == "v2":
+                    result["plugin_runtime_status"] = "unverified"
             if not bridge_file.is_file() or not self.check_hooks_configured(
                 path, ide_type
             ):
@@ -2526,7 +2533,8 @@ class IDESetup:
                     and (extension_dir / "package.json").is_file()
                 )
 
-            # Plugin-file hooks (OpenCode): check for ai-guardian.ts AND registration
+            # OpenCode V1 uses explicit plugin registration. V2 discovers the
+            # generated plugin directly from the local plugins directory.
             if ide_config.get("plugin_file"):
                 plugin_file = config_path / "ai-guardian.ts"
                 if not plugin_file.exists():
@@ -2547,6 +2555,11 @@ class IDESetup:
                     and runtime_generation != plugin_generation
                 ):
                     return False
+                if plugin_generation == "v2":
+                    # OpenCode V2 auto-discovers direct TypeScript files from
+                    # this plugins directory. Its configured plugin entries
+                    # are package directories, not individual files.
+                    return True
                 config_file = _resolve_opencode_config()
                 if not config_file.exists():
                     return False
@@ -2736,7 +2749,7 @@ class IDESetup:
         dry_run: bool = False,
         generation: Optional[str] = None,
     ) -> Optional[str]:
-        """Register plugin in opencode.json/opencode.jsonc config.
+        """Configure OpenCode plugin discovery and clean up stale entries.
 
         Returns a status message, or None if registration was skipped.
         """
@@ -2747,6 +2760,11 @@ class IDESetup:
         alternate_key = "plugin" if config_key == "plugins" else "plugins"
 
         if dry_run:
+            if generation == "v2":
+                return (
+                    f"  OpenCode V2 auto-discovers plugin files in: {plugins_dir}\n"
+                    "  No file entry is added to opencode.json\n"
+                )
             return (
                 f"  Register plugin in: {config_file} "
                 f"(OpenCode {generation}; {config_key})\n"
@@ -2767,6 +2785,7 @@ class IDESetup:
                 "Fix the file before rerunning setup."
             )
 
+        original_config = dict(config)
         plugins = []
         for key in (config_key, alternate_key):
             entries = config.get(key, [])
@@ -2774,17 +2793,29 @@ class IDESetup:
                 for entry in entries:
                     if entry not in plugins:
                         plugins.append(entry)
-        needs_write = (
-            config_key not in config
-            or alternate_key in config
-            or config.get(config_key) != plugins
-        )
-        if plugin_path not in plugins:
+        if generation == "v2":
+            if any(
+                isinstance(entry, str)
+                and entry != plugin_path
+                and Path(entry).suffix.lower() == ".ts"
+                for entry in plugins
+            ):
+                return (
+                    "OpenCode V2 setup cannot migrate local TypeScript plugin "
+                    "file entries automatically. Migrate them explicitly "
+                    "before rerunning setup."
+                )
+            # V2 discovers ai-guardian.ts from plugins_dir. Remove a stale
+            # explicit file entry because configured paths must be packages.
+            plugins = [entry for entry in plugins if entry != plugin_path]
+        elif plugin_path not in plugins:
             plugins.append(plugin_path)
-            needs_write = True
         config.pop(alternate_key, None)
-        config[config_key] = plugins
-        if needs_write:
+        if generation == "v2" and not plugins:
+            config.pop(config_key, None)
+        else:
+            config[config_key] = plugins
+        if config != original_config:
             config_file.parent.mkdir(parents=True, exist_ok=True)
             backup_ok, _, backup_error = self._backup_before_write(
                 config_file, operation="OpenCode plugin registration"
@@ -2827,8 +2858,9 @@ class IDESetup:
     ) -> Tuple[bool, str]:
         """Setup plugin-file based hooks (OpenCode).
 
-        Drops the host plugin and shared bridge into the IDE's plugins
-        directory and registers the host plugin in opencode.json.
+        Drops the host plugin into the IDE's plugins directory, places the
+        shared bridge beside the config directory, and configures V1
+        registration where required.
         """
         ide_name = ide_config["name"]
         plugin_file = plugins_dir / "ai-guardian.ts"
@@ -2893,6 +2925,11 @@ class IDESetup:
         if ide_type == "opencode":
             detected = f" {version}" if version else " (CLI version unavailable)"
             message += f"  OpenCode {generation}{detected} plugin contract selected\n"
+            if generation == "v2":
+                message += (
+                    "  OpenCode V2 auto-discovers this plugin; setup does not "
+                    "verify server activation\n"
+                )
             if self._remove_legacy_opencode_bridge(plugins_dir):
                 message += f"  Removed stale bridge: {legacy_bridge_file}\n"
             elif legacy_bridge_file.is_file():
@@ -4848,11 +4885,16 @@ export const AiGuardian: Plugin = async (ctx) => {
 _OPENCODE_PLUGIN_V2_TS = """\
 // ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
 // ai-guardian-opencode-generation: v2
-import { Plugin } from '@opencode/plugin';
 import { createGuardianBridge } from '../ai-guardian/ai-guardian-bridge';
 
 const guardian = createGuardianBridge({ ideType: 'opencode' });
 const OPENCODE_VERSION = '2.0.0';
+const PROMPT_REFUSAL_NOTICE =
+  'AI Guardian refused the previous prompt. The original prompt was not sent to the model. Do not answer or continue that request. Ask the user to provide a new prompt without the sensitive or blocked content.';
+const PRE_TOOL_REFUSAL_NOTICE =
+  'AI Guardian refused a tool call before execution. The tool did not run. Do not retry or continue that operation. Tell the user it was blocked and wait for a new instruction.';
+const POST_TOOL_REFUSAL_NOTICE =
+  'AI Guardian blocked a tool result after execution. The tool ran, but its result was withheld from the model. Do not infer or repeat the result. Tell the user it was blocked and wait for a new instruction.';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -4912,13 +4954,36 @@ function resultWithReplacement(original: unknown, replacement: unknown): unknown
   return { output: replacement };
 }
 
-export default Plugin.define({
+export default {
   id: 'ai-guardian',
   async setup(ctx) {
     const cwd = ctx.location.directory || process.cwd();
     const opencodeVersion = ctx.app.version;
+    const recordRefusalNotice = async (
+      sessionID: string,
+      sourceID: unknown,
+      text: string,
+      kind: string,
+    ) => {
+      try {
+        await ctx.session.synthetic({
+          sessionID,
+          ...(typeof sourceID === 'string'
+            ? { id: `msg_ai_guardian_${sourceID}` }
+            : {}),
+          text,
+          description: `AI Guardian ${kind}`,
+          metadata: { source: 'ai-guardian', kind },
+          resume: false,
+        });
+      } catch {
+        console.error(
+          '[ai-guardian] Could not add a refusal notice to the OpenCode transcript',
+        );
+      }
+    };
 
-    await ctx.session.hook('prompt', (event) => {
+    await ctx.session.hook('prompt', async (event) => {
       const prompt = event.prompt?.text || '';
       if (!prompt) return;
       const result = guardian.run(hookData('message.submit', cwd, {
@@ -4926,11 +4991,17 @@ export default Plugin.define({
         session_id: event.sessionID,
       }, opencodeVersion));
       if (result.blocked) {
-        throw new Error(result.error || 'Blocked by ai-guardian');
+        await recordRefusalNotice(
+          event.sessionID,
+          event.messageID,
+          PROMPT_REFUSAL_NOTICE,
+          'prompt-refusal',
+        );
+        throw new Error('Blocked by ai-guardian');
       }
     });
 
-    await ctx.tool.hook('execute.before', (event) => {
+    await ctx.tool.hook('execute.before', async (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
       const input = (event.input || {}) as JsonRecord;
       const result = guardian.run(hookData('tool.execute.before', cwd, {
@@ -4940,11 +5011,17 @@ export default Plugin.define({
         tool_use_id: event.id,
       }, opencodeVersion));
       if (result.blocked) {
-        throw new Error(result.error || 'Blocked by ai-guardian');
+        await recordRefusalNotice(
+          event.sessionID,
+          event.id,
+          PRE_TOOL_REFUSAL_NOTICE,
+          'pre-tool-refusal',
+        );
+        throw new Error('AI Guardian blocked this tool call before execution');
       }
     });
 
-    await ctx.tool.hook('execute.after', (event) => {
+    await ctx.tool.hook('execute.after', async (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
       const input = (event.input || {}) as JsonRecord;
       const error = event.error as unknown;
@@ -4962,7 +5039,15 @@ export default Plugin.define({
         tool_use_id: event.id,
       }, opencodeVersion));
       if (result.blocked) {
-        throw new Error(result.error || 'Blocked by ai-guardian');
+        await recordRefusalNotice(
+          event.sessionID,
+          event.id,
+          POST_TOOL_REFUSAL_NOTICE,
+          'post-tool-refusal',
+        );
+        throw new Error(
+          'AI Guardian blocked this tool result after execution; result withheld',
+        );
       }
       if (event.status === 'completed' && result.updatedOutput !== undefined) {
         event.result = resultWithReplacement(
@@ -4995,7 +5080,7 @@ export default Plugin.define({
 
     return () => controller.abort();
   },
-});
+};
 """
 
 _OPENCLAW_PACKAGE_JSON = """\

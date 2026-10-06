@@ -100,11 +100,11 @@ def test_doctor_reports_mcp_status_for_generic_local_clients(tmp_path):
 
 def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
     """
-    USER EXPERIENCE: Installed CLI -> doctor and Console health show its version.
+    USER EXPERIENCE: OpenCode V2 -> doctor reports its version and load status.
 
     The Console renders the same structured integration message returned by the
-    local health endpoint, so the CLI and JSON contracts must expose identical
-    version information without changing the hook status.
+    local health endpoint, so human and JSON output must expose the CLI version
+    and clarify that configured V2 files are not proof of server activation.
     """
     plugin_dir = tmp_path / "opencode" / "plugins"
     plugin_dir.mkdir(parents=True)
@@ -121,7 +121,10 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
         ),
         patch(
             "ai_guardian.setup.IDESetup.check_hooks_for_ide",
-            return_value=(True, "OpenCode: configured"),
+            return_value=(
+                True,
+                "OpenCode: plugin files configured; runtime load not verified",
+            ),
         ),
         patch("ai_guardian.setup.mcp.verify_mcp_config", return_value=verification),
         patch.object(
@@ -138,6 +141,7 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
 
     assert result.status == CheckStatus.PASS
     assert "CLI: opencode 2.0.22 (v2)" in result.message
+    assert "runtime load not verified" in result.message
     opencode = next(item for item in result.integrations if item["ide"] == "opencode")
     assert opencode["cli"] == {
         "executable": "opencode",
@@ -147,9 +151,11 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
 
     report = DoctorReport(checks=[result])
     assert "CLI: opencode 2.0.22 (v2)" in format_human(report)
+    assert "runtime load not verified" in format_human(report)
     structured = json.loads(format_json(report))["checks"][0]["integrations"]
     structured_opencode = next(item for item in structured if item["ide"] == "opencode")
     assert structured_opencode["cli"]["version"] == "2.0.22"
+    assert "runtime load not verified" in structured_opencode["message"]
 
 
 def test_console_health_uses_the_running_local_daemon_runtime():
