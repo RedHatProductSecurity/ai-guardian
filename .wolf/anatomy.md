@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72489 tok)
+- `CHANGELOG.md` — Change log (~72561 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -897,7 +897,7 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~15459 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~15695 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
@@ -1317,10 +1317,10 @@
 
 - `__init__.py` — setup_hooks (~10359 tok)
 - `config.py` — Default configuration creation for ai-guardian. (~7266 tok)
-- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~55398 tok)
-- `mcp.py` — MCP server configuration for ai-guardian setup. (~12720 tok)
+- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~55794 tok)
+- `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
-- `utils.py` — Shared utility functions for ai-guardian setup modules. (~2719 tok)
+- `utils.py` — Shared utility functions for ai-guardian setup modules. (~3323 tok)
 
 ## src/ai_guardian/skills/
 
@@ -1361,7 +1361,7 @@
 - `animation.py` — Declares TrayIconManager (~1492 tok)
 - `app.py` — URL configuration (~16780 tok)
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1078 tok)
-- `health.py` — URL configuration (~16672 tok)
+- `health.py` — URL configuration (~16972 tok)
 - `icons.py` — URL configuration (~1302 tok)
 - `menu_builder.py` — URL configuration (~36787 tok)
 - `menu.py` — URL configuration (~2947 tok)

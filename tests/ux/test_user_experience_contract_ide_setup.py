@@ -288,6 +288,58 @@ def test_setup_modal_shows_cli_config_parse_error():
     assert config_path in message
 
 
+def test_tray_setup_result_shows_backup_failure_path_and_reason():
+    """
+    USER EXPERIENCE: Existing host config cannot be backed up -> no write.
+
+    Scenario:
+    1. The tray offers setup for an installed integration.
+    2. The shared setup flow reports that its existing host configuration could
+       not be backed up.
+    3. The tray performs its normal post-setup health verification.
+
+    Expected User Experience:
+    - The tray result includes the affected configuration path.
+    - The tray result explains that setup stopped before modifying the file.
+    """
+    config_path = "/tmp/cli/settings.json"
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": False,
+        "events": {"userPromptSubmitted": "missing"},
+        "obsolete": [],
+    }
+
+    def failed_setup(**_kwargs):
+        print(
+            "Setup stopped before modifying "
+            f"{config_path}: Unable to create backup for {config_path}: denied"
+        )
+        return False
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=True),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["copilot"]),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.setup.setup_hooks", side_effect=failed_setup),
+        patch.object(monitor, "_notify_ide_setup_result") as notify_result,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        dialog.return_value.show.return_value = "action"
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    results = notify_result.call_args.args[0]
+    diagnostics = results[0]["verification"]["diagnostics"]
+    assert config_path in diagnostics[0]
+    assert "stopped before modifying" in diagnostics[0]
+
+
 def test_cli_setup_prompts_for_only_unconfigured_integrations():
     """
     USER EXPERIENCE: Plain CLI setup -> choose among pending integrations.

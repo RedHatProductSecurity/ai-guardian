@@ -1,13 +1,75 @@
 """Shared utility functions for ai-guardian setup modules."""
 
 import json
+import os
 import platform
 import re
 import shutil
+import stat
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from ai_guardian.ide_paths import resolve_opencode_config
+
+
+def _create_config_backup(
+    config_path: Path,
+) -> Tuple[Optional[Path], Optional[str]]:
+    """Create a byte-for-byte, non-destructive backup of a config file.
+
+    Backups use ``<config>.backup`` for the first snapshot and numbered
+    suffixes for later snapshots.  Existing backups are never overwritten, so
+    a setup flow that mutates a file more than once retains the original
+    pre-flow bytes.  A missing file is not an error because no backup is
+    needed before creating a new configuration.
+
+    Returns:
+        ``(backup_path, error)``.  Both values are ``None`` for a missing
+        configuration file.
+    """
+    if not config_path.exists():
+        return None, None
+
+    try:
+        original = config_path.read_bytes()
+        mode = stat.S_IMODE(config_path.stat().st_mode) or 0o600
+    except OSError as exc:
+        return None, f"Unable to create backup for {config_path}: {exc}"
+
+    index = 0
+    while True:
+        suffix = ".backup" if index == 0 else f".backup.{index}"
+        backup_path = Path(f"{config_path}{suffix}")
+        try:
+            fd = os.open(
+                backup_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                mode,
+            )
+        except FileExistsError:
+            index += 1
+            continue
+        except OSError as exc:
+            return None, f"Unable to create backup for {config_path}: {exc}"
+
+        open_fd: Optional[int] = fd
+        try:
+            with os.fdopen(fd, "wb") as destination:
+                open_fd = None
+                destination.write(original)
+        except OSError as exc:
+            if open_fd is not None:
+                try:
+                    os.close(open_fd)
+                except OSError:
+                    pass  # intentionally silent — cleanup after backup failure
+            try:
+                backup_path.unlink()
+            except OSError:
+                pass  # intentionally silent — preserve the original failure
+            return None, f"Unable to create backup for {config_path}: {exc}"
+
+        return backup_path, None
 
 
 def _resolve_binary_path() -> str:
