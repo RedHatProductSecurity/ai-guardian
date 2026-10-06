@@ -23,6 +23,10 @@ budget_tokens: 1000
   first-use paths.
 - Committed the sandbox/authentication and documentation work as `4e9e78ba`,
   pushed `docs/restore-openshell-sandbox-setup`, and opened PR #2514.
+- Addressed both CodeRabbit findings in `d822f60e`: provider refresh now
+  requires credentials matching the selected provider type, and the API-key
+  test isolates `CODEX_HOME`; the focused sandbox/tray suite now passes 155
+  tests.
 - Restored the missing OpenShell provider-instance setup commands to
   `docs/Sandbox.md` on branch `docs/restore-openshell-sandbox-setup`; the
   documentation now covers both Codex OAuth and API-key provider creation
