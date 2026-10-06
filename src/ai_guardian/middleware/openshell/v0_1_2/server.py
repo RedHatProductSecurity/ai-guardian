@@ -1894,10 +1894,19 @@ def _claim_middleware_pid_file(path: Path) -> None:
 def _middleware_command_without_lifecycle_flags(
     *, pid_path: Path, log_path: Path
 ) -> list[str]:
+    lifecycle_commands = {"start", "stop", "status", "restart"}
     values = [
         value
         for value in sys.argv[1:]
-        if value not in {"--background", "-b", "--stop", "--restart", "--status"}
+        if value
+        not in {
+            *lifecycle_commands,
+            "--background",
+            "-b",
+            "--stop",
+            "--restart",
+            "--status",
+        }
     ]
     if not any(
         value == "--pid-file" or value.startswith("--pid-file=") for value in values
@@ -2080,9 +2089,10 @@ def _status_middleware_background(args) -> int:
 def run_middleware_server(args) -> int:
     """CLI handler for ``ai-guardian openshell-middleware``."""
 
-    if getattr(args, "stop", False):
+    lifecycle_command = getattr(args, "middleware_command", None)
+    if lifecycle_command == "stop" or getattr(args, "stop", False):
         return _stop_middleware_background(args)
-    if getattr(args, "status", False):
+    if lifecycle_command == "status" or getattr(args, "status", False):
         return _status_middleware_background(args)
     if not getattr(args, "config", None):
         print(
@@ -2090,7 +2100,7 @@ def run_middleware_server(args) -> int:
             file=sys.stderr,
         )
         return 1
-    if getattr(args, "restart", False):
+    if lifecycle_command == "restart" or getattr(args, "restart", False):
         if _stop_middleware_background(args, quiet=True) != 0:
             return 1
         return _start_middleware_background(args)

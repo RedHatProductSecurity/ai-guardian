@@ -199,6 +199,24 @@
   contract tests. The local ignored `.opencode/package.json` now carries both
   the V1 and V2 plugin pins.
 
+- **OpenShell middleware lifecycle UX:** Match the daemon command with
+  `openshell-middleware start|stop|status|restart`; retain the former lifecycle
+  flags only as compatibility aliases. Background relaunch must strip the
+  lifecycle subcommand so `restart` cannot recursively restart itself.
+
+- **OpenShell gateway registration reload:** Operator-run middleware
+  registrations are static in the gateway TOML. Run the documented gateway
+  config preflight and restart the gateway only when the registration changed;
+  restarting the external middleware process alone does not require a gateway
+  restart.
+
+- **Middleware Console audit visibility:** The external middleware can write
+  directly to the same `violations.jsonl` selected by `ViolationLogger`; use
+  `AI_GUARDIAN_STATE_DIR`, then `XDG_STATE_HOME/ai-guardian`, then the default
+  `~/.local/state/ai-guardian`, and keep the Console on the same environment and
+  Unix account. An explicit `/tmp` violation log is intentionally isolated from
+  the Console.
+
 ## Do-Not-Repeat
 
 - [2026-06-30] DO NOT call `_show_via_subprocess` from the tray's `_handle_remote_prompt` without first trying NiceGUI in-process. On macOS Sonoma+ (14+), `activateIgnoringOtherApps_` is deprecated so tkinter subprocess windows spawn invisible behind other apps — dialog blocks for 300s then auto-dismisses, making the tray appear stuck. Fix: in `_show_and_respond`, call `_NiceGuiAskDialog(violation, timeout).run()` first if NiceGUI is available; it opens a browser tab which is always visible. Only fall back to `_show_via_subprocess` if NiceGUI is unavailable.

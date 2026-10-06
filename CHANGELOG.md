@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bounded HTTP/WebSocket/streaming payloads, scanner ownership routing, and
   fail-closed behavior. An explicit `--bootstrap-openshell` mode can generate
   the gateway registration and sandbox policy for local development. The
-  `openshell-middleware` command also supports detached start, status, stop,
-  and restart lifecycle operations. Versioned adapters reuse the latest
+  `openshell-middleware` command supports daemon-style `start`, `status`,
+  `stop`, and `restart` subcommands (with legacy flag aliases). Versioned
+  adapters reuse the latest
   compatible implementation across same-major OpenShell releases. See
   `docs/OPENSHELL_MIDDLEWARE.md`.
 - **OpenShell middleware attribution (#2484):** Denials now carry a safe
@@ -44,9 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **OpenShell middleware sandbox qualification (#2484):** Document the
   Community workload image, Codex provider prerequisites, the explicit `curl`
-  probe policy required to reach L7, one-step create/connect commands, audit
-  evidence, cleanup, and the OpenShell v0.1.2 delegated-workload `Permission
-  denied` failure mode that occurs before middleware evaluation.
+  probe policy required to reach L7, one-step create/connect commands, the
+  shared XDG audit path used by the Console, conditional gateway restart after
+  registration changes, cleanup, and the OpenShell v0.1.2 delegated-workload
+  `Permission denied` failure mode that occurs before middleware evaluation.
 - **OpenShell middleware timeout encoding (#2484):** Encode multi-second
   `timeout_ms` values as normalized protobuf `Duration` seconds and nanoseconds
   so gateway registration negotiation accepts valid timeouts above one second.
