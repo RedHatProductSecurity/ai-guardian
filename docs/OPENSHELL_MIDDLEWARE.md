@@ -89,30 +89,33 @@ loopback bind is appropriate only when every caller runs on the same host.
 Start the external service:
 
 ```bash
-ai-guardian openshell-middleware \
+ai-guardian openshell-middleware start \
   --config /etc/ai-guardian/openshell-middleware.yaml \
   --bind "$AI_GUARDIAN_MIDDLEWARE_BIND"
 ```
 
-The normal `openshell-middleware` command is a convenience launcher and validator;
-it does not edit the OpenShell gateway, create a sandbox, or install an
-OpenShell extension. Use a service manager (systemd, a container supervisor,
-or a Kubernetes Deployment) to keep it running before the gateway starts.
+The `openshell-middleware` command uses daemon-style `start`, `stop`, `status`,
+and `restart` subcommands. `start` without `--background` runs in the current
+terminal; use a service manager (systemd, a container supervisor, or a
+Kubernetes Deployment) to keep it running before the gateway starts. The
+command does not itself create a sandbox or install an OpenShell extension.
 The previous `middleware-server` spelling remains an alias.
 
-For quick local operation, it also supports daemon-like lifecycle flags:
+For quick local operation:
 
 ```bash
-ai-guardian openshell-middleware --background --config /tmp/middleware.yaml
-ai-guardian openshell-middleware --status
-ai-guardian openshell-middleware --restart --config /tmp/middleware.yaml
-ai-guardian openshell-middleware --stop
+ai-guardian openshell-middleware start --background --config /tmp/middleware.yaml
+ai-guardian openshell-middleware status
+ai-guardian openshell-middleware restart --config /tmp/middleware.yaml
+ai-guardian openshell-middleware stop
 ```
 
 Background processes use private PID and log files in the AI Guardian state
 directory by default. Override them with `--pid-file` and `--log-file`. For
-production, prefer the systemd or container supervisor examples below so the
-service is restarted and monitored by the deployment platform.
+backward compatibility, the old `--background`, `--status`, `--restart`, and
+`--stop` flags remain accepted, but new scripts should use the subcommands.
+For production, prefer the systemd or container supervisor examples below so
+the service is restarted and monitored by the deployment platform.
 
 ### Explicit local bootstrap
 
@@ -122,7 +125,7 @@ the gateway TOML and writes a sandbox policy; it does not restart the gateway or
 modify an existing sandbox:
 
 ```bash
-ai-guardian openshell-middleware \
+ai-guardian openshell-middleware start \
   --config /tmp/middleware.yaml \
   --bind "$AI_GUARDIAN_MIDDLEWARE_BIND" \
   --bootstrap-openshell \
@@ -133,11 +136,20 @@ ai-guardian openshell-middleware \
 The gateway and policy paths default to `~/.config/openshell/gateway.toml` and
 `openshell-policy.yaml` beside the middleware config. Conflicting existing
 settings fail safely; use `--bootstrap-force` only when intentionally replacing
-the named registration and generated policy. Restart the gateway if its TOML
-changed, then create the sandbox with the generated policy:
+the named registration and generated policy. Validate the gateway TOML and
+restart the gateway only when the bootstrap reports that its registration
+changed:
 
 ```bash
+openshell-gateway config preflight \
+  --path "$HOME/.config/openshell/gateway.toml"
+# Linux systemd user installation, only if the gateway TOML changed:
 systemctl --user restart openshell-gateway
+```
+
+Then create the sandbox with the generated policy:
+
+```bash
 openshell sandbox create \
   --name guarded \
   --from localhost/ai-guardian-openshell:dev \
@@ -234,13 +246,28 @@ EOF
 #### 2. Start the external service and bootstrap OpenShell
 
 The service is independent of the AI Guardian daemon. Run it with an explicit
-audit path so the result is easy to inspect:
+audit path in the same XDG state directory used by the local daemon and Web
+Console. `ViolationLogger` uses this precedence for the standard path:
+`AI_GUARDIAN_STATE_DIR`, then `$XDG_STATE_HOME/ai-guardian`, then
+`~/.local/state/ai-guardian`. The final file is always `violations.jsonl`.
+Use the same effective environment and Unix account when starting the
+middleware and the local Console. If `AI_GUARDIAN_STATE_DIR` is already set,
+the Console must use that same value.
 
 ```bash
-rm -f /tmp/opencode/content-guard-violations.jsonl
+if [ -n "${AI_GUARDIAN_STATE_DIR:-}" ]; then
+  AI_GUARDIAN_MIDDLEWARE_STATE_DIR="$AI_GUARDIAN_STATE_DIR"
+elif [ -n "${XDG_STATE_HOME:-}" ]; then
+  AI_GUARDIAN_MIDDLEWARE_STATE_DIR="$XDG_STATE_HOME/ai-guardian"
+else
+  AI_GUARDIAN_MIDDLEWARE_STATE_DIR="$HOME/.local/state/ai-guardian"
+fi
+export AI_GUARDIAN_MIDDLEWARE_VIOLATION_LOG="$AI_GUARDIAN_MIDDLEWARE_STATE_DIR/violations.jsonl"
+mkdir -p "$AI_GUARDIAN_MIDDLEWARE_STATE_DIR"
 
 uv run --extra middleware python -m ai_guardian \
   openshell-middleware \
+  start \
   --background \
   --config /tmp/content-guard-clean.yaml \
   --bind "$AI_GUARDIAN_MIDDLEWARE_BIND" \
@@ -249,18 +276,49 @@ uv run --extra middleware python -m ai_guardian \
   --policy-out /tmp/content-guard-policy.yaml \
   --pid-file /tmp/content-guard.pid \
   --log-file /tmp/content-guard.log \
-  --violation-log /tmp/opencode/content-guard-violations.jsonl
+  --violation-log "$AI_GUARDIAN_MIDDLEWARE_VIOLATION_LOG"
 ```
 
-The bootstrap updates the gateway registration and writes the attachment policy,
-but it does not restart the gateway:
+Do not remove this file for a Console-visible run: it is the shared host audit
+trail. Filter by the current timestamp or the middleware source when inspecting
+the new record.
+
+The `--violation-log` option is the middleware process's audit destination; it
+is not a field in the OpenShell attachment policy. Omitting the option also
+uses the same XDG path through `ViolationLogger()`. Ensure the host
+`violation_logging.enabled` setting is not false and, if `log_types` is
+restricted, includes the finding types you want to review (for example
+`prompt_injection`, `pii_detected`, `secret_detected`, and `secret_redaction`).
+
+The bootstrap updates the gateway registration and writes the attachment policy.
+[OpenShell's supervisor-middleware configuration guide](https://docs.nvidia.com/openshell/latest/extensibility/supervisor-middleware/configure)
+documents operator-run middleware registration as static, so a changed gateway
+registration requires a gateway restart; an unchanged registration does not.
+Validate the TOML first:
+
+```bash
+openshell-gateway config preflight \
+  --path "$HOME/.config/openshell/gateway.toml"
+```
+
+If the bootstrap output reports `gateway=... (updated)`, restart the gateway
+using the service owner for the installation. On the documented Linux systemd
+user installation:
 
 ```bash
 systemctl --user restart openshell-gateway
+```
+
+For Homebrew use `brew services restart openshell`; for a container-managed
+gateway restart that gateway through its container supervisor. Do not restart
+the gateway merely because the external middleware process was restarted.
+
+Then inspect middleware status:
+
+```bash
 uv run --extra middleware python -m ai_guardian \
   openshell-middleware \
-  --status \
-  --config /tmp/content-guard-clean.yaml \
+  status \
   --pid-file /tmp/content-guard.pid
 ```
 
@@ -325,7 +383,9 @@ next step.
 
 Run this from a normal terminal, not from Codex or another agent with AI
 Guardian hooks. With an interactive terminal and no command after `--`,
-OpenShell creates the sandbox and opens its shell in one step:
+OpenShell creates the sandbox and opens its shell in one step. Do not add
+`--tty --detach` to this form; those switches intentionally move the shell
+connection into a later `sandbox connect` step.
 
 ```bash
 openshell sandbox create \
@@ -405,15 +465,18 @@ jq -c 'select(.violation_type == "prompt_injection") |
    direction:.blocked.direction,
    reason_code:.blocked.reason_code,
    target_host:.blocked.target_host}' \
-  /tmp/opencode/content-guard-violations.jsonl
+  "$AI_GUARDIAN_MIDDLEWARE_VIOLATION_LOG"
 ```
 
 No AI Guardian daemon is required for this audit write. The external
-middleware process writes the JSONL record directly. The middleware-only
-Community sandbox is not currently shown as a tray/Console sandbox target,
-because it has no `ai-guardian.managed` label or daemon REST service. Use the
-explicit audit file above, or configure `--violation-log` to the standard host
-`violations.jsonl` path before launching the local Console.
+middleware process writes the JSONL record directly. Because this example uses
+the standard XDG state path, the local Console's Violations page and
+`ai-guardian violations` can read the same record after the page is refreshed.
+The middleware-only Community sandbox is still not shown as a tray/Console
+sandbox target, because it has no `ai-guardian.managed` label or daemon REST
+service. An explicit `/tmp` audit path is useful for isolated tests, but it is
+not visible to the Console unless the Console is configured to use that same
+state path.
 
 #### 7. Troubleshooting and cleanup
 
@@ -424,6 +487,7 @@ explicit audit file above, or configure `--violation-log` to the standard host
 | Codex asks for authentication | Expected with the Community image; it does not perform AI Guardian's provider-auth bootstrap. This qualification uses `curl`. |
 | `connect` attaches read-only | The canonical main process already owns input. Use `--tty --detach` at creation, or `openshell sandbox exec --tty -- bash -l`. |
 | No audit file appears | Check the middleware PID/log and the exact `--violation-log` path. A daemon is not required. |
+| The Console shows no middleware violation | Confirm middleware and Console use the same Unix account and the same `AI_GUARDIAN_STATE_DIR`/`XDG_STATE_HOME`; use the standard `violations.jsonl` path and refresh the Violations page. |
 | Sandbox is absent from the tray | Expected for this middleware-only raw sandbox; tray integration is tracked separately. |
 
 When finished, remove the sandbox and stop the external service:
@@ -434,8 +498,7 @@ openshell sandbox delete mw-proof
 
 uv run --extra middleware python -m ai_guardian \
   openshell-middleware \
-  --stop \
-  --config /tmp/content-guard-clean.yaml \
+  stop \
   --pid-file /tmp/content-guard.pid
 ```
 
@@ -454,8 +517,8 @@ Wants=network-online.target
 
 [Service]
 User=ai-guardian
-  EnvironmentFile=/etc/ai-guardian/openshell-middleware.env
-  ExecStart=/usr/local/bin/ai-guardian openshell-middleware --config /etc/ai-guardian/openshell-middleware.yaml --bind ${AI_GUARDIAN_MIDDLEWARE_BIND}
+EnvironmentFile=/etc/ai-guardian/openshell-middleware.env
+ExecStart=/usr/local/bin/ai-guardian openshell-middleware start --config /etc/ai-guardian/openshell-middleware.yaml --bind ${AI_GUARDIAN_MIDDLEWARE_BIND}
 Restart=on-failure
 NoNewPrivileges=true
 PrivateTmp=true
@@ -465,6 +528,14 @@ ReadOnlyPaths=/etc/ai-guardian /etc/openshell
 [Install]
 WantedBy=multi-user.target
 ```
+
+For Console visibility, the middleware service account must share the Console's
+effective audit path. Prefer running both under the same account. If a separate
+service account is required, set an explicitly shared
+`AI_GUARDIAN_STATE_DIR=/var/lib/ai-guardian` in this unit's environment, grant
+the Console/daemon account access to that directory, and export the same value
+when launching the Console and daemon. Otherwise each account gets a different
+default `~/.local/state/ai-guardian/violations.jsonl`.
 
 For Kubernetes, mount the middleware YAML, TLS certificate/key, and OpenShell
 public verification key from Secrets or projected volumes; expose the service
@@ -489,7 +560,7 @@ allow_insecure_transport = true
 For this development-only mode, bind to a specific interface, for example:
 
 ```bash
-ai-guardian openshell-middleware \
+ai-guardian openshell-middleware start \
   --config /tmp/middleware.yaml \
   --bind "$AI_GUARDIAN_MIDDLEWARE_BIND"
 ```

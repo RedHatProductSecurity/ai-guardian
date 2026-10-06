@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72343 tok)
+- `CHANGELOG.md` — Change log (~72372 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -921,7 +921,7 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1443 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~6477 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~7396 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
@@ -1028,7 +1028,7 @@
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12000 tok)
-- `cli.py` — main (~32342 tok)
+- `cli.py` — Declares with (~32981 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
@@ -1169,7 +1169,7 @@
 
 - `__init__.py` — OpenShell v0.1.2 supervisor-middleware adapter implementation. (~20 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4066 tok)
-- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~26692 tok)
+- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~26789 tok)
 
 ## src/ai_guardian/middleware/openshell/v0_1_2/proto/
 

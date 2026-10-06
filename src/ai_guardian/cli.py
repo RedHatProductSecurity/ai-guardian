@@ -275,6 +275,151 @@ def _handle_ml_command(args, ml_parser):
         return 1
 
 
+def _add_middleware_state_options(parser):
+    """Add PID/log path options shared by middleware lifecycle commands."""
+
+    parser.add_argument(
+        "--pid-file",
+        metavar="FILE",
+        help="Middleware PID file (default: AI Guardian state directory)",
+    )
+    parser.add_argument(
+        "--log-file",
+        metavar="FILE",
+        help="Background middleware log file (default: AI Guardian state directory)",
+    )
+
+
+def _add_middleware_service_options(parser):
+    """Add options used when starting or restarting OpenShell middleware."""
+
+    parser.add_argument(
+        "--config",
+        metavar="FILE",
+        help=(
+            "Operator-managed JSON/YAML middleware configuration "
+            "(required to start or restart)"
+        ),
+    )
+    parser.add_argument(
+        "--openshell-version",
+        metavar="VERSION",
+        help=(
+            "Override the detected OpenShell release used for adapter selection "
+            "(for example: 0.2.1)"
+        ),
+    )
+    parser.add_argument(
+        "--bootstrap-openshell",
+        action="store_true",
+        help=(
+            "Explicitly and idempotently generate/update the OpenShell gateway "
+            "registration and sandbox policy before serving"
+        ),
+    )
+    parser.add_argument(
+        "--gateway-config",
+        metavar="FILE",
+        help=(
+            "OpenShell gateway TOML to bootstrap (default: "
+            "~/.config/openshell/gateway.toml)"
+        ),
+    )
+    parser.add_argument(
+        "--gateway-endpoint",
+        metavar="URL",
+        help=(
+            "Reachable middleware URL to register; required when --bind is "
+            "a wildcard address"
+        ),
+    )
+    parser.add_argument(
+        "--gateway-tls-ca",
+        metavar="FILE",
+        help="CA PEM path to place in a bootstrapped TLS gateway registration",
+    )
+    parser.add_argument(
+        "--policy-out",
+        metavar="FILE",
+        help=(
+            "Sandbox policy output path (default: openshell-policy.yaml beside "
+            "--config)"
+        ),
+    )
+    parser.add_argument(
+        "--policy-name",
+        metavar="NAME",
+        help="Sandbox policy attachment key (default: <registration>-attachment)",
+    )
+    parser.add_argument(
+        "--bootstrap-force",
+        action="store_true",
+        help="Replace conflicting named bootstrap registration/policy files",
+    )
+    parser.add_argument(
+        "--profile",
+        metavar="PROFILE",
+        help="Override the operator-selected AI Guardian profile",
+    )
+    parser.add_argument(
+        "--bind",
+        metavar="HOST:PORT",
+        help=(
+            "gRPC listen address (default: 127.0.0.1:50051); plaintext "
+            "mode rejects wildcard binds"
+        ),
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        help="gRPC worker count (default: 16)",
+    )
+    parser.add_argument(
+        "--violation-log",
+        metavar="FILE",
+        help=(
+            "Audit-safe middleware violation log (default: the standard "
+            "AI Guardian violations.jsonl path)"
+        ),
+    )
+    parser.add_argument(
+        "--tls-cert",
+        metavar="FILE",
+        help="Override the TLS server certificate PEM path",
+    )
+    parser.add_argument(
+        "--tls-key",
+        metavar="FILE",
+        help="Override the TLS server private-key PEM path",
+    )
+    parser.add_argument(
+        "--tls-client-ca",
+        metavar="FILE",
+        help="Optional client CA PEM path for mutual TLS",
+    )
+    parser.add_argument(
+        "--jwt-secret",
+        metavar="VALUE",
+        help="Override an HMAC JWT validation secret (prefer config or key file)",
+    )
+    parser.add_argument(
+        "--jwt-public-key",
+        metavar="FILE",
+        help="Override the JWT public-key PEM path",
+    )
+    parser.add_argument(
+        "--jwt-audience",
+        metavar="AUDIENCE",
+        help="Override the exact OpenShell JWT audience",
+    )
+    parser.add_argument(
+        "--allow-insecure-transport",
+        action="store_true",
+        help="Development-only plaintext gRPC without JWT authentication",
+    )
+    _add_middleware_state_options(parser)
+
+
 def _add_sandbox_runtime_options(parser, *, suppress_defaults=False):
     """Add runtime selection options to the sandbox parent and subcommands."""
     default = argparse.SUPPRESS if suppress_defaults else None
@@ -1387,176 +1532,119 @@ def main():
         )
 
         # External OpenShell supervisor middleware (Issue #2484)
+        # Keep the option parser separate so the same start/restart options are
+        # accepted after the lifecycle subcommand as well as in the legacy
+        # flag-based form.
+        middleware_options_parser = argparse.ArgumentParser(
+            add_help=False, argument_default=argparse.SUPPRESS
+        )
+        _add_middleware_service_options(middleware_options_parser)
+        middleware_state_parser = argparse.ArgumentParser(
+            add_help=False, argument_default=argparse.SUPPRESS
+        )
+        _add_middleware_state_options(middleware_state_parser)
+
         middleware_server_parser = subparsers.add_parser(
             "openshell-middleware",
             aliases=["middleware-server"],
-            help="Run the operator-managed OpenShell semantic middleware service",
+            parents=[middleware_options_parser],
+            help="Manage the operator-managed OpenShell semantic middleware service",
             description=(
-                "Run AI Guardian as an external NVIDIA OpenShell supervisor "
-                "middleware service. A versioned adapter is selected from the "
-                "installed or configured OpenShell release. This starts the gRPC "
-                "service; OpenShell gateway registration and sandbox policy "
-                "attachment remain operator-managed unless --bootstrap-openshell "
-                "is explicitly supplied."
+                "Manage AI Guardian as an external NVIDIA OpenShell supervisor "
+                "middleware service. Use start, stop, status, or restart like "
+                "the daemon command. A versioned adapter is selected from the "
+                "installed or configured OpenShell release. OpenShell gateway "
+                "registration and sandbox policy attachment remain operator-managed "
+                "unless --bootstrap-openshell is explicitly supplied."
             ),
         )
-        middleware_server_parser.add_argument(
-            "--config",
-            metavar="FILE",
-            help=(
-                "Operator-managed JSON/YAML middleware configuration "
-                "(required to start or restart)"
-            ),
+        middleware_server_parser.set_defaults(
+            config=None,
+            openshell_version=None,
+            bootstrap_openshell=False,
+            gateway_config=None,
+            gateway_endpoint=None,
+            gateway_tls_ca=None,
+            policy_out=None,
+            policy_name=None,
+            bootstrap_force=False,
+            profile=None,
+            bind="127.0.0.1:50051",
+            workers=16,
+            violation_log=None,
+            tls_cert=None,
+            tls_key=None,
+            tls_client_ca=None,
+            jwt_secret=None,
+            jwt_public_key=None,
+            jwt_audience=None,
+            allow_insecure_transport=False,
+            pid_file=None,
+            log_file=None,
+            background=False,
+            stop=False,
+            restart=False,
+            status=False,
         )
-        middleware_server_parser.add_argument(
-            "--openshell-version",
-            metavar="VERSION",
-            help=(
-                "Override the detected OpenShell release used for adapter selection "
-                "(for example: 0.2.1)"
-            ),
-        )
-        middleware_server_parser.add_argument(
-            "--bootstrap-openshell",
-            action="store_true",
-            help=(
-                "Explicitly and idempotently generate/update the OpenShell gateway "
-                "registration and sandbox policy before serving"
-            ),
-        )
+
+        # The flags remain accepted for compatibility with earlier middleware
+        # documentation and scripts. New usage should prefer the subcommands.
         middleware_lifecycle = middleware_server_parser.add_mutually_exclusive_group()
         middleware_lifecycle.add_argument(
             "--background",
             "-b",
             action="store_true",
-            help="Start middleware in the background (detached)",
+            help="Compatibility alias for 'start --background'",
         )
         middleware_lifecycle.add_argument(
             "--stop",
             action="store_true",
-            help="Stop the background middleware service",
+            help="Compatibility alias for 'stop'",
         )
         middleware_lifecycle.add_argument(
             "--restart",
             action="store_true",
-            help="Restart the middleware service in the background",
+            help="Compatibility alias for 'restart'",
         )
         middleware_lifecycle.add_argument(
             "--status",
             action="store_true",
+            help="Compatibility alias for 'status'",
+        )
+
+        middleware_sub = middleware_server_parser.add_subparsers(
+            dest="middleware_command", metavar="{start,stop,status,restart}"
+        )
+        middleware_start_parser = middleware_sub.add_parser(
+            "start",
+            parents=[middleware_options_parser],
+            argument_default=argparse.SUPPRESS,
+            help="Start the middleware service",
+        )
+        middleware_start_parser.add_argument(
+            "--background",
+            "-b",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help="Start middleware in the background (detached)",
+        )
+        middleware_sub.add_parser(
+            "restart",
+            parents=[middleware_options_parser],
+            argument_default=argparse.SUPPRESS,
+            help="Restart the background middleware service",
+        )
+        middleware_sub.add_parser(
+            "stop",
+            parents=[middleware_state_parser],
+            argument_default=argparse.SUPPRESS,
+            help="Stop the background middleware service",
+        )
+        middleware_sub.add_parser(
+            "status",
+            parents=[middleware_state_parser],
+            argument_default=argparse.SUPPRESS,
             help="Show background middleware service status",
-        )
-        middleware_server_parser.add_argument(
-            "--gateway-config",
-            metavar="FILE",
-            help=(
-                "OpenShell gateway TOML to bootstrap (default: "
-                "~/.config/openshell/gateway.toml)"
-            ),
-        )
-        middleware_server_parser.add_argument(
-            "--gateway-endpoint",
-            metavar="URL",
-            help=(
-                "Reachable middleware URL to register; required when --bind is "
-                "a wildcard address"
-            ),
-        )
-        middleware_server_parser.add_argument(
-            "--gateway-tls-ca",
-            metavar="FILE",
-            help="CA PEM path to place in a bootstrapped TLS gateway registration",
-        )
-        middleware_server_parser.add_argument(
-            "--policy-out",
-            metavar="FILE",
-            help=(
-                "Sandbox policy output path (default: openshell-policy.yaml beside "
-                "--config)"
-            ),
-        )
-        middleware_server_parser.add_argument(
-            "--policy-name",
-            metavar="NAME",
-            help="Sandbox policy attachment key (default: <registration>-attachment)",
-        )
-        middleware_server_parser.add_argument(
-            "--bootstrap-force",
-            action="store_true",
-            help="Replace conflicting named bootstrap registration/policy files",
-        )
-        middleware_server_parser.add_argument(
-            "--profile",
-            metavar="PROFILE",
-            help="Override the operator-selected AI Guardian profile",
-        )
-        middleware_server_parser.add_argument(
-            "--bind",
-            default="127.0.0.1:50051",
-            metavar="HOST:PORT",
-            help=(
-                "gRPC listen address (default: 127.0.0.1:50051); plaintext "
-                "mode rejects wildcard binds"
-            ),
-        )
-        middleware_server_parser.add_argument(
-            "--workers",
-            type=int,
-            default=16,
-            help="gRPC worker count (default: 16)",
-        )
-        middleware_server_parser.add_argument(
-            "--pid-file",
-            metavar="FILE",
-            help="Middleware PID file (default: AI Guardian state directory)",
-        )
-        middleware_server_parser.add_argument(
-            "--log-file",
-            metavar="FILE",
-            help="Background middleware log file (default: AI Guardian state directory)",
-        )
-        middleware_server_parser.add_argument(
-            "--violation-log",
-            metavar="FILE",
-            help=(
-                "Audit-safe middleware violation log (default: the standard "
-                "AI Guardian violations.jsonl path)"
-            ),
-        )
-        middleware_server_parser.add_argument(
-            "--tls-cert",
-            metavar="FILE",
-            help="Override the TLS server certificate PEM path",
-        )
-        middleware_server_parser.add_argument(
-            "--tls-key",
-            metavar="FILE",
-            help="Override the TLS server private-key PEM path",
-        )
-        middleware_server_parser.add_argument(
-            "--tls-client-ca",
-            metavar="FILE",
-            help="Optional client CA PEM path for mutual TLS",
-        )
-        middleware_server_parser.add_argument(
-            "--jwt-secret",
-            metavar="VALUE",
-            help="Override an HMAC JWT validation secret (prefer config or key file)",
-        )
-        middleware_server_parser.add_argument(
-            "--jwt-public-key",
-            metavar="FILE",
-            help="Override the JWT public-key PEM path",
-        )
-        middleware_server_parser.add_argument(
-            "--jwt-audience",
-            metavar="AUDIENCE",
-            help="Override the exact OpenShell JWT audience",
-        )
-        middleware_server_parser.add_argument(
-            "--allow-insecure-transport",
-            action="store_true",
-            help="Development-only plaintext gRPC without JWT authentication",
         )
 
         # Tray-independent global pause/resume commands (#2427)

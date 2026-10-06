@@ -49,6 +49,7 @@ from ai_guardian.middleware.openshell.server import (
     create_server,
 )
 from ai_guardian.middleware.openshell.v0_1_2.server import (
+    _middleware_command_without_lifecycle_flags,
     _status_middleware_background,
 )
 from ai_guardian.middleware.openshell.registry import (
@@ -822,6 +823,116 @@ def test_cli_exposes_canonical_openshell_middleware_lifecycle_flags():
     assert arguments.status
     assert not arguments.background
     assert not arguments.restart
+
+
+def test_cli_exposes_openshell_middleware_lifecycle_subcommands():
+    with (
+        patch(
+            "sys.argv",
+            [
+                "ai-guardian",
+                "openshell-middleware",
+                "start",
+                "--background",
+                "--config",
+                "policy.json",
+            ],
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.server.run_middleware_server",
+            return_value=0,
+        ) as run,
+    ):
+        assert main() == 0
+
+    arguments = run.call_args.args[0]
+    assert arguments.middleware_command == "start"
+    assert arguments.background
+    assert arguments.config == "policy.json"
+
+
+def test_cli_exposes_openshell_middleware_restart_subcommand():
+    with (
+        patch(
+            "sys.argv",
+            [
+                "ai-guardian",
+                "openshell-middleware",
+                "restart",
+                "--config",
+                "policy.json",
+            ],
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.server.run_middleware_server",
+            return_value=0,
+        ) as run,
+    ):
+        assert main() == 0
+
+    arguments = run.call_args.args[0]
+    assert arguments.middleware_command == "restart"
+    assert arguments.config == "policy.json"
+    assert not getattr(arguments, "background", False)
+
+
+@pytest.mark.parametrize("lifecycle", ["stop", "status"])
+def test_cli_exposes_openshell_middleware_stop_and_status_subcommands(lifecycle):
+    with (
+        patch(
+            "sys.argv",
+            ["ai-guardian", "openshell-middleware", lifecycle],
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.server.run_middleware_server",
+            return_value=0,
+        ) as run,
+    ):
+        assert main() == 0
+
+    assert run.call_args.args[0].middleware_command == lifecycle
+
+
+def test_background_middleware_command_removes_restart_subcommand(tmp_path):
+    pid_file = tmp_path / "middleware.pid"
+    log_file = tmp_path / "middleware.log"
+    with (
+        patch(
+            "sys.argv",
+            [
+                "ai-guardian",
+                "openshell-middleware",
+                "restart",
+                "--config",
+                "policy.json",
+                "--pid-file",
+                str(pid_file),
+                "--log-file",
+                str(log_file),
+            ],
+        ),
+        patch(
+            "ai_guardian.daemon.get_executable_command",
+            return_value=["python", "-m", "ai_guardian"],
+        ),
+    ):
+        command = _middleware_command_without_lifecycle_flags(
+            pid_path=pid_file,
+            log_path=log_file,
+        )
+
+    assert command == [
+        "python",
+        "-m",
+        "ai_guardian",
+        "openshell-middleware",
+        "--config",
+        "policy.json",
+        "--pid-file",
+        str(pid_file),
+        "--log-file",
+        str(log_file),
+    ]
 
 
 def test_middleware_status_removes_stale_pid_file(tmp_path):
