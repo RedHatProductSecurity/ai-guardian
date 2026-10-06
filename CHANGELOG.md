@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adapters reuse the latest
   compatible implementation across same-major OpenShell releases. See
   `docs/OPENSHELL_MIDDLEWARE.md`.
+- **Remembered OpenShell middleware starts (#2484):** Background middleware
+  state now persists safe restart arguments and the selected config path under
+  the XDG-backed AI Guardian state directory, so `restart` can reuse the prior
+  config without repeating `--config`. CLI JWT secret values are never stored.
 - **OpenShell middleware attribution (#2484):** Denials now carry a safe
    AI Guardian source message, scanner/rule metadata, structured service-log
    fields, and entries in the standard violation audit trail. Provider payload
@@ -47,8 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Community workload image, Codex provider prerequisites, the explicit `curl`
   probe policy required to reach L7, one-step create/connect commands, the
   shared XDG audit path used by the Console, conditional gateway restart after
-  registration changes, cleanup, and the OpenShell v0.1.2 delegated-workload
-  `Permission denied` failure mode that occurs before middleware evaluation.
+  registration changes, remembered middleware lifecycle configuration, cleanup,
+  and the OpenShell v0.1.2 delegated-workload `Permission denied` failure mode
+  that occurs before middleware evaluation. The guide now follows one linear
+  qualification path with separate deployment and response references.
 - **OpenShell middleware timeout encoding (#2484):** Encode multi-second
   `timeout_ms` values as normalized protobuf `Duration` seconds and nanoseconds
   so gateway registration negotiation accepts valid timeouts above one second.

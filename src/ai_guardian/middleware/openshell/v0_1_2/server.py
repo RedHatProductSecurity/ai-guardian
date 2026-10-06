@@ -20,7 +20,7 @@ import time
 from concurrent import futures
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional, cast
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, cast
 
 from ai_guardian import __version__
 from .bootstrap import (
@@ -1806,6 +1806,59 @@ def _middleware_pid(value: Optional[Mapping[str, Any]]) -> Optional[int]:
     return pid
 
 
+_MIDDLEWARE_LIFECYCLE_COMMANDS = frozenset({"start", "stop", "status", "restart"})
+_MIDDLEWARE_LIFECYCLE_FLAGS = frozenset(
+    {"--background", "-b", "--stop", "--restart", "--status"}
+)
+
+
+def _middleware_option_value(values: Sequence[str], option: str) -> Optional[str]:
+    """Return an option value from an argv-style sequence."""
+
+    for index, value in enumerate(values):
+        if value == option:
+            if index + 1 < len(values):
+                return values[index + 1]
+            return None
+        prefix = f"{option}="
+        if value.startswith(prefix):
+            return value[len(prefix) :]
+    return None
+
+
+def _safe_middleware_restart_args(values: Sequence[str]) -> list[str]:
+    """Remove secret values before persisting a background restart command."""
+
+    safe_values: list[str] = []
+    skip_secret_value = False
+    for value in values:
+        if skip_secret_value:
+            skip_secret_value = False
+            continue
+        if value == "--jwt-secret":
+            skip_secret_value = True
+            continue
+        if value.startswith("--jwt-secret="):
+            continue
+        safe_values.append(value)
+    return safe_values
+
+
+def _saved_middleware_restart_args(
+    info: Optional[Mapping[str, Any]],
+) -> Optional[list[str]]:
+    """Validate restart arguments loaded from the private middleware state file."""
+
+    if not info:
+        return None
+    values = info.get("restart_args")
+    if not isinstance(values, list) or not values:
+        return None
+    if any(not isinstance(value, str) for value in values):
+        return None
+    return list(values)
+
+
 def _middleware_process_matches(pid: int) -> bool:
     """Check that a live PID appears to be an OpenShell middleware process."""
 
@@ -1831,7 +1884,12 @@ def _middleware_process_matches(pid: int) -> bool:
     )
 
 
-def _write_middleware_pid_file(path: Path, pid: int) -> None:
+def _write_middleware_pid_file(
+    path: Path,
+    pid: int,
+    *,
+    restart_args: Optional[Sequence[str]] = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", dir=str(path.parent), text=True
@@ -1842,6 +1900,12 @@ def _write_middleware_pid_file(path: Path, pid: int) -> None:
             "started_at": int(time.time()),
             "service": "openshell-middleware",
         }
+        if restart_args is not None:
+            safe_restart_args = _safe_middleware_restart_args(restart_args)
+            payload["restart_args"] = safe_restart_args
+            config_path = _middleware_option_value(safe_restart_args, "--config")
+            if config_path:
+                payload["config"] = config_path
         try:
             os.chmod(temporary_name, 0o600)
         except OSError:
@@ -1873,7 +1937,9 @@ def _remove_middleware_pid_file(
         logger.warning("unable to remove middleware PID file: %s", path)
 
 
-def _claim_middleware_pid_file(path: Path) -> None:
+def _claim_middleware_pid_file(
+    path: Path, *, restart_args: Optional[Sequence[str]] = None
+) -> None:
     existing = _read_middleware_pid_file(path)
     existing_pid = _middleware_pid(existing)
     if existing_pid and existing_pid != os.getpid():
@@ -1888,25 +1954,39 @@ def _claim_middleware_pid_file(path: Path) -> None:
                 f"middleware PID file points to an unrelated active process (pid {existing_pid})"
             )
         _remove_middleware_pid_file(path, expected_pid=existing_pid)
-    _write_middleware_pid_file(path, os.getpid())
+    _write_middleware_pid_file(path, os.getpid(), restart_args=restart_args)
 
 
 def _middleware_command_without_lifecycle_flags(
-    *, pid_path: Path, log_path: Path
+    *,
+    pid_path: Path,
+    log_path: Path,
+    argv: Optional[Sequence[str]] = None,
 ) -> list[str]:
-    lifecycle_commands = {"start", "stop", "status", "restart"}
+    values = _middleware_command_arguments(
+        pid_path=pid_path,
+        log_path=log_path,
+        argv=argv,
+    )
+    from ai_guardian.daemon import get_executable_command
+
+    return get_executable_command() + values
+
+
+def _middleware_command_arguments(
+    *,
+    pid_path: Path,
+    log_path: Path,
+    argv: Optional[Sequence[str]] = None,
+) -> list[str]:
+    """Build foreground middleware arguments from current or saved argv."""
+
+    source_values = list(sys.argv[1:] if argv is None else argv)
     values = [
         value
-        for value in sys.argv[1:]
-        if value
-        not in {
-            *lifecycle_commands,
-            "--background",
-            "-b",
-            "--stop",
-            "--restart",
-            "--status",
-        }
+        for value in source_values
+        if value not in _MIDDLEWARE_LIFECYCLE_COMMANDS
+        and value not in _MIDDLEWARE_LIFECYCLE_FLAGS
     ]
     if not any(
         value == "--pid-file" or value.startswith("--pid-file=") for value in values
@@ -1916,12 +1996,14 @@ def _middleware_command_without_lifecycle_flags(
         value == "--log-file" or value.startswith("--log-file=") for value in values
     ):
         values.extend(("--log-file", str(log_path)))
-    from ai_guardian.daemon import get_executable_command
-
-    return get_executable_command() + values
+    return values
 
 
-def _start_middleware_background(args) -> int:
+def _start_middleware_background(
+    args,
+    *,
+    restart_args: Optional[Sequence[str]] = None,
+) -> int:
     pid_path = _middleware_state_path(args, "pid")
     log_path = _middleware_state_path(args, "log")
     existing_pid = _middleware_pid(_read_middleware_pid_file(pid_path))
@@ -1942,10 +2024,19 @@ def _start_middleware_background(args) -> int:
         _remove_middleware_pid_file(pid_path, expected_pid=existing_pid)
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    command = _middleware_command_without_lifecycle_flags(
+    command_values = _middleware_command_arguments(
         pid_path=pid_path,
         log_path=log_path,
+        argv=restart_args,
     )
+    if restart_args is not None and not getattr(args, "log_file", None):
+        saved_log_path = _middleware_option_value(command_values, "--log-file")
+        if saved_log_path:
+            log_path = Path(saved_log_path).expanduser()
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+    from ai_guardian.daemon import get_executable_command
+
+    command = get_executable_command() + command_values
     log_handle = None
     try:
         log_descriptor = os.open(
@@ -1984,7 +2075,11 @@ def _start_middleware_background(args) -> int:
             log_handle.close()
 
     try:
-        _write_middleware_pid_file(pid_path, process.pid)
+        _write_middleware_pid_file(
+            pid_path,
+            process.pid,
+            restart_args=command_values,
+        )
     except OSError as exc:
         try:
             process.terminate()
@@ -2083,6 +2178,9 @@ def _status_middleware_background(args) -> int:
     print(f"ai-guardian openshell-middleware: running (pid {pid})")
     print(f"PID file: {pid_path}")
     print(f"Log: {log_path}")
+    config_path = info.get("config") if info else None
+    if isinstance(config_path, str) and config_path:
+        print(f"Config: {config_path}")
     return 0
 
 
@@ -2094,16 +2192,33 @@ def run_middleware_server(args) -> int:
         return _stop_middleware_background(args)
     if lifecycle_command == "status" or getattr(args, "status", False):
         return _status_middleware_background(args)
-    if not getattr(args, "config", None):
+    restart_requested = lifecycle_command == "restart" or getattr(
+        args, "restart", False
+    )
+    restart_args: Optional[list[str]] = None
+    if restart_requested and not getattr(args, "config", None):
+        pid_path = _middleware_state_path(args, "pid")
+        saved_info = _read_middleware_pid_file(pid_path)
+        restart_args = _saved_middleware_restart_args(saved_info)
+        if restart_args is None or not _middleware_option_value(
+            restart_args, "--config"
+        ):
+            print(
+                "Error: no saved middleware configuration is available; "
+                "provide --config or start the service with a background command",
+                file=sys.stderr,
+            )
+            return 1
+    if not getattr(args, "config", None) and not restart_requested:
         print(
             "Error: --config is required when starting OpenShell middleware",
             file=sys.stderr,
         )
         return 1
-    if lifecycle_command == "restart" or getattr(args, "restart", False):
+    if restart_requested:
         if _stop_middleware_background(args, quiet=True) != 0:
             return 1
-        return _start_middleware_background(args)
+        return _start_middleware_background(args, restart_args=restart_args)
     if getattr(args, "background", False):
         return _start_middleware_background(args)
 
@@ -2111,7 +2226,13 @@ def run_middleware_server(args) -> int:
     pid_path = _middleware_state_path(args, "pid")
     try:
         require_grpc()
-        _claim_middleware_pid_file(pid_path)
+        _claim_middleware_pid_file(
+            pid_path,
+            restart_args=_middleware_command_arguments(
+                pid_path=pid_path,
+                log_path=_middleware_state_path(args, "log"),
+            ),
+        )
         claimed_pid = True
         policy, raw = load_operator_policy(args.config, profile_override=args.profile)
         security_overrides: Dict[str, Any] = {}

@@ -50,7 +50,11 @@ from ai_guardian.middleware.openshell.server import (
 )
 from ai_guardian.middleware.openshell.v0_1_2.server import (
     _middleware_command_without_lifecycle_flags,
+    _middleware_state_path,
+    _saved_middleware_restart_args,
     _status_middleware_background,
+    _write_middleware_pid_file,
+    run_middleware_server,
 )
 from ai_guardian.middleware.openshell.registry import (
     OpenShellCompatibilityError,
@@ -933,6 +937,66 @@ def test_background_middleware_command_removes_restart_subcommand(tmp_path):
         "--log-file",
         str(log_file),
     ]
+
+
+def test_middleware_restart_state_uses_xdg_and_excludes_jwt_secret(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("AI_GUARDIAN_STATE_DIR", raising=False)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    args = SimpleNamespace(pid_file=None)
+    pid_file = _middleware_state_path(args, "pid")
+
+    _write_middleware_pid_file(
+        pid_file,
+        1234,
+        restart_args=[
+            "openshell-middleware",
+            "--config",
+            "policy.json",
+            "--jwt-secret",
+            "do-not-write-this",
+        ],
+    )
+
+    payload = json.loads(pid_file.read_text(encoding="utf-8"))
+    assert pid_file == tmp_path / "ai-guardian" / "openshell-middleware.pid"
+    assert payload["config"] == "policy.json"
+    assert "do-not-write-this" not in pid_file.read_text(encoding="utf-8")
+    assert _saved_middleware_restart_args(payload) == [
+        "openshell-middleware",
+        "--config",
+        "policy.json",
+    ]
+
+
+def test_middleware_restart_reuses_saved_start_arguments(tmp_path):
+    args = SimpleNamespace(
+        middleware_command="restart",
+        restart=False,
+        config=None,
+        pid_file=str(tmp_path / "middleware.pid"),
+        log_file=None,
+    )
+    saved_args = ["openshell-middleware", "--config", "policy.json"]
+    with (
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._read_middleware_pid_file",
+            return_value={"restart_args": saved_args},
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._stop_middleware_background",
+            return_value=0,
+        ) as stop,
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._start_middleware_background",
+            return_value=0,
+        ) as start,
+    ):
+        assert run_middleware_server(args) == 0
+
+    stop.assert_called_once_with(args, quiet=True)
+    start.assert_called_once_with(args, restart_args=saved_args)
 
 
 def test_middleware_status_removes_stale_pid_file(tmp_path):

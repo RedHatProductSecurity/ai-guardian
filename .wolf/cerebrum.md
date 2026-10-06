@@ -217,6 +217,16 @@
   Unix account. An explicit `/tmp` violation log is intentionally isolated from
   the Console.
 
+- **OpenShell middleware restart state:** Background starts persist sanitized
+  restart arguments, including the config path, in the private middleware PID
+  state file under the XDG-backed AI Guardian state directory. Bare `restart`
+  can reuse that metadata; never persist `--jwt-secret` values.
+
+- **OpenShell middleware documentation:** Keep the qualification instructions
+  linear and put deployment, lifecycle, gateway registration, response behavior,
+  and troubleshooting in separate sections. The primary Community sandbox
+  command omits `--tty --detach`; detached connect is only an alternative.
+
 ## Do-Not-Repeat
 
 - [2026-06-30] DO NOT call `_show_via_subprocess` from the tray's `_handle_remote_prompt` without first trying NiceGUI in-process. On macOS Sonoma+ (14+), `activateIgnoringOtherApps_` is deprecated so tkinter subprocess windows spawn invisible behind other apps — dialog blocks for 300s then auto-dismisses, making the tray appear stuck. Fix: in `_show_and_respond`, call `_NiceGuiAskDialog(violation, timeout).run()` first if NiceGUI is available; it opens a browser tab which is always visible. Only fall back to `_show_via_subprocess` if NiceGUI is unavailable.
