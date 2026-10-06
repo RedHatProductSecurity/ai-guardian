@@ -65,7 +65,8 @@ def test_user_experience_openshell_prompt_injection_is_denied_with_stable_code()
 
     Expected experience:
     - OpenShell receives DECISION_DENY.
-    - The response contains only the stable semantic_content_blocked code;
+    - The response contains the stable semantic_content_blocked code plus an
+      attribution-safe AI Guardian middleware message and finding metadata;
       raw provider content is not returned in middleware diagnostics.
     - No interactive ask dialog is attempted because this is an external RPC.
     """
@@ -81,6 +82,13 @@ def test_user_experience_openshell_prompt_injection_is_denied_with_stable_code()
 
     assert response.decision == pb2.DECISION_DENY
     assert response.reason_code == "semantic_content_blocked"
+    assert response.reason == (
+        "AI Guardian blocks this request: prompt_injection (OpenShell middleware)"
+    )
+    assert response.metadata["middleware_source"] == (
+        "ai-guardian-openshell-middleware"
+    )
+    assert response.metadata["finding_types"] == "prompt_injection"
     assert "Ignore previous" not in response.reason
 
 

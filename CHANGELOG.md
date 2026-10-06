@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and restart lifecycle operations. Versioned adapters reuse the latest
   compatible implementation across same-major OpenShell releases. See
   `docs/OPENSHELL_MIDDLEWARE.md`.
+- **OpenShell middleware attribution (#2484):** Denials now carry a safe
+   AI Guardian source message, scanner/rule metadata, structured service-log
+   fields, and entries in the standard violation audit trail. Provider payload
+   text is excluded from scanner diagnostics. Use `--violation-log` to select
+   an explicit audit path.
 - **Automatic CLI/IDE setup discovery (#2494):** Make plain `ai-guardian setup`
   reuse tray installation and integrity checks, skip healthy integrations,
   prompt for a selectable subset when several need setup, and let `--yes` or
@@ -37,10 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
-- **OpenShell middleware sandbox example (#2484):** Use the AI Guardian
-  OpenShell support image, plus an explicit TTY or long-lived command, for
-  policy-attached sandbox creation. The generic Ubuntu default image can fail
-  in OpenShell's delegated workload path when network middleware is enabled.
+- **OpenShell middleware sandbox qualification (#2484):** Document the
+  Community workload image, Codex provider prerequisites, the explicit `curl`
+  probe policy required to reach L7, one-step create/connect commands, audit
+  evidence, cleanup, and the OpenShell v0.1.2 delegated-workload `Permission
+  denied` failure mode that occurs before middleware evaluation.
 - **OpenShell middleware timeout encoding (#2484):** Encode multi-second
   `timeout_ms` values as normalized protobuf `Duration` seconds and nanoseconds
   so gateway registration negotiation accepts valid timeouts above one second.

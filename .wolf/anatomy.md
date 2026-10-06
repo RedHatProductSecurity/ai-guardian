@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72243 tok)
+- `CHANGELOG.md` — Change log (~72343 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -921,7 +921,7 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1443 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~3556 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~6477 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
@@ -1028,7 +1028,7 @@
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12000 tok)
-- `cli.py` — main (~32261 tok)
+- `cli.py` — main (~32342 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
@@ -1111,7 +1111,7 @@
 - `__init__.py` — Per-event hook handlers for ai-guardian (Phase 5, #1491). (~19 tok)
 - `content_pipeline.py` — Shared content scanning pipeline extracted from hook_processing.py (Phase 5e.3, #1491). (~7298 tok)
 - `post_tool_use.py` — PostToolUse event handler extracted from hook_processing.py (Phase 5e.2, #1491). (~14267 tok)
-- `scanners.py` — Scanner runner functions extracted from hook_processing.py (Phase 5d, #1491). (~8572 tok)
+- `scanners.py` — Scanner runner functions extracted from hook_processing.py (Phase 5d, #1491). (~8589 tok)
 - `session_events.py` — Session lifecycle event handlers extracted from hook_processing.py (Phase 5e.1, #1491). (~3010 tok)
 - `utils.py` — Shared utilities for hook event handlers. (~498 tok)
 
@@ -1169,7 +1169,7 @@
 
 - `__init__.py` — OpenShell v0.1.2 supervisor-middleware adapter implementation. (~20 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4066 tok)
-- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~21532 tok)
+- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~26692 tok)
 
 ## src/ai_guardian/middleware/openshell/v0_1_2/proto/
 
@@ -1260,7 +1260,7 @@
 - `output_parsers.py` — ScannerOutputParser: parse, parse, parse, parse + 1 more (~6117 tok)
 - `pipeline.py` — Shared content scanning pipeline for SDK and hooks. Calls entry.run_fn directly (no dispatcher). (~3299 tok)
 - `post_scan_filters.py` — Post-scan filter pipeline for the ScannerRegistry. (~3584 tok)
-- `prompt_injection.py` — Declares UnicodeAttackDetector (~22587 tok)
+- `prompt_injection.py` — Declares UnicodeAttackDetector (~23251 tok)
 - `python_loader.py` — URL configuration (~2209 tok)
 - `remote_config.py` — fetch_remote_engine_config, merge_engine_configs (~826 tok)
 - `sanitizer.py` — get_sanitize_config, sanitize_text, sanitize_text_batch, sanitize_directory (~8496 tok)

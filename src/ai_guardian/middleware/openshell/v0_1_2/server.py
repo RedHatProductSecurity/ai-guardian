@@ -439,11 +439,18 @@ if _GRPC_AVAILABLE:
             security: Optional[MiddlewareServerSecurity] = None,
             scanner: Optional[SemanticContentScanner] = None,
             deduplicator: Optional[FindingDeduplicator] = None,
+            violation_logger: Optional[Any] = None,
         ) -> None:
             self.policy = policy
             self.security = security
             self.scanner = scanner or SemanticContentScanner(policy.profile)
             self.deduplicator = deduplicator or FindingDeduplicator()
+            # The OpenShell middleware is a separate process from any daemon
+            # running inside a workload.  Keep its audit sink injectable for
+            # tests, and let the CLI provide the normal ViolationLogger in
+            # production.  A missing sink must never change a deny decision;
+            # structured service logging below remains available regardless.
+            self.violation_logger = violation_logger
             self.authenticator = (
                 JwtAuthInterceptor(security)
                 if security and not security.allow_insecure_transport
@@ -464,6 +471,179 @@ if _GRPC_AVAILABLE:
                     "openshell.middleware.scanner.config-content",
                 }
             )
+
+        @staticmethod
+        def _safe_audit_value(value: Any, limit: int = 256) -> str:
+            """Bound and flatten operator-visible middleware diagnostics."""
+
+            text = " ".join(str(value or "").split())
+            return text[:limit]
+
+        def _finding_types(self, findings: Iterable[ContentFinding]) -> tuple[str, ...]:
+            """Return stable finding types without copying provider content."""
+
+            values = {
+                _safe_reason_code(finding.type, "middleware_finding")
+                for finding in findings
+                if finding.type
+            }
+            return tuple(sorted(values))
+
+        def _decision_metadata(
+            self,
+            reason_code: str,
+            findings: Iterable[ContentFinding],
+            metadata: Optional[Mapping[str, str]] = None,
+        ) -> Dict[str, str]:
+            """Build bounded, content-free metadata for OpenShell diagnostics."""
+
+            items = tuple(findings)
+            result = {
+                str(key): self._safe_audit_value(value, 512)
+                for key, value in (metadata or {}).items()
+            }
+            safe_reason = _safe_reason_code(
+                reason_code, "middleware_denied" if reason_code else ""
+            )
+            if safe_reason:
+                result["decision_reason"] = safe_reason
+            if items:
+                types = self._finding_types(items)
+                if types:
+                    result["finding_types"] = ",".join(types)[:1024]
+                rules = sorted(
+                    {
+                        self._safe_audit_value(finding.rule_id, 128)
+                        for finding in items
+                        if finding.rule_id
+                    }
+                )
+                if rules:
+                    result["finding_rules"] = ",".join(rules)[:1024]
+            if safe_reason or items:
+                result["middleware_source"] = "ai-guardian-openshell-middleware"
+            return result
+
+        def _decision_message(
+            self, reason_code: str, findings: Iterable[ContentFinding]
+        ) -> str:
+            """Return a safe human-readable message for request diagnostics."""
+
+            types = self._finding_types(findings)
+            if types:
+                return (
+                    "AI Guardian blocks this request: "
+                    + ", ".join(types)
+                    + " (OpenShell middleware)"
+                )
+            safe_reason = _safe_reason_code(reason_code, "middleware_denied")
+            return (
+                f"AI Guardian blocks this request: {safe_reason} (OpenShell middleware)"
+            )
+
+        def _record_decision(
+            self,
+            *,
+            decision: int,
+            reason_code: str,
+            findings: Iterable[ContentFinding] = (),
+            metadata: Optional[Mapping[str, str]] = None,
+            request_id: str = "",
+            phase: str = "",
+            direction: str = "",
+            middleware_name: str = "",
+            target_host: str = "",
+            policy: Optional[MiddlewarePolicy] = None,
+        ) -> None:
+            """Emit an attribution-safe log and persist scanner findings.
+
+            OpenShell may expose only a generic client error for a denied
+            provider operation.  The external middleware therefore records a
+            second, operator-visible trail.  It contains the stable reason
+            code, scanner categories, rule IDs, request correlation ID, and
+            direction, but never the request/response body or matched value.
+            """
+
+            items = tuple(findings)
+            denied = decision == _DENY
+            safe_reason = _safe_reason_code(
+                reason_code, "middleware_denied" if denied else ""
+            )
+            types = self._finding_types(items)
+            rules = tuple(
+                sorted(
+                    {
+                        self._safe_audit_value(finding.rule_id, 128)
+                        for finding in items
+                        if finding.rule_id
+                    }
+                )
+            )
+            log_method = logger.warning if denied else logger.info
+            log_method(
+                "OpenShell middleware decision=%s source=ai-guardian-openshell-middleware "
+                "reason_code=%s request_id=%s phase=%s direction=%s middleware=%s "
+                "target_host=%s finding_types=%s finding_rules=%s",
+                "deny" if denied else "allow",
+                safe_reason if reason_code else "none",
+                self._safe_audit_value(request_id),
+                self._safe_audit_value(phase),
+                self._safe_audit_value(direction),
+                self._safe_audit_value(middleware_name),
+                self._safe_audit_value(target_host),
+                ",".join(types) or "none",
+                ",".join(rules) or "none",
+            )
+
+            if self.violation_logger is None or not items:
+                return
+
+            from ai_guardian.scanners.scan_result import ScanResult
+            from ai_guardian.violations.log_violation import ScanContext, log_violation
+
+            policy_version = None
+            if policy is not None:
+                policy_version = f"{policy.profile_id}:{policy.profile_digest[:12]}"
+            context = ScanContext(
+                ide_type="openshell-middleware",
+                hook_event=f"{phase}:{direction}".strip(":"),
+                correlation_id=self._safe_audit_value(request_id) or None,
+                agent="openshell",
+                policy_version=policy_version,
+            )
+            safe_context = {
+                "middleware_source": "ai-guardian-openshell-middleware",
+                "phase": self._safe_audit_value(phase),
+                "direction": self._safe_audit_value(direction),
+                "request_id": self._safe_audit_value(request_id),
+                "middleware_name": self._safe_audit_value(middleware_name),
+                "target_host": self._safe_audit_value(target_host),
+                "reason_code": safe_reason,
+            }
+            for finding in items:
+                violation_type = _safe_reason_code(finding.type, "middleware_finding")
+                result = ScanResult(
+                    detected=True,
+                    violation_type=violation_type,
+                    severity=self._safe_audit_value(finding.severity, 32) or "high",
+                    should_block=denied,
+                    rule_id=self._safe_audit_value(finding.rule_id, 128),
+                    total_findings=max(1, int(finding.count)),
+                    extra={"openshell_middleware": True},
+                )
+                try:
+                    log_violation(
+                        result,
+                        context,
+                        violation_logger=self.violation_logger,
+                        blocked_overrides=safe_context,
+                        source="openshell-middleware",
+                    )
+                except Exception:  # pragma: no cover - defensive audit boundary
+                    logger.warning(
+                        "OpenShell middleware audit persistence failed for %s",
+                        violation_type,
+                    )
 
         def Describe(self, request, context):
             try:
@@ -528,6 +708,9 @@ if _GRPC_AVAILABLE:
 
         def EvaluateHttpRequest(self, request, context):
             self._authorize_supervisor(context, request.context)
+            request_id = _request_id(request)
+            middleware_name = request.middleware_name
+            target_host = request.target.host
             if request.phase != _PRE_CREDENTIALS:
                 context.abort(
                     grpc.StatusCode.INVALID_ARGUMENT, "unsupported HTTP request phase"
@@ -535,18 +718,20 @@ if _GRPC_AVAILABLE:
             if len(request.body) > self.policy.max_payload_bytes:
                 return self._denied_result(
                     "payload_limit_exceeded",
-                    request_id=_request_id(request),
+                    request_id=request_id,
                     phase="pre_credentials",
                     direction="request",
+                    middleware_name=middleware_name,
+                    target_host=target_host,
                     policy=self.policy,
                 )
             try:
                 policy = self._policy_for_struct(request.config)
                 selected, ownership_error = self._selected_scanners(
                     policy,
-                    target_host=request.target.host,
-                    middleware_name=request.middleware_name,
-                    request_id=_request_id(request),
+                    target_host=target_host,
+                    middleware_name=middleware_name,
+                    request_id=request_id,
                     phase="pre_credentials",
                     direction="request",
                 )
@@ -557,17 +742,21 @@ if _GRPC_AVAILABLE:
                 )
                 return self._denied_result(
                     "effective_policy_invalid",
-                    request_id=_request_id(request),
+                    request_id=request_id,
                     phase="pre_credentials",
                     direction="request",
+                    middleware_name=middleware_name,
+                    target_host=target_host,
                     policy=self.policy,
                 )
             if ownership_error:
                 return self._denied_result(
                     "scanner_ownership_unavailable",
-                    request_id=_request_id(request),
+                    request_id=request_id,
                     phase="pre_credentials",
                     direction="request",
+                    middleware_name=middleware_name,
+                    target_host=target_host,
                     policy=policy,
                 )
             if not selected or not request.body:
@@ -582,16 +771,20 @@ if _GRPC_AVAILABLE:
             except UnicodeDecodeError:
                 return self._denied_result(
                     "unsupported_payload_encoding",
-                    request_id=_request_id(request),
+                    request_id=request_id,
                     phase="pre_credentials",
                     direction="request",
+                    middleware_name=middleware_name,
+                    target_host=target_host,
                     policy=policy,
                 )
             return self._request_result(
                 evaluation,
                 transformed,
                 bytes(request.body),
-                request_id=_request_id(request),
+                request_id=request_id,
+                middleware_name=middleware_name,
+                target_host=target_host,
                 policy=policy,
             )
 
@@ -629,6 +822,16 @@ if _GRPC_AVAILABLE:
                             direction="websocket",
                         )
                     except (MiddlewarePolicyError, ScannerOwnershipError, ValueError):
+                        self._record_decision(
+                            decision=_DENY,
+                            reason_code="effective_policy_invalid",
+                            request_id=request_id,
+                            phase="pre_credentials",
+                            direction="websocket",
+                            middleware_name=preflight.middleware_name,
+                            target_host=preflight.target.host,
+                            policy=self.policy,
+                        )
                         yield pb2.WebSocketSessionEventResult(
                             preflight_decision=pb2.WebSocketPreflightDecision(
                                 action=_WS_DENY,
@@ -637,6 +840,16 @@ if _GRPC_AVAILABLE:
                         )
                         return
                     if ownership_error:
+                        self._record_decision(
+                            decision=_DENY,
+                            reason_code="scanner_ownership_unavailable",
+                            request_id=request_id,
+                            phase="pre_credentials",
+                            direction="websocket",
+                            middleware_name=preflight.middleware_name,
+                            target_host=preflight.target.host,
+                            policy=policy,
+                        )
                         yield pb2.WebSocketSessionEventResult(
                             preflight_decision=pb2.WebSocketPreflightDecision(
                                 action=_WS_DENY,
@@ -680,6 +893,16 @@ if _GRPC_AVAILABLE:
                     sequence = message.sequence
                     payload = message.WhichOneof("payload")
                     if payload == "binary" and not policy.allow_binary_websocket:
+                        self._record_decision(
+                            decision=_DENY,
+                            reason_code="unsupported_websocket_payload",
+                            request_id=request_id,
+                            phase="pre_credentials",
+                            direction="websocket",
+                            middleware_name=preflight.middleware_name,
+                            target_host=preflight.target.host,
+                            policy=policy,
+                        )
                         yield pb2.WebSocketSessionEventResult(
                             message_result=pb2.WebSocketMessageResult(
                                 sequence=message.sequence,
@@ -703,6 +926,16 @@ if _GRPC_AVAILABLE:
                         )
                     text = message.text
                     if len(text.encode("utf-8")) > policy.max_payload_bytes:
+                        self._record_decision(
+                            decision=_DENY,
+                            reason_code="payload_limit_exceeded",
+                            request_id=request_id,
+                            phase="pre_credentials",
+                            direction="websocket",
+                            middleware_name=preflight.middleware_name,
+                            target_host=preflight.target.host,
+                            policy=policy,
+                        )
                         yield pb2.WebSocketSessionEventResult(
                             message_result=pb2.WebSocketMessageResult(
                                 sequence=message.sequence,
@@ -719,6 +952,16 @@ if _GRPC_AVAILABLE:
                             filename="websocket-message",
                         )
                     except UnicodeDecodeError:
+                        self._record_decision(
+                            decision=_DENY,
+                            reason_code="unsupported_payload_encoding",
+                            request_id=request_id,
+                            phase="pre_credentials",
+                            direction="websocket",
+                            middleware_name=preflight.middleware_name,
+                            target_host=preflight.target.host,
+                            policy=policy,
+                        )
                         yield pb2.WebSocketSessionEventResult(
                             message_result=pb2.WebSocketMessageResult(
                                 sequence=message.sequence,
@@ -758,10 +1001,48 @@ if _GRPC_AVAILABLE:
                             direction="websocket",
                             policy=policy,
                         ),
-                        "metadata": evaluation.metadata,
+                        "metadata": self._decision_metadata(
+                            (
+                                _safe_reason_code(
+                                    evaluation.reason_code, "semantic_content_blocked"
+                                )
+                                if evaluation.blocked
+                                else ""
+                            ),
+                            evaluation.findings,
+                            evaluation.metadata,
+                        ),
                     }
+                    if not evaluation.blocked:
+                        self._record_decision(
+                            decision=_ALLOW,
+                            reason_code="",
+                            findings=evaluation.findings,
+                            metadata=evaluation.metadata,
+                            request_id=request_id,
+                            phase="pre_credentials",
+                            direction="websocket",
+                            middleware_name=preflight.middleware_name,
+                            target_host=preflight.target.host,
+                            policy=policy,
+                        )
                     if replacement is not None and not evaluation.blocked:
                         message_result["text"] = replacement
+                    if evaluation.blocked:
+                        self._record_decision(
+                            decision=_DENY,
+                            reason_code=_safe_reason_code(
+                                evaluation.reason_code, "semantic_content_blocked"
+                            ),
+                            findings=evaluation.findings,
+                            metadata=evaluation.metadata,
+                            request_id=request_id,
+                            phase="pre_credentials",
+                            direction="websocket",
+                            middleware_name=preflight.middleware_name,
+                            target_host=preflight.target.host,
+                            policy=policy,
+                        )
                     yield pb2.WebSocketSessionEventResult(
                         message_result=pb2.WebSocketMessageResult(**message_result)
                     )
@@ -969,6 +1250,8 @@ if _GRPC_AVAILABLE:
             original: bytes,
             *,
             request_id: str = "",
+            middleware_name: str = "",
+            target_host: str = "",
             policy: Optional[MiddlewarePolicy] = None,
         ):
             if evaluation.blocked:
@@ -981,6 +1264,8 @@ if _GRPC_AVAILABLE:
                     request_id=request_id,
                     phase="pre_credentials",
                     direction="request",
+                    middleware_name=middleware_name,
+                    target_host=target_host,
                     policy=policy,
                 )
             transformed_bytes = transformed.encode("utf-8")
@@ -990,9 +1275,26 @@ if _GRPC_AVAILABLE:
                     request_id=request_id,
                     phase="pre_credentials",
                     direction="request",
+                    middleware_name=middleware_name,
+                    target_host=target_host,
                     policy=policy,
                 )
             changed = transformed_bytes != original
+            decision_metadata = self._decision_metadata(
+                "", evaluation.findings, evaluation.metadata
+            )
+            self._record_decision(
+                decision=_ALLOW,
+                reason_code="",
+                findings=evaluation.findings,
+                metadata=evaluation.metadata,
+                request_id=request_id,
+                phase="pre_credentials",
+                direction="request",
+                middleware_name=middleware_name,
+                target_host=target_host,
+                policy=policy,
+            )
             return pb2.HttpRequestResult(
                 decision=_ALLOW,
                 body=transformed_bytes if changed else b"",
@@ -1004,7 +1306,7 @@ if _GRPC_AVAILABLE:
                     direction="request",
                     policy=policy,
                 ),
-                metadata=evaluation.metadata,
+                metadata=decision_metadata,
             )
 
         def _denied_result(
@@ -1016,19 +1318,39 @@ if _GRPC_AVAILABLE:
             request_id: str = "",
             phase: str = "",
             direction: str = "",
+            middleware_name: str = "",
+            target_host: str = "",
             policy: Optional[MiddlewarePolicy] = None,
         ):
+            finding_items = tuple(findings)
+            safe_reason = _safe_reason_code(reason_code, "middleware_denied")
+            decision_metadata = self._decision_metadata(
+                safe_reason, finding_items, metadata
+            )
+            self._record_decision(
+                decision=_DENY,
+                reason_code=safe_reason,
+                findings=finding_items,
+                metadata=metadata,
+                request_id=request_id,
+                phase=phase,
+                direction=direction,
+                middleware_name=middleware_name,
+                target_host=target_host,
+                policy=policy,
+            )
             return pb2.HttpRequestResult(
                 decision=_DENY,
-                reason_code=_safe_reason_code(reason_code, "middleware_denied"),
+                reason=self._decision_message(safe_reason, finding_items),
+                reason_code=safe_reason,
                 findings=self._findings(
-                    findings,
+                    finding_items,
                     request_id=request_id,
                     phase=phase,
                     direction=direction,
                     policy=policy,
                 ),
-                metadata=dict(metadata or {}),
+                metadata=decision_metadata,
             )
 
         def _findings(
@@ -1084,6 +1406,8 @@ if _GRPC_AVAILABLE:
             self.trailers_seen = False
             self.request_id = ""
             self.max_payload_bytes = 0
+            self.middleware_name = ""
+            self.target_host = ""
 
         def preflight(self, event, context):
             if self.policy is not None:
@@ -1094,6 +1418,16 @@ if _GRPC_AVAILABLE:
             try:
                 self.policy = self.service._policy_for_struct(event.config)
             except (MiddlewarePolicyError, ScannerOwnershipError, ValueError):
+                self.service._record_decision(
+                    decision=_DENY,
+                    reason_code="effective_policy_invalid",
+                    request_id=event.context.request_id,
+                    phase="pre_return",
+                    direction="response",
+                    middleware_name=event.middleware_name,
+                    target_host=event.target.host,
+                    policy=self.service.policy,
+                )
                 return pb2.HttpResponseEventResult(
                     preflight_result=pb2.HttpResponsePreflightResult(
                         block_delivery=pb2.HttpResponseBlockDelivery(),
@@ -1112,11 +1446,23 @@ if _GRPC_AVAILABLE:
                     "response request_id is required",
                 )
             self.request_id = event.context.request_id
+            self.middleware_name = event.middleware_name
+            self.target_host = event.target.host
             attached, _ = policy.validate_effective_policy(
                 middleware_name=event.middleware_name,
                 target_host=event.target.host,
             )
             if not attached:
+                self.service._record_decision(
+                    decision=_DENY,
+                    reason_code="effective_policy_invalid",
+                    request_id=self.request_id,
+                    phase="pre_return",
+                    direction="response",
+                    middleware_name=event.middleware_name,
+                    target_host=event.target.host,
+                    policy=policy,
+                )
                 return pb2.HttpResponseEventResult(
                     preflight_result=pb2.HttpResponsePreflightResult(
                         block_delivery=pb2.HttpResponseBlockDelivery(),
@@ -1132,6 +1478,16 @@ if _GRPC_AVAILABLE:
                 hooks_capabilities=policy.hooks_capabilities,
             )
             if any(item.effective_mode == "fail_closed" for item in decisions.values()):
+                self.service._record_decision(
+                    decision=_DENY,
+                    reason_code="scanner_ownership_unavailable",
+                    request_id=self.request_id,
+                    phase="pre_return",
+                    direction="response",
+                    middleware_name=event.middleware_name,
+                    target_host=event.target.host,
+                    policy=policy,
+                )
                 return pb2.HttpResponseEventResult(
                     preflight_result=pb2.HttpResponsePreflightResult(
                         block_delivery=pb2.HttpResponseBlockDelivery(),
@@ -1162,6 +1518,16 @@ if _GRPC_AVAILABLE:
                     )
                 )
             else:
+                self.service._record_decision(
+                    decision=_DENY,
+                    reason_code="unsupported_response_body_mode",
+                    request_id=self.request_id,
+                    phase="pre_return",
+                    direction="response",
+                    middleware_name=event.middleware_name,
+                    target_host=event.target.host,
+                    policy=policy,
+                )
                 return pb2.HttpResponseEventResult(
                     preflight_result=pb2.HttpResponsePreflightResult(
                         block_delivery=pb2.HttpResponseBlockDelivery(),
@@ -1224,6 +1590,21 @@ if _GRPC_AVAILABLE:
                     findings=evaluation.findings,
                     metadata=evaluation.metadata,
                 )
+            self.service._record_decision(
+                decision=_ALLOW,
+                reason_code="",
+                findings=evaluation.findings,
+                metadata=evaluation.metadata,
+                request_id=self.request_id,
+                phase="pre_return",
+                direction="response",
+                middleware_name=self.middleware_name,
+                target_host=self.target_host,
+                policy=policy,
+            )
+            decision_metadata = self.service._decision_metadata(
+                "", evaluation.findings, evaluation.metadata
+            )
             action = (
                 pb2.HttpResponseBodyResult(
                     sequence=event.sequence,
@@ -1235,7 +1616,7 @@ if _GRPC_AVAILABLE:
                         direction="response",
                         policy=policy,
                     ),
-                    metadata=evaluation.metadata,
+                    metadata=decision_metadata,
                 )
                 if transformed_bytes != data
                 else pb2.HttpResponseBodyResult(
@@ -1248,7 +1629,7 @@ if _GRPC_AVAILABLE:
                         direction="response",
                         policy=policy,
                     ),
-                    metadata=evaluation.metadata,
+                    metadata=decision_metadata,
                 )
             )
             return pb2.HttpResponseEventResult(body_result=action)
@@ -1266,19 +1647,35 @@ if _GRPC_AVAILABLE:
 
         def _block_body(self, reason_code, sequence, *, findings=(), metadata=None):
             policy = self.policy
+            finding_items = tuple(findings)
+            safe_reason = _safe_reason_code(reason_code, "middleware_denied")
+            self.service._record_decision(
+                decision=_DENY,
+                reason_code=safe_reason,
+                findings=finding_items,
+                metadata=metadata,
+                request_id=self.request_id,
+                phase="pre_return",
+                direction="response",
+                middleware_name=self.middleware_name,
+                target_host=self.target_host,
+                policy=policy,
+            )
             return pb2.HttpResponseEventResult(
                 body_result=pb2.HttpResponseBodyResult(
                     sequence=sequence,
                     block_delivery=pb2.HttpResponseBlockDelivery(),
-                    reason_code=_safe_reason_code(reason_code, "middleware_denied"),
+                    reason_code=safe_reason,
                     findings=self.service._findings(
-                        findings,
+                        finding_items,
                         request_id=self.request_id,
                         phase="pre_return",
                         direction="response",
                         policy=policy,
                     ),
-                    metadata=dict(metadata or {}),
+                    metadata=self.service._decision_metadata(
+                        safe_reason, finding_items, metadata
+                    ),
                 )
             )
 
@@ -1788,7 +2185,19 @@ def run_middleware_server(args) -> int:
                 attachment_name=getattr(args, "policy_name", None),
                 force=bool(getattr(args, "bootstrap_force", False)),
             )
-        service = MiddlewareService(policy, security=security)
+        from ai_guardian.violations.logger import ViolationLogger
+
+        violation_log_path = getattr(args, "violation_log", None)
+        violation_logger = (
+            ViolationLogger(log_path=Path(violation_log_path).expanduser())
+            if violation_log_path
+            else ViolationLogger()
+        )
+        service = MiddlewareService(
+            policy,
+            security=security,
+            violation_logger=violation_logger,
+        )
         server = create_server(
             service,
             bind=args.bind,

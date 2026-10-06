@@ -1516,6 +1516,14 @@ def main():
             help="Background middleware log file (default: AI Guardian state directory)",
         )
         middleware_server_parser.add_argument(
+            "--violation-log",
+            metavar="FILE",
+            help=(
+                "Audit-safe middleware violation log (default: the standard "
+                "AI Guardian violations.jsonl path)"
+            ),
+        )
+        middleware_server_parser.add_argument(
             "--tls-cert",
             metavar="FILE",
             help="Override the TLS server certificate PEM path",
