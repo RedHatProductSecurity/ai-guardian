@@ -113,7 +113,7 @@ class TomlPatternsScanner(Scanner):
         except Exception as e:
             logger.warning(f"TomlPatternsScanner: failed to load from server: {e}")
 
-    def scan(self, content: str, file_path: str = None) -> List[Finding]:
+    def scan(self, content: str, file_path: Optional[str] = None) -> List[Finding]:
         """Scan content for secrets using compiled TOML patterns.
 
         Args:

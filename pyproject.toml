@@ -208,7 +208,6 @@ disallow_untyped_calls = false
 disallow_untyped_decorators = false
 no_implicit_reexport = false
 warn_return_any = false
-implicit_optional = true
 show_error_codes = true
 warn_unused_ignores = true
 

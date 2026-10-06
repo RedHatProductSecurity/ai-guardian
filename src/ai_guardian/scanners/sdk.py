@@ -11,7 +11,7 @@ Usage:
         name = "my-scanner"
         version = "1.0.0"
 
-        def scan(self, content: str, file_path: str = None) -> list[Finding]:
+        def scan(self, content: str, file_path: str | None = None) -> list[Finding]:
             findings = []
             for i, line in enumerate(content.splitlines(), 1):
                 if "secret-pattern" in line:
@@ -72,7 +72,7 @@ class Scanner(ABC):
     version: str = "0.0.0"
 
     @abstractmethod
-    def scan(self, content: str, file_path: str = None) -> List[Finding]:
+    def scan(self, content: str, file_path: Optional[str] = None) -> List[Finding]:
         """Scan content and return findings.
 
         Args:

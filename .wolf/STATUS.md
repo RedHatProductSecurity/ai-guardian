@@ -11,6 +11,13 @@ budget_tokens: 1000
 
 ## Done
 
+- Issue #2510 now removes the legacy `implicit_optional` Mypy compatibility
+  override and makes nullable defaults explicit with Python 3.10 typing across
+  scanner, setup, daemon, policy, hook, and configuration-scope APIs.
+- Issue #2510 validation passes: Mypy, Ruff, Black, Pylint error checks, diff
+  checks, and 994 focused unit tests. Six existing OpenCode V1/V2 setup
+  assertions remain a documented baseline mismatch and are unrelated.
+
 - OpenShell middleware lifecycle now matches the daemon with `start`, `stop`,
   `status`, and `restart` subcommands. Background starts persist sanitized
   restart arguments and the config path in the XDG-backed private state file;
@@ -134,14 +141,14 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Wait for review/CI follow-up on the OpenShell middleware branch `2484`.
+- Run `daf complete` for issue #2510 when the user is ready to commit and open
+  the pull request. No commit has been created in this session.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2484`
-- HEAD: `324cc27a`; the OpenShell middleware lifecycle, XDG restart state, and
-  documentation restructuring are pushed to `origin/2484`.
+- Branch: `2510`
+- HEAD: `ae9c7f3b`; issue #2510 changes are uncommitted in this workspace.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
@@ -173,4 +180,4 @@ git diff --check
 - `AGENTS.md` - repository contribution rules
 - GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2496`
 - Prior GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2493`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2510`

@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72561 tok)
+- `CHANGELOG.md` — Change log (~72618 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -24,7 +24,7 @@
 - `Makefile` — Make build targets (~62 tok)
 - `mkdocs.yml` (~1153 tok)
 - `NOTICE` (~55 tok)
-- `pyproject.toml` — Python project configuration (~2629 tok)
+- `pyproject.toml` — Python project configuration (~2622 tok)
 - `README.md` — Project documentation (~10584 tok)
 - `RELEASING.md` — Release Management Process (~7903 tok)
 - `skills-lock.json` (~491 tok)
@@ -1038,7 +1038,7 @@
 - `git_workflow.py` — Git workflow helpers for init-project --annotate. (~1960 tok)
 - `help_content.py` — Centralized help content for all AI Guardian scanner pages. (~8993 tok)
 - `hook_context.py` — HookContextManager: save_pretool_context, get_pretool_context, cleanup_session, cleanup (~2346 tok)
-- `hook_processing.py` — URL configuration (~37867 tok)
+- `hook_processing.py` — URL configuration (~37874 tok)
 - `ide_paths.py` — Canonical path resolution for supported IDE and agent integrations. (~2333 tok)
 - `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4397 tok)
 - `logging_utils.py` — Shared logging utilities. (~254 tok)
@@ -1074,7 +1074,7 @@
 - `client.py` — URL configuration (~5854 tok)
 - `desktop.py` — Desktop shortcut and autostart integration for the ai-guardian tray. (~4266 tok)
 - `discovery.py` — URL configuration (~19049 tok)
-- `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~16621 tok)
+- `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~16625 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 12 more (~1873 tok)
 - `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~17645 tok)
@@ -1266,7 +1266,7 @@
 - `sanitizer.py` — get_sanitize_config, sanitize_text, sanitize_text_batch, sanitize_directory (~8496 tok)
 - `scan_result.py` — for: generate_violation_id, clean, from_secret_scan, from_pii_scan + 8 more (~4660 tok)
 - `scanner_registry.py` — Scanner registry for declarative, loop-based scanner invocation. (~4086 tok)
-- `sdk.py` — MyScanner: scan, scan, configure (~903 tok)
+- `sdk.py` — MyScanner: scan, scan, configure (~908 tok)
 - `secret_redactor.py` — ai-guardian:begin-allow (~7596 tok)
 - `secret_scanning.py` — Secret scanning functions extracted from hook_processing.py (Phase 5a, #1491). (~29010 tok)
 - `secret_types.py` — Human-readable display names for secret scanner rule IDs. (~1497 tok)
@@ -1274,7 +1274,7 @@
 - `ssrf.py` — Declares SSRFProtector (~13888 tok)
 - `strategies.py` — URL configuration (~4253 tok)
 - `supply_chain.py` — URL patterns: 2 routes (~5474 tok)
-- `toml_patterns.py` — TomlPatternsScanner: configure, scan (~2012 tok)
+- `toml_patterns.py` — TomlPatternsScanner: configure, scan (~2015 tok)
 
 ## src/ai_guardian/scanners/transcript/
 
@@ -1320,7 +1320,7 @@
 - `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~55794 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
-- `utils.py` — Shared utility functions for ai-guardian setup modules. (~3323 tok)
+- `utils.py` — Shared utility functions for ai-guardian setup modules. (~3326 tok)
 
 ## src/ai_guardian/skills/
 
@@ -1353,7 +1353,7 @@
 - `diff_provider.py` — DiffProviderError: parse_pr_ref, parse_mr_ref, detect_platform, get_merge_base + 8 more (~3283 tok)
 - `directory_rules.py` — URL patterns: 2 routes (~5244 tok)
 - `patterns.py` (~11401 tok)
-- `policy.py` — ToolPolicyChecker: is_shell_tool_name (~35028 tok)
+- `policy.py` — ToolPolicyChecker: is_shell_tool_name (~35030 tok)
 
 ## src/ai_guardian/tray/
 
@@ -1460,7 +1460,7 @@
 - `file_opener.py` — Open a file in the user's preferred editor at a specific line. (~517 tok)
 - `hook_simulator.py` — Shared hook simulator data and result parsing for the web console. (~1098 tok)
 - `ignore_file_editor.py` — Shared logic for the 'Ignore File...' flow. (~690 tok)
-- `pattern_editor.py` — Pattern editor for the ask dialog's "Allow Always" flow. (~3242 tok)
+- `pattern_editor.py` — Pattern editor for the ask dialog's "Allow Always" flow. (~3252 tok)
 - `source_annotator.py` — Source code annotation insertion for inline suppression. (~2292 tok)
 - `tray_prompt.py` — _TkinterPromptApp: run (~6952 tok)
 - `tray_target_selector.py` — NiceGUI target selector for multi-target tray plugin commands. (~974 tok)

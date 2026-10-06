@@ -831,8 +831,8 @@ class MultiDaemonClient:
         line_number: int,
         violation_type: str,
         secret_type: str = "",
-        start_column: int = None,
-        end_column: int = None,
+        start_column: int | None = None,
+        end_column: int | None = None,
     ) -> Optional[dict]:
         """Rescan a file on the daemon to get matched text for allowlisting."""
         if target.runtime == "local":
