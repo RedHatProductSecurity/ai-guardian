@@ -21,6 +21,8 @@ budget_tokens: 1000
   prerequisites for Container OAuth/API-key, OpenShell OAuth/API-key, and tray
   creation; lifecycle, options, snapshots, and troubleshooting now follow the
   first-use paths.
+- Committed the sandbox/authentication and documentation work as `4e9e78ba`,
+  pushed `docs/restore-openshell-sandbox-setup`, and opened PR #2514.
 - Restored the missing OpenShell provider-instance setup commands to
   `docs/Sandbox.md` on branch `docs/restore-openshell-sandbox-setup`; the
   documentation now covers both Codex OAuth and API-key provider creation
@@ -167,8 +169,7 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Review and commit the current OpenShell documentation and tray changes on
-  `docs/restore-openshell-sandbox-setup` if the user wants them submitted.
+- Await review of PR #2514.
 
 ## Context
 
