@@ -5865,7 +5865,7 @@ class TestOpenCodePluginRegistration:
         )
 
     def test_registers_plugin_in_existing_json(self, tmp_path):
-        """Plugin path added to the V1 plugin array in existing opencode.json."""
+        """V1 plugin path is added to the singular key in opencode.json."""
         opencode_dir = tmp_path / ".config" / "opencode"
         plugins_dir = opencode_dir / "plugins"
         plugins_dir.mkdir(parents=True)
@@ -5877,7 +5877,7 @@ class TestOpenCodePluginRegistration:
 
         setup = IDESetup()
         with self._mock_resolve(config_file):
-            setup._register_opencode_plugin(plugin_file, plugins_dir)
+            setup._register_opencode_plugin(plugin_file, plugins_dir, generation="v1")
 
         config = json.loads(config_file.read_text())
         assert str(plugin_file) in config["plugin"]
@@ -5895,7 +5895,7 @@ class TestOpenCodePluginRegistration:
 
         setup = IDESetup()
         with self._mock_resolve(config_file):
-            setup._register_opencode_plugin(plugin_file, plugins_dir)
+            setup._register_opencode_plugin(plugin_file, plugins_dir, generation="v1")
 
         config = json.loads(config_file.read_text())
         assert str(plugin_file) in config["plugin"]
@@ -5912,7 +5912,7 @@ class TestOpenCodePluginRegistration:
 
         setup = IDESetup()
         with self._mock_resolve(config_file):
-            setup._register_opencode_plugin(plugin_file, plugins_dir)
+            setup._register_opencode_plugin(plugin_file, plugins_dir, generation="v1")
 
         assert config_file.exists()
         config = json.loads(config_file.read_text())
@@ -5931,8 +5931,8 @@ class TestOpenCodePluginRegistration:
 
         setup = IDESetup()
         with self._mock_resolve(config_file):
-            setup._register_opencode_plugin(plugin_file, plugins_dir)
-            setup._register_opencode_plugin(plugin_file, plugins_dir)
+            setup._register_opencode_plugin(plugin_file, plugins_dir, generation="v1")
+            setup._register_opencode_plugin(plugin_file, plugins_dir, generation="v1")
 
         config = json.loads(config_file.read_text())
         assert config["plugin"].count(str(plugin_file)) == 1
@@ -5950,7 +5950,7 @@ class TestOpenCodePluginRegistration:
 
         setup = IDESetup()
         with self._mock_resolve(config_file):
-            setup._register_opencode_plugin(plugin_file, plugins_dir)
+            setup._register_opencode_plugin(plugin_file, plugins_dir, generation="v1")
 
         config = json.loads(config_file.read_text())
         assert "plugins" not in config
@@ -5970,7 +5970,7 @@ class TestOpenCodePluginRegistration:
         setup = IDESetup()
         with self._mock_resolve(config_file):
             msg = setup._register_opencode_plugin(
-                plugin_file, plugins_dir, dry_run=True
+                plugin_file, plugins_dir, dry_run=True, generation="v1"
             )
 
         assert "Register plugin in" in msg
@@ -5991,7 +5991,7 @@ class TestOpenCodePluginRegistration:
 
         setup = IDESetup()
         with self._mock_resolve(config_file):
-            setup._register_opencode_plugin(plugin_file, plugins_dir)
+            setup._register_opencode_plugin(plugin_file, plugins_dir, generation="v1")
 
         config = json.loads(config_file.read_text())
         assert config["mcp"] == {"some-server": {}}

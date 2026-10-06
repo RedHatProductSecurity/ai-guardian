@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 
 import ai_guardian
+from ai_guardian.setup.hooks import _OPENCODE_PLUGIN_V2_TS
 from ai_guardian.tools.policy import ToolPolicyChecker
 
 
@@ -91,3 +92,53 @@ def test_opencode_safe_file_read_remains_allowed():
 
     response = json.loads(result.get("output") or "{}")
     assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+
+def test_opencode_v2_refused_prompt_is_recorded_without_sending_prompt_to_model():
+    """
+    USER EXPERIENCE: Sensitive prompt -> AI Guardian refusal reaches transcript.
+
+    Scenario:
+    1. The user submits a prompt that AI Guardian blocks.
+    2. The V2 prompt hook records a fixed refusal notice in the transcript.
+    3. OpenCode rejects the original prompt; no blocked text is copied into the
+       notice or passed to the model.
+
+    Expected User Experience:
+    - The transcript identifies AI Guardian as refusing the previous prompt.
+    - OpenCode shows the notice as synthetic user-role input, not an assistant
+      answer, and does not start a model run for it.
+    - The next model turn sees that the prior request was refused and must not
+      continue it.
+    - The refused prompt, detection details, and bridge error are not exposed
+      in the notice.
+
+    Exact notice:
+    "AI Guardian refused the previous prompt. The original prompt was not sent
+    to the model. Do not answer or continue that request. Ask the user to
+    provide a new prompt without the sensitive or blocked content."
+
+    Manual verification with OpenCode V2:
+    1. Start a session with the generated AI Guardian plugin loaded.
+    2. Submit a test prompt that triggers a configured AI Guardian block.
+    3. Confirm the transcript contains the synthetic refusal notice and the
+       original prompt was not processed by the model.
+    4. Submit a safe follow-up and confirm the model sees the refusal notice,
+       not the blocked text.
+    """
+    prompt_hook = _OPENCODE_PLUGIN_V2_TS.split(
+        "await ctx.session.hook('prompt'", maxsplit=1
+    )[1].split("await ctx.tool.hook('execute.before'", maxsplit=1)[0]
+    expected_notice = (
+        "AI Guardian refused the previous prompt. "
+        "The original prompt was not sent to the model. "
+        "Do not answer or continue that request. "
+        "Ask the user to provide a new prompt without the sensitive or blocked content."
+    )
+
+    assert expected_notice in _OPENCODE_PLUGIN_V2_TS
+    assert "ctx.session.synthetic({" in prompt_hook
+    assert "resume: false" in prompt_hook
+    assert "prompt," not in prompt_hook.split("ctx.session.synthetic({", maxsplit=1)[1]
+    assert "result.error" not in prompt_hook
+    assert "throw new Error('Blocked by ai-guardian')" in prompt_hook

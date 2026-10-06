@@ -14,15 +14,32 @@ V2 are both installed under different executable names, the version resolved as
 
 ## Host Plugin Contracts
 
-| Generation | CLI/package | Plugin package | Config key | Generated hooks |
+| Generation | CLI/package | Local plugin loading | Config key | Generated hooks |
 |---|---|---|---|---|
-| V1 | `opencode-ai` 1.x | `@opencode-ai/plugin` | `plugin` | `tool.execute.before`, `chat.message`, `tool.execute.after`, `session.end` |
-| V2 | `@opencode/cli` 2.x | `@opencode/plugin` | `plugins` | `ctx.session.hook("prompt")`, `ctx.tool.hook("execute.before")`, `ctx.tool.hook("execute.after")`, session events |
+| V1 | `opencode-ai` 1.x | `@opencode-ai/plugin` import | `plugin` | `tool.execute.before`, `chat.message`, `tool.execute.after`, `session.end` |
+| V2 | `@opencode/cli` 2.x | Local auto-discovery; direct `{ id, setup }` export | None for this local plugin | `ctx.session.hook("prompt")`, `ctx.tool.hook("execute.before")`, `ctx.tool.hook("execute.after")`, session events |
+
+The V2 plugin deliberately omits the documented `@opencode/plugin` import.
+OpenCode V2 server builds have been reported to fail resolving that scoped
+package from local plugin files, while accepting a plain default-exported
+`{ id, setup }` object. The file is loaded from the global `plugins` directory;
+the `plugins` config key is for package or plugin-directory entries, not this
+single TypeScript file. Setup removes an old explicit AI Guardian file entry
+and preserves unrelated configured plugins.
 
 V2 tool hooks use the V2 `event.id` call identifier. Successful after-tool
 events expose a mutable `event.result`; failed after-tool events expose
 `event.error` instead. AI Guardian scans both paths and only applies output
 redaction to completed results.
+
+When the V2 prompt hook blocks a prompt, it adds a fixed AI Guardian refusal
+notice to the session transcript as a synthetic entry with `resume: false`,
+then rejects the original prompt. OpenCode records the notice as synthetic
+user-role input rather than a generated assistant answer. The next model turn
+sees that the request was refused; the original prompt and detection details
+are not included. OpenCode V2 does not expose a typed prompt-denial result, so
+it may still display its generic failed-send notification for the rejected
+prompt.
 
 The shared bridge remains outside the direct plugin discovery directory:
 
@@ -61,12 +78,12 @@ The OpenShell selector does not expose `opencode`. OpenCode is not installed in
 `Dockerfile.openshell`, its policy, or the OpenShell compatibility matrix. Use
 the host integration or the normal Docker/Podman image for OpenCode.
 
-The OpenCode project and both plugin packages are MIT licensed. Sources:
+The OpenCode project and V1 plugin package are MIT licensed. Sources:
 
 - [OpenCode repository and license](https://github.com/anomalyco/opencode)
 - [`opencode-ai` package](https://www.npmjs.com/package/opencode-ai)
 - [`@opencode/cli` package](https://www.npmjs.com/package/@opencode/cli)
-- [`@opencode/plugin` package](https://www.npmjs.com/package/@opencode/plugin)
+- [OpenCode issue: local V2 plugin resolver cannot load `@opencode/plugin`](https://github.com/anomalyco/opencode/issues/50434)
 
 Account access, provider credentials, service terms, and model availability
 remain the responsibility of the user and are not bundled into either image.
@@ -100,9 +117,10 @@ uv run --extra dev python -m pytest \
   tests/ux/test_user_experience_contract_opencode_self_protection.py -q
 ```
 
-The generated V2 source is also type-checked against the published
-`@opencode/plugin@2.0.22` declarations. Release readiness validates the normal
-image's pinned V1 executable; V2 remains a host-plugin contract only.
+Release readiness validates the normal image's pinned V1 executable; V2 remains
+a host-plugin contract only. V2 doctor status confirms generated files and
+discovery-path configuration, but does not inspect whether a running OpenCode
+server successfully activated the plugin.
 
 The isolated host matrix currently passes both generated plugin generations. The
 version variable below is a test-only override used to exercise both contracts;

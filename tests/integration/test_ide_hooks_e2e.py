@@ -591,22 +591,24 @@ def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
         ), f"{ide_type}/setup: shared process bridge missing"
 
     if ide_type == "opencode":
-        if "@opencode/plugin" in source:
+        is_v2 = "ai-guardian-opencode-generation: v2" in source
+        if is_v2:
             required_events = (
                 "ctx.session.hook('prompt'",
                 "ctx.tool.hook('execute.before'",
                 "ctx.tool.hook('execute.after'",
             )
-            registration_key = "plugins"
+            registration = _read_json_config(_resolve_opencode_config())
+            assert str(source_path) not in registration.get("plugins", [])
+            assert str(source_path) not in registration.get("plugin", [])
         else:
             required_events = (
                 "tool.execute.before",
                 "chat.message",
                 "tool.execute.after",
             )
-            registration_key = "plugin"
-        registration = _read_json_config(_resolve_opencode_config())
-        assert str(source_path) in registration.get(registration_key, [])
+            registration = _read_json_config(_resolve_opencode_config())
+            assert str(source_path) in registration.get("plugin", [])
     elif ide_type == "pi":
         required_events = (
             'pi.on("input"',
@@ -625,12 +627,19 @@ def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "opencode_version,plugin_package",
-    [("1.18.31", "@opencode-ai/plugin"), ("2.0.22", "@opencode/plugin")],
+    "opencode_version,generation,plugin_package",
+    [
+        ("1.18.31", "v1", "@opencode-ai/plugin"),
+        ("2.0.22", "v2", None),
+    ],
     ids=("v1", "v2"),
 )
 def test_opencode_versioned_plugin_setup(
-    opencode_version, plugin_package, isolated_ide_environment, monkeypatch
+    opencode_version,
+    generation,
+    plugin_package,
+    isolated_ide_environment,
+    monkeypatch,
 ):
     """Verify both generated plugin contracts in isolated homes."""
     if "opencode" not in _selected_ides():
@@ -639,16 +648,19 @@ def test_opencode_versioned_plugin_setup(
     monkeypatch.setenv("AI_GUARDIAN_OPENCODE_VERSION", opencode_version)
     setup, verification = _install_and_verify("opencode")
 
-    assert verification["opencode_generation"] == (
-        "v2" if opencode_version.startswith("2.") else "v1"
-    )
+    assert verification["opencode_generation"] == generation
     _assert_mcp_registration("opencode")
     _assert_plugin_or_extension_bridge(setup, "opencode")
 
     source_path = (
         Path(setup.get_config_path("opencode")).expanduser() / "ai-guardian.ts"
     )
-    assert plugin_package in source_path.read_text(encoding="utf-8")
+    source = source_path.read_text(encoding="utf-8")
+    if plugin_package:
+        assert plugin_package in source
+    else:
+        assert "@opencode/plugin" not in source
+        assert "export default {" in source
 
 
 @pytest.mark.parametrize("ide_type", _selected_ides(), ids=_selected_ides())
