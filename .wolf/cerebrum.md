@@ -119,6 +119,12 @@
   `OpenCode: configured`; otherwise the generic empty-detail fallback reports
   the misleading `configuration unreadable` warning even with healthy MCP.
 
+- **OpenCode V2 plugin migration:** V2's `plugins` configuration accepts
+  packages or plugin directories, not direct TypeScript files. During setup,
+  remove only AI Guardian's stale direct entry; if another local `.ts` entry is
+  present, leave the host configuration unchanged and require explicit user
+  migration.
+
 - **Runtime-specific container entrypoints (#2446):** The normal and OpenShell images share `container/entrypoint.sh`; when a CLI is intentionally normal-container-only, the OpenShell image must set an explicit runtime marker and the entrypoint must filter that CLI from its supported arrays.
 
 - **OpenShell provider credential types:** OpenShell `0.1.2` codex providers

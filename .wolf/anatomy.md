@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72618 tok)
+- `CHANGELOG.md` — Change log (~72846 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -897,7 +897,7 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~15695 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~15774 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
@@ -920,7 +920,7 @@
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
-- `OPENCODE.md` — OpenCode Support (~1443 tok)
+- `OPENCODE.md` — OpenCode Support (~1888 tok)
 - `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~4701 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
@@ -1317,7 +1317,7 @@
 
 - `__init__.py` — setup_hooks (~10359 tok)
 - `config.py` — Default configuration creation for ai-guardian. (~7266 tok)
-- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~55794 tok)
+- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~56849 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
 - `utils.py` — Shared utility functions for ai-guardian setup modules. (~3326 tok)
