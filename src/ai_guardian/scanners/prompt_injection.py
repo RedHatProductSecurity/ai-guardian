@@ -1238,9 +1238,15 @@ class PromptInjectionDetector:
         end_column = _offset_to_column(content, match_end_offset)
 
         if is_injection:
-            logger.debug(
-                f"Detected {attack_type} pattern in {source_type}: '{matched_text[:50]}...'"
-            )
+            if source_type == "provider_content":
+                logger.debug(
+                    "Detected %s pattern in provider_content",
+                    attack_type,
+                )
+            else:
+                logger.debug(
+                    f"Detected {attack_type} pattern in {source_type}: '{matched_text[:50]}...'"
+                )
 
             # Populate findings from all matches that contributed to the detection
             passing_matches = (
@@ -1495,7 +1501,8 @@ class PromptInjectionDetector:
             content: The text to check for prompt injection
             file_path: Optional file path being scanned (for ignore_files matching)
             tool_name: Optional tool name being used (for ignore_tools matching)
-            source_type: Source of content - "user_prompt" (default) or "file_content"
+            source_type: Source of content - "user_prompt" (default),
+                "file_content", or "provider_content"
 
         Returns:
             Tuple of (should_block, error_message, detected)
@@ -1571,7 +1578,9 @@ class PromptInjectionDetector:
                     }
                 )
 
-                if file_path:
+                if source_type == "provider_content":
+                    source_info = "source='provider_content'"
+                elif file_path:
                     source_info = f"file='{file_path}'"
                 elif tool_name:
                     source_info = f"tool='{tool_name}'"
@@ -1579,18 +1588,33 @@ class PromptInjectionDetector:
                     source_info = "source='user_prompt'"
 
                 if self.action == "warn":
-                    logger.warning(
-                        f"Unicode attack detected (warn mode): {source_info}, details='{unicode_details}' - execution allowed"
-                    )
+                    if source_type == "provider_content":
+                        logger.warning(
+                            "Unicode attack detected (warn mode): %s - execution allowed",
+                            source_info,
+                        )
+                    else:
+                        logger.warning(
+                            f"Unicode attack detected (warn mode): {source_info}, details='{unicode_details}' - execution allowed"
+                        )
                     unicode_error_msg = f"⚠️  Unicode attack detected (warn mode): {unicode_details} - execution allowed"
                 elif self.action == "log-only":
-                    logger.warning(
-                        f"Unicode attack detected (log-only mode): {source_info}, details='{unicode_details}' - execution allowed (silent)"
-                    )
+                    if source_type == "provider_content":
+                        logger.warning(
+                            "Unicode attack detected (log-only mode): %s - execution allowed (silent)",
+                            source_info,
+                        )
+                    else:
+                        logger.warning(
+                            f"Unicode attack detected (log-only mode): {source_info}, details='{unicode_details}' - execution allowed (silent)"
+                        )
                 else:
-                    logger.error(
-                        f"Unicode attack detected: {source_info}, details='{unicode_details}'"
-                    )
+                    if source_type == "provider_content":
+                        logger.error("Unicode attack detected: %s", source_info)
+                    else:
+                        logger.error(
+                            f"Unicode attack detected: {source_info}, details='{unicode_details}'"
+                        )
                     unicode_should_block = True
                     unicode_error_msg = (
                         f"\n{'='*70}\n"
@@ -1666,7 +1690,9 @@ class PromptInjectionDetector:
                 )
 
                 # Format source information for logging
-                if file_path:
+                if source_type == "provider_content":
+                    source_info = "source='provider_content'"
+                elif file_path:
                     source_info = f"file='{file_path}'"
                 elif tool_name:
                     source_info = f"tool='{tool_name}'"
@@ -1691,12 +1717,22 @@ class PromptInjectionDetector:
                     if len(sanitized_content) > 200
                     else sanitized_content
                 )
+                provider_log_details = (
+                    f"{source_info}, confidence={confidence:.2f}, "
+                    f"pattern='{pattern_preview}'"
+                )
 
                 # Check action
                 if self.action == "warn":
-                    logger.warning(
-                        f"{detection_label} detected (warn mode): {source_info}, confidence={confidence:.2f}, pattern='{pattern_preview}', text='{text_preview}', prompt='{content_preview}' - execution allowed"
-                    )
+                    if source_type == "provider_content":
+                        logger.warning(
+                            f"{detection_label} detected (warn mode): "
+                            f"{provider_log_details} - execution allowed"
+                        )
+                    else:
+                        logger.warning(
+                            f"{detection_label} detected (warn mode): {source_info}, confidence={confidence:.2f}, pattern='{pattern_preview}', text='{text_preview}', prompt='{content_preview}' - execution allowed"
+                        )
                     warn_msg = f"⚠️  {detection_label} detected (warn mode) - execution allowed"
                     return (
                         False,
@@ -1704,15 +1740,26 @@ class PromptInjectionDetector:
                         True,
                     )  # Allow execution, warning message, detected
                 elif self.action == "log-only":
-                    logger.warning(
-                        f"{detection_label} detected (log-only mode): {source_info}, confidence={confidence:.2f}, pattern='{pattern_preview}', text='{text_preview}', prompt='{content_preview}' - execution allowed (silent)"
-                    )
+                    if source_type == "provider_content":
+                        logger.warning(
+                            f"{detection_label} detected (log-only mode): "
+                            f"{provider_log_details} - execution allowed (silent)"
+                        )
+                    else:
+                        logger.warning(
+                            f"{detection_label} detected (log-only mode): {source_info}, confidence={confidence:.2f}, pattern='{pattern_preview}', text='{text_preview}', prompt='{content_preview}' - execution allowed (silent)"
+                        )
                     return False, None, True  # Allow execution, no warning, detected
                 else:
                     # Block execution
-                    logger.error(
-                        f"{detection_label} detected: {source_info}, confidence={confidence:.2f}, pattern='{pattern_preview}', text='{text_preview}', prompt='{content_preview}'"
-                    )
+                    if source_type == "provider_content":
+                        logger.error(
+                            f"{detection_label} detected: {provider_log_details}"
+                        )
+                    else:
+                        logger.error(
+                            f"{detection_label} detected: {source_info}, confidence={confidence:.2f}, pattern='{pattern_preview}', text='{text_preview}', prompt='{content_preview}'"
+                        )
                     return True, error_msg, True  # Block, error message, detected
 
             # No heuristic injection — check if unicode was detected

@@ -337,3 +337,18 @@
   command. Extension JWTs require the exact `openshell-ext+jwt` type, opaque
   audience, gateway issuer, and the complete `iss`/`aud`/`sub`/`iat`/`exp`/
   `jti`/`caller_kind` claim set; only supervisor callers carry `sandbox_id`.
+
+- [2026-10-06] **OpenShell middleware clean-workload qualification (#2484):** A
+  provider-backed policy is required for the tested OpenShell v0.1.2 delegated
+  workload, while the middleware can reject a keyless `curl` request during
+  pre-credential evaluation. A short-lived sandbox transitions to `Completed`
+  when its main process exits even if managed Podman containers remain briefly.
+
+- [2026-10-06] **Provider-content diagnostic privacy:** Passing
+  `source_type="provider_content"` must suppress matched text and Unicode
+  details in every prompt-injection diagnostic path, including debug logs; only
+  source, confidence, and rule metadata may be logged.
+
+- [2026-10-06] **Documentation privacy:** OpenShell examples must use neutral
+  host/interface placeholders such as `middleware.example.internal`, never a
+  developer-specific private IP address.

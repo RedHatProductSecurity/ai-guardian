@@ -156,7 +156,8 @@ def run_prompt_injection_scan(
         config: Pre-loaded PI config dict, or None to load internally.
         file_path: File path associated with the content (for ignore checks).
         tool_name: Tool identifier (for ignore checks).
-        source_type: 'user_prompt' or 'file_content' — controls thresholds.
+        source_type: 'user_prompt', 'file_content', or 'provider_content' —
+            controls thresholds and provider-log redaction.
         latency_timer: Optional _CheckTimer for performance tracking.
 
     Returns:
