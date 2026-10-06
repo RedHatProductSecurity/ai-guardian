@@ -311,6 +311,12 @@ def _add_middleware_service_options(parser):
         ),
     )
     parser.add_argument(
+        "--implementation",
+        choices=("rust", "python"),
+        default=None,
+        help="Middleware runtime implementation (default: Python compatibility runtime)",
+    )
+    parser.add_argument(
         "--bootstrap-openshell",
         action="store_true",
         help=(
@@ -417,6 +423,14 @@ def _add_middleware_service_options(parser):
         "--allow-insecure-transport",
         action="store_true",
         help="Development-only plaintext gRPC without JWT authentication",
+    )
+    parser.add_argument(
+        "--allow-insecure-wildcard-bind",
+        action="store_true",
+        help=(
+            "Development-only: permit plaintext middleware on a wildcard bind "
+            "when explicitly required by a local sandbox runtime"
+        ),
     )
     _add_middleware_state_options(parser)
 
@@ -1571,6 +1585,7 @@ def main():
         )
         middleware_server_parser.set_defaults(
             config=None,
+            implementation=None,
             openshell_version=None,
             bootstrap_openshell=False,
             gateway_config=None,
@@ -1590,6 +1605,7 @@ def main():
             jwt_public_key=None,
             jwt_audience=None,
             allow_insecure_transport=False,
+            allow_insecure_wildcard_bind=False,
             pid_file=None,
             log_file=None,
             background=False,

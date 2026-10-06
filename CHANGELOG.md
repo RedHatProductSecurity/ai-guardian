@@ -68,6 +68,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot load. Doctor now distinguishes configured plugin files from verified
   server activation, and setup refuses to rewrite V2 configuration when an
   unrelated local TypeScript plugin file would be migrated implicitly.
+- **OpenShell middleware config overrides:** Preserve saved bootstrap, gateway,
+  policy, bind, and audit arguments when `restart --config FILE` changes only
+  the middleware YAML path. Simplify the guide to create config, start/bootstrap,
+  verify gateway health/registration, and create a sandbox attached through the
+  generated policy; move curl probes and audit redirection to optional sections.
+  Document gateway restart commands for Homebrew, systemd, Snap, containers,
+  and manual launches, plus recovery when no background start state exists.
+  On macOS plaintext host-interface binds now use a long-lived TCP relay into
+  loopback grpcio so Podman supervisors can reach the middleware.
 - **Strict Mypy optional parameters (#2510):** Remove the legacy implicit-
   optional compatibility override and annotate nullable defaults explicitly
   across scanner, setup, daemon, policy, hook, and configuration-scope APIs.

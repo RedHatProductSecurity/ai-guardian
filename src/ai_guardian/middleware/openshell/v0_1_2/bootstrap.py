@@ -299,6 +299,8 @@ def _policy_document(policy: MiddlewarePolicy, attachment_name: str) -> Dict[str
                 "config": {
                     "profile_id": policy.profile_id,
                     "profile_digest": policy.profile_digest,
+                    "scanner_ownership": dict(policy.scanner_ownership),
+                    "response_redaction": policy.response_redaction,
                 },
                 "on_error": "fail_closed",
                 "endpoints": {"include": list(policy.provider_endpoints)},

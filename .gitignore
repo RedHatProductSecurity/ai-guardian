@@ -8,6 +8,9 @@ dist/
 container/vendor/ai_guardian-*.whl
 *.egg-info/
 
+# Rust build artifacts
+rust/**/target/
+
 # Virtual environments
 venv/
 ENV/

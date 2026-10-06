@@ -50,6 +50,14 @@ budget_tokens: 1000
   checks, and 994 focused unit tests. Six existing OpenCode V1/V2 setup
   assertions remain a documented baseline mismatch and are unrelated.
 
+- OpenShell middleware `restart --config FILE` now preserves saved bootstrap,
+  gateway, policy, bind, and audit arguments instead of dropping them. The
+  middleware guide now leads with the minimal config → start/bootstrap →
+  managed Codex sandbox flow; provider setup, curl probes, and audit
+  redirection are explicit/optional sections. Rust now owns OpenShell gRPC and
+  calls the daemon REST backend; the live macOS sandbox reports active policy
+  and provider credentials. Focused middleware unit/UX and Rust tests pass.
+
 - OpenShell middleware lifecycle now matches the daemon with `start`, `stop`,
   `status`, and `restart` subcommands. Background starts persist sanitized
   restart arguments and the config path in the XDG-backed private state file;
@@ -174,13 +182,18 @@ budget_tokens: 1000
 ## Next Quest
 
 - Await review of PR #2514.
+- Monitor PR #2513's fresh CI run for commit `15644bf1`, especially the Windows
+  Python 3.10 matrix job that previously timed out in the existing Pi UX
+  contract. No Pi/tray production change is warranted unless the rerun
+  produces a reproducible assertion failure.
+- Monitor PR #2515 for the Rust OpenShell middleware runtime and config/restart
+  fixes.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `docs/restore-openshell-sandbox-setup`
-- PR #2513 review fix and the related OpenWolf session bookkeeping are
-  committed together on this branch.
+- Branch: `fix/openshell-middleware-config-persistence`
+- PR #2515 contains the Rust middleware runtime and config/restart fixes.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
