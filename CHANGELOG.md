@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refusal notice to the transcript before rejecting a blocked prompt, so the
   next model turn knows the original request was refused without receiving its
   contents.
+- **OpenCode V2 tool refusal feedback:** Add safe transcript notices for blocked
+  pre-tool calls and withheld post-tool results, with fixed tool errors that
+  tell the model why the operation failed without exposing its contents.
 - **OpenCode V2 plugin loading (#2495):** Use OpenCode's local plugin
   auto-discovery instead of registering a TypeScript file as a package
   directory, and avoid the V2 plugin API import that the server resolver

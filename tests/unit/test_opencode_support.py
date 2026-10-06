@@ -355,11 +355,39 @@ def test_v2_prompt_blocks_add_safe_model_visible_refusal_notice():
     assert "AI Guardian refused the previous prompt." in _OPENCODE_PLUGIN_V2_TS
     assert "The original prompt was not sent to the model." in _OPENCODE_PLUGIN_V2_TS
     assert "Do not answer or continue that request." in _OPENCODE_PLUGIN_V2_TS
-    assert "ctx.session.synthetic({" in prompt_hook
+    assert "await recordRefusalNotice(" in prompt_hook
     assert "event.messageID" in prompt_hook
-    assert "resume: false" in prompt_hook
+    assert "resume: false" in _OPENCODE_PLUGIN_V2_TS
     assert "throw new Error('Blocked by ai-guardian')" in prompt_hook
     assert "result.error" not in prompt_hook
+
+
+def test_v2_tool_blocks_add_safe_pre_and_post_refusal_notices():
+    before_hook = _OPENCODE_PLUGIN_V2_TS.split(
+        "await ctx.tool.hook('execute.before'", maxsplit=1
+    )[1].split("await ctx.tool.hook('execute.after'", maxsplit=1)[0]
+    after_hook = _OPENCODE_PLUGIN_V2_TS.split(
+        "await ctx.tool.hook('execute.after'", maxsplit=1
+    )[1].split("const controller = new AbortController()", maxsplit=1)[0]
+
+    assert "const PRE_TOOL_REFUSAL_NOTICE =" in _OPENCODE_PLUGIN_V2_TS
+    assert "The tool did not run." in _OPENCODE_PLUGIN_V2_TS
+    assert "const POST_TOOL_REFUSAL_NOTICE =" in _OPENCODE_PLUGIN_V2_TS
+    assert "its result was withheld from the model." in _OPENCODE_PLUGIN_V2_TS
+    assert "await recordRefusalNotice(" in before_hook
+    assert "PRE_TOOL_REFUSAL_NOTICE" in before_hook
+    assert "event.id" in before_hook
+    assert "AI Guardian blocked this tool call before execution" in before_hook
+    assert "await recordRefusalNotice(" in after_hook
+    assert "POST_TOOL_REFUSAL_NOTICE" in after_hook
+    assert "event.id" in after_hook
+    assert (
+        "AI Guardian blocked this tool result after execution; result withheld"
+        in after_hook
+    )
+    assert "result.error" not in before_hook
+    assert "result.error" not in after_hook
+    assert "resume: false" in _OPENCODE_PLUGIN_V2_TS
 
 
 def test_openwolf_plugin_review_regressions_are_present():

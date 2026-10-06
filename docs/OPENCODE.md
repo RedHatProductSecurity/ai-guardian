@@ -32,6 +32,12 @@ events expose a mutable `event.result`; failed after-tool events expose
 `event.error` instead. AI Guardian scans both paths and only applies output
 redaction to completed results.
 
+Blocked pre-tool calls add a fixed notice saying the tool did not run. Blocked
+post-tool results add a notice saying the tool ran but its result was withheld;
+the tool's side effects cannot be undone. Both notices avoid tool arguments and
+result contents. OpenCode receives a fixed tool error immediately, and the
+synthetic transcript notice is available as context on the next model turn.
+
 When the V2 prompt hook blocks a prompt, it adds a fixed AI Guardian refusal
 notice to the session transcript as a synthetic entry with `resume: false`,
 then rejects the original prompt. OpenCode records the notice as synthetic

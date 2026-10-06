@@ -137,8 +137,58 @@ def test_opencode_v2_refused_prompt_is_recorded_without_sending_prompt_to_model(
     )
 
     assert expected_notice in _OPENCODE_PLUGIN_V2_TS
-    assert "ctx.session.synthetic({" in prompt_hook
-    assert "resume: false" in prompt_hook
-    assert "prompt," not in prompt_hook.split("ctx.session.synthetic({", maxsplit=1)[1]
+    assert "await recordRefusalNotice(" in prompt_hook
+    assert "resume: false" in _OPENCODE_PLUGIN_V2_TS
     assert "result.error" not in prompt_hook
     assert "throw new Error('Blocked by ai-guardian')" in prompt_hook
+
+
+def test_opencode_v2_pre_and_post_tool_blocks_reach_transcript_and_model():
+    """
+    USER EXPERIENCE: Blocked tool input/output -> safe AI Guardian notice.
+
+    Scenario:
+    1. The model attempts a tool operation that AI Guardian blocks before
+       execution, or a completed tool returns output AI Guardian blocks.
+    2. OpenCode marks the tool call as failed with a fixed, safe error.
+    3. AI Guardian records a stage-specific synthetic transcript notice without
+       copying tool arguments or output.
+
+    Expected User Experience:
+    - Before-tool notice says the tool did not run.
+    - After-tool notice says the tool ran but its result was withheld.
+    - The model receives a safe tool failure and later sees the refusal notice.
+    - Post-tool blocking does not claim to undo the tool's side effects.
+    - Redacted, allowed results still replace the original tool output.
+
+    Manual verification with OpenCode V2:
+    1. Configure a tool-input policy that denies a test tool call.
+    2. Confirm the tool does not execute and the refusal notice appears.
+    3. Configure a post-tool rule that blocks a test result.
+    4. Confirm the result is not returned to the model and the notice states
+       that the tool already ran.
+    """
+    before_hook = _OPENCODE_PLUGIN_V2_TS.split(
+        "await ctx.tool.hook('execute.before'", maxsplit=1
+    )[1].split("await ctx.tool.hook('execute.after'", maxsplit=1)[0]
+    after_hook = _OPENCODE_PLUGIN_V2_TS.split(
+        "await ctx.tool.hook('execute.after'", maxsplit=1
+    )[1].split("const controller = new AbortController()", maxsplit=1)[0]
+
+    assert "The tool did not run." in _OPENCODE_PLUGIN_V2_TS
+    assert "its result was withheld from the model." in _OPENCODE_PLUGIN_V2_TS
+    assert "await recordRefusalNotice(" in before_hook
+    assert "await recordRefusalNotice(" in after_hook
+    assert "AI Guardian blocked this tool call before execution" in before_hook
+    assert (
+        "AI Guardian blocked this tool result after execution; result withheld"
+        in after_hook
+    )
+    assert "result.error" not in before_hook
+    assert "result.error" not in after_hook
+    assert "event.result = resultWithReplacement(" in after_hook
+    notice_helper = _OPENCODE_PLUGIN_V2_TS.split(
+        "const recordRefusalNotice = async", maxsplit=1
+    )[1].split("await ctx.session.hook('prompt'", maxsplit=1)[0]
+    assert "event.input" not in notice_helper
+    assert "event.result" not in notice_helper

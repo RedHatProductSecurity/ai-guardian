@@ -4880,6 +4880,10 @@ const guardian = createGuardianBridge({ ideType: 'opencode' });
 const OPENCODE_VERSION = '2.0.0';
 const PROMPT_REFUSAL_NOTICE =
   'AI Guardian refused the previous prompt. The original prompt was not sent to the model. Do not answer or continue that request. Ask the user to provide a new prompt without the sensitive or blocked content.';
+const PRE_TOOL_REFUSAL_NOTICE =
+  'AI Guardian refused a tool call before execution. The tool did not run. Do not retry or continue that operation. Tell the user it was blocked and wait for a new instruction.';
+const POST_TOOL_REFUSAL_NOTICE =
+  'AI Guardian blocked a tool result after execution. The tool ran, but its result was withheld from the model. Do not infer or repeat the result. Tell the user it was blocked and wait for a new instruction.';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -4944,6 +4948,29 @@ export default {
   async setup(ctx) {
     const cwd = ctx.location.directory || process.cwd();
     const opencodeVersion = ctx.app.version;
+    const recordRefusalNotice = async (
+      sessionID: string,
+      sourceID: unknown,
+      text: string,
+      kind: string,
+    ) => {
+      try {
+        await ctx.session.synthetic({
+          sessionID,
+          ...(typeof sourceID === 'string'
+            ? { id: `msg_ai_guardian_${sourceID}` }
+            : {}),
+          text,
+          description: `AI Guardian ${kind}`,
+          metadata: { source: 'ai-guardian', kind },
+          resume: false,
+        });
+      } catch {
+        console.error(
+          '[ai-guardian] Could not add a refusal notice to the OpenCode transcript',
+        );
+      }
+    };
 
     await ctx.session.hook('prompt', async (event) => {
       const prompt = event.prompt?.text || '';
@@ -4953,27 +4980,17 @@ export default {
         session_id: event.sessionID,
       }, opencodeVersion));
       if (result.blocked) {
-        try {
-          await ctx.session.synthetic({
-            sessionID: event.sessionID,
-            ...(typeof event.messageID === 'string'
-              ? { id: `msg_ai_guardian_${event.messageID}` }
-              : {}),
-            text: PROMPT_REFUSAL_NOTICE,
-            description: 'AI Guardian prompt refusal',
-            metadata: { source: 'ai-guardian', kind: 'prompt-refusal' },
-            resume: false,
-          });
-        } catch {
-          console.error(
-            '[ai-guardian] Could not add a refusal notice to the OpenCode transcript',
-          );
-        }
+        await recordRefusalNotice(
+          event.sessionID,
+          event.messageID,
+          PROMPT_REFUSAL_NOTICE,
+          'prompt-refusal',
+        );
         throw new Error('Blocked by ai-guardian');
       }
     });
 
-    await ctx.tool.hook('execute.before', (event) => {
+    await ctx.tool.hook('execute.before', async (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
       const input = (event.input || {}) as JsonRecord;
       const result = guardian.run(hookData('tool.execute.before', cwd, {
@@ -4983,11 +5000,17 @@ export default {
         tool_use_id: event.id,
       }, opencodeVersion));
       if (result.blocked) {
-        throw new Error(result.error || 'Blocked by ai-guardian');
+        await recordRefusalNotice(
+          event.sessionID,
+          event.id,
+          PRE_TOOL_REFUSAL_NOTICE,
+          'pre-tool-refusal',
+        );
+        throw new Error('AI Guardian blocked this tool call before execution');
       }
     });
 
-    await ctx.tool.hook('execute.after', (event) => {
+    await ctx.tool.hook('execute.after', async (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
       const input = (event.input || {}) as JsonRecord;
       const error = event.error as unknown;
@@ -5005,7 +5028,15 @@ export default {
         tool_use_id: event.id,
       }, opencodeVersion));
       if (result.blocked) {
-        throw new Error(result.error || 'Blocked by ai-guardian');
+        await recordRefusalNotice(
+          event.sessionID,
+          event.id,
+          POST_TOOL_REFUSAL_NOTICE,
+          'post-tool-refusal',
+        );
+        throw new Error(
+          'AI Guardian blocked this tool result after execution; result withheld',
+        );
       }
       if (event.status === 'completed' && result.updatedOutput !== undefined) {
         event.result = resultWithReplacement(
