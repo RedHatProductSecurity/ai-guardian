@@ -391,7 +391,7 @@ redistributing the image. The build workflow deliberately publishes OpenShell
 only to the dedicated primary Quay repository and does not mirror it to
 `itdove`.
 For OpenShell installation and first-time setup, see the official
-[OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
+[OpenShell installation guide](https://docs.nvidia.com/openshell/latest/about/installation).
 For policy fields and validation rules, see the official
 [policy schema reference](https://docs.nvidia.com/openshell/reference/policy-schema)
 and [policy customization guide](https://docs.nvidia.com/openshell/sandboxes/policies).
@@ -485,12 +485,16 @@ openshell status
 For a containerized gateway, see OpenShell's [container gateway
 guide](https://docs.nvidia.com/openshell/about/container-gateway).
 
-Before the first sandbox command call, enable OpenShell Providers v2 on the active
-gateway. This is required for the supported Codex provider flow:
+Before the first sandbox command call, use the provider setup for the active
+OpenShell release. OpenShell `0.1.2` exposes this Providers v2 setting:
 
 ```bash
 openshell settings set --global --key providers_v2_enabled --value true
 ```
+
+Newer OpenShell releases may not expose this key. If the command reports
+`unknown setting key 'providers_v2_enabled'`, skip it and continue with the
+provider profile setup.
 
 ```bash
 ai-guardian sandbox create --runtime openshell        # opens a Codex sandbox shell
@@ -511,9 +515,13 @@ not start the CLI automatically.
 Provider profiles belong to the active OpenShell gateway; they are not stored
 in the repository, image, or Git branch. `--agent-provider` selects the provider
 inside the selected CLI; `--provider` separately attaches an OpenShell gateway
-provider. When `--provider` is omitted, the sandbox command asks that gateway
-for a provider profile matching the selected CLI/backend and may create or reuse
-the corresponding provider from local credentials. If the gateway does not advertise a Codex profile, a
+provider. For automatic Codex setup, `--openshell-auth oauth` selects the
+`codex` profile and `ai-guardian-codex`; `--openshell-auth api-key` selects the
+`openai` profile and `ai-guardian-openai`. If the option is omitted, the
+sandbox command detects local credentials. When `--provider` is omitted, the
+sandbox command asks that gateway for a provider profile matching the selected
+CLI/backend and may create or reuse the corresponding provider from local
+credentials. If the gateway does not advertise a Codex profile, a
 launch selecting `--cli codex` fails with an error such as “the active
 OpenShell gateway has no provider profile for codex.” Configure a Codex
 provider on that gateway first, or pass an already configured provider
@@ -676,13 +684,17 @@ startup, the entrypoint writes those placeholders into the selected
 `$CODEX_HOME/auth.json` in Codex's native ChatGPT format; it never writes the
 host's real OAuth tokens into the sandbox. A synthetic JWT-shaped ID token is
 used only because Codex parses that field locally. With a gateway that
-advertises the `codex` profile and has Providers v2 enabled, Codex should
+advertises the `codex` profile and has the required Providers v2 support, Codex should
 start without showing its sign-in menu and a separate OpenAI API key is not
-required. Enable the gateway feature once with:
+required. On OpenShell `0.1.2`, enable the gateway feature once with:
 
 ```bash
 openshell settings set --global --key providers_v2_enabled --value true
 ```
+
+If a newer OpenShell release reports `unknown setting key
+'providers_v2_enabled'`, skip this command; that release no longer exposes the
+legacy setting.
 
 For API-key authentication, the entrypoint instead runs `codex login
 --with-api-key` with the provider-injected `OPENAI_API_KEY` placeholder, so
@@ -726,10 +738,10 @@ allowed through the selected Codex policy.
 When a config, profile, or repository snapshot is needed, the sandbox command
 uploads it before explicitly invoking the image entrypoint with
 `openshell sandbox exec`. For Codex, when the active gateway advertises a matching
-profile, the sandbox command creates or reuses an `ai-guardian-codex` provider
-from existing local credentials when `--provider` is not supplied. Pass
-`--provider NAME` for a gateway that does not advertise an automatic provider
-profile.
+profile, the sandbox command creates or reuses `ai-guardian-codex` for OAuth or
+`ai-guardian-openai` for an API key from existing local credentials when
+`--provider` is not supplied. Pass `--provider NAME` for a gateway that does not
+advertise an automatic provider profile.
 
 The default image build is pinned to the latest stable PyPI release at the
 time the image definition is updated. At startup, the entrypoint checks the

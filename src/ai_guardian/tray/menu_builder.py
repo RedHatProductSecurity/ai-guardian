@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Tray exposes only the currently supported OpenShell CLI.
 TRAY_OPENSHELL_CLI_CHOICES = ("codex",)
+TRAY_OPENSHELL_AUTH_CHOICES = ("OAuth", "API key")
 TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
     "container": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["container"],
     "openshell": TRAY_OPENSHELL_CLI_CHOICES,
@@ -1057,12 +1058,18 @@ class TrayMenuBuilder:
         if agent_provider not in agent_provider_choices:
             agent_provider = ""
         model_default = os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", "")
-        openshell_provider_choices_by_cli = {"codex": ("",)}
-        openshell_provider_choices = (
-            openshell_provider_choices_by_cli.get(cli, ("",))
-            if runtime == "openshell"
-            else ()
+        openshell_auth_default = os.environ.get("AI_GUARDIAN_OPEN_SHELL_AUTH", "")
+        normalized_auth_default = (
+            str(openshell_auth_default)
+            .strip()
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
         )
+        if normalized_auth_default in {"api_key", "apikey"}:
+            openshell_auth_default = "API key"
+        else:
+            openshell_auth_default = "OAuth"
         providers_default = ""
         from ai_guardian.sandbox import _generated_openshell_name
 
@@ -1090,6 +1097,23 @@ class TrayMenuBuilder:
                 "default": cli,
                 "required": True,
                 "help": "Select the CLI to configure in the sandbox.",
+            },
+            {
+                "name": "openshell_auth",
+                "label": "Codex authentication",
+                "type": "choice",
+                "choices": TRAY_OPENSHELL_AUTH_CHOICES,
+                "default": openshell_auth_default,
+                "required": True,
+                "help": (
+                    "OAuth uses the codex profile and ai-guardian-codex; API key "
+                    "uses the openai profile and ai-guardian-openai."
+                ),
+                "enabled_when": {
+                    "field": "runtime",
+                    "values": ("openshell",),
+                },
+                "clear_when_disabled": True,
             },
             {
                 "name": "name",
@@ -1218,26 +1242,13 @@ class TrayMenuBuilder:
             },
             {
                 "name": "providers",
-                "label": "OpenShell providers",
-                "type": "choice" if runtime == "openshell" else "text",
-                "choices": openshell_provider_choices,
-                "editable": False if runtime == "openshell" else True,
-                "clear_when_choice_invalid": True,
-                "choices_by": (
-                    {
-                        "field": "cli",
-                        "values": openshell_provider_choices_by_cli,
-                    }
-                    if runtime == "openshell"
-                    else {}
-                ),
+                "label": "OpenShell provider override",
+                "type": "text",
                 "default": providers_default,
                 "help": (
-                    "Select existing OpenAI provider instance; one provider "
-                    "is selected automatically when unambiguous."
-                    if openshell_provider_choices
-                    else "OpenShell provider names; separate names with commas "
-                    "or newlines."
+                    "Optional existing provider instance; leave empty to use the "
+                    "Codex authentication selection above. Separate multiple "
+                    "providers with commas or newlines."
                 ),
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
@@ -1331,6 +1342,22 @@ class TrayMenuBuilder:
         agent_provider = str(values.get("agent_provider") or "").strip() or None
         cli_value = str(values.get("cli") or "").strip() or None
         cli = cli_value or "codex"
+        openshell_auth = None
+        if runtime == "openshell" and cli == "codex":
+            from ai_guardian.sandbox import _normalize_openshell_auth_mode
+
+            try:
+                openshell_auth = _normalize_openshell_auth_mode(
+                    values.get("openshell_auth") or "oauth"
+                )
+            except ValueError as exc:
+                self._sandbox_error(
+                    "Create AI Guardian sandbox",
+                    str(exc),
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
+                finish_flow()
+                return
         supported_cli_types = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME.get(runtime, ())
         if cli not in supported_cli_types:
             self._sandbox_error(
@@ -1479,6 +1506,7 @@ class TrayMenuBuilder:
                 image=image,
                 model=model,
                 api_key=None,
+                openshell_auth=openshell_auth,
                 environment=environment_values,
                 policy=policy_paths,
                 provider=provider_names,

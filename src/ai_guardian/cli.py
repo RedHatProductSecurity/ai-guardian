@@ -1422,6 +1422,16 @@ def main():
             help="OpenShell gateway provider to attach (repeatable)",
         )
         sandbox_create_parser.add_argument(
+            "--openshell-auth",
+            choices=("oauth", "api-key"),
+            dest="openshell_auth",
+            metavar="{oauth,api-key}",
+            help=(
+                "Choose OpenShell Codex authentication for automatic provider "
+                "setup; OAuth uses the codex profile and api-key uses openai"
+            ),
+        )
+        sandbox_create_parser.add_argument(
             "--label",
             action="append",
             metavar="KEY=VALUE",

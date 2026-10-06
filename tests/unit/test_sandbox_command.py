@@ -56,6 +56,7 @@ def _args(**overrides):
         "level": None,
         "since": None,
         "model": None,
+        "openshell_auth": None,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -1410,6 +1411,64 @@ def test_existing_openshell_codex_provider_refreshes_api_key(tmp_path):
     assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
 
 
+def test_explicit_openshell_oauth_selection_does_not_fall_back_to_api_key(
+    tmp_path,
+):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "auth_mode": "apikey",
+                "OPENAI_API_KEY": "api-secret",
+                "tokens": {
+                    "access_token": "access-secret",
+                    "refresh_token": "refresh-secret",
+                    "account_id": "account-secret",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = _args(environment=[], openshell_auth="oauth")
+
+    with (
+        patch.dict(
+            os.environ,
+            {"HOME": str(tmp_path), "CODEX_HOME": str(codex_home)},
+            clear=True,
+        ),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["codex", "openai"],
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch("ai_guardian.sandbox._openshell_providers_v2_enabled", return_value=True),
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+    ):
+        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+
+    command = run.call_args.args[0]
+    assert command[command.index("--type") + 1] == "codex"
+    assert command[-1] == "--from-existing"
+    assert "api-secret" not in command
+    assert "OPENAI_API_KEY" not in run.call_args.kwargs["env"]
+
+
+def test_explicit_openshell_api_key_selection_requires_a_key():
+    args = _args(environment=[], openshell_auth="api-key")
+
+    with (
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["codex", "openai"],
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        pytest.raises(ValueError, match="no OPENAI_API_KEY"),
+    ):
+        _ensure_openshell_cli_provider(args, "codex")
+
+
 def test_missing_openshell_api_key_profile_lists_setup_guidance(tmp_path):
     codex_home = tmp_path / ".codex"
     codex_home.mkdir()
@@ -1431,7 +1490,7 @@ def test_missing_openshell_api_key_profile_lists_setup_guidance(tmp_path):
         "openshell provider profile import --file /path/to/openai.yaml --global"
         in message
     )
-    assert "docs/Sandbox.md#manual-live-provider-smoke-tests" in message
+    assert "docs/Sandbox.md#openshell-provider-setup" in message
     assert "api-secret" not in message
 
 

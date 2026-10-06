@@ -178,7 +178,7 @@ OPENAI_API_KEY=... \
 
 # Preferred OpenShell sandbox (published image; local build is also supported)
 # OpenShell currently supports Codex only; Claude support is deferred until 0.1.3.
-openshell settings set --global --key providers_v2_enabled --value true
+# Complete the gateway/provider setup in docs/Sandbox.md first.
 podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 ai-guardian sandbox create --runtime openshell \
     --image quay.io/redhatproductsecurity/ai-guardian-openshell:latest \
@@ -267,7 +267,7 @@ gateway and does not use a host-side forward process.
 
 OpenShell must be installed and initialized on the host first, with a
 reachable gateway and configured compute driver; follow the
-[official OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
+[official OpenShell installation guide](https://docs.nvidia.com/openshell/latest/about/installation).
 On Fedora/Linux, verify the systemd user service with
 `systemctl --user status openshell-gateway`. On macOS, verify the Homebrew
 service with `brew services list`. In both cases, run `openshell status` before
@@ -290,15 +290,21 @@ image, whose V1 executable is pinned at `1.18.34`. OpenCode is outside the
 OpenShell runtime scope; see the [OpenCode support record](docs/OPENCODE.md) for
 the V1/V2 plugin contracts and exact limitations.
 
-For Codex ChatGPT/OAuth credentials, enable OpenShell Providers v2 once on the
-active gateway:
+For Codex ChatGPT/OAuth credentials, OpenShell `0.1.2` requires Providers v2
+to be enabled on the active gateway:
 
 ```bash
 openshell settings set --global --key providers_v2_enabled --value true
 ```
 
+Newer OpenShell releases may not expose this setting. If the command reports
+`unknown setting key 'providers_v2_enabled'`, skip it; the provider profile and
+credential setup remain the same.
+
 A Codex OAuth login does not require a separate API key after Providers v2 is
-enabled. Legacy Codex discovery requires `OPENAI_API_KEY` instead.
+enabled. Choose **OAuth** or **API key** in the tray's Create sandbox form, or
+pass `--openshell-auth oauth`/`--openshell-auth api-key` to select the matching
+`codex`/`openai` profile and `ai-guardian-codex`/`ai-guardian-openai` provider.
 The subcommand converts the gateway-provided OAuth placeholders into Codex's
 native sandbox-local `auth.json`; real host tokens are not uploaded. When host
 files must be uploaded, the subcommand uses a compatible staging flow and starts
