@@ -359,6 +359,23 @@ def _add_middleware_service_options(parser):
         help="Sandbox policy attachment key (default: <registration>-attachment)",
     )
     parser.add_argument(
+        "--registration-name",
+        metavar="NAME",
+        help=(
+            "Override the middleware registration name without modifying the "
+            "operator configuration"
+        ),
+    )
+    parser.add_argument(
+        "--provider-endpoint",
+        action="append",
+        metavar="HOST",
+        help=(
+            "Override a provider endpoint attached to the generated OpenShell "
+            "policy (repeatable)"
+        ),
+    )
+    parser.add_argument(
         "--bootstrap-force",
         action="store_true",
         help="Replace conflicting named bootstrap registration/policy files",
@@ -456,6 +473,155 @@ def _add_sandbox_runtime_options(parser, *, suppress_defaults=False):
         "--openshell-cli",
         default=default,
         help="OpenShell executable (default: $OPENSHELL_CLI or openshell)",
+    )
+
+
+def _add_openshell_middleware_create_options(parser):
+    """Add first-class external middleware options to sandbox creation."""
+
+    parser.add_argument(
+        "--middleware",
+        "--external-middleware",
+        action="store_true",
+        help=(
+            "Start or reuse external AI Guardian OpenShell middleware and "
+            "generate its gateway registration and sandbox attachment"
+        ),
+    )
+    parser.add_argument(
+        "--middleware-config",
+        "--openshell-middleware-config",
+        dest="middleware_config",
+        metavar="FILE",
+        help=(
+            "Operator middleware JSON/YAML configuration; omitted to generate "
+            "a private state-owned default configuration"
+        ),
+    )
+    parser.add_argument(
+        "--middleware-profile",
+        dest="middleware_profile",
+        metavar="PROFILE",
+        help="AI Guardian profile projected into external middleware",
+    )
+    parser.add_argument(
+        "--middleware-registration",
+        dest="middleware_registration",
+        metavar="NAME",
+        help="OpenShell gateway middleware registration name",
+    )
+    parser.add_argument(
+        "--middleware-provider-endpoint",
+        "--middleware-endpoint",
+        dest="middleware_provider_endpoint",
+        action="append",
+        metavar="HOST",
+        help="Provider host attached to middleware (repeatable)",
+    )
+    parser.add_argument(
+        "--middleware-probe",
+        dest="middleware_probe",
+        action="store_true",
+        help=(
+            "Permit /usr/bin/curl to reach the provider so a keyless middleware "
+            "denial probe can run before credential injection"
+        ),
+    )
+    parser.add_argument(
+        "--middleware-bind",
+        dest="middleware_bind",
+        metavar="HOST:PORT",
+        help="Middleware listener address (default: 127.0.0.1:50051)",
+    )
+    parser.add_argument(
+        "--middleware-implementation",
+        dest="middleware_implementation",
+        choices=("rust", "python"),
+        help="Middleware runtime implementation (default: rust)",
+    )
+    parser.add_argument(
+        "--middleware-gateway-config",
+        dest="middleware_gateway_config",
+        metavar="FILE",
+        help="OpenShell gateway TOML to update",
+    )
+    parser.add_argument(
+        "--middleware-gateway-endpoint",
+        dest="middleware_gateway_endpoint",
+        metavar="URL",
+        help="Reachable middleware URL advertised to the gateway",
+    )
+    parser.add_argument(
+        "--middleware-policy-out",
+        dest="middleware_policy_out",
+        metavar="FILE",
+        help="Generated middleware OpenShell policy path",
+    )
+    parser.add_argument(
+        "--middleware-policy-name",
+        dest="middleware_policy_name",
+        metavar="NAME",
+        help="Generated OpenShell policy attachment name",
+    )
+    parser.add_argument(
+        "--middleware-bootstrap-force",
+        dest="middleware_bootstrap_force",
+        action="store_true",
+        help="Replace conflicting generated gateway/policy settings",
+    )
+    parser.add_argument(
+        "--middleware-restart",
+        dest="middleware_restart",
+        action="store_true",
+        help="Restart an existing background middleware service",
+    )
+    parser.add_argument(
+        "--middleware-allow-insecure",
+        dest="middleware_allow_insecure",
+        action="store_true",
+        help="Allow local plaintext middleware transport (development only)",
+    )
+    parser.add_argument(
+        "--middleware-allow-insecure-wildcard-bind",
+        dest="middleware_allow_insecure_wildcard_bind",
+        action="store_true",
+        help="Allow plaintext middleware on a wildcard bind (development only)",
+    )
+    parser.add_argument(
+        "--middleware-gateway-tls-ca",
+        dest="middleware_gateway_tls_ca",
+        metavar="FILE",
+        help="CA PEM path for a TLS gateway registration",
+    )
+    parser.add_argument(
+        "--middleware-tls-cert",
+        dest="middleware_tls_cert",
+        metavar="FILE",
+        help="Middleware server certificate PEM path",
+    )
+    parser.add_argument(
+        "--middleware-tls-key",
+        dest="middleware_tls_key",
+        metavar="FILE",
+        help="Middleware server private-key PEM path",
+    )
+    parser.add_argument(
+        "--middleware-tls-client-ca",
+        dest="middleware_tls_client_ca",
+        metavar="FILE",
+        help="Middleware client CA PEM path",
+    )
+    parser.add_argument(
+        "--middleware-jwt-public-key",
+        dest="middleware_jwt_public_key",
+        metavar="FILE",
+        help="JWT public-key PEM path for secure middleware transport",
+    )
+    parser.add_argument(
+        "--middleware-jwt-audience",
+        dest="middleware_jwt_audience",
+        metavar="AUDIENCE",
+        help="JWT audience for secure middleware transport",
     )
 
 
@@ -1331,6 +1497,7 @@ def main():
         sandbox_create_parser = _sandbox_command_parser(
             "create", "Create a sandbox (OpenShell connects when ready)"
         )
+        _add_openshell_middleware_create_options(sandbox_create_parser)
         sandbox_create_parser.add_argument(
             "--name",
             help=(
@@ -1593,6 +1760,8 @@ def main():
             gateway_tls_ca=None,
             policy_out=None,
             policy_name=None,
+            registration_name=None,
+            provider_endpoint=None,
             bootstrap_force=False,
             profile=None,
             bind="127.0.0.1:50051",

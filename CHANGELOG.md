@@ -22,8 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `openshell-middleware` command supports daemon-style `start`, `status`,
   `stop`, and `restart` subcommands (with legacy flag aliases). Versioned
   adapters reuse the latest
-  compatible implementation across same-major OpenShell releases. See
-  `docs/OPENSHELL_MIDDLEWARE.md`.
+   compatible implementation across same-major OpenShell releases. See
+   `docs/OPENSHELL_MIDDLEWARE.md`.
+- **First-class OpenShell middleware sandbox creation (#2507):** Add
+  `sandbox create --middleware` support for state-owned middleware config and
+  policy generation, gateway registration bootstrap, host-daemon startup,
+  provider-endpoint validation, secure transport overrides, and an optional
+  credential-free `/usr/bin/curl` denial probe. Existing `--policy` and
+  `--provider` overlays remain compatible.
 - **Remembered OpenShell middleware starts (#2484):** Background middleware
   state now persists safe restart arguments and the selected config path under
   the XDG-backed AI Guardian state directory, so `restart` can reuse the prior
