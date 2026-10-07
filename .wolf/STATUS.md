@@ -60,7 +60,8 @@ budget_tokens: 1000
   Codex, unwraps daemon IPC responses, and returns sensitive-content denials
   instead of middleware failures. Focused middleware/daemon tests, 4 Rust
   tests, and the live Codex HTTP/WebSocket checks pass. Commit `6f84e070` is
-  pushed to PR #2515. Commit `5bc46714` clarifies Codex retry behavior.
+  pushed to PR #2515. Commit `5bc46714` clarifies Codex retry behavior and
+  `4c9969dc` applies valid CodeRabbit hardening findings.
 
 - OpenShell middleware lifecycle now matches the daemon with `start`, `stop`,
   `status`, and `restart` subcommands. Background starts persist sanitized
