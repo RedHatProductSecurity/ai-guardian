@@ -385,7 +385,13 @@ class DaemonServer:
                 is_subscriber = True
                 return
             elif msg_type == "status":
-                response = make_response(self.state.get_stats())
+                stats = self.state.get_stats()
+                status_data = request.get("data") or {}
+                if isinstance(status_data, dict) and status_data.get("project_dir"):
+                    stats["middleware_pause"] = self.state.get_pause_status(
+                        status_data["project_dir"]
+                    )
+                response = make_response(stats)
             elif msg_type == "pause":
                 minutes = request.get("data", {}).get("minutes", 0)
                 self.state.pause(minutes)
@@ -670,6 +676,13 @@ class DaemonServer:
         from ai_guardian.scanners.pipeline import scan_content
         from ai_guardian.scanners.scanner_registry import ScannerName
 
+        project_dir = data.get("project_dir")
+        if project_dir:
+            self.state.check_project_config(project_dir)
+        pause_status = self.state.get_pause_status(project_dir)
+        if pause_status.get("paused"):
+            return self._middleware_paused_result(data, pause_status)
+
         check_to_scanner = {
             "injection": ScannerName.PROMPT_INJECTION,
             "context_poisoning": ScannerName.CONTEXT_POISONING,
@@ -722,6 +735,69 @@ class DaemonServer:
             "clean": not findings,
             "findings": findings,
             "redacted": redacted,
+        }
+
+    def _middleware_paused_result(self, data, pause_status):
+        """Return an explicit fail-closed decision for paused middleware."""
+
+        from ai_guardian.violations.decision import PolicyDecision
+
+        project_dir = data.get("project_dir")
+        correlation_id = data.get("correlation_id") or data.get("session_id")
+        decision = PolicyDecision(
+            event="middleware_check",
+            decision="block",
+            reason="middleware_paused",
+            severity="warning",
+            source="daemon",
+            agent="openshell-middleware",
+            repository=project_dir,
+            correlation_id=correlation_id,
+        ).to_dict()
+        audit_state = {
+            key: value for key, value in pause_status.items() if value is not None
+        }
+        logger.warning(
+            "OpenShell middleware check denied: reason_code=middleware_paused "
+            "source=%s scope=%s project_dir=%s remaining_seconds=%s",
+            pause_status.get("source"),
+            pause_status.get("scope"),
+            project_dir or "",
+            pause_status.get("remaining_seconds", 0),
+        )
+        try:
+            from ai_guardian.violations.logger import ViolationLogger
+
+            ViolationLogger().log_violation(
+                "middleware_paused",
+                blocked={
+                    "reason_code": "middleware_paused",
+                    "pause": audit_state,
+                },
+                context={
+                    "ide_type": "openshell-middleware",
+                    "agent": "openshell",
+                    "project_dir": project_dir,
+                },
+                severity="warning",
+                policy_decision=decision,
+            )
+        except Exception:  # pragma: no cover - audit must not alter denial
+            logger.critical(
+                "Failed to persist middleware pause audit record", exc_info=True
+            )
+        return {
+            "clean": False,
+            "findings": [],
+            "redacted": None,
+            "paused": True,
+            "reason_code": "middleware_paused",
+            "message": "AI Guardian middleware is paused",
+            "pause": audit_state,
+            "pause_source": pause_status.get("source"),
+            "pause_scope": pause_status.get("scope"),
+            "pause_remaining_seconds": pause_status.get("remaining_seconds", 0),
+            "policy_decision": decision,
         }
 
     def _handle_engine_test(self, data):

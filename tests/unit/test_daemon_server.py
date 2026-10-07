@@ -307,6 +307,26 @@ class TestDaemonServerProtocol:
         finally:
             sock.close()
 
+    def test_status_request_accepts_project_scope_for_middleware(self, running_server):
+        server, sock_path = running_server
+        server.state.pause_dir("/project/a")
+        sock = _connect(sock_path)
+        try:
+            sock.sendall(
+                encode_message(
+                    {
+                        "version": 1,
+                        "type": "status",
+                        "data": {"project_dir": "/project/a"},
+                    }
+                )
+            )
+            response = decode_message(sock, timeout=2.0)
+            assert response["data"]["middleware_pause"]["paused"] is True
+            assert response["data"]["middleware_pause"]["scope"] == "project"
+        finally:
+            sock.close()
+
     def test_shutdown_request(self, short_state_dir, monkeypatch):
 
         server = DaemonServer(idle_timeout=30, enable_rest_api=False)
@@ -469,6 +489,52 @@ class TestDaemonServerProtocol:
             )
 
         assert result["findings"][0]["type"] == "jailbreak"
+
+    def test_middleware_check_returns_explicit_paused_decision(self, short_state_dir):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause(5)
+
+        result = server._handle_middleware_check(
+            {
+                "text": "safe content",
+                "checks": ["injection"],
+                "correlation_id": "paused-request",
+            }
+        )
+
+        assert result["clean"] is False
+        assert result["findings"] == []
+        assert result["paused"] is True
+        assert result["reason_code"] == "middleware_paused"
+        assert result["pause_source"] == "daemon"
+        assert result["pause_remaining_seconds"] > 0
+        assert result["policy_decision"]["decision"] == "block"
+
+    def test_middleware_check_project_pause_only_matches_project(self, short_state_dir):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause_dir("/project/a", 5)
+
+        with mock.patch(
+            "ai_guardian.scanners.pipeline.scan_content", return_value=[]
+        ) as scan:
+            paused = server._handle_middleware_check(
+                {
+                    "text": "safe content",
+                    "checks": ["injection"],
+                    "project_dir": "/project/a",
+                }
+            )
+            clean = server._handle_middleware_check(
+                {
+                    "text": "safe content",
+                    "checks": ["injection"],
+                    "project_dir": "/project/b",
+                }
+            )
+
+        assert paused["reason_code"] == "middleware_paused"
+        assert clean["clean"] is True
+        scan.assert_called_once()
 
 
 class TestDaemonServerSubscriber:

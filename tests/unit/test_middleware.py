@@ -50,6 +50,8 @@ from ai_guardian.middleware.openshell.server import (
 )
 from ai_guardian.middleware.openshell.v0_1_2.server import (
     _middleware_command_without_lifecycle_flags,
+    _pause_middleware,
+    _resume_middleware,
     _middleware_state_path,
     _needs_macos_tcp_relay,
     _saved_middleware_restart_args,
@@ -138,7 +140,7 @@ def _scan_content(text, **kwargs):
     return []
 
 
-def _service(policy=None, violation_logger=None):
+def _service(policy=None, violation_logger=None, pause_file=None, project_dir=None):
     scanner = SemanticContentScanner(
         (policy or _policy()).profile,
         scan_fn=_scan_content,
@@ -148,6 +150,8 @@ def _service(policy=None, violation_logger=None):
         policy or _policy(),
         scanner=scanner,
         violation_logger=violation_logger,
+        pause_file=pause_file,
+        project_dir=project_dir,
     )
 
 
@@ -442,6 +446,43 @@ def test_http_request_payload_limit_fails_closed():
     response = service.EvaluateHttpRequest(_request(b"x" * 17), FakeContext())
     assert response.decision == pb2.DECISION_DENY
     assert response.reason_code == "payload_limit_exceeded"
+
+
+def test_http_request_fails_closed_when_standalone_middleware_is_paused(tmp_path):
+    from ai_guardian.middleware.pause import MiddlewarePauseStore
+
+    pause_file = tmp_path / "middleware.paused"
+    MiddlewarePauseStore(pause_file).pause(5)
+    service = _service(pause_file=pause_file)
+
+    response = service.EvaluateHttpRequest(_request(b"safe content"), FakeContext())
+
+    assert response.decision == pb2.DECISION_DENY
+    assert response.reason_code == "middleware_paused"
+    assert response.metadata["pause_source"] == "middleware"
+    assert response.metadata["pause_scope"] == "global"
+
+
+def test_http_response_pause_blocks_delivery_at_preflight(tmp_path):
+    from ai_guardian.middleware.pause import MiddlewarePauseStore
+
+    pause_file = tmp_path / "middleware.paused"
+    MiddlewarePauseStore(pause_file).pause()
+    service = _service(pause_file=pause_file)
+    event = pb2.HttpResponseEvent(
+        preflight=pb2.HttpResponsePreflight(
+            context=pb2.RequestContext(request_id="paused-response"),
+            target=pb2.HttpRequestTarget(host="provider.example"),
+            middleware_name="content-guard",
+            permitted_body_modes=[pb2.HTTP_RESPONSE_BODY_MODE_STREAM_BYTES],
+        )
+    )
+
+    results = list(service.Evaluate(iter((event,)), FakeContext()))
+
+    assert results[0].preflight_result.reason_code == "middleware_paused"
+    assert results[0].preflight_result.HasField("block_delivery")
+    assert results[0].preflight_result.metadata["pause_source"] == "middleware"
 
 
 def test_both_route_deduplicates_findings_before_emitting_them():
@@ -973,6 +1014,58 @@ def test_cli_exposes_openshell_middleware_stop_and_status_subcommands(lifecycle)
     assert run.call_args.args[0].middleware_command == lifecycle
 
 
+def test_cli_exposes_standalone_middleware_pause_scope_and_duration():
+    with (
+        patch(
+            "sys.argv",
+            [
+                "ai-guardian",
+                "openshell-middleware",
+                "pause",
+                "15",
+                "--dir",
+                "/project/a",
+                "--pause-file",
+                "/tmp/middleware.paused",
+            ],
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.server.run_middleware_server",
+            return_value=0,
+        ) as run,
+    ):
+        assert main() == 0
+
+    arguments = run.call_args.args[0]
+    assert arguments.middleware_command == "pause"
+    assert arguments.minutes == 15
+    assert arguments.project_dir == "/project/a"
+    assert arguments.pause_file == "/tmp/middleware.paused"
+
+
+def test_cli_exposes_standalone_middleware_resume():
+    with (
+        patch(
+            "sys.argv",
+            [
+                "ai-guardian",
+                "openshell-middleware",
+                "resume",
+                "--json",
+            ],
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.server.run_middleware_server",
+            return_value=0,
+        ) as run,
+    ):
+        assert main() == 0
+
+    arguments = run.call_args.args[0]
+    assert arguments.middleware_command == "resume"
+    assert arguments.json_output is True
+
+
 def test_background_middleware_command_removes_restart_subcommand(tmp_path):
     pid_file = tmp_path / "middleware.pid"
     log_file = tmp_path / "middleware.log"
@@ -1153,3 +1246,17 @@ def test_middleware_status_removes_stale_pid_file(tmp_path):
 
     assert _status_middleware_background(args) == 1
     assert not pid_file.exists()
+
+
+def test_standalone_middleware_lifecycle_does_not_require_daemon(tmp_path, capsys):
+    args = SimpleNamespace(
+        pause_file=str(tmp_path / "middleware.paused"),
+        project_dir=None,
+        minutes=10,
+        json_output=False,
+    )
+
+    assert _pause_middleware(args) == 0
+    assert "PAUSED" in capsys.readouterr().out
+    assert _resume_middleware(args) == 0
+    assert "not paused" in capsys.readouterr().out

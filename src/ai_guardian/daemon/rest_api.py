@@ -56,6 +56,7 @@ class _RestHandler(BaseHTTPRequestHandler):
             state = self.server.daemon_state
             stats = state.get_stats() if state else {}
             result = {"status": "ok", "paused": stats.get("paused", False)}
+            result["middleware_pause"] = self._get_middleware_pause_status()
             name = getattr(self.server, "instance_name", None) or "ai-guardian"
             result["name"] = name
             self._send_json(result)
@@ -66,6 +67,10 @@ class _RestHandler(BaseHTTPRequestHandler):
         path = parsed.path
         if path == "/api/status":
             self._send_json(self._get_status())
+        elif path == "/api/middleware/status":
+            qs = urllib.parse.parse_qs(parsed.query)
+            project_dir = qs.get("project_dir", [None])[0]
+            self._send_json(self._get_middleware_pause_status(project_dir))
         elif path == "/api/stats":
             self._send_json(self._get_stats())
         elif path == "/api/about":
@@ -183,10 +188,21 @@ class _RestHandler(BaseHTTPRequestHandler):
                 self._send_error(400, "minutes must be a number between 0 and 1440")
                 return
             self.server.daemon_state.pause(minutes)
-            self._send_json({"status": "paused", "minutes": minutes})
+            self._send_json(
+                {
+                    "status": "paused",
+                    "minutes": minutes,
+                    "middleware_pause": self._get_middleware_pause_status(),
+                }
+            )
         elif self.path == "/api/resume":
             self.server.daemon_state.resume()
-            self._send_json({"status": "resumed"})
+            self._send_json(
+                {
+                    "status": "resumed",
+                    "middleware_pause": self._get_middleware_pause_status(),
+                }
+            )
         elif self.path == "/api/pause_dir":
             body = self._read_body()
             if body is None:
@@ -201,7 +217,12 @@ class _RestHandler(BaseHTTPRequestHandler):
                 return
             self.server.daemon_state.pause_dir(directory, minutes)
             self._send_json(
-                {"status": "dir_paused", "dir": directory, "minutes": minutes}
+                {
+                    "status": "dir_paused",
+                    "dir": directory,
+                    "minutes": minutes,
+                    "middleware_pause": self._get_middleware_pause_status(directory),
+                }
             )
         elif self.path == "/api/resume_dir":
             body = self._read_body()
@@ -212,7 +233,13 @@ class _RestHandler(BaseHTTPRequestHandler):
                 self._send_error(400, "dir is required")
                 return
             self.server.daemon_state.resume_dir(directory)
-            self._send_json({"status": "dir_resumed", "dir": directory})
+            self._send_json(
+                {
+                    "status": "dir_resumed",
+                    "dir": directory,
+                    "middleware_pause": self._get_middleware_pause_status(directory),
+                }
+            )
         elif self.path == "/api/reload":
             self.server.daemon_state.force_reload_config()
             self._send_json({"status": "config_reloaded"})
@@ -348,6 +375,7 @@ class _RestHandler(BaseHTTPRequestHandler):
         state = self.server.daemon_state
         stats = state.get_stats()
         paused_dirs = stats.get("paused_dirs", {})
+        middleware_pause = self._get_middleware_pause_status()
         config_source, config_read_only = self._get_config_metadata()
         result = {
             "running": True,
@@ -359,14 +387,33 @@ class _RestHandler(BaseHTTPRequestHandler):
             "mcp_installed": stats.get("mcp_installed", False),
             "config_source": config_source,
             "config_read_only": config_read_only,
+            "middleware_pause": middleware_pause,
         }
         menu_tags = self._get_menu_tags()
         if menu_tags:
             result["menu_tags"] = menu_tags
         return result
 
+    def _get_middleware_pause_status(self, project_dir=None):
+        """Return the daemon state exposed to attached middleware clients."""
+
+        state = self.server.daemon_state
+        get_pause_status = getattr(state, "get_pause_status", None)
+        if callable(get_pause_status):
+            return get_pause_status(project_dir)
+        stats = state.get_stats() if state else {}
+        paused = bool(stats.get("paused", False))
+        return {
+            "paused": paused,
+            "source": "daemon" if paused else "none",
+            "scope": "global" if paused else None,
+            "remaining_seconds": stats.get("pause_remaining_seconds", 0),
+            "reason": "daemon_pause" if paused else None,
+        }
+
     def _get_stats(self):
         stats = self.server.daemon_state.get_stats()
+        stats.setdefault("middleware_pause", self._get_middleware_pause_status())
         name = self._get_instance_name()
         if name:
             stats["name"] = name
@@ -922,6 +969,14 @@ class _RestHandler(BaseHTTPRequestHandler):
             self.server.daemon_state.check_project_config(project_dir)
 
         t0 = _time.monotonic()
+        pause_status = self._get_middleware_pause_status(project_dir)
+        if pause_status.get("paused"):
+            self._send_json(
+                self._middleware_paused_response(
+                    body, pause_status, (_time.monotonic() - t0) * 1000
+                )
+            )
+            return
 
         try:
             from ai_guardian.sdk import _DirectSession
@@ -1102,6 +1157,71 @@ class _RestHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.error("Check endpoint failed: %s", e)
             self._send_error(500, "Internal error")
+
+    def _middleware_paused_response(self, body, pause_status, elapsed_ms):
+        """Build and audit a pause decision for REST middleware callers."""
+
+        from ai_guardian.violations.decision import PolicyDecision
+
+        project_dir = body.get("project_dir")
+        correlation_id = body.get("correlation_id") or body.get("session_id")
+        decision = PolicyDecision(
+            event="rest_check",
+            decision="block",
+            reason="middleware_paused",
+            severity="warning",
+            source="rest_api",
+            agent="openshell-middleware",
+            repository=project_dir,
+            correlation_id=correlation_id,
+            latency_ms=elapsed_ms,
+        ).to_dict()
+        audit_state = {
+            key: value for key, value in pause_status.items() if value is not None
+        }
+        logger.warning(
+            "OpenShell middleware REST check denied: reason_code=middleware_paused "
+            "source=%s scope=%s project_dir=%s remaining_seconds=%s",
+            pause_status.get("source"),
+            pause_status.get("scope"),
+            project_dir or "",
+            pause_status.get("remaining_seconds", 0),
+        )
+        try:
+            from ai_guardian.violations.logger import ViolationLogger
+
+            ViolationLogger().log_violation(
+                "middleware_paused",
+                blocked={
+                    "reason_code": "middleware_paused",
+                    "pause": audit_state,
+                },
+                context={
+                    "ide_type": "openshell-middleware",
+                    "agent": "openshell",
+                    "project_dir": project_dir,
+                },
+                severity="warning",
+                policy_decision=decision,
+            )
+        except Exception:  # pragma: no cover - audit must not alter denial
+            logger.critical(
+                "Failed to persist middleware pause REST audit record", exc_info=True
+            )
+        return {
+            "clean": False,
+            "findings": [],
+            "redacted": None,
+            "elapsed_ms": round(elapsed_ms, 1),
+            "paused": True,
+            "reason_code": "middleware_paused",
+            "message": "AI Guardian middleware is paused",
+            "pause": audit_state,
+            "pause_source": pause_status.get("source"),
+            "pause_scope": pause_status.get("scope"),
+            "pause_remaining_seconds": pause_status.get("remaining_seconds", 0),
+            "policy_decision": decision,
+        }
 
     def _handle_violation_context(self, body):
         """Handle POST /api/violation-context — rescan file for matched text."""

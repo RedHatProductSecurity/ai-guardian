@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1196 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1197 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~73458 tok)
+- `CHANGELOG.md` — Change log (~73538 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -916,12 +916,12 @@
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
 - `MCP_SERVER.md` — MCP Security Advisor Server (~4091 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
-- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~7258 tok)
+- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~7296 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~10772 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~11294 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
@@ -1008,11 +1008,11 @@
 
 - `build.rs` (~232 tok)
 - `Cargo.toml` — Rust package manifest (~243 tok)
-- `README.md` — Project documentation (~493 tok)
+- `README.md` — Project documentation (~633 tok)
 
 ## rust/openshell-middleware/src/
 
-- `main.rs` — Rust OpenShell supervisor middleware. (~13063 tok)
+- `main.rs` — Rust OpenShell supervisor middleware. (~18797 tok)
 
 ## scripts/
 
@@ -1039,7 +1039,7 @@
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12000 tok)
-- `cli.py` — Declares with (~34849 tok)
+- `cli.py` — Declares with (~35545 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
@@ -1088,9 +1088,9 @@
 - `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~16625 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 12 more (~1880 tok)
-- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~18263 tok)
-- `server.py` — URL configuration (~11804 tok)
-- `state.py` — URL configuration (~19056 tok)
+- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~19621 tok)
+- `server.py` — URL configuration (~12681 tok)
+- `state.py` — URL configuration (~19891 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
 - `violation_rescan.py` — Rescan a file at a violation location to retrieve matched text. (~3372 tok)
@@ -1156,6 +1156,7 @@
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4071 tok)
 - `config.py` — Configuration and scanner-ownership rules for supervisor middleware. (~6505 tok)
 - `dedup.py` — Pre-persistence deduplication for explicit hook/middleware defense-in-depth. (~653 tok)
+- `pause.py` — Pause state shared by the daemon and standalone middleware runtimes. (~3578 tok)
 - `semantic.py` — Provider-payload normalization and semantic content scanning. (~3667 tok)
 - `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~21420 tok)
 
@@ -1164,7 +1165,7 @@
 - `__init__.py` — Version-selected NVIDIA OpenShell supervisor-middleware adapters. (~93 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4065 tok)
 - `registry.py` — OpenShell release-to-adapter selection. (~1768 tok)
-- `server.py` — Stable facade for version-selected OpenShell middleware adapters. (~415 tok)
+- `server.py` — Stable facade for version-selected OpenShell middleware adapters. (~451 tok)
 
 ## src/ai_guardian/middleware/openshell/proto/
 
@@ -1180,7 +1181,7 @@
 
 - `__init__.py` — OpenShell v0.1.2 supervisor-middleware adapter implementation. (~20 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4106 tok)
-- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~31433 tok)
+- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~34834 tok)
 
 ## src/ai_guardian/middleware/openshell/v0_1_2/proto/
 
@@ -1490,7 +1491,7 @@
 - `decision.py` — Versioned, safe policy decision records. (~4327 tok)
 - `guidance.py` — Shared fix-guidance logic for violation resolution instructions. (~3728 tok)
 - `log_violation.py` — Unified violation logging — one function for all scanner types. (~2440 tok)
-- `logger.py` — ViolationLogger: log_violation, get_recent_violations, mark_resolved, mark_unresolved + 2 more (~4974 tok)
+- `logger.py` — ViolationLogger: log_violation, get_recent_violations, mark_resolved, mark_unresolved + 2 more (~4984 tok)
 - `redact.py` — Redact sensitive matched_text values before persisting violation records. (~600 tok)
 - `utils.py` — Utilities for violation detection and analysis. (~419 tok)
 

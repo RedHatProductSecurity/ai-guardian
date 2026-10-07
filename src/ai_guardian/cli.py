@@ -276,7 +276,7 @@ def _handle_ml_command(args, ml_parser):
 
 
 def _add_middleware_state_options(parser):
-    """Add PID/log path options shared by middleware lifecycle commands."""
+    """Add state paths and scope options shared by middleware commands."""
 
     parser.add_argument(
         "--pid-file",
@@ -287,6 +287,19 @@ def _add_middleware_state_options(parser):
         "--log-file",
         metavar="FILE",
         help="Background middleware log file (default: AI Guardian state directory)",
+    )
+    parser.add_argument(
+        "--pause-file",
+        metavar="FILE",
+        help=(
+            "Standalone middleware pause state file (default: AI Guardian state "
+            "directory)"
+        ),
+    )
+    parser.add_argument(
+        "--project-dir",
+        metavar="DIR",
+        help="Project scope controlled by this middleware instance",
     )
 
 
@@ -1743,7 +1756,8 @@ def main():
             help="Manage the operator-managed OpenShell semantic middleware service",
             description=(
                 "Manage AI Guardian as an external NVIDIA OpenShell supervisor "
-                "middleware service. Use start, stop, status, or restart like "
+                "middleware service. Use start, stop, status, restart, pause, or "
+                "resume like "
                 "the daemon command. A versioned adapter is selected from the "
                 "installed or configured OpenShell release. OpenShell gateway "
                 "registration and sandbox policy attachment remain operator-managed "
@@ -1777,6 +1791,10 @@ def main():
             allow_insecure_wildcard_bind=False,
             pid_file=None,
             log_file=None,
+            pause_file=None,
+            project_dir=None,
+            json_output=False,
+            minutes=0,
             background=False,
             stop=False,
             restart=False,
@@ -1809,7 +1827,8 @@ def main():
         )
 
         middleware_sub = middleware_server_parser.add_subparsers(
-            dest="middleware_command", metavar="{start,stop,status,restart}"
+            dest="middleware_command",
+            metavar="{start,stop,status,restart,pause,resume}",
         )
         middleware_start_parser = middleware_sub.add_parser(
             "start",
@@ -1836,11 +1855,63 @@ def main():
             argument_default=argparse.SUPPRESS,
             help="Stop the background middleware service",
         )
-        middleware_sub.add_parser(
+        middleware_status_parser = middleware_sub.add_parser(
             "status",
             parents=[middleware_state_parser],
             argument_default=argparse.SUPPRESS,
             help="Show background middleware service status",
+        )
+        middleware_status_parser.add_argument(
+            "--json",
+            action="store_true",
+            dest="json_output",
+            default=argparse.SUPPRESS,
+        )
+        middleware_pause_parser = middleware_sub.add_parser(
+            "pause",
+            parents=[middleware_state_parser],
+            argument_default=argparse.SUPPRESS,
+            help="Pause middleware enforcement without requiring a daemon",
+        )
+        middleware_pause_parser.add_argument(
+            "minutes",
+            nargs="?",
+            default=argparse.SUPPRESS,
+            type=_parse_pause_minutes,
+            metavar="MINUTES",
+            help="Pause duration in minutes (0 or omitted: indefinite)",
+        )
+        middleware_pause_parser.add_argument(
+            "--dir",
+            dest="project_dir",
+            metavar="DIR",
+            default=argparse.SUPPRESS,
+            help="Project scope to pause instead of the global middleware scope",
+        )
+        middleware_pause_parser.add_argument(
+            "--json",
+            action="store_true",
+            dest="json_output",
+            default=argparse.SUPPRESS,
+        )
+        middleware_resume_parser = middleware_sub.add_parser(
+            "resume",
+            parents=[middleware_state_parser],
+            argument_default=argparse.SUPPRESS,
+            help="Resume middleware enforcement without requiring a daemon",
+        )
+        middleware_resume_parser.add_argument(
+            "--dir",
+            dest="project_dir",
+            metavar="DIR",
+            default=argparse.SUPPRESS,
+            help="Project scope to resume instead of the global middleware scope",
+        )
+        middleware_resume_parser.add_argument(
+            "--json",
+            action="store_true",
+            dest="json_output",
+            default=argparse.SUPPRESS,
         )
 
         # Tray-independent global pause/resume commands (#2427)

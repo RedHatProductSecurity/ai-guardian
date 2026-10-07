@@ -260,6 +260,23 @@ class TestPauseResume:
         assert not state.paused
         assert state.pause_remaining_seconds() == 0.0
 
+    def test_get_pause_status_reports_global_and_project_scope(self, tmp_path):
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+
+        assert state.get_pause_status()["paused"] is False
+
+        state.pause_dir(str(tmp_path / "project"))
+        project_status = state.get_pause_status(str(tmp_path / "project"))
+        other_status = state.get_pause_status(str(tmp_path / "other"))
+        assert project_status["paused"] is True
+        assert project_status["scope"] == "project"
+        assert other_status["paused"] is False
+
+        state.pause(duration_minutes=5)
+        global_status = state.get_pause_status(str(tmp_path / "project"))
+        assert global_status["paused"] is True
+        assert global_status["scope"] == "global"
+
 
 class TestPerDirectoryPause:
     """Tests for per-directory pause/resume (#958)."""
