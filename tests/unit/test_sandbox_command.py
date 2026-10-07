@@ -1367,7 +1367,10 @@ def test_openshell_middleware_generates_state_owned_config(tmp_path, monkeypatch
         "require_effective_policy": True,
         "allow_insecure_transport": True,
     }
-    assert config_path.stat().st_mode & 0o777 == 0o600
+    # POSIX mode bits are not portable on Windows; Windows uses ACLs and
+    # reports a platform-specific mode through pathlib.Path.stat().
+    if os.name != "nt":
+        assert config_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_openshell_middleware_command_propagates_secure_options(tmp_path):
