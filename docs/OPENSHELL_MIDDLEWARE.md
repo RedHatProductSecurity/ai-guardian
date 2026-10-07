@@ -934,6 +934,19 @@ may display its WebSocket fallback sequence before the HTTP denial. Codex
 v0.154 can also render a temporary reconnect status while retrying a denied
 HTTP stream; middleware cannot control that client-side display or retry loop.
 
+### Recovering Codex conversation after a blocked prompt
+
+Codex includes conversation history in later provider requests. If a prompt
+containing PII or a secret is denied, that content remains in the active Codex
+conversation; a later safe prompt can therefore be denied again. This is client
+history, not sticky middleware state.
+
+In an interactive Codex session, wait until the turn is idle and press **Esc
+twice**. Use `↑`/`↓` to select the checkpoint before the blocked prompt, then
+press `Enter` to edit/fork from that point. `/new` starts a fresh conversation;
+`/clear` starts a fresh chat and clears the visible transcript. `Ctrl-L` only
+clears the terminal display and does not reset conversation history.
+
 ## Troubleshooting and security boundaries
 
 | Symptom | Correction |
