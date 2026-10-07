@@ -51,4 +51,6 @@ the daemon backend.
 OpenShell closes a denied WebSocket message with code `1008`; Codex may retry
 that stream before its HTTPS fallback. Configure a Codex custom Responses
 provider with `supports_websockets = false` when immediate HTTP
-`middleware_denied` feedback is preferred.
+`middleware_denied` feedback is preferred. Codex may still render a temporary
+reconnect status while retrying a denied HTTP stream; middleware cannot control
+that client-side display.

@@ -930,7 +930,9 @@ codex \
 OpenShell still injects the attached `ai-guardian-openai` provider credentials
 because the custom provider targets the same admitted endpoint. Without this
 transport override, a blocked Codex WebSocket request remains fail-closed but
-may display its retry sequence before the HTTP fallback.
+may display its WebSocket fallback sequence before the HTTP denial. Codex
+v0.154 can also render a temporary reconnect status while retrying a denied
+HTTP stream; middleware cannot control that client-side display or retry loop.
 
 ## Troubleshooting and security boundaries
 
