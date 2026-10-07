@@ -51,6 +51,7 @@ from ai_guardian.middleware.openshell.server import (
 from ai_guardian.middleware.openshell.v0_1_2.server import (
     _middleware_command_without_lifecycle_flags,
     _middleware_state_path,
+    _needs_macos_tcp_relay,
     _saved_middleware_restart_args,
     _status_middleware_background,
     _write_middleware_pid_file,
@@ -322,7 +323,7 @@ def test_describe_negotiates_protocol_and_advertises_bindings():
     }
 
 
-def test_describe_encodes_multi_second_timeout_as_duration():
+def test_describe_leaves_binding_timeout_to_gateway_registration():
     service = _service(_policy(timeout_ms=5000))
     gateway = extension_pb2.PeerMetadata(
         protocol_version=extension_pb2.ProtocolVersion(major=1, minor=0),
@@ -334,8 +335,7 @@ def test_describe_encodes_multi_second_timeout_as_duration():
     )
 
     assert response.bindings
-    assert all(binding.request_timeout.seconds == 5 for binding in response.bindings)
-    assert all(binding.request_timeout.nanos == 0 for binding in response.bindings)
+    assert all(not binding.HasField("request_timeout") for binding in response.bindings)
 
 
 def test_describe_rejects_incompatible_gateway():
@@ -654,6 +654,33 @@ def test_plaintext_middleware_rejects_wildcard_bind(bind):
         )
 
 
+def test_macos_plaintext_non_loopback_uses_relay(monkeypatch):
+    monkeypatch.setattr(
+        "ai_guardian.middleware.openshell.v0_1_2.server.sys.platform", "darwin"
+    )
+    security = MiddlewareServerSecurity.from_mapping({"allow_insecure_transport": True})
+
+    assert _needs_macos_tcp_relay("192.0.2.10:50051", security)
+    assert not _needs_macos_tcp_relay("127.0.0.1:50051", security)
+    assert not _needs_macos_tcp_relay("0.0.0.0:50051", security)
+
+
+def test_explicit_wildcard_plaintext_opt_in_allows_local_development():
+    security = MiddlewareServerSecurity.from_mapping(
+        {
+            "allow_insecure_transport": True,
+            "allow_insecure_wildcard_bind": True,
+        }
+    )
+    server = create_server(
+        _service(),
+        bind="0.0.0.0:0",
+        security=security,
+        workers=1,
+    )
+    server.stop(0)
+
+
 def test_explicit_openshell_bootstrap_is_idempotent(tmp_path):
     policy = _policy(
         require_effective_policy=True,
@@ -679,6 +706,11 @@ def test_explicit_openshell_bootstrap_is_idempotent(tmp_path):
         ]
         == "content-guard"
     )
+    attachment_config = generated_policy["network_middlewares"][
+        "content-guard-attachment"
+    ]["config"]
+    assert attachment_config["scanner_ownership"] == policy.scanner_ownership
+    assert attachment_config["response_redaction"] is policy.response_redaction
 
     second = bootstrap_openshell(
         policy,
@@ -855,6 +887,30 @@ def test_cli_exposes_openshell_middleware_lifecycle_subcommands():
     assert arguments.config == "policy.json"
 
 
+def test_cli_exposes_rust_middleware_implementation():
+    with (
+        patch(
+            "sys.argv",
+            [
+                "ai-guardian",
+                "openshell-middleware",
+                "start",
+                "--implementation",
+                "rust",
+                "--config",
+                "policy.json",
+            ],
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.server.run_middleware_server",
+            return_value=0,
+        ) as run,
+    ):
+        assert main() == 0
+
+    assert run.call_args.args[0].implementation == "rust"
+
+
 def test_cli_exposes_openshell_middleware_restart_subcommand():
     with (
         patch(
@@ -997,6 +1053,74 @@ def test_middleware_restart_reuses_saved_start_arguments(tmp_path):
 
     stop.assert_called_once_with(args, quiet=True)
     start.assert_called_once_with(args, restart_args=saved_args)
+
+
+def test_middleware_restart_config_override_preserves_saved_bootstrap_arguments(
+    tmp_path,
+):
+    args = SimpleNamespace(
+        middleware_command="restart",
+        restart=False,
+        config="new-policy.yaml",
+        pid_file=str(tmp_path / "middleware.pid"),
+        log_file=None,
+    )
+    saved_args = [
+        "openshell-middleware",
+        "--config",
+        "old-policy.yaml",
+        "--bind",
+        "192.0.2.10:50051",
+        "--bootstrap-openshell",
+        "--allow-insecure-wildcard-bind",
+        "--gateway-config",
+        "/tmp/gateway.toml",
+        "--policy-out",
+        "/tmp/policy.yaml",
+    ]
+    with (
+        patch(
+            "sys.argv",
+            [
+                "ai-guardian",
+                "openshell-middleware",
+                "restart",
+                "--config",
+                "new-policy.yaml",
+            ],
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._read_middleware_pid_file",
+            return_value={"restart_args": saved_args},
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._stop_middleware_background",
+            return_value=0,
+        ) as stop,
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._start_middleware_background",
+            return_value=0,
+        ) as start,
+    ):
+        assert run_middleware_server(args) == 0
+
+    stop.assert_called_once_with(args, quiet=True)
+    start.assert_called_once_with(
+        args,
+        restart_args=[
+            "openshell-middleware",
+            "--config",
+            "new-policy.yaml",
+            "--bind",
+            "192.0.2.10:50051",
+            "--bootstrap-openshell",
+            "--allow-insecure-wildcard-bind",
+            "--gateway-config",
+            "/tmp/gateway.toml",
+            "--policy-out",
+            "/tmp/policy.yaml",
+        ],
+    )
 
 
 def test_middleware_status_removes_stale_pid_file(tmp_path):

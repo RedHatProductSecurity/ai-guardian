@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-04
+> Last updated: 2026-10-06
 
 ## User Preferences
 
@@ -12,6 +12,12 @@
 - Sandbox documentation should lead with short, case-based setup recipes and
   prerequisites for each runtime/authentication path; keep lifecycle and
   advanced reference details below the first-use steps.
+- OpenShell middleware documentation should lead with the minimal happy path:
+  create config, start/bootstrap middleware, and create sandbox. Curl denial
+  probes and audit redirection belong in optional sections at the bottom.
+- OpenShell sandbox create tests should pass an explicit non-interactive command
+  such as `-- /bin/true`; omitting it intentionally attaches an interactive
+  shell, so use `sandbox connect` only after create returns.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
@@ -262,6 +268,10 @@
 
 ## Do-Not-Repeat
 
+- [2026-10-06] Do not place `exit` in copy-paste guards intended for an
+  interactive shell; use a subshell or an `if/else` block so missing optional
+  artifacts do not terminate the user's session.
+
 - [2026-06-30] DO NOT call `_show_via_subprocess` from the tray's `_handle_remote_prompt` without first trying NiceGUI in-process. On macOS Sonoma+ (14+), `activateIgnoringOtherApps_` is deprecated so tkinter subprocess windows spawn invisible behind other apps — dialog blocks for 300s then auto-dismisses, making the tray appear stuck. Fix: in `_show_and_respond`, call `_NiceGuiAskDialog(violation, timeout).run()` first if NiceGUI is available; it opens a browser tab which is always visible. Only fall back to `_show_via_subprocess` if NiceGUI is unavailable.
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
@@ -411,5 +421,54 @@
   source, confidence, and rule metadata may be logged.
 
 - [2026-10-06] **Documentation privacy:** OpenShell examples must use neutral
-  host/interface placeholders such as `middleware.example.internal`, never a
-  developer-specific private IP address.
+   host/interface placeholders such as `middleware.example.internal`, never a
+   developer-specific private IP address.
+
+- [2026-10-06] **OpenShell middleware config override:** When `restart` receives
+  an explicit `--config`, merge that override into saved background arguments
+  instead of rebuilding from the short current command; otherwise bootstrap,
+  gateway, policy, bind, and audit options are lost and gateway preflight can
+  report a missing path.
+
+- [2026-10-06] **OpenShell policy composition:** The generated middleware policy
+  is already schema-valid and should be passed directly to basic sandbox create.
+  Optional network-policy overlays must be deep-composed with version checks;
+  never append a fragment after a failed copy.
+
+- [2026-10-06] **OpenShell Codex sandbox path:** Raw Community-image sandbox
+  creation does not stage provider placeholders into Codex `auth.json`. For a
+  usable Codex sandbox, verify Providers v2 and use AI Guardian's managed
+  `sandbox create --runtime openshell --cli codex --provider` flow.
+
+- [2026-10-06] **OpenShell supervisor reachability:** On this macOS Homebrew /
+  Podman setup, the supervisor cannot reach host loopback. AI Guardian's
+  macOS plaintext relay keeps grpcio on loopback while exposing the selected
+  host interface address; remote gateways require TLS/reachable deployment.
+
+- [2026-10-06] **Middleware relay lifetime:** The macOS TCP relay must keep
+  HTTP/2 connections open across Describe, ValidateConfig, and evaluations;
+  never impose a short per-connection join timeout. Track active sockets and
+  close them only during relay shutdown.
+
+- [2026-10-06] **OpenShell sandbox provider activation:** A sandbox can accept
+  policy while `DesiredConfigurationReady=False` if its attached provider has
+  no installed credentials. Later traffic reports the misleading
+  `middleware_failed: binding_not_described`; inspect provider status and run
+  `openshell provider update NAME --credential OPENAI_API_KEY --wait` before
+  debugging middleware bindings.
+
+- [2026-10-06] **Managed sandbox provider selection:** Passing explicit
+  `--provider ai-guardian-codex` bypasses AI Guardian's API-key provider refresh.
+  With `OPENAI_API_KEY`, omit `--provider` so sandbox setup selects or refreshes
+  `ai-guardian-openai`; use the Codex provider only for OAuth credentials.
+
+- [2026-10-07] **Rust OpenShell middleware runtime:** The Rust service owns
+  OpenShell gRPC and uses the daemon Unix socket by default; explicit remote
+  deployments use `AI_GUARDIAN_DAEMON_URL` plus an authenticated token. Codex
+  uses WebSocket transport, so the Rust manifest must advertise the text-
+  WebSocket binding or provider prompts bypass request scanning.
+- [2026-10-07] **Codex middleware denial UX:** OpenShell closes denied
+  WebSocket messages with code 1008, and Codex retries that stream before HTTP
+  fallback. HTTP middleware denials are immediate 403 `middleware_denied`; a
+  Codex custom Responses provider with `supports_websockets=false` avoids the
+  retry loop.

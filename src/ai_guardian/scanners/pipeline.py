@@ -6,7 +6,7 @@ per-scanner action modes.  See issue #1927 (original), #1932 (registry migration
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import ai_guardian.config.loaders as _loaders
 from ai_guardian.hook_events.scanners import (
@@ -52,6 +52,7 @@ def scan_content(
     content_overrides: Optional[Dict[ScannerName, str]] = None,
     scanner_kwargs: Optional[Dict[ScannerName, Dict[str, Any]]] = None,
     registry: Optional[Any] = None,
+    scanner_names: Optional[Set[ScannerName]] = None,
 ) -> List[ScanResult]:
     """Run all enabled content scanners on *text*.
 
@@ -73,6 +74,9 @@ def scan_content(
     *scanner_kwargs* maps ``ScannerName`` → dict of extra keyword arguments
     for that scanner (e.g., ``context``, ``ignore_files`` for secrets).
 
+    *scanner_names* restricts the content pipeline to selected registry entries.
+    It is used by daemon-backed middleware ownership routing.
+
     Returns only ``ScanResult`` objects where a detection occurred, plus
     any error results (``extra["scan_error"]`` set) so callers can apply
     fail-closed logic.  Each scanner is wrapped in try/except for
@@ -87,7 +91,10 @@ def scan_content(
         registry = get_default_registry()
 
     pipeline = _get_content_pipeline(
-        registry, hook_event=hook_event, file_path=file_path
+        registry,
+        hook_event=hook_event,
+        file_path=file_path,
+        scanner_names=scanner_names,
     )
 
     results = []
@@ -251,7 +258,9 @@ def scan_command(
     return results
 
 
-def _get_content_pipeline(registry, *, hook_event=None, file_path=None):
+def _get_content_pipeline(
+    registry, *, hook_event=None, file_path=None, scanner_names=None
+):
     """Return the ordered list of content scanners to run.
 
     When *hook_event* is provided, uses the registry's event-based filtering.
@@ -265,12 +274,19 @@ def _get_content_pipeline(registry, *, hook_event=None, file_path=None):
             has_file_path=file_path is not None,
             has_command=False,
         )
-        return [e for e in entries if e.name in _CONTENT_SCANNER_NAMES]
+        return [
+            e
+            for e in entries
+            if e.name in _CONTENT_SCANNER_NAMES
+            and (scanner_names is None or e.name in scanner_names)
+        ]
 
     # SDK fallback: all content scanners, filtered by available inputs
     applicable = []
     for entry in registry.all_entries():
         if entry.name not in _CONTENT_SCANNER_NAMES:
+            continue
+        if scanner_names is not None and entry.name not in scanner_names:
             continue
         if entry.requires_file_path and not file_path:
             continue

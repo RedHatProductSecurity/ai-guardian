@@ -183,7 +183,8 @@ def make_sdk_check(check_type, data):
     """Create an SDK security check request message.
 
     Args:
-        check_type: "content", "file", "command", "sanitize", or "violations"
+        check_type: "content", "middleware", "file", "command", "sanitize", or
+            "violations"
         data: Check-specific parameters
 
     Returns:

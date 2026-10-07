@@ -395,6 +395,81 @@ class TestDaemonServerProtocol:
         finally:
             sock.close()
 
+    def test_middleware_check_redacts_findings_from_cached_config(
+        self, short_state_dir
+    ):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        config = {"prompt_injection": {"enabled": True}}
+        finding = mock.Mock(detected=True, violation_type="pii", extra={})
+
+        with (
+            mock.patch.object(server.state, "get_config", return_value=config),
+            mock.patch(
+                "ai_guardian.scanners.pipeline.scan_content",
+                return_value=[finding],
+            ),
+            mock.patch(
+                "ai_guardian.scanners.sanitizer.sanitize_text",
+                return_value={"sanitized_text": "[REDACTED]"},
+            ),
+        ):
+            result = server._handle_middleware_check(
+                {
+                    "text": "Synthetic test phone: 212-555-0198",
+                    "checks": ["pii"],
+                    "action": "block",
+                }
+            )
+
+        assert result["clean"] is False
+        assert result["findings"][0]["type"] == "pii"
+        assert result["redacted"] == "[REDACTED]"
+
+    def test_middleware_check_fails_closed_on_scan_error(self, short_state_dir):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        failed_scan = mock.Mock(
+            detected=False,
+            violation_type="pii",
+            extra={"scan_error": "scanner unavailable"},
+        )
+
+        with (
+            mock.patch.object(server.state, "get_config", return_value={}),
+            mock.patch(
+                "ai_guardian.scanners.pipeline.scan_content",
+                return_value=[failed_scan],
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="middleware scanner failed"):
+                server._handle_middleware_check(
+                    {"text": "clean-looking content", "checks": ["pii"]}
+                )
+
+    def test_middleware_check_normalizes_jailbreak_type(self, short_state_dir):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        finding = mock.Mock(
+            detected=True,
+            violation_type="jailbreak_detected",
+            extra={},
+        )
+
+        with (
+            mock.patch.object(server.state, "get_config", return_value={}),
+            mock.patch(
+                "ai_guardian.scanners.pipeline.scan_content",
+                return_value=[finding],
+            ),
+            mock.patch(
+                "ai_guardian.scanners.sanitizer.sanitize_text",
+                return_value={"sanitized_text": "[REDACTED]"},
+            ),
+        ):
+            result = server._handle_middleware_check(
+                {"text": "synthetic content", "checks": ["injection"]}
+            )
+
+        assert result["findings"][0]["type"] == "jailbreak"
+
 
 class TestDaemonServerSubscriber:
     """Tests for push event subscriber protocol (#650)."""

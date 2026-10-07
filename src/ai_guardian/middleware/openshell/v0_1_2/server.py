@@ -12,10 +12,14 @@ import json
 import logging
 import ipaddress
 import os
+import select
 import signal
+import socket
+import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from concurrent import futures
 from dataclasses import dataclass
@@ -131,6 +135,7 @@ class MiddlewareServerSecurity:
     jwt_algorithms: tuple[str, ...] = ("EdDSA",)
     jwt_token_type: str = "openshell-ext+jwt"
     allow_insecure_transport: bool = False
+    allow_insecure_wildcard_bind: bool = False
 
     def validate(self) -> None:
         if self.allow_insecure_transport:
@@ -228,6 +233,9 @@ class MiddlewareServerSecurity:
         allow_insecure_transport = raw.get("allow_insecure_transport", False)
         if not isinstance(allow_insecure_transport, bool):
             raise ValueError("allow_insecure_transport must be a boolean")
+        allow_insecure_wildcard_bind = raw.get("allow_insecure_wildcard_bind", False)
+        if not isinstance(allow_insecure_wildcard_bind, bool):
+            raise ValueError("allow_insecure_wildcard_bind must be a boolean")
         return cls(
             tls_cert_file=_optional_string(tls.get("cert_file")),
             tls_key_file=_optional_string(tls.get("key_file")),
@@ -246,6 +254,7 @@ class MiddlewareServerSecurity:
             jwt_algorithms=tuple(str(item) for item in algorithms),
             jwt_token_type=_JWT_TYP,
             allow_insecure_transport=allow_insecure_transport,
+            allow_insecure_wildcard_bind=allow_insecure_wildcard_bind,
         )
 
     def server_credentials(self):
@@ -669,19 +678,16 @@ if _GRPC_AVAILABLE:
                         operation=pb2.SUPERVISOR_MIDDLEWARE_OPERATION_HTTP_REQUEST,
                         phase=pb2.SUPERVISOR_MIDDLEWARE_PHASE_PRE_CREDENTIALS,
                         max_payload_bytes=self.policy.max_payload_bytes,
-                        request_timeout=_duration(self.policy.timeout_ms),
                     ),
                     pb2.MiddlewareBinding(
                         operation=pb2.SUPERVISOR_MIDDLEWARE_OPERATION_HTTP_RESPONSE,
                         phase=pb2.SUPERVISOR_MIDDLEWARE_PHASE_PRE_RETURN,
                         max_payload_bytes=self.policy.max_payload_bytes,
-                        request_timeout=_duration(self.policy.timeout_ms),
                     ),
                     pb2.MiddlewareBinding(
                         operation=pb2.SUPERVISOR_MIDDLEWARE_OPERATION_WEBSOCKET_MESSAGE,
                         phase=pb2.SUPERVISOR_MIDDLEWARE_PHASE_PRE_CREDENTIALS,
                         max_payload_bytes=self.policy.max_payload_bytes,
-                        request_timeout=_duration(self.policy.timeout_ms),
                     ),
                 ],
                 expected_audience=(
@@ -1722,11 +1728,228 @@ def _is_wildcard_bind(bind: str) -> bool:
 def _validate_bind_security(bind: str, security: MiddlewareServerSecurity) -> None:
     """Prevent unauthenticated plaintext services from using wildcard binds."""
 
-    if security.allow_insecure_transport and _is_wildcard_bind(bind):
+    if (
+        security.allow_insecure_transport
+        and _is_wildcard_bind(bind)
+        and not security.allow_insecure_wildcard_bind
+    ):
         raise ValueError(
             "insecure middleware transport cannot bind to wildcard address "
-            f"{bind!r}; bind to a specific trusted interface or configure TLS/JWT"
+            f"{bind!r}; bind to a specific trusted interface, explicitly enable "
+            "allow_insecure_wildcard_bind for local development, or configure TLS/JWT"
         )
+
+
+def _is_loopback_bind(bind: str) -> bool:
+    """Return whether a bind address listens only on loopback."""
+
+    host = _bind_host(bind).strip().lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _needs_macos_tcp_relay(bind: str, security: MiddlewareServerSecurity) -> bool:
+    """Use a host-interface relay for macOS plaintext gRPC services.
+
+    grpcio on macOS can accept a non-loopback listener but close incoming HTTP/2
+    connections.  OpenShell's Podman supervisor needs a host-reachable endpoint,
+    so keep grpcio on loopback and relay only the explicitly selected interface.
+    TLS deployments do not use this development-only relay.
+    """
+
+    return (
+        sys.platform == "darwin"
+        and security.allow_insecure_transport
+        and not _is_loopback_bind(bind)
+        and not _is_wildcard_bind(bind)
+    )
+
+
+def _rust_middleware_binary() -> Optional[Path]:
+    """Locate the Rust middleware executable for the explicit Rust runtime."""
+
+    configured = os.environ.get("AI_GUARDIAN_RUST_MIDDLEWARE")
+    if configured:
+        path = Path(configured).expanduser()
+        return path if path.is_file() and os.access(path, os.X_OK) else None
+    discovered = shutil.which("ai-guardian-openshell-middleware")
+    if discovered:
+        return Path(discovered)
+    repository_root = Path(__file__).resolve().parents[5]
+    for profile in ("release", "debug"):
+        candidate = (
+            repository_root
+            / "rust"
+            / "openshell-middleware"
+            / "target"
+            / profile
+            / "ai-guardian-openshell-middleware"
+        )
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def _bind_port(bind: str) -> int:
+    """Extract and validate TCP port from a gRPC bind address."""
+
+    value = bind.strip()
+    if value.startswith("["):
+        closing = value.find("]")
+        if closing > 0 and value[closing + 1 :].startswith(":"):
+            return int(value[closing + 2 :])
+    if value.count(":") == 1:
+        return int(value.rsplit(":", 1)[1])
+    raise ValueError(f"middleware bind address must include a TCP port: {bind!r}")
+
+
+def _free_loopback_bind() -> str:
+    """Reserve a currently free loopback port for the local gRPC listener."""
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return f"127.0.0.1:{probe.getsockname()[1]}"
+
+
+class _MiddlewareTcpRelay:
+    """Relay one selected host interface to a loopback gRPC listener."""
+
+    def __init__(self, external_bind: str, internal_bind: str) -> None:
+        self.external_bind = external_bind
+        self.internal_host = _bind_host(internal_bind)
+        self.internal_port = _bind_port(internal_bind)
+        self._listener: Optional[socket.socket] = None
+        self._thread: Optional[threading.Thread] = None
+        self._stopping = threading.Event()
+        self._connections: set[tuple[socket.socket, socket.socket]] = set()
+        self._connections_lock = threading.Lock()
+
+    def start(self) -> None:
+        host = _bind_host(self.external_bind)
+        port = _bind_port(self.external_bind)
+        family = socket.AF_INET6 if ":" in host else socket.AF_INET
+        listener = socket.socket(family, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if family == socket.AF_INET6:
+            listener.bind((host, port, 0, 0))
+        else:
+            listener.bind((host, port))
+        listener.listen(64)
+        listener.settimeout(0.5)
+        self._listener = listener
+        self._thread = threading.Thread(
+            target=self._accept_loop,
+            name="openshell-middleware-relay",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _accept_loop(self) -> None:
+        listener = self._listener
+        if listener is None:
+            return
+        while not self._stopping.is_set():
+            try:
+                client, _address = listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            threading.Thread(
+                target=self._proxy_connection,
+                args=(client,),
+                name="openshell-middleware-relay-connection",
+                daemon=True,
+            ).start()
+
+    def _proxy_connection(self, client: socket.socket) -> None:
+        try:
+            upstream = socket.create_connection(
+                (self.internal_host, self.internal_port), timeout=5
+            )
+        except OSError as exc:
+            logger.debug(
+                "middleware relay could not connect to loopback gRPC listener: %s",
+                type(exc).__name__,
+            )
+            client.close()
+            return
+
+        connection = (client, upstream)
+        with self._connections_lock:
+            self._connections.add(connection)
+        try:
+            client.settimeout(None)
+            upstream.settimeout(None)
+            workers = (
+                threading.Thread(
+                    target=self._copy_stream,
+                    args=(client, upstream),
+                    daemon=True,
+                ),
+                threading.Thread(
+                    target=self._copy_stream,
+                    args=(upstream, client),
+                    daemon=True,
+                ),
+            )
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join()
+        finally:
+            with self._connections_lock:
+                self._connections.discard(connection)
+            client.close()
+            upstream.close()
+
+    @staticmethod
+    def _copy_stream(source: socket.socket, target: socket.socket) -> None:
+        try:
+            while True:
+                readable, _writeable, _exceptional = select.select([source], [], [], 1)
+                if not readable:
+                    continue
+                data = source.recv(64 * 1024)
+                if not data:
+                    try:
+                        target.shutdown(socket.SHUT_WR)
+                    except OSError:
+                        pass
+                    return
+                target.sendall(data)
+        except OSError as exc:
+            logger.debug("middleware relay connection closed: %s", type(exc).__name__)
+
+    def stop(self) -> None:
+        self._stopping.set()
+        listener = self._listener
+        self._listener = None
+        if listener is not None:
+            try:
+                listener.close()
+            except OSError:
+                pass
+        with self._connections_lock:
+            connections = tuple(self._connections)
+        for client, upstream in connections:
+            for connection in (client, upstream):
+                try:
+                    connection.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                try:
+                    connection.close()
+                except OSError:
+                    pass
+        thread = self._thread
+        self._thread = None
+        if thread is not None:
+            thread.join(timeout=2)
 
 
 def create_server(
@@ -1810,6 +2033,38 @@ _MIDDLEWARE_LIFECYCLE_COMMANDS = frozenset({"start", "stop", "status", "restart"
 _MIDDLEWARE_LIFECYCLE_FLAGS = frozenset(
     {"--background", "-b", "--stop", "--restart", "--status"}
 )
+_MIDDLEWARE_RESTART_VALUE_OPTIONS = frozenset(
+    {
+        "--config",
+        "--implementation",
+        "--openshell-version",
+        "--gateway-config",
+        "--gateway-endpoint",
+        "--gateway-tls-ca",
+        "--policy-out",
+        "--policy-name",
+        "--profile",
+        "--bind",
+        "--workers",
+        "--violation-log",
+        "--tls-cert",
+        "--tls-key",
+        "--tls-client-ca",
+        "--jwt-secret",
+        "--jwt-public-key",
+        "--jwt-audience",
+        "--pid-file",
+        "--log-file",
+    }
+)
+_MIDDLEWARE_RESTART_BOOLEAN_OPTIONS = frozenset(
+    {
+        "--bootstrap-openshell",
+        "--bootstrap-force",
+        "--allow-insecure-transport",
+        "--allow-insecure-wildcard-bind",
+    }
+)
 
 
 def _middleware_option_value(values: Sequence[str], option: str) -> Optional[str]:
@@ -1824,6 +2079,50 @@ def _middleware_option_value(values: Sequence[str], option: str) -> Optional[str
         if value.startswith(prefix):
             return value[len(prefix) :]
     return None
+
+
+def _replace_middleware_option(
+    values: Sequence[str], option: str, replacement: str
+) -> list[str]:
+    """Replace one option in saved middleware arguments, preserving its form."""
+
+    replaced: list[str] = []
+    found = False
+    index = 0
+    while index < len(values):
+        value = values[index]
+        if value == option:
+            replaced.extend((option, replacement))
+            found = True
+            index += 2 if index + 1 < len(values) else 1
+            continue
+        prefix = f"{option}="
+        if value.startswith(prefix):
+            replaced.append(f"{option}={replacement}")
+            found = True
+            index += 1
+            continue
+        replaced.append(value)
+        index += 1
+    if not found:
+        replaced.extend((option, replacement))
+    return replaced
+
+
+def _merge_middleware_restart_args(
+    saved_values: Sequence[str], current_values: Sequence[str]
+) -> list[str]:
+    """Apply explicitly supplied restart options to the saved start command."""
+
+    merged = list(saved_values)
+    for option in _MIDDLEWARE_RESTART_VALUE_OPTIONS:
+        value = _middleware_option_value(current_values, option)
+        if value is not None:
+            merged = _replace_middleware_option(merged, option, value)
+    for option in _MIDDLEWARE_RESTART_BOOLEAN_OPTIONS:
+        if option in current_values and option not in merged:
+            merged.append(option)
+    return merged
 
 
 def _safe_middleware_restart_args(values: Sequence[str]) -> list[str]:
@@ -2196,19 +2495,24 @@ def run_middleware_server(args) -> int:
         args, "restart", False
     )
     restart_args: Optional[list[str]] = None
-    if restart_requested and not getattr(args, "config", None):
+    if restart_requested:
         pid_path = _middleware_state_path(args, "pid")
         saved_info = _read_middleware_pid_file(pid_path)
-        restart_args = _saved_middleware_restart_args(saved_info)
-        if restart_args is None or not _middleware_option_value(
-            restart_args, "--config"
-        ):
-            print(
-                "Error: no saved middleware configuration is available; "
-                "provide --config or start the service with a background command",
-                file=sys.stderr,
-            )
-            return 1
+        saved_args = _saved_middleware_restart_args(saved_info)
+        if getattr(args, "config", None):
+            if saved_args is not None:
+                restart_args = _merge_middleware_restart_args(saved_args, sys.argv[1:])
+        else:
+            restart_args = saved_args
+            if restart_args is None or not _middleware_option_value(
+                restart_args, "--config"
+            ):
+                print(
+                    "Error: no saved middleware configuration is available; "
+                    "provide --config or start the service with a background command",
+                    file=sys.stderr,
+                )
+                return 1
     if not getattr(args, "config", None) and not restart_requested:
         print(
             "Error: --config is required when starting OpenShell middleware",
@@ -2224,8 +2528,10 @@ def run_middleware_server(args) -> int:
 
     claimed_pid = False
     pid_path = _middleware_state_path(args, "pid")
+    relay: Optional[_MiddlewareTcpRelay] = None
     try:
-        require_grpc()
+        if getattr(args, "implementation", None) != "rust":
+            require_grpc()
         _claim_middleware_pid_file(
             pid_path,
             restart_args=_middleware_command_arguments(
@@ -2271,6 +2577,8 @@ def run_middleware_server(args) -> int:
             security_overrides["jwt"] = jwt_override
         if getattr(args, "allow_insecure_transport", False):
             security_overrides["allow_insecure_transport"] = True
+        if getattr(args, "allow_insecure_wildcard_bind", False):
+            security_overrides["allow_insecure_wildcard_bind"] = True
         security = MiddlewareServerSecurity.from_mapping(
             raw,
             overrides=security_overrides,
@@ -2316,6 +2624,25 @@ def run_middleware_server(args) -> int:
                 attachment_name=getattr(args, "policy_name", None),
                 force=bool(getattr(args, "bootstrap_force", False)),
             )
+        if getattr(args, "implementation", None) == "rust":
+            if not security.allow_insecure_transport:
+                raise ValueError(
+                    "the Rust middleware runtime currently requires explicit "
+                    "allow_insecure_transport; use the Python runtime for TLS/JWT"
+                )
+            rust_binary = _rust_middleware_binary()
+            if rust_binary is None:
+                raise RuntimeError(
+                    "Rust middleware binary not found; build "
+                    "rust/openshell-middleware or set AI_GUARDIAN_RUST_MIDDLEWARE"
+                )
+            rust_environment = os.environ.copy()
+            rust_environment["AI_GUARDIAN_MIDDLEWARE_BIND"] = args.bind
+            rust_environment["AI_GUARDIAN_MIDDLEWARE_REGISTRATION"] = (
+                policy.registration_name
+            )
+            rust_environment["AI_GUARDIAN_MIDDLEWARE_PID_FILE"] = str(pid_path)
+            os.execve(str(rust_binary), [str(rust_binary)], rust_environment)
         from ai_guardian.violations.logger import ViolationLogger
 
         violation_log_path = getattr(args, "violation_log", None)
@@ -2329,9 +2656,19 @@ def run_middleware_server(args) -> int:
             security=security,
             violation_logger=violation_logger,
         )
+        server_bind = args.bind
+        if _needs_macos_tcp_relay(args.bind, security):
+            internal_bind = _free_loopback_bind()
+            relay = _MiddlewareTcpRelay(args.bind, internal_bind)
+            server_bind = internal_bind
+            logger.info(
+                "using macOS loopback relay for middleware endpoint %s via %s",
+                args.bind,
+                internal_bind,
+            )
         server = create_server(
             service,
-            bind=args.bind,
+            bind=server_bind,
             security=security,
             workers=args.workers,
         )
@@ -2379,15 +2716,21 @@ def run_middleware_server(args) -> int:
         signal.signal(signal.SIGTERM, _handle_sigterm)
         try:
             server.start()
+            if relay is not None:
+                relay.start()
             if shutdown_requested:
                 server.stop(grace=1)
             server.wait_for_termination()
         except KeyboardInterrupt:
             server.stop(grace=1)
         finally:
+            if relay is not None:
+                relay.stop()
             signal.signal(signal.SIGTERM, previous_sigterm)
         return 0
     except (OSError, RuntimeError) as exc:
+        if relay is not None:
+            relay.stop()
         logger.error(
             "OpenShell middleware stopped during startup: %s", type(exc).__name__
         )

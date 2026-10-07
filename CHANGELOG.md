@@ -51,6 +51,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **OpenShell Rust WebSocket scanning:** Advertise and enforce the text-WebSocket
+  middleware binding so Codex requests using its WebSocket transport are scanned
+  before provider credentials and fail closed on sensitive content.
+- **OpenShell daemon IPC checks:** Unwrap the daemon's nested Unix-socket response
+  envelope and reuse the cached scanner config for redaction, so clean provider
+  content is allowed and detected PII/secrets return `middleware_denied` instead
+  of `middleware_failed`.
+- **OpenShell middleware fail-closed hardening:** Bound Unix-socket exchanges,
+  propagate scanner errors, route offensive/canary ownership checks, normalize
+  middleware finding types, and preserve wildcard-bind restart options.
 - **OpenShell setup guidance:** Document local gateway installation and startup,
   put the required Providers v2/profile-import sequence before the first
   sandbox example, clarify automatic OAuth/API-key provider selection, and link
@@ -68,6 +78,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot load. Doctor now distinguishes configured plugin files from verified
   server activation, and setup refuses to rewrite V2 configuration when an
   unrelated local TypeScript plugin file would be migrated implicitly.
+- **OpenShell middleware config overrides:** Preserve saved bootstrap, gateway,
+  policy, bind, and audit arguments when `restart --config FILE` changes only
+  the middleware YAML path. Simplify the guide to create config, start/bootstrap,
+  verify gateway health/registration, and create a sandbox attached through the
+  generated policy; move curl probes and audit redirection to optional sections.
+  Document gateway restart commands for Homebrew, systemd, Snap, containers,
+  and manual launches, plus recovery when no background start state exists.
+  On macOS plaintext host-interface binds now use a long-lived TCP relay into
+  loopback grpcio so Podman supervisors can reach the middleware.
 - **Strict Mypy optional parameters (#2510):** Remove the legacy implicit-
   optional compatibility override and annotate nullable defaults explicitly
   across scanner, setup, daemon, policy, hook, and configuration-scope APIs.
