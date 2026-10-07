@@ -55,8 +55,12 @@ budget_tokens: 1000
   middleware guide now leads with the minimal config → start/bootstrap →
   managed Codex sandbox flow; provider setup, curl probes, and audit
   redirection are explicit/optional sections. Rust now owns OpenShell gRPC and
-  calls the daemon REST backend; the live macOS sandbox reports active policy
-  and provider credentials. Focused middleware unit/UX and Rust tests pass.
+  uses daemon Unix-socket IPC by default; the live macOS sandbox reports active
+  policy and provider credentials. Rust advertises text-WebSocket scanning for
+  Codex, unwraps daemon IPC responses, and returns sensitive-content denials
+  instead of middleware failures. Focused middleware/daemon tests, 4 Rust
+  tests, and the live Codex HTTP/WebSocket checks pass. Commit `6f84e070` is
+  pushed to PR #2515.
 
 - OpenShell middleware lifecycle now matches the daemon with `start`, `stop`,
   `status`, and `restart` subcommands. Background starts persist sanitized
@@ -186,8 +190,9 @@ budget_tokens: 1000
   Python 3.10 matrix job that previously timed out in the existing Pi UX
   contract. No Pi/tray production change is warranted unless the rerun
   produces a reproducible assertion failure.
-- Monitor PR #2515 for the Rust OpenShell middleware runtime and config/restart
-  fixes.
+- Monitor PR #2515 CI and review; latest commit `6f84e070` adds Codex
+  WebSocket scanning, daemon IPC/redaction fixes, and HTTP-only Codex UX
+  guidance.
 
 ## Context
 
