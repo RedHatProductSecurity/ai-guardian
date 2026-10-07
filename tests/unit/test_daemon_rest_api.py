@@ -625,6 +625,39 @@ class TestCheckEndpoint:
             data = json.loads(resp.read())
         assert data["clean"] is True
 
+    @pytest.mark.parametrize(
+        ("check_name", "scanner_path", "finding_type"),
+        [
+            (
+                "offensive",
+                "ai_guardian.hook_events.scanners.run_offensive_language_scan",
+                "offensive_language",
+            ),
+            (
+                "canary",
+                "ai_guardian.hook_events.scanners.run_canary_detection_scan",
+                "canary_detected",
+            ),
+        ],
+    )
+    def test_post_check_supports_middleware_scanners(
+        self, rest_api, check_name, scanner_path, finding_type
+    ):
+        api, port, state = rest_api
+        result = mock.MagicMock(detected=True)
+        with mock.patch(scanner_path, return_value=result):
+            url = f"http://127.0.0.1:{port}/api/check"
+            body = json.dumps(
+                {"content": "scanner test", "checks": [check_name]}
+            ).encode("utf-8")
+            req = Request(url, data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+
+        assert data["clean"] is False
+        assert data["findings"][0]["type"] == finding_type
+
     def test_post_check_with_findings(self, rest_api):
         api, port, state = rest_api
         url = f"http://127.0.0.1:{port}/api/check"

@@ -369,32 +369,56 @@ impl MiddlewareService {
                     _ => None,
                 });
         let mut checks = Vec::new();
-        for (scanner, check) in [
-            ("prompt_injection", "injection"),
-            ("context_poisoning", "context_poisoning"),
-            ("secret_scanning", "secrets"),
-            ("scan_pii", "pii"),
-        ] {
-            let mode = ownership
-                .and_then(|values| values.get(scanner))
-                .and_then(|value| match value.kind.as_ref() {
-                    Some(Kind::StringValue(value)) => Some(value.as_str()),
-                    _ => None,
-                })
-                .unwrap_or("middleware");
-            match mode {
-                "middleware" | "auto" | "both" => checks.push(check),
-                "hooks" => {}
-                _ => {
+        let mut redaction_owned = ownership.is_none();
+        if let Some(values) = ownership {
+            for (scanner, value) in values {
+                let mode = match value.kind.as_ref() {
+                    Some(Kind::StringValue(value)) => value.as_str(),
+                    _ => {
+                        return Err(Status::invalid_argument(format!(
+                            "scanner ownership for {scanner} must be a string"
+                        )))
+                    }
+                };
+                if mode == "hooks" {
+                    continue;
+                }
+                if mode == "both" {
+                    return Err(Status::failed_precondition(format!(
+                        "scanner ownership 'both' is not supported by Rust middleware for {scanner}"
+                    )));
+                }
+                if mode != "middleware" && mode != "auto" {
                     return Err(Status::invalid_argument(format!(
                         "unsupported scanner ownership mode for {scanner}: {mode}"
-                    )))
+                    )));
+                }
+                match scanner.as_str() {
+                    "prompt_injection" => checks.push("injection"),
+                    "context_poisoning" => checks.push("context_poisoning"),
+                    "secret_scanning" => checks.push("secrets"),
+                    "scan_pii" => checks.push("pii"),
+                    "scan_offensive" => checks.push("offensive"),
+                    "canary_detection" => checks.push("canary"),
+                    "secret_redaction" => redaction_owned = true,
+                    "supply_chain" | "config_file_scanning" => {
+                        return Err(Status::failed_precondition(format!(
+                            "scanner {scanner} is not available through daemon REST middleware"
+                        )));
+                    }
+                    _ => {
+                        return Err(Status::invalid_argument(format!(
+                            "unknown scanner ownership entry: {scanner}"
+                        )));
+                    }
                 }
             }
+        } else {
+            checks.extend(["injection", "context_poisoning", "secrets", "pii"]);
         }
         Ok(ScanPlan {
             checks,
-            response_redaction,
+            response_redaction: response_redaction && redaction_owned,
         })
     }
 }
@@ -686,6 +710,7 @@ fn remove_pid_file_if_owned() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
     use std::io::Write;
 
     #[test]
@@ -715,5 +740,34 @@ mod tests {
         }))
         .expect_err("missing contract capability");
         assert!(error.message().contains("supervisor-middleware contract"));
+    }
+
+    #[test]
+    fn scanner_plan_routes_supported_keys_and_rejects_local_only_scanners() {
+        let config = Struct {
+            fields: BTreeMap::from([(
+                "scanner_ownership".to_string(),
+                prost_types::Value {
+                    kind: Some(Kind::StructValue(Struct {
+                        fields: BTreeMap::from([
+                            (
+                                "prompt_injection".to_string(),
+                                prost_types::Value {
+                                    kind: Some(Kind::StringValue("middleware".to_string())),
+                                },
+                            ),
+                            (
+                                "supply_chain".to_string(),
+                                prost_types::Value {
+                                    kind: Some(Kind::StringValue("middleware".to_string())),
+                                },
+                            ),
+                        ]),
+                    })),
+                },
+            )]),
+        };
+        let error = MiddlewareService::scan_plan(Some(&config)).expect_err("local-only scanner");
+        assert!(error.message().contains("supply_chain"));
     }
 }

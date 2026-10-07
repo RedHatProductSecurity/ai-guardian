@@ -25,6 +25,8 @@ _VALID_CHECKS = frozenset(
         "injection",
         "ssrf",
         "context_poisoning",
+        "offensive",
+        "canary",
     }
 )
 
@@ -989,6 +991,56 @@ class _RestHandler(BaseHTTPRequestHandler):
                             )
                     except Exception as e:
                         logger.warning("Context poisoning check failed: %s", e)
+
+            if "offensive" in checks:
+                try:
+                    from ai_guardian.hook_events.scanners import (
+                        run_offensive_language_scan,
+                    )
+
+                    offensive_result = run_offensive_language_scan(
+                        content,
+                        config=(
+                            cfg.get("scan_offensive") if isinstance(cfg, dict) else None
+                        ),
+                        filename="provider-content",
+                    )
+                    if offensive_result is not None and offensive_result.detected:
+                        findings.append(
+                            {
+                                "type": "offensive_language",
+                                "message": "offensive language detected",
+                                "action_taken": action,
+                            }
+                        )
+                except Exception as e:
+                    logger.warning("Offensive language check failed: %s", e)
+
+            if "canary" in checks:
+                try:
+                    from ai_guardian.hook_events.scanners import (
+                        run_canary_detection_scan,
+                    )
+
+                    canary_result = run_canary_detection_scan(
+                        content,
+                        filename="provider-content",
+                        config=(
+                            cfg.get("canary_detection")
+                            if isinstance(cfg, dict)
+                            else None
+                        ),
+                    )
+                    if canary_result is not None and canary_result.detected:
+                        findings.append(
+                            {
+                                "type": "canary_detected",
+                                "message": "canary token detected",
+                                "action_taken": action,
+                            }
+                        )
+                except Exception as e:
+                    logger.warning("Canary detection check failed: %s", e)
 
             redacted = None
             if findings:

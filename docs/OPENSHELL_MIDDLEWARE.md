@@ -32,6 +32,14 @@ Gateway must report `Status: healthy`. Keep `OPENAI_API_KEY` exported when
 using API-key provider authentication. Do not pass `--provider` in sandbox
 creation; AI Guardian selects `ai-guardian-openai` automatically.
 
+The Rust middleware and AI Guardian daemon must run in the same host/user
+environment by default. Rust reads the daemon REST port from that environment's
+`daemon.pid` and token from `daemon.token`, then calls localhost REST. If the
+daemon is remote or containerized separately, set `AI_GUARDIAN_DAEMON_URL`,
+`AI_GUARDIAN_DAEMON_TOKEN` (or `AI_GUARDIAN_DAEMON_TOKEN_FILE`), and ensure the
+endpoint is reachable and authenticated; do not rely on local PID-file
+discovery.
+
 ### 1. Create middleware policy
 
 ```bash
@@ -41,9 +49,11 @@ registration_name: content-guard-test
 provider_endpoints:
   - api.openai.com
 scanner_ownership:
-  default: middleware
+  default: hooks
   prompt_injection: middleware
+  context_poisoning: middleware
   secret_scanning: middleware
+  scan_pii: middleware
   secret_redaction: middleware
 max_payload_bytes: 262144
 timeout_ms: 5000
@@ -253,9 +263,11 @@ registration_name: content-guard-test
 provider_endpoints:
   - api.openai.com
 scanner_ownership:
-  default: middleware
+  default: hooks
   prompt_injection: middleware
+  context_poisoning: middleware
   secret_scanning: middleware
+  scan_pii: middleware
   secret_redaction: middleware
 max_payload_bytes: 262144
 timeout_ms: 5000
@@ -782,22 +794,97 @@ operator actions.
 
 ## Scanner ownership and response behavior
 
-`scanner_ownership` supports these modes:
+### What OpenShell middleware can see
+
+OpenShell middleware runs only on traffic selected by an OpenShell
+`network_middlewares` policy entry. It can inspect:
+
+- provider-bound HTTP requests before credentials are injected;
+- provider HTTP responses before delivery; and
+- advertised WebSocket text messages.
+
+It cannot inspect local filesystem reads, process launches, tool execution,
+host shell commands, or arbitrary tool output that never crosses a selected
+provider network boundary. Those surfaces remain AI Guardian hook/daemon
+responsibilities.
+
+### Ownership modes
+
+`scanner_ownership` is copied into the generated OpenShell policy and controls
+which checks Rust middleware requests from the daemon for **provider content**:
 
 | Mode | Behavior |
 |---|---|
-| `middleware` | The external service owns the scanner; missing capability, invalid attachment, or outage denies the operation. |
-| `hooks` | Local AI Guardian hooks own the scanner; this service does not scan it. |
-| `auto` | Use middleware after protocol, capability, and effective-policy validation; otherwise fall back to hooks when available. |
-| `both` | Run both surfaces only with shared correlation and pre-persistence deduplication; otherwise deny. |
+| `middleware` | Rust middleware invokes the daemon scanner for matching provider traffic. Middleware outage fails closed. |
+| `hooks` | Rust middleware skips that scanner. Host/agent hooks remain responsible for hook events. |
+| `auto` | Rust middleware uses the daemon scanner when the provider request reaches middleware; it does not dynamically re-route a host hook event. |
+| `both` | Both surfaces may inspect the same logical content independently. Use only when duplicate findings are acceptable; cross-process deduplication is not automatic. |
 
 The middleware YAML's `scanner_ownership` is copied into the generated
 OpenShell policy. Rust middleware uses it to choose which checks to request from
 the daemon: `middleware` and `auto` route through middleware, while `hooks`
 leaves that scanner to host/agent hooks. The daemon's `ai-guardian.json` still
 defines scanner behavior and profiles; ownership decides which enforcement
-surface invokes it. Host hooks remain active even when middleware owns a
-provider-content scanner.
+surface invokes it. **Setting a scanner to `middleware` does not disable the
+same scanner in host hooks.** This is intentional defense-in-depth: a prompt or
+tool event can be blocked locally even when it never reaches OpenShell, while
+provider content can be checked again at the external boundary.
+
+There is no single middleware YAML switch that turns off host hook scanning.
+Do not weaken host protection merely to remove duplicate findings; use
+`scanner_ownership: hooks` when middleware should not inspect a provider
+scanner, or keep `middleware` for boundary enforcement.
+
+### Scanner ownership keys and surface support
+
+These are all supported `scanner_ownership` keys:
+
+| Key | Rust/provider-content middleware | Host hooks/local content |
+|---|---|---|
+| `secret_scanning` | ✅ Daemon REST check | ✅ Separate hook scanner |
+| `scan_pii` | ✅ Daemon REST check | ✅ Separate hook scanner |
+| `prompt_injection` | ✅ Daemon REST check | ✅ Separate hook scanner |
+| `context_poisoning` | ✅ Daemon REST check | ✅ Separate hook scanner |
+| `secret_redaction` | ✅ Response redaction path | ✅ Separate hook/output path |
+| `supply_chain` | ❌ Not provider-content middleware | ✅ Local config/hook scanner |
+| `scan_offensive` | ✅ Daemon REST check | ✅ Separate hook scanner |
+| `canary_detection` | ✅ Daemon REST check | ✅ Separate hook scanner |
+| `config_file_scanning` | ❌ Local/config-file scanner, not provider content | ✅ Local scanner |
+
+Do not set unsupported rows to `middleware`, `auto`, or `both`; Rust middleware
+rejects that policy during `ValidateConfig`. Keep them on `hooks` when they are
+needed for local files or tool events. `ai-guardian.json` controls scanner
+settings/actions; this table controls whether the provider-content middleware
+requests the daemon check.
+
+### Canonical scanner names versus violation types
+
+The registry has 13 canonical hook scanners. They are not a one-to-one match
+with violation types; one scanner can emit several types, and some violation
+types come from policy guards or transcript adapters rather than scanners:
+
+```text
+prompt_injection     context_poisoning   supply_chain
+offensive_language   canary_detection    config_file
+secret               pii                  code_security
+bash_exfil           exfil_detection     image
+directory
+```
+
+The corresponding `scanner_ownership` keys are the nine semantic/provider
+sections listed above. The remaining registry entries are local/tool/file
+controls and cannot be delegated to OpenShell middleware.
+
+Examples of violation types that are not additional scanners:
+
+| Violation type | Origin |
+|---|---|
+| `tool_permission`, `directory_blocking`, `ssrf_blocked` | Immutable/policy guards |
+| `secret_in_transcript`, `pii_in_transcript` | Transcript adapters |
+| `jailbreak_detected` | Prompt-injection subcategory |
+| `secret_redaction` | Redaction action/result |
+| `image_secret_detected`, `image_pii_detected` | Image/OCR scanner |
+| `config_file_exfil` | Bash/config-file exfiltration paths |
 
 The service scans textual leaves throughout JSON provider payloads, including
 messages, tool calls, tool results, files, and shell content. It does not put

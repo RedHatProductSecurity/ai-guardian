@@ -20,6 +20,12 @@ Start AI Guardian daemon first:
 ai-guardian daemon start -b
 ```
 
+By default, run this daemon and the Rust middleware under the same host/user
+environment. The middleware reads `daemon.pid` for the REST port and
+`daemon.token` for authentication. A separately hosted daemon requires an
+explicit `AI_GUARDIAN_DAEMON_URL` plus `AI_GUARDIAN_DAEMON_TOKEN` or
+`AI_GUARDIAN_DAEMON_TOKEN_FILE`.
+
 Then start middleware:
 
 ```bash
