@@ -140,10 +140,15 @@ uv run --extra middleware python -m ai_guardian sandbox create \
   --runtime openshell \
   --name mw-proof \
   --cli codex \
-  --policy /tmp/content-guard-policy.yaml
+  --policy /tmp/content-guard-policy.yaml \
+  -- /bin/true
 
 uv run --extra middleware python -m ai_guardian sandbox connect mw-proof
 ```
+
+The explicit `/bin/true` keeps this create command non-interactive. If the
+command is omitted, AI Guardian opens a shell after setup; exit that shell or
+use a second terminal before running `sandbox connect`.
 
 The generated policy's `network_middlewares` entry attaches
 `content-guard-test` to `api.openai.com`. Verify activation from a second host
@@ -202,17 +207,17 @@ or `ValidateConfig` calls fail.
 ### Runtime split
 
 OpenShell transport runs in Rust. AI Guardian scanner execution remains in the
-long-lived Python daemon and is reached only through authenticated localhost
-REST. Build the Rust service from the repository:
+long-lived Python daemon and is reached through its permission-protected Unix
+socket by default. Explicit remote deployments can use authenticated REST.
+Build the Rust service from the repository:
 
 ```bash
 cargo build --release --manifest-path rust/openshell-middleware/Cargo.toml
 ai-guardian daemon start -b
 ```
 
-The Rust binary reads the daemon REST port from the XDG `daemon.pid` file and
-the token from `daemon.token`. Set `AI_GUARDIAN_DAEMON_URL` only when explicitly
-overriding PID-file discovery. See
+The Rust binary reads the daemon Unix socket from the XDG state directory. Set
+`AI_GUARDIAN_DAEMON_URL` only for an explicit remote REST deployment. See
 `rust/openshell-middleware/README.md` for runtime variables and direct launch.
 
 ### Prerequisites
@@ -906,6 +911,26 @@ injection, the response is withheld even though sensitive text may have been
 removed from the transformed copy. Redaction failures fail closed with
 `response_redaction_error`. Response audit entries use
 `phase=pre_return` and `direction=response`.
+
+### Codex WebSocket retry behavior
+
+OpenShell denies a blocked WebSocket message with close code `1008`; Codex may
+retry that stream before falling back to HTTPS. This is Codex client behavior,
+not an HTTP status chosen by middleware. To make Codex use HTTPS/SSE directly
+and show the middleware's immediate `403 middleware_denied` response, select a
+custom Responses provider with WebSockets disabled:
+
+```bash
+codex \
+  --config 'model_provider="ai_guardian_https"' \
+  --config 'model_providers.ai_guardian_https={name="AI Guardian HTTPS",base_url="https://api.openai.com/v1",wire_api="responses",supports_websockets=false,request_max_retries=0,stream_max_retries=0}' \
+  exec --skip-git-repo-check 'Reply with exactly OK. Synthetic test phone: 212-555-0198.'
+```
+
+OpenShell still injects the attached `ai-guardian-openai` provider credentials
+because the custom provider targets the same admitted endpoint. Without this
+transport override, a blocked Codex WebSocket request remains fail-closed but
+may display its retry sequence before the HTTP fallback.
 
 ## Troubleshooting and security boundaries
 

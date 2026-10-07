@@ -51,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **OpenShell Rust WebSocket scanning:** Advertise and enforce the text-WebSocket
+  middleware binding so Codex requests using its WebSocket transport are scanned
+  before provider credentials and fail closed on sensitive content.
+- **OpenShell daemon IPC checks:** Unwrap the daemon's nested Unix-socket response
+  envelope and reuse the cached scanner config for redaction, so clean provider
+  content is allowed and detected PII/secrets return `middleware_denied` instead
+  of `middleware_failed`.
 - **OpenShell setup guidance:** Document local gateway installation and startup,
   put the required Providers v2/profile-import sequence before the first
   sandbox example, clarify automatic OAuth/API-key provider selection, and link

@@ -15,6 +15,9 @@
 - OpenShell middleware documentation should lead with the minimal happy path:
   create config, start/bootstrap middleware, and create sandbox. Curl denial
   probes and audit redirection belong in optional sections at the bottom.
+- OpenShell sandbox create tests should pass an explicit non-interactive command
+  such as `-- /bin/true`; omitting it intentionally attaches an interactive
+  shell, so use `sandbox connect` only after create returns.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
@@ -459,7 +462,13 @@
   With `OPENAI_API_KEY`, omit `--provider` so sandbox setup selects or refreshes
   `ai-guardian-openai`; use the Codex provider only for OAuth credentials.
 
-- [2026-10-06] **Rust OpenShell middleware runtime:** The Rust service owns
-  OpenShell gRPC and calls the daemon's authenticated localhost REST API. It
-  reads daemon `rest_port` from `daemon.pid` and token from `daemon.token`; the
-  Python middleware transport is no longer needed for the macOS Podman path.
+- [2026-10-07] **Rust OpenShell middleware runtime:** The Rust service owns
+  OpenShell gRPC and uses the daemon Unix socket by default; explicit remote
+  deployments use `AI_GUARDIAN_DAEMON_URL` plus an authenticated token. Codex
+  uses WebSocket transport, so the Rust manifest must advertise the text-
+  WebSocket binding or provider prompts bypass request scanning.
+- [2026-10-07] **Codex middleware denial UX:** OpenShell closes denied
+  WebSocket messages with code 1008, and Codex retries that stream before HTTP
+  fallback. HTTP middleware denials are immediate 403 `middleware_denied`; a
+  Codex custom Responses provider with `supports_websockets=false` avoids the
+  retry loop.

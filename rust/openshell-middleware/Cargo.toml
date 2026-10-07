@@ -26,6 +26,3 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 [build-dependencies]
 protoc-bin-vendored = "3"
 tonic-build = "0.12"
-
-[dev-dependencies]
-tempfile = "3"

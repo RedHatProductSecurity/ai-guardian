@@ -619,6 +619,9 @@ class DaemonServer:
         check_type = data.get("check_type", "")
 
         try:
+            if check_type == "middleware":
+                return {"data": self._handle_middleware_check(data)}
+
             from ai_guardian.sdk import _DirectSession
 
             session = _DirectSession(config=self.state.get_config())
@@ -661,6 +664,60 @@ class DaemonServer:
         except Exception as e:
             logger.error(f"SDK check failed: {e}")
             return {"error": str(e)}
+
+    def _handle_middleware_check(self, data):
+        """Run selected provider-content scanners for Rust middleware IPC."""
+        from ai_guardian.scanners.pipeline import scan_content
+        from ai_guardian.scanners.scanner_registry import ScannerName
+
+        check_to_scanner = {
+            "injection": ScannerName.PROMPT_INJECTION,
+            "context_poisoning": ScannerName.CONTEXT_POISONING,
+            "secrets": ScannerName.SECRET,
+            "pii": ScannerName.PII,
+            "offensive": ScannerName.OFFENSIVE_LANGUAGE,
+            "canary": ScannerName.CANARY_DETECTION,
+        }
+        raw_checks = data.get("checks") or []
+        if not isinstance(raw_checks, list) or any(
+            check not in check_to_scanner for check in raw_checks
+        ):
+            raise ValueError("invalid middleware scanner selection")
+        selected = {check_to_scanner[check] for check in raw_checks}
+        content = data.get("text", "")
+        if not isinstance(content, str):
+            raise ValueError("middleware content must be a string")
+        config = self.state.get_config()
+        scan_results = scan_content(
+            content,
+            config=config,
+            filename="provider-content",
+            source_type="provider_content",
+            scanner_names=selected,
+        )
+        findings = [
+            {
+                "type": str(result.violation_type),
+                "message": "AI Guardian finding",
+                "action_taken": data.get("action", "block"),
+            }
+            for result in scan_results
+            if result.detected
+        ]
+        redacted = None
+        if findings:
+            from ai_guardian.scanners.sanitizer import sanitize_text
+
+            pi_config = (
+                config.get("prompt_injection") if isinstance(config, dict) else None
+            )
+            sanitized = sanitize_text(content, pi_config=pi_config)
+            redacted = sanitized.get("sanitized_text") or sanitized.get("redacted")
+        return {
+            "clean": not findings,
+            "findings": findings,
+            "redacted": redacted,
+        }
 
     def _handle_engine_test(self, data):
         """Run an engine test inside the daemon process.
