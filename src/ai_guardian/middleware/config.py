@@ -551,8 +551,17 @@ def load_operator_policy(
     path: str | Path,
     *,
     profile_override: Optional[str] = None,
+    registration_override: Optional[str] = None,
+    provider_endpoints_override: Optional[Sequence[str]] = None,
 ) -> tuple[MiddlewarePolicy, Dict[str, Any]]:
-    """Load an operator-owned JSON/YAML policy and its raw server settings."""
+    """Load an operator-owned JSON/YAML policy and its raw server settings.
+
+    The overrides are intentionally applied to the effective policy rather than
+    written back to the operator's file.  This lets callers such as
+    ``sandbox create`` attach a generated registration or endpoint set without
+    mutating a configuration file that may be shared by another middleware
+    process.
+    """
 
     config_path = Path(path).expanduser()
     try:
@@ -594,6 +603,10 @@ def load_operator_policy(
     policy_values = dict(policy_raw)
     if profile_override:
         policy_values["profile_id"] = profile_override
+    if registration_override is not None:
+        policy_values["registration_name"] = registration_override
+    if provider_endpoints_override is not None:
+        policy_values["provider_endpoints"] = list(provider_endpoints_override)
     profile_id = policy_values.get("profile_id", "standard")
     profile_ref = str(profile_id)
     profile = load_profile(profile_ref)

@@ -216,6 +216,26 @@ jwt:
     assert raw["tls"]["cert_file"] == "/etc/ai-guardian/tls.crt"
 
 
+def test_operator_policy_overrides_registration_and_provider_endpoints(tmp_path):
+    path = tmp_path / "middleware.yaml"
+    path.write_text(
+        "profile_id: standard\n"
+        "registration_name: configured-name\n"
+        "provider_endpoints: [configured.example]\n"
+        "require_effective_policy: true\n",
+        encoding="utf-8",
+    )
+
+    policy, _raw = load_operator_policy(
+        path,
+        registration_override="sandbox-name",
+        provider_endpoints_override=("api.openai.com", "api.anthropic.com"),
+    )
+
+    assert policy.registration_name == "sandbox-name"
+    assert policy.provider_endpoints == ("api.openai.com", "api.anthropic.com")
+
+
 @pytest.mark.parametrize("release", ["0.1.2", "0.2.1", "0.9.0"])
 def test_openshell_adapter_falls_back_within_release_major(release):
     adapter, target, _source = select_adapter(release)

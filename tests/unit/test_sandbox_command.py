@@ -22,6 +22,10 @@ from ai_guardian.sandbox import (
     _initial_config_source,
     _load_snapshot_config,
     _openshell_create,
+    _openshell_middleware_command,
+    _openshell_middleware_config_path,
+    _openshell_middleware_probe_policy,
+    _openshell_middleware_requested,
     _openshell_provider_environment,
     _expose_openshell_service,
     _run,
@@ -29,6 +33,7 @@ from ai_guardian.sandbox import (
     _resolve_sandbox_name,
     _sandbox_name_exists,
     _validate_create_options,
+    _validate_openshell_middleware_network_access,
     create_sandbox,
     handle_sandbox_command,
 )
@@ -1327,6 +1332,197 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         assert Path(command[command.index("--policy") + 1]).name == "policy.yaml"
     finally:
         shutil.rmtree(policy_dir)
+
+
+def test_openshell_middleware_generates_state_owned_config(tmp_path, monkeypatch):
+    args = _args(
+        middleware=True,
+        middleware_profile="strict",
+        middleware_registration="content-guard",
+        middleware_provider_endpoint=["api.openai.com", "api.anthropic.com"],
+        middleware_allow_insecure=True,
+        middleware_bootstrap_force=False,
+    )
+    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+
+    assert _openshell_middleware_requested(args)
+    config_path = _openshell_middleware_config_path(args)
+
+    assert config_path == tmp_path / "openshell-middleware" / "sandbox-config.json"
+    assert json.loads(config_path.read_text(encoding="utf-8")) == {
+        "profile_id": "strict",
+        "registration_name": "content-guard",
+        "provider_endpoints": ["api.openai.com", "api.anthropic.com"],
+        "scanner_ownership": {
+            "default": "hooks",
+            "prompt_injection": "middleware",
+            "context_poisoning": "middleware",
+            "secret_scanning": "middleware",
+            "scan_pii": "middleware",
+            "secret_redaction": "middleware",
+            "scan_offensive": "middleware",
+            "canary_detection": "middleware",
+        },
+        "response_redaction": True,
+        "require_effective_policy": True,
+        "allow_insecure_transport": True,
+    }
+    # POSIX mode bits are not portable on Windows; Windows uses ACLs and
+    # reports a platform-specific mode through pathlib.Path.stat().
+    if os.name != "nt":
+        assert config_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_openshell_middleware_command_propagates_secure_options(tmp_path):
+    args = _args(
+        middleware=True,
+        middleware_implementation="python",
+        middleware_bind="10.0.0.5:50051",
+        middleware_gateway_config=str(tmp_path / "gateway.toml"),
+        middleware_gateway_endpoint="https://10.0.0.5:50051",
+        middleware_policy_name="content-guard-attachment",
+        middleware_profile="strict",
+        middleware_registration="content-guard",
+        middleware_provider_endpoint=["api.openai.com"],
+        middleware_gateway_tls_ca=str(tmp_path / "ca.pem"),
+        middleware_tls_cert=str(tmp_path / "server.crt"),
+        middleware_tls_key=str(tmp_path / "server.key"),
+        middleware_tls_client_ca=str(tmp_path / "client-ca.pem"),
+        middleware_jwt_public_key=str(tmp_path / "jwt.pem"),
+        middleware_jwt_audience="urn:openshell:content-guard",
+        middleware_bootstrap_force=True,
+    )
+
+    command = _openshell_middleware_command(
+        args,
+        config_path=tmp_path / "middleware.json",
+        policy_path=tmp_path / "policy.yaml",
+    )
+
+    assert command[:5] == [
+        os.sys.executable,
+        "-m",
+        "ai_guardian",
+        "openshell-middleware",
+        "start",
+    ]
+    assert "--background" in command
+    assert command[command.index("--config") + 1] == str(tmp_path / "middleware.json")
+    assert command[command.index("--policy-out") + 1] == str(tmp_path / "policy.yaml")
+    assert command[command.index("--provider-endpoint") + 1] == "api.openai.com"
+    assert "--allow-insecure-transport" not in command
+    assert "--bootstrap-force" in command
+
+
+def test_openshell_middleware_probe_generates_keyless_curl_policy(
+    tmp_path, monkeypatch
+):
+    provider_policy = tmp_path / "middleware-policy.yaml"
+    provider_policy.write_text(
+        "version: 1\n"
+        "network_middlewares:\n"
+        "  content-guard:\n"
+        "    endpoints:\n"
+        "      include: [api.openai.com]\n",
+        encoding="utf-8",
+    )
+    args = _args(
+        middleware_probe=True,
+        middleware_bootstrap_force=False,
+    )
+    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / "state"))
+
+    probe_path = _openshell_middleware_probe_policy(
+        args, provider_policy=provider_policy
+    )
+
+    assert probe_path is not None
+    probe = yaml.safe_load(probe_path.read_text(encoding="utf-8"))
+    probe_rule = probe["network_policies"]["ai_guardian_middleware_probe"]
+    assert probe_rule["endpoints"][0]["host"] == "api.openai.com"
+    assert probe_rule["binaries"] == [{"path": "/usr/bin/curl"}]
+
+
+def test_openshell_middleware_network_validation_rejects_unpermitted_endpoint(
+    tmp_path,
+):
+    effective = tmp_path / "effective.yaml"
+    effective.write_text(
+        "version: 1\nnetwork_policies:\n"
+        "  codex:\n"
+        "    endpoints:\n"
+        "      - host: api.openai.com\n",
+        encoding="utf-8",
+    )
+    middleware = tmp_path / "middleware.yaml"
+    middleware.write_text(
+        "version: 1\nnetwork_middlewares:\n"
+        "  content-guard:\n"
+        "    endpoints:\n"
+        "      include: [api.anthropic.com]\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="not permitted"):
+        _validate_openshell_middleware_network_access(effective, middleware)
+
+
+def test_middleware_options_are_rejected_for_container_sandboxes():
+    args = _args(runtime="container", middleware=True)
+
+    with pytest.raises(ValueError, match="OpenShell sandboxes only"):
+        _validate_create_options(args)
+
+
+def test_middleware_options_require_an_ai_guardian_openshell_image():
+    args = _args(
+        runtime="openshell",
+        middleware=True,
+        image="quay.io/nvidia/openshell-community:latest",
+    )
+
+    with pytest.raises(ValueError, match="AI Guardian OpenShell image"):
+        _validate_create_options(args)
+
+
+def test_openshell_create_merges_generated_middleware_policy(tmp_path, monkeypatch):
+    middleware_policy = tmp_path / "middleware-policy.yaml"
+    middleware_policy.write_text(
+        "version: 1\nnetwork_middlewares:\n  content-guard: {}\n",
+        encoding="utf-8",
+    )
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="demo",
+        cli="codex",
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="localhost/ai-guardian-openshell:dev",
+        environment=[],
+        policy=[],
+        provider=["codex-provider"],
+        label=[],
+        middleware=True,
+    )
+    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / "state"))
+
+    with patch(
+        "ai_guardian.sandbox._start_openshell_middleware",
+        return_value=middleware_policy,
+    ) as start:
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        policy_path = Path(command[command.index("--policy") + 1])
+        policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+    finally:
+        shutil.rmtree(policy_dir)
+
+    start.assert_called_once()
+    assert name == "demo"
+    assert uploads is False
+    assert "content-guard" in policy["network_middlewares"]
 
 
 def test_existing_openshell_codex_provider_refreshes_local_credentials(tmp_path):

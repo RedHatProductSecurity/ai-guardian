@@ -5,11 +5,19 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-06
+> Last updated: 2026-10-07
 
 ---
 
 ## Done
+
+- Implemented issue #2507's first-class external OpenShell middleware sandbox
+  flow on branch `2507`: `sandbox create --middleware` now generates private
+  middleware config/policy state, bootstraps gateway registration, starts or
+  reuses the host daemon/middleware service, validates provider network access,
+  supports secure transport overrides, and can generate a credential-free curl
+  denial probe. Manual `--policy`/`--provider` behavior remains compatible.
+  Added focused unit/UX coverage and updated the OpenShell/Sandbox guides.
 
 - OpenShell Codex authentication is now explicit in the tray Create sandbox
   form: OAuth maps to the managed `ai-guardian-codex` provider and API key maps
@@ -186,6 +194,9 @@ budget_tokens: 1000
 
 ## Next Quest
 
+- Live-qualify the new `sandbox create --middleware` path with the local
+  OpenShell gateway/image, including the first registration reload and the
+  keyless denial probe; no live credentialed run was performed in this session.
 - Await review of PR #2514.
 - Monitor PR #2513's fresh CI run for commit `15644bf1`, especially the Windows
   Python 3.10 matrix job that previously timed out in the existing Pi UX
@@ -198,8 +209,9 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `fix/openshell-middleware-config-persistence`
-- PR #2515 contains the Rust middleware runtime and config/restart fixes.
+- Branch: `2507`
+- PR #2515 contains the merged Rust middleware runtime and config/restart fixes;
+  the current working tree adds the first-class sandbox workflow for issue #2507.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.

@@ -1,19 +1,19 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1192 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1196 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
 - `.aiguardignore.toml` (~138 tok)
 - `.coverage` (~14198 tok)
-- `.gitignore` — Git ignore rules (~259 tok)
+- `.gitignore` — Git ignore rules (~270 tok)
 - `.gitleaks.toml` — Test files for secret redaction - contain intentional fake secrets for testing (~333 tok)
 - `.readthedocs.yaml` (~55 tok)
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
-- `CHANGELOG.md` — Change log (~72998 tok)
+- `CHANGELOG.md` — Change log (~73458 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -921,13 +921,13 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~4701 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~10772 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
 - `README.md` — Project documentation (~1485 tok)
 - `requirements.txt` — Python dependencies (~36 tok)
-- `Sandbox.md` — Sandbox CLI (~3269 tok)
+- `Sandbox.md` — Sandbox CLI (~3323 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2439 tok)
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
@@ -1004,6 +1004,16 @@
 - `ssrf-patterns.toml` — SSRF Protection Patterns - Example Pattern Server File (~1030 tok)
 - `unicode-patterns.toml` — Unicode Attack Detection Patterns - Example Pattern Server File (~1622 tok)
 
+## rust/openshell-middleware/
+
+- `build.rs` (~232 tok)
+- `Cargo.toml` — Rust package manifest (~243 tok)
+- `README.md` — Project documentation (~493 tok)
+
+## rust/openshell-middleware/src/
+
+- `main.rs` — Rust OpenShell supervisor middleware. (~13063 tok)
+
 ## scripts/
 
 - `check_cli_versions.py` — Check explicitly managed CLI versions in the support images. (~2644 tok)
@@ -1029,7 +1039,7 @@
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12000 tok)
-- `cli.py` — Declares with (~33116 tok)
+- `cli.py` — Declares with (~34849 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
@@ -1047,7 +1057,7 @@
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
 - `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
-- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~24150 tok)
+- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~30393 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)
@@ -1077,9 +1087,9 @@
 - `discovery.py` — URL configuration (~19049 tok)
 - `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~16625 tok)
 - `path_env.py` — URL configuration (~1228 tok)
-- `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 12 more (~1873 tok)
-- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~17645 tok)
-- `server.py` — URL configuration (~11082 tok)
+- `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 12 more (~1880 tok)
+- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~18263 tok)
+- `server.py` — URL configuration (~11804 tok)
 - `state.py` — URL configuration (~19056 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
@@ -1144,7 +1154,7 @@
 
 - `__init__.py` — Reusable semantic middleware components and protocol adapters. (~138 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4071 tok)
-- `config.py` — Configuration and scanner-ownership rules for supervisor middleware. (~6299 tok)
+- `config.py` — Configuration and scanner-ownership rules for supervisor middleware. (~6505 tok)
 - `dedup.py` — Pre-persistence deduplication for explicit hook/middleware defense-in-depth. (~653 tok)
 - `semantic.py` — Provider-payload normalization and semantic content scanning. (~3667 tok)
 - `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~21420 tok)
@@ -1169,8 +1179,8 @@
 ## src/ai_guardian/middleware/openshell/v0_1_2/
 
 - `__init__.py` — OpenShell v0.1.2 supervisor-middleware adapter implementation. (~20 tok)
-- `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4066 tok)
-- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~27961 tok)
+- `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4106 tok)
+- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~31433 tok)
 
 ## src/ai_guardian/middleware/openshell/v0_1_2/proto/
 
@@ -1259,7 +1269,7 @@
 - `ml_detection.py` — MLEngine: is_ml_available, get_models_dir, list_registered_models, download_model + 3 more (~5724 tok)
 - `offensive_language.py` — OffensiveLanguageScanner: scan (~1628 tok)
 - `output_parsers.py` — ScannerOutputParser: parse, parse, parse, parse + 1 more (~6117 tok)
-- `pipeline.py` — Shared content scanning pipeline for SDK and hooks. Calls entry.run_fn directly (no dispatcher). (~3299 tok)
+- `pipeline.py` — Shared content scanning pipeline for SDK and hooks. (~3440 tok)
 - `post_scan_filters.py` — Post-scan filter pipeline for the ScannerRegistry. (~3584 tok)
 - `prompt_injection.py` — Declares UnicodeAttackDetector (~23251 tok)
 - `python_loader.py` — URL configuration (~2209 tok)

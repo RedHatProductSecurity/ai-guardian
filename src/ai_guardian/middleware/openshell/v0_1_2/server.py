@@ -2540,7 +2540,12 @@ def run_middleware_server(args) -> int:
             ),
         )
         claimed_pid = True
-        policy, raw = load_operator_policy(args.config, profile_override=args.profile)
+        policy, raw = load_operator_policy(
+            args.config,
+            profile_override=args.profile,
+            registration_override=getattr(args, "registration_name", None),
+            provider_endpoints_override=getattr(args, "provider_endpoint", None),
+        )
         security_overrides: Dict[str, Any] = {}
         raw_tls = raw.get("tls", {})
         if raw_tls is None:

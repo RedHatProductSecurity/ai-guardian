@@ -371,6 +371,7 @@ The most useful options are:
 | `--policy FILE` | Add an OpenShell policy file; repeatable. |
 | `--provider NAME` | Attach an existing OpenShell provider; repeatable. |
 | `--openshell-auth {oauth,api-key}` | Select automatic OpenShell Codex authentication. |
+| `--middleware` | Start/reuse external AI Guardian middleware and generate its OpenShell attachment; see [middleware sandbox quickstart](OPENSHELL_MIDDLEWARE.md#quickstart-first-class-middleware-sandbox-creation). |
 | `--agent-provider NAME` | Select Pi's provider in Container sandboxes. |
 | `--opencode-agent-profile NAME` | Select an OpenCode profile in Container sandboxes. |
 | `--env KEY=VALUE` | Add an environment variable; repeatable. |
