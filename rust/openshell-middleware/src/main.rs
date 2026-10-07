@@ -221,6 +221,19 @@ impl DaemonClient {
         path: &Path,
         body: &CheckRequest<'_>,
     ) -> Result<CheckResponse, AppError> {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            self.check_unix_inner(path, body),
+        )
+        .await
+        .map_err(|_| AppError::Message("daemon IPC request timed out".to_string()))?
+    }
+
+    async fn check_unix_inner(
+        &self,
+        path: &Path,
+        body: &CheckRequest<'_>,
+    ) -> Result<CheckResponse, AppError> {
         let mut stream = UnixStream::connect(path).await.map_err(|error| {
             AppError::Message(format!(
                 "cannot connect to daemon socket {}: {error}",
@@ -320,14 +333,17 @@ impl MiddlewareService {
             .copied()
             .filter(|check| matches!(*check, "injection" | "context_poisoning"))
             .collect();
-        let semantic = self
-            .daemon
-            .check(content, request_id, semantic_checks)
-            .await?;
+        let semantic = if semantic_checks.is_empty() {
+            CheckResponse::default()
+        } else {
+            self.daemon
+                .check(content, request_id, semantic_checks)
+                .await?
+        };
         let semantic_blocking = semantic.findings.iter().any(|finding| {
             matches!(
                 finding.finding_type.as_str(),
-                "prompt_injection" | "context_poisoning" | "jailbreak"
+                "prompt_injection" | "context_poisoning" | "jailbreak" | "canary_detected"
             )
         });
         if semantic_blocking {
@@ -344,7 +360,7 @@ impl MiddlewareService {
             .checks
             .iter()
             .copied()
-            .filter(|check| matches!(*check, "secrets" | "pii"))
+            .filter(|check| matches!(*check, "secrets" | "pii" | "offensive"))
             .collect();
         let sensitive = if sensitive_checks.is_empty() {
             CheckResponse::default()
@@ -364,14 +380,14 @@ impl MiddlewareService {
             .findings
             .iter()
             .any(|finding| matches!(finding.finding_type.as_str(), "jailbreak"));
+        let redacted = if plan.response_redaction {
+            sensitive.redacted.clone()
+        } else {
+            None
+        };
         Ok(Evaluation {
-            blocked: !sensitive.clean
-                && (block_all_findings || blocking || !plan.response_redaction),
-            redacted: if plan.response_redaction {
-                sensitive.redacted
-            } else {
-                None
-            },
+            blocked: !sensitive.clean && (block_all_findings || blocking || redacted.is_none()),
+            redacted,
             findings,
             reason: if sensitive.clean {
                 String::new()
@@ -947,7 +963,16 @@ fn default_state_dir() -> PathBuf {
             env::var_os("XDG_STATE_HOME").map(|path| PathBuf::from(path).join("ai-guardian"))
         })
         .or_else(|| {
-            env::var_os("HOME").map(|path| PathBuf::from(path).join(".local/state/ai-guardian"))
+            if cfg!(windows) {
+                env::var_os("LOCALAPPDATA")
+                    .map(|path| PathBuf::from(path).join("ai-guardian/state"))
+                    .or_else(|| {
+                        env::var_os("USERPROFILE")
+                            .map(|path| PathBuf::from(path).join("AppData/Local/ai-guardian/state"))
+                    })
+            } else {
+                env::var_os("HOME").map(|path| PathBuf::from(path).join(".local/state/ai-guardian"))
+            }
         })
         .unwrap_or_else(|| PathBuf::from(".ai-guardian"))
 }

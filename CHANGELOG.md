@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   envelope and reuse the cached scanner config for redaction, so clean provider
   content is allowed and detected PII/secrets return `middleware_denied` instead
   of `middleware_failed`.
+- **OpenShell middleware fail-closed hardening:** Bound Unix-socket exchanges,
+  propagate scanner errors, route offensive/canary ownership checks, normalize
+  middleware finding types, and preserve wildcard-bind restart options.
 - **OpenShell setup guidance:** Document local gateway installation and startup,
   put the required Providers v2/profile-import sequence before the first
   sandbox example, clarify automatic OAuth/API-key provider selection, and link

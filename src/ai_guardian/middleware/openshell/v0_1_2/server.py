@@ -2058,7 +2058,12 @@ _MIDDLEWARE_RESTART_VALUE_OPTIONS = frozenset(
     }
 )
 _MIDDLEWARE_RESTART_BOOLEAN_OPTIONS = frozenset(
-    {"--bootstrap-openshell", "--bootstrap-force", "--allow-insecure-transport"}
+    {
+        "--bootstrap-openshell",
+        "--bootstrap-force",
+        "--allow-insecure-transport",
+        "--allow-insecure-wildcard-bind",
+    }
 )
 
 

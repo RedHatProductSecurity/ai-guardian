@@ -695,9 +695,14 @@ class DaemonServer:
             source_type="provider_content",
             scanner_names=selected,
         )
+        if any(result.extra.get("scan_error") for result in scan_results):
+            raise RuntimeError("middleware scanner failed")
+        type_aliases = {"jailbreak_detected": "jailbreak"}
         findings = [
             {
-                "type": str(result.violation_type),
+                "type": type_aliases.get(
+                    str(result.violation_type), str(result.violation_type)
+                ),
                 "message": "AI Guardian finding",
                 "action_taken": data.get("action", "block"),
             }
