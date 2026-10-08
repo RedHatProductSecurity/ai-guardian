@@ -26,7 +26,7 @@ class _Context:
         raise AssertionError(f"unexpected middleware RPC abort: {code}: {details}")
 
 
-def _service():
+def _service(*, pause_file=None):
     profile = {
         "secret_scanning": {"enabled": True},
         "secret_redaction": {"enabled": True},
@@ -55,7 +55,7 @@ def _service():
         return []
 
     scanner = SemanticContentScanner(policy.profile, scan_fn=scan)
-    return MiddlewareService(policy, scanner=scanner)
+    return MiddlewareService(policy, scanner=scanner, pause_file=pause_file)
 
 
 def test_user_experience_openshell_prompt_injection_is_denied_with_stable_code():
@@ -106,3 +106,36 @@ def test_user_experience_plaintext_wildcard_listener_is_rejected():
 
     with pytest.raises(ValueError, match="wildcard address"):
         create_server(_service(), bind="0.0.0.0:50051", security=security)
+
+
+def test_user_experience_paused_middleware_denies_before_scanning(tmp_path):
+    """
+    USER EXPERIENCE: An operator pauses the standalone OpenShell middleware
+    while a provider request is about to cross the middleware boundary.
+
+    Expected experience:
+    - OpenShell receives DECISION_DENY with the stable ``middleware_paused``
+      reason code rather than an allow caused by skipped scanning.
+    - Diagnostics identify the middleware pause source and scope without
+      returning provider content.
+    - No scanner finding or interactive permission flow is produced.
+    """
+    from ai_guardian.middleware.pause import MiddlewarePauseStore
+
+    pause_file = tmp_path / "middleware.paused"
+    MiddlewarePauseStore(pause_file).pause()
+    request = pb2.HttpRequestEvaluation(
+        phase=pb2.SUPERVISOR_MIDDLEWARE_PHASE_PRE_CREDENTIALS,
+        context=pb2.RequestContext(request_id="paused-ux-request"),
+        target=pb2.HttpRequestTarget(host="provider.example", method="POST"),
+        body=b'{"messages":[{"content":"safe provider content"}]}',
+        middleware_name="content-guard",
+    )
+
+    response = _service(pause_file=pause_file).EvaluateHttpRequest(request, _Context())
+
+    assert response.decision == pb2.DECISION_DENY
+    assert response.reason_code == "middleware_paused"
+    assert response.metadata["pause_source"] == "middleware"
+    assert response.metadata["pause_scope"] == "global"
+    assert "safe provider content" not in response.reason

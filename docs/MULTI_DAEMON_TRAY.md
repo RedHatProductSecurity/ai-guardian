@@ -266,8 +266,9 @@ Each daemon exposes a REST API for tray communication:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
-| `/api/status` | GET | Daemon status (name, version, paused, menu_tags, config_source, config_read_only) |
-| `/api/stats` | GET | Full stats (requests, blocked, violations, menu_tags, config_source, config_read_only) |
+| `/api/status` | GET | Daemon status (name, version, paused, middleware_pause, menu_tags, config_source, config_read_only) |
+| `/api/stats` | GET | Full stats (requests, blocked, violations, middleware_pause, menu_tags, config_source, config_read_only) |
+| `/api/middleware/status` | GET | Effective daemon pause for OpenShell middleware; accepts optional `project_dir` |
 | `/api/pause` | POST | Pause scanning (`{"minutes": 15}`) |
 | `/api/resume` | POST | Resume scanning |
 

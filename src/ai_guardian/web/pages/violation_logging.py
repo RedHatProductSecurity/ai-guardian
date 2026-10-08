@@ -28,6 +28,10 @@ ALL_LOG_TYPES = [
         "Injection in Transcript — prompt injection from ! shell commands",
     ),
     ("annotation_suppressed", "Annotation Suppressed — inline suppression applied"),
+    (
+        "middleware_paused",
+        "Middleware Paused — OpenShell requests denied while enforcement is paused",
+    ),
     ("image_secret_detected", "Image Secret — secrets found in images via OCR"),
     ("image_pii_detected", "Image PII — PII found in images via OCR"),
 ]

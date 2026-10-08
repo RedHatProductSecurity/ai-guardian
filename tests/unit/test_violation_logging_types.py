@@ -1,4 +1,4 @@
-"""Tests for ssrf_blocked and config_file_exfil violation logging types."""
+"""Tests for the supported violation logging types."""
 
 import json
 import os
@@ -21,6 +21,7 @@ ALL_LOG_TYPES = [
     "pii_in_transcript",
     "prompt_injection_in_transcript",
     "annotation_suppressed",
+    "middleware_paused",
     "image_secret_detected",
     "image_pii_detected",
     "context_poisoning",
@@ -48,7 +49,7 @@ class TestViolationLoggerDefaults:
                 defaults = vl._get_default_config()
                 assert "config_file_exfil" in defaults["log_types"]
 
-    def test_default_config_has_all_eight_types(self):
+    def test_default_config_has_all_log_types(self):
         from ai_guardian.violations.logger import ViolationLogger
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -136,6 +137,7 @@ class TestSetupDefaults:
         log_types = config["violation_logging"]["log_types"]
         assert "ssrf_blocked" in log_types
         assert "config_file_exfil" in log_types
+        assert "middleware_paused" in log_types
 
     def test_permissive_config_template_includes_new_types(self):
         from ai_guardian.setup import _get_default_config_template
@@ -144,6 +146,7 @@ class TestSetupDefaults:
         log_types = config["violation_logging"]["log_types"]
         assert "ssrf_blocked" in log_types
         assert "config_file_exfil" in log_types
+        assert "middleware_paused" in log_types
 
 
 class TestSchemaValidation:
@@ -181,7 +184,7 @@ class TestSchemaValidation:
         config = {"violation_logging": {"log_types": ["config_file_exfil"]}}
         jsonschema.validate(config, schema)
 
-    def test_schema_accepts_all_eight_types(self):
+    def test_schema_accepts_all_log_types(self):
         import jsonschema
 
         schema_path = os.path.join(

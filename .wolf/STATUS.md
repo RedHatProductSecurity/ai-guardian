@@ -9,6 +9,15 @@ budget_tokens: 1000
 
 ---
 
+## Current Quest: Issue #2506
+
+- Coupled OpenShell middleware evaluations to daemon global/project pause state
+  with explicit fail-closed `middleware_paused` decisions, REST/Unix status
+  reporting, standalone pause/resume state, audit logging, and UX coverage.
+- Focused validation passes: 328 Python unit/UX tests, Ruff, Black, Mypy,
+  Pylint, compileall, JSON validation, and diff checks. Rust compilation could
+  not run because this environment has no cargo/rustc toolchain.
+
 ## Done
 
 - Implemented issue #2507's first-class external OpenShell middleware sandbox

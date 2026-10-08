@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenShell middleware pause coupling (#2506):** Couple daemon global/project
+  pause state to external middleware checks, add explicit fail-closed
+  `middleware_paused` decisions and audit metadata, and add standalone
+  middleware `pause`, `resume`, and combined `status` controls with persisted
+  automatic expiry.
 - **OpenShell tray authentication selector:** Add an explicit Codex OAuth/API-key
   choice to the Create sandbox form. OAuth maps to the `codex` profile and
   `ai-guardian-codex`; API key maps to `openai` and `ai-guardian-openai`, even

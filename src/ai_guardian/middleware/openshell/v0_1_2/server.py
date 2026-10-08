@@ -43,6 +43,13 @@ from ...config import (
 )
 from ...dedup import FindingDeduplicator
 from ...dedup import FindingKey
+from ...pause import (
+    MiddlewarePauseStateError,
+    MiddlewarePauseStatus,
+    MiddlewarePauseStore,
+    default_middleware_pause_path,
+    effective_pause_status,
+)
 from ...semantic import (
     ContentEvaluation,
     ContentFinding,
@@ -449,6 +456,8 @@ if _GRPC_AVAILABLE:
             scanner: Optional[SemanticContentScanner] = None,
             deduplicator: Optional[FindingDeduplicator] = None,
             violation_logger: Optional[Any] = None,
+            pause_file: Optional[Path] = None,
+            project_dir: Optional[str] = None,
         ) -> None:
             self.policy = policy
             self.security = security
@@ -460,6 +469,10 @@ if _GRPC_AVAILABLE:
             # production.  A missing sink must never change a deny decision;
             # structured service logging below remains available regardless.
             self.violation_logger = violation_logger
+            self.pause_file = Path(pause_file).expanduser() if pause_file else None
+            self.project_dir = project_dir or os.environ.get(
+                "AI_GUARDIAN_MIDDLEWARE_PROJECT_DIR"
+            )
             self.authenticator = (
                 JwtAuthInterceptor(security)
                 if security and not security.allow_insecure_transport
@@ -548,6 +561,119 @@ if _GRPC_AVAILABLE:
             safe_reason = _safe_reason_code(reason_code, "middleware_denied")
             return (
                 f"AI Guardian blocks this request: {safe_reason} (OpenShell middleware)"
+            )
+
+        def _pause_status(self) -> MiddlewarePauseStatus:
+            """Read daemon and standalone middleware pause state."""
+
+            return effective_pause_status(
+                self.project_dir,
+                middleware_pause_file=self.pause_file,
+            )
+
+        @staticmethod
+        def _pause_metadata(status: MiddlewarePauseStatus) -> Dict[str, str]:
+            values = status.to_dict()
+            return {
+                f"pause_{key}": str(value)
+                for key, value in values.items()
+                if key != "paused" and value is not None
+            }
+
+        def _audit_pause(
+            self,
+            status: MiddlewarePauseStatus,
+            *,
+            request_id: str = "",
+            phase: str = "",
+            direction: str = "",
+            middleware_name: str = "",
+            target_host: str = "",
+            policy: Optional[MiddlewarePolicy] = None,
+            record_decision: bool = True,
+        ) -> None:
+            """Persist an attribution-safe pause decision without content."""
+
+            metadata = self._pause_metadata(status)
+            if record_decision:
+                self._record_decision(
+                    decision=_DENY,
+                    reason_code="middleware_paused",
+                    metadata=metadata,
+                    request_id=request_id,
+                    phase=phase,
+                    direction=direction,
+                    middleware_name=middleware_name,
+                    target_host=target_host,
+                    policy=policy,
+                )
+            if self.violation_logger is None:
+                return
+            from ai_guardian.violations.decision import PolicyDecision
+
+            try:
+                self.violation_logger.log_violation(
+                    "middleware_paused",
+                    blocked={
+                        "reason_code": "middleware_paused",
+                        "pause": status.to_dict(),
+                    },
+                    context={
+                        "ide_type": "openshell-middleware",
+                        "agent": "openshell",
+                        "project_dir": self.project_dir,
+                        "request_id": self._safe_audit_value(request_id),
+                        "phase": self._safe_audit_value(phase),
+                        "direction": self._safe_audit_value(direction),
+                    },
+                    severity="warning",
+                    policy_decision=PolicyDecision(
+                        event="middleware_pause",
+                        decision="deny",
+                        reason="middleware_paused",
+                        severity="warning",
+                        source="openshell-middleware",
+                        agent="openshell",
+                        repository=self.project_dir,
+                        correlation_id=request_id or None,
+                    ).to_dict(),
+                )
+            except Exception:  # pragma: no cover - audit must not alter denial
+                logger.critical(
+                    "OpenShell middleware pause audit persistence failed",
+                    exc_info=True,
+                )
+
+        def _paused_request_result(
+            self,
+            *,
+            request_id: str,
+            middleware_name: str,
+            target_host: str,
+            policy: Optional[MiddlewarePolicy],
+        ):
+            status = self._pause_status()
+            if not status.paused:
+                return None
+            self._audit_pause(
+                status,
+                request_id=request_id,
+                phase="pre_credentials",
+                direction="request",
+                middleware_name=middleware_name,
+                target_host=target_host,
+                policy=policy,
+                record_decision=False,
+            )
+            return self._denied_result(
+                "middleware_paused",
+                metadata=self._pause_metadata(status),
+                request_id=request_id,
+                phase="pre_credentials",
+                direction="request",
+                middleware_name=middleware_name,
+                target_host=target_host,
+                policy=policy,
             )
 
         def _record_decision(
@@ -717,6 +843,14 @@ if _GRPC_AVAILABLE:
             request_id = _request_id(request)
             middleware_name = request.middleware_name
             target_host = request.target.host
+            paused_result = self._paused_request_result(
+                request_id=request_id,
+                middleware_name=middleware_name,
+                target_host=target_host,
+                policy=self.policy,
+            )
+            if paused_result is not None:
+                return paused_result
             if request.phase != _PRE_CREDENTIALS:
                 context.abort(
                     grpc.StatusCode.INVALID_ARGUMENT, "unsupported HTTP request phase"
@@ -817,6 +951,26 @@ if _GRPC_AVAILABLE:
                             "unsupported WebSocket phase",
                         )
                     request_id = preflight.context.request_id or request_id
+                    pause_status = self._pause_status()
+                    if pause_status.paused:
+                        self._audit_pause(
+                            pause_status,
+                            request_id=request_id,
+                            phase="pre_credentials",
+                            direction="websocket",
+                            middleware_name=preflight.middleware_name,
+                            target_host=preflight.target.host,
+                            policy=self.policy,
+                        )
+                        yield pb2.WebSocketSessionEventResult(
+                            preflight_decision=pb2.WebSocketPreflightDecision(
+                                action=_WS_DENY,
+                                reason="AI Guardian middleware is paused",
+                                reason_code="middleware_paused",
+                                metadata=self._pause_metadata(pause_status),
+                            )
+                        )
+                        return
                     try:
                         policy = self._policy_for_struct(preflight.config)
                         selected, ownership_error = self._selected_scanners(
@@ -1421,6 +1575,28 @@ if _GRPC_AVAILABLE:
                     grpc.StatusCode.FAILED_PRECONDITION, "duplicate response preflight"
                 )
             self.service._authorize_supervisor(context, event.context)
+            pause_status = self.service._pause_status()
+            if pause_status.paused:
+                self.request_id = event.context.request_id
+                self.middleware_name = event.middleware_name
+                self.target_host = event.target.host
+                self.service._audit_pause(
+                    pause_status,
+                    request_id=self.request_id,
+                    phase="pre_return",
+                    direction="response",
+                    middleware_name=self.middleware_name,
+                    target_host=self.target_host,
+                    policy=self.service.policy,
+                )
+                return pb2.HttpResponseEventResult(
+                    preflight_result=pb2.HttpResponsePreflightResult(
+                        block_delivery=pb2.HttpResponseBlockDelivery(),
+                        reason="AI Guardian middleware is paused",
+                        reason_code="middleware_paused",
+                        metadata=self.service._pause_metadata(pause_status),
+                    )
+                )
             try:
                 self.policy = self.service._policy_for_struct(event.config)
             except (MiddlewarePolicyError, ScannerOwnershipError, ValueError):
@@ -2006,6 +2182,15 @@ def _middleware_state_path(args, suffix: str) -> Path:
     return get_state_dir() / f"openshell-middleware.{suffix}"
 
 
+def _middleware_pause_path(args) -> Path:
+    """Return the pause state path shared by CLI and middleware runtimes."""
+
+    configured = getattr(args, "pause_file", None)
+    return (
+        Path(configured).expanduser() if configured else default_middleware_pause_path()
+    )
+
+
 def _read_middleware_pid_file(path: Path) -> Optional[Dict[str, Any]]:
     if not path.exists():
         return None
@@ -2029,7 +2214,9 @@ def _middleware_pid(value: Optional[Mapping[str, Any]]) -> Optional[int]:
     return pid
 
 
-_MIDDLEWARE_LIFECYCLE_COMMANDS = frozenset({"start", "stop", "status", "restart"})
+_MIDDLEWARE_LIFECYCLE_COMMANDS = frozenset(
+    {"start", "stop", "status", "restart", "pause", "resume"}
+)
 _MIDDLEWARE_LIFECYCLE_FLAGS = frozenset(
     {"--background", "-b", "--stop", "--restart", "--status"}
 )
@@ -2055,6 +2242,8 @@ _MIDDLEWARE_RESTART_VALUE_OPTIONS = frozenset(
         "--jwt-audience",
         "--pid-file",
         "--log-file",
+        "--pause-file",
+        "--project-dir",
     }
 )
 _MIDDLEWARE_RESTART_BOOLEAN_OPTIONS = frozenset(
@@ -2459,6 +2648,10 @@ def _stop_middleware_background(args, *, quiet: bool = False) -> int:
 def _status_middleware_background(args) -> int:
     pid_path = _middleware_state_path(args, "pid")
     log_path = _middleware_state_path(args, "log")
+    pause_status = effective_pause_status(
+        getattr(args, "project_dir", None),
+        middleware_pause_file=_middleware_pause_path(args),
+    )
     info = _read_middleware_pid_file(pid_path)
     pid = _middleware_pid(info)
     from ai_guardian.daemon import is_pid_active
@@ -2466,20 +2659,120 @@ def _status_middleware_background(args) -> int:
     if pid is None or not is_pid_active(pid):
         if pid is not None:
             _remove_middleware_pid_file(pid_path, expected_pid=pid)
-        print("ai-guardian openshell-middleware: not running")
+        if getattr(args, "json_output", False):
+            print(json.dumps({"running": False, "pause": pause_status.to_dict()}))
+        else:
+            print("ai-guardian openshell-middleware: not running")
+            _print_middleware_pause_status(pause_status)
         return 1
     if not _middleware_process_matches(pid):
-        print(
-            f"ai-guardian openshell-middleware: PID {pid} is an unrelated process",
-            file=sys.stderr,
-        )
+        if getattr(args, "json_output", False):
+            print(
+                json.dumps(
+                    {
+                        "running": False,
+                        "pid": pid,
+                        "process_matches": False,
+                        "pause": pause_status.to_dict(),
+                    }
+                )
+            )
+        else:
+            print(
+                f"ai-guardian openshell-middleware: PID {pid} is an unrelated process",
+                file=sys.stderr,
+            )
         return 1
-    print(f"ai-guardian openshell-middleware: running (pid {pid})")
-    print(f"PID file: {pid_path}")
-    print(f"Log: {log_path}")
     config_path = info.get("config") if info else None
-    if isinstance(config_path, str) and config_path:
-        print(f"Config: {config_path}")
+    if getattr(args, "json_output", False):
+        print(
+            json.dumps(
+                {
+                    "running": True,
+                    "pid": pid,
+                    "pid_file": str(pid_path),
+                    "log_file": str(log_path),
+                    "config": config_path,
+                    "pause": pause_status.to_dict(),
+                }
+            )
+        )
+    else:
+        print(f"ai-guardian openshell-middleware: running (pid {pid})")
+        print(f"PID file: {pid_path}")
+        print(f"Log: {log_path}")
+        _print_middleware_pause_status(pause_status)
+        if isinstance(config_path, str) and config_path:
+            print(f"Config: {config_path}")
+    return 0
+
+
+def _print_middleware_pause_status(status) -> None:
+    """Render the effective middleware pause without exposing payload data."""
+
+    if not status.paused:
+        print("Middleware pause: not paused")
+        return
+    if status.remaining_seconds > 0:
+        minutes = int(status.remaining_seconds // 60)
+        seconds = int(status.remaining_seconds % 60)
+        duration = f"{minutes}m {seconds}s left"
+    else:
+        duration = "indefinite"
+    scope = status.scope or "global"
+    source = status.source or "unknown"
+    print(f"Middleware pause: PAUSED ({source}, {scope}, {duration})")
+
+
+def _pause_middleware(args) -> int:
+    """Pause standalone middleware state without requiring a daemon."""
+
+    try:
+        MiddlewarePauseStore(_middleware_pause_path(args)).pause(
+            getattr(args, "minutes", 0),
+            project_dir=getattr(args, "project_dir", None),
+        )
+    except (MiddlewarePauseStateError, ValueError) as exc:
+        print(f"Failed to pause middleware: {exc}", file=sys.stderr)
+        return 1
+    effective = effective_pause_status(
+        getattr(args, "project_dir", None),
+        middleware_pause_file=_middleware_pause_path(args),
+    )
+    if getattr(args, "json_output", False):
+        print(json.dumps({"status": "paused", "pause": effective.to_dict()}))
+    else:
+        duration = (
+            f" for {getattr(args, 'minutes', 0)} minutes"
+            if getattr(args, "minutes", 0) > 0
+            else " indefinitely"
+        )
+        scope = getattr(args, "project_dir", None) or "global"
+        print(f"ai-guardian middleware: scanning paused{duration} ({scope})")
+        _print_middleware_pause_status(effective)
+    return 0
+
+
+def _resume_middleware(args) -> int:
+    """Resume standalone middleware state idempotently."""
+
+    try:
+        MiddlewarePauseStore(_middleware_pause_path(args)).resume(
+            project_dir=getattr(args, "project_dir", None)
+        )
+    except MiddlewarePauseStateError as exc:
+        print(f"Failed to resume middleware: {exc}", file=sys.stderr)
+        return 1
+    effective = effective_pause_status(
+        getattr(args, "project_dir", None),
+        middleware_pause_file=_middleware_pause_path(args),
+    )
+    if getattr(args, "json_output", False):
+        print(json.dumps({"status": "resumed", "pause": effective.to_dict()}))
+    else:
+        scope = getattr(args, "project_dir", None) or "global"
+        print(f"ai-guardian middleware: scanning resumed ({scope})")
+        _print_middleware_pause_status(effective)
     return 0
 
 
@@ -2487,6 +2780,10 @@ def run_middleware_server(args) -> int:
     """CLI handler for ``ai-guardian openshell-middleware``."""
 
     lifecycle_command = getattr(args, "middleware_command", None)
+    if lifecycle_command == "pause":
+        return _pause_middleware(args)
+    if lifecycle_command == "resume":
+        return _resume_middleware(args)
     if lifecycle_command == "stop" or getattr(args, "stop", False):
         return _stop_middleware_background(args)
     if lifecycle_command == "status" or getattr(args, "status", False):
@@ -2647,6 +2944,13 @@ def run_middleware_server(args) -> int:
                 policy.registration_name
             )
             rust_environment["AI_GUARDIAN_MIDDLEWARE_PID_FILE"] = str(pid_path)
+            rust_environment["AI_GUARDIAN_MIDDLEWARE_PAUSE_FILE"] = str(
+                _middleware_pause_path(args)
+            )
+            if getattr(args, "project_dir", None):
+                rust_environment["AI_GUARDIAN_MIDDLEWARE_PROJECT_DIR"] = str(
+                    args.project_dir
+                )
             os.execve(str(rust_binary), [str(rust_binary)], rust_environment)
         from ai_guardian.violations.logger import ViolationLogger
 
@@ -2660,6 +2964,8 @@ def run_middleware_server(args) -> int:
             policy,
             security=security,
             violation_logger=violation_logger,
+            pause_file=_middleware_pause_path(args),
+            project_dir=getattr(args, "project_dir", None),
         )
         server_bind = args.bind
         if _needs_macos_tcp_relay(args.bind, security):

@@ -553,6 +553,36 @@ class TestCheckEndpoint:
         assert data["policy_decision"]["decision"] == "allow"
         assert data["policy_decision"]["source"] == "rest_api"
 
+    def test_post_check_when_daemon_paused_returns_middleware_decision(self, rest_api):
+        api, port, state = rest_api
+        state.pause(15)
+        url = f"http://127.0.0.1:{port}/api/check"
+        body = json.dumps({"content": "safe content"}).encode("utf-8")
+        req = Request(url, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+
+        with urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+
+        assert data["clean"] is False
+        assert data["findings"] == []
+        assert data["paused"] is True
+        assert data["reason_code"] == "middleware_paused"
+        assert data["pause_source"] == "daemon"
+        assert data["policy_decision"]["decision"] == "block"
+
+    def test_status_exposes_middleware_pause_state(self, rest_api):
+        api, port, state = rest_api
+        state.pause(15)
+        url = f"http://127.0.0.1:{port}/api/middleware/status"
+
+        with urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read())
+
+        assert data["paused"] is True
+        assert data["source"] == "daemon"
+        assert data["remaining_seconds"] == 0
+
     def test_post_check_missing_content(self, rest_api):
         api, port, state = rest_api
         url = f"http://127.0.0.1:{port}/api/check"

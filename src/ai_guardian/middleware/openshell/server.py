@@ -19,7 +19,12 @@ def run_middleware_server(args) -> int:
 
     # Lifecycle operations do not need protocol selection and should work even
     # when the OpenShell CLI is absent from a minimal service environment.
-    if getattr(args, "stop", False) or getattr(args, "status", False):
+    if (
+        getattr(args, "stop", False)
+        or getattr(args, "status", False)
+        or getattr(args, "middleware_command", None)
+        in {"stop", "status", "pause", "resume"}
+    ):
         from .v0_1_2.server import run_middleware_server as run_default
 
         return run_default(args)

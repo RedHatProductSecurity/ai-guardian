@@ -9,6 +9,8 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_stream::try_stream;
 use prost_types::{value::Kind, Struct};
@@ -73,6 +75,8 @@ enum AppError {
 #[derive(Clone)]
 struct DaemonClient {
     transport: DaemonTransport,
+    project_dir: Option<String>,
+    middleware_pause_file: PathBuf,
 }
 
 #[derive(Clone)]
@@ -93,6 +97,8 @@ struct CheckRequest<'a> {
     checks: Vec<&'static str>,
     action: &'static str,
     correlation_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    project_dir: Option<&'a str>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -102,6 +108,88 @@ struct CheckResponse {
     #[serde(default)]
     findings: Vec<DaemonFinding>,
     redacted: Option<String>,
+    #[serde(default)]
+    paused: bool,
+    #[serde(default)]
+    pause_source: String,
+    #[serde(default)]
+    pause_scope: String,
+    #[serde(default)]
+    pause_remaining_seconds: f64,
+    #[serde(default)]
+    reason_code: String,
+    #[serde(default)]
+    message: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct DaemonPauseStatus {
+    #[serde(default)]
+    paused: bool,
+    #[serde(default)]
+    source: Option<String>,
+    #[serde(default)]
+    scope: Option<String>,
+    #[serde(default)]
+    remaining_seconds: f64,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct DaemonStatus {
+    #[serde(default)]
+    paused: bool,
+    #[serde(default)]
+    pause_remaining_seconds: f64,
+    #[serde(default)]
+    middleware_pause: Option<DaemonPauseStatus>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct PauseEntry {
+    #[serde(default)]
+    paused: bool,
+    #[serde(default)]
+    until: f64,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct PauseDocument {
+    #[serde(default)]
+    global: Option<PauseEntry>,
+    #[serde(default)]
+    projects: HashMap<String, PauseEntry>,
+    #[serde(default)]
+    dirs: HashMap<String, PauseEntry>,
+}
+
+fn current_unix_seconds() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
+fn active_pause_entry(
+    entry: &PauseEntry,
+    scope: &str,
+    now: f64,
+) -> Option<CheckResponse> {
+    if !entry.paused || (entry.until > 0.0 && now >= entry.until) {
+        return None;
+    }
+    let remaining = if entry.until > 0.0 {
+        entry.until - now
+    } else {
+        0.0
+    };
+    Some(paused_check_response(
+        "middleware",
+        scope,
+        remaining,
+        "operator_pause",
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,6 +211,7 @@ struct Evaluation {
     blocked: bool,
     redacted: Option<String>,
     findings: Vec<Finding>,
+    metadata: HashMap<String, String>,
     reason: String,
     reason_code: String,
 }
@@ -152,8 +241,91 @@ fn parse_socket_check_response(envelope: DaemonSocketResponse) -> Result<CheckRe
     Ok(serde_json::from_value(check_data)?)
 }
 
+fn paused_check_response(
+    source: &str,
+    scope: &str,
+    remaining_seconds: f64,
+    reason: &str,
+) -> CheckResponse {
+    CheckResponse {
+        clean: false,
+        findings: Vec::new(),
+        redacted: None,
+        paused: true,
+        pause_source: source.to_string(),
+        pause_scope: scope.to_string(),
+        pause_remaining_seconds: remaining_seconds.max(0.0),
+        reason_code: "middleware_paused".to_string(),
+        message: format!("AI Guardian middleware is paused ({reason})"),
+    }
+}
+
+fn pause_status_response(status: DaemonPauseStatus) -> Option<CheckResponse> {
+    if !status.paused {
+        return None;
+    }
+    let source = status.source.as_deref().unwrap_or("daemon");
+    let scope = status.scope.as_deref().unwrap_or("global");
+    let reason = status.reason.as_deref().unwrap_or("daemon_pause");
+    Some(paused_check_response(
+        source,
+        scope,
+        status.remaining_seconds,
+        reason,
+    ))
+}
+
+fn daemon_status_response(status: DaemonStatus) -> Option<CheckResponse> {
+    if let Some(pause) = status.middleware_pause {
+        if pause.paused {
+            return pause_status_response(pause);
+        }
+    }
+    if status.paused {
+        return Some(paused_check_response(
+            "daemon",
+            "global",
+            status.pause_remaining_seconds,
+            "daemon_pause",
+        ));
+    }
+    None
+}
+
+fn pause_metadata(response: &CheckResponse) -> HashMap<String, String> {
+    let mut metadata = HashMap::new();
+    if !response.pause_source.is_empty() {
+        metadata.insert("pause_source".to_string(), response.pause_source.clone());
+    }
+    if !response.pause_scope.is_empty() {
+        metadata.insert("pause_scope".to_string(), response.pause_scope.clone());
+    }
+    metadata.insert(
+        "pause_remaining_seconds".to_string(),
+        format!("{:.3}", response.pause_remaining_seconds.max(0.0)),
+    );
+    metadata
+}
+
+fn middleware_project_dir_from_environment() -> Option<String> {
+    let value = env::var("AI_GUARDIAN_MIDDLEWARE_PROJECT_DIR")
+        .ok()
+        .filter(|value| !value.trim().is_empty())?;
+    let path = PathBuf::from(value);
+    Some(
+        fs::canonicalize(&path)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
 impl DaemonClient {
     fn from_environment() -> Result<Self, AppError> {
+        let project_dir = middleware_project_dir_from_environment();
+        let middleware_pause_file = env::var_os("AI_GUARDIAN_MIDDLEWARE_PAUSE_FILE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| default_state_dir().join("middleware.paused"));
         if let Ok(value) = env::var("AI_GUARDIAN_DAEMON_URL") {
             if !value.trim().is_empty() {
                 let token = daemon_token_from_environment()?;
@@ -167,6 +339,8 @@ impl DaemonClient {
                         base_url: value.trim_end_matches('/').to_string(),
                         token,
                     },
+                    project_dir,
+                    middleware_pause_file,
                 });
             }
         }
@@ -176,7 +350,56 @@ impl DaemonClient {
                     .map(PathBuf::from)
                     .unwrap_or_else(|_| default_state_dir().join("daemon.sock")),
             },
+            project_dir,
+            middleware_pause_file,
         })
+    }
+
+    fn local_pause_response(&self) -> Option<CheckResponse> {
+        let path = &self.middleware_pause_file;
+        if !path.exists() {
+            return None;
+        }
+        let raw = match fs::read_to_string(path) {
+            Ok(value) => value,
+            Err(error) => {
+                warn!(path = %path.display(), %error, "middleware pause state is unreadable");
+                return Some(paused_check_response(
+                    "middleware",
+                    "global",
+                    0.0,
+                    "middleware_pause_state_unavailable",
+                ));
+            }
+        };
+        let document: PauseDocument = match serde_json::from_str(&raw) {
+            Ok(value) => value,
+            Err(error) => {
+                warn!(path = %path.display(), %error, "middleware pause state is invalid");
+                return Some(paused_check_response(
+                    "middleware",
+                    "global",
+                    0.0,
+                    "middleware_pause_state_unavailable",
+                ));
+            }
+        };
+        let now = current_unix_seconds();
+        if let Some(entry) = document.global.as_ref() {
+            if let Some(response) = active_pause_entry(entry, "global", now) {
+                return Some(response);
+            }
+        }
+        if let Some(project_dir) = self.project_dir.as_deref() {
+            for entries in [&document.projects, &document.dirs] {
+                if let Some(entry) = entries.get(project_dir) {
+                    if let Some(response) = active_pause_entry(entry, "project", now) {
+                        return Some(response);
+                    }
+                }
+            }
+        }
+        None
     }
 
     async fn check(
@@ -190,7 +413,14 @@ impl DaemonClient {
             checks,
             action: "block",
             correlation_id: request_id.to_string(),
+            project_dir: self.project_dir.as_deref(),
         };
+        if content.is_empty() {
+            return Ok(self.pause_status().await?.unwrap_or_default());
+        }
+        if let Some(response) = self.local_pause_response() {
+            return Ok(response);
+        }
         match &self.transport {
             DaemonTransport::Unix { path } => self.check_unix(path, &body).await,
             DaemonTransport::Http {
@@ -216,6 +446,36 @@ impl DaemonClient {
         }
     }
 
+    async fn pause_status(&self) -> Result<Option<CheckResponse>, AppError> {
+        if let Some(response) = self.local_pause_response() {
+            return Ok(Some(response));
+        }
+        match &self.transport {
+            DaemonTransport::Unix { path } => self.pause_status_unix(path).await,
+            DaemonTransport::Http {
+                http,
+                base_url,
+                token,
+            } => {
+                let mut request = http
+                    .get(format!("{base_url}/api/middleware/status"))
+                    .header(AUTHORIZATION, format!("Bearer {token}"));
+                if let Some(project_dir) = self.project_dir.as_deref() {
+                    request = request.query(&[("project_dir", project_dir)]);
+                }
+                let response = request.send().await?;
+                if !response.status().is_success() {
+                    return Err(AppError::Message(format!(
+                        "AI Guardian daemon /api/middleware/status returned {}",
+                        response.status()
+                    )));
+                }
+                let status: DaemonPauseStatus = response.json().await?;
+                Ok(pause_status_response(status))
+            }
+        }
+    }
+
     async fn check_unix(
         &self,
         path: &Path,
@@ -234,12 +494,6 @@ impl DaemonClient {
         path: &Path,
         body: &CheckRequest<'_>,
     ) -> Result<CheckResponse, AppError> {
-        let mut stream = UnixStream::connect(path).await.map_err(|error| {
-            AppError::Message(format!(
-                "cannot connect to daemon socket {}: {error}",
-                path.display()
-            ))
-        })?;
         let envelope = serde_json::json!({
             "version": 1,
             "type": "sdk_check",
@@ -249,8 +503,53 @@ impl DaemonClient {
                 "checks": body.checks,
                 "action": body.action,
                 "correlation_id": body.correlation_id,
+                "project_dir": body.project_dir,
             }
         });
+        let envelope = self.unix_request(path, envelope).await?;
+        parse_socket_check_response(envelope)
+    }
+
+    async fn pause_status_unix(&self, path: &Path) -> Result<Option<CheckResponse>, AppError> {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            self.pause_status_unix_inner(path),
+        )
+        .await
+        .map_err(|_| AppError::Message("daemon status request timed out".to_string()))?
+    }
+
+    async fn pause_status_unix_inner(
+        &self,
+        path: &Path,
+    ) -> Result<Option<CheckResponse>, AppError> {
+        let envelope = serde_json::json!({
+            "version": 1,
+            "type": "status",
+            "data": {
+                "project_dir": self.project_dir,
+            }
+        });
+        let envelope = self.unix_request(path, envelope).await?;
+        let data = envelope
+            .data
+            .ok_or_else(|| AppError::Message("daemon IPC response has no data".to_string()))?;
+        let status_data = data.get("data").unwrap_or(&data).clone();
+        let status: DaemonStatus = serde_json::from_value(status_data)?;
+        Ok(daemon_status_response(status))
+    }
+
+    async fn unix_request(
+        &self,
+        path: &Path,
+        envelope: serde_json::Value,
+    ) -> Result<DaemonSocketResponse, AppError> {
+        let mut stream = UnixStream::connect(path).await.map_err(|error| {
+            AppError::Message(format!(
+                "cannot connect to daemon socket {}: {error}",
+                path.display()
+            ))
+        })?;
         let payload = serde_json::to_vec(&envelope)?;
         let length = u32::try_from(payload.len())
             .map_err(|_| AppError::Message("daemon IPC request is too large".to_string()))?;
@@ -265,8 +564,7 @@ impl DaemonClient {
         }
         let mut response = vec![0_u8; response_length as usize];
         stream.read_exact(&mut response).await?;
-        let envelope: DaemonSocketResponse = serde_json::from_slice(&response)?;
-        parse_socket_check_response(envelope)
+        Ok(serde_json::from_slice(&response)?)
     }
 }
 
@@ -308,6 +606,26 @@ impl MiddlewareService {
             .collect()
     }
 
+    fn paused_evaluation(response: CheckResponse) -> Evaluation {
+        let reason_code = if response.reason_code.is_empty() {
+            "middleware_paused".to_string()
+        } else {
+            response.reason_code
+        };
+        Evaluation {
+            blocked: true,
+            redacted: None,
+            findings: Vec::new(),
+            metadata: pause_metadata(&response),
+            reason: if response.message.is_empty() {
+                "AI Guardian middleware is paused".to_string()
+            } else {
+                response.message
+            },
+            reason_code,
+        }
+    }
+
     async fn evaluate(
         &self,
         content: &str,
@@ -316,10 +634,14 @@ impl MiddlewareService {
         block_all_findings: bool,
     ) -> Result<Evaluation, AppError> {
         if plan.checks.is_empty() {
+            if let Some(response) = self.daemon.pause_status().await? {
+                return Ok(Self::paused_evaluation(response));
+            }
             return Ok(Evaluation {
                 blocked: false,
                 redacted: None,
                 findings: Vec::new(),
+                metadata: HashMap::new(),
                 reason: String::new(),
                 reason_code: String::new(),
             });
@@ -340,6 +662,9 @@ impl MiddlewareService {
                 .check(content, request_id, semantic_checks)
                 .await?
         };
+        if semantic.paused {
+            return Ok(Self::paused_evaluation(semantic));
+        }
         let semantic_blocking = semantic.findings.iter().any(|finding| {
             matches!(
                 finding.finding_type.as_str(),
@@ -351,6 +676,7 @@ impl MiddlewareService {
                 blocked: true,
                 redacted: None,
                 findings: Self::findings(&semantic.findings),
+                metadata: HashMap::new(),
                 reason: "AI Guardian finding".to_string(),
                 reason_code: "semantic_content_blocked".to_string(),
             });
@@ -369,6 +695,9 @@ impl MiddlewareService {
                 .check(content, request_id, sensitive_checks)
                 .await?
         };
+        if sensitive.paused {
+            return Ok(Self::paused_evaluation(sensitive));
+        }
         let combined_findings: Vec<_> = semantic
             .findings
             .iter()
@@ -389,6 +718,7 @@ impl MiddlewareService {
             blocked: !sensitive.clean && (block_all_findings || blocking || redacted.is_none()),
             redacted,
             findings,
+            metadata: HashMap::new(),
             reason: if sensitive.clean {
                 String::new()
             } else {
@@ -614,24 +944,37 @@ impl SupervisorMiddleware for MiddlewareService {
             );
             return Err(Status::invalid_argument("unsupported HTTP request phase"));
         }
-        if request.body.is_empty() {
-            info!(
-                request_id,
-                host, method, body_bytes, "Rust middleware allowed empty request body"
-            );
-            return Ok(Response::new(HttpRequestResult {
-                decision: Decision::Allow as i32,
-                ..Default::default()
-            }));
-        }
         let content = String::from_utf8(request.body)
             .map_err(|_| Status::invalid_argument("request body must be UTF-8"))?;
         let request_id = request_id.to_string();
-        let plan = Self::scan_plan(request.config.as_ref())?;
-        let result = self
+        let plan = if content.is_empty() {
+            ScanPlan {
+                checks: Vec::new(),
+                response_redaction: false,
+            }
+        } else {
+            Self::scan_plan(request.config.as_ref())?
+        };
+        let result = match self
             .evaluate(&content, &request_id, &plan, true)
             .await
-            .map_err(|error| Status::unavailable(error.to_string()))?;
+        {
+            Ok(result) => result,
+            Err(error) => {
+                warn!(
+                    request_id = %request_id,
+                    host,
+                    method,
+                    "Rust middleware control plane unavailable; denying request: {error}"
+                );
+                return Ok(Response::new(HttpRequestResult {
+                    decision: Decision::Deny as i32,
+                    reason: "AI Guardian middleware control plane unavailable".to_string(),
+                    reason_code: "middleware_control_plane_unavailable".to_string(),
+                    ..Default::default()
+                }));
+            }
+        };
         info!(
             request_id = %request_id,
             host,
@@ -651,6 +994,7 @@ impl SupervisorMiddleware for MiddlewareService {
             reason: result.reason,
             reason_code: result.reason_code,
             findings: result.findings,
+            metadata: result.metadata,
             ..Default::default()
         }))
     }
@@ -702,6 +1046,47 @@ impl SupervisorMiddleware for MiddlewareService {
                         middleware_name = preflight.middleware_name.clone();
                         plan = MiddlewareService::scan_plan(preflight.config.as_ref())?;
                         preflight_seen = true;
+                        match service.daemon.pause_status().await {
+                            Ok(Some(response)) => {
+                                let metadata = pause_metadata(&response);
+                                yield WebSocketSessionEventResult {
+                                    result: Some(
+                                        web_socket_session_event_result::Result::PreflightDecision(
+                                            WebSocketPreflightDecision {
+                                                action: WebSocketPreflightAction::Deny as i32,
+                                                reason: response.message,
+                                                reason_code: response.reason_code,
+                                                metadata,
+                                                ..Default::default()
+                                            },
+                                        ),
+                                    ),
+                                };
+                                return;
+                            }
+                            Ok(None) => {}
+                            Err(error) => {
+                                warn!(
+                                    request_id = %request_id,
+                                    host = %target_host,
+                                    "Rust middleware control plane unavailable; denying WebSocket upgrade: {error}"
+                                );
+                                yield WebSocketSessionEventResult {
+                                    result: Some(
+                                        web_socket_session_event_result::Result::PreflightDecision(
+                                            WebSocketPreflightDecision {
+                                                action: WebSocketPreflightAction::Deny as i32,
+                                                reason: "AI Guardian middleware control plane unavailable".to_string(),
+                                                reason_code: "middleware_control_plane_unavailable".to_string(),
+                                                metadata: HashMap::new(),
+                                                ..Default::default()
+                                            },
+                                        ),
+                                    ),
+                                };
+                                return;
+                            }
+                        }
                         if plan.checks.is_empty() {
                             skipped = true;
                             yield WebSocketSessionEventResult {
@@ -803,10 +1188,35 @@ impl SupervisorMiddleware for MiddlewareService {
                             };
                             return;
                         }
-                        let result = service
+                        let result = match service
                             .evaluate(&text, &request_id, &plan, true)
                             .await
-                            .map_err(|error| Status::unavailable(error.to_string()))?;
+                        {
+                            Ok(result) => result,
+                            Err(error) => {
+                                warn!(
+                                    request_id = %request_id,
+                                    host = %target_host,
+                                    middleware = %middleware_name,
+                                    sequence,
+                                    "Rust middleware control plane unavailable; denying WebSocket message: {error}"
+                                );
+                                yield WebSocketSessionEventResult {
+                                    result: Some(
+                                        web_socket_session_event_result::Result::MessageResult(
+                                            WebSocketMessageResult {
+                                                sequence,
+                                                decision: Decision::Deny as i32,
+                                                reason: "AI Guardian middleware control plane unavailable".to_string(),
+                                                reason_code: "middleware_control_plane_unavailable".to_string(),
+                                                ..Default::default()
+                                            },
+                                        ),
+                                    ),
+                                };
+                                return;
+                            }
+                        };
                         let blocked = result.blocked;
                         let reason_code = if blocked {
                             result.reason_code.clone()
@@ -836,6 +1246,7 @@ impl SupervisorMiddleware for MiddlewareService {
                                         reason: result.reason,
                                         reason_code,
                                         findings: result.findings,
+                                        metadata: result.metadata,
                                         ..Default::default()
                                     },
                                 ),
@@ -876,6 +1287,45 @@ impl HttpResponsePreReturn for MiddlewareService {
                 match event.event {
                     Some(http_response_event::Event::Preflight(preflight)) => {
                         request_id = preflight.context.as_ref().map(|value| value.request_id.clone()).unwrap_or_default();
+                        let pause_response = match service.daemon.pause_status().await {
+                            Ok(response) => response,
+                            Err(error) => {
+                                warn!(
+                                    request_id = %request_id,
+                                    "Rust middleware control plane unavailable; blocking response: {error}"
+                                );
+                                yield HttpResponseEventResult {
+                                    result: Some(http_response_event_result::Result::PreflightResult(
+                                        HttpResponsePreflightResult {
+                                            action: Some(http_response_preflight_result::Action::BlockDelivery(
+                                                HttpResponseBlockDelivery {},
+                                            )),
+                                            reason: "AI Guardian middleware control plane unavailable".to_string(),
+                                            reason_code: "middleware_control_plane_unavailable".to_string(),
+                                            ..Default::default()
+                                        },
+                                    )),
+                                };
+                                return;
+                            }
+                        };
+                        if let Some(response) = pause_response {
+                            let metadata = pause_metadata(&response);
+                            yield HttpResponseEventResult {
+                                result: Some(http_response_event_result::Result::PreflightResult(
+                                    HttpResponsePreflightResult {
+                                        action: Some(http_response_preflight_result::Action::BlockDelivery(
+                                            HttpResponseBlockDelivery {},
+                                        )),
+                                        reason: response.message,
+                                        reason_code: response.reason_code,
+                                        metadata,
+                                        ..Default::default()
+                                    },
+                                )),
+                            };
+                            return;
+                        }
                         plan = MiddlewareService::scan_plan(preflight.config.as_ref())?;
                         if !preflight.permitted_body_modes.iter().any(|mode| *mode == pb::HttpResponseBodyMode::WholeBodyBytes as i32) {
                             Err(Status::failed_precondition("whole-body response inspection is required"))?;
@@ -902,8 +1352,34 @@ impl HttpResponsePreReturn for MiddlewareService {
                         if unit.end_of_stream {
                             let content = String::from_utf8(body.clone())
                                 .map_err(|_| Status::invalid_argument("response body must be UTF-8"))?;
-                            let result = service.evaluate(&content, &request_id, &plan, false).await
-                                .map_err(|error| Status::unavailable(error.to_string()))?;
+                            let result = match service
+                                .evaluate(&content, &request_id, &plan, false)
+                                .await
+                            {
+                                Ok(result) => result,
+                                Err(error) => {
+                                    warn!(
+                                        request_id = %request_id,
+                                        "Rust middleware control plane unavailable; blocking response: {error}"
+                                    );
+                                    yield HttpResponseEventResult {
+                                        result: Some(http_response_event_result::Result::BodyResult(
+                                            HttpResponseBodyResult {
+                                                sequence: body_sequence,
+                                                action: Some(
+                                                    http_response_body_result::Action::BlockDelivery(
+                                                        HttpResponseBlockDelivery {},
+                                                    ),
+                                                ),
+                                                reason: "AI Guardian middleware control plane unavailable".to_string(),
+                                                reason_code: "middleware_control_plane_unavailable".to_string(),
+                                                ..Default::default()
+                                            },
+                                        )),
+                                    };
+                                    return;
+                                }
+                            };
                             info!(
                                 request_id = %request_id,
                                 blocked = result.blocked,
@@ -934,6 +1410,7 @@ impl HttpResponsePreReturn for MiddlewareService {
                                         reason: result.reason,
                                         reason_code: result.reason_code,
                                         findings: result.findings,
+                                        metadata: result.metadata,
                                         ..Default::default()
                                     },
                                 )),
@@ -1090,6 +1567,8 @@ mod tests {
                 transport: DaemonTransport::Unix {
                     path: PathBuf::from("/unused/daemon.sock"),
                 },
+                project_dir: None,
+                middleware_pause_file: PathBuf::from("/unused/middleware.paused"),
             },
             registration_name: "content-guard-test".to_string(),
         };
@@ -1134,5 +1613,29 @@ mod tests {
         let response = parse_socket_check_response(envelope).expect("nested check result");
         assert!(response.clean);
         assert!(response.findings.is_empty());
+    }
+
+    #[test]
+    fn parses_paused_daemon_check_response() {
+        let envelope: DaemonSocketResponse = serde_json::from_value(serde_json::json!({
+            "type": "response",
+            "data": {
+                "data": {
+                    "clean": false,
+                    "findings": [],
+                    "paused": true,
+                    "reason_code": "middleware_paused",
+                    "pause_source": "daemon",
+                    "pause_scope": "global",
+                    "pause_remaining_seconds": 30.0
+                }
+            }
+        }))
+        .expect("valid paused daemon response envelope");
+        let response = parse_socket_check_response(envelope).expect("paused check result");
+        assert!(response.paused);
+        assert_eq!(response.reason_code, "middleware_paused");
+        assert_eq!(response.pause_source, "daemon");
+        assert_eq!(response.pause_remaining_seconds, 30.0);
     }
 }

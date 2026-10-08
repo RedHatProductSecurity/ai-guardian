@@ -124,6 +124,47 @@ The generated configuration and policy remain under
 `${AI_GUARDIAN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/ai-guardian}/openshell-middleware/`
 for reuse and explicit review.
 
+## Pause and resume operations
+
+Middleware pause state is evaluated at the provider boundary and is separate
+from OpenShell's sandbox lifecycle:
+
+- A **global daemon pause** applies to every middleware instance attached to
+  that daemon. The daemon's `/api/check` and Unix `sdk_check` responses return
+  `reason_code=middleware_paused`, so the external service denies traffic
+  rather than treating a skipped scan as an allow.
+- A **project pause** applies only when the middleware instance is started with
+  `--project-dir DIR` (or `AI_GUARDIAN_MIDDLEWARE_PROJECT_DIR`). The daemon
+  project pause and the standalone middleware project pause use the same
+  normalized directory scope.
+- A **standalone middleware pause** is stored in
+  `middleware.paused` under the AI Guardian state directory and does not
+  require a daemon. Use the lifecycle commands directly:
+
+  ```bash
+  ai-guardian openshell-middleware pause 15
+  ai-guardian openshell-middleware status
+  ai-guardian openshell-middleware resume
+  ```
+
+  Add `--dir /path/to/project` for a project-scoped control, or
+  `--pause-file FILE` for an explicitly shared state location. The Rust
+  runtime reads the same state through `AI_GUARDIAN_MIDDLEWARE_PAUSE_FILE`.
+
+Automatic expiry uses a persisted wall-clock deadline. A pause affects new
+middleware evaluations after the control state is observed; an already
+admitted provider request is not cancelled, while later WebSocket messages or
+response units are denied when their middleware evaluation observes the pause.
+Resume is idempotent and only clears the selected global/project middleware
+scope. A daemon pause always takes precedence over a standalone resume.
+
+The combined daemon state is available from `/api/status`,
+`/api/middleware/status`, and `openshell-middleware status`. Pause denials are
+recorded as `middleware_paused` audit entries with the source, scope, reason,
+and remaining automatic-resume time. If the daemon control plane is
+unavailable, the Rust runtime returns a fail-closed
+`middleware_control_plane_unavailable` denial instead of allowing traffic.
+
 ## Operator-managed middleware bootstrap reference
 
 Run from repository root. This path uses Rust for OpenShell gRPC and the

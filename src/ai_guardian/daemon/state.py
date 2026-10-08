@@ -1020,6 +1020,77 @@ class DaemonState:
         with self._lock:
             return self._pause_remaining_locked()
 
+    def get_pause_status(self, directory=None):
+        """Return the effective daemon pause for a global/project scope.
+
+        Middleware requests use this instead of checking ``paused`` and
+        ``is_dir_paused`` independently.  The single snapshot gives the
+        external middleware an explicit source, scope, and auto-resume time
+        while keeping global pause precedence identical to hook processing.
+        """
+
+        normalized_directory = (
+            os.path.realpath(os.path.expanduser(directory)) if directory else None
+        )
+        expired = False
+        with self._lock:
+            now_monotonic = time.monotonic()
+            now_wall = time.time()
+
+            if self._paused and self._paused_until > 0:
+                if now_monotonic >= self._paused_until:
+                    self._paused = False
+                    self._paused_until = 0.0
+                    expired = True
+                else:
+                    remaining = self._paused_until - now_monotonic
+                    return {
+                        "paused": True,
+                        "source": "daemon",
+                        "scope": "global",
+                        "remaining_seconds": max(0.0, remaining),
+                        "until": now_wall + max(0.0, remaining),
+                        "reason": "daemon_pause",
+                    }
+            elif self._paused:
+                return {
+                    "paused": True,
+                    "source": "daemon",
+                    "scope": "global",
+                    "remaining_seconds": 0.0,
+                    "reason": "daemon_pause",
+                }
+
+            if normalized_directory:
+                until = self._paused_dirs.get(normalized_directory)
+                if until is not None:
+                    if until > 0 and now_monotonic >= until:
+                        del self._paused_dirs[normalized_directory]
+                        expired = True
+                    else:
+                        remaining = max(0.0, until - now_monotonic)
+                        return {
+                            "paused": True,
+                            "source": "daemon",
+                            "scope": "project",
+                            "project_dir": normalized_directory,
+                            "remaining_seconds": remaining,
+                            "until": (now_wall + remaining if until > 0 else None),
+                            "reason": "daemon_pause",
+                        }
+
+        if expired:
+            self._persist_pause_state()
+        return {
+            "paused": False,
+            "source": "none",
+            "scope": None,
+            "project_dir": None,
+            "remaining_seconds": 0.0,
+            "until": None,
+            "reason": None,
+        }
+
     # --- Per-directory pause/resume (#958) ---
 
     def pause_dir(self, directory, duration_minutes=0):
@@ -1223,6 +1294,7 @@ class DaemonState:
             dict: Stats including uptime, request count, violation count,
                   severity breakdown, and last block info
         """
+        middleware_pause = self.get_pause_status()
         with self._lock:
             uptime = time.time() - self._started_at
             violations = (
@@ -1260,6 +1332,7 @@ class DaemonState:
                 "config_loaded": self._config is not None,
                 "paused": self._paused,
                 "pause_remaining_seconds": self._pause_remaining_locked(),
+                "middleware_pause": middleware_pause,
                 "started_at": self._started_at,
                 "last_config_reload_at": self._last_config_reload_at,
                 "last_config_reload_seconds_ago": last_reload_seconds_ago,
