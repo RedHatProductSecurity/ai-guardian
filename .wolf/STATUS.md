@@ -9,30 +9,42 @@ budget_tokens: 1000
 
 ---
 
-## Current Quest: Issue #2523
+## Current Quest: Issue #2525
 
-- Clarified that `scanner_ownership` routes provider-boundary checks and does
-  not disable independent host/agent hooks.
-- Added a hook-versus-middleware coverage matrix, recommended hooks-only,
-  provider-boundary, and defense-in-depth configurations, and precise `auto`
-  and `both` behavior including correlation/deduplication requirements.
-- Documented the Rust v0.1.2 `both` limitation and added Python/Rust regression
-  assertions for the supported defense-in-depth shape and validation message.
-- Directly affected Python unit/UX validation passes: 143 tests. Rust tests
-  remain pending because this environment has no `cargo`, `rustc`, or
-  `rustfmt`; CI or a Rust-enabled environment must validate them.
+- Removed the Python middleware launcher, policy/bootstrap helpers, lifecycle
+  handlers, generated Python protobuf bindings, and Python gRPC runtime.
+  Rust is the only middleware runtime.
+- Split the Rust runtime into compatibility, daemon transport, policy,
+  evaluation, HTTP, response, WebSocket, and service-wiring modules; `main.rs`
+  is now a thin binary entrypoint.
+- Added one shared OpenShell `0.1.x`-from-`0.1.2` / supervisor protocol `1.0`
+  contract checked by the repository validator and embedded by Rust.
+  Unsupported releases and protocol combinations fail closed; the external
+  service receives the installed version explicitly.
+- Reworked the OpenShell guide around the official operator flow: run the
+  external service, register it in gateway TOML, restart the gateway, and use
+  native `openshell sandbox`/`openshell policy` commands for activation.
+- Documented the usual gateway TOML locations and the Linux systemd,
+  macOS/Homebrew, and Snap gateway restart commands.
+- Rust unit tests pass 10/10 and the optimized release build succeeds.
+  `rustfmt` is still unavailable as a cargo component in this environment.
+- Extended the twice-monthly support-image CLI health workflow to smoke-test
+  newer Codex candidates without credentials, expose a manual version input,
+  and create/update issues with the required local OAuth/OpenShell qualification
+  checklist.
+- Removed all AI Guardian middleware CLI/control-plane surface and sandbox
+  middleware flags. Only the shared OpenShell compatibility fixture/check
+  remains on the Python side; service lifecycle is outside AI Guardian.
 
 ## Done
 
-- Issue #2523 scanner ownership documentation and regression coverage are
-  complete. Changes remain uncommitted on branch `2523` for `daf complete`.
+- Issue #2523 scanner ownership documentation and regression coverage were
+  already present in the #2525 working tree; the active completion target is
+  now #2525.
 
-- Implemented issue #2507's first-class external OpenShell middleware sandbox
-  flow on branch `2507`: `sandbox create --middleware` now generates private
-  middleware config/policy state, bootstraps gateway registration, starts or
-  reuses the host daemon/middleware service, validates provider network access,
-  supports secure transport overrides, and can generate a credential-free curl
-  denial probe. Manual `--policy`/`--provider` behavior remains compatible.
+- Superseded the earlier issue #2507 coupled sandbox/middleware flow: generated
+  middleware state, gateway bootstrap, middleware startup, and sandbox
+  middleware flags were removed in favor of the native OpenShell operator flow.
   Added focused unit/UX coverage and updated the OpenShell/Sandbox guides.
 
 - OpenShell Codex authentication is now explicit in the tray Create sandbox
@@ -210,17 +222,19 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Run `daf complete` outside the active agent session to commit the #2523
-  documentation/test changes, create the pull request, and close the issue
-  when ready.
+- Rerun the live `mw-proof` OpenShell create/probe with the fixed editable CLI,
+  then review the uncommitted #2525 diff before using the DAF completion flow
+  to commit, push, and open the issue pull request. Agent-originated
+  AI-Guardian CLI execution is currently blocked by immutable self-protection,
+  so the live retry must be run by the user.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2523`
-- Current issue: `RedHatProductSecurity/ai-guardian#2523`
-- The current working tree contains the uncommitted #2523 documentation and
-  regression-test changes.
+- Branch: `2525`
+- Current issue: `RedHatProductSecurity/ai-guardian#2525`
+- The current working tree contains the uncommitted #2525 middleware audit,
+  compatibility, documentation, workflow, and regression-test changes.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
@@ -236,12 +250,18 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_sandbox_command.py tests/unit/test_middleware.py tests/ux/test_user_experience_contract_openshell_middleware.py -q  # 143 passed
-black --target-version py310 --check tests/unit/test_sandbox_command.py
-ruff check tests/unit/test_sandbox_command.py
+uv run --extra dev python -m pytest tests/unit/test_middleware.py tests/unit/test_openshell_compatibility.py tests/unit/test_middleware_pause.py tests/unit/test_cli_version_check.py tests/unit/test_workflow_runner_policy.py tests/unit/test_container_scripts.py tests/ux/test_user_experience_contract_openshell_middleware.py -q  # 156 passed
+uv run --extra dev python -m pytest tests/unit/test_middleware.py tests/unit/test_sandbox_command.py tests/ux/test_user_experience_contract_openshell_middleware.py -q  # 118 passed
+uv run python scripts/check_openshell_compatibility.py
+uv build --wheel --out-dir /tmp/opencode/ai-guardian-build  # shared JSON present in wheel
+black --target-version py310 --check src/ai_guardian/ tests/
+ruff check src/ai_guardian/ tests/
+pylint src/ai_guardian/ --disable=all --enable=E --output-format=text  # 10.00/10
+mypy src/ai_guardian/middleware/  # no issues
+ # Full mypy retains unrelated existing baseline errors outside middleware.
+ # Rust: cargo/rustc/rustfmt are not installed here.
 python -m json.tool .wolf/buglog.json > /dev/null
 git diff --check
-# Rust validation pending: cargo/rustc/rustfmt are not installed here.
 ```
 
 ## References

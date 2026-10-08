@@ -346,7 +346,13 @@ class TestContainerLaunchers:
         workflow = CLI_VERSION_WORKFLOW.read_text(encoding="utf-8")
 
         assert "cron: '0 9 1,15 * *'" in workflow
+        assert "codex_version:" in workflow
         assert "scripts/check_cli_versions.py" in workflow
+        assert "Smoke-test Codex candidate without credentials" in workflow
+        assert "actions/setup-node@v4" in workflow
+        assert "codex exec --help" in workflow
+        assert "OAuth credentials are intentionally not stored" in workflow
+        assert "Fail manual candidate smoke when it does not pass" in workflow
         assert "openshell-cli-version-update" in workflow
         assert "issues: write" in workflow
         assert "quay.io/redhatproductsecurity/ai-guardian" not in workflow

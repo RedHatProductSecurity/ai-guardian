@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Check explicitly managed CLI versions in the support images.
+"""Check explicitly managed terminal CLI versions in the support images.
 
 The Dockerfiles are the source of truth for pinned versions. This check reads
 their build arguments and compares them with stable versions published in the
 npm registry. It intentionally covers only CLI clients explicitly installed
-by each image.
+by each image. It does not check the OpenShell gateway release or the
+AI Guardian middleware compatibility contract; use
+``check_openshell_compatibility.py`` for that.
 
 Exit codes:
     0: All registry checks succeeded and no newer versions were found.
@@ -168,8 +170,12 @@ def check_versions(
     has_updates = False
     has_errors = False
 
-    image_name = "normal" if specs is NORMAL_CLI_VERSION_SPECS else "OpenShell"
-    print(f"Checking {image_name} CLI version updates...\n")
+    image_name = (
+        "normal support image"
+        if specs is NORMAL_CLI_VERSION_SPECS
+        else "OpenShell support image"
+    )
+    print(f"Checking {image_name} terminal CLI version updates...\n")
     for build_arg, spec in specs.items():
         pinned_version = pinned_versions[build_arg]
         latest_version = version_lookup(spec["lookup"])
@@ -258,7 +264,8 @@ def main() -> int:
             _, has_updates, has_errors = check_versions(args.dockerfile, args.output)
     except (OSError, ValueError) as error:
         print(
-            f"Error: unable to check support-image CLI versions: {error}", file=sys.stderr
+            f"Error: unable to check support-image CLI versions: {error}",
+            file=sys.stderr,
         )
         return 2
 

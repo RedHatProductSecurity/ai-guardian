@@ -9,41 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **OpenShell middleware pause coupling (#2506):** Couple daemon global/project
-  pause state to external middleware checks, add explicit fail-closed
-  `middleware_paused` decisions and audit metadata, and add standalone
-  middleware `pause`, `resume`, and combined `status` controls with persisted
-  automatic expiry.
+  pause state to external middleware checks and add explicit fail-closed
+  `middleware_paused` decisions and audit metadata. Middleware pause state is
+  controlled by the ordinary daemon/OpenShell deployment; AI Guardian has no
+  middleware lifecycle command.
 - **OpenShell tray authentication selector:** Add an explicit Codex OAuth/API-key
   choice to the Create sandbox form. OAuth maps to the `codex` profile and
   `ai-guardian-codex`; API key maps to `openai` and `ai-guardian-openai`, even
   when the tray process does not inherit the interactive shell environment.
 - **OpenShell supervisor middleware (#2484):** Add an optional, external
-  OpenShell v0.1.2 gRPC service for semantic provider-content scanning and
+  OpenShell v0.1.2 Rust gRPC service for semantic provider-content scanning and
   response redaction. The operator-managed service supports protocol
-  negotiation, effective-policy validation, TLS/EdDSA JWT authentication,
-  bounded HTTP/WebSocket/streaming payloads, scanner ownership routing, and
-  fail-closed behavior. An explicit `--bootstrap-openshell` mode can generate
-  the gateway registration and sandbox policy for local development. The
-  `openshell-middleware` command supports daemon-style `start`, `status`,
-  `stop`, and `restart` subcommands (with legacy flag aliases). Versioned
-  adapters reuse the latest
-   compatible implementation across same-major OpenShell releases. See
-   `docs/OPENSHELL_MIDDLEWARE.md`.
-- **First-class OpenShell middleware sandbox creation (#2507):** Add
-  `sandbox create --middleware` support for state-owned middleware config and
-  policy generation, gateway registration bootstrap, host-daemon startup,
-  provider-endpoint validation, secure transport overrides, and an optional
-  credential-free `/usr/bin/curl` denial probe. Existing `--policy` and
-  `--provider` overlays remain compatible.
-- **Remembered OpenShell middleware starts (#2484):** Background middleware
-  state now persists safe restart arguments and the selected config path under
-  the XDG-backed AI Guardian state directory, so `restart` can reuse the prior
-  config without repeating `--config`. CLI JWT secret values are never stored.
-- **OpenShell middleware attribution (#2484):** Denials now carry a safe
-   AI Guardian source message, scanner/rule metadata, structured service-log
-   fields, and entries in the standard violation audit trail. Provider payload
-   text is excluded from scanner diagnostics. Use `--violation-log` to select
-   an explicit audit path.
+  negotiation, bounded HTTP/WebSocket/streaming payloads, scanner ownership
+  routing, and fail-closed behavior. The gateway registration and
+  `network_middlewares` policy remain operator-managed OpenShell resources.
+  See `docs/OPENSHELL_MIDDLEWARE.md`.
+- **OpenShell middleware attribution (#2484):** Rust denials carry safe
+  AI Guardian source metadata, scanner/rule attribution, structured service
+  fields, and daemon-backed audit records. Provider payload text is excluded
+  from scanner diagnostics; the standard daemon audit path is used.
 - **Automatic CLI/IDE setup discovery (#2494):** Make plain `ai-guardian setup`
   reuse tray installation and integrity checks, skip healthy integrations,
   prompt for a selectable subset when several need setup, and let `--yes` or
@@ -60,8 +44,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI version visibility in doctor:** Report detected versions for installed
   CLI integrations in human-readable and structured hook health output. OpenCode
   also reports whether the active CLI uses the V1 or V2 plugin contract.
+- **Biweekly Codex candidate smoke checks:** The support-image version-health
+  workflow now installs and validates a newly released Codex candidate without
+  credentials, then records the required local OAuth/OpenShell qualification
+  steps in the maintenance issue. GitHub Actions does not receive ChatGPT OAuth
+  tokens.
+- **OpenShell compatibility contract (#2525):** Validate the installed
+  OpenShell release against the Rust middleware contract before the service
+  accepts traffic. The Python middleware launcher, middleware lifecycle
+  commands, sandbox middleware flags, and generated bootstrap coupling were
+  removed; OpenShell and the external service manager now own deployment,
+  registration, policy activation, and cleanup.
 
 ### Fixed
+- **OpenShell middleware readiness (#2525):** Validate the effective Rust
+  service and OpenShell release before traffic is accepted, including when an
+  older policy artifact or service process is present.
+- **OpenShell OAuth provider-boundary coverage (#2525):** Include
+  `chatgpt.com` and `ab.chatgpt.com` in the generated middleware attachment for
+  Codex OAuth, so provider-content scanning remains effective when local hooks
+  are disabled. Explicit endpoint overrides remain authoritative.
+- **OpenShell middleware policy validation (#2525):** Require the registered
+  service name in the policy's nested `middleware` field while leaving policy
+  composition and application to the OpenShell operator.
 - **OpenShell/OpenCode regressions (#2520):** Route canary-owned scans through
   the Rust middleware, preserve warn/log-only scanner actions across daemon IPC
   and REST, treat empty scanner groups as clean, propagate configured payload
@@ -98,14 +103,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   server activation, and setup refuses to rewrite V2 configuration when an
   unrelated local TypeScript plugin file would be migrated implicitly.
 - **OpenShell middleware config overrides:** Preserve saved bootstrap, gateway,
-  policy, bind, and audit arguments when `restart --config FILE` changes only
+  policy, and bind arguments when `restart --config FILE` changes only
   the middleware YAML path. Simplify the guide to create config, start/bootstrap,
   verify gateway health/registration, and create a sandbox attached through the
   generated policy; move curl probes and audit redirection to optional sections.
   Document gateway restart commands for Homebrew, systemd, Snap, containers,
   and manual launches, plus recovery when no background start state exists.
-  On macOS plaintext host-interface binds now use a long-lived TCP relay into
-  loopback grpcio so Podman supervisors can reach the middleware.
+  Rust binds the selected host interface directly; no Python gRPC relay is
+  involved.
 - **Strict Mypy optional parameters (#2510):** Remove the legacy implicit-
   optional compatibility override and annotate nullable defaults explicitly
   across scanner, setup, daemon, policy, hook, and configuration-scope APIs.
@@ -125,9 +130,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `timeout_ms` values as normalized protobuf `Duration` seconds and nanoseconds
   so gateway registration negotiation accepts valid timeouts above one second.
 - **OpenShell middleware plaintext binding (#2484):** Reject wildcard listen
-  addresses when TLS/JWT authentication is disabled, preventing an accidental
-  unauthenticated listener on every host interface. Deployment examples now
-  use a specific reachable interface for local development.
+  addresses by default, preventing an accidental unauthenticated Rust listener
+  on every host interface. Deployment examples use a specific reachable
+  interface for local development.
 - **Consistent Fedora tray setup prompts (#2497):** Keep structured Linux
   setup and snooze flows on one rich UI provider, avoid silently dropping
   install/profile choices in native dialogs, and serialize setup and upgrade
@@ -155,6 +160,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving the underlying container image reference used for selection.
 
 ### Changed
+- **OpenShell middleware compatibility contract (#2525):** Inventory the
+  shared launcher/control-plane modules and remove the Python
+  gRPC/scanning/TLS/JWT fallback. Rust is now the only supported middleware
+  runtime; Python retains launcher/control-plane responsibilities. Both use one
+  v0.1.x-from-0.1.2 release and protocol 1.0 contract; unsupported OpenShell
+  minor releases, protocol mismatches, and direct Rust launches without a
+  validated release fail closed.
+  Separate CI coverage now verifies middleware compatibility apart from bundled
+  terminal-CLI version health.
 - **OpenShell scanner ownership coverage (#2523):** Clarify that
   `scanner_ownership` routes provider-boundary checks without disabling host
   hooks, document hook-versus-middleware coverage for local and provider
@@ -166,8 +180,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Codex CLI; OpenCode and Pi stay available only through the normal image.
 - **OpenCode container boundary (#2470):** Pin OpenCode V1 `1.18.34` in the
   normal Docker/Podman image and remove OpenCode from the OpenShell image,
-  policy, and qualification matrix. OpenShell support now targets releases
-  `0.1.2` or newer.
+  policy, and qualification matrix. OpenShell support now targets `0.1.x`
+  patch releases from `0.1.2`.
 - **Ubuntu 26.04 runner migration (#2491):** Move all intended GitHub Actions
   Linux jobs to the available `ubuntu-26.04` runner, including tests, lint,
   release readiness, publishing, scanners, smoke tests, scenarios, and

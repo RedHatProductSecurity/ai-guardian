@@ -107,6 +107,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v7
         with:
@@ -875,7 +880,7 @@ jobs:
                   print(f"stderr (truncated): {proc.stderr[:500]}")
           PYEOF
 
-  openshell-middleware:
+  openshell-middleware-runtime:
     name: OpenShell Supervisor Middleware
     runs-on: ubuntu-26.04
 
@@ -883,20 +888,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-          cache: 'pip'
-
-      - name: Install middleware extra
+      - name: Set up Rust
         run: |
-          python -m pip install --upgrade pip
-          pip install '.[middleware]'
+          rustup toolchain install stable --profile minimal
+          rustup default stable
 
-      - name: Verify middleware command surface
-        run: ai-guardian openshell-middleware --help
+      - name: Verify OpenShell release compatibility contract
+        run: python scripts/check_openshell_compatibility.py
 
-      - name: Run middleware protocol contracts
-        run: |
-          python -m pytest tests/unit/test_middleware.py tests/ux/test_user_experience_contract_openshell_middleware.py -q
+      - name: Run Rust middleware tests
+        run: cargo test --manifest-path rust/openshell-middleware/Cargo.toml

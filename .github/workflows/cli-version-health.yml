@@ -1,10 +1,15 @@
-name: OpenShell CLI Version Health
+name: Support-image Terminal CLI Version Health
 
 on:
   schedule:
     # Check the image's pinned terminal CLIs twice each month.
     - cron: '0 9 1,15 * *'
   workflow_dispatch:
+    inputs:
+      codex_version:
+        description: 'Optional Codex version to smoke-test (for example 0.160.1)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -12,7 +17,7 @@ permissions:
 
 jobs:
   check-versions:
-    name: Check OpenShell CLI Versions
+    name: Check support-image terminal CLI versions
     runs-on: ubuntu-26.04
 
     steps:
@@ -40,6 +45,43 @@ jobs:
       - name: Fail when registry checks are unavailable
         if: steps.check-versions.outputs.exit_code == '2'
         run: exit 1
+
+      - name: Set up Node.js for Codex candidate smoke
+        if: steps.check-versions.outputs.exit_code == '1' || inputs.codex_version != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+
+      - name: Smoke-test Codex candidate without credentials
+        id: codex-smoke
+        if: steps.check-versions.outputs.exit_code == '1' || inputs.codex_version != ''
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          REQUESTED_CODEX_VERSION: ${{ inputs.codex_version }}
+        run: |
+          set -euo pipefail
+          candidate="$REQUESTED_CODEX_VERSION"
+          if [ -z "$candidate" ]; then
+            candidate="$(python -c 'import json; print(json.load(open("cli-versions.json", encoding="utf-8"))["CODEX_VERSION"]["latest_version"])')"
+          fi
+          python - "$candidate" <<'PY'
+          import re
+          import sys
+
+          if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", sys.argv[1]):
+              raise SystemExit(f"invalid Codex version: {sys.argv[1]!r}")
+          PY
+          echo "candidate_version=$candidate" >> "$GITHUB_OUTPUT"
+          npm install --global --no-fund --no-audit "@openai/codex@${candidate}"
+          export CODEX_HOME="$RUNNER_TEMP/codex-candidate"
+          mkdir -p "$CODEX_HOME"
+          actual="$(codex --version)"
+          printf '%s\n' "$actual"
+          grep -Fq "codex-cli ${candidate}" <<<"$actual"
+          codex --help >/dev/null
+          codex exec --help >/dev/null
+          echo "Credential-free Codex ${candidate} smoke passed."
 
       - name: Check for existing update issue
         id: check-issue
@@ -79,11 +121,18 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: ${{ steps.check-issue.outputs.issue_number }},
-              body: `⏰ **Twice-monthly OpenShell CLI version check**
+              body: `⏰ **Twice-monthly support-image terminal CLI version check**
 
             New versions are still available:
 
             ${updates}
+
+            Automated Codex candidate smoke: **${{ steps.codex-smoke.outcome }}**
+            (credential-free install, version, and help checks only).
+
+            OAuth workspace-routing qualification remains manual; use the
+            [OpenShell middleware guide](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/${context.sha}/docs/OPENSHELL_MIDDLEWARE.md#clean-reset-for-a-new-middleware-test)
+            and test the candidate with local credentials before changing the pin.
 
             Checked: ${new Date().toISOString().split('T')[0]}`
             });
@@ -103,14 +152,39 @@ jobs:
             const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '📦 OpenShell CLI versions outdated - update recommended',
+              title: '📦 Support-image terminal CLI versions outdated - update recommended',
               labels: ['openshell-cli-version-update', 'dependencies', 'maintenance'],
-              body: `## OpenShell CLI version health check
+              body: `## Support-image terminal CLI version health check
 
             New stable versions are available for the CLI packages pinned by
             container/Dockerfile.openshell:
 
             ${updates}
+
+            ## Automated candidate smoke
+
+            The workflow automatically attempted a credential-free Codex smoke
+            for the newest candidate:
+
+            - Result: **${{ steps.codex-smoke.outcome }}**
+            - Candidate: \`${{ steps.codex-smoke.outputs.candidate_version }}\`
+            - Covered: npm installation, \`codex --version\`, \`codex --help\`,
+              and \`codex exec --help\`
+
+            This does not exercise ChatGPT OAuth \`account/read\` workspace
+            routing because OAuth credentials are intentionally not stored in
+            GitHub Actions.
+
+            ## Required manual OpenShell qualification
+
+            1. Follow the [clean reset procedure](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/${context.sha}/docs/OPENSHELL_MIDDLEWARE.md#clean-reset-for-a-new-middleware-test).
+            2. Build the OpenShell image with the candidate \`CODEX_VERSION\`.
+            3. Create an ordinary OAuth Codex sandbox, then deploy/register the
+               Rust service and apply its complete policy with OpenShell.
+            4. Remove the local hooks and verify Codex startup, \`account/read\`,
+               and middleware denial behavior.
+            5. Record whether the candidate works or reproduce the failure in
+               this issue before updating the pin.
 
             ## Update procedure
 
@@ -125,3 +199,9 @@ jobs:
             });
 
             console.log(`Created issue #${issue.data.number}`);
+
+      - name: Fail manual candidate smoke when it does not pass
+        if: github.event_name == 'workflow_dispatch' && steps.codex-smoke.outcome == 'failure'
+        run: |
+          echo "The requested Codex candidate failed the credential-free smoke test."
+          exit 1
