@@ -53,6 +53,14 @@ to a restricted, reachable host address; do not use `0.0.0.0` or another
 wildcard address. Put TLS or an authenticated private network boundary in front
 of the service if the deployment requires transport protection.
 
+The daemon connection belongs to the external Rust service, not to the
+OpenShell sandbox. `AI_GUARDIAN_MIDDLEWARE_BIND` is the middleware listener
+address; it is different from the daemon address. Keep
+`AI_GUARDIAN_DAEMON_SOCKET` when the middleware and daemon share a host, or set
+`AI_GUARDIAN_DAEMON_URL` and its authentication token when the daemon runs at a
+provided remote IP. The native OpenShell sandbox itself does not need an AI
+Guardian daemon or hooks for middleware scanning.
+
 ## 1. Build the Rust service
 
 ```bash
@@ -204,6 +212,11 @@ image, hooks, daemon, or AI Guardian-specific environment:
 openshell sandbox create --name mw-proof --template <template> -- /bin/true
 ```
 
+That is sufficient when the external middleware uses the daemon configured on
+its own host or at a separate reachable daemon address. The sandbox only needs
+to reach the OpenShell gateway/supervisor path; it does not need to run an AI
+Guardian daemon.
+
 ### Option B: OpenShell sandbox with AI Guardian hooks
 
 This uses AI Guardian's ordinary sandbox wrapper. The wrapper delegates the
@@ -218,6 +231,11 @@ ai-guardian sandbox create \
   --cli codex \
   --repo .
 ```
+
+The daemon included by this wrapper serves the in-sandbox AI Guardian hooks. It
+is not a requirement for the external middleware, which uses the daemon
+endpoint configured for the Rust service unless an operator deliberately
+exposes and selects another daemon endpoint.
 
 Use the native OpenShell lifecycle commands or the wrapper's ordinary sandbox
 lifecycle commands as appropriate. In both options, apply the middleware in
