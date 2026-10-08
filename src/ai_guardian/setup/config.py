@@ -438,6 +438,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
                 "pii_in_transcript",
                 "prompt_injection_in_transcript",
                 "annotation_suppressed",
+                "middleware_paused",
                 "image_secret_detected",
                 "image_pii_detected",
                 "supply_chain",

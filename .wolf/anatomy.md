@@ -12,7 +12,7 @@
 - `.readthedocs.yaml` (~55 tok)
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
-- `ai-guardian-example.json` — ', '**/examples/**')", (~20492 tok)
+- `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
 - `CHANGELOG.md` — Change log (~73538 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
@@ -1306,7 +1306,7 @@
 
 ## src/ai_guardian/schemas/
 
-- `ai-guardian-config.schema.json` — Declares in (~38674 tok)
+- `ai-guardian-config.schema.json` — Declares in (~38694 tok)
 - `aiguardignore.schema.json` (~556 tok)
 - `policy-decision.schema.json` (~584 tok)
 - `scenario.schema.json` — Declares to (~1315 tok)
@@ -1328,7 +1328,7 @@
 ## src/ai_guardian/setup/
 
 - `__init__.py` — setup_hooks (~10359 tok)
-- `config.py` — Default configuration creation for ai-guardian. (~7266 tok)
+- `config.py` — Default configuration creation for ai-guardian. (~7276 tok)
 - `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~56849 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
