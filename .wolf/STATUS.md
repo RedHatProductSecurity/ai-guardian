@@ -9,14 +9,16 @@ budget_tokens: 1000
 
 ---
 
-## Current Quest: Issue #2506
+## Current Quest: Issue #2517
 
-- Coupled OpenShell middleware evaluations to daemon global/project pause state
-  with explicit fail-closed `middleware_paused` decisions, REST/Unix status
-  reporting, standalone pause/resume state, audit logging, and UX coverage.
-- Focused validation passes: 328 Python unit/UX tests, Ruff, Black, Mypy,
-  Pylint, compileall, JSON validation, and diff checks. Rust compilation could
-  not run because this environment has no cargo/rustc toolchain.
+- Fixed Tracing Settings page initialization so persisted values are hydrated
+  before value-change handlers are registered; opening the page no longer saves
+  configuration or emits a save notification.
+- Added regression coverage for enabled tracing, numeric hydration, no initial
+  save, and one explicit enabled edit. Focused unit and tracing UX tests pass.
+- Source-targeted Mypy, Ruff, Black, Pylint, JSON validation, and diff checks
+  pass. Full Mypy retains unrelated existing errors in `skill_discovery.py`
+  and `scanners/secret_validator.py`.
 
 ## Done
 
@@ -203,24 +205,16 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Live-qualify the new `sandbox create --middleware` path with the local
-  OpenShell gateway/image, including the first registration reload and the
-  keyless denial probe; no live credentialed run was performed in this session.
-- Await review of PR #2514.
-- Monitor PR #2513's fresh CI run for commit `15644bf1`, especially the Windows
-  Python 3.10 matrix job that previously timed out in the existing Pi UX
-  contract. No Pi/tray production change is warranted unless the rerun
-  produces a reproducible assertion failure.
-- Monitor PR #2515 CI and review; latest commit `6f84e070` adds Codex
-  WebSocket scanning, daemon IPC/redaction fixes, and HTTP-only Codex UX
-  guidance.
+- Run `daf complete` outside the active agent session to commit the #2517 fix,
+  create the pull request, and close the issue when ready.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2507`
-- PR #2515 contains the merged Rust middleware runtime and config/restart fixes;
-  the current working tree adds the first-class sandbox workflow for issue #2507.
+- Branch: `2517`
+- Current issue: `RedHatProductSecurity/ai-guardian#2517`
+- The current working tree contains the uncommitted #2517 Tracing Settings
+  hydration fix and its regression test.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
@@ -236,10 +230,11 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_sandbox_command.py tests/unit/test_sandbox_tray.py -q  # 154 passed
+uv run --extra dev python -m pytest tests/unit/test_web_sessions_page.py tests/unit/test_tracing_config.py -q  # 14 passed
+uv run --extra dev python -m pytest tests/ux/test_hook_trace_contract.py -q  # 4 passed
 ruff check src/ai_guardian/ tests/
 black --target-version py310 --check src/ai_guardian/ tests/
-mypy src/ai_guardian/
+mypy src/ai_guardian/web/pages/tracing_settings.py
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text
 python -m json.tool .wolf/buglog.json > /dev/null
 git diff --check
@@ -253,4 +248,4 @@ git diff --check
 - GitHub PR: `https://github.com/RedHatProductSecurity/ai-guardian/pull/2513`
 - GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2496`
 - Prior GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2510`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2517`
