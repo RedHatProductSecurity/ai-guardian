@@ -55,21 +55,28 @@ def create_tracing_settings_page(service, daemon_name: str):
             finally:
                 saving["active"] = False
 
-        enabled.on_value_change(lambda event: _save("enabled", event.value))
-        refresh.on_value_change(
-            lambda event: _save("auto_refresh_interval_seconds", int(event.value))
-        )
-        retention.on_value_change(
-            lambda event: _save("trace_cache_retention_days", int(event.value))
-        )
-
         async def _load():
-            config = await run.io_bound(load_web_config)
-            tracing = resolve_tracing_config(config)
             saving["active"] = True
-            enabled.value = tracing["enabled"]
-            refresh.value = tracing["auto_refresh_interval_seconds"]
-            retention.value = tracing["trace_cache_retention_days"]
-            saving["active"] = False
+            try:
+                config = await run.io_bound(load_web_config)
+                tracing = resolve_tracing_config(config)
+                enabled.value = tracing["enabled"]
+                refresh.value = tracing["auto_refresh_interval_seconds"]
+                retention.value = tracing["trace_cache_retention_days"]
+            finally:
+                # Bind change handlers only after initial values are hydrated.
+                # NiceGUI can dispatch value-change events for server-side
+                # assignments after this callback returns, which would otherwise
+                # save on page load.
+                enabled.on_value_change(lambda event: _save("enabled", event.value))
+                refresh.on_value_change(
+                    lambda event: _save(
+                        "auto_refresh_interval_seconds", int(event.value)
+                    )
+                )
+                retention.on_value_change(
+                    lambda event: _save("trace_cache_retention_days", int(event.value))
+                )
+                saving["active"] = False
 
         ui.timer(0.1, _load, once=True)

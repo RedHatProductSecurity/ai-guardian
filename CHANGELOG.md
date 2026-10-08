@@ -62,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **Tracing Settings initialization (#2517):** Prevent initial control hydration
+  from saving the tracing configuration or displaying a save notification; edits
+  continue to save once after the page has loaded.
 - **OpenShell Rust WebSocket scanning:** Advertise and enforce the text-WebSocket
   middleware binding so Codex requests using its WebSocket transport are scanned
   before provider credentials and fail closed on sensitive content.

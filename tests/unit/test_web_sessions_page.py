@@ -1,6 +1,9 @@
 """Contracts for the unified web Sessions page."""
 
+import asyncio
 import inspect
+from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 
@@ -68,6 +71,133 @@ def test_tracing_settings_number_labels_have_room_to_render():
 
     source = inspect.getsource(create_tracing_settings_page)
     assert source.count('.classes("w-full max-w-md")') == 2
+
+
+def test_tracing_settings_hydration_does_not_save_and_enabled_edits_save_once(
+    monkeypatch,
+):
+    """Initial control hydration is side-effect free, including enabled=True."""
+    from ai_guardian.web.pages import tracing_settings
+
+    class FakeElement:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def classes(self, *_args):
+            return self
+
+    class FakeControl(FakeElement):
+        def __init__(self, value):
+            self._value = value
+            self.callbacks = []
+            self.pending_changes = []
+
+        @property
+        def value(self):
+            return self._value
+
+        @value.setter
+        def value(self, value):
+            self._value = value
+            self.pending_changes.extend(
+                (callback, SimpleNamespace(value=value)) for callback in self.callbacks
+            )
+
+        def on_value_change(self, callback):
+            self.callbacks.append(callback)
+
+        async def flush_changes(self):
+            pending_changes = self.pending_changes
+            self.pending_changes = []
+            for callback, event in pending_changes:
+                result = callback(event)
+                if inspect.isawaitable(result):
+                    await result
+
+        async def trigger_change(self, value):
+            self.value = value
+            await self.flush_changes()
+
+    class FakeUI:
+        def __init__(self):
+            self.controls = {}
+            self.timer_callback = None
+            self.notifications = []
+
+        def column(self):
+            return FakeElement()
+
+        def label(self, *_args):
+            return FakeElement()
+
+        def switch(self, label):
+            control = FakeControl(False)
+            self.controls[label] = control
+            return control
+
+        def number(self, label, value, **_kwargs):
+            control = FakeControl(value)
+            self.controls[label] = control
+            return control
+
+        def timer(self, _delay, callback, once=False):
+            assert once is True
+            self.timer_callback = callback
+
+        def notify(self, message, **kwargs):
+            self.notifications.append((message, kwargs))
+
+    class FakeRun:
+        @staticmethod
+        async def io_bound(function, *args):
+            return function(*args)
+
+    fake_ui = FakeUI()
+    saved_configs = []
+
+    def load_config():
+        return {
+            "tracing": {
+                "enabled": True,
+                "auto_refresh_interval_seconds": 12,
+                "trace_cache_retention_days": 45,
+            }
+        }
+
+    def save_config(config):
+        saved_configs.append(deepcopy(config))
+        return True
+
+    monkeypatch.setattr(tracing_settings, "ui", fake_ui)
+    monkeypatch.setattr(tracing_settings, "run", FakeRun)
+    monkeypatch.setattr(
+        tracing_settings, "create_sidebar", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        tracing_settings, "create_header", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(tracing_settings, "load_web_config", load_config)
+    monkeypatch.setattr(tracing_settings, "save_web_config", save_config)
+
+    tracing_settings.create_tracing_settings_page(None, "local")
+    asyncio.run(fake_ui.timer_callback())
+    for control in fake_ui.controls.values():
+        asyncio.run(control.flush_changes())
+
+    enabled = fake_ui.controls["Record SDK and hook traces"]
+    assert enabled.value is True
+    assert fake_ui.controls["Auto-refresh interval (seconds)"].value == 12
+    assert fake_ui.controls["Remote trace cache retention (days)"].value == 45
+    assert saved_configs == []
+    assert fake_ui.notifications == []
+
+    asyncio.run(enabled.trigger_change(False))
+
+    assert len(saved_configs) == 1
+    assert saved_configs[0]["tracing"]["enabled"] is False
 
 
 def test_sessions_page_has_day_navigation():
