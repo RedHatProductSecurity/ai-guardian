@@ -1742,6 +1742,31 @@ mod tests {
     }
 
     #[test]
+    fn scanner_plan_rejects_both_with_actionable_runtime_message() {
+        let config = Struct {
+            fields: BTreeMap::from([(
+                "scanner_ownership".to_string(),
+                prost_types::Value {
+                    kind: Some(Kind::StructValue(Struct {
+                        fields: BTreeMap::from([(
+                            "prompt_injection".to_string(),
+                            prost_types::Value {
+                                kind: Some(Kind::StringValue("both".to_string())),
+                            },
+                        ]),
+                    })),
+                },
+            )]),
+        };
+
+        let error = MiddlewareService::scan_plan(Some(&config)).expect_err("both must fail");
+        assert!(error
+            .message()
+            .contains("scanner ownership 'both' is not supported by Rust middleware"));
+        assert!(error.message().contains("prompt_injection"));
+    }
+
+    #[test]
     fn daemon_warning_metadata_does_not_block() {
         let finding: DaemonFinding = serde_json::from_value(serde_json::json!({
             "type": "prompt_injection",

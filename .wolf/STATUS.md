@@ -9,18 +9,23 @@ budget_tokens: 1000
 
 ---
 
-## Current Quest: Issue #2520
+## Current Quest: Issue #2523
 
-- Fixed the six confirmed OpenShell Rust and OpenCode setup regressions:
-  canary routing, empty scanner groups, warn/log-only action propagation,
-  configured payload limits, stream-only response inspection, and V2 setup
-  artifact preflight.
-- Added daemon, REST, Rust, OpenCode, middleware, and UX regression coverage;
-  the directly affected Python/unit/UX validation passes.
-- Rust compilation remains pending because this environment has no `cargo`,
-  `rustc`, or `rustfmt`; CI or a Rust-enabled environment must validate it.
+- Clarified that `scanner_ownership` routes provider-boundary checks and does
+  not disable independent host/agent hooks.
+- Added a hook-versus-middleware coverage matrix, recommended hooks-only,
+  provider-boundary, and defense-in-depth configurations, and precise `auto`
+  and `both` behavior including correlation/deduplication requirements.
+- Documented the Rust v0.1.2 `both` limitation and added Python/Rust regression
+  assertions for the supported defense-in-depth shape and validation message.
+- Directly affected Python unit/UX validation passes: 143 tests. Rust tests
+  remain pending because this environment has no `cargo`, `rustc`, or
+  `rustfmt`; CI or a Rust-enabled environment must validate them.
 
 ## Done
+
+- Issue #2523 scanner ownership documentation and regression coverage are
+  complete. Changes remain uncommitted on branch `2523` for `daf complete`.
 
 - Implemented issue #2507's first-class external OpenShell middleware sandbox
   flow on branch `2507`: `sandbox create --middleware` now generates private
@@ -205,16 +210,17 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Run `daf complete` outside the active agent session to commit the #2517 fix,
-  create the pull request, and close the issue when ready.
+- Run `daf complete` outside the active agent session to commit the #2523
+  documentation/test changes, create the pull request, and close the issue
+  when ready.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2517`
-- Current issue: `RedHatProductSecurity/ai-guardian#2517`
-- The current working tree contains the uncommitted #2517 Tracing Settings
-  hydration fix and its regression test.
+- Branch: `2523`
+- Current issue: `RedHatProductSecurity/ai-guardian#2523`
+- The current working tree contains the uncommitted #2523 documentation and
+  regression-test changes.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
@@ -230,14 +236,12 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_web_sessions_page.py tests/unit/test_tracing_config.py -q  # 14 passed
-uv run --extra dev python -m pytest tests/ux/test_hook_trace_contract.py -q  # 4 passed
-ruff check src/ai_guardian/ tests/
-black --target-version py310 --check src/ai_guardian/ tests/
-mypy src/ai_guardian/web/pages/tracing_settings.py
-pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text
+uv run --extra dev python -m pytest tests/unit/test_sandbox_command.py tests/unit/test_middleware.py tests/ux/test_user_experience_contract_openshell_middleware.py -q  # 143 passed
+black --target-version py310 --check tests/unit/test_sandbox_command.py
+ruff check tests/unit/test_sandbox_command.py
 python -m json.tool .wolf/buglog.json > /dev/null
 git diff --check
+# Rust validation pending: cargo/rustc/rustfmt are not installed here.
 ```
 
 ## References
