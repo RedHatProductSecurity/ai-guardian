@@ -25,12 +25,14 @@ This is the same ownership model described in OpenShell's
 | Build and run the middleware process | Rust binary + systemd, launchd, Kubernetes, or another service manager |
 | Register the service | OpenShell gateway `gateway.toml` |
 | Attach or remove the service | OpenShell `network_middlewares` policy |
-| Create, start, connect to, and delete a sandbox | Native OpenShell sandbox commands |
+| Create, start, connect to, and delete a sandbox | Native OpenShell commands, or the ordinary `ai-guardian sandbox` wrapper |
 | Scan and audit backend | The ordinary AI Guardian daemon used by the Rust service |
 
-AI Guardian's sandbox command deliberately has no middleware flags. Creating a
-sandbox neither checks whether middleware is deployed nor changes middleware
-policy. A sandbox can be created before or after the service is installed.
+AI Guardian's sandbox command deliberately has no middleware flags. It can
+still create an ordinary OpenShell sandbox with the AI Guardian image, hooks,
+daemon, and related defaults. Creating a sandbox through either path neither
+checks whether middleware is deployed nor changes middleware policy. A sandbox
+can be created before or after the service is installed.
 
 AI Guardian exposes no middleware lifecycle command. There is also no implicit
 bootstrap, attach, detach, start, stop, or pause operation hidden inside
@@ -190,16 +192,36 @@ The service process and static gateway registration are intentionally separate.
 
 ## 4. Create an ordinary sandbox
 
-For middleware qualification, use the native OpenShell command. There is no
-middleware flag and the command does not inspect whether the service is
-running:
+Choose either sandbox creation path. Middleware is not coupled to either one,
+and neither command checks whether the middleware service is running.
+
+### Option A: native OpenShell sandbox
+
+This creates the OpenShell template as-is. It does **not** add the AI Guardian
+image, hooks, daemon, or AI Guardian-specific environment:
 
 ```bash
 openshell sandbox create --name mw-proof --template <template> -- /bin/true
 ```
 
-AI Guardian's `sandbox` wrapper is also middleware-agnostic, but it is not
-needed for this OpenShell workflow.
+### Option B: OpenShell sandbox with AI Guardian hooks
+
+This uses AI Guardian's ordinary sandbox wrapper. The wrapper delegates the
+sandbox lifecycle to OpenShell, but selects the AI Guardian OpenShell image and
+adds the hooks, daemon, labels, and selected CLI setup. It still does not start
+or attach the Rust middleware:
+
+```bash
+ai-guardian sandbox create \
+  --runtime openshell \
+  --name mw-proof \
+  --cli codex \
+  --repo .
+```
+
+Use the native OpenShell lifecycle commands or the wrapper's ordinary sandbox
+lifecycle commands as appropriate. In both options, apply the middleware in
+the next step with native `openshell policy`.
 
 ## 5. Attach middleware with OpenShell policy
 

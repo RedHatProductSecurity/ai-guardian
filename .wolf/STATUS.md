@@ -22,8 +22,9 @@ budget_tokens: 1000
   Unsupported releases and protocol combinations fail closed; the external
   service receives the installed version explicitly.
 - Reworked the OpenShell guide around the official operator flow: run the
-  external service, register it in gateway TOML, restart the gateway, and use
-  native `openshell sandbox`/`openshell policy` commands for activation.
+  external service, register it in gateway TOML, restart the gateway, choose
+  either native `openshell sandbox` or the ordinary AI Guardian OpenShell
+  wrapper for creation, and use native `openshell policy` for activation.
 - Documented the usual gateway TOML locations and the Linux systemd,
   macOS/Homebrew, and Snap gateway restart commands.
 - Rust unit tests pass 10/10 and the optimized release build succeeds.
