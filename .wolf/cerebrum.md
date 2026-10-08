@@ -266,6 +266,14 @@
   and troubleshooting in separate sections. The primary Community sandbox
   command omits `--tty --detach`; detached connect is only an alternative.
 
+- **OpenShell scanner ownership (#2523):** `scanner_ownership` routes checks at
+  the provider boundary; it is not an exclusive switch that disables host
+  hooks. The Rust v0.1.2 runtime rejects explicit `both`, so the supported
+  defense-in-depth shape is `default: hooks` with explicit provider-capable
+  scanners set to `middleware`; Python `both` requires correlation and
+  pre-persistence deduplication, but that deduplicator does not merge
+  independently persisted host-hook records.
+
 ## Do-Not-Repeat
 
 - [2026-10-06] Do not place `exit` in copy-paste guards intended for an

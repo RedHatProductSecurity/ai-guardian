@@ -815,10 +815,14 @@ provider_endpoints:
   - api.openai.com
   - api.anthropic.com
 scanner_ownership:
-  default: auto
+  default: hooks
   secret_scanning: middleware
   prompt_injection: middleware
+  context_poisoning: middleware
+  scan_pii: middleware
   secret_redaction: middleware
+  scan_offensive: middleware
+  canary_detection: middleware
 max_payload_bytes: 262144
 timeout_ms: 500
 response_redaction: true
@@ -949,52 +953,77 @@ operator actions.
 
 ## Scanner ownership and response behavior
 
-### What OpenShell middleware can see
+### Boundary routing is not exclusive ownership
 
 OpenShell middleware runs only on traffic selected by an OpenShell
-`network_middlewares` policy entry. It can inspect:
+`network_middlewares` policy entry. It can inspect provider-bound HTTP requests
+before credentials are injected, provider HTTP responses before delivery, and
+advertised WebSocket text messages. It cannot inspect local filesystem reads,
+process launches, tool execution, host shell commands, or arbitrary tool output
+that never crosses a selected provider network boundary.
 
-- provider-bound HTTP requests before credentials are injected;
-- provider HTTP responses before delivery; and
-- advertised WebSocket text messages.
+`scanner_ownership` is therefore a per-scanner **provider-boundary routing
+directive**, not a global switch between hooks and middleware. It controls
+whether this middleware asks the daemon to scan content that has already
+reached the OpenShell boundary. It does not install, disable, or reconfigure
+host/agent hooks, and it does not change the scanner action in the daemon's
+`ai-guardian.json` profile.
 
-It cannot inspect local filesystem reads, process launches, tool execution,
-host shell commands, or arbitrary tool output that never crosses a selected
-provider network boundary. Those surfaces remain AI Guardian hook/daemon
-responsibilities.
+Host hooks remain an independent protection surface. In particular,
+`scanner_ownership: middleware` does **not** disable the same scanner in host
+hooks. This is the recommended way to obtain defense in depth: local events
+are still protected when they never reach a provider, while provider traffic
+is checked again at the external boundary.
+
+### Hook-versus-middleware coverage
+
+The exact hook events vary by IDE/agent integration. A check marked
+“hook-dependent” is available only when that integration emits the relevant
+event or transcript; it is not a provider-boundary guarantee.
+
+| Content surface | Host/agent hooks | OpenShell middleware | Coverage boundary |
+|---|---|---|---|
+| User prompt submission | ✅ Hook event, when supported | ❌ No direct prompt-event hook | Middleware sees it only if it is later serialized into selected provider traffic. |
+| Local file reads/writes | ✅ Tool/file hooks | ❌ Not visible | A provider payload containing file text is a separate, later boundary event. |
+| Process launches and host shell commands | ✅ Tool/policy hooks | ❌ Not visible | OpenShell network middleware is not a host process sandbox. |
+| Tool output that never crosses a provider boundary | ✅ Post-tool/output hooks | ❌ Not visible | Middleware cannot recover content that never enters provider traffic. |
+| Provider HTTP request, pre-credentials | Hook-dependent | ✅ Request binding | Middleware sees the bounded payload before OpenShell injects credentials. |
+| Provider HTTP response, pre-return | Hook-dependent | ✅ Response binding | Response redaction and response decisions happen at this boundary. |
+| Provider WebSocket text message | Hook-dependent | ✅ Advertised text binding | Binary WebSocket messages are rejected or skipped according to the policy. |
 
 ### Ownership modes
 
 `scanner_ownership` is copied into the generated OpenShell policy and controls
-which checks Rust middleware requests from the daemon for **provider content**:
+which checks the selected middleware implementation requests from the daemon
+for **provider content**:
 
 | Mode | Behavior |
 |---|---|
-| `middleware` | Rust middleware invokes the daemon scanner for matching provider traffic. Middleware outage fails closed. |
-| `hooks` | Rust middleware skips that scanner. Host/agent hooks remain responsible for hook events. |
-| `auto` | Rust middleware uses the daemon scanner when the provider request reaches middleware; it does not dynamically re-route a host hook event. |
-| `both` | Both surfaces may inspect the same logical content independently. Use only when duplicate findings are acceptable; cross-process deduplication is not automatic. |
+| `middleware` | Route matching provider content through middleware. A middleware/control-plane outage fails closed. This does not turn off host hooks. |
+| `hooks` | Do not request that scanner from middleware. Host/agent hooks are expected to cover the local/event surface; Rust cannot verify that a host hook is installed. |
+| `auto` | Resolve to middleware when provider-boundary prerequisites are healthy, compatible, attached, and capable; otherwise the Python resolver may select hooks when that capability is advertised, or fail closed when no validated owner exists. This never reroutes a host hook event dynamically. Rust v0.1.2 treats `auto` as middleware for its scan plan. |
+| `both` | Request provider-boundary scanning while retaining host-hook scanning. The Python resolver requires a shared correlation ID, pre-persistence deduplication, and the corresponding hook capability. Duplicate persistence across the independent hook and middleware processes is still not automatically removed. Rust v0.1.2 rejects explicit `both` during `ValidateConfig`. |
 
 The middleware YAML's `scanner_ownership` is copied into the generated
-OpenShell policy. Rust middleware uses it to choose which checks to request from
-the daemon: `middleware` and `auto` route through middleware, while `hooks`
-leaves that scanner to host/agent hooks. The daemon's `ai-guardian.json` still
-defines scanner behavior and profiles; ownership decides which enforcement
-surface invokes it. **Setting a scanner to `middleware` does not disable the
-same scanner in host hooks.** This is intentional defense-in-depth: a prompt or
-tool event can be blocked locally even when it never reaches OpenShell, while
-provider content can be checked again at the external boundary.
+OpenShell policy. In the default Rust implementation, `middleware` and `auto`
+route through the provider boundary, while `hooks` leaves that scanner to the
+host/agent integration. The daemon's `ai-guardian.json` still defines scanner
+behavior and profiles; this setting only selects whether the provider boundary
+requests the check.
 
 There is no single middleware YAML switch that turns off host hook scanning.
-Do not weaken host protection merely to remove duplicate findings; use
-`scanner_ownership: hooks` when middleware should not inspect a provider
-scanner, or keep `middleware` for boundary enforcement.
+Do not weaken host protection merely to remove duplicate findings. Use
+`scanner_ownership: hooks` when a scanner should not inspect provider traffic,
+or use explicit provider-capable `middleware` entries when boundary enforcement
+is wanted in addition to the hooks.
 
 ### Scanner ownership keys and surface support
 
-These are all supported `scanner_ownership` keys:
+The policy parser accepts these nine semantic keys. The last two are local/file
+scanners, not provider-content scanners, and must remain `hooks` for the Rust
+OpenShell implementation:
 
-| Key | Rust/provider-content middleware | Host hooks/local content |
+| Key | Rust v0.1.2 provider-content middleware | Host hooks/local content |
 |---|---|---|
 | `secret_scanning` | ✅ Daemon REST check | ✅ Separate hook scanner |
 | `scan_pii` | ✅ Daemon REST check | ✅ Separate hook scanner |
@@ -1011,6 +1040,87 @@ rejects that policy during `ValidateConfig`. Keep them on `hooks` when they are
 needed for local files or tool events. `ai-guardian.json` controls scanner
 settings/actions; this table controls whether the provider-content middleware
 requests the daemon check.
+
+### Runtime differences and actionable validation
+
+The default `rust` implementation is the OpenShell v0.1.2 boundary runtime.
+The `python` implementation shares the Python ownership resolver but is not a
+drop-in semantic equivalent for every mode:
+
+| Implementation | `hooks` / `middleware` / `auto` | `both` |
+|---|---|---|
+| Rust (default) | `hooks` skips the provider check; `middleware` and `auto` request it and fail closed when the daemon/control plane is unavailable. | Rejected during `ValidateConfig` with a reason naming the scanner. Use explicit `middleware` entries with `default: hooks` for defense in depth. |
+| Python | Uses the resolver prerequisites and can fall back from `auto` to hooks only when hook capability is advertised. | Accepted only with `shared_correlation_id: true`, `pre_persistence_deduplication: true`, a hook capability, and a request correlation ID. Its in-process deduplicator does not merge independently persisted host-hook records. |
+
+If Rust validation reports `scanner ownership 'both' is not supported`, do not
+remove the host hooks or retry with a global `middleware` default. Use the
+following supported pattern instead:
+
+```yaml
+scanner_ownership:
+  default: hooks
+  prompt_injection: middleware
+  context_poisoning: middleware
+  secret_scanning: middleware
+  scan_pii: middleware
+  secret_redaction: middleware
+  scan_offensive: middleware
+  canary_detection: middleware
+```
+
+The same pattern keeps `supply_chain` and `config_file_scanning` on their local
+hook/file surface. To deliberately evaluate Python-only `both` behavior, start
+the service with `--middleware-implementation python` and configure the
+correlation, deduplication, and hook-capability prerequisites; expect duplicate
+audit records whenever those processes do not share a deduplication store.
+
+### Recommended configurations
+
+**Hooks-only local/agent protection** — use this when OpenShell should not scan
+provider traffic:
+
+```yaml
+scanner_ownership:
+  default: hooks
+```
+
+**Middleware-only provider-boundary routing (limited)** — use explicit
+provider-capable middleware entries when the goal is to inspect provider
+traffic at this boundary. This is “middleware-only” only for the provider
+boundary: `scanner_ownership` has no switch that disables host hooks, and it
+cannot provide local file, process, or tool coverage if those hooks are absent.
+Keep local/file scanners on `hooks` rather than applying a global middleware
+default:
+
+```yaml
+scanner_ownership:
+  default: hooks
+  prompt_injection: middleware
+  context_poisoning: middleware
+  secret_scanning: middleware
+  scan_pii: middleware
+  secret_redaction: middleware
+  scan_offensive: middleware
+  canary_detection: middleware
+```
+
+**Provider-boundary protection with local defense in depth (recommended)** —
+the generated `sandbox create --middleware` configuration uses the same shape.
+Install and verify host hooks as well; it does not need `both` because
+`middleware` selects the provider boundary while host hooks remain
+independently active.
+
+```yaml
+scanner_ownership:
+  default: hooks
+  prompt_injection: middleware
+  context_poisoning: middleware
+  secret_scanning: middleware
+  scan_pii: middleware
+  secret_redaction: middleware
+  scan_offensive: middleware
+  canary_detection: middleware
+```
 
 ### Canonical scanner names versus violation types
 
@@ -1042,7 +1152,9 @@ Examples of violation types that are not additional scanners:
 | `config_file_exfil` | Bash/config-file exfiltration paths |
 
 The service scans textual leaves throughout JSON provider payloads, including
-messages, tool calls, tool results, files, and shell content. It does not put
+messages, tool calls, tool results, files, and shell content. This means those
+values are covered **when serialized into selected provider traffic**; it does
+not mean that middleware sees every local tool call or output. It does not put
 raw payloads, matched text, bearer tokens, or secret values in diagnostics.
 
 For LLM responses, `response_redaction` controls whether sensitive content is

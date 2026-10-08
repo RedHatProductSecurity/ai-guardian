@@ -155,6 +155,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving the underlying container image reference used for selection.
 
 ### Changed
+- **OpenShell scanner ownership coverage (#2523):** Clarify that
+  `scanner_ownership` routes provider-boundary checks without disabling host
+  hooks, document hook-versus-middleware coverage for local and provider
+  surfaces, explain `auto` fallback and `both` correlation/deduplication
+  requirements, and record the Rust v0.1.2 limitation that rejects explicit
+  `both`.
 - **OpenShell Codex CLI (#2478):** Update the pinned `@openai/codex` client from
   `0.154.0` to `0.160.0`. OpenShell remains intentionally limited to the
   Codex CLI; OpenCode and Pi stay available only through the normal image.

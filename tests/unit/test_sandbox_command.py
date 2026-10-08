@@ -1334,7 +1334,8 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         shutil.rmtree(policy_dir)
 
 
-def test_openshell_middleware_generates_state_owned_config(tmp_path, monkeypatch):
+def test_openshell_middleware_generates_defense_in_depth_config(tmp_path, monkeypatch):
+    """Generated policy routes provider checks without disabling host hooks."""
     args = _args(
         middleware=True,
         middleware_profile="strict",
@@ -1349,7 +1350,8 @@ def test_openshell_middleware_generates_state_owned_config(tmp_path, monkeypatch
     config_path = _openshell_middleware_config_path(args)
 
     assert config_path == tmp_path / "openshell-middleware" / "sandbox-config.json"
-    assert json.loads(config_path.read_text(encoding="utf-8")) == {
+    generated = json.loads(config_path.read_text(encoding="utf-8"))
+    assert generated == {
         "profile_id": "strict",
         "registration_name": "content-guard",
         "provider_endpoints": ["api.openai.com", "api.anthropic.com"],
@@ -1367,6 +1369,14 @@ def test_openshell_middleware_generates_state_owned_config(tmp_path, monkeypatch
         "require_effective_policy": True,
         "allow_insecure_transport": True,
     }
+    ownership = generated["scanner_ownership"]
+    assert ownership["default"] == "hooks"
+    assert ownership["prompt_injection"] == "middleware"
+    assert "both" not in ownership.values()
+    # Omitted semantic keys inherit the hooks default, keeping local/file
+    # scanners on the host surface rather than asking Rust to scan them.
+    assert "supply_chain" not in ownership
+    assert "config_file_scanning" not in ownership
     # POSIX mode bits are not portable on Windows; Windows uses ACLs and
     # reports a platform-specific mode through pathlib.Path.stat().
     if os.name != "nt":
