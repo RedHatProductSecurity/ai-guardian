@@ -231,9 +231,10 @@ entry. The policy must be a complete policy appropriate for the target
 sandbox; a small fragment is not a safe replacement for its existing
 filesystem, provider, and network controls.
 
-Add the middleware entry to the policy used for `mw-proof`:
+Create the policy file used for `mw-proof`:
 
-```yaml
+```bash
+cat >> /tmp/mw-proof-policy.yaml <<'EOF'
 version: 1
 
 network_middlewares:
@@ -256,7 +257,12 @@ network_middlewares:
         - api.openai.com
         - chatgpt.com
         - ab.chatgpt.com
+EOF
 ```
+
+The `>>` form creates the file when it does not exist and appends when it
+does. Run it once for a fresh file, or remove the old `/tmp` file before
+repeating the example.
 
 The nested `middleware` value must match the gateway registration name. The map
 key is the stable policy-local identity; using `content-guard` for both keeps
