@@ -219,9 +219,28 @@ ai-guardian sandbox create \
   --repo .
 ```
 
+To apply the middleware policy during this creation, add the general
+OpenShell-policy option:
+
+```bash
+ai-guardian sandbox create \
+  --runtime openshell \
+  --name mw-proof \
+  --cli codex \
+  --repo . \
+  --policy ./mw-proof-policy.yaml
+```
+
+Here `--policy` is not a middleware-specific AI Guardian flag. The wrapper
+composes the supplied OpenShell policy with its ordinary AI Guardian sandbox
+defaults and passes the resulting policy to OpenShell. The middleware service
+must already be running and registered before creation, because OpenShell
+validates the policy against the registered service.
+
 Use the native OpenShell lifecycle commands or the wrapper's ordinary sandbox
 lifecycle commands as appropriate. In both options, apply the middleware in
-the next step with native `openshell policy`.
+the next step with native `openshell policy` when the sandbox was not created
+with `--policy`.
 
 ## 5. Attach middleware with OpenShell policy
 
