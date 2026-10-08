@@ -1350,7 +1350,7 @@
 
 - `minimal.json` (~4286 tok)
 - `moderator.json` (~4639 tok)
-- `standard.json` (~5018 tok)
+- `standard.json` (~5026 tok)
 - `strict.json` (~4235 tok)
 
 ## src/ai_guardian/templates/tray-plugins/
