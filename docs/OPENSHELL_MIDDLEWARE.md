@@ -265,7 +265,7 @@ Apply the complete policy to a single live sandbox with OpenShell:
 
 ```bash
 openshell policy set mw-proof \
-  --policy ./mw-proof-policy.yaml \
+  --policy /tmp/mw-proof-policy.yaml \
   --wait
 openshell policy get mw-proof --full
 ```
@@ -276,7 +276,7 @@ the ordinary create operation instead:
 ```bash
 openshell sandbox create \
   --name mw-proof \
-  --policy ./mw-proof-policy.yaml \
+  --policy /tmp/mw-proof-policy.yaml \
   -- /bin/true
 ```
 
@@ -288,7 +288,7 @@ ai-guardian sandbox create \
   --name mw-proof \
   --cli codex \
   --repo . \
-  --policy ./mw-proof-policy.yaml
+  --policy /tmp/mw-proof-policy.yaml
 ```
 
 Here `--policy` is the general OpenShell-policy option, not a middleware-
