@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~73591 tok)
+- `CHANGELOG.md` — Change log (~73684 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -1012,7 +1012,7 @@
 
 ## rust/openshell-middleware/src/
 
-- `main.rs` — Rust OpenShell supervisor middleware. (~18797 tok)
+- `main.rs` — Rust OpenShell supervisor middleware. (~21101 tok)
 
 ## scripts/
 
@@ -1088,8 +1088,8 @@
 - `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~16625 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 12 more (~1880 tok)
-- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~19621 tok)
-- `server.py` — URL configuration (~12681 tok)
+- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~20059 tok)
+- `server.py` — URL configuration (~12904 tok)
 - `state.py` — URL configuration (~19891 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
@@ -1181,7 +1181,7 @@
 
 - `__init__.py` — OpenShell v0.1.2 supervisor-middleware adapter implementation. (~20 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4106 tok)
-- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~34834 tok)
+- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~34873 tok)
 
 ## src/ai_guardian/middleware/openshell/v0_1_2/proto/
 
@@ -1329,7 +1329,7 @@
 
 - `__init__.py` — setup_hooks (~10359 tok)
 - `config.py` — Default configuration creation for ai-guardian. (~7276 tok)
-- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~56849 tok)
+- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~56995 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
 - `utils.py` — Shared utility functions for ai-guardian setup modules. (~3326 tok)

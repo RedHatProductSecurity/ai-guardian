@@ -711,13 +711,33 @@ class DaemonServer:
         if any(result.extra.get("scan_error") for result in scan_results):
             raise RuntimeError("middleware scanner failed")
         type_aliases = {"jailbreak_detected": "jailbreak"}
+
+        def finding_action(result):
+            if result.should_block:
+                return "block"
+            section = (
+                config.get(result.config_section, {})
+                if isinstance(config, dict) and result.config_section
+                else {}
+            )
+            if isinstance(section, dict) and isinstance(section.get("action"), str):
+                return section["action"]
+            extra_action = result.extra.get("action")
+            if isinstance(extra_action, str):
+                return extra_action
+            return "warn"
+
+        blocking = any(
+            result.detected and result.should_block for result in scan_results
+        )
         findings = [
             {
                 "type": type_aliases.get(
                     str(result.violation_type), str(result.violation_type)
                 ),
                 "message": "AI Guardian finding",
-                "action_taken": data.get("action", "block"),
+                "should_block": bool(result.should_block),
+                "action_taken": finding_action(result),
             }
             for result in scan_results
             if result.detected
@@ -733,6 +753,7 @@ class DaemonServer:
             redacted = sanitized.get("sanitized_text") or sanitized.get("redacted")
         return {
             "clean": not findings,
+            "blocked": blocking,
             "findings": findings,
             "redacted": redacted,
         }

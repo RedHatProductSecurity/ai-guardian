@@ -62,6 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 
 ### Fixed
+- **OpenShell/OpenCode regressions (#2520):** Route canary-owned scans through
+  the Rust middleware, preserve warn/log-only scanner actions across daemon IPC
+  and REST, treat empty scanner groups as clean, propagate configured payload
+  limits, support stream-only response inspection, and preflight OpenCode V2
+  migration before writing generated plugin artifacts.
 - **Tracing Settings initialization (#2517):** Prevent initial control hydration
   from saving the tracing configuration or displaying a save notification; edits
   continue to save once after the page has loaded.

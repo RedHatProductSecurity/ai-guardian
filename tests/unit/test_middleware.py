@@ -972,6 +972,70 @@ def test_cli_exposes_rust_middleware_implementation():
     assert run.call_args.args[0].implementation == "rust"
 
 
+def test_rust_middleware_receives_effective_payload_limit(tmp_path):
+    policy = _policy(max_payload_bytes=512 * 1024)
+    args = SimpleNamespace(
+        middleware_command=None,
+        stop=False,
+        status=False,
+        restart=False,
+        config=str(tmp_path / "middleware.yaml"),
+        background=False,
+        implementation="rust",
+        pid_file=str(tmp_path / "middleware.pid"),
+        log_file=str(tmp_path / "middleware.log"),
+        profile=None,
+        registration_name=None,
+        provider_endpoint=None,
+        tls_cert=None,
+        tls_key=None,
+        tls_client_ca=None,
+        jwt_secret=None,
+        jwt_public_key=None,
+        jwt_audience=None,
+        allow_insecure_transport=False,
+        allow_insecure_wildcard_bind=False,
+        bootstrap_openshell=False,
+        bootstrap_force=False,
+        gateway_config=None,
+        gateway_endpoint=None,
+        gateway_tls_ca=None,
+        policy_out=None,
+        policy_name=None,
+        bind="127.0.0.1:50051",
+        workers=1,
+        pause_file=str(tmp_path / "middleware.paused"),
+        project_dir=None,
+    )
+
+    with (
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server.load_operator_policy",
+            return_value=(policy, {"allow_insecure_transport": True}),
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._rust_middleware_binary",
+            return_value=tmp_path / "middleware",
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._claim_middleware_pid_file"
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server._remove_middleware_pid_file"
+        ),
+        patch(
+            "ai_guardian.middleware.openshell.v0_1_2.server.os.execve",
+            side_effect=RuntimeError("stop after environment capture"),
+        ) as execve,
+    ):
+        assert run_middleware_server(args) == 1
+
+    environment = execve.call_args.args[2]
+    assert environment["AI_GUARDIAN_MIDDLEWARE_MAX_PAYLOAD_BYTES"] == str(
+        policy.max_payload_bytes
+    )
+
+
 def test_cli_exposes_openshell_middleware_restart_subcommand():
     with (
         patch(

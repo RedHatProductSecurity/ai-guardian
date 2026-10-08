@@ -442,8 +442,40 @@ class TestDaemonServerProtocol:
             )
 
         assert result["clean"] is False
+        assert result["blocked"] is True
         assert result["findings"][0]["type"] == "pii"
         assert result["redacted"] == "[REDACTED]"
+
+    def test_middleware_check_preserves_warn_only_findings(self, short_state_dir):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        finding = mock.Mock(
+            detected=True,
+            violation_type="prompt_injection",
+            should_block=False,
+            extra={},
+        )
+
+        with (
+            mock.patch.object(server.state, "get_config", return_value={}),
+            mock.patch(
+                "ai_guardian.scanners.pipeline.scan_content",
+                return_value=[finding],
+            ),
+        ):
+            result = server._handle_middleware_check(
+                {"text": "warn-only content", "checks": ["injection"]}
+            )
+
+        assert result["clean"] is False
+        assert result["blocked"] is False
+        assert result["findings"] == [
+            {
+                "type": "prompt_injection",
+                "message": "AI Guardian finding",
+                "should_block": False,
+                "action_taken": "warn",
+            }
+        ]
 
     def test_middleware_check_fails_closed_on_scan_error(self, short_state_dir):
         server = DaemonServer(idle_timeout=30, enable_rest_api=False)
