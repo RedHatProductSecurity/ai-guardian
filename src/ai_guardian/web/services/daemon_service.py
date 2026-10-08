@@ -99,6 +99,13 @@ class DaemonService:
         except Exception:
             return None
 
+    def get_daemon_about(self, target: DaemonTarget) -> Optional[dict]:
+        """Get informational daemon metadata, including scanner inventory."""
+        try:
+            return self._client.get_about(target)
+        except Exception:
+            return None
+
     def get_daemon_config(self, target: DaemonTarget) -> Optional[dict]:
         try:
             return self._client.get_config(target)

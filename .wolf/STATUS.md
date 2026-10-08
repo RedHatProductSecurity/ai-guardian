@@ -9,6 +9,113 @@ budget_tokens: 1000
 
 ---
 
+## OpenCode pasted-credential diagnostic — 2026-10-28
+
+- User asked why a pasted credential-like assignment reached the model. Initial
+  protocol-file read was refused; stopped and retried only after "read again".
+- MCP sanitizer redacted the supplied sample once; the original was not returned.
+  This uses SecretRedactor, not the hook's `check_secrets` path, so it does not
+  establish that the configured prompt scanner detected the original submission.
+- Source registers V2 prompt admission and routes it through content scanning.
+  Doctor reports configured plugin files, explicitly not verified runtime loading;
+  the queried secret-detection violation list is empty. A later tool refusal is
+  evidence of tool enforcement, not proof of the original prompt's scan outcome.
+- The earlier MCP `check_path` response described paused proactive action-gating
+  and said hooks remain active. That is distinct from the daemon's global hook
+  pause, which was checked separately below.
+- New cross-check: `git ls-remote` confirms remote `main` is the same commit as
+  local `origin/main` (`10a41e2d`). The two branch commits only add the
+  default-off password-likelihood feature; no secret-scanner, adapter, or OpenCode
+  prompt-hook code changed. Effective project config reports secret scanning on,
+  password likelihood off; Gitleaks 8.30.1 is installed/default. The project's
+  four allowlist entries and zero ignore entries do not mention the OpenAI prefix.
+  A generated high-entropy positive control was detected and blocked by the direct
+  secret scanner. The existing patterned test fixture's non-detection is not
+  evidence about the user's value.
+- Process socket metadata confirms current OpenCode client PID 2757870 is connected
+  to server PID 497170, launched with `OPENCODE_CONFIG_DIR=~/.config/opencode-v2`.
+  The standard and legacy plugin/bridge copies are identical to each other and
+  functionally match current templates; both contain the prompt hook. Global
+  Codex `UserPromptSubmit` config also contains an AI Guardian handler. Thus the
+  legacy-profile mismatch is confirmed but is not yet a demonstrated cause.
+- The daemon's current global pause is intentional after the user's tests, not
+  evidence that it was paused during them. Safe log aggregates show resume at
+  17:09, two prompt-processing/secret-scan entries at 17:10, and pause at 17:12;
+  the user identifies these as the unpaused test window. There were no
+  `secret_detected` records at 17:10. Both hook paths reached the daemon and invoked
+  the prompt scanner, so pause/hook delivery is not the cause of those retries.
+  The user disabled daemon REST TLS and restarted it as a comparison; detection
+  did not change. App hook clients use local IPC, so REST TLS is unrelated. User
+  should restore HTTPS because the setting protects the REST API.
+- Four `secret_detected` records at 17:06 match the agent's synthetic direct scanner
+  probes; their `ide_type=unknown` context is consistent with that direct call.
+  Agent likely caused them and apologized. Do not treat the user's pasted record as
+  evidence that either app prompt was blocked; no raw violation contents retained.
+- **Likely configuration cause identified:** this machine's global
+  `secret_scanning.engines` explicitly selects only `gitleaks`; Mac selects
+  `toml-patterns`, `leaktk`, and `gitleaks` (user spelling “tolm-patterns” is
+  assumed to mean `toml-patterns`). AI Guardian's default is
+  `['toml-patterns', 'gitleaks']`, but an explicit engine list overrides it. The
+  bundled TOML rules include `openai-project-key` (`sk-proj-...`) and its
+  validator; omitting `toml-patterns` prevents that scanner from running here.
+  Local status shows Gitleaks 8.30.1 and Betterleaks 1.2.0 installed, but no
+  LeakTK. This is consistent with the same token being detected on Mac but missed
+  here; the app hooks themselves reached the daemon. `password_likelihood=false`
+  is not relevant to this provider-token case.
+- No configuration change has been made. Ask before adding the built-in
+  `toml-patterns` engine to the local global engine list; no new dependency is
+  needed for it. Do not reuse the real value; rotate it if genuine. Do not restart
+  the connected OpenCode service. No application changes or publication.
+
+## Doctor and scanner diagnostics — 2026-10-28
+
+- Added supported secret-engine inventory to `Doctor.check_scanners()`, showing
+  configured and installed status for built-in `toml-patterns` and all preset
+  engines. Warn only when secret scanning is enabled and TOML patterns are omitted;
+  optional engines remain informational to avoid warning noise. Added focused tests.
+- Clarified docs that an omitted engine list defaults to TOML patterns + Gitleaks,
+  while an explicit list replaces the defaults; Doctor behavior is documented.
+- Doctor now lists configured pattern servers one per line with URL and
+  `patterns_endpoint`; the supported pattern-server catalog uses the same
+  one-line-per-server format.
+- Engine Tester lists only engines explicitly present in
+  `secret_scanning.engines`; it no longer adds Gitleaks or TOML patterns and the
+  Console explains that installed/built-in engines are not added automatically.
+- User reported the Console collapsed the multiline engine inventory into one
+  visual line. Fixed its diagnostic-detail labels to preserve line breaks with
+  `white-space: pre-line`.
+- Validation: related Doctor, scanner-manager, Engine Tester, and Web Console
+  tests — **311 passed** (161, 35, 53, and 62 respectively). Ruff, Black py310,
+  error-level Pylint, and targeted Mypy across all five changed source modules pass.
+  The earlier full-package Mypy run reported 14 errors in untouched
+  `skill_discovery.py` and `scanners/secret_validator.py`.
+- No live user configuration or daemon state was changed. Work remains uncommitted
+  on existing branch `2612`. The user should refresh the Console Health Check page
+  to verify line-by-line rendering. HTTPS restoration and safe OpenCode profile
+  handoff remain unconfirmed; do not restart the connected OpenCode service.
+  Earlier credential-triage notes below remain context.
+
+## Console Engine Config checkboxes — 2026-10-28
+
+- Replaced JSON-first engine selection with per-engine checkboxes for the selected
+  daemon's installed external scanners, plus a distinct always-available built-in
+  TOML patterns option. Check/uncheck writes the selected config scope immediately
+  and updates the advanced JSON editor; existing per-engine overrides and unrelated
+  settings are preserved. Unsaved advanced JSON prevents checkbox changes rather
+  than being silently overwritten, and config writes share a lock.
+- Added additive `/api/about` `installed_scanners` names for local/remote daemon
+  inventory; no binary paths or versions are exposed in the new field. Older or
+  unreachable daemons without that field show an unavailable-inventory notice and
+  do not invent the Console host's installed engines.
+- **Validation:** 238 related unit/UX tests pass (78 page tests, 158 scanner/API/
+  service tests, 2 complete new UX contract tests). Ruff, Black py310, error-level
+  Pylint, targeted Mypy, and `git diff --check` pass. One initial UX test-harness
+  error awaited a synchronous editor callback; corrected and recorded in buglog.
+- A token-like prompt was blocked before delivery as `secret_detected` at prompt
+  line 1. Its value was not reused or added to tests. No live config, daemon, or
+  OpenCode process was changed. Changes remain uncommitted on existing branch `2612`;
+  refresh Engine Config in the Console for visual verification.
+
 ## Issue #2612 / PR #2613 CI follow-up — 2026-10-28
 
 - User reported CI failure after publishing `de3f4301` on existing branch `2612`.

@@ -39,35 +39,31 @@ class EngineTestResult:
 
 
 def get_available_engines() -> List[str]:
-    """Return engine names from the user's config, plus the default.
+    """Return only engine names explicitly listed in the user's config.
 
     Reads ``secret_scanning.engines`` from ``ai-guardian.json``.  Each
     entry can be a plain string (``"gitleaks"``) or a dict with a
-    ``type`` key.  The default engine (``"gitleaks"``) is appended if
-    not already present so there is always at least one entry.
+    ``type`` key. Built-in defaults, supported engines, and installed
+    scanners are not added automatically.
     """
     try:
         from ai_guardian import _load_secret_scanning_config
 
         scanner_config, _ = _load_secret_scanning_config()
-        raw = (
-            scanner_config.get("engines", ["gitleaks"])
-            if scanner_config
-            else ["gitleaks"]
-        )
+        raw = scanner_config.get("engines", []) if scanner_config else []
     except Exception:
-        raw = ["gitleaks"]
+        raw = []
+
+    if not isinstance(raw, list):
+        return []
 
     seen: set = set()
     names: List[str] = []
     for entry in raw:
         name = entry.get("type") if isinstance(entry, dict) else str(entry)
-        if name and name not in seen:
+        if isinstance(name, str) and name and name not in seen:
             seen.add(name)
             names.append(name)
-
-    if "gitleaks" not in seen:
-        names.append("gitleaks")
 
     return names
 

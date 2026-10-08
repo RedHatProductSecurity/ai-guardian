@@ -13,6 +13,19 @@ class TestScannerManager:
     """Tests for ScannerManager class."""
 
     @mock.patch("shutil.which")
+    def test_list_installed_names_does_not_probe_versions(self, mock_which):
+        mock_which.side_effect = lambda name: (
+            "/usr/local/bin/ggshield"
+            if name == "ggshield"
+            else "/usr/local/bin/leaktk" if name == "leaktk" else None
+        )
+
+        names = ScannerManager().list_installed_names()
+
+        assert names == ["leaktk", "gitguardian"]
+        assert mock_which.call_count == len(ScannerManager.SUPPORTED_SCANNERS)
+
+    @mock.patch("shutil.which")
     @mock.patch("subprocess.run")
     def test_list_installed_empty(self, mock_run, mock_which):
         """Test listing scanners when none are installed."""
@@ -495,14 +508,32 @@ class TestPatternServers:
     @mock.patch("builtins.print")
     def test_print_pattern_servers(self, mock_print):
         """Test human-readable output for pattern servers."""
-        manager = ScannerManager()
-        manager.print_pattern_servers()
+        servers = {
+            "leaktk": {
+                "url": "https://patterns.example/",
+                "patterns_endpoint": "/patterns/gitleaks/8.27.0",
+            },
+            "ssrf": {
+                "url": "https://ssrf.example/",
+                "patterns_endpoint": "/patterns/ssrf/v1",
+            },
+        }
+        with mock.patch(
+            "ai_guardian.scanners.installer.ScannerInstaller.get_pattern_servers",
+            return_value=servers,
+        ):
+            ScannerManager().print_pattern_servers()
 
-        print_calls = [str(call) for call in mock_print.call_args_list]
-        output = "\n".join(print_calls)
-        assert "leaktk" in output
-        assert "URL:" in output
-        assert "Endpoint:" in output
+        server_lines = [
+            call.args[0]
+            for call in mock_print.call_args_list
+            if call.args and str(call.args[0]).startswith("  ")
+        ]
+        assert server_lines == [
+            "  leaktk: URL=https://patterns.example/; "
+            "patterns_endpoint=/patterns/gitleaks/8.27.0",
+            "  ssrf: URL=https://ssrf.example/; patterns_endpoint=/patterns/ssrf/v1",
+        ]
 
     @mock.patch("builtins.print")
     def test_print_pattern_servers_empty(self, mock_print):

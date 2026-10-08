@@ -95,6 +95,21 @@ class TestDaemonServiceStatus:
         assert service.get_daemon_status(mock_target) is None
         service._client.get_status.assert_not_called()
 
+    def test_get_daemon_about(self, service, mock_target):
+        service._client.get_about.return_value = {
+            "installed_scanners": ["gitleaks", "leaktk"]
+        }
+
+        result = service.get_daemon_about(mock_target)
+
+        assert result == {"installed_scanners": ["gitleaks", "leaktk"]}
+        service._client.get_about.assert_called_once_with(mock_target)
+
+    def test_get_daemon_about_handles_error(self, service, mock_target):
+        service._client.get_about.side_effect = Exception("connection failed")
+
+        assert service.get_daemon_about(mock_target) is None
+
 
 class TestDaemonServiceConfig:
     def test_get_daemon_config(self, service, mock_target):

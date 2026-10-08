@@ -6,6 +6,19 @@
 
 ## User Preferences
 
+- **2026-10-28 — Doctor scanner inventory:** List all supported secret engines with
+  configured/installed status. Warn only when secret scanning is enabled and the
+  built-in `toml-patterns` engine is omitted; show other optional unselected engines
+  informationally to avoid turning ordinary intentional choices into warnings.
+  In the Console, preserve embedded newlines in diagnostic details so each engine
+  status renders on its own line rather than collapsing into one label line.
+  The Engine Tester is intentionally narrower: list only explicitly configured
+  engines, do not auto-add built-in or installed engines, and explain this in the UI.
+  Pattern-server inventories should render one entry per line with
+  `patterns_endpoint` included. In Engine Configuration, provide auto-saving
+  checkboxes for the selected daemon's installed external engines and a distinct
+  built-in TOML option; preserve advanced JSON edits and settings.
+
 - **2026-10-28 — #2612 Console auto-save:** Global-only policy does not need a
   special Save button. Follow the Console's existing auto-save-on-change behavior
   for password-likelihood enable/outcome controls. Viewing the page is not consent;
@@ -127,6 +140,47 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-10-29 — NiceGUI Engine Config callbacks:** `update:model-value` editor
+  callbacks are synchronous, while value-change callbacks may be async. UX fakes
+  should call the editor callback directly and await only async control handlers.
+
+- **2026-10-28 — OpenCode prompt diagnostics:** MCP `sanitize_text` exercises
+  SecretRedactor, not the prompt hook's `check_secrets` backend. A successful
+  sanitizer redaction does not prove the admitted prompt was scanned/detected.
+  Doctor verifies generated files, not runtime hook activation; tool refusals
+  likewise do not establish prompt enforcement. A paused proactive MCP check
+  explicitly leaves mandatory hooks active, so do not conflate the two.
+
+- **2026-10-28 — Cross-agent secret-leak triage:** If both Codex and OpenCode leak,
+  compare the shared scanner/config/runtime path before blaming one adapter. A
+  direct positive-control scan proves backend capability only, not that either
+  application's prompt hook ran; an absent violation cannot distinguish hook
+  delivery failure from a value-specific miss. Verify current remote-main ancestry
+  before calling a branch change a regression. A profile-directory mismatch is not
+  itself causal when the active and canonical prompt-hook code is identical. Do
+  not restart a service attached to the live session; use a fresh non-secret
+  controlled prompt or correlated event evidence.
+
+- **2026-10-28 — Distinct daemon pause states:** MCP proactive action-gating can be
+  paused while hook scanning remains active, but `DaemonState.paused` is a separate
+  global pause that makes `DaemonServer._handle_hook_request()` return its
+  security-instructions-only response before content scanning. Check local daemon
+  status, not only MCP `proactive_level`; `mcp_proactive_level=low` can coexist with
+  global `paused=true`. HTTPS on the local REST listener does not route hook
+  requests over HTTPS: absent `AI_GUARDIAN_DAEMON_URL`, hook CLI uses local IPC.
+  A pause observed after a user's unpaused test is not evidence of pause during the
+  prompt; use timestamped event metadata. Direct scanner probes may create persisted
+  `secret_detected` violations with unknown IDE identity, so don't mistake them for
+  app-hook evidence or run further probes against user state without isolation.
+
+- **2026-10-28 — Explicit secret engine list overrides defaults:**
+  `secret_scanning.DEFAULT_ENGINES` is `toml-patterns` then Gitleaks, but a saved
+  `engines` array replaces that list. The internal TOML scanner contains the
+  OpenAI `sk-proj-` rule. If one workstation explicitly selects Gitleaks only and
+  another selects TOML patterns/LeakTK/Gitleaks, same branch does not mean same
+  detection coverage. Compare engine selection and availability before blaming OS
+  or hook transport. Built-in TOML patterns need no external scanner install.
 
 - **2026-10-28 — #2613 CI capture/guidance:** A sanitizer CLI test disables global
   logging, so new privacy tests must establish pytest-managed caplog levels and

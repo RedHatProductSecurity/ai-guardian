@@ -4,13 +4,17 @@
 **Status**: ✅ **Phase 1 Complete (v1.5.0)** | ✅ **Phase 2 Complete (v1.6.0)**  
 **Priority**: High (Production Ready)
 
+> **Current default:** If `secret_scanning.engines` is omitted, AI Guardian uses
+> `toml-patterns` followed by Gitleaks. An explicit list replaces that default.
+> The phase-planning notes below preserve the earlier Gitleaks-only proposal.
+
 ## Summary
 
 Multi-engine support for secret scanning is **fully implemented and production-ready** since v1.5.0. Users can choose or combine different secret detection tools based on their organization's requirements, compliance needs, and detection preferences.
 
 ## Background
 
-AI Guardian supports multiple secret scanning engines since v1.5.0 (see `src/ai_guardian/scanners/engine_builder.py`). While Gitleaks is the default and an excellent open-source tool with 100+ built-in patterns, different organizations have varying needs:
+AI Guardian supports multiple secret scanning engines since v1.5.0 (see `src/ai_guardian/scanners/engine_builder.py`). The built-in `toml-patterns` engine and Gitleaks are the default when no engine list is configured; different organizations can explicitly select other engines based on their needs:
 
 ### Why Multi-Engine Support?
 
@@ -59,7 +63,7 @@ The `engines` field is **fully functional** with support for both simple and adv
 {
   "secret_scanning": {
     "enabled": true,
-    "engines": ["gitleaks"]  // Single engine (default)
+    "engines": ["gitleaks"]  // Explicit Gitleaks-only selection
   }
 }
 ```
@@ -557,7 +561,8 @@ For organizations with AGPL concerns, use gitleaks, betterleaks, leaktk, or dete
   - [x] Strategy-level logging: engines_run, combined_findings, deduplicated
 
 - [x] **Console panel**
-  - [x] "Engine Configuration" panel with JSON editor
+  - [x] "Engine Configuration" panel with installed-engine checkboxes that
+    auto-save selections and update the advanced JSON editor
   - [x] Strategy dropdown, consensus threshold input
   - [x] Live JSON validation
 
@@ -658,7 +663,7 @@ Easy to add new engines as they emerge:
 
 ## Backward Compatibility
 
-- **No `engines` config**: Default to Gitleaks (current behavior)
+- **No `engines` config**: Default to `toml-patterns`, then Gitleaks
 - **`engines: ["gitleaks"]`**: Explicit Gitleaks-only (same as current)
 - **Pattern server**: Works with any engine that supports TOML configs
 - **Existing configs**: Continue working unchanged

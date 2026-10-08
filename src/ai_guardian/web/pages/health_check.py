@@ -19,6 +19,14 @@ def _get_hook_integrations(check: dict) -> list:
     return integrations if isinstance(integrations, list) else []
 
 
+def _detail_label(text: str):
+    """Render health-check details without collapsing embedded line breaks."""
+    label = ui.label(text)
+    label.classes("text-xs text-grey-6")
+    label.style("white-space: pre-line")
+    return label
+
+
 def create_health_check_page(service, daemon_name: str):
     """Create the Health Check page."""
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/health-check")
@@ -148,9 +156,7 @@ def create_health_check_page(service, daemon_name: str):
                                     if detail or fix_hint:
                                         with ui.expansion("Details").classes("w-full"):
                                             if detail:
-                                                ui.label(detail).classes(
-                                                    "text-xs text-grey-6"
-                                                )
+                                                _detail_label(detail)
                                             if fix_hint:
                                                 ui.label(f"Fix: {fix_hint}").classes(
                                                     "text-xs text-blue-4"
@@ -161,9 +167,7 @@ def create_health_check_page(service, daemon_name: str):
                                     "w-full ml-6"
                                 ):
                                     if check.get("detail"):
-                                        ui.label(check["detail"]).classes(
-                                            "text-xs text-grey-6"
-                                        )
+                                        _detail_label(check["detail"])
                                     if check.get("fix_hint"):
                                         ui.label(f"Fix: {check['fix_hint']}").classes(
                                             "text-xs text-blue-4"
@@ -184,7 +188,7 @@ def create_health_check_page(service, daemon_name: str):
                         if detail or fix_hint:
                             with ui.expansion("Details").classes("w-full ml-8"):
                                 if detail:
-                                    ui.label(detail).classes("text-xs text-grey-6")
+                                    _detail_label(detail)
                                 if fix_hint:
                                     ui.label(f"Fix: {fix_hint}").classes(
                                         "text-xs text-blue-4"
@@ -335,7 +339,7 @@ def create_health_check_page(service, daemon_name: str):
                         if fix_hint and outcome == "mismatch":
                             with ui.expansion("Details").classes("w-full ml-8"):
                                 if r.get("detail"):
-                                    ui.label(r["detail"]).classes("text-xs text-grey-6")
+                                    _detail_label(r["detail"])
                                 ui.label(f"Fix: {fix_hint}").classes(
                                     "text-xs text-blue-4"
                                 )

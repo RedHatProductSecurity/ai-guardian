@@ -41,6 +41,7 @@ def get_about_info() -> dict:
         pass  # intentionally silent — optional dependency
 
     scanners = []
+    installed_scanners = None
     try:
         from ai_guardian.scanners.manager import ScannerManager
         from ai_guardian.config.loaders import _load_config_file
@@ -51,6 +52,7 @@ def get_about_info() -> dict:
             scanners.append(
                 {"name": s.name, "version": s.version, "is_default": s.is_default}
             )
+        installed_scanners = sm.list_installed_names()
     except Exception:
         pass  # intentionally silent — optional dependency
 
@@ -77,6 +79,7 @@ def get_about_info() -> dict:
         "platform": plat_str,
         "config_path": config_path,
         "scanners": scanners,
+        "installed_scanners": installed_scanners,
         "url": PROJECT_URL,
         "author": AUTHOR_NAME,
         "author_url": AUTHOR_URL,

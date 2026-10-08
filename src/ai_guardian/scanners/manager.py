@@ -204,6 +204,14 @@ class ScannerManager:
 
         return installed
 
+    def list_installed_names(self) -> List[str]:
+        """Return installed external scanner names without probing versions."""
+        return [
+            scanner_name
+            for scanner_name in self.SUPPORTED_SCANNERS
+            if shutil.which(self.BINARY_NAMES.get(scanner_name, scanner_name))
+        ]
+
     def _list_python_scanners(self) -> List[InstalledScanner]:
         """List Python-based scanners from config.
 
@@ -425,10 +433,10 @@ class ScannerManager:
 
         print("\nSupported pattern servers:\n")
         for name, config in servers.items():
-            print(f"  {name}")
             if isinstance(config, dict):
                 url = config.get("url", "N/A")
                 endpoint = config.get("patterns_endpoint", "N/A")
-                print(f"    URL:      {url}")
-                print(f"    Endpoint: {endpoint}")
-            print()
+            else:
+                url = "N/A"
+                endpoint = "N/A"
+            print(f"  {name}: URL={url}; patterns_endpoint={endpoint}")
