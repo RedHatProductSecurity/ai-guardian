@@ -38,6 +38,55 @@ AI Guardian exposes no middleware lifecycle command. There is also no implicit
 bootstrap, attach, detach, start, stop, or pause operation hidden inside
 `ai-guardian sandbox`.
 
+## Architecture
+
+```text
+                         openshell CLI / tray
+                                  |
+                 gateway.toml + network_middlewares policy
+                                  v
+                    +---------------------------+
+                    | OpenShell gateway         |
+                    | registration + policy     |
+                    +-------------+-------------+
+                                  |
+                    creates/manages sandbox
+                                  v
+                    +---------------------------+
+                    | OpenShell sandbox         |
+                    | supervisor                 |
+                    +-------------+-------------+
+                                  |
+                    per-request middleware RPCs
+                                  v
+                    +---------------------------+
+                    | External Rust middleware  |
+                    | service                   |
+                    +-------------+-------------+
+                                  |
+                         scan/audit requests
+                                  v
+                    +---------------------------+
+                    | AI Guardian daemon        |
+                    | host Unix socket or       |
+                    | configured remote URL/IP  |
+                    +---------------------------+
+
+     +---------------------------+    +-------------------------------+
+     | Native OpenShell sandbox  |    | AI Guardian OpenShell wrapper  |
+     | no AI Guardian hooks or   |    | hooks + in-sandbox daemon      |
+     | daemon required            |    | for hook processing             |
+     +---------------------------+    +-------------------------------+
+```
+
+The bottom two boxes are alternative sandbox contents. The external Rust
+service and its daemon backend are outside both sandbox variants. The daemon
+inside the AI Guardian wrapper is for that sandbox's hooks; it is separate from
+the daemon endpoint used by the external middleware unless an operator
+deliberately configures them to be the same reachable service.
+At gateway startup, OpenShell also calls the Rust service for capability and
+protocol validation before accepting the registration.
+
 ## Prerequisites
 
 - OpenShell v0.1.2 or a later qualified v0.1.x patch release.
