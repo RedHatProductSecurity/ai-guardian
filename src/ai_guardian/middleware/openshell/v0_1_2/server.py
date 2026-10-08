@@ -2947,6 +2947,9 @@ def run_middleware_server(args) -> int:
             rust_environment["AI_GUARDIAN_MIDDLEWARE_PAUSE_FILE"] = str(
                 _middleware_pause_path(args)
             )
+            rust_environment["AI_GUARDIAN_MIDDLEWARE_MAX_PAYLOAD_BYTES"] = str(
+                policy.max_payload_bytes
+            )
             if getattr(args, "project_dir", None):
                 rust_environment["AI_GUARDIAN_MIDDLEWARE_PROJECT_DIR"] = str(
                     args.project_dir

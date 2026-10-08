@@ -58,7 +58,9 @@ use openshell::middleware::v1::{
 
 const CONTRACT_CAPABILITY: &str = "openshell.supervisor-middleware.contract";
 const IMPLEMENTATION_NAME: &str = "ai-guardian/rust-middleware";
-const MAX_PAYLOAD_BYTES: u64 = 262_144;
+const DEFAULT_MAX_PAYLOAD_BYTES: u64 = 256 * 1024;
+const MAX_CONFIGURED_PAYLOAD_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_PAYLOAD_ENV: &str = "AI_GUARDIAN_MIDDLEWARE_MAX_PAYLOAD_BYTES";
 
 #[derive(Debug, thiserror::Error)]
 enum AppError {
@@ -105,6 +107,8 @@ struct CheckRequest<'a> {
 struct CheckResponse {
     #[serde(default)]
     clean: bool,
+    #[serde(default)]
+    blocked: bool,
     #[serde(default)]
     findings: Vec<DaemonFinding>,
     redacted: Option<String>,
@@ -204,6 +208,10 @@ struct DaemonSocketResponse {
 struct DaemonFinding {
     #[serde(rename = "type")]
     finding_type: String,
+    #[serde(default)]
+    should_block: Option<bool>,
+    #[serde(default)]
+    action_taken: Option<String>,
 }
 
 #[derive(Debug)]
@@ -220,6 +228,55 @@ struct Evaluation {
 struct ScanPlan {
     checks: Vec<&'static str>,
     response_redaction: bool,
+}
+
+fn clean_check_response() -> CheckResponse {
+    CheckResponse {
+        clean: true,
+        ..Default::default()
+    }
+}
+
+fn finding_blocks(finding: &DaemonFinding) -> bool {
+    // Older daemons do not include action metadata.  Treat those findings as
+    // blocking so upgrading the middleware cannot weaken an existing policy.
+    finding.should_block.unwrap_or_else(|| {
+        !matches!(
+            finding.action_taken.as_deref(),
+            Some("warn") | Some("log") | Some("log-only")
+        )
+    })
+}
+
+fn response_has_blocking_findings(response: &CheckResponse) -> bool {
+    if response.blocked {
+        return true;
+    }
+    if response.findings.is_empty() {
+        return !response.clean;
+    }
+    response.findings.iter().any(finding_blocks)
+}
+
+fn response_has_findings(response: &CheckResponse) -> bool {
+    response.blocked || !response.clean || !response.findings.is_empty()
+}
+
+fn configured_max_payload_bytes() -> u64 {
+    match env::var(MAX_PAYLOAD_ENV) {
+        Ok(value) => match value.parse::<u64>() {
+            Ok(value) if (1..=MAX_CONFIGURED_PAYLOAD_BYTES).contains(&value) => value,
+            _ => {
+                warn!(
+                    value = %value,
+                    default = DEFAULT_MAX_PAYLOAD_BYTES,
+                    "invalid Rust middleware payload limit; using default"
+                );
+                DEFAULT_MAX_PAYLOAD_BYTES
+            }
+        },
+        Err(_) => DEFAULT_MAX_PAYLOAD_BYTES,
+    }
 }
 
 fn parse_socket_check_response(envelope: DaemonSocketResponse) -> Result<CheckResponse, AppError> {
@@ -416,7 +473,10 @@ impl DaemonClient {
             project_dir: self.project_dir.as_deref(),
         };
         if content.is_empty() {
-            return Ok(self.pause_status().await?.unwrap_or_default());
+            return Ok(self
+                .pause_status()
+                .await?
+                .unwrap_or_else(clean_check_response));
         }
         if let Some(response) = self.local_pause_response() {
             return Ok(response);
@@ -590,6 +650,7 @@ fn daemon_token_from_environment() -> Result<String, AppError> {
 struct MiddlewareService {
     daemon: DaemonClient,
     registration_name: String,
+    max_payload_bytes: u64,
 }
 
 impl MiddlewareService {
@@ -646,17 +707,19 @@ impl MiddlewareService {
                 reason_code: String::new(),
             });
         }
-        // Run blocking semantic checks first.  The daemon's legacy combined
-        // secrets/PII path can fail independently; it must not hide a valid
-        // prompt-injection denial behind a generic middleware failure.
+        // Run semantic checks first. The daemon's legacy combined secrets/PII
+        // path can fail independently; it must not hide a valid prompt-
+        // injection denial behind a generic middleware failure.
         let semantic_checks: Vec<_> = plan
             .checks
             .iter()
             .copied()
-            .filter(|check| matches!(*check, "injection" | "context_poisoning"))
+            .filter(|check| {
+                matches!(*check, "injection" | "context_poisoning" | "canary")
+            })
             .collect();
         let semantic = if semantic_checks.is_empty() {
-            CheckResponse::default()
+            clean_check_response()
         } else {
             self.daemon
                 .check(content, request_id, semantic_checks)
@@ -665,12 +728,7 @@ impl MiddlewareService {
         if semantic.paused {
             return Ok(Self::paused_evaluation(semantic));
         }
-        let semantic_blocking = semantic.findings.iter().any(|finding| {
-            matches!(
-                finding.finding_type.as_str(),
-                "prompt_injection" | "context_poisoning" | "jailbreak" | "canary_detected"
-            )
-        });
+        let semantic_blocking = response_has_blocking_findings(&semantic);
         if semantic_blocking {
             return Ok(Evaluation {
                 blocked: true,
@@ -689,7 +747,7 @@ impl MiddlewareService {
             .filter(|check| matches!(*check, "secrets" | "pii" | "offensive"))
             .collect();
         let sensitive = if sensitive_checks.is_empty() {
-            CheckResponse::default()
+            clean_check_response()
         } else {
             self.daemon
                 .check(content, request_id, sensitive_checks)
@@ -705,17 +763,22 @@ impl MiddlewareService {
             .cloned()
             .collect();
         let findings = Self::findings(&combined_findings);
-        let blocking = sensitive
-            .findings
-            .iter()
-            .any(|finding| matches!(finding.finding_type.as_str(), "jailbreak"));
+        let blocking = response_has_blocking_findings(&sensitive);
         let redacted = if plan.response_redaction {
             sensitive.redacted.clone()
         } else {
             None
         };
+        let sensitive_findings = response_has_findings(&sensitive);
+        let blocked = if !sensitive_findings {
+            false
+        } else if block_all_findings {
+            blocking
+        } else {
+            blocking && redacted.is_none()
+        };
         Ok(Evaluation {
-            blocked: !sensitive.clean && (block_all_findings || blocking || redacted.is_none()),
+            blocked,
             redacted,
             findings,
             metadata: HashMap::new(),
@@ -861,19 +924,19 @@ impl SupervisorMiddleware for MiddlewareService {
                 MiddlewareBinding {
                     operation: SupervisorMiddlewareOperation::HttpRequest as i32,
                     phase: SupervisorMiddlewarePhase::PreCredentials as i32,
-                    max_payload_bytes: MAX_PAYLOAD_BYTES,
+                    max_payload_bytes: self.max_payload_bytes,
                     request_timeout: None,
                 },
                 MiddlewareBinding {
                     operation: SupervisorMiddlewareOperation::HttpResponse as i32,
                     phase: SupervisorMiddlewarePhase::PreReturn as i32,
-                    max_payload_bytes: MAX_PAYLOAD_BYTES,
+                    max_payload_bytes: self.max_payload_bytes,
                     request_timeout: None,
                 },
                 MiddlewareBinding {
                     operation: SupervisorMiddlewareOperation::WebsocketMessage as i32,
                     phase: SupervisorMiddlewarePhase::PreCredentials as i32,
-                    max_payload_bytes: MAX_PAYLOAD_BYTES,
+                    max_payload_bytes: self.max_payload_bytes,
                     request_timeout: None,
                 },
             ],
@@ -943,6 +1006,14 @@ impl SupervisorMiddleware for MiddlewareService {
                 "Rust middleware rejected unsupported request phase"
             );
             return Err(Status::invalid_argument("unsupported HTTP request phase"));
+        }
+        if body_bytes > self.max_payload_bytes as usize {
+            return Ok(Response::new(HttpRequestResult {
+                decision: Decision::Deny as i32,
+                reason: "AI Guardian middleware payload limit exceeded".to_string(),
+                reason_code: "payload_limit_exceeded".to_string(),
+                ..Default::default()
+            }));
         }
         let content = String::from_utf8(request.body)
             .map_err(|_| Status::invalid_argument("request body must be UTF-8"))?;
@@ -1163,7 +1234,7 @@ impl SupervisorMiddleware for MiddlewareService {
                                 return;
                             }
                         };
-                        if text.len() > MAX_PAYLOAD_BYTES as usize {
+                        if text.len() > service.max_payload_bytes as usize {
                             info!(
                                 request_id = %request_id,
                                 host = %target_host,
@@ -1283,6 +1354,7 @@ impl HttpResponsePreReturn for MiddlewareService {
                 checks: vec!["injection", "context_poisoning", "secrets", "pii"],
                 response_redaction: true,
             };
+            let mut body_mode = pb::HttpResponseBodyMode::WholeBodyBytes as i32;
             while let Some(event) = events.message().await? {
                 match event.event {
                     Some(http_response_event::Event::Preflight(preflight)) => {
@@ -1327,15 +1399,29 @@ impl HttpResponsePreReturn for MiddlewareService {
                             return;
                         }
                         plan = MiddlewareService::scan_plan(preflight.config.as_ref())?;
-                        if !preflight.permitted_body_modes.iter().any(|mode| *mode == pb::HttpResponseBodyMode::WholeBodyBytes as i32) {
-                            Err(Status::failed_precondition("whole-body response inspection is required"))?;
-                        }
+                        body_mode = if preflight
+                            .permitted_body_modes
+                            .iter()
+                            .any(|mode| *mode == pb::HttpResponseBodyMode::WholeBodyBytes as i32)
+                        {
+                            pb::HttpResponseBodyMode::WholeBodyBytes as i32
+                        } else if preflight
+                            .permitted_body_modes
+                            .iter()
+                            .any(|mode| *mode == pb::HttpResponseBodyMode::StreamBytes as i32)
+                        {
+                            pb::HttpResponseBodyMode::StreamBytes as i32
+                        } else {
+                            Err(Status::failed_precondition(
+                                "stream or whole-body response inspection is required",
+                            ))?
+                        };
                         yield HttpResponseEventResult {
                             result: Some(http_response_event_result::Result::PreflightResult(
                                 HttpResponsePreflightResult {
                                     action: Some(http_response_preflight_result::Action::Inspect(
                                         HttpResponsePreflightInspect {
-                                            body_mode: pb::HttpResponseBodyMode::WholeBodyBytes as i32,
+                                            body_mode,
                                             header_mutations: Vec::new(),
                                         },
                                     )),
@@ -1346,75 +1432,131 @@ impl HttpResponsePreReturn for MiddlewareService {
                     }
                     Some(http_response_event::Event::Body(unit)) => {
                         let body_sequence = unit.sequence;
-                        if let Some(http_response_body_unit::Payload::Data(data)) = unit.payload {
-                            body.extend(data);
-                        }
-                        if unit.end_of_stream {
-                            let content = String::from_utf8(body.clone())
-                                .map_err(|_| Status::invalid_argument("response body must be UTF-8"))?;
-                            let result = match service
-                                .evaluate(&content, &request_id, &plan, false)
-                                .await
-                            {
-                                Ok(result) => result,
-                                Err(error) => {
-                                    warn!(
-                                        request_id = %request_id,
-                                        "Rust middleware control plane unavailable; blocking response: {error}"
-                                    );
-                                    yield HttpResponseEventResult {
-                                        result: Some(http_response_event_result::Result::BodyResult(
-                                            HttpResponseBodyResult {
-                                                sequence: body_sequence,
-                                                action: Some(
-                                                    http_response_body_result::Action::BlockDelivery(
-                                                        HttpResponseBlockDelivery {},
-                                                    ),
+                        let data = match unit.payload {
+                            Some(http_response_body_unit::Payload::Data(data)) => data,
+                            None => Vec::new(),
+                        };
+                        let content_bytes = if body_mode
+                            == pb::HttpResponseBodyMode::StreamBytes as i32
+                        {
+                            if data.len() > service.max_payload_bytes as usize {
+                                yield HttpResponseEventResult {
+                                    result: Some(http_response_event_result::Result::BodyResult(
+                                        HttpResponseBodyResult {
+                                            sequence: body_sequence,
+                                            action: Some(
+                                                http_response_body_result::Action::BlockDelivery(
+                                                    HttpResponseBlockDelivery {},
                                                 ),
-                                                reason: "AI Guardian middleware control plane unavailable".to_string(),
-                                                reason_code: "middleware_control_plane_unavailable".to_string(),
-                                                ..Default::default()
-                                            },
-                                        )),
-                                    };
-                                    return;
-                                }
-                            };
-                            info!(
-                                request_id = %request_id,
-                                blocked = result.blocked,
-                                reason_code = %result.reason_code,
-                                finding_count = result.findings.len(),
-                                "Rust middleware response decision"
-                            );
-                            let action = if result.blocked {
-                                http_response_body_result::Action::BlockDelivery(HttpResponseBlockDelivery {})
-                            } else if let Some(redacted) = result.redacted {
-                                http_response_body_result::Action::Transform(HttpResponseBodyTransform {
+                                            ),
+                                            reason: "AI Guardian middleware payload limit exceeded"
+                                                .to_string(),
+                                            reason_code: "payload_limit_exceeded".to_string(),
+                                            ..Default::default()
+                                        },
+                                    )),
+                                };
+                                return;
+                            }
+                            data
+                        } else {
+                            body.extend(data);
+                            if body.len() > service.max_payload_bytes as usize {
+                                yield HttpResponseEventResult {
+                                    result: Some(http_response_event_result::Result::BodyResult(
+                                        HttpResponseBodyResult {
+                                            sequence: body_sequence,
+                                            action: Some(
+                                                http_response_body_result::Action::BlockDelivery(
+                                                    HttpResponseBlockDelivery {},
+                                                ),
+                                            ),
+                                            reason: "AI Guardian middleware payload limit exceeded"
+                                                .to_string(),
+                                            reason_code: "payload_limit_exceeded".to_string(),
+                                            ..Default::default()
+                                        },
+                                    )),
+                                };
+                                return;
+                            }
+                            if !unit.end_of_stream {
+                                continue;
+                            }
+                            body.clone()
+                        };
+                        let content = String::from_utf8(content_bytes)
+                            .map_err(|_| Status::invalid_argument("response body must be UTF-8"))?;
+                        let result = match service
+                            .evaluate(&content, &request_id, &plan, false)
+                            .await
+                        {
+                            Ok(result) => result,
+                            Err(error) => {
+                                warn!(
+                                    request_id = %request_id,
+                                    "Rust middleware control plane unavailable; blocking response: {error}"
+                                );
+                                yield HttpResponseEventResult {
+                                    result: Some(http_response_event_result::Result::BodyResult(
+                                        HttpResponseBodyResult {
+                                            sequence: body_sequence,
+                                            action: Some(
+                                                http_response_body_result::Action::BlockDelivery(
+                                                    HttpResponseBlockDelivery {},
+                                                ),
+                                            ),
+                                            reason: "AI Guardian middleware control plane unavailable".to_string(),
+                                            reason_code: "middleware_control_plane_unavailable".to_string(),
+                                            ..Default::default()
+                                        },
+                                    )),
+                                };
+                                return;
+                            }
+                        };
+                        info!(
+                            request_id = %request_id,
+                            blocked = result.blocked,
+                            reason_code = %result.reason_code,
+                            finding_count = result.findings.len(),
+                            "Rust middleware response decision"
+                        );
+                        let action = if result.blocked {
+                            http_response_body_result::Action::BlockDelivery(
+                                HttpResponseBlockDelivery {},
+                            )
+                        } else if let Some(redacted) = result.redacted {
+                            http_response_body_result::Action::Transform(
+                                HttpResponseBodyTransform {
                                     replacement: Some(
                                         pb::http_response_body_transform::Replacement::Data(
                                             redacted.into_bytes(),
                                         ),
                                     ),
-                                })
-                            } else {
-                                http_response_body_result::Action::PassThrough(
-                                    pb::HttpResponseBodyPassThrough {},
-                                )
-                            };
-                            yield HttpResponseEventResult {
-                                result: Some(http_response_event_result::Result::BodyResult(
-                                    HttpResponseBodyResult {
-                                        sequence: body_sequence,
-                                        action: Some(action),
-                                        reason: result.reason,
-                                        reason_code: result.reason_code,
-                                        findings: result.findings,
-                                        metadata: result.metadata,
-                                        ..Default::default()
-                                    },
-                                )),
-                            };
+                                },
+                            )
+                        } else {
+                            http_response_body_result::Action::PassThrough(
+                                pb::HttpResponseBodyPassThrough {},
+                            )
+                        };
+                        let blocked = result.blocked;
+                        yield HttpResponseEventResult {
+                            result: Some(http_response_event_result::Result::BodyResult(
+                                HttpResponseBodyResult {
+                                    sequence: body_sequence,
+                                    action: Some(action),
+                                    reason: result.reason,
+                                    reason_code: result.reason_code,
+                                    findings: result.findings,
+                                    metadata: result.metadata,
+                                    ..Default::default()
+                                },
+                            )),
+                        };
+                        if blocked {
+                            return;
                         }
                     }
                     Some(http_response_event::Event::Trailers(_)) => {
@@ -1469,6 +1611,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         daemon: DaemonClient::from_environment()?,
         registration_name: env::var("AI_GUARDIAN_MIDDLEWARE_REGISTRATION")
             .unwrap_or_else(|_| "content-guard-test".to_string()),
+        max_payload_bytes: configured_max_payload_bytes(),
     };
 
     info!(%address, "Rust OpenShell middleware listening");
@@ -1560,6 +1703,61 @@ mod tests {
         assert!(error.message().contains("supply_chain"));
     }
 
+    #[test]
+    fn scanner_plan_routes_canary_and_skips_hook_owned_scanners() {
+        let config = Struct {
+            fields: BTreeMap::from([(
+                "scanner_ownership".to_string(),
+                prost_types::Value {
+                    kind: Some(Kind::StructValue(Struct {
+                        fields: BTreeMap::from([
+                            (
+                                "canary_detection".to_string(),
+                                prost_types::Value {
+                                    kind: Some(Kind::StringValue("middleware".to_string())),
+                                },
+                            ),
+                            (
+                                "prompt_injection".to_string(),
+                                prost_types::Value {
+                                    kind: Some(Kind::StringValue("middleware".to_string())),
+                                },
+                            ),
+                            (
+                                "scan_pii".to_string(),
+                                prost_types::Value {
+                                    kind: Some(Kind::StringValue("hooks".to_string())),
+                                },
+                            ),
+                        ]),
+                    })),
+                },
+            )]),
+        };
+
+        let plan = MiddlewareService::scan_plan(Some(&config)).expect("valid scan plan");
+        assert!(plan.checks.contains(&"injection"));
+        assert!(plan.checks.contains(&"canary"));
+        assert!(!plan.checks.contains(&"pii"));
+    }
+
+    #[test]
+    fn daemon_warning_metadata_does_not_block() {
+        let finding: DaemonFinding = serde_json::from_value(serde_json::json!({
+            "type": "prompt_injection",
+            "should_block": false,
+            "action_taken": "warn"
+        }))
+        .expect("warning finding");
+        assert!(!finding_blocks(&finding));
+        assert!(!response_has_blocking_findings(&CheckResponse {
+            clean: false,
+            blocked: false,
+            findings: vec![finding],
+            ..Default::default()
+        }));
+    }
+
     #[tokio::test]
     async fn describe_advertises_text_websocket_binding() {
         let service = MiddlewareService {
@@ -1571,6 +1769,7 @@ mod tests {
                 middleware_pause_file: PathBuf::from("/unused/middleware.paused"),
             },
             registration_name: "content-guard-test".to_string(),
+            max_payload_bytes: DEFAULT_MAX_PAYLOAD_BYTES,
         };
         let response = SupervisorMiddleware::describe(
             &service,

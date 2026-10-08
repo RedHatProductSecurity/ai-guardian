@@ -547,6 +547,7 @@ class TestCheckEndpoint:
         with urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
         assert data["clean"] is True
+        assert data["blocked"] is False
         assert data["findings"] == []
         assert data["redacted"] is None
         assert isinstance(data["elapsed_ms"], (int, float))
@@ -709,9 +710,32 @@ class TestCheckEndpoint:
         assert data["clean"] is False
         assert len(data["findings"]) >= 1
         assert data["findings"][0]["type"] == "secret_detected"
+        assert data["findings"][0]["should_block"] is True
         assert data["redacted"] is not None
+        assert data["blocked"] is True
         assert data["policy_decision"]["decision"] == "block"
         assert data["findings"][0]["policy_decision"]["decision"] == "block"
+
+    def test_post_check_preserves_warn_only_scanner_action(self, rest_api):
+        api, port, state = rest_api
+        with mock.patch(
+            "ai_guardian.scanners.prompt_injection.check_prompt_injection",
+            return_value=(False, "warning", True),
+        ):
+            url = f"http://127.0.0.1:{port}/api/check"
+            body = json.dumps(
+                {"content": "warn-only content", "checks": ["injection"]}
+            ).encode("utf-8")
+            req = Request(url, data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+
+        assert data["clean"] is False
+        assert data["blocked"] is False
+        assert data["findings"][0]["should_block"] is False
+        assert data["findings"][0]["action_taken"] == "warn"
+        assert data["policy_decision"]["decision"] == "warn"
 
 
 class TestRedactEndpoint:

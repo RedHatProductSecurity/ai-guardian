@@ -5,20 +5,20 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-07
+> Last updated: 2026-10-08
 
 ---
 
-## Current Quest: Issue #2517
+## Current Quest: Issue #2520
 
-- Fixed Tracing Settings page initialization so persisted values are hydrated
-  before value-change handlers are registered; opening the page no longer saves
-  configuration or emits a save notification.
-- Added regression coverage for enabled tracing, numeric hydration, no initial
-  save, and one explicit enabled edit. Focused unit and tracing UX tests pass.
-- Source-targeted Mypy, Ruff, Black, Pylint, JSON validation, and diff checks
-  pass. Full Mypy retains unrelated existing errors in `skill_discovery.py`
-  and `scanners/secret_validator.py`.
+- Fixed the six confirmed OpenShell Rust and OpenCode setup regressions:
+  canary routing, empty scanner groups, warn/log-only action propagation,
+  configured payload limits, stream-only response inspection, and V2 setup
+  artifact preflight.
+- Added daemon, REST, Rust, OpenCode, middleware, and UX regression coverage;
+  the directly affected Python/unit/UX validation passes.
+- Rust compilation remains pending because this environment has no `cargo`,
+  `rustc`, or `rustfmt`; CI or a Rust-enabled environment must validate it.
 
 ## Done
 

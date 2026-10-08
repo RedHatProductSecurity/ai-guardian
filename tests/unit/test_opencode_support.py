@@ -473,6 +473,41 @@ def test_v2_registration_refuses_unrelated_typescript_file_migration(tmp_path):
     assert config_file.read_text(encoding="utf-8") == original
 
 
+def test_v2_setup_preflights_registration_before_writing_artifacts(tmp_path):
+    """A refused V2 migration must not leave a discoverable generated plugin."""
+    config_file = tmp_path / "opencode.json"
+    plugins_dir = tmp_path / "plugins"
+    unrelated_file = tmp_path / "other-plugin.ts"
+    unrelated_file.write_text("// user plugin\n", encoding="utf-8")
+    original = json.dumps({"plugins": [str(unrelated_file)]}, indent=2) + "\n"
+    config_file.write_text(original, encoding="utf-8")
+
+    setup = IDESetup()
+    with (
+        mock.patch(
+            "ai_guardian.setup.hooks._resolve_opencode_config", return_value=config_file
+        ),
+        mock.patch(
+            "ai_guardian.setup.hooks.detect_opencode_runtime",
+            return_value={"generation": "v2", "version": "2.0.22"},
+        ),
+    ):
+        success, message = setup._setup_plugin_file(
+            "opencode",
+            IDESetup.IDE_CONFIGS["opencode"],
+            plugins_dir,
+        )
+
+    assert success is False
+    assert message == (
+        "OpenCode V2 setup cannot migrate local TypeScript plugin file entries "
+        "automatically. Migrate them explicitly before rerunning setup."
+    )
+    assert config_file.read_text(encoding="utf-8") == original
+    assert not (plugins_dir / "ai-guardian.ts").exists()
+    assert not (tmp_path / "ai-guardian" / "ai-guardian-bridge.ts").exists()
+
+
 def test_v2_verification_uses_plugin_directory_auto_discovery(tmp_path):
     """V2 setup verification relies on the discovered plugin file itself."""
     plugins_dir = tmp_path / "plugins"

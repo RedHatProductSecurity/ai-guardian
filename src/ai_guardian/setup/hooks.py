@@ -2748,10 +2748,13 @@ class IDESetup:
         plugins_dir: Path,
         dry_run: bool = False,
         generation: Optional[str] = None,
+        validate_only: bool = False,
     ) -> Optional[str]:
         """Configure OpenCode plugin discovery and clean up stale entries.
 
-        Returns a status message, or None if registration was skipped.
+        Returns a status message, or None if registration was skipped. When
+        ``validate_only`` is true, validate the host configuration without
+        changing it.
         """
         config_file = _resolve_opencode_config()
         plugin_path = str(plugin_file)
@@ -2805,11 +2808,15 @@ class IDESetup:
                     "file entries automatically. Migrate them explicitly "
                     "before rerunning setup."
                 )
+            if validate_only:
+                return None
             # V2 discovers ai-guardian.ts from plugins_dir. Remove a stale
             # explicit file entry because configured paths must be packages.
             plugins = [entry for entry in plugins if entry != plugin_path]
         elif plugin_path not in plugins:
             plugins.append(plugin_path)
+        if validate_only:
+            return None
         config.pop(alternate_key, None)
         if generation == "v2" and not plugins:
             config.pop(config_key, None)
@@ -2899,6 +2906,15 @@ class IDESetup:
             if reg_msg:
                 message += reg_msg
             return True, message
+
+        registration_error = self._register_opencode_plugin(
+            plugin_file,
+            plugins_dir,
+            generation=generation,
+            validate_only=True,
+        )
+        if registration_error:
+            return False, registration_error
 
         plugins_dir.mkdir(parents=True, exist_ok=True)
 

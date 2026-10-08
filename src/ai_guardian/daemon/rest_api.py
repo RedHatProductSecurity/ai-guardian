@@ -986,6 +986,16 @@ class _RestHandler(BaseHTTPRequestHandler):
 
             findings = []
 
+            def finding_action(should_block, section=None):
+                if should_block:
+                    return "block"
+                section_config = cfg.get(section, {}) if section else {}
+                if isinstance(section_config, dict) and isinstance(
+                    section_config.get("action"), str
+                ):
+                    return section_config["action"]
+                return "log" if action == "log" else "warn"
+
             if "secrets" in checks or "pii" in checks:
                 result = session.check_content(content, filename="input")
                 if result.detected:
@@ -993,7 +1003,8 @@ class _RestHandler(BaseHTTPRequestHandler):
                         {
                             "type": result.violation_type,
                             "message": result.message,
-                            "action_taken": action,
+                            "should_block": bool(result.blocked),
+                            "action_taken": finding_action(result.blocked),
                         }
                     )
 
@@ -1016,7 +1027,10 @@ class _RestHandler(BaseHTTPRequestHandler):
                                 {
                                     "type": "prompt_injection",
                                     "message": msg,
-                                    "action_taken": action,
+                                    "should_block": bool(should_block),
+                                    "action_taken": finding_action(
+                                        should_block, "prompt_injection"
+                                    ),
                                 }
                             )
                     except Exception as e:
@@ -1041,7 +1055,10 @@ class _RestHandler(BaseHTTPRequestHandler):
                                 {
                                     "type": "context_poisoning",
                                     "message": msg,
-                                    "action_taken": action,
+                                    "should_block": bool(should_block),
+                                    "action_taken": finding_action(
+                                        should_block, "context_poisoning"
+                                    ),
                                 }
                             )
                     except Exception as e:
@@ -1065,7 +1082,10 @@ class _RestHandler(BaseHTTPRequestHandler):
                             {
                                 "type": "offensive_language",
                                 "message": "offensive language detected",
-                                "action_taken": action,
+                                "should_block": bool(offensive_result.should_block),
+                                "action_taken": finding_action(
+                                    offensive_result.should_block, "scan_offensive"
+                                ),
                             }
                         )
                 except Exception as e:
@@ -1091,7 +1111,10 @@ class _RestHandler(BaseHTTPRequestHandler):
                             {
                                 "type": "canary_detected",
                                 "message": "canary token detected",
-                                "action_taken": action,
+                                "should_block": bool(canary_result.should_block),
+                                "action_taken": finding_action(
+                                    canary_result.should_block, "canary_detection"
+                                ),
                             }
                         )
                 except Exception as e:
@@ -1116,9 +1139,10 @@ class _RestHandler(BaseHTTPRequestHandler):
             from ai_guardian.violations.decision import PolicyDecision
 
             correlation_id = body.get("correlation_id") or body.get("session_id")
+            blocked = any(finding["should_block"] for finding in findings)
             overall_decision = PolicyDecision(
                 event="rest_check",
-                decision=(action if findings else "allow"),
+                decision=("block" if blocked else "warn" if findings else "allow"),
                 reason=(
                     "security finding detected"
                     if findings
@@ -1134,7 +1158,7 @@ class _RestHandler(BaseHTTPRequestHandler):
             for finding in findings:
                 finding["policy_decision"] = PolicyDecision(
                     event="rest_check_finding",
-                    decision=action,
+                    decision=("block" if finding["should_block"] else "warn"),
                     reason="security finding detected",
                     severity="warning",
                     source="rest_api",
@@ -1148,6 +1172,7 @@ class _RestHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "clean": len(findings) == 0,
+                    "blocked": blocked,
                     "findings": findings,
                     "redacted": redacted,
                     "elapsed_ms": round(elapsed, 1),
