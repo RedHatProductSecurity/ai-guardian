@@ -168,8 +168,6 @@ For example, after installing an operator-owned **systemd user unit** named
 `ai-guardian-openshell-middleware.service`, start and inspect it with:
 
 ```bash
-systemctl --user daemon-reload       # after adding or changing the unit
-systemctl --user enable ai-guardian-openshell-middleware.service
 systemctl --user start ai-guardian-openshell-middleware.service
 systemctl --user status ai-guardian-openshell-middleware.service
 ```
