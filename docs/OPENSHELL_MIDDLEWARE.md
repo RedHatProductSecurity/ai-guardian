@@ -344,12 +344,19 @@ entry. The policy must be a complete policy appropriate for the target
 sandbox; a small fragment is not a safe replacement for its existing
 filesystem, provider, and network controls.
 
-Create the policy file used for `mw-proof`:
+For an existing sandbox, first export its effective complete policy. The
+`openshell policy set` command replaces the sandbox policy; it does not merge
+a middleware-only fragment into the live policy:
+
+```bash
+openshell sandbox get mw-proof --policy-only \
+  > /tmp/mw-proof-policy.yaml
+```
+
+Append the middleware entry to that fresh policy export:
 
 ```bash
 cat >> /tmp/mw-proof-policy.yaml <<'EOF'
-version: 1
-
 network_middlewares:
   content-guard:
     name: AI Guardian content guard
@@ -373,9 +380,11 @@ network_middlewares:
 EOF
 ```
 
-The `>>` form creates the file when it does not exist and appends when it
-does. Run it once for a fresh file, or remove the old `/tmp` file before
-repeating the example.
+The `>>` form appends to the complete exported policy. Run it once after a
+fresh export; if the file already contains `network_middlewares`, edit that
+existing mapping instead of appending a duplicate YAML key. Do not use a
+middleware-only file with `openshell policy set` on a live sandbox, because
+OpenShell will reject removal of its existing filesystem policy.
 
 The nested `middleware` value must match the gateway registration name. The map
 key is the stable policy-local identity; using `content-guard` for both keeps
@@ -389,8 +398,8 @@ openshell policy set mw-proof \
 openshell policy get mw-proof --full
 ```
 
-When the policy is ready before sandbox creation, OpenShell can apply it during
-the ordinary create operation instead:
+When a complete, reviewed policy is ready before sandbox creation, OpenShell
+can apply it during the ordinary create operation instead:
 
 ```bash
 openshell sandbox create \
