@@ -530,7 +530,10 @@ Keep middleware cleanup separate from sandbox cleanup:
    effective policy with `openshell policy get --full`.
 2. Delete the sandbox only if the workload should be removed:
    `openshell sandbox delete NAME`.
-3. Stop the Rust service:
+3. Remove the generated test policy export so the next run starts from a fresh
+   base policy:
+   `rm -f /tmp/mw-proof-policy.yaml`.
+4. Stop the Rust service:
    - If it was started in a terminal, return to that terminal and press
      `Ctrl-C`.
    - If it is a systemd user service, run
@@ -546,9 +549,9 @@ Keep middleware cleanup separate from sandbox cleanup:
    - If the daemon was dedicated to this test, stop it separately with
      `ai-guardian daemon stop`. Do not stop a shared daemon that serves other
      hooks or sandboxes.
-4. Remove the gateway registration from `gateway.toml` only when it is no
+5. Remove the gateway registration from `gateway.toml` only when it is no
    longer needed, then restart the gateway.
-5. Confirm `openshell gateway info` no longer lists the registration.
+6. Confirm `openshell gateway info` no longer lists the registration.
 
 There is intentionally no `ai-guardian openshell-middleware stop`, `start`,
 `restart`, or `status` command. The Rust process is an external OpenShell
