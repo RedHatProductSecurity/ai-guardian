@@ -466,11 +466,26 @@ Keep middleware cleanup separate from sandbox cleanup:
    effective policy with `openshell policy get --full`.
 2. Delete the sandbox only if the workload should be removed:
    `openshell sandbox delete NAME`.
-3. Stop the Rust service through systemd, launchd, Kubernetes, or the selected
-   service manager.
+3. Stop the Rust service:
+   - If it was started in a terminal, return to that terminal and press
+     `Ctrl-C`.
+   - If it is a systemd user service, run
+     `systemctl --user stop <middleware-unit>`.
+   - If it is a Homebrew service, run
+     `brew services stop <middleware-formula>`; for launchd, stop the label
+     used by the service's plist.
+   - If it is deployed in Kubernetes, scale the middleware deployment to zero
+     or delete the operator-managed workload.
 4. Remove the gateway registration from `gateway.toml` only when it is no
    longer needed, then restart the gateway.
 5. Confirm `openshell gateway info` no longer lists the registration.
+
+There is intentionally no `ai-guardian openshell-middleware stop`, `start`,
+`restart`, or `status` command. The Rust process is an external OpenShell
+service, so its lifecycle belongs to the terminal, service manager, or
+deployment platform that started it. This also prevents two independent
+middleware control planes from disagreeing about the listener and gateway
+registration.
 
 Do not remove OpenShell-managed containers directly while the sandbox resource
 still exists.
