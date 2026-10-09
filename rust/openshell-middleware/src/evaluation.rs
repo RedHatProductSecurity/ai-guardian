@@ -58,22 +58,16 @@ pub(super) fn response_has_findings(response: &CheckResponse) -> bool {
 }
 
 pub(super) fn paused_evaluation(response: CheckResponse) -> Evaluation {
-    let reason_code = if response.reason_code.is_empty() {
-        "middleware_paused".to_string()
-    } else {
-        response.reason_code.clone()
-    };
+    // A daemon pause means scanning is suspended, not that the network path
+    // should be denied.  Preserve the pause details as audit-safe metadata
+    // while allowing the request/response to continue.
     Evaluation {
-        blocked: true,
+        blocked: false,
         redacted: None,
         findings: Vec::new(),
         metadata: pause_metadata(&response),
-        reason: if response.message.is_empty() {
-            "AI Guardian middleware is paused".to_string()
-        } else {
-            response.message
-        },
-        reason_code,
+        reason: String::new(),
+        reason_code: String::new(),
     }
 }
 

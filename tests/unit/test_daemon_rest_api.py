@@ -565,12 +565,13 @@ class TestCheckEndpoint:
         with urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
 
-        assert data["clean"] is False
+        assert data["clean"] is True
+        assert data["blocked"] is False
         assert data["findings"] == []
         assert data["paused"] is True
         assert data["reason_code"] == "middleware_paused"
         assert data["pause_source"] == "daemon"
-        assert data["policy_decision"]["decision"] == "block"
+        assert data["policy_decision"]["decision"] == "allow"
 
     def test_status_exposes_middleware_pause_state(self, rest_api):
         api, port, state = rest_api

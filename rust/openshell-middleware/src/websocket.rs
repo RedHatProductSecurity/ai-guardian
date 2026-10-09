@@ -6,13 +6,31 @@ use async_stream::try_stream;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
-use super::daemon::pause_metadata;
+use super::daemon::{pause_metadata, CheckResponse};
 use super::openshell::middleware::v1::{
     self as pb, web_socket_message, web_socket_session_event,
     web_socket_session_event_result, Decision, WebSocketMessageResult,
     WebSocketPreflightAction, WebSocketPreflightDecision,
 };
 use super::MiddlewareService;
+
+fn paused_preflight_decision(response: &CheckResponse) -> WebSocketPreflightDecision {
+    WebSocketPreflightDecision {
+        action: WebSocketPreflightAction::Inspect as i32,
+        reason: if response.message.is_empty() {
+            "AI Guardian middleware is paused; message scanning will resume when the daemon resumes"
+                .to_string()
+        } else {
+            format!(
+                "{}; message scanning will resume when the daemon resumes",
+                response.message
+            )
+        },
+        reason_code: String::new(),
+        metadata: pause_metadata(response),
+        ..Default::default()
+    }
+}
 
 impl MiddlewareService {
     pub(super) async fn evaluate_web_socket_session_rpc(
@@ -64,21 +82,23 @@ impl MiddlewareService {
                         preflight_seen = true;
                         match service.daemon.pause_status().await {
                             Ok(Some(response)) => {
-                                let metadata = pause_metadata(&response);
+                                // Keep the session in Inspect mode even while
+                                // scanning is paused. A WebSocket preflight
+                                // Skip decision applies to the whole session;
+                                // using it here would let a connection opened
+                                // during a pause remain uninspected after the
+                                // daemon resumes. Each message re-checks the
+                                // daemon state through `evaluate`, so paused
+                                // messages pass through and later messages are
+                                // scanned when the pause ends.
                                 yield pb::WebSocketSessionEventResult {
                                     result: Some(
                                         web_socket_session_event_result::Result::PreflightDecision(
-                                            WebSocketPreflightDecision {
-                                                action: WebSocketPreflightAction::Deny as i32,
-                                                reason: response.message,
-                                                reason_code: response.reason_code,
-                                                metadata,
-                                                ..Default::default()
-                                            },
+                                            paused_preflight_decision(&response),
                                         ),
                                     ),
                                 };
-                                return;
+                                continue;
                             }
                             Ok(None) => {}
                             Err(error) => {
@@ -278,5 +298,25 @@ impl MiddlewareService {
             }
         };
         Ok(Response::new(Box::pin(stream)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::daemon::paused_check_response;
+    use super::*;
+
+    #[test]
+    fn paused_websocket_preflight_keeps_session_inspectable() {
+        let response = paused_check_response("daemon", "global", 30.0, "daemon_pause");
+
+        let decision = paused_preflight_decision(&response);
+
+        assert_eq!(
+            decision.action,
+            WebSocketPreflightAction::Inspect as i32
+        );
+        assert_eq!(decision.metadata.get("pause_source"), Some(&"daemon".to_string()));
+        assert!(decision.reason.contains("resume"));
     }
 }

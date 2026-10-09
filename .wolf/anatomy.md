@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1208 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1209 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~73999 tok)
+- `CHANGELOG.md` — Change log (~74152 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -798,7 +798,7 @@
 - `entrypoint.sh` (~8491 tok)
 - `openshell-github-readonly-policy.yaml` — /info/refs*" } (~371 tok)
 - `openshell-github-readwrite-policy.yaml` — /info/refs*" } (~380 tok)
-- `README.md` — Project documentation (~13769 tok)
+- `README.md` — Project documentation (~13877 tok)
 - `run-scenarios.sh` (~313 tok)
 - `run.sh` (~3500 tok)
 
@@ -921,7 +921,7 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~5950 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~6414 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
@@ -1013,14 +1013,18 @@
 ## rust/openshell-middleware/src/
 
 - `compatibility.rs` — Shared OpenShell release and supervisor-protocol compatibility checks. (~988 tok)
-- `daemon.rs` — Authenticated AI Guardian daemon transports and pause state. (~4134 tok)
-- `evaluation.rs` — Daemon-backed content evaluation and OpenShell finding conversion. (~1583 tok)
+- `daemon.rs` — Authenticated AI Guardian daemon transports and pause state. (~4189 tok)
+- `evaluation.rs` — Daemon-backed content evaluation and OpenShell finding conversion. (~1564 tok)
 - `http.rs` — HTTP request capability and supervisor handshake RPCs. (~2110 tok)
 - `main.rs` — AI Guardian Rust OpenShell middleware binary. (~40 tok)
 - `policy.rs` — OpenShell middleware policy validation and scanner ownership planning. (~927 tok)
-- `response.rs` — HTTP response inspection and redaction capability. (~3975 tok)
-- `service.rs` — Rust OpenShell supervisor middleware service wiring. (~4819 tok)
-- `websocket.rs` — Text WebSocket session inspection capability. (~4274 tok)
+- `response.rs` — HTTP response inspection and redaction capability. (~4053 tok)
+- `service.rs` — Rust OpenShell supervisor middleware service wiring. (~5151 tok)
+- `websocket.rs` — Text WebSocket session inspection capability. (~4689 tok)
+
+## rust/openshell-middleware/src/bin/
+
+- `probe.rs` (~1626 tok)
 
 ## scripts/
 
@@ -1097,8 +1101,8 @@
 - `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~16625 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 12 more (~1880 tok)
-- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~20059 tok)
-- `server.py` — URL configuration (~12904 tok)
+- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~20132 tok)
+- `server.py` — URL configuration (~12991 tok)
 - `state.py` — URL configuration (~19891 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)

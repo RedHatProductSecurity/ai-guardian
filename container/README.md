@@ -740,7 +740,12 @@ inner sandbox behavior. This follows the pattern in OpenShell's official
 The configured `ai-guardian` MCP server is a local stdio process and therefore
 does not need a network-policy endpoint. Codex's separate `codex_apps` remote
 MCP, when enabled by Codex, does need its provider/profile endpoint and can be
-allowed through the selected Codex policy.
+allowed through the selected Codex policy. Current Codex versions may also
+contact regional `*.oaiusercontent.com` hosts for app content; that optional
+wildcard is intentionally absent from the default Codex policy. Add it only
+when `codex_apps` is enabled. See the [OpenShell middleware guide](../docs/OPENSHELL_MIDDLEWARE.md#optional-codex-apps-remote-mcp)
+for the exact OpenShell policy command and the resulting
+`policy_dns_ineligible`/transport-channel-closed diagnostic.
 
 When a config, profile, or repository snapshot is needed, the sandbox command
 uploads it before explicitly invoking the image entrypoint with

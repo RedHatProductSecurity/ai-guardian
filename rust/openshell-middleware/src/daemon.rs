@@ -169,7 +169,8 @@ pub(super) fn paused_check_response(
     reason: &str,
 ) -> CheckResponse {
     CheckResponse {
-        clean: false,
+        clean: true,
+        blocked: false,
         findings: Vec::new(),
         redacted: None,
         paused: true,
@@ -216,6 +217,12 @@ fn daemon_status_response(status: DaemonStatus) -> Option<CheckResponse> {
 
 pub(super) fn pause_metadata(response: &CheckResponse) -> HashMap<String, String> {
     let mut metadata = HashMap::new();
+    if !response.reason_code.is_empty() {
+        metadata.insert(
+            "pause_reason_code".to_string(),
+            response.reason_code.clone(),
+        );
+    }
     if !response.pause_source.is_empty() {
         metadata.insert("pause_source".to_string(), response.pause_source.clone());
     }

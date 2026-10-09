@@ -27,7 +27,9 @@ budget_tokens: 1000
   wrapper for creation, and use native `openshell policy` for activation.
 - Documented the usual gateway TOML locations and the Linux systemd,
   macOS/Homebrew, and Snap gateway restart commands.
-- Rust unit tests pass 10/10 and the optimized release build succeeds.
+- Rust unit tests pass 12/12 and the optimized release build succeeds
+  warning-free after changing daemon-pause handling to pass through without
+  scanning.
   `rustfmt` is still unavailable as a cargo component in this environment.
 - Extended the twice-monthly support-image CLI health workflow to smoke-test
   newer Codex candidates without credentials, expose a manual version input,
@@ -223,11 +225,18 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Rerun the live `mw-proof` OpenShell create/probe with the fixed editable CLI,
-  then review the uncommitted #2525 diff before using the DAF completion flow
-  to commit, push, and open the issue pull request. Agent-originated
-  AI-Guardian CLI execution is currently blocked by immutable self-protection,
-  so the live retry must be run by the user.
+- Restart the live external Rust middleware so it loads the rebuilt binary,
+  then rerun the `mw-proof` Codex `hello` probe while resumed and paused.
+  Agent-originated AI-Guardian CLI execution is currently blocked by immutable
+  self-protection, and middleware lifecycle remains operator/service-manager
+  owned, so the live retry must be run by the user.
+- Codex's optional `codex_apps` remote MCP may also require an operator-added
+  `*.oaiusercontent.com` endpoint; this is documented but intentionally absent
+  from the default policy.
+- A WebSocket opened while paused previously stayed session-wide uninspected
+  after resume. The Rust fix keeps paused preflight inspectable and re-checks
+  daemon state per message; restart the current `(deleted)` service process to
+  load it before live validation.
 
 ## Context
 

@@ -66,6 +66,13 @@
   sandbox coupling. Operators run the Rust binary with a service manager,
   register it in the gateway TOML, and apply a complete OpenShell policy.
 
+- **OpenShell middleware pause semantics (#2525):** A daemon pause suspends
+  content inspection and passes provider traffic through for HTTP, response,
+  and WebSocket stages while retaining pause metadata; daemon/control-plane
+  outages remain fail-closed. Rebuilding the Rust release binary replaces its
+  inode, so a directly launched service continues running the old `(deleted)`
+  binary until its operator-owned process is restarted.
+
 - **OpenShell policy naming (#2525):** The `network_middlewares` map key is the
   stable policy-local identity; the nested `middleware` value references the
   operator gateway registration name. Using the same value for both is the

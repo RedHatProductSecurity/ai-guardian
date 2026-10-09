@@ -10,7 +10,8 @@ use super::openshell::middleware::v1::{
     http_response_event_result, http_response_preflight_result, HttpResponseBlockDelivery,
     HttpResponseBodyResult,
     HttpResponseBodyTransform, HttpResponseEventResult,
-    HttpResponsePreflightInspect, HttpResponsePreflightResult, HttpResponseTrailersResult,
+    HttpResponsePreflightInspect, HttpResponsePreflightResult, HttpResponsePreflightSkip,
+    HttpResponseTrailersResult,
 };
 use super::MiddlewareService;
 
@@ -64,11 +65,15 @@ impl MiddlewareService {
                             yield HttpResponseEventResult {
                                 result: Some(http_response_event_result::Result::PreflightResult(
                                     HttpResponsePreflightResult {
-                                        action: Some(http_response_preflight_result::Action::BlockDelivery(
-                                            HttpResponseBlockDelivery {},
+                                        action: Some(http_response_preflight_result::Action::Skip(
+                                            HttpResponsePreflightSkip {},
                                         )),
-                                        reason: response.message,
-                                        reason_code: response.reason_code,
+                                        reason: if response.message.is_empty() {
+                                            "AI Guardian middleware is paused".to_string()
+                                        } else {
+                                            response.message
+                                        },
+                                        reason_code: String::new(),
                                         metadata,
                                         ..Default::default()
                                     },

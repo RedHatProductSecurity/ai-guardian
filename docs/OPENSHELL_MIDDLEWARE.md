@@ -409,6 +409,38 @@ openshell policy set mw-proof \
 openshell policy get mw-proof --full
 ```
 
+### Optional Codex Apps remote MCP access
+
+The local `ai-guardian` MCP server uses stdio and needs no network endpoint.
+Codex's separate `codex_apps` remote MCP client is different: current Codex
+versions may fetch app content from regional hosts such as
+`sdmntprsouthcentralus.oaiusercontent.com`. The core Codex policy intentionally
+does not grant this optional access by default. Without it, OpenShell reports
+`policy_dns_ineligible` and Codex may report that the MCP transport channel
+closed during initialization.
+
+If `codex_apps` is intentionally enabled, add the optional endpoint to the
+Codex network rule through OpenShell. The provider-composed rule is the one
+shown by `openshell policy get <sandbox> --full`; use `codex_openai` when
+editing the base policy source instead:
+
+```bash
+openshell policy update mw-proof \
+  --rule-name _provider_ai_guardian_codex \
+  --add-endpoint '*.oaiusercontent.com:443:read-write:rest:enforce' \
+  --binary /usr/bin/codex \
+  --binary /usr/local/bin/codex \
+  --binary '/usr/lib/node_modules/@openai/**' \
+  --wait
+```
+
+For a repeatable sandbox policy, add the same endpoint to the selected
+`network_policies.codex_openai.endpoints` source before the next complete
+`openshell policy set`. This endpoint is not added to the
+`network_middlewares.content-guard.endpoints.include` list by default; add it
+there only when response scanning of those app-content hosts is explicitly
+desired.
+
 Before testing traffic, confirm that this output contains
 `network_middlewares.content-guard`. A healthy gateway registration alone is
 not enough; the service is invoked only for sandbox traffic selected by the
@@ -493,6 +525,12 @@ openshell sandbox delete mw-proof
 - The OpenShell policy should use `on_error: fail_closed`.
 - The Rust service fails closed when daemon scanning or protocol validation is
   unavailable.
+- An ordinary AI Guardian daemon pause suspends middleware scanning without
+  blocking provider traffic: paused HTTP/WebSocket stages pass through and
+  carry pause metadata for audit. WebSocket sessions remain inspectable while
+  paused so a daemon resume takes effect for the next message without requiring
+  a reconnect. Hooks remain independently enforced in any sandbox that uses
+  the AI Guardian hook integration.
 - Pausing or stopping the external process is a service-manager/OpenShell
   decision; there is no middleware-specific AI Guardian pause command.
 - Rust middleware audit records use the normal AI Guardian daemon audit path:

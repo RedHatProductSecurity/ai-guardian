@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **OpenShell middleware pause coupling (#2506):** Couple daemon global/project
-  pause state to external middleware checks and add explicit fail-closed
-  `middleware_paused` decisions and audit metadata. Middleware pause state is
-  controlled by the ordinary daemon/OpenShell deployment; AI Guardian has no
-  middleware lifecycle command.
+  pause state to external middleware checks and add explicit pass-through
+  `middleware_paused` decisions and audit metadata. A pause suspends scanning
+  without blocking provider traffic; middleware remains fail-closed when its
+  daemon control plane is unavailable. Middleware pause state is controlled by
+  the ordinary daemon/OpenShell deployment; AI Guardian has no middleware
+  lifecycle command.
 - **OpenShell tray authentication selector:** Add an explicit Codex OAuth/API-key
   choice to the Create sandbox form. OAuth maps to the `codex` profile and
   `ai-guardian-codex`; API key maps to `openai` and `ai-guardian-openai`, even
@@ -67,6 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenShell middleware policy validation (#2525):** Require the registered
   service name in the policy's nested `middleware` field while leaving policy
   composition and application to the OpenShell operator.
+- **Codex Apps OpenShell troubleshooting:** Document the optional regional
+  `*.oaiusercontent.com` endpoint required by Codex's separate `codex_apps`
+  remote MCP client and the `policy_dns_ineligible` symptom when it is absent.
 - **OpenShell/OpenCode regressions (#2520):** Route canary-owned scans through
   the Rust middleware, preserve warn/log-only scanner actions across daemon IPC
   and REST, treat empty scanner groups as clean, propagate configured payload
@@ -85,6 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenShell middleware fail-closed hardening:** Bound Unix-socket exchanges,
   propagate scanner errors, route offensive/canary ownership checks, normalize
   middleware finding types, and preserve wildcard-bind restart options.
+- **OpenShell middleware pause/resume:** Keep paused WebSocket sessions in the
+  inspectable path and re-check daemon state per message, so resuming the daemon
+  re-enables PII/secret scanning without requiring a new provider connection.
 - **OpenShell setup guidance:** Document local gateway installation and startup,
   put the required Providers v2/profile-import sequence before the first
   sandbox example, clarify automatic OAuth/API-key provider selection, and link

@@ -248,10 +248,10 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use super::daemon::{
-        parse_socket_check_response, CheckResponse, DaemonClient, DaemonFinding,
-        DaemonSocketResponse, DaemonTransport,
+        parse_socket_check_response, paused_check_response, CheckResponse, DaemonClient,
+        DaemonFinding, DaemonSocketResponse, DaemonTransport,
     };
-    use super::evaluation::{finding_blocks, response_has_blocking_findings};
+    use super::evaluation::{finding_blocks, paused_evaluation, response_has_blocking_findings};
     use super::openshell::extension::v1::ProtocolVersion;
     use prost_types::value::Kind;
     use std::collections::BTreeMap;
@@ -455,7 +455,7 @@ mod tests {
             "type": "response",
             "data": {
                 "data": {
-                    "clean": false,
+                    "clean": true,
                     "findings": [],
                     "paused": true,
                     "reason_code": "middleware_paused",
@@ -471,5 +471,36 @@ mod tests {
         assert_eq!(response.reason_code, "middleware_paused");
         assert_eq!(response.pause_source, "daemon");
         assert_eq!(response.pause_remaining_seconds, 30.0);
+    }
+
+    #[test]
+    fn paused_evaluation_allows_traffic_and_preserves_pause_metadata() {
+        let response = CheckResponse {
+            clean: true,
+            paused: true,
+            pause_source: "daemon".to_string(),
+            pause_scope: "global".to_string(),
+            pause_remaining_seconds: 30.0,
+            reason_code: "middleware_paused".to_string(),
+            ..Default::default()
+        };
+
+        let evaluation = paused_evaluation(response);
+
+        assert!(!evaluation.blocked);
+        assert!(evaluation.findings.is_empty());
+        assert_eq!(evaluation.reason_code, "");
+        assert_eq!(evaluation.metadata.get("pause_source"), Some(&"daemon".to_string()));
+        assert_eq!(evaluation.metadata.get("pause_scope"), Some(&"global".to_string()));
+    }
+
+    #[test]
+    fn pause_status_response_is_clean_pass_through() {
+        let response = paused_check_response("daemon", "global", 30.0, "daemon_pause");
+
+        assert!(response.clean);
+        assert!(!response.blocked);
+        assert!(response.paused);
+        assert_eq!(response.reason_code, "middleware_paused");
     }
 }

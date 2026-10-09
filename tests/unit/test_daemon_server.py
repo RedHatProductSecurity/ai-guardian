@@ -534,13 +534,14 @@ class TestDaemonServerProtocol:
             }
         )
 
-        assert result["clean"] is False
+        assert result["clean"] is True
+        assert result["blocked"] is False
         assert result["findings"] == []
         assert result["paused"] is True
         assert result["reason_code"] == "middleware_paused"
         assert result["pause_source"] == "daemon"
         assert result["pause_remaining_seconds"] > 0
-        assert result["policy_decision"]["decision"] == "block"
+        assert result["policy_decision"]["decision"] == "allow"
 
     def test_middleware_check_project_pause_only_matches_project(self, short_state_dir):
         server = DaemonServer(idle_timeout=30, enable_rest_api=False)
