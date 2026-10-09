@@ -8,7 +8,6 @@
 
 use std::env;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::pin::Pin;
 
 use prost_types::Struct;
@@ -256,6 +255,7 @@ mod tests {
     use super::openshell::extension::v1::ProtocolVersion;
     use prost_types::value::Kind;
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
 
     #[test]
     fn gateway_metadata_requires_contract_capability() {
