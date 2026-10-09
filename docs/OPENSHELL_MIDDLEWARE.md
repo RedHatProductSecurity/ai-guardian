@@ -230,10 +230,11 @@ The OpenShell 0.1.2 gateway configuration reference lists the package paths in
 detail:
 [Gateway Configuration File](https://docs.nvidia.com/openshell/v0.1.2/how-it-works/gateways/configuration).
 
-```toml
-[openshell]
-version = 2
+The file normally already contains one `[openshell]` table with
+`version = 2`. Do **not** append a second `[openshell]` table. Add only the
+middleware array below to that existing file:
 
+```toml
 [[openshell.supervisor.middleware]]
 name = "content-guard"
 grpc_endpoint = "http://host.openshell.internal:50051"
@@ -250,6 +251,16 @@ registration:
 Use `host.openshell.internal` when it resolves to the middleware host in the
 OpenShell environment. Otherwise replace it with the same real host address
 used in `MIDDLEWARE_HOST`; never use `192.0.2.10`, which is documentation-only.
+
+Validate the edited file before restarting the gateway:
+
+```bash
+openshell-gateway config preflight \
+  --path ~/.config/openshell/gateway.toml
+```
+
+If `OPENSHELL_GATEWAY_CONFIG` or a gateway `--config` override selects another
+file, pass that effective path instead. Restart only after preflight succeeds.
 
 ```bash
 # Linux: Debian/Ubuntu and Fedora/RHEL package installs use a systemd user service.
