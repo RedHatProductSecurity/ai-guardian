@@ -295,11 +295,16 @@ and neither command checks whether the middleware service is running.
 
 ### Option A: native OpenShell sandbox
 
-This creates the OpenShell template as-is. It does **not** add the AI Guardian
-image, hooks, daemon, or AI Guardian-specific environment:
+This uses the gateway's configured default workload image. It does **not** add
+the AI Guardian image, hooks, daemon, or AI Guardian-specific environment.
+Neither `--template` nor a trailing command is required here. Use
+`--template <template-name>` for a named OpenShell template, or `--from
+<image>` for an explicit image:
 
 ```bash
-openshell sandbox create --name mw-proof --template <template> -- /bin/true
+openshell sandbox create \
+  --name mw-proof \
+  --detach
 ```
 
 That is sufficient when the external middleware uses the daemon configured on
@@ -391,7 +396,7 @@ the ordinary create operation instead:
 openshell sandbox create \
   --name mw-proof \
   --policy /tmp/mw-proof-policy.yaml \
-  -- /bin/true
+  --detach
 ```
 
 For the AI Guardian-hooked sandbox, the equivalent create-time form is:
