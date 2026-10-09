@@ -355,11 +355,14 @@ policy:
 openshell policy get mw-proof --base \
   | sed '1,/^---$/d' \
   > /tmp/mw-proof-policy.yaml
+printf '\n' >> /tmp/mw-proof-policy.yaml
 ```
 
 The `sed` step removes the CLI's table metadata and YAML document separator;
 redirecting the default table output directly would create two YAML documents,
-which `openshell policy set` rejects.
+which `openshell policy set` rejects. The `printf` step ensures the appended
+top-level mapping starts on a new line when the exported YAML has no final
+newline.
 
 Append the middleware entry to that fresh policy export:
 
