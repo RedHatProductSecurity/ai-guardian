@@ -759,7 +759,12 @@ class DaemonServer:
         }
 
     def _middleware_paused_result(self, data, pause_status):
-        """Return an explicit fail-closed decision for paused middleware."""
+        """Return an explicit pass-through decision for paused middleware.
+
+        A daemon pause disables scanning; it does not disable the protected
+        network path.  Middleware callers must therefore be able to continue
+        clean traffic while retaining pause metadata for audit and diagnostics.
+        """
 
         from ai_guardian.violations.decision import PolicyDecision
 
@@ -767,7 +772,7 @@ class DaemonServer:
         correlation_id = data.get("correlation_id") or data.get("session_id")
         decision = PolicyDecision(
             event="middleware_check",
-            decision="block",
+            decision="allow",
             reason="middleware_paused",
             severity="warning",
             source="daemon",
@@ -779,7 +784,8 @@ class DaemonServer:
             key: value for key, value in pause_status.items() if value is not None
         }
         logger.warning(
-            "OpenShell middleware check denied: reason_code=middleware_paused "
+            "OpenShell middleware check passed without scanning: "
+            "reason_code=middleware_paused "
             "source=%s scope=%s project_dir=%s remaining_seconds=%s",
             pause_status.get("source"),
             pause_status.get("scope"),
@@ -808,7 +814,8 @@ class DaemonServer:
                 "Failed to persist middleware pause audit record", exc_info=True
             )
         return {
-            "clean": False,
+            "clean": True,
+            "blocked": False,
             "findings": [],
             "redacted": None,
             "paused": True,

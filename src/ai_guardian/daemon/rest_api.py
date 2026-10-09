@@ -1184,7 +1184,12 @@ class _RestHandler(BaseHTTPRequestHandler):
             self._send_error(500, "Internal error")
 
     def _middleware_paused_response(self, body, pause_status, elapsed_ms):
-        """Build and audit a pause decision for REST middleware callers."""
+        """Build and audit a pass-through decision for paused middleware.
+
+        A daemon pause suspends scanning; it does not deny the protected
+        network path.  Keep the pause state in the audit response while
+        allowing the caller to continue.
+        """
 
         from ai_guardian.violations.decision import PolicyDecision
 
@@ -1192,7 +1197,7 @@ class _RestHandler(BaseHTTPRequestHandler):
         correlation_id = body.get("correlation_id") or body.get("session_id")
         decision = PolicyDecision(
             event="rest_check",
-            decision="block",
+            decision="allow",
             reason="middleware_paused",
             severity="warning",
             source="rest_api",
@@ -1205,7 +1210,8 @@ class _RestHandler(BaseHTTPRequestHandler):
             key: value for key, value in pause_status.items() if value is not None
         }
         logger.warning(
-            "OpenShell middleware REST check denied: reason_code=middleware_paused "
+            "OpenShell middleware REST check passed without scanning: "
+            "reason_code=middleware_paused "
             "source=%s scope=%s project_dir=%s remaining_seconds=%s",
             pause_status.get("source"),
             pause_status.get("scope"),
@@ -1234,7 +1240,8 @@ class _RestHandler(BaseHTTPRequestHandler):
                 "Failed to persist middleware pause REST audit record", exc_info=True
             )
         return {
-            "clean": False,
+            "clean": True,
+            "blocked": False,
             "findings": [],
             "redacted": None,
             "elapsed_ms": round(elapsed_ms, 1),

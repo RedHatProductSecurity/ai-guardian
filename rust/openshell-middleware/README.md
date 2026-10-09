@@ -1,7 +1,9 @@
 # AI Guardian Rust OpenShell Middleware
 
-Rust owns OpenShell's external gRPC boundary. Scanner execution remains in the
-long-lived AI Guardian daemon through its authenticated Unix socket by default.
+This crate builds the external Rust supervisor middleware used by OpenShell.
+It is deployed and managed as an ordinary service. AI Guardian does not expose
+a middleware lifecycle command, and sandbox creation does not start or attach
+this process.
 
 ## Build
 
@@ -9,57 +11,78 @@ long-lived AI Guardian daemon through its authenticated Unix socket by default.
 cargo build --release --manifest-path rust/openshell-middleware/Cargo.toml
 ```
 
-The crate vendors `protoc` through `protoc-bin-vendored`; no system `protoc`
-installation is required.
+The crate vendors `protoc` through `protoc-bin-vendored`; a system `protoc`
+installation is not required.
 
-## Run
+## Run directly
 
-Start AI Guardian daemon first:
-
-```bash
-ai-guardian daemon start -b
-```
-
-By default, run this daemon and the Rust middleware under the same host/user
-environment. The middleware connects to the daemon's permission-protected
-`daemon.sock`. A separately hosted daemon requires an explicit
-`AI_GUARDIAN_DAEMON_URL` plus `AI_GUARDIAN_DAEMON_TOKEN` or
-`AI_GUARDIAN_DAEMON_TOKEN_FILE`.
-
-Then start middleware:
+Run the ordinary AI Guardian daemon separately. Then launch the Rust binary
+under systemd, launchd, Kubernetes, or another service supervisor:
 
 ```bash
-AI_GUARDIAN_MIDDLEWARE_BIND=127.0.0.1:50051 \
+OPENSHELL_VERSION="$(openshell --version | awk '{print $2}')"
+test -n "$OPENSHELL_VERSION"
+
+AI_GUARDIAN_OPENSHELL_VERSION="$OPENSHELL_VERSION" \
+AI_GUARDIAN_MIDDLEWARE_BIND=192.0.2.10:50051 \
+AI_GUARDIAN_MIDDLEWARE_REGISTRATION=content-guard \
   rust/openshell-middleware/target/release/ai-guardian-openshell-middleware
 ```
 
-Environment:
+Use a real restricted host address reachable by the OpenShell gateway and
+supervisors. The plaintext listener must not bind a wildcard address.
+
+The service owns OpenShell gRPC, protocol negotiation, daemon-backed scanning,
+request/response/WebSocket inspection, redaction, and fail-closed behavior.
+Python gRPC bindings and a Python middleware runtime are not required.
+
+## Environment
 
 | Variable | Default |
 |---|---|
+| `AI_GUARDIAN_OPENSHELL_VERSION` | Required qualified OpenShell release marker |
 | `AI_GUARDIAN_MIDDLEWARE_BIND` | `127.0.0.1:50051` |
 | `AI_GUARDIAN_MIDDLEWARE_REGISTRATION` | `content-guard-test` |
-| `AI_GUARDIAN_DAEMON_URL` | Explicit remote REST override; otherwise use Unix socket |
+| `AI_GUARDIAN_MIDDLEWARE_MAX_PAYLOAD_BYTES` | `262144` |
 | `AI_GUARDIAN_DAEMON_SOCKET` | XDG AI Guardian `daemon.sock` |
-| `AI_GUARDIAN_DAEMON_TOKEN_FILE` | REST override token file |
-| `AI_GUARDIAN_DAEMON_TOKEN` | Explicit token override |
-| `AI_GUARDIAN_MIDDLEWARE_PAUSE_FILE` | Standalone pause state file |
-| `AI_GUARDIAN_MIDDLEWARE_PROJECT_DIR` | Optional project pause scope |
+| `AI_GUARDIAN_DAEMON_URL` | Optional authenticated remote daemon REST endpoint |
+| `AI_GUARDIAN_DAEMON_TOKEN_FILE` | Token file for the remote daemon |
+| `AI_GUARDIAN_DAEMON_TOKEN` | Token override for the remote daemon |
+| `RUST_LOG` | Rust tracing filter |
 
-The Rust service fails closed when daemon checks fail. It supports HTTP request,
-HTTP response, and text-WebSocket bindings; all scanner execution remains in
-the daemon backend.
+The default daemon connection is the permission-protected Unix socket. A
+remote daemon requires an explicit URL and authentication token. If daemon
+scanning fails, the middleware fails closed.
 
-The daemon's global or project pause is returned by each middleware check as an
-explicit `middleware_paused` decision. When operating independently, the
-middleware can be paused without a daemon by writing the shared pause file
-through `ai-guardian openshell-middleware pause [MINUTES]`; resume and expiry
-use the same state file. A control-plane failure remains fail closed as
-`middleware_control_plane_unavailable`.
+## OpenShell registration and policy
 
-OpenShell closes a denied WebSocket message with code `1008`; Codex may retry
-that stream before its HTTPS fallback. Configure a Codex custom Responses
-provider with `supports_websockets = false` when immediate HTTP
-`middleware_denied` feedback is preferred. Codex may still render a temporary
-reconnect status while retrying a denied HTTP stream; middleware cannot control
-that client-side display.
+Register the service in the operator-owned gateway TOML and restart the
+gateway:
+
+```toml
+[[openshell.supervisor.middleware]]
+name = "content-guard"
+grpc_endpoint = "http://192.0.2.10:50051"
+allow_insecure_transport = true
+max_payload_bytes = 262144
+timeout = "500ms"
+```
+
+Then attach the registered name through an OpenShell `network_middlewares`
+policy. Use `openshell policy set` for a complete per-sandbox policy or an
+intentionally complete gateway-global policy. The middleware binary does not
+modify gateway configuration or sandbox policy.
+
+## Compatibility
+
+The binary embeds the shared compatibility contract at
+`src/ai_guardian/middleware/openshell/compatibility.json`. It currently
+supports OpenShell `0.1.x` from `0.1.2` onward and supervisor protocol `1.0`.
+An unsupported release, protocol, or capability negotiation fails before the
+service accepts traffic.
+
+## Tests
+
+```bash
+cargo test --manifest-path rust/openshell-middleware/Cargo.toml
+```

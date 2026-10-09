@@ -1,31 +1,28 @@
-"""UX contracts for first-class external middleware sandbox creation (#2507)."""
+"""UX contracts for the OpenShell sandbox/middleware ownership boundary."""
 
-from types import SimpleNamespace
+from unittest.mock import patch
 
-from ai_guardian.sandbox import create_sandbox
+import pytest
 
 
-def test_user_experience_rejects_unsupported_image_before_runtime_access():
+def test_user_experience_sandbox_creation_has_no_middleware_lifecycle_options(
+    capsys,
+):
     """
-    USER EXPERIENCE: External middleware is requested for a non-AI-Guardian
-    OpenShell image.
+    USER EXPERIENCE: Sandbox creation is independent from middleware.
 
     Expected experience:
-    - Sandbox creation stops before invoking OpenShell.
-    - The user sees the image compatibility requirement and an example image.
-    - No provider, gateway, or middleware state is touched.
+    - ``sandbox create`` creates only the sandbox and its normal policy.
+    - Middleware deployment and activation are not hidden in sandbox setup.
+    - The operator manages middleware through OpenShell's gateway/policy layer.
     """
-    args = SimpleNamespace(
-        runtime="openshell",
-        image="quay.io/nvidia/openshell-community:latest",
-        middleware=True,
-        cli="codex",
-    )
-    output = []
+    from ai_guardian.cli import main
 
-    assert create_sandbox(args, interactive=False, output=output) == 2
-    assert output == [
-        "Error: external OpenShell middleware requires an AI Guardian OpenShell "
-        "image (for example localhost/ai-guardian-openshell:dev); received "
-        "'quay.io/nvidia/openshell-community:latest'\n"
-    ]
+    with patch("sys.argv", ["ai-guardian", "sandbox", "create", "--help"]):
+        with pytest.raises(SystemExit) as error:
+            main()
+
+    assert error.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "--middleware" not in help_text
+    assert "--middleware-policy" not in help_text

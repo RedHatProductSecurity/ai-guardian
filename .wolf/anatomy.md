@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1197 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1209 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~73777 tok)
+- `CHANGELOG.md` — Change log (~74152 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -24,8 +24,8 @@
 - `Makefile` — Make build targets (~62 tok)
 - `mkdocs.yml` (~1153 tok)
 - `NOTICE` (~55 tok)
-- `pyproject.toml` — Python project configuration (~2622 tok)
-- `README.md` — Project documentation (~10681 tok)
+- `pyproject.toml` — Python project configuration (~2585 tok)
+- `README.md` — Project documentation (~10682 tok)
 - `RELEASING.md` — Release Management Process (~7903 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
@@ -127,14 +127,14 @@
 
 - `build-container.yml` — GitHub Actions CI/CD - Build Container Image (~2341 tok)
 - `build-wheel.yml` — CI: Build Wheel (~981 tok)
-- `cli-version-health.yml` — CI: OpenShell CLI Version Health (~1331 tok)
+- `cli-version-health.yml` — CI: Support-image Terminal CLI Version Health (~2458 tok)
 - `container-build-validation.yml` — CI: Container Build Validation (~1020 tok)
 - `integration-tests.yml` — CI: Integration Tests (~4031 tok)
 - `lint.yml` — GitHub Actions CI/CD - Lint Workflow (~689 tok)
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~874 tok)
-- `release-readiness.yml` — CI: Release Readiness (~8955 tok)
+- `release-readiness.yml` — CI: Release Readiness (~8940 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~6855 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -798,7 +798,7 @@
 - `entrypoint.sh` (~8491 tok)
 - `openshell-github-readonly-policy.yaml` — /info/refs*" } (~371 tok)
 - `openshell-github-readwrite-policy.yaml` — /info/refs*" } (~380 tok)
-- `README.md` — Project documentation (~13649 tok)
+- `README.md` — Project documentation (~13877 tok)
 - `run-scenarios.sh` (~313 tok)
 - `run.sh` (~3500 tok)
 
@@ -921,13 +921,13 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~12831 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~6414 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
-- `README.md` — Project documentation (~1485 tok)
+- `README.md` — Project documentation (~1479 tok)
 - `requirements.txt` — Python dependencies (~36 tok)
-- `Sandbox.md` — Sandbox CLI (~3323 tok)
+- `Sandbox.md` — Sandbox CLI (~3338 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2439 tok)
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
@@ -1008,15 +1008,28 @@
 
 - `build.rs` (~232 tok)
 - `Cargo.toml` — Rust package manifest (~243 tok)
-- `README.md` — Project documentation (~633 tok)
+- `README.md` — Project documentation (~797 tok)
 
 ## rust/openshell-middleware/src/
 
-- `main.rs` — Rust OpenShell supervisor middleware. (~21376 tok)
+- `compatibility.rs` — Shared OpenShell release and supervisor-protocol compatibility checks. (~988 tok)
+- `daemon.rs` — Authenticated AI Guardian daemon transports and pause state. (~4189 tok)
+- `evaluation.rs` — Daemon-backed content evaluation and OpenShell finding conversion. (~1564 tok)
+- `http.rs` — HTTP request capability and supervisor handshake RPCs. (~2110 tok)
+- `main.rs` — AI Guardian Rust OpenShell middleware binary. (~40 tok)
+- `policy.rs` — OpenShell middleware policy validation and scanner ownership planning. (~927 tok)
+- `response.rs` — HTTP response inspection and redaction capability. (~4053 tok)
+- `service.rs` — Rust OpenShell supervisor middleware service wiring. (~5151 tok)
+- `websocket.rs` — Text WebSocket session inspection capability. (~4689 tok)
+
+## rust/openshell-middleware/src/bin/
+
+- `probe.rs` (~1626 tok)
 
 ## scripts/
 
-- `check_cli_versions.py` — Check explicitly managed CLI versions in the support images. (~2644 tok)
+- `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2713 tok)
+- `check_openshell_compatibility.py` — Verify the qualified OpenShell release and protocol contract. (~1585 tok)
 - `check_parser_compat.py` — get_leaktk_url, fetch_url, fetch_pattern_data, extract_schema + 4 more (~3274 tok)
 - `check_scanner_versions.py` — get_latest_version, get_latest_leaktk_pattern_version, get_version_age, compare_versions + 4 more (~4691 tok)
 - `install` (~202 tok)
@@ -1039,7 +1052,7 @@
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12000 tok)
-- `cli.py` — Declares with (~35545 tok)
+- `cli.py` — main (~30395 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
@@ -1057,7 +1070,7 @@
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
 - `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
-- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~30393 tok)
+- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~24174 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)
@@ -1088,8 +1101,8 @@
 - `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~16625 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 12 more (~1880 tok)
-- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~20059 tok)
-- `server.py` — URL configuration (~12904 tok)
+- `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~20132 tok)
+- `server.py` — URL configuration (~12991 tok)
 - `state.py` — URL configuration (~19891 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
@@ -1152,9 +1165,10 @@
 
 ## src/ai_guardian/middleware/
 
-- `__init__.py` — Reusable semantic middleware components and protocol adapters. (~138 tok)
+- `__init__.py` — Operator policy and lifecycle control for the Rust OpenShell middleware. (~141 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4071 tok)
-- `config.py` — Configuration and scanner-ownership rules for supervisor middleware. (~6505 tok)
+- `compatibility.py` — Shared OpenShell release and protocol compatibility contract. (~991 tok)
+- `config.py` — Configuration and scanner-ownership rules for supervisor middleware. (~6559 tok)
 - `dedup.py` — Pre-persistence deduplication for explicit hook/middleware defense-in-depth. (~653 tok)
 - `pause.py` — Pause state shared by the daemon and standalone middleware runtimes. (~3578 tok)
 - `semantic.py` — Provider-payload normalization and semantic content scanning. (~3667 tok)
@@ -1162,10 +1176,11 @@
 
 ## src/ai_guardian/middleware/openshell/
 
-- `__init__.py` — Version-selected NVIDIA OpenShell supervisor-middleware adapters. (~93 tok)
+- `__init__.py` — OpenShell release compatibility and Rust middleware runtime selection. (~94 tok)
 - `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4065 tok)
-- `registry.py` — OpenShell release-to-adapter selection. (~1768 tok)
-- `server.py` — Stable facade for version-selected OpenShell middleware adapters. (~451 tok)
+- `compatibility.json` (~52 tok)
+- `registry.py` — OpenShell release-to-Rust-runtime selection. (~1717 tok)
+- `server.py` — Stable facade for the Rust-only OpenShell middleware launcher. (~420 tok)
 
 ## src/ai_guardian/middleware/openshell/proto/
 
@@ -1179,9 +1194,9 @@
 
 ## src/ai_guardian/middleware/openshell/v0_1_2/
 
-- `__init__.py` — OpenShell v0.1.2 supervisor-middleware adapter implementation. (~20 tok)
-- `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~4106 tok)
-- `server.py` — OpenShell v0.1.2 supervisor-middleware gRPC service. (~34873 tok)
+- `__init__.py` — OpenShell v0.1.2 Rust middleware launcher control plane. (~18 tok)
+- `bootstrap.py` — Explicit, idempotent OpenShell configuration bootstrap helpers. (~3957 tok)
+- `server.py` — Rust OpenShell middleware launcher and lifecycle control plane. (~10602 tok)
 
 ## src/ai_guardian/middleware/openshell/v0_1_2/proto/
 

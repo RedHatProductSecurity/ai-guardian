@@ -1,4 +1,4 @@
-"""Tests for the OpenShell CLI version health check."""
+"""Tests for the support-image terminal CLI version health check."""
 
 import sys
 from pathlib import Path

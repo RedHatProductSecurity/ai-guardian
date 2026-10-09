@@ -29,7 +29,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Console Guide](CONSOLE.md) | NiceGUI browser console for managing configuration |
 | [Hook Ordering](HOOKS.md) | How hooks work and ordering requirements |
 | [Troubleshooting](TROUBLESHOOTING.md) | Daemon, tray, container, and OpenShell issue resolution |
-| [OpenShell Supervisor Middleware](OPENSHELL_MIDDLEWARE.md) | External semantic scanning service, gateway registration, policy attachment, and scanner ownership |
+| [OpenShell Supervisor Middleware](OPENSHELL_MIDDLEWARE.md) | External Rust service managed by OpenShell gateway registration and policy |
 
 ## Security Features
 

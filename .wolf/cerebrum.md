@@ -12,9 +12,11 @@
 - Sandbox documentation should lead with short, case-based setup recipes and
   prerequisites for each runtime/authentication path; keep lifecycle and
   advanced reference details below the first-use steps.
-- OpenShell middleware documentation should lead with the minimal happy path:
-  create config, start/bootstrap middleware, and create sandbox. Curl denial
-  probes and audit redirection belong in optional sections at the bottom.
+- OpenShell middleware documentation should lead with the OpenShell operator
+  boundary: run the external Rust service, register it in the gateway, apply a
+  complete `network_middlewares` policy with OpenShell, and create ordinary
+  sandboxes independently. AI Guardian must not expose middleware lifecycle
+  commands or sandbox middleware flags.
 - OpenShell sandbox create tests should pass an explicit non-interactive command
   such as `-- /bin/true`; omitting it intentionally attaches an interactive
   shell, so use `sandbox connect` only after create returns.
@@ -52,6 +54,39 @@
   CLI, update both the Dockerfile-derived version-check fixture and registry
   lookup fixtures. The checker correctly ignores packages not explicitly
   installed by that image.
+
+- **OpenShell middleware Rust split (#2525):** Keep `main.rs` as a thin binary
+  entrypoint. Compatibility loading belongs in `compatibility.rs`, daemon IPC
+  and pause state in `daemon.rs`, scanner routing/evaluation in `policy.rs` and
+  `evaluation.rs`, and protocol capabilities in `http.rs`, `response.rs`, and
+  `websocket.rs`. Contract checks must follow the dedicated compatibility
+  module rather than assuming the fixture include remains in `main.rs`.
+
+- **OpenShell middleware deployment (#2525):** There is no Python bootstrap or
+  sandbox coupling. Operators run the Rust binary with a service manager,
+  register it in the gateway TOML, and apply a complete OpenShell policy.
+
+- **OpenShell middleware pause semantics (#2525):** A daemon pause suspends
+  content inspection and passes provider traffic through for HTTP, response,
+  and WebSocket stages while retaining pause metadata; daemon/control-plane
+  outages remain fail-closed. Rebuilding the Rust release binary replaces its
+  inode, so a directly launched service continues running the old `(deleted)`
+  binary until its operator-owned process is restarted.
+
+- **OpenShell policy naming (#2525):** The `network_middlewares` map key is the
+  stable policy-local identity; the nested `middleware` value references the
+  operator gateway registration name. Using the same value for both is the
+  clearest default, but OpenShell permits distinct names.
+
+- **OpenShell OAuth coverage (#2525):** Codex OAuth provider traffic uses
+  `chatgpt.com` and `ab.chatgpt.com`, not only `api.openai.com`. Middleware
+  policy generation must include those hosts when OAuth is selected; explicit
+  endpoint overrides intentionally replace the defaults.
+
+- **OpenShell compatibility (#2525):** The Rust binary validates the explicit
+  `AI_GUARDIAN_OPENSHELL_VERSION` against the shared fixture before binding;
+  the OpenShell gateway then validates the supervisor protocol and capability
+  handshake. Keep the release fixture and Rust embedded contract synchronized.
 
 - **OpenCode hook normalization (#2425):** OpenCode built-in tools arrive as lowercase names (`read`, `write`, `edit`, `bash`) with camelCase arguments such as `filePath`; normalize both adapter input and raw policy calls before immutable protection evaluates them.
 
@@ -238,10 +273,10 @@
   contract tests. The local ignored `.opencode/package.json` now carries both
   the V1 and V2 plugin pins.
 
-- **OpenShell middleware lifecycle UX:** Match the daemon command with
-  `openshell-middleware start|stop|status|restart`; retain the former lifecycle
-  flags only as compatibility aliases. Background relaunch must strip the
-  lifecycle subcommand so `restart` cannot recursively restart itself.
+- **OpenShell middleware lifecycle UX:** Do not add an AI Guardian middleware
+  lifecycle command. The Rust binary is an external service; OpenShell owns
+  registration and `network_middlewares` policy activation, and systemd/launchd
+  or Kubernetes owns process lifecycle.
 
 - **OpenShell gateway registration reload:** Operator-run middleware
   registrations are static in the gateway TOML. Run the documented gateway
@@ -256,15 +291,9 @@
   Unix account. An explicit `/tmp` violation log is intentionally isolated from
   the Console.
 
-- **OpenShell middleware restart state:** Background starts persist sanitized
-  restart arguments, including the config path, in the private middleware PID
-  state file under the XDG-backed AI Guardian state directory. Bare `restart`
-  can reuse that metadata; never persist `--jwt-secret` values.
-
 - **OpenShell middleware documentation:** Keep the qualification instructions
-  linear and put deployment, lifecycle, gateway registration, response behavior,
-  and troubleshooting in separate sections. The primary Community sandbox
-  command omits `--tty --detach`; detached connect is only an alternative.
+  linear: external Rust service, gateway registration, ordinary sandbox
+  creation, complete OpenShell policy activation, and service-manager cleanup.
 
 - **OpenShell scanner ownership (#2523):** `scanner_ownership` routes checks at
   the provider boundary; it is not an exclusive switch that disables host
@@ -432,16 +461,9 @@
    host/interface placeholders such as `middleware.example.internal`, never a
    developer-specific private IP address.
 
-- [2026-10-06] **OpenShell middleware config override:** When `restart` receives
-  an explicit `--config`, merge that override into saved background arguments
-  instead of rebuilding from the short current command; otherwise bootstrap,
-  gateway, policy, bind, and audit options are lost and gateway preflight can
-  report a missing path.
-
-- [2026-10-06] **OpenShell policy composition:** The generated middleware policy
-  is already schema-valid and should be passed directly to basic sandbox create.
-  Optional network-policy overlays must be deep-composed with version checks;
-  never append a fragment after a failed copy.
+- [2026-10-06] **OpenShell policy composition:** Middleware policy is an
+  OpenShell operator artifact. Apply a complete policy with `openshell policy
+  set`; do not hide policy composition inside AI Guardian sandbox creation.
 
 - [2026-10-06] **OpenShell Codex sandbox path:** Raw Community-image sandbox
   creation does not stage provider placeholders into Codex `auth.json`. For a

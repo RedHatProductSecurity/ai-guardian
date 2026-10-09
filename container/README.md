@@ -4,7 +4,7 @@ The published image is a UBI-based Docker/Podman support image with
 ai-guardian and the supported agent integrations. Headless-capable CLIs are
 bundled; GUI-only integrations receive their hooks when the container starts.
 
-OpenShell releases v0.1.2 or newer use a separate image definition, `Dockerfile.openshell`, based
+OpenShell v0.1.x patch releases from v0.1.2 use a separate image definition, `Dockerfile.openshell`, based
 on the pinned `nvcr.io/nvidia/base/ubuntu:24.04` workload image. OpenShell's
 default workload is intentionally minimal, so this Dockerfile installs the
 filesystem layout, networking tools, users, and supported agent CLIs explicitly.
@@ -62,7 +62,7 @@ accepted for Container sandboxes.
 
 | CLI/scenario | Provider/authentication | Status |
 | --- | --- | --- |
-| `codex` | Gateway Codex provider from OAuth or OpenAI API-key login | Supported; qualify on OpenShell v0.1.2 or newer |
+| `codex` | Gateway Codex provider from OAuth or OpenAI API-key login | Supported; qualify on OpenShell v0.1.x from v0.1.2 |
 
 The tray exposes only Codex when Runtime is OpenShell and rejects other CLI
 choices before creating a sandbox. Credential absence is reported separately
@@ -365,6 +365,13 @@ ai-guardian sandbox create --runtime openshell \
 Use a different `CODEX_VERSION` build argument when testing a specific Codex
 release. Rebuild the image and recreate the sandbox after changing the source
 wheel or a bundled CLI version.
+
+The twice-monthly `Support-image Terminal CLI Version Health` workflow checks
+the npm registry, automatically smoke-tests a newer Codex candidate with no
+credentials (`codex --version`, `codex --help`, and `codex exec --help`), and
+opens or updates a maintenance issue when the managed pin is behind. ChatGPT
+OAuth workspace-routing behavior cannot be tested safely on a hosted runner;
+the issue links to the local OpenShell qualification procedure for that step.
 
 #### CLI scope and image contents
 
@@ -733,7 +740,12 @@ inner sandbox behavior. This follows the pattern in OpenShell's official
 The configured `ai-guardian` MCP server is a local stdio process and therefore
 does not need a network-policy endpoint. Codex's separate `codex_apps` remote
 MCP, when enabled by Codex, does need its provider/profile endpoint and can be
-allowed through the selected Codex policy.
+allowed through the selected Codex policy. Current Codex versions may also
+contact regional `*.oaiusercontent.com` hosts for app content; that optional
+wildcard is intentionally absent from the default Codex policy. Add it only
+when `codex_apps` is enabled. See the [OpenShell middleware guide](../docs/OPENSHELL_MIDDLEWARE.md#optional-codex-apps-remote-mcp)
+for the exact OpenShell policy command and the resulting
+`policy_dns_ineligible`/transport-channel-closed diagnostic.
 
 When a config, profile, or repository snapshot is needed, the sandbox command
 uploads it before explicitly invoking the image entrypoint with
