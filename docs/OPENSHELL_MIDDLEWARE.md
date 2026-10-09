@@ -406,6 +406,11 @@ openshell policy set mw-proof \
 openshell policy get mw-proof --full
 ```
 
+Before testing traffic, confirm that this output contains
+`network_middlewares.content-guard`. A healthy gateway registration alone is
+not enough; the service is invoked only for sandbox traffic selected by the
+effective policy.
+
 When a complete, reviewed policy is ready before sandbox creation, OpenShell
 can apply it during the ordinary create operation instead:
 
