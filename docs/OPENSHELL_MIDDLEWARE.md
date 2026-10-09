@@ -470,10 +470,13 @@ Keep middleware cleanup separate from sandbox cleanup:
    - If it was started in a terminal, return to that terminal and press
      `Ctrl-C`.
    - If it is a systemd user service, run
-     `systemctl --user stop <middleware-unit>`.
-   - If it is a Homebrew service, run
-     `brew services stop <middleware-formula>`; for launchd, stop the label
-     used by the service's plist.
+     `systemctl --user stop ai-guardian-openshell-middleware.service` if you
+     gave the unit that name. The unit name is operator-defined; a direct
+     binary launch has no systemd unit.
+   - If it is a Homebrew service, use the actual formula name shown by
+     `brew services list`. AI Guardian does not currently ship a Homebrew
+     middleware formula, and `openshell` refers to the OpenShell gateway, not
+     this middleware. For launchd, stop the label used by the service's plist.
    - If it is deployed in Kubernetes, scale the middleware deployment to zero
      or delete the operator-managed workload.
 4. Remove the gateway registration from `gateway.toml` only when it is no
