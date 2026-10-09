@@ -127,6 +127,17 @@ Start the ordinary AI Guardian daemon separately if it is not already running.
 The middleware process is then managed like any other OpenShell supervisor
 extension—not by an AI Guardian lifecycle command.
 
+Check and start the scanning daemon with its existing AI Guardian commands:
+
+```bash
+ai-guardian daemon status
+# If it is not running:
+ai-guardian daemon start -b
+```
+
+These commands manage the daemon backend used for scanning and audit records;
+they do not start or stop the external Rust middleware.
+
 For a local qualification, run the binary directly in one terminal:
 
 ```bash
@@ -491,6 +502,9 @@ Keep middleware cleanup separate from sandbox cleanup:
      this middleware. For launchd, stop the label used by the service's plist.
    - If it is deployed in Kubernetes, scale the middleware deployment to zero
      or delete the operator-managed workload.
+   - If the daemon was dedicated to this test, stop it separately with
+     `ai-guardian daemon stop`. Do not stop a shared daemon that serves other
+     hooks or sandboxes.
 4. Remove the gateway registration from `gateway.toml` only when it is no
    longer needed, then restart the gateway.
 5. Confirm `openshell gateway info` no longer lists the registration.
