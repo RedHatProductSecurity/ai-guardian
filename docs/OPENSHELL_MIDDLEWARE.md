@@ -344,12 +344,15 @@ entry. The policy must be a complete policy appropriate for the target
 sandbox; a small fragment is not a safe replacement for its existing
 filesystem, provider, and network controls.
 
-For an existing sandbox, first export its effective complete policy. The
-`openshell policy set` command replaces the sandbox policy; it does not merge
-a middleware-only fragment into the live policy:
+For an existing sandbox, first export its round-trippable base policy. Do not
+use the effective policy from `--full` or `sandbox get --policy-only` here;
+those outputs include OpenShell-generated provider entries that cannot be
+submitted back to `policy set`. The `openshell policy set` command replaces
+the sandbox policy; it does not merge a middleware-only fragment into the live
+policy:
 
 ```bash
-openshell sandbox get mw-proof --policy-only \
+openshell policy get mw-proof --base \
   > /tmp/mw-proof-policy.yaml
 ```
 
