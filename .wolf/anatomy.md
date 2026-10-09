@@ -921,7 +921,7 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~4778 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~4927 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
@@ -1019,7 +1019,7 @@
 - `main.rs` — AI Guardian Rust OpenShell middleware binary. (~40 tok)
 - `policy.rs` — OpenShell middleware policy validation and scanner ownership planning. (~927 tok)
 - `response.rs` — HTTP response inspection and redaction capability. (~3975 tok)
-- `service.rs` — Rust OpenShell supervisor middleware service wiring. (~4818 tok)
+- `service.rs` — Rust OpenShell supervisor middleware service wiring. (~4819 tok)
 - `websocket.rs` — Text WebSocket session inspection capability. (~4274 tok)
 
 ## scripts/

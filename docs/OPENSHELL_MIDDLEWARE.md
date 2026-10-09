@@ -54,7 +54,7 @@ bootstrap, attach, detach, start, stop, or pause operation hidden inside
                                   v
                     +---------------------------+
                     | OpenShell sandbox         |
-                    | supervisor                 |
+                    | supervisor                |
                     +-------------+-------------+
                                   |
                     per-request middleware RPCs
@@ -73,9 +73,9 @@ bootstrap, attach, detach, start, stop, or pause operation hidden inside
                     +---------------------------+
 
      +---------------------------+    +-------------------------------+
-     | Native OpenShell sandbox  |    | AI Guardian OpenShell wrapper  |
-     | no AI Guardian hooks or   |    | hooks + in-sandbox daemon      |
-     | daemon required            |    | for hook processing             |
+     | Native OpenShell sandbox  |    | AI Guardian OpenShell wrapper |
+     | no AI Guardian hooks or   |    | hooks + in-sandbox daemon     |
+     | daemon required           |    | for hook processing           |
      +---------------------------+    +-------------------------------+
 ```
 
@@ -132,25 +132,28 @@ For a local qualification, run the binary directly in one terminal:
 ```bash
 OPENSHELL_VERSION="$(openshell --version | awk '{print $2}')"
 test -n "$OPENSHELL_VERSION"
+MIDDLEWARE_HOST="${MIDDLEWARE_HOST:?Set MIDDLEWARE_HOST to an IP assigned to this host and reachable from OpenShell}"
 
 AI_GUARDIAN_OPENSHELL_VERSION="$OPENSHELL_VERSION" \
-AI_GUARDIAN_MIDDLEWARE_BIND=192.0.2.10:50051 \
+AI_GUARDIAN_MIDDLEWARE_BIND="$MIDDLEWARE_HOST:50051" \
 AI_GUARDIAN_MIDDLEWARE_REGISTRATION=content-guard \
   rust/openshell-middleware/target/release/ai-guardian-openshell-middleware
 ```
 
 Keep that process running while the gateway is restarted and the policy is
-applied. Use the real host address and the version reported by
-`openshell --version`.
+applied. Set `MIDDLEWARE_HOST` to an address assigned to the middleware host,
+not a documentation or wildcard address. The same reachable address must be
+used by the gateway registration.
 
 For a development build, the equivalent command is:
 
 ```bash
 OPENSHELL_VERSION="$(openshell --version | awk '{print $2}')"
 test -n "$OPENSHELL_VERSION"
+MIDDLEWARE_HOST="${MIDDLEWARE_HOST:?Set MIDDLEWARE_HOST to an IP assigned to this host and reachable from OpenShell}"
 
 AI_GUARDIAN_OPENSHELL_VERSION="$OPENSHELL_VERSION" \
-AI_GUARDIAN_MIDDLEWARE_BIND=192.0.2.10:50051 \
+AI_GUARDIAN_MIDDLEWARE_BIND="$MIDDLEWARE_HOST:50051" \
 AI_GUARDIAN_MIDDLEWARE_REGISTRATION=content-guard \
   cargo run --release --manifest-path rust/openshell-middleware/Cargo.toml
 ```
@@ -210,7 +213,7 @@ version = 2
 
 [[openshell.supervisor.middleware]]
 name = "content-guard"
-grpc_endpoint = "http://192.0.2.10:50051"
+grpc_endpoint = "http://host.openshell.internal:50051"
 allow_insecure_transport = true
 max_payload_bytes = 262144
 timeout = "500ms"
@@ -220,6 +223,10 @@ The `name` must match `AI_GUARDIAN_MIDDLEWARE_REGISTRATION`. The endpoint must
 be reachable from the gateway and the sandbox supervisors. Restart the
 operator-managed gateway after editing the file, then verify the live
 registration:
+
+Use `host.openshell.internal` when it resolves to the middleware host in the
+OpenShell environment. Otherwise replace it with the same real host address
+used in `MIDDLEWARE_HOST`; never use `192.0.2.10`, which is documentation-only.
 
 ```bash
 # Linux: Debian/Ubuntu and Fedora/RHEL package installs use a systemd user service.
