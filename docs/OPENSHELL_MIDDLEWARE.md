@@ -164,6 +164,20 @@ is optional deployment plumbing, not an OpenShell installation step. The
 service must be running before the gateway is restarted because OpenShell
 contacts it during gateway startup.
 
+For example, after installing an operator-owned **systemd user unit** named
+`ai-guardian-openshell-middleware.service`, start and inspect it with:
+
+```bash
+systemctl --user daemon-reload       # after adding or changing the unit
+systemctl --user enable ai-guardian-openshell-middleware.service
+systemctl --user start ai-guardian-openshell-middleware.service
+systemctl --user status ai-guardian-openshell-middleware.service
+```
+
+The unit name is an example chosen by the operator; these commands do nothing
+until a matching unit has been installed. Use the service manager's equivalent
+commands for launchd, Homebrew, or Kubernetes.
+
 The binary requires `AI_GUARDIAN_OPENSHELL_VERSION` so a direct deployment
 cannot accidentally run against an unqualified OpenShell release. Check the
 installed CLI with `openshell --version` before setting the service variable.
