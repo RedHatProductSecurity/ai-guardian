@@ -12,9 +12,108 @@ on:
   workflow_dispatch:
 
 jobs:
+  build_openshell_middleware:
+    name: Build OpenShell middleware (${{ matrix.target }})
+    # Test tags publish only to TestPyPI and do not create a GitHub release.
+    # Build the release assets only for a production version tag.
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-test')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-26.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-26.04
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+
+      - name: Install Linux ARM linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes gcc-aarch64-linux-gnu
+
+      - name: Verify release and middleware versions
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${RELEASE_VERSION#v}"
+          python3 scripts/sync_rust_middleware_version.py \
+            --repo . \
+            --version "$VERSION" \
+            --check
+          python3 scripts/check_openshell_compatibility.py
+
+      - name: Run Rust middleware tests
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: cargo test --locked --manifest-path rust/openshell-middleware/Cargo.toml
+
+      - name: Build release binary
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [[ "$TARGET" == "aarch64-unknown-linux-gnu" ]]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+            export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+          fi
+          cargo build --locked --release --target "$TARGET" \
+            --manifest-path rust/openshell-middleware/Cargo.toml
+
+          BINARY="rust/openshell-middleware/target/${TARGET}/release/ai-guardian-openshell-middleware"
+          test -x "$BINARY"
+          file "$BINARY"
+
+      - name: Package release asset
+        env:
+          TARGET: ${{ matrix.target }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${RELEASE_VERSION#v}"
+          ASSET="ai-guardian-openshell-middleware-${VERSION}-${TARGET}"
+          BINARY="rust/openshell-middleware/target/${TARGET}/release/ai-guardian-openshell-middleware"
+
+          mkdir -p "dist/${ASSET}"
+          install -m 0755 "$BINARY" "dist/${ASSET}/ai-guardian-openshell-middleware"
+          cp rust/openshell-middleware/README.md LICENSE "dist/${ASSET}/"
+          tar -C dist -czf "dist/${ASSET}.tar.gz" "$ASSET"
+          rm -rf "dist/${ASSET}"
+          tar -tzf "dist/${ASSET}.tar.gz"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v7
+        with:
+          name: openshell-middleware-${{ matrix.target }}
+          path: dist/ai-guardian-openshell-middleware-*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Build and Publish
     runs-on: ubuntu-26.04
+    needs: build_openshell_middleware
+    # A skipped binary job is expected for TestPyPI tags and manual runs. A
+    # failed production binary build must prevent package/release publication.
+    if: >-
+      always() &&
+      (needs.build_openshell_middleware.result == 'success' ||
+      needs.build_openshell_middleware.result == 'skipped')
     environment: ${{ contains(github.ref, '-test') && 'testpypi' || 'production' }}
     permissions:
       id-token: write
@@ -57,6 +156,14 @@ jobs:
         run: |
           twine check dist/*
           ls -la dist/
+
+      - name: Download OpenShell middleware release assets
+        if: steps.target.outputs.create_release == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: openshell-middleware-*
+          path: dist
+          merge-multiple: true
 
       - name: Publish to ${{ steps.target.outputs.registry }}
         uses: pypa/gh-action-pypi-publish@release/v1

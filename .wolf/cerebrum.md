@@ -88,6 +88,13 @@
   the OpenShell gateway then validates the supervisor protocol and capability
   handshake. Keep the release fixture and Rust embedded contract synchronized.
 
+- **OpenShell release binaries (#2522):** The Python middleware runtime was
+  already removed before binary distribution work. Publish the external Rust
+  service as versioned GitHub Release archives for Linux x86_64/arm64 and macOS
+  Intel/Apple Silicon; keep both `Cargo.toml` and `Cargo.lock` aligned with the
+  AI Guardian release tag so locked builds and capability version reporting stay
+  compatible.
+
 - **OpenCode hook normalization (#2425):** OpenCode built-in tools arrive as lowercase names (`read`, `write`, `edit`, `bash`) with camelCase arguments such as `filePath`; normalize both adapter input and raw policy calls before immutable protection evaluates them.
 
 - **IDE detection must separate installation evidence from protection status:** Project metadata such as OpenWolf's `.cursor/rules/` is not proof of an IDE installation. Require an IDE-owned config file or artifact for discovery, then use structured hook/MCP verification to determine whether AI Guardian is configured.

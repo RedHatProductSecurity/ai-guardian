@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
@@ -89,3 +91,53 @@ def test_release_readiness_calls_container_build_validation_gate():
 
     assert "container-build-validation:" in workflow
     assert "uses: ./.github/workflows/container-build-validation.yml" in workflow
+
+
+def test_publish_workflow_builds_validated_openshell_release_targets():
+    """Production releases must attach every supported Rust target asset."""
+    workflow_path = WORKFLOW_DIR / "publish.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    build_job = workflow["jobs"]["build_openshell_middleware"]
+    targets = {
+        entry["target"]: entry["runner"]
+        for entry in build_job["strategy"]["matrix"]["include"]
+    }
+
+    assert targets == {
+        "x86_64-unknown-linux-gnu": "ubuntu-26.04",
+        "aarch64-unknown-linux-gnu": "ubuntu-26.04",
+        "x86_64-apple-darwin": "macos-latest",
+        "aarch64-apple-darwin": "macos-latest",
+    }
+    build_steps = "\n".join(step.get("run", "") for step in build_job["steps"])
+    assert "cargo build --locked --release --target" in build_steps
+    assert "cargo test --locked" in build_steps
+    assert "check_openshell_compatibility.py" in build_steps
+    assert "sync_rust_middleware_version.py" in build_steps
+
+    publish_job = workflow["jobs"]["publish"]
+    assert publish_job["needs"] == "build_openshell_middleware"
+    publish_text = workflow_path.read_text(encoding="utf-8")
+    assert "actions/upload-artifact@v7" in publish_text
+    assert "actions/download-artifact@v8" in publish_text
+    assert "sha256sum *.tar.gz *.whl > checksums.txt" in publish_text
+    assert "dist/*.tar.gz" in publish_text
+
+
+def test_openshell_middleware_release_docs_match_publish_targets():
+    """Operator docs must describe the same targets as the release workflow."""
+    docs = (REPO_ROOT / "docs" / "OPENSHELL_MIDDLEWARE.md").read_text(encoding="utf-8")
+    middleware_readme = (
+        REPO_ROOT / "rust" / "openshell-middleware" / "README.md"
+    ).read_text(encoding="utf-8")
+
+    for target in (
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+    ):
+        assert target in docs
+        assert target in middleware_readme
+    assert "checksums.txt" in docs
+    assert "Cargo package version" in middleware_readme

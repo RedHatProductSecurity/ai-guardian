@@ -63,6 +63,17 @@ def test_release_script_synchronizes_stable_references_before_tagging():
     )
 
 
+def test_release_script_synchronizes_rust_middleware_version():
+    """Release and post-release commits include the Rust binary version."""
+    script = RELEASE_SCRIPT.read_text(encoding="utf-8")
+
+    assert "scripts/sync_rust_middleware_version.py" in script
+    assert '--version "${NEW_VERSION}"' in script
+    assert '--version "${NEXT_DEV_VERSION}"' in script
+    assert "rust/openshell-middleware/Cargo.toml" in script
+    assert "rust/openshell-middleware/Cargo.lock" in script
+
+
 def test_release_readiness_derives_previous_stable_version():
     """Upgrade coverage must not require a hand-edited version pin."""
     workflow = RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8")

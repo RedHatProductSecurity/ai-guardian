@@ -92,8 +92,8 @@ protocol validation before accepting the registration.
 - OpenShell v0.1.2 or a later qualified v0.1.x patch release.
 - A healthy, authenticated OpenShell gateway.
 - A host address reachable by both the gateway and OpenShell supervisors.
-- The Rust middleware binary built from this repository or obtained from the
-  deployment artifact.
+- The Rust middleware binary obtained from a GitHub release asset, or a local
+  Rust toolchain when building from source.
 - An AI Guardian daemon reachable by the Rust process. The default deployment
   uses the same user's protected Unix socket.
 
@@ -110,7 +110,52 @@ address; it is different from the daemon address. Keep
 provided remote IP. The native OpenShell sandbox itself does not need an AI
 Guardian daemon or hooks for middleware scanning.
 
+## Release binaries
+
+Production AI Guardian tags publish the external middleware as versioned GitHub
+Release assets. The release asset must match the AI Guardian version used by the
+deployment; do not copy a binary from a different release. The supported
+matrix is validated by the publish workflow:
+
+| Host | Rust target | Release asset suffix |
+| --- | --- | --- |
+| Linux x86_64 (glibc) | `x86_64-unknown-linux-gnu` | `x86_64-unknown-linux-gnu` |
+| Linux arm64 (glibc) | `aarch64-unknown-linux-gnu` | `aarch64-unknown-linux-gnu` |
+| macOS Intel | `x86_64-apple-darwin` | `x86_64-apple-darwin` |
+| macOS Apple Silicon | `aarch64-apple-darwin` | `aarch64-apple-darwin` |
+
+For release `1.20.0`, for example, download the asset for the host target from
+the [AI Guardian release page](https://github.com/RedHatProductSecurity/ai-guardian/releases):
+
+```text
+ai-guardian-openshell-middleware-1.20.0-x86_64-unknown-linux-gnu.tar.gz
+```
+
+Each archive contains the executable and its Rust middleware README. The same
+release includes `checksums.txt`; verify the selected archive before installing
+it. Linux users can run:
+
+```bash
+ASSET=ai-guardian-openshell-middleware-1.20.0-x86_64-unknown-linux-gnu.tar.gz
+grep "  ${ASSET}$" checksums.txt | sha256sum -c -
+tar -xzf "$ASSET"
+ARCHIVE_DIR="${ASSET%.tar.gz}"
+sudo install -m 0755 "${ARCHIVE_DIR}/ai-guardian-openshell-middleware" /usr/local/libexec/ai-guardian-openshell-middleware
+```
+
+On macOS, replace `sha256sum -c -` with a `shasum -a 256` comparison. Point the
+operator-owned systemd, launchd, Kubernetes, or equivalent service definition at
+the installed executable. `AI_GUARDIAN_RUST_MIDDLEWARE` is not required by the
+external service; use the service manager's `ExecStart`/command path instead.
+If that path is missing or not executable, the service manager will fail before
+the gateway can register the middleware. Install the matching release asset (or
+build the source fallback) and restart the operator-owned service. There is no
+Python middleware fallback.
+
 ## 1. Build the Rust service
+
+Release users should prefer the versioned binary above. Build from source for
+development or when a deployment target is not in the published matrix:
 
 ```bash
 cargo build --release --manifest-path rust/openshell-middleware/Cargo.toml

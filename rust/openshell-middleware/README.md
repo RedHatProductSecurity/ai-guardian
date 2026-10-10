@@ -14,6 +14,26 @@ cargo build --release --manifest-path rust/openshell-middleware/Cargo.toml
 The crate vendors `protoc` through `protoc-bin-vendored`; a system `protoc`
 installation is not required.
 
+## Release assets
+
+Production AI Guardian releases publish versioned archives for the validated
+Linux and macOS targets below. Download the archive matching the host from the
+[AI Guardian release page](https://github.com/RedHatProductSecurity/ai-guardian/releases)
+and verify it with the release `checksums.txt` before installing it under the
+operator-owned service manager.
+
+| Host | Target |
+| --- | --- |
+| Linux x86_64 (glibc) | `x86_64-unknown-linux-gnu` |
+| Linux arm64 (glibc) | `aarch64-unknown-linux-gnu` |
+| macOS Intel | `x86_64-apple-darwin` |
+| macOS Apple Silicon | `aarch64-apple-darwin` |
+
+The archive name is
+`ai-guardian-openshell-middleware-VERSION-TARGET.tar.gz`. The archive's
+executable reports the matching Cargo package version during OpenShell
+capability negotiation.
+
 ## Run directly
 
 Run the ordinary AI Guardian daemon separately. Then launch the Rust binary

@@ -272,6 +272,13 @@ fi
 run $HELPER update-version "$NEW_VERSION"
 info "Version: $NEW_VERSION"
 
+# Keep the external Rust middleware package version in the release tag. The
+# middleware reports CARGO_PKG_VERSION during OpenShell capability negotiation.
+run python3 "${REPO_ROOT}/scripts/sync_rust_middleware_version.py" \
+    --repo "${REPO_ROOT}" \
+    --version "${NEW_VERSION}"
+info "Rust middleware version synchronized to ${NEW_VERSION}"
+
 # CHANGELOG: skip if already updated for this version
 if ! $DRY_RUN && grep -q "^## \[${NEW_VERSION}\]" CHANGELOG.md 2>/dev/null; then
     warn "CHANGELOG.md already has [${NEW_VERSION}] section — skipping"
@@ -348,7 +355,9 @@ else
 fi
 
 # Commit release changes (skip if nothing changed)
-run git add pyproject.toml src/ai_guardian/__init__.py CHANGELOG.md README.md \
+run git add pyproject.toml src/ai_guardian/__init__.py \
+    rust/openshell-middleware/Cargo.toml rust/openshell-middleware/Cargo.lock \
+    CHANGELOG.md README.md \
     container/Dockerfile container/Dockerfile.openshell container/README.md \
     docs/notebooklm-export.md
 if $DRY_RUN || ! git diff --cached --quiet 2>/dev/null; then
@@ -511,6 +520,11 @@ fi
 run $HELPER update-version "$NEXT_DEV_VERSION"
 info "Version: $NEXT_DEV_VERSION"
 
+run python3 "${REPO_ROOT}/scripts/sync_rust_middleware_version.py" \
+    --repo "${REPO_ROOT}" \
+    --version "${NEXT_DEV_VERSION}"
+info "Rust middleware version synchronized to ${NEXT_DEV_VERSION}"
+
 # Restore README URLs to /main/
 if [[ -f README.md ]]; then
     if $DRY_RUN; then
@@ -530,7 +544,9 @@ run python3 "${REPO_ROOT}/scripts/sync_release_versions.py" \
 info "Stable release references verified after merge-back"
 
 # Commit post-release changes (skip if nothing changed)
-run git add pyproject.toml src/ai_guardian/__init__.py README.md
+run git add pyproject.toml src/ai_guardian/__init__.py \
+    rust/openshell-middleware/Cargo.toml rust/openshell-middleware/Cargo.lock \
+    README.md
 if $DRY_RUN || ! git diff --cached --quiet 2>/dev/null; then
     run git commit -m "chore: begin ${NEXT_DEV_VERSION} development cycle
 
