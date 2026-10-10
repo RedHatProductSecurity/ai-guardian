@@ -22,9 +22,18 @@ from ai_guardian.ide_registry import (
     SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
     SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
 )
+from ai_guardian.openshell_policy import (
+    NO_POLICY_CHOICE,
+    discover_openshell_policies,
+    load_openshell_policy,
+    policy_choice_values,
+    resolve_openshell_policy_choice,
+    summarize_openshell_policy,
+)
 from ai_guardian.tray import icons as tray_icons
 from ai_guardian.tray import menu as tray_menu
 from ai_guardian.tray import notifications as tray_notifications
+from ai_guardian.tray import openshell_middleware
 from ai_guardian.tray import plugins as tray_plugins
 
 logger = logging.getLogger(__name__)
@@ -33,6 +42,7 @@ logger = logging.getLogger(__name__)
 # Tray exposes only the currently supported OpenShell CLI.
 TRAY_OPENSHELL_CLI_CHOICES = ("codex",)
 TRAY_OPENSHELL_AUTH_CHOICES = ("OAuth", "API key")
+TRAY_OPENSHELL_MODE_CHOICES = ("AI Guardian hooks", "Native OpenShell")
 TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
     "container": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["container"],
     "openshell": TRAY_OPENSHELL_CLI_CHOICES,
@@ -42,6 +52,15 @@ _SANDBOX_CONFIG_SOURCE_CHOICES = (
     "Latest saved snapshot",
 )
 _SANDBOX_DEFAULT_CONFIG_SOURCE = _SANDBOX_CONFIG_SOURCE_CHOICES[0]
+
+
+def _split_form_values(value):
+    """Split comma/newline form values while preserving user order."""
+    return [
+        item.strip()
+        for item in str(value or "").replace("\n", ",").split(",")
+        if item.strip()
+    ]
 
 
 def _normalize_sandbox_config_source(value):
@@ -827,6 +846,37 @@ class TrayMenuBuilder:
             "source": source,
         }
 
+    @staticmethod
+    def _openshell_policy_paths(values):
+        """Resolve the selected policy profile and any manually entered overlays."""
+        options = discover_openshell_policies()
+        selected = resolve_openshell_policy_choice(values.get("policy"), options)
+        paths = []
+        if selected is not None:
+            if not selected.is_file():
+                raise ValueError(f"OpenShell policy file not found: {selected}")
+            load_openshell_policy(selected)
+            paths.append(selected)
+        for value in _split_form_values(values.get("policies")):
+            path = Path(value).expanduser()
+            if not path.is_file():
+                raise ValueError(f"OpenShell policy file not found: {path}")
+            load_openshell_policy(path)
+            paths.append(path)
+        return paths
+
+    @staticmethod
+    def _is_native_openshell(values):
+        """Return whether a form value set selects the native OpenShell path."""
+        mode = str(values.get("openshell_mode") or "").strip().casefold()
+        return str(
+            values.get("runtime") or "openshell"
+        ).strip().casefold() == "openshell" and mode in {
+            "native",
+            "native openshell",
+            "native-openshell",
+        }
+
     def _sandbox_upload_confirmation_message(self, values, summary):
         """Build safe command and parameter preview for an OpenShell upload."""
         from ai_guardian.sandbox import DEFAULT_OPENSHELL_IMAGE
@@ -835,32 +885,59 @@ class TrayMenuBuilder:
         name = str(values.get("name") or "")
         cli = str(values.get("cli") or "claude")
         repo = summary["path"]
-        image = summary.get("image") or DEFAULT_OPENSHELL_IMAGE
-        image_status = summary.get("image_status") or self._sandbox_image_status(image)
-        command = [
-            "ai-guardian",
-            "sandbox",
-            "create",
-            "--runtime",
-            runtime,
-            "--name",
-            name,
-            "--cli",
-            cli,
-            "--repo",
-            repo,
-        ]
-        if str(values.get("image") or "").strip():
-            command.extend(["--base", image])
-        profile = str(values.get("profile") or "").strip()
-        if profile:
-            command.extend(["--profile", profile])
-        agent = str(values.get("agent") or "").strip()
-        if cli == "opencode" and agent:
-            command.extend(["--opencode-agent-profile", agent])
-        model = str(values.get("model") or "").strip()
-        if model:
-            command.extend(["--model", model])
+        native = self._is_native_openshell(values)
+        image = summary.get("image") or (
+            "OpenShell default" if native else DEFAULT_OPENSHELL_IMAGE
+        )
+        image_status = summary.get("image_status")
+        if not image_status:
+            image_status = (
+                "OpenShell resolves this image/base."
+                if native and str(values.get("image") or "").strip()
+                else (
+                    "OpenShell resolves the default workload image."
+                    if native
+                    else self._sandbox_image_status(image)
+                )
+            )
+        if native:
+            command = [
+                "openshell",
+                "sandbox",
+                "create",
+                "--detach",
+                "--name",
+                name,
+                "--upload",
+                f"{repo}:/sandbox/repo",
+            ]
+            if str(values.get("image") or "").strip():
+                command.extend(["--from", image])
+        else:
+            command = [
+                "ai-guardian",
+                "sandbox",
+                "create",
+                "--runtime",
+                runtime,
+                "--name",
+                name,
+                "--cli",
+                cli,
+                "--repo",
+                repo,
+            ]
+            if str(values.get("image") or "").strip():
+                command.extend(["--base", image])
+            profile = str(values.get("profile") or "").strip()
+            if profile:
+                command.extend(["--profile", profile])
+            agent = str(values.get("agent") or "").strip()
+            if cli == "opencode" and agent:
+                command.extend(["--opencode-agent-profile", agent])
+            model = str(values.get("model") or "").strip()
+            if model:
+                command.extend(["--model", model])
         providers = [
             item.strip()
             for item in str(values.get("providers") or "").replace("\n", ",").split(",")
@@ -868,13 +945,15 @@ class TrayMenuBuilder:
         ]
         for provider in providers:
             command.extend(["--provider", provider])
-        policies = [
-            item.strip()
-            for item in str(values.get("policies") or "").replace("\n", ",").split(",")
-            if item.strip()
-        ]
+        try:
+            policies = self._openshell_policy_paths(values)
+        except ValueError:
+            policies = []
         for policy in policies:
-            command.extend(["--policy", policy])
+            if native:
+                command.extend(["--policy", "<composed-policy>"])
+                break
+            command.extend(["--policy", str(policy)])
         if (
             _normalize_sandbox_config_source(values.get("config_source"))
             == "Latest saved snapshot"
@@ -934,9 +1013,20 @@ class TrayMenuBuilder:
 
         image = str(values.get("image") or "").strip() or DEFAULT_OPENSHELL_IMAGE
         summary["image"] = image
-        self._sandbox_progress_update(progress, "Checking local container image...")
-        summary["image_status"] = self._sandbox_image_status(image)
-        image_error = summary["image_status"].startswith("Missing locally;")
+        if self._is_native_openshell(values):
+            summary["image"] = (
+                image if str(values.get("image") or "").strip() else "OpenShell default"
+            )
+            summary["image_status"] = (
+                "OpenShell resolves the default workload image."
+                if not str(values.get("image") or "").strip()
+                else "OpenShell resolves this image/base."
+            )
+            image_error = False
+        else:
+            self._sandbox_progress_update(progress, "Checking local container image...")
+            summary["image_status"] = self._sandbox_image_status(image)
+            image_error = summary["image_status"].startswith("Missing locally;")
         error_lines = (
             (f"Image status: {summary['image_status']}",) if image_error else ()
         )
@@ -1032,17 +1122,59 @@ class TrayMenuBuilder:
         config_source = _normalize_sandbox_config_source(
             values.get("config_source") if isinstance(values, dict) else None
         )
-        runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
+        form_values = values if isinstance(values, dict) else {}
+        runtime = form_values.get(
+            "runtime", os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
+        )
         if runtime not in {"container", "openshell"}:
             runtime = "openshell"
         cli_choices = TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME[runtime]
+        policy_options = discover_openshell_policies() if runtime == "openshell" else ()
+        policy_choices = policy_choice_values(policy_options)
+        policy_default = str(
+            form_values.get(
+                "policy", os.environ.get("AI_GUARDIAN_OPEN_SHELL_POLICY", "")
+            )
+            or NO_POLICY_CHOICE
+        )
+        configured_policy = policy_default
+        if configured_policy:
+            configured_path = Path(configured_policy).expanduser()
+            for option in policy_options:
+                try:
+                    matches = configured_path.resolve() == option.path.resolve()
+                except OSError:
+                    matches = configured_path == option.path
+                if matches:
+                    policy_default = option.display
+                    break
+            else:
+                policy_default = configured_policy
+        mode_default = str(
+            form_values.get(
+                "openshell_mode",
+                os.environ.get(
+                    "AI_GUARDIAN_OPEN_SHELL_SANDBOX_MODE",
+                    TRAY_OPENSHELL_MODE_CHOICES[0],
+                ),
+            )
+            or TRAY_OPENSHELL_MODE_CHOICES[0]
+        )
+        if mode_default not in TRAY_OPENSHELL_MODE_CHOICES:
+            mode_default = TRAY_OPENSHELL_MODE_CHOICES[0]
         default_cli = "codex"
-        cli = os.environ.get("AI_GUARDIAN_CLI", default_cli)
+        cli = form_values.get("cli") or os.environ.get("AI_GUARDIAN_CLI", default_cli)
         if cli not in cli_choices:
             cli = default_cli
-        opencode_agent = os.environ.get("AI_GUARDIAN_OPENCODE_AGENT", "")
-        agent_provider = os.environ.get("AI_GUARDIAN_AGENT_PROVIDER", "")
-        repo_default = os.environ.get("AI_GUARDIAN_SANDBOX_REPO")
+        opencode_agent = form_values.get(
+            "agent", os.environ.get("AI_GUARDIAN_OPENCODE_AGENT", "")
+        )
+        agent_provider = form_values.get(
+            "agent_provider", os.environ.get("AI_GUARDIAN_AGENT_PROVIDER", "")
+        )
+        repo_default = form_values.get("repo") or os.environ.get(
+            "AI_GUARDIAN_SANDBOX_REPO"
+        )
         if not repo_default:
             target = getattr(self._tray, "_active_target", None)
             if target is None and len(self._tray._targets) == 1:
@@ -1057,8 +1189,12 @@ class TrayMenuBuilder:
         agent_provider_choices = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
         if agent_provider not in agent_provider_choices:
             agent_provider = ""
-        model_default = os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", "")
-        openshell_auth_default = os.environ.get("AI_GUARDIAN_OPEN_SHELL_AUTH", "")
+        model_default = form_values.get("model") or os.environ.get(
+            "AI_GUARDIAN_OPEN_SHELL_MODEL", ""
+        )
+        openshell_auth_default = form_values.get(
+            "openshell_auth", os.environ.get("AI_GUARDIAN_OPEN_SHELL_AUTH", "")
+        )
         normalized_auth_default = (
             str(openshell_auth_default)
             .strip()
@@ -1070,7 +1206,7 @@ class TrayMenuBuilder:
             openshell_auth_default = "API key"
         else:
             openshell_auth_default = "OAuth"
-        providers_default = ""
+        providers_default = form_values.get("providers", "")
         from ai_guardian.sandbox import _generated_openshell_name
 
         name_default = _generated_openshell_name(cli)
@@ -1083,6 +1219,19 @@ class TrayMenuBuilder:
                 "default": runtime,
                 "required": True,
                 "help": "Use Docker/Podman or NVIDIA OpenShell.",
+            },
+            {
+                "name": "openshell_mode",
+                "label": "OpenShell sandbox mode",
+                "type": "choice",
+                "choices": TRAY_OPENSHELL_MODE_CHOICES,
+                "default": mode_default,
+                "help": (
+                    "Native OpenShell leaves image, hooks, and daemon setup to "
+                    "OpenShell; AI Guardian hooks uses the managed support image."
+                ),
+                "enabled_when": {"field": "runtime", "values": ("openshell",)},
+                "clear_when_disabled": True,
             },
             {
                 "name": "cli",
@@ -1183,7 +1332,7 @@ class TrayMenuBuilder:
                 "name": "config_dir",
                 "label": "Host config directory",
                 "type": "directory",
-                "default": "",
+                "default": form_values.get("config_dir", ""),
                 "help": "Optional directory containing the initial ai-guardian.json.",
                 "enabled_when": {
                     "field": "config_source",
@@ -1195,7 +1344,7 @@ class TrayMenuBuilder:
                 "name": "image",
                 "label": "Image / base",
                 "type": "image",
-                "default": "",
+                "default": form_values.get("image", ""),
                 "help": (
                     "Leave empty to use the runtime default. Browse lists local "
                     "AI Guardian images; local tags use registry/name:tag, "
@@ -1216,7 +1365,7 @@ class TrayMenuBuilder:
                 "type": "choice",
                 "choices": profile_choices,
                 "editable": True,
-                "default": "",
+                "default": form_values.get("profile", ""),
                 "help": (
                     "Optional profile; choose a built-in or type a custom "
                     "profile name/path."
@@ -1229,16 +1378,39 @@ class TrayMenuBuilder:
             },
             {
                 "name": "policies",
-                "label": "Policy files",
+                "label": "Additional policy files",
                 "type": "file",
                 "multiple": True,
-                "default": "",
+                "default": form_values.get("policies", ""),
                 "help": (
-                    "OpenShell policy files or fragments; separate paths with "
-                    "commas or newlines."
+                    "Optional custom OpenShell overlays; separate paths with commas "
+                    "or newlines."
                 ),
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
+            },
+            {
+                "name": "policy",
+                "label": "OpenShell policy profile",
+                "type": "choice",
+                "choices": policy_choices,
+                "editable": True,
+                "default": policy_default,
+                "help": (
+                    "Optional discovered policy profile. Each choice shows its "
+                    "validation state and top-level sections; custom paths are "
+                    "also accepted."
+                ),
+                "enabled_when": {"field": "runtime", "values": ("openshell",)},
+                "clear_when_disabled": True,
+                "choices_by": {
+                    "field": "runtime",
+                    "values": {
+                        "container": (NO_POLICY_CHOICE,),
+                        "openshell": policy_choices,
+                    },
+                },
+                "clear_when_choice_invalid": True,
             },
             {
                 "name": "providers",
@@ -1306,6 +1478,9 @@ class TrayMenuBuilder:
         runtime = values.get("runtime")
         name = str(values.get("name") or "").strip()
         profile = str(values.get("profile") or "").strip()
+        openshell_mode = str(
+            values.get("openshell_mode") or TRAY_OPENSHELL_MODE_CHOICES[0]
+        ).strip()
         config_source = _normalize_sandbox_config_source(values.get("config_source"))
         restore = config_source == "Latest saved snapshot"
         if restore and profile:
@@ -1342,8 +1517,13 @@ class TrayMenuBuilder:
         agent_provider = str(values.get("agent_provider") or "").strip() or None
         cli_value = str(values.get("cli") or "").strip() or None
         cli = cli_value or "codex"
+        native_openshell = runtime == "openshell" and openshell_mode.casefold() in {
+            "native",
+            "native openshell",
+            "native-openshell",
+        }
         openshell_auth = None
-        if runtime == "openshell" and cli == "codex":
+        if runtime == "openshell" and cli == "codex" and not native_openshell:
             from ai_guardian.sandbox import _normalize_openshell_auth_mode
 
             try:
@@ -1398,7 +1578,19 @@ class TrayMenuBuilder:
             finish_flow()
             return
         policies = str(values.get("policies") or "").strip()
-        if policies and runtime != "openshell":
+        policy_paths = []
+        if runtime == "openshell":
+            try:
+                policy_paths = self._openshell_policy_paths(values)
+            except ValueError as exc:
+                self._sandbox_error(
+                    "Create AI Guardian sandbox",
+                    str(exc),
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
+                finish_flow()
+                return
+        if (policies or values.get("policy")) and runtime != "openshell":
             self._sandbox_error(
                 "Create AI Guardian sandbox",
                 "Policy files are supported for OpenShell sandboxes only.",
@@ -1406,11 +1598,6 @@ class TrayMenuBuilder:
             )
             finish_flow()
             return
-        policy_paths = []
-        for policy in policies.replace("\n", ",").split(","):
-            policy = policy.strip()
-            if policy:
-                policy_paths.append(policy)
         providers = str(values.get("providers") or "").strip()
         provider_names = []
         for provider in providers.replace("\n", ",").split(","):
@@ -1461,26 +1648,13 @@ class TrayMenuBuilder:
                 return
             port_value = int(port)
 
-        preparation = None
         if runtime == "openshell" and repo:
-            preparation = self._show_sandbox_progress(
-                f"Preparing sandbox '{name}'",
-                "Operation: create\nRuntime: openshell\n"
-                "Preparing repository upload; preflight stages appear below.",
+            confirmed = self._confirm_sandbox_upload(
+                values,
+                repo,
                 screen_bounds=screen_bounds,
             )
-            try:
-                confirmed = self._confirm_sandbox_upload(
-                    values,
-                    repo,
-                    screen_bounds=screen_bounds,
-                    progress=preparation,
-                )
-            except Exception:
-                self._sandbox_progress_close(preparation)
-                raise
             if not confirmed:
-                self._sandbox_progress_close(preparation)
                 reopen_kwargs = (
                     {"on_finished": on_finished} if on_finished is not None else {}
                 )
@@ -1506,9 +1680,10 @@ class TrayMenuBuilder:
                 image=image,
                 model=model,
                 api_key=None,
+                openshell_mode=openshell_mode,
                 openshell_auth=openshell_auth,
                 environment=environment_values,
-                policy=policy_paths,
+                policy=[str(path) for path in policy_paths],
                 provider=provider_names,
                 label=label_values,
                 command_args=[],
@@ -1563,6 +1738,299 @@ class TrayMenuBuilder:
         )
         if self._tray._discovery:
             self._tray._discovery.request_refresh(wait=False)
+
+    def _run_openshell_middleware_readiness(self, *, screen_bounds=None):
+        """Probe configured middleware endpoints and report live identity."""
+        try:
+            readiness = openshell_middleware.check_openshell_middleware()
+            report = openshell_middleware.format_middleware_readiness(readiness)
+            from ai_guardian.tray.sandbox_dialog import show_sandbox_log
+
+            show_sandbox_log(
+                "OpenShell middleware readiness",
+                "The check reads middleware endpoints from gateway TOML and probes "
+                "their gRPC Describe identity; gateway activation is shown separately.",
+                report,
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+        except Exception as exc:
+            logger.exception("OpenShell middleware readiness check failed")
+            self._sandbox_error(
+                "OpenShell middleware readiness",
+                f"Unable to check OpenShell middleware readiness: {exc}",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+
+    def _mk_openshell_middleware_readiness_action(self):
+        """Create a tray action that probes gateway-configured middleware."""
+
+        def action(icon, __):
+            screen_bounds = self._capture_sandbox_screen_bounds(icon)
+            threading.Thread(
+                target=self._run_openshell_middleware_readiness,
+                kwargs=self._screen_bounds_kwargs(screen_bounds),
+                daemon=True,
+                name="openshell-middleware-readiness",
+            ).start()
+
+        return action
+
+    @staticmethod
+    def _openshell_sandbox_label(record):
+        return f"{record['name']} ({record.get('phase', 'unknown')})"
+
+    def _openshell_policy_apply_fields(self, records):
+        """Return the form used to select a sandbox and a policy overlay."""
+        options = discover_openshell_policies()
+        sandbox_choices = tuple(
+            self._openshell_sandbox_label(record) for record in records
+        )
+        if not sandbox_choices:
+            sandbox_choices = ("",)
+        return [
+            {
+                "name": "sandbox",
+                "label": "OpenShell sandbox",
+                "type": "choice",
+                "choices": sandbox_choices,
+                "editable": True,
+                "default": sandbox_choices[0],
+                "required": True,
+                "help": (
+                    "Eligible live sandboxes are listed with their current phase; "
+                    "you may type a name if it was created after this list loaded."
+                ),
+            },
+            {
+                "name": "policy",
+                "label": "Policy profile",
+                "type": "choice",
+                "width": 68,
+                "choices": policy_choice_values(options),
+                "editable": True,
+                "default": NO_POLICY_CHOICE,
+                "required": True,
+                "help": (
+                    "Choose a discovered profile or enter a policy file path. "
+                    "The overlay merges into the sandbox base; the confirmation "
+                    "preview shows the complete policy before replacement."
+                ),
+            },
+        ]
+
+    @staticmethod
+    def _openshell_selected_sandbox_name(value, records):
+        candidate = str(value or "").strip()
+        for record in records:
+            if candidate == TrayMenuBuilder._openshell_sandbox_label(record):
+                return record["name"]
+        return candidate
+
+    def _complete_openshell_policy_form(self, values, records, *, screen_bounds=None):
+        """Prepare, confirm, and apply a complete policy to one sandbox."""
+        name = self._openshell_selected_sandbox_name(values.get("sandbox"), records)
+        if not name:
+            self._sandbox_error(
+                "Apply OpenShell policy",
+                "An OpenShell sandbox name is required.",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            return
+
+        try:
+            policy_paths = self._openshell_policy_paths(
+                {"policy": values.get("policy"), "policies": ""}
+            )
+        except ValueError as exc:
+            self._sandbox_error(
+                "Apply OpenShell policy",
+                str(exc),
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            return
+        if not policy_paths:
+            self._sandbox_error(
+                "Apply OpenShell policy",
+                "Select a valid OpenShell policy profile before continuing.",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            return
+
+        temporary_dir = None
+        try:
+            from ai_guardian.sandbox import (
+                _write_edited_openshell_policy,
+                apply_openshell_policy,
+                get_openshell_base_policy,
+                prepare_openshell_policy_update,
+            )
+
+            args = SimpleNamespace(openshell_cli=None)
+            policy_path, temporary_dir, current, updated = (
+                prepare_openshell_policy_update(args, name, policy_paths)
+            )
+            complete_policy_yaml = policy_path.read_text(encoding="utf-8").rstrip()
+            selected_profiles = ", ".join(str(path) for path in policy_paths)
+            message = (
+                f"Sandbox: {name}\n\n"
+                f"Selected policy profile: {selected_profiles}\n\n"
+                f"Current policy: {summarize_openshell_policy(current)}\n"
+                f"Initial merged policy: {summarize_openshell_policy(updated)}\n\n"
+                "Edit the complete merged YAML below if you wish. It includes the "
+                "current sandbox base policy and selected profile overlay. Clicking "
+                "Replace policy validates and applies exactly the edited document."
+            )
+            from ai_guardian.tray.sandbox_dialog import show_sandbox_form
+
+            editor_message = message
+            while True:
+                editor_values = show_sandbox_form(
+                    "Apply OpenShell policy",
+                    editor_message,
+                    [
+                        {
+                            "name": "policy_yaml",
+                            "label": "Complete merged policy (YAML)",
+                            "type": "textarea",
+                            "width": 64,
+                            "height": 20,
+                            "default": complete_policy_yaml,
+                            "required": True,
+                            "help": (
+                                "Make any desired edits. The full document is "
+                                "validated before OpenShell replaces the policy."
+                            ),
+                        }
+                    ],
+                    submit_label="Replace policy",
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
+                if editor_values is None:
+                    return
+                complete_policy_yaml = str(editor_values.get("policy_yaml") or "")
+                try:
+                    updated = _write_edited_openshell_policy(
+                        policy_path,
+                        name,
+                        current,
+                        complete_policy_yaml,
+                    )
+                except ValueError as exc:
+                    editor_message = (
+                        f"{message}\n\nPolicy validation failed: {exc}\n"
+                        "Your edits are preserved. Correct the YAML and click "
+                        "Replace policy again, or cancel without applying."
+                    )
+                    continue
+                break
+
+            output = _SandboxOutput()
+            result = apply_openshell_policy(args, name, policy_path, output=output)
+            log_text = "".join(output).strip()
+            if result == 0:
+                try:
+                    applied = get_openshell_base_policy(args, name)
+                    verification = (
+                        "OpenShell accepted and loaded the resulting policy.\n"
+                        f"Result: {summarize_openshell_policy(applied)}"
+                    )
+                except Exception as exc:
+                    verification = (
+                        "OpenShell policy set returned success, but the follow-up "
+                        f"policy read failed: {exc}"
+                    )
+                tray_notifications.show_notification(
+                    "AI Guardian", f"OpenShell policy applied: {name}"
+                )
+                from ai_guardian.tray.sandbox_dialog import show_sandbox_log
+
+                show_sandbox_log(
+                    "OpenShell policy applied",
+                    f"Complete policy applied to '{name}'.",
+                    verification,
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
+            else:
+                from ai_guardian.tray.sandbox_dialog import show_sandbox_log
+
+                show_sandbox_log(
+                    "OpenShell policy failed",
+                    f"Unable to apply a policy to '{name}'.",
+                    log_text or f"OpenShell exited with code {result}.",
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
+        except Exception as exc:
+            logger.exception("OpenShell policy application failed")
+            self._sandbox_error(
+                "Apply OpenShell policy",
+                f"Unable to prepare the complete policy: {exc}",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+        finally:
+            if temporary_dir is not None:
+                import shutil
+
+                shutil.rmtree(temporary_dir, ignore_errors=True)
+
+    def _mk_openshell_policy_apply_action(self):
+        """Create the tray action that discovers and updates OpenShell sandboxes."""
+
+        def action(icon, __):
+            screen_bounds = self._capture_sandbox_screen_bounds(icon)
+
+            def load_form():
+                try:
+                    from ai_guardian.sandbox import list_openshell_sandboxes
+
+                    records = list_openshell_sandboxes(
+                        SimpleNamespace(openshell_cli=None)
+                    )
+                except Exception as exc:
+                    logger.exception("OpenShell sandbox discovery failed")
+                    self._sandbox_error(
+                        "Apply OpenShell policy",
+                        f"Unable to list OpenShell sandboxes: {exc}",
+                        **self._screen_bounds_kwargs(screen_bounds),
+                    )
+                    return
+
+                self._start_sandbox_form(
+                    "Apply OpenShell policy",
+                    "Select a sandbox and a validated policy profile. Existing policy "
+                    "controls are preserved by composing a complete replacement.",
+                    self._openshell_policy_apply_fields(records),
+                    lambda values, **kwargs: self._complete_openshell_policy_form(
+                        values, records, **kwargs
+                    ),
+                    name="openshell-policy-apply-form",
+                    screen_bounds=screen_bounds,
+                )
+
+            threading.Thread(
+                target=load_form,
+                daemon=True,
+                name="openshell-policy-discovery",
+            ).start()
+
+        return action
+
+    def _build_openshell_middleware_menu_items(self):
+        """Build middleware readiness and live OpenShell policy actions."""
+        return [
+            pystray.MenuItem(
+                "OpenShell middleware",
+                pystray.Menu(
+                    pystray.MenuItem(
+                        "Check middleware readiness...",
+                        self._mk_openshell_middleware_readiness_action(),
+                    ),
+                    pystray.MenuItem(
+                        "Apply policy to sandbox...",
+                        self._mk_openshell_policy_apply_action(),
+                    ),
+                ),
+            )
+        ]
 
     @staticmethod
     def _sandbox_operation_parts(operation):

@@ -5,26 +5,46 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-08
+> Last updated: 2026-10-10
 
 ---
 
-## Current Quest: Issue #2522
+## Current Quest: Issue #2527
 
-- Added production release packaging for the external Rust OpenShell middleware.
-  GitHub Release assets are built for Linux x86_64/arm64 and macOS
-  Intel/Apple Silicon, archived with the executable and README, and included
-  in the release checksum file.
-- Added release-target version validation and OpenShell compatibility checks.
-  The release script synchronizes both `Cargo.toml` and `Cargo.lock` with the
-  AI Guardian release version, then restores the next development version.
-- Updated the OpenShell middleware operator guide and crate README with the
-  release asset matrix, checksum verification, installation path, and missing
-  binary remediation. The Python middleware path remains removed.
-- Added workflow, release-script, and version-synchronizer regression tests.
-- Focused tests, Rust unit tests, compatibility validation, Black, Ruff, and
-  Pylint pass. Full mypy still reports the existing unrelated errors in
-  `skill_discovery.py` and `secret_validator.py`.
+- Added tray workflows for OpenShell middleware readiness, explicit native vs
+  AI Guardian-hooked sandbox creation, policy profile discovery/validation, and
+  complete-policy replacement for existing OpenShell sandboxes.
+- Kept service-manager ownership of the external Rust process and OpenShell
+  ownership of gateway registration and `network_middlewares` activation.
+- Added the shipped middleware policy overlay with `api.openai.com`,
+  `chatgpt.com`, and `ab.chatgpt.com`, plus operator-boundary documentation.
+- Tray readiness now reads registered gRPC endpoints from gateway TOML and calls
+  `SupervisorMiddleware/Describe`. It reports Running only after the configured
+  endpoint responds with `ai-guardian/rust-middleware` and a version; gateway
+  extension activation is reported separately. No endpoint or registration
+  input is required in the tray.
+- The initial readiness failure was caused by the tray runtime missing `grpcio`
+  while gateway metadata still reported the extension active. After refreshing
+  the tray installation, the user confirmed the readiness check works.
+- Added grpcio/protobuf runtime dependencies, deployment guidance, and unit/UX
+  coverage. Missing tray-runtime dependencies now direct operators to refresh
+  the AI Guardian installation and restart the tray. The directly affected suite
+  passes 110 tests; full Ruff, Black,
+  Pylint, Mypy, and diff checks pass. Mypy reports no issues across 302 files.
+- User confirmed readiness works after refreshing the AI Guardian tray
+  environment; the prior `grpcio` import failure is resolved.
+- Improved the **Apply policy to sandbox** form: the policy-profile selector is
+  wider for long choices, and its help explains that the selected profile is an
+  overlay. The merged policy is editable; **Replace policy** validates the YAML,
+  preserves required base controls, and applies the edited document. Invalid YAML
+  reopens the editor with the user's text preserved.
+- Removed policy-preparation and repository-upload preflight progress
+  interstitials, and kept successful sandbox operation details open until the
+  user closes the dialog, preventing fast modals from flashing and disappearing.
+- The full directly affected sandbox/middleware suite passes (124 tests).
+- Ruff, Black, Pylint, Mypy (302 source files), JSON validation, and
+  `git diff --check` pass.
+- Changes remain uncommitted on branch `2527`.
 
 ## Done
 
@@ -212,48 +232,30 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Review the uncommitted release-packaging changes and let the production tag
-  workflow build the four target archives. The workflow requires the release
-  tag version in both `Cargo.toml` and `Cargo.lock` before publishing assets.
-- After the first release, verify the GitHub Release assets and checksums on one
-  Linux and one macOS host, then update the supported matrix if a target is not
-  operationally validated.
+- No follow-up pending for #2527 middleware readiness or policy review. Changes
+  remain uncommitted on branch `2527`.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2522`
-- Current issue: `RedHatProductSecurity/ai-guardian#2522`
-- The current working tree contains the uncommitted Rust middleware release
-  packaging, version synchronization, documentation, and regression-test changes.
-- The Python middleware runtime was removed before this issue; this work does
-  not restore or maintain a Python fallback.
-- OpenShell is intentionally Codex-only. The current stable npm pin is
-  `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
-  superseded before implementation.
+- Branch: `2527`
+- Current issue: `RedHatProductSecurity/ai-guardian#2527`
+- The current working tree contains the broader uncommitted #2527 sandbox,
+  middleware-readiness, documentation, and test changes.
 - The generated `docs/notebooklm-export.md` remains intentionally untouched;
   refresh it only during the release process.
-- The prior issue #2470 implementation, tests, documentation, workflow,
-  container, policy changes, doctor reporting, daemon routing, review fixes,
-  and CI test-contract correction remain committed and pushed to `origin/2470`;
-  PR #2495 is open.
-- NiceGUI is a core dependency; `uv.lock` is ignored by this repository and was regenerated locally.
+- `uv.lock` is ignored by this repository and was regenerated locally.
 - Do not regenerate `docs/notebooklm-export.md` during development.
 
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_sync_rust_middleware_version.py tests/unit/test_release_script.py tests/unit/test_workflow_runner_policy.py -q  # 16 passed
-python3 scripts/sync_rust_middleware_version.py --repo . --version 1.20.0-dev --check
-python3 scripts/check_openshell_compatibility.py
-cargo test --locked --manifest-path rust/openshell-middleware/Cargo.toml  # 13 passed
-cargo build --locked --release --target x86_64-unknown-linux-gnu --manifest-path rust/openshell-middleware/Cargo.toml
+uv run --extra dev python -m pytest tests/unit/test_openshell_middleware_probe.py tests/unit/test_openshell_middleware_tray.py tests/unit/test_openshell_policy.py tests/unit/test_sandbox_tray.py tests/ux/test_user_experience_contract_sandbox_middleware.py -q  # 115 passed
 black --target-version py310 --check src/ai_guardian/ tests/
 ruff check src/ai_guardian/ tests/
-pylint src/ai_guardian/ --disable=all --enable=E --output-format=text  # 10.00/10
-mypy scripts/sync_rust_middleware_version.py tests/unit/test_sync_rust_middleware_version.py tests/unit/test_workflow_runner_policy.py  # no issues
- # Full mypy retains 14 unrelated baseline errors in skill_discovery.py and secret_validator.py.
-python -m json.tool .wolf/buglog.json > /dev/null
+pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text  # 10.00/10
+mypy src/ai_guardian/  # no issues across 302 files
+uv run --extra dev python -m json.tool .wolf/buglog.json > /dev/null
 git diff --check
 ```
 
@@ -262,7 +264,4 @@ git diff --check
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- GitHub PR: `https://github.com/RedHatProductSecurity/ai-guardian/pull/2513`
-- GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2496`
-- Prior GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2470`
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2517`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2527`

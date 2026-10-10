@@ -22,6 +22,7 @@ from ai_guardian.tray.menu import (
 from ai_guardian.tray.menu_builder import (
     TRAY_OPENSHELL_AUTH_CHOICES,
     TRAY_OPENSHELL_CLI_CHOICES,
+    TRAY_OPENSHELL_MODE_CHOICES,
     TrayMenuBuilder,
 )
 
@@ -663,8 +664,12 @@ class TestSandboxTrayMenu:
             ["stopped-container"],
         )
 
-    def test_create_form_maps_restore_and_runtime_options(self):
+    def test_create_form_maps_restore_and_runtime_options(self, tmp_path):
         tray = _make_tray([])
+        first_policy = tmp_path / "read-only.yaml"
+        second_policy = tmp_path / "network.yaml"
+        first_policy.write_text("network_policies: {}\n", encoding="utf-8")
+        second_policy.write_text("network_middlewares: {}\n", encoding="utf-8")
         values = {
             "runtime": "openshell",
             "name": "ag-test",
@@ -677,7 +682,7 @@ class TestSandboxTrayMenu:
             "image": "localhost/ai-guardian:openshell",
             "model": "",
             "profile": "",
-            "policies": "/tmp/read-only.yaml, /tmp/network.yaml",
+            "policies": f"{first_policy}, {second_policy}",
             "providers": "ai-guardian-codex, ai-guardian-github",
             "environment": "DEBUG=1, TERM=xterm",
             "labels": "team=security, owner=ai",
@@ -714,7 +719,7 @@ class TestSandboxTrayMenu:
         assert args.config_dir is None
         assert args.image == "localhost/ai-guardian:openshell"
         assert args.model is None
-        assert args.policy == ["/tmp/read-only.yaml", "/tmp/network.yaml"]
+        assert args.policy == [str(first_policy), str(second_policy)]
         assert args.provider == ["ai-guardian-codex", "ai-guardian-github"]
         assert args.environment == ["DEBUG=1", "TERM=xterm"]
         assert args.label == ["team=security", "owner=ai"]
@@ -766,6 +771,30 @@ class TestSandboxTrayMenu:
         args = create.call_args.args[0]
         assert args.openshell_auth == "api_key"
 
+    def test_create_form_maps_native_mode_and_policy(self, tmp_path):
+        tray = _make_tray([])
+        policy = tmp_path / "native-policy.yaml"
+        policy.write_text(
+            "version: 1\nfilesystem_policy:\n  read_write: [/sandbox]\n",
+            encoding="utf-8",
+        )
+        values = {
+            "runtime": "openshell",
+            "openshell_mode": "Native OpenShell",
+            "name": "native-demo",
+            "cli": "codex",
+            "policy": str(policy),
+            "config_source": "Host/default",
+        }
+
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.openshell_mode == "Native OpenShell"
+        assert args.openshell_auth is None
+        assert args.policy == [str(policy)]
+
     def test_create_form_shows_runtime_log_when_direct_create_fails(self):
         tray = _make_tray([])
 
@@ -789,7 +818,7 @@ class TestSandboxTrayMenu:
             "runtime failed",
         )
 
-    def test_openshell_preflight_shows_preparation_before_upload_confirmation(
+    def test_openshell_preflight_skips_transient_progress_before_confirmation(
         self, tmp_path
     ):
         tray = _make_tray([])
@@ -802,34 +831,21 @@ class TestSandboxTrayMenu:
             "cli": "codex",
             "repo": str(repo),
         }
-        preparation = mock.MagicMock()
-
-        def show_confirmation(_message, **_kwargs):
-            assert preparation.update_status.call_count >= 3
-            return True
-
         with (
-            mock.patch.object(
-                tray._menu, "_show_sandbox_progress", return_value=preparation
-            ) as show_progress,
+            mock.patch.object(tray._menu, "_show_sandbox_progress") as show_progress,
             mock.patch.object(
                 tray._menu, "_sandbox_image_status", return_value="Found locally."
             ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog.show_sandbox_upload_confirmation",
-                side_effect=show_confirmation,
-            ),
+                return_value=True,
+            ) as show_confirmation,
             mock.patch.object(tray._menu, "_run_sandbox_create") as run_create,
         ):
             tray._menu._complete_sandbox_create_form(values)
 
-        show_progress.assert_called_once_with(
-            "Preparing sandbox 'ag-test'",
-            "Operation: create\nRuntime: openshell\n"
-            "Preparing repository upload; preflight stages appear below.",
-            screen_bounds=None,
-        )
-        preparation.close.assert_called_once_with()
+        show_progress.assert_not_called()
+        assert "(1 files)" in show_confirmation.call_args.args[0]
         run_create.assert_called_once()
 
     def test_upload_preflight_summarizes_size_and_git_remote(self, tmp_path):
@@ -868,6 +884,30 @@ class TestSandboxTrayMenu:
         assert "GitHub repository" in message
         assert "TOKEN=hidden" not in message
         assert "ai-guardian sandbox create" in message
+
+    def test_native_upload_preview_uses_native_openshell_command(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "openshell_mode": "Native OpenShell",
+            "name": "native-demo",
+            "repo": "/tmp/repo",
+        }
+        summary = {
+            "path": "/tmp/repo",
+            "size": 128,
+            "files": 2,
+            "source": "Local repository",
+        }
+
+        with mock.patch.object(tray._menu, "_sandbox_image_status") as image_status:
+            message = tray._menu._sandbox_upload_confirmation_message(values, summary)
+
+        image_status.assert_not_called()
+        command_preview = message.split("Command preview:\n", 1)[1]
+        assert "openshell sandbox create" in command_preview
+        assert "--upload /tmp/repo:/sandbox/repo" in command_preview
+        assert "ai-guardian sandbox create" not in command_preview
 
     def test_upload_preflight_reports_local_and_remote_image_status(self):
         tray = _make_tray([])
@@ -993,7 +1033,7 @@ class TestSandboxTrayMenu:
             == "Latest saved snapshot"
         )
 
-    def test_create_streams_output_and_closes_progress_on_success(self):
+    def test_create_streams_output_and_finishes_progress_on_success(self):
         tray = _make_tray([])
         progress = mock.MagicMock()
         discovery = mock.MagicMock()
@@ -1274,6 +1314,185 @@ class TestSandboxTrayMenu:
         repo_field = next(field for field in fields if field["name"] == "repo")
         assert repo_field["type"] == "directory"
         assert repo_field["default"] == os.path.expanduser("~")
+
+    def test_create_form_exposes_native_openshell_mode_and_policy_profile(self):
+        tray = _make_tray([])
+        base_env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("AI_GUARDIAN_")
+        }
+        with mock.patch.dict(os.environ, base_env, clear=True):
+            fields = tray._menu._sandbox_create_fields()
+
+        mode_field = next(
+            field for field in fields if field["name"] == "openshell_mode"
+        )
+        assert mode_field["choices"] == TRAY_OPENSHELL_MODE_CHOICES
+        assert mode_field["default"] == "AI Guardian hooks"
+        policy_field = next(field for field in fields if field["name"] == "policy")
+        assert policy_field["type"] == "choice"
+        assert policy_field["choices"][0] == "No additional policy"
+        assert any("valid" in choice for choice in policy_field["choices"][1:])
+
+    def test_openshell_menu_exposes_readiness_and_policy_actions(self):
+        tray = _make_tray([])
+        with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
+            items = tray._menu._build_openshell_middleware_menu_items()
+
+        assert [item.label for item in items] == ["OpenShell middleware"]
+        assert _walk_labels(items[0].action) == [
+            "Check middleware readiness...",
+            "Apply policy to sandbox...",
+        ]
+
+    def test_apply_openshell_policy_form_has_a_wider_profile_field(self):
+        tray = _make_tray([])
+        with mock.patch(
+            "ai_guardian.tray.menu_builder.discover_openshell_policies",
+            return_value=(),
+        ):
+            fields = tray._menu._openshell_policy_apply_fields([])
+
+        profile = next(field for field in fields if field["name"] == "policy")
+        assert profile["width"] == 68
+        assert "enter a policy file path" in profile["help"]
+        assert "complete policy before replacement" in profile["help"]
+
+    def test_apply_openshell_policy_edits_and_applies_complete_merged_yaml(
+        self, tmp_path
+    ):
+        tray = _make_tray([])
+        overlay = tmp_path / "github-readwrite.yaml"
+        overlay.write_text("network_policies: {}\n", encoding="utf-8")
+        temporary_dir = tmp_path / "prepared"
+        temporary_dir.mkdir()
+        policy_path = temporary_dir / "policy.yaml"
+        policy_path.write_text(
+            "version: 1\nfilesystem_policy:\n  read_only: false\n"
+            "network_policies:\n  github: readwrite\n",
+            encoding="utf-8",
+        )
+        complete_yaml = policy_path.read_text(encoding="utf-8").rstrip()
+        current = {"version": 1, "filesystem_policy": {"read_only": False}}
+        updated = {
+            "version": 1,
+            "filesystem_policy": {"read_only": False},
+            "network_policies": {"github": "readwrite"},
+        }
+
+        with (
+            mock.patch.object(
+                tray._menu, "_openshell_policy_paths", return_value=[overlay]
+            ),
+            mock.patch.object(tray._menu, "_show_sandbox_progress") as show_progress,
+            mock.patch.object(tray._menu, "_sandbox_progress_close") as close_progress,
+            mock.patch(
+                "ai_guardian.sandbox.prepare_openshell_policy_update",
+                return_value=(policy_path, temporary_dir, current, updated),
+            ),
+            mock.patch(
+                "ai_guardian.sandbox.apply_openshell_policy", return_value=0
+            ) as apply_policy,
+            mock.patch(
+                "ai_guardian.sandbox.get_openshell_base_policy", return_value=updated
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.show_sandbox_form",
+                return_value={"policy_yaml": complete_yaml},
+            ) as confirm,
+            mock.patch("ai_guardian.tray.sandbox_dialog.show_sandbox_log"),
+            mock.patch(
+                "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
+            ),
+        ):
+            tray._menu._complete_openshell_policy_form(
+                {"sandbox": "github-demo", "policy": str(overlay)}, []
+            )
+
+        title, message, fields = confirm.call_args.args
+        assert title == "Apply OpenShell policy"
+        assert f"Selected policy profile: {overlay}" in message
+        assert "complete merged YAML below" in message
+        assert fields[0]["type"] == "textarea"
+        assert fields[0]["label"] == "Complete merged policy (YAML)"
+        assert fields[0]["default"] == complete_yaml
+        assert confirm.call_args.kwargs["submit_label"] == "Replace policy"
+        apply_policy.assert_called_once()
+        show_progress.assert_not_called()
+        close_progress.assert_not_called()
+
+    def test_apply_openshell_policy_reopens_editor_after_validation_error(
+        self, tmp_path
+    ):
+        tray = _make_tray([])
+        overlay = tmp_path / "github-readwrite.yaml"
+        overlay.write_text("network_policies: {}\n", encoding="utf-8")
+        temporary_dir = tmp_path / "prepared"
+        temporary_dir.mkdir()
+        policy_path = temporary_dir / "policy.yaml"
+        initial_yaml = (
+            "version: 1\nfilesystem_policy:\n  read_only: false\n"
+            "network_policies:\n  github: readwrite\n"
+        )
+        policy_path.write_text(initial_yaml, encoding="utf-8")
+        current = {"version": 1, "filesystem_policy": {"read_only": False}}
+        updated = {
+            "version": 1,
+            "filesystem_policy": {"read_only": False},
+            "network_policies": {"github": "readwrite"},
+        }
+
+        with (
+            mock.patch.object(
+                tray._menu, "_openshell_policy_paths", return_value=[overlay]
+            ),
+            mock.patch(
+                "ai_guardian.sandbox.prepare_openshell_policy_update",
+                return_value=(policy_path, temporary_dir, current, updated),
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.show_sandbox_form",
+                side_effect=[
+                    {"policy_yaml": "version: ["},
+                    {"policy_yaml": initial_yaml},
+                ],
+            ) as edit_form,
+            mock.patch(
+                "ai_guardian.sandbox.apply_openshell_policy", return_value=1
+            ) as apply_policy,
+            mock.patch("ai_guardian.tray.sandbox_dialog.show_sandbox_log"),
+        ):
+            tray._menu._complete_openshell_policy_form(
+                {"sandbox": "github-demo", "policy": str(overlay)}, []
+            )
+
+        assert edit_form.call_count == 2
+        assert "validation failed" in edit_form.call_args_list[1].args[1]
+        assert edit_form.call_args_list[1].args[2][0]["default"] == "version: ["
+        apply_policy.assert_called_once()
+
+    def test_middleware_readiness_action_auto_discovers_without_a_setup_form(self):
+        tray = _make_tray([])
+
+        with (
+            mock.patch.object(
+                tray._menu, "_capture_sandbox_screen_bounds", return_value=None
+            ),
+            mock.patch.object(
+                tray._menu, "_run_openshell_middleware_readiness"
+            ) as run_readiness,
+            mock.patch.object(tray._menu, "_start_sandbox_form") as start_form,
+            mock.patch("ai_guardian.tray.menu_builder.threading.Thread") as thread,
+        ):
+            action = tray._menu._mk_openshell_middleware_readiness_action()
+            action(None, None)
+
+        thread.assert_called_once()
+        assert thread.call_args.kwargs["target"] == run_readiness
+        assert thread.call_args.kwargs["kwargs"] == {}
+        thread.return_value.start.assert_called_once()
+        start_form.assert_not_called()
 
     def test_create_form_defaults_repo_to_active_working_dir(self):
         tray = _make_tray(
@@ -1810,6 +2029,80 @@ class TestSandboxDialogFallback:
         assert isinstance(progress, SandboxProgress)
         progress.close()
 
+    def test_successful_progress_dialog_stays_open_for_user_to_close(self):
+        import queue
+        from types import ModuleType
+
+        from ai_guardian.tray.sandbox_dialog import _show_tkinter_progress
+
+        class Updates:
+            def __init__(self):
+                self.values = [
+                    {
+                        "type": "complete",
+                        "success": True,
+                        "message": "Sandbox 'demo' created.",
+                        "log": "Sandbox ready",
+                    }
+                ]
+
+            def get_nowait(self):
+                if self.values:
+                    return self.values.pop(0)
+                raise queue.Empty
+
+        root = mock.MagicMock()
+        root.winfo_exists.return_value = True
+        scheduled = []
+
+        def schedule(delay, callback):
+            if delay == 50:
+                scheduled.append(callback)
+            else:
+                callback()
+
+        root.after.side_effect = schedule
+        root.mainloop.side_effect = lambda: scheduled.pop(0)()
+        variables = []
+
+        def make_variable(*_args, **_kwargs):
+            variable = mock.MagicMock()
+            variables.append(variable)
+            return variable
+
+        tk_module = ModuleType("tkinter")
+        tk_module.Tk = mock.Mock(return_value=root)
+        tk_module.StringVar = make_variable
+        tk_module.BooleanVar = make_variable
+        tk_module.Text = mock.Mock(return_value=mock.MagicMock())
+        tk_module.TclError = type("TclError", (Exception,), {})
+        ttk_module = ModuleType("tkinter.ttk")
+        ttk_module.Frame = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+        ttk_module.Label = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+        ttk_module.Scrollbar = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+        ttk_module.Checkbutton = mock.Mock(
+            side_effect=lambda *_a, **_k: mock.MagicMock()
+        )
+        ttk_module.Button = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+        tk_module.ttk = ttk_module
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {"tkinter": tk_module, "tkinter.ttk": ttk_module},
+            ),
+            mock.patch("ai_guardian.ui.display._ensure_tcl_library"),
+            mock.patch("ai_guardian.tray.sandbox_dialog._place_window_on_screen"),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.queue.Queue", return_value=Updates()
+            ),
+            mock.patch("ai_guardian.tray.sandbox_dialog.threading.Thread"),
+        ):
+            _show_tkinter_progress("Creating sandbox", "Running")
+
+        root.destroy.assert_not_called()
+        variables[0].set.assert_called_once_with("Sandbox 'demo' created.")
+
     def test_sandbox_text_wrap_switches_between_wrapped_and_unwrapped(self):
         from ai_guardian.tray.sandbox_dialog import _set_text_wrap
 
@@ -1879,6 +2172,95 @@ class TestSandboxDialogFallback:
         assert result == {"runtime": "container"}
         show_form.assert_called_once_with("Title", "Message", [])
 
+    def test_form_forwards_custom_submit_label_to_tkinter_subprocess(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_form
+
+        with (
+            mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True),
+            mock.patch(
+                "ai_guardian.ui.display.select_ui_provider", return_value="tkinter"
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess",
+                return_value={"policy_yaml": "version: 1"},
+            ) as show_form,
+        ):
+            result = show_sandbox_form(
+                "Apply OpenShell policy",
+                "Review policy",
+                [{"name": "policy_yaml", "type": "textarea"}],
+                submit_label="Replace policy",
+            )
+
+        assert result == {"policy_yaml": "version: 1"}
+        show_form.assert_called_once_with(
+            "Apply OpenShell policy",
+            "Review policy",
+            [{"name": "policy_yaml", "type": "textarea"}],
+            submit_label="Replace policy",
+        )
+
+    def test_tk_form_returns_edited_multiline_textarea(self):
+        from types import ModuleType
+
+        from ai_guardian.tray.sandbox_dialog import _show_tkinter_form
+
+        root = mock.MagicMock()
+        text_widget = mock.MagicMock()
+        text_widget.get.return_value = "version: 1\nnetwork_policies: {}"
+        ttk_module = ModuleType("tkinter.ttk")
+        ttk_module.Frame = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+        ttk_module.Label = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+        ttk_module.Scrollbar = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+        ttk_module.Checkbutton = mock.Mock(
+            side_effect=lambda *_a, **_k: mock.MagicMock()
+        )
+        ttk_module.Button = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+
+        def run_form():
+            ttk_module.Button.call_args_list[-1].kwargs["command"]()
+
+        root.mainloop.side_effect = run_form
+        tk_module = ModuleType("tkinter")
+        tk_module.Tk = mock.Mock(return_value=root)
+        tk_module.Canvas = mock.Mock(return_value=mock.MagicMock())
+        tk_module.StringVar = mock.Mock(return_value=mock.MagicMock())
+        tk_module.BooleanVar = mock.Mock(return_value=mock.MagicMock())
+        tk_module.Text = mock.Mock(return_value=text_widget)
+        tk_module.TclError = type("TclError", (Exception,), {})
+        tk_module.ttk = ttk_module
+        tk_module.filedialog = ModuleType("tkinter.filedialog")
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "tkinter": tk_module,
+                    "tkinter.ttk": ttk_module,
+                    "tkinter.filedialog": tk_module.filedialog,
+                },
+            ),
+            mock.patch("ai_guardian.ui.display._ensure_tcl_library"),
+            mock.patch("ai_guardian.tray.sandbox_dialog._place_window_on_screen"),
+        ):
+            result = _show_tkinter_form(
+                "Apply OpenShell policy",
+                "Review policy",
+                [
+                    {
+                        "name": "policy_yaml",
+                        "label": "Complete policy",
+                        "type": "textarea",
+                        "default": "version: 1",
+                    }
+                ],
+                submit_label="Replace policy",
+            )
+
+        assert result == {"policy_yaml": "version: 1\nnetwork_policies: {}"}
+        assert root.bind.call_args_list[-1].args[0] == "<Control-Return>"
+        assert ttk_module.Button.call_args_list[-1].kwargs["text"] == "Replace policy"
+
     def test_confirmation_returns_false_when_ui_is_headless(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_confirmation
 
@@ -1941,6 +2323,36 @@ class TestSandboxDialogFallback:
             error_lines=(),
         )
 
+    def test_policy_confirmation_returns_false_when_ui_is_headless(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_policy_confirmation
+
+        with mock.patch(
+            "ai_guardian.ui.display.select_ui_provider", return_value="headless"
+        ):
+            assert show_sandbox_policy_confirmation("Replace policy?") is False
+
+    def test_policy_confirmation_uses_explicit_replace_label(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_policy_confirmation
+
+        with (
+            mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True),
+            mock.patch(
+                "ai_guardian.ui.display.select_ui_provider", return_value="tkinter"
+            ) as select_provider,
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog._show_tkinter_upload_confirmation_subprocess",
+                return_value=True,
+            ) as show_confirmation,
+        ):
+            assert show_sandbox_policy_confirmation("Replace policy?") is True
+
+        show_confirmation.assert_called_once_with(
+            "Apply OpenShell policy",
+            "Replace policy?",
+            confirm_label="Replace policy",
+        )
+        select_provider.assert_called_once_with("form", screen_bounds=None)
+
     def test_form_uses_nicegui_when_selected_without_tkinter(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_form
 
@@ -1957,6 +2369,34 @@ class TestSandboxDialogFallback:
 
         assert result == {"runtime": "openshell"}
         show_form.assert_called_once_with("Title", "Message", [], screen_bounds=None)
+
+    def test_nicegui_form_receives_custom_submit_label(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_form
+
+        with (
+            mock.patch(
+                "ai_guardian.ui.display.select_ui_provider", return_value="nicegui"
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog._show_nicegui_form",
+                return_value={"policy_yaml": "version: 1"},
+            ) as show_form,
+        ):
+            result = show_sandbox_form(
+                "Apply OpenShell policy",
+                "Review policy",
+                [{"name": "policy_yaml", "type": "textarea"}],
+                submit_label="Replace policy",
+            )
+
+        assert result == {"policy_yaml": "version: 1"}
+        show_form.assert_called_once_with(
+            "Apply OpenShell policy",
+            "Review policy",
+            [{"name": "policy_yaml", "type": "textarea"}],
+            screen_bounds=None,
+            submit_label="Replace policy",
+        )
 
     def test_macos_native_upload_confirmation_works_without_tkinter(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_upload_confirmation

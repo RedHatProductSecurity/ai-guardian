@@ -1,0 +1,27 @@
+# OpenShell policy overlay for the operator-registered AI Guardian middleware.
+#
+# This is intentionally an overlay.  The tray and ``ai-guardian sandbox``
+# compose it with the appropriate complete base policy before OpenShell applies
+# it.  The nested middleware value must match the gateway registration name.
+version: 1
+
+network_middlewares:
+  content-guard:
+    name: AI Guardian content guard
+    middleware: content-guard
+    order: 10
+    on_error: fail_closed
+    config:
+      response_redaction: true
+      scanner_ownership:
+        default: hooks
+        prompt_injection: middleware
+        context_poisoning: middleware
+        secret_scanning: middleware
+        scan_pii: middleware
+        secret_redaction: middleware
+    endpoints:
+      include:
+        - api.openai.com
+        - chatgpt.com
+        - ab.chatgpt.com

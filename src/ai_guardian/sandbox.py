@@ -26,6 +26,10 @@ from ai_guardian.ide_registry import (
     SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
     SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
 )
+from ai_guardian.openshell_policy import (
+    load_openshell_policy,
+    validate_openshell_policy,
+)
 
 CONTAINER_RUNTIME = "container"
 OPENSHELL_RUNTIME = "openshell"
@@ -44,6 +48,8 @@ RUNTIME_LABEL_KEY = "ai-guardian.runtime"
 DAEMON_LABEL_KEY = "ai-guardian.daemon"
 OPENSHELL_ENTRYPOINT = "/usr/local/bin/entrypoint.sh"
 OPENSHELL_SERVICE_NAME = "ai-guardian"
+OPENSHELL_MODE_MANAGED = "ai-guardian"
+OPENSHELL_MODE_NATIVE = "native"
 OPENSHELL_PROVIDER_DOC_URL = (
     "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/Sandbox.md"
     "#openshell-provider-setup"
@@ -223,6 +229,30 @@ def _openshell_auth_mode(args) -> Optional[str]:
     return _normalize_openshell_auth_mode(getattr(args, "openshell_auth", None))
 
 
+def _openshell_mode(args) -> str:
+    """Resolve the tray-only OpenShell creation mode."""
+    selected = (
+        str(getattr(args, "openshell_mode", None) or OPENSHELL_MODE_MANAGED)
+        .strip()
+        .lower()
+        .replace("_", "-")
+        .replace(" ", "-")
+    )
+    if selected in {OPENSHELL_MODE_NATIVE, "native-openshell"}:
+        return OPENSHELL_MODE_NATIVE
+    if selected in {
+        OPENSHELL_MODE_MANAGED,
+        "hooks",
+        "ai-guardian-hooks",
+        "managed",
+    }:
+        return OPENSHELL_MODE_MANAGED
+    raise ValueError(
+        "unsupported OpenShell creation mode "
+        f"'{getattr(args, 'openshell_mode', None)}'; choose native or ai-guardian"
+    )
+
+
 def _openshell_explicit_command(args) -> List[str]:
     """Return the explicit command for the supported OpenShell CLI."""
     return _command_args(args)
@@ -353,6 +383,207 @@ def _run_capture(
         )
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return None
+
+
+def _parse_openshell_json_output(
+    result: Optional[subprocess.CompletedProcess], description: str
+) -> Any:
+    """Decode a JSON response from the OpenShell CLI with safe diagnostics."""
+    if result is None:
+        raise ValueError(f"OpenShell {description} command was not available")
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        suffix = f": {detail}" if detail else ""
+        raise ValueError(f"OpenShell {description} failed{suffix}")
+    try:
+        return json.loads(result.stdout or "")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"OpenShell {description} returned invalid JSON") from exc
+
+
+def list_openshell_sandboxes(args=None) -> List[Dict[str, Any]]:
+    """Return live OpenShell sandboxes eligible for policy updates."""
+    base_command = [_openshell_cli(args), "sandbox", "list", "--output", "json"]
+    all_records = []
+    page_token = ""
+    while True:
+        command = [*base_command]
+        if page_token:
+            command.extend(["--page-token", page_token])
+        result = _run_capture(command)
+        payload = _parse_openshell_json_output(result, "sandbox list")
+        records = payload.get("sandboxes") if isinstance(payload, dict) else payload
+        if not isinstance(records, list):
+            raise ValueError("OpenShell sandbox list did not contain a sandbox array")
+        all_records.extend(records)
+        next_token = (
+            payload.get("next_page_token", "") if isinstance(payload, dict) else ""
+        )
+        if (
+            not isinstance(next_token, str)
+            or not next_token
+            or next_token == page_token
+        ):
+            break
+        page_token = next_token
+
+    sandboxes = []
+    for record in all_records:
+        if not isinstance(record, dict):
+            continue
+        name = record.get("name") or record.get("sandbox_name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        phase = str(record.get("phase") or record.get("status") or "unknown")
+        if phase.casefold() in {"deleted", "deleting"}:
+            continue
+        labels = record.get("labels")
+        sandboxes.append(
+            {
+                "name": name.strip(),
+                "phase": phase.strip(),
+                "labels": dict(labels) if isinstance(labels, dict) else {},
+                "record": record,
+            }
+        )
+    return sorted(sandboxes, key=lambda item: item["name"].casefold())
+
+
+def get_openshell_base_policy(args, name: str) -> Dict[str, Any]:
+    """Read a round-trippable base policy from an existing sandbox."""
+    result = _run_capture(
+        [
+            _openshell_cli(args),
+            "policy",
+            "get",
+            name,
+            "--base",
+            "--output",
+            "json",
+        ]
+    )
+    payload = _parse_openshell_json_output(result, "policy get")
+    policy = payload.get("policy") if isinstance(payload, dict) else None
+    if not isinstance(policy, dict) and isinstance(payload, dict):
+        policy = payload
+    if not isinstance(policy, dict):
+        raise ValueError("OpenShell policy get did not contain a base policy")
+    return validate_openshell_policy(policy, Path(f"<sandbox:{name}>"))
+
+
+def prepare_openshell_policy_update(
+    args,
+    name: str,
+    policy_paths: Sequence[Path],
+) -> Tuple[Path, Path, Dict[str, Any], Dict[str, Any]]:
+    """Merge overlays into a sandbox base policy before confirmation.
+
+    The returned temporary directory belongs to the caller, which must remove
+    it after ``openshell policy set`` completes or the user cancels.
+    """
+    if not policy_paths:
+        raise ValueError("select an OpenShell policy before applying it")
+
+    current_policy = get_openshell_base_policy(args, name)
+    updated_policy = dict(current_policy)
+    for path in policy_paths:
+        policy_path = Path(path).expanduser()
+        if not policy_path.is_file():
+            raise ValueError(f"OpenShell policy file not found: {policy_path}")
+        updated_policy = _merge_openshell_policy_values(
+            updated_policy, load_openshell_policy(policy_path)
+        )
+
+    # A policy update replaces the live policy.  Refuse an overlay that would
+    # erase the existing sandbox's core controls instead of silently weakening
+    # the sandbox while adding middleware.
+    for required_section in ("filesystem_policy", "network_policies"):
+        if required_section in current_policy and not isinstance(
+            updated_policy.get(required_section), dict
+        ):
+            raise ValueError(
+                f"selected policy would replace {required_section} with a non-mapping"
+            )
+    updated_policy = validate_openshell_policy(
+        updated_policy, Path(f"<sandbox:{name}:updated>")
+    )
+
+    try:
+        temporary_dir = Path(
+            tempfile.mkdtemp(
+                prefix="ai-guardian-openshell-policy-update.",
+                dir=os.environ.get("TMPDIR") or None,
+            )
+        )
+        policy_path = temporary_dir / "policy.yaml"
+        import yaml
+
+        policy_path.write_text(
+            yaml.safe_dump(updated_policy, sort_keys=False), encoding="utf-8"
+        )
+        os.chmod(policy_path, 0o600)
+    except (OSError, UnicodeError, ImportError) as exc:
+        if "temporary_dir" in locals():
+            shutil.rmtree(temporary_dir, ignore_errors=True)
+        raise ValueError(f"unable to prepare OpenShell policy update: {exc}") from exc
+
+    return policy_path, temporary_dir, current_policy, updated_policy
+
+
+def _write_edited_openshell_policy(
+    policy_path: Path,
+    name: str,
+    current_policy: Mapping[str, Any],
+    policy_text: str,
+) -> Dict[str, Any]:
+    """Validate edited policy YAML and replace only the private prepared file."""
+    import yaml
+
+    try:
+        value = yaml.safe_load(policy_text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"edited OpenShell policy has invalid YAML: {exc}") from exc
+
+    updated_policy = validate_openshell_policy(value, Path(f"<sandbox:{name}:edited>"))
+    for required_section in ("filesystem_policy", "network_policies"):
+        if (
+            required_section in current_policy
+            and required_section not in updated_policy
+        ):
+            raise ValueError(
+                f"edited policy must preserve {required_section} from the sandbox base"
+            )
+
+    try:
+        policy_path.write_text(
+            yaml.safe_dump(updated_policy, sort_keys=False), encoding="utf-8"
+        )
+        os.chmod(policy_path, 0o600)
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"unable to save edited OpenShell policy: {exc}") from exc
+    return updated_policy
+
+
+def apply_openshell_policy(
+    args,
+    name: str,
+    policy_path: Path,
+    *,
+    output: Optional[List[str]] = None,
+) -> int:
+    """Apply one complete prepared policy through the native OpenShell CLI."""
+    return _run(
+        [
+            _openshell_cli(args),
+            "policy",
+            "set",
+            name,
+            "--policy",
+            str(policy_path),
+            "--wait",
+        ],
+        output=output,
+    )
 
 
 def _sandbox_name_exists(args, runtime: str, name: str) -> bool:
@@ -941,32 +1172,7 @@ def _openshell_policy_assets(args, cli: str) -> Tuple[Path, Path]:
 
 def _load_openshell_policy(path: Path) -> Dict[str, Any]:
     """Load one YAML OpenShell policy fragment as a mapping."""
-    try:
-        import importlib
-
-        yaml = importlib.import_module("yaml")
-
-        value = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise ValueError(
-            f"cannot read OpenShell policy fragment {path}: {exc}"
-        ) from exc
-    except UnicodeError as exc:
-        raise ValueError(
-            f"cannot decode OpenShell policy fragment {path}: {exc}"
-        ) from exc
-    except yaml.YAMLError as exc:
-        raise ValueError(
-            f"invalid YAML in OpenShell policy fragment {path}: {exc}"
-        ) from exc
-
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise ValueError(
-            f"OpenShell policy fragment {path} must contain a YAML mapping"
-        )
-    return value
+    return load_openshell_policy(path)
 
 
 def _merge_openshell_policy_values(base: Any, overlay: Any) -> Any:
@@ -988,8 +1194,9 @@ def _compose_openshell_policy(
     cli: str,
     *,
     extra_overlays: Sequence[Path] = (),
+    include_agent_policy: bool = True,
 ) -> Tuple[Path, Path]:
-    """Compose baseline, user overlays, CLI, and generated policy overlays."""
+    """Compose baseline, user overlays, and optional selected-CLI policy."""
     import yaml
 
     base_path, cli_path = _openshell_policy_assets(args, cli)
@@ -1001,7 +1208,11 @@ def _compose_openshell_policy(
             raise ValueError(f"OpenShell policy file not found: {policy_path}")
 
     policy: Dict[str, Any] = {}
-    for path in [base_path, *overlay_paths, cli_path, *extra_overlays]:
+    policy_paths = [base_path, *overlay_paths]
+    if include_agent_policy:
+        policy_paths.append(cli_path)
+    policy_paths.extend(extra_overlays)
+    for path in policy_paths:
         policy = _merge_openshell_policy_values(policy, _load_openshell_policy(path))
     policy.setdefault("version", 1)
     if policy["version"] != 1:
@@ -1971,6 +2182,52 @@ def _openshell_create(
     return command, name, uploads_requested, policy_dir
 
 
+def _openshell_native_create(
+    args, *, output: Optional[List[str]] = None
+) -> Tuple[List[str], str, bool, Optional[Path]]:
+    """Build a native OpenShell create command without AI Guardian coupling."""
+    cli = _openshell_cli(args)
+    command = [cli, "sandbox", "create", "--detach"]
+    name = _sandbox_base_name(args, OPENSHELL_RUNTIME)
+    command.extend(["--name", name])
+
+    image = getattr(args, "image", None)
+    if image:
+        _validate_image_reference(image)
+        command.extend(["--from", str(image).strip()])
+
+    for label in getattr(args, "label", None) or []:
+        command.extend(["--label", label])
+
+    policy_dir = None
+    if getattr(args, "policy", None):
+        policy_path, policy_dir = _compose_openshell_policy(
+            args,
+            _selected_cli(args, DEFAULT_OPENSHELL_CLI),
+            include_agent_policy=False,
+        )
+        command.extend(["--policy", str(policy_path)])
+
+    repo = getattr(args, "repo", None)
+    uploads_requested = bool(repo)
+    if repo:
+        command.extend(["--upload", f"{Path(repo).expanduser()}:/sandbox/repo"])
+
+    explicit_providers = list(getattr(args, "provider", None) or [])
+    provider_names = explicit_providers[:]
+
+    for value in getattr(args, "environment", None) or []:
+        command.extend(["--env", value])
+    for provider in provider_names:
+        command.extend(["--provider", provider])
+    command.append("--no-auto-providers" if provider_names else "--auto-providers")
+
+    explicit_command = _openshell_explicit_command(args)
+    if explicit_command:
+        command.extend(["--", *explicit_command])
+    return command, name, uploads_requested, policy_dir
+
+
 def _create(
     args,
     *,
@@ -1993,6 +2250,23 @@ def _create(
         if runtime == CONTAINER_RUNTIME:
             command, child_env = _container_create(args)
             return _run(command, env=child_env, output=output)
+        if _openshell_mode(args) == OPENSHELL_MODE_NATIVE:
+            command, name, _uploads_requested, policy_dir = _openshell_native_create(
+                args, output=output
+            )
+            result = _run(command, output=output)
+            if policy_dir is not None:
+                shutil.rmtree(policy_dir, ignore_errors=True)
+                policy_dir = None
+            if result != 0:
+                return result
+            if interactive and not _openshell_explicit_command(args):
+                return _run(
+                    _openshell_interactive_shell_command(args, name),
+                    output=output,
+                )
+            return result
+
         command, name, uploads_requested, policy_dir = _openshell_create(
             args, output=output
         )
@@ -2083,6 +2357,7 @@ def create_sandbox(
 def _validate_create_options(args) -> None:
     """Validate create-only options before touching a runtime."""
     runtime = _requested_runtime(args) or _runtime(args)
+    openshell_mode = _openshell_mode(args) if runtime == OPENSHELL_RUNTIME else None
     _validate_image_reference(getattr(args, "image", None))
     policy = getattr(args, "policy", None) or []
     providers = getattr(args, "provider", None) or []
@@ -2126,6 +2401,15 @@ def _validate_create_options(args) -> None:
             raise ValueError("--api-key is supported for container sandboxes only")
         if getattr(args, "port", None) is not None:
             raise ValueError("--port is supported for container sandboxes only")
+        if openshell_mode == OPENSHELL_MODE_NATIVE and (
+            getattr(args, "profile", None)
+            or getattr(args, "config_dir", None)
+            or getattr(args, "restore_config", None)
+        ):
+            raise ValueError(
+                "native OpenShell sandboxes cannot use AI Guardian profiles or "
+                "configuration snapshots"
+            )
     restore_selector = getattr(args, "restore_config", None)
     if not restore_selector:
         return
@@ -2324,8 +2608,14 @@ def run_sandbox_command(args, *, output: Optional[List[str]] = None) -> int:
 __all__ = [
     "CONTAINER_RUNTIME",
     "OPENSHELL_RUNTIME",
+    "OPENSHELL_MODE_MANAGED",
+    "OPENSHELL_MODE_NATIVE",
     "SUPPORTED_RUNTIMES",
+    "apply_openshell_policy",
     "create_sandbox",
+    "get_openshell_base_policy",
     "handle_sandbox_command",
+    "list_openshell_sandboxes",
+    "prepare_openshell_policy_update",
     "run_sandbox_command",
 ]
