@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1209 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1210 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~74152 tok)
+- `CHANGELOG.md` — Change log (~74232 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -133,7 +133,7 @@
 - `lint.yml` — GitHub Actions CI/CD - Lint Workflow (~689 tok)
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
-- `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~874 tok)
+- `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2031 tok)
 - `release-readiness.yml` — CI: Release Readiness (~8940 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~6855 tok)
@@ -921,7 +921,7 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~6414 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~6961 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
@@ -1008,7 +1008,7 @@
 
 - `build.rs` (~232 tok)
 - `Cargo.toml` — Rust package manifest (~243 tok)
-- `README.md` — Project documentation (~797 tok)
+- `README.md` — Project documentation (~996 tok)
 
 ## rust/openshell-middleware/src/
 
@@ -1033,8 +1033,9 @@
 - `check_parser_compat.py` — get_leaktk_url, fetch_url, fetch_pattern_data, extract_schema + 4 more (~3274 tok)
 - `check_scanner_versions.py` — get_latest_version, get_latest_leaktk_pattern_version, get_version_age, compare_versions + 4 more (~4691 tok)
 - `install` (~202 tok)
-- `release.sh` — Fully automated release script for AI Guardian. (~5794 tok)
+- `release.sh` — Fully automated release script for AI Guardian. (~6000 tok)
 - `sync_release_versions.py` — Synchronize AI Guardian's active stable-release references. (~2676 tok)
+- `sync_rust_middleware_version.py` — Keep the Rust OpenShell middleware version aligned with an AI Guardian release. (~1756 tok)
 - `unittest` (~62 tok)
 - `verify_container_images.py` — Verify versioned container manifests with bounded retries. (~1380 tok)
 

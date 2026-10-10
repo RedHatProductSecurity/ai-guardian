@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenShell middleware release binaries (#2522):** Publish the external Rust
+  middleware as versioned, SHA-256-checked GitHub Release assets for validated
+  Linux x86_64/arm64 and macOS Intel/Apple Silicon targets. The release process
+  keeps the binary's Cargo package version aligned with the AI Guardian release.
 - **OpenShell middleware pause coupling (#2506):** Couple daemon global/project
   pause state to external middleware checks and add explicit pass-through
   `middleware_paused` decisions and audit metadata. A pause suspends scanning

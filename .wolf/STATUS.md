@@ -9,35 +9,22 @@ budget_tokens: 1000
 
 ---
 
-## Current Quest: Issue #2525
+## Current Quest: Issue #2522
 
-- Removed the Python middleware launcher, policy/bootstrap helpers, lifecycle
-  handlers, generated Python protobuf bindings, and Python gRPC runtime.
-  Rust is the only middleware runtime.
-- Split the Rust runtime into compatibility, daemon transport, policy,
-  evaluation, HTTP, response, WebSocket, and service-wiring modules; `main.rs`
-  is now a thin binary entrypoint.
-- Added one shared OpenShell `0.1.x`-from-`0.1.2` / supervisor protocol `1.0`
-  contract checked by the repository validator and embedded by Rust.
-  Unsupported releases and protocol combinations fail closed; the external
-  service receives the installed version explicitly.
-- Reworked the OpenShell guide around the official operator flow: run the
-  external service, register it in gateway TOML, restart the gateway, choose
-  either native `openshell sandbox` or the ordinary AI Guardian OpenShell
-  wrapper for creation, and use native `openshell policy` for activation.
-- Documented the usual gateway TOML locations and the Linux systemd,
-  macOS/Homebrew, and Snap gateway restart commands.
-- Rust unit tests pass 12/12 and the optimized release build succeeds
-  warning-free after changing daemon-pause handling to pass through without
-  scanning.
-  `rustfmt` is still unavailable as a cargo component in this environment.
-- Extended the twice-monthly support-image CLI health workflow to smoke-test
-  newer Codex candidates without credentials, expose a manual version input,
-  and create/update issues with the required local OAuth/OpenShell qualification
-  checklist.
-- Removed all AI Guardian middleware CLI/control-plane surface and sandbox
-  middleware flags. Only the shared OpenShell compatibility fixture/check
-  remains on the Python side; service lifecycle is outside AI Guardian.
+- Added production release packaging for the external Rust OpenShell middleware.
+  GitHub Release assets are built for Linux x86_64/arm64 and macOS
+  Intel/Apple Silicon, archived with the executable and README, and included
+  in the release checksum file.
+- Added release-target version validation and OpenShell compatibility checks.
+  The release script synchronizes both `Cargo.toml` and `Cargo.lock` with the
+  AI Guardian release version, then restores the next development version.
+- Updated the OpenShell middleware operator guide and crate README with the
+  release asset matrix, checksum verification, installation path, and missing
+  binary remediation. The Python middleware path remains removed.
+- Added workflow, release-script, and version-synchronizer regression tests.
+- Focused tests, Rust unit tests, compatibility validation, Black, Ruff, and
+  Pylint pass. Full mypy still reports the existing unrelated errors in
+  `skill_discovery.py` and `secret_validator.py`.
 
 ## Done
 
@@ -225,26 +212,22 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- Restart the live external Rust middleware so it loads the rebuilt binary,
-  then rerun the `mw-proof` Codex `hello` probe while resumed and paused.
-  Agent-originated AI-Guardian CLI execution is currently blocked by immutable
-  self-protection, and middleware lifecycle remains operator/service-manager
-  owned, so the live retry must be run by the user.
-- Codex's optional `codex_apps` remote MCP may also require an operator-added
-  `*.oaiusercontent.com` endpoint; this is documented but intentionally absent
-  from the default policy.
-- A WebSocket opened while paused previously stayed session-wide uninspected
-  after resume. The Rust fix keeps paused preflight inspectable and re-checks
-  daemon state per message; restart the current `(deleted)` service process to
-  load it before live validation.
+- Review the uncommitted release-packaging changes and let the production tag
+  workflow build the four target archives. The workflow requires the release
+  tag version in both `Cargo.toml` and `Cargo.lock` before publishing assets.
+- After the first release, verify the GitHub Release assets and checksums on one
+  Linux and one macOS host, then update the supported matrix if a target is not
+  operationally validated.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch: `2525`
-- Current issue: `RedHatProductSecurity/ai-guardian#2525`
-- The current working tree contains the uncommitted #2525 middleware audit,
-  compatibility, documentation, workflow, and regression-test changes.
+- Branch: `2522`
+- Current issue: `RedHatProductSecurity/ai-guardian#2522`
+- The current working tree contains the uncommitted Rust middleware release
+  packaging, version synchronization, documentation, and regression-test changes.
+- The Python middleware runtime was removed before this issue; this work does
+  not restore or maintain a Python fallback.
 - OpenShell is intentionally Codex-only. The current stable npm pin is
   `@openai/codex@0.160.0`; the issue's original `0.159.3` target was
   superseded before implementation.
@@ -260,16 +243,16 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_middleware.py tests/unit/test_openshell_compatibility.py tests/unit/test_middleware_pause.py tests/unit/test_cli_version_check.py tests/unit/test_workflow_runner_policy.py tests/unit/test_container_scripts.py tests/ux/test_user_experience_contract_openshell_middleware.py -q  # 156 passed
-uv run --extra dev python -m pytest tests/unit/test_middleware.py tests/unit/test_sandbox_command.py tests/ux/test_user_experience_contract_openshell_middleware.py -q  # 118 passed
-uv run python scripts/check_openshell_compatibility.py
-uv build --wheel --out-dir /tmp/opencode/ai-guardian-build  # shared JSON present in wheel
+uv run --extra dev python -m pytest tests/unit/test_sync_rust_middleware_version.py tests/unit/test_release_script.py tests/unit/test_workflow_runner_policy.py -q  # 16 passed
+python3 scripts/sync_rust_middleware_version.py --repo . --version 1.20.0-dev --check
+python3 scripts/check_openshell_compatibility.py
+cargo test --locked --manifest-path rust/openshell-middleware/Cargo.toml  # 13 passed
+cargo build --locked --release --target x86_64-unknown-linux-gnu --manifest-path rust/openshell-middleware/Cargo.toml
 black --target-version py310 --check src/ai_guardian/ tests/
 ruff check src/ai_guardian/ tests/
 pylint src/ai_guardian/ --disable=all --enable=E --output-format=text  # 10.00/10
-mypy src/ai_guardian/middleware/  # no issues
- # Full mypy retains unrelated existing baseline errors outside middleware.
- # Rust: cargo/rustc/rustfmt are not installed here.
+mypy scripts/sync_rust_middleware_version.py tests/unit/test_sync_rust_middleware_version.py tests/unit/test_workflow_runner_policy.py  # no issues
+ # Full mypy retains 14 unrelated baseline errors in skill_discovery.py and secret_validator.py.
 python -m json.tool .wolf/buglog.json > /dev/null
 git diff --check
 ```
