@@ -84,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **KDE tray menu stability (#2532):** Defer AppIndicator menu refreshes while
+  Plasma has the exported menu open, then apply the latest state after its
+  close event so a refresh does not replace actions during menu dismissal.
 - **OpenShell middleware readiness (#2525):** Validate the effective Rust
   service and OpenShell release before traffic is accepted, including when an
   older policy artifact or service process is present.
