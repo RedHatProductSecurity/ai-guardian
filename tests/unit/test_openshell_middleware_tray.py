@@ -239,7 +239,7 @@ def test_missing_grpc_dependency_recommends_refreshing_tray_dependencies(tmp_pat
     assert readiness.middleware_status == "probe_unavailable"
     assert "grpcio is not installed" in report
     assert "refresh AI Guardian" in report
-    assert "grpcio and protobuf" in report
+    assert "grpcio is installed" in report
     assert "Restart the tray after dependency changes" in report
     assert "Ensure a service manager runs the Rust middleware" not in report
 

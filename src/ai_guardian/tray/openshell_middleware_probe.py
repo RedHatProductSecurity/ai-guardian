@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import Any, Tuple
+from typing import Iterator, Tuple, Union
 from urllib.parse import urlsplit
 
 _CONTRACT_CAPABILITY = "openshell.supervisor-middleware.contract"
@@ -27,138 +26,124 @@ class MiddlewareProbeIdentity:
     version: str
 
 
-def _add_field(
-    message: Any,
-    name: str,
-    number: int,
-    field_type: int,
-    *,
-    repeated: bool = False,
-    type_name: str = "",
-) -> None:
-    field = message.field.add()
-    field.name = name
-    field.number = number
-    field.type = field_type
-    field.label = field.LABEL_REPEATED if repeated else field.LABEL_OPTIONAL
-    if type_name:
-        field.type_name = type_name
+def _encode_varint(value: int) -> bytes:
+    """Encode one non-negative protobuf varint."""
+    encoded = bytearray()
+    while value > 0x7F:
+        encoded.append((value & 0x7F) | 0x80)
+        value >>= 7
+    encoded.append(value)
+    return bytes(encoded)
 
 
-@lru_cache(maxsize=1)
-def _probe_message_types() -> Tuple[Any, Any]:
-    """Build only the protobuf messages needed for the Describe handshake."""
+def _encode_varint_field(field_number: int, value: int) -> bytes:
+    return _encode_varint(field_number << 3) + _encode_varint(value)
+
+
+def _encode_bytes_field(field_number: int, value: bytes) -> bytes:
+    return _encode_varint((field_number << 3) | 2) + _encode_varint(len(value)) + value
+
+
+def _serialize_describe_request(openshell_version: str) -> bytes:
+    """Serialize the fixed OpenShell v0.1.2 Describe request wire fields."""
+    protocol_version = _encode_varint_field(1, 1)  # ProtocolVersion.major
+    gateway = (
+        _encode_bytes_field(1, protocol_version)  # PeerMetadata.protocol_version
+        + _encode_bytes_field(2, b"openshell/gateway")
+        + _encode_bytes_field(3, openshell_version.encode("utf-8"))
+        + _encode_bytes_field(4, _CONTRACT_CAPABILITY.encode("utf-8"))
+    )
+    return _encode_bytes_field(1, gateway)  # MiddlewareDescribeRequest.gateway
+
+
+def _read_varint(data: bytes, offset: int) -> Tuple[int, int]:
+    value = 0
+    for shift in range(0, 70, 7):
+        if offset >= len(data):
+            raise ValueError("truncated protobuf varint")
+        byte = data[offset]
+        offset += 1
+        if shift == 63 and byte > 1:
+            raise ValueError("protobuf varint exceeds 64 bits")
+        value |= (byte & 0x7F) << shift
+        if byte < 0x80:
+            return value, offset
+    raise ValueError("protobuf varint exceeds 64 bits")
+
+
+def _iter_wire_fields(
+    data: bytes,
+) -> Iterator[Tuple[int, int, Union[int, bytes]]]:
+    """Yield protobuf field number, wire type, and value; reject malformed data."""
+    offset = 0
+    while offset < len(data):
+        tag, offset = _read_varint(data, offset)
+        field_number, wire_type = tag >> 3, tag & 7
+        if field_number == 0:
+            raise ValueError("protobuf field number cannot be zero")
+
+        value: Union[int, bytes]
+        if wire_type == 0:
+            value, offset = _read_varint(data, offset)
+        elif wire_type == 1:
+            end = offset + 8
+            if end > len(data):
+                raise ValueError("truncated fixed64 protobuf field")
+            value = data[offset:end]
+            offset = end
+        elif wire_type == 2:
+            length, offset = _read_varint(data, offset)
+            end = offset + length
+            if end > len(data):
+                raise ValueError("truncated length-delimited protobuf field")
+            value = data[offset:end]
+            offset = end
+        elif wire_type == 5:
+            end = offset + 4
+            if end > len(data):
+                raise ValueError("truncated fixed32 protobuf field")
+            value = data[offset:end]
+            offset = end
+        else:
+            raise ValueError("unsupported protobuf wire type")
+
+        yield field_number, wire_type, value
+
+
+def _parse_manifest_identity(data: bytes) -> MiddlewareProbeIdentity:
+    """Extract extension identity fields from an OpenShell Describe response."""
+    has_extension = False
+    implementation = ""
+    version = ""
     try:
-        from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
-    except ImportError as exc:
+        for field_number, wire_type, value in _iter_wire_fields(data):
+            if field_number != 5 or wire_type != 2 or not isinstance(value, bytes):
+                continue
+            has_extension = True  # MiddlewareManifest.extension
+            for (
+                metadata_number,
+                metadata_wire_type,
+                metadata_value,
+            ) in _iter_wire_fields(value):
+                if metadata_wire_type != 2 or not isinstance(metadata_value, bytes):
+                    continue
+                if metadata_number == 2:
+                    implementation = metadata_value.decode("utf-8")
+                elif metadata_number == 3:
+                    version = metadata_value.decode("utf-8")
+    except (UnicodeDecodeError, ValueError) as exc:
         raise MiddlewareProbeError(
-            "protobuf runtime is unavailable", kind="dependency"
+            "Describe response metadata is malformed", kind="identity"
         ) from exc
 
-    # Field numbers/types mirror the vendored OpenShell v0.1.2 proto contract.
-    field_types = descriptor_pb2.FieldDescriptorProto
-    pool = descriptor_pool.DescriptorPool()
-
-    extension_file = descriptor_pb2.FileDescriptorProto(
-        name="ai_guardian_openshell_extension.proto",
-        package="openshell.extension.v1",
-        syntax="proto3",
+    if not has_extension:
+        raise MiddlewareProbeError(
+            "Describe response has no implementation metadata", kind="identity"
+        )
+    return MiddlewareProbeIdentity(
+        implementation=implementation.strip(),
+        version=version.strip(),
     )
-    protocol_version = extension_file.message_type.add()
-    protocol_version.name = "ProtocolVersion"
-    _add_field(
-        protocol_version,
-        "major",
-        1,
-        field_types.TYPE_UINT32,
-    )
-    _add_field(
-        protocol_version,
-        "minor",
-        2,
-        field_types.TYPE_UINT32,
-    )
-
-    peer_metadata = extension_file.message_type.add()
-    peer_metadata.name = "PeerMetadata"
-    _add_field(
-        peer_metadata,
-        "protocol_version",
-        1,
-        field_types.TYPE_MESSAGE,
-        type_name=".openshell.extension.v1.ProtocolVersion",
-    )
-    _add_field(
-        peer_metadata,
-        "implementation_name",
-        2,
-        field_types.TYPE_STRING,
-    )
-    _add_field(
-        peer_metadata,
-        "implementation_version",
-        3,
-        field_types.TYPE_STRING,
-    )
-    _add_field(
-        peer_metadata,
-        "supported_capabilities",
-        4,
-        field_types.TYPE_STRING,
-        repeated=True,
-    )
-    _add_field(
-        peer_metadata,
-        "required_capabilities",
-        5,
-        field_types.TYPE_STRING,
-        repeated=True,
-    )
-    pool.Add(extension_file)
-
-    middleware_file = descriptor_pb2.FileDescriptorProto(
-        name="ai_guardian_openshell_middleware_probe.proto",
-        package="openshell.middleware.v1",
-        dependency=[extension_file.name],
-        syntax="proto3",
-    )
-    describe_request = middleware_file.message_type.add()
-    describe_request.name = "MiddlewareDescribeRequest"
-    _add_field(
-        describe_request,
-        "gateway",
-        1,
-        field_types.TYPE_MESSAGE,
-        type_name=".openshell.extension.v1.PeerMetadata",
-    )
-
-    manifest = middleware_file.message_type.add()
-    manifest.name = "MiddlewareManifest"
-    _add_field(manifest, "name", 1, field_types.TYPE_STRING)
-    _add_field(manifest, "service_version", 2, field_types.TYPE_STRING)
-    _add_field(
-        manifest,
-        "extension",
-        5,
-        field_types.TYPE_MESSAGE,
-        type_name=".openshell.extension.v1.PeerMetadata",
-    )
-
-    service = middleware_file.service.add()
-    service.name = "SupervisorMiddleware"
-    describe = service.method.add()
-    describe.name = "Describe"
-    describe.input_type = ".openshell.middleware.v1.MiddlewareDescribeRequest"
-    describe.output_type = ".openshell.middleware.v1.MiddlewareManifest"
-    pool.Add(middleware_file)
-
-    request_type = message_factory.GetMessageClass(
-        pool.FindMessageTypeByName("openshell.middleware.v1.MiddlewareDescribeRequest")
-    )
-    manifest_type = message_factory.GetMessageClass(
-        pool.FindMessageTypeByName("openshell.middleware.v1.MiddlewareManifest")
-    )
-    return request_type, manifest_type
 
 
 def _grpc_target(endpoint: str) -> Tuple[str, bool]:
@@ -213,13 +198,7 @@ def probe_middleware_endpoint(
             kind="dependency",
         ) from exc
 
-    request_type, manifest_type = _probe_message_types()
-    request = request_type()
-    request.gateway.protocol_version.major = 1
-    request.gateway.protocol_version.minor = 0
-    request.gateway.implementation_name = "openshell/gateway"
-    request.gateway.implementation_version = openshell_version
-    request.gateway.supported_capabilities.append(_CONTRACT_CAPABILITY)
+    request = _serialize_describe_request(openshell_version)
 
     channel = (
         grpc.secure_channel(target, grpc.ssl_channel_credentials())
@@ -229,10 +208,10 @@ def probe_middleware_endpoint(
     try:
         describe = channel.unary_unary(
             _DESCRIBE_METHOD,
-            request_serializer=lambda message: message.SerializeToString(),
-            response_deserializer=manifest_type.FromString,
+            request_serializer=lambda message: message,
+            response_deserializer=lambda message: message,
         )
-        manifest = describe(request, timeout=timeout)
+        response = describe(request, timeout=timeout)
     except grpc.RpcError as exc:
         code = exc.code()
         code_name = getattr(code, "name", "UNKNOWN")
@@ -242,15 +221,7 @@ def probe_middleware_endpoint(
     finally:
         channel.close()
 
-    if not manifest.HasField("extension"):
-        raise MiddlewareProbeError(
-            "Describe response has no implementation metadata", kind="identity"
-        )
-
-    return MiddlewareProbeIdentity(
-        implementation=str(manifest.extension.implementation_name).strip(),
-        version=str(manifest.extension.implementation_version).strip(),
-    )
+    return _parse_manifest_identity(response)
 
 
 __all__ = [

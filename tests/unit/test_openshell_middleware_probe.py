@@ -9,26 +9,39 @@ grpc = pytest.importorskip("grpc", reason="gRPC middleware probes require grpcio
 from ai_guardian.tray.openshell_middleware_probe import (
     MiddlewareProbeError,
     _grpc_target,
-    _probe_message_types,
+    _parse_manifest_identity,
     probe_middleware_endpoint,
 )
 
 
+def _varint(value):
+    encoded = bytearray()
+    while value > 0x7F:
+        encoded.append((value & 0x7F) | 0x80)
+        value >>= 7
+    encoded.append(value)
+    return bytes(encoded)
+
+
+def _bytes_field(field_number, value):
+    return _varint((field_number << 3) | 2) + _varint(len(value)) + value
+
+
 def test_describe_probe_returns_live_implementation_and_version():
-    request_type, manifest_type = _probe_message_types()
     captured_requests = []
+    extension = _bytes_field(2, b"ai-guardian/rust-middleware") + _bytes_field(
+        3, b"1.20.0-dev"
+    )
+    response = _bytes_field(99, b"ignored") + _bytes_field(5, extension)
 
     def describe(request, _context):
         captured_requests.append(request)
-        response = manifest_type()
-        response.extension.implementation_name = "ai-guardian/rust-middleware"
-        response.extension.implementation_version = "1.20.0-dev"
         return response
 
     method_handler = grpc.unary_unary_rpc_method_handler(
         describe,
-        request_deserializer=request_type.FromString,
-        response_serializer=lambda message: message.SerializeToString(),
+        request_deserializer=lambda message: message,
+        response_serializer=lambda message: message,
     )
     executor = ThreadPoolExecutor(max_workers=1)
     server = grpc.server(executor)
@@ -55,12 +68,22 @@ def test_describe_probe_returns_live_implementation_and_version():
 
     assert identity.implementation == "ai-guardian/rust-middleware"
     assert identity.version == "1.20.0-dev"
-    request = captured_requests[0]
-    assert request.gateway.protocol_version.major == 1
-    assert request.gateway.protocol_version.minor == 0
-    assert "openshell.supervisor-middleware.contract" in (
-        request.gateway.supported_capabilities
+    protocol_version = _varint(1 << 3) + _varint(1)
+    gateway = (
+        _bytes_field(1, protocol_version)
+        + _bytes_field(2, b"openshell/gateway")
+        + _bytes_field(3, b"OpenShell 0.1.2")
+        + _bytes_field(4, b"openshell.supervisor-middleware.contract")
     )
+    assert captured_requests == [_bytes_field(1, gateway)]
+
+
+@pytest.mark.parametrize("response", [b"", b"\x2a\x04\x12\x05x"])
+def test_parse_manifest_identity_rejects_missing_or_malformed_metadata(response):
+    with pytest.raises(MiddlewareProbeError) as error:
+        _parse_manifest_identity(response)
+
+    assert error.value.kind == "identity"
 
 
 @pytest.mark.parametrize(

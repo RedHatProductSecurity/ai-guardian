@@ -226,7 +226,7 @@ def test_user_experience_missing_probe_dependency_points_to_tray_install():
 
     assert "Middleware status: ? Probe unavailable" in report
     assert "refresh AI Guardian" in report
-    assert "grpcio and protobuf" in report
+    assert "grpcio is installed" in report
     assert "Restart the tray after dependency changes" in report
 
 

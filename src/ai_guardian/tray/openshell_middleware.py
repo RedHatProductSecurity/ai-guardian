@@ -493,7 +493,7 @@ def format_middleware_readiness(
                 "",
                 "Operator setup if checks are not ready",
                 "1. If the status is Probe unavailable, refresh AI Guardian so",
-                "   grpcio and protobuf are available in the tray's Python environment.",
+                "   grpcio is installed in the tray's Python environment.",
                 "2. Otherwise ensure the service manager runs the Rust middleware.",
                 "3. Check the gRPC endpoint in the effective gateway TOML and make",
                 "   it reachable from this host and the OpenShell gateway.",

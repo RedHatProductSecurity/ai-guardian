@@ -176,9 +176,18 @@ def _policy_roots() -> Iterable[Path]:
     if configured_dir:
         yield Path(configured_dir).expanduser()
 
-    xdg_config = Path(
-        os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
-    ).expanduser()
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config_home is None:
+        try:
+            xdg_config = Path.home() / ".config"
+        except RuntimeError:
+            return
+    else:
+        xdg_config = Path(xdg_config_home)
+    try:
+        xdg_config = xdg_config.expanduser()
+    except RuntimeError:
+        return
     yield xdg_config / "ai-guardian" / "openshell" / "policies"
 
 

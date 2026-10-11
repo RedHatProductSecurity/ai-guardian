@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Successful sandbox operation details remain open until the user closes the
   dialog, and repository preflight leads directly to upload confirmation without
   a brief progress-window interstitial.
-  The probe uses grpcio (Apache-2.0) and protobuf (BSD-3-Clause).
+  The probe uses grpcio (Apache-2.0) and encodes its fixed protobuf wire fields
+  directly, avoiding a protobuf runtime dependency for readiness checks.
 - **OpenShell middleware release binaries (#2522):** Publish the external Rust
   middleware as versioned, SHA-256-checked GitHub Release assets for validated
   Linux x86_64/arm64 and macOS Intel/Apple Silicon targets. The release process

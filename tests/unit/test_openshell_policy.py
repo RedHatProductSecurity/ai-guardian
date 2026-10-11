@@ -12,6 +12,7 @@ import pytest
 
 from ai_guardian.openshell_policy import (
     NO_POLICY_CHOICE,
+    _policy_roots,
     discover_openshell_policies,
     policy_choice_values,
     resolve_openshell_policy_choice,
@@ -23,6 +24,23 @@ from ai_guardian.sandbox import (
     list_openshell_sandboxes,
     prepare_openshell_policy_update,
 )
+
+
+def test_policy_roots_skip_user_config_when_home_is_unavailable(monkeypatch):
+    monkeypatch.delenv("AI_GUARDIAN_OPEN_SHELL_POLICY_DIR", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+    def unavailable_home(*_args):
+        raise RuntimeError("home directory unavailable")
+
+    monkeypatch.setattr(Path, "home", unavailable_home)
+
+    roots = tuple(_policy_roots())
+
+    assert Path.cwd() / "container" in roots
+    assert not any(
+        root.name == "policies" and ".config" in root.parts for root in roots
+    )
 
 
 def test_policy_discovery_exposes_validation_and_summary(tmp_path, monkeypatch):
