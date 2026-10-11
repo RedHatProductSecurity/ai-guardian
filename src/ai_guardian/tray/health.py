@@ -162,7 +162,7 @@ class TrayHealthMonitor:
 
             def refresh_icon() -> None:
                 self._tray._icon.icon = self._tray._create_icon()
-                self._tray._icon.update_menu()
+                self._tray._refresh_menu()
 
             self._tray._dispatch_to_main(refresh_icon)
 

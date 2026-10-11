@@ -312,6 +312,10 @@ class DaemonTray:
         self._multi_client = multi_client
         self._standalone = standalone
         self._icon = None
+        self._appindicator_menu_root = None
+        self._appindicator_menu_handler = None
+        self._appindicator_menu_open = False
+        self._menu_refresh_pending = False
         self._thread = None
         self._pause_timer = None
         self._status = "running"
@@ -586,6 +590,7 @@ class DaemonTray:
         self._icon = pystray.Icon(
             "ai-guardian", self._create_icon(), "AI Guardian Tray", menu
         )
+        self._schedule_appindicator_menu_watch()
         if self._discovery:
             self._anim._is_initial_discovery = True
             self._anim._discovery_in_progress = True
@@ -636,7 +641,7 @@ class DaemonTray:
             return
         try:
             self._icon.icon = self._create_icon()
-            self._icon.update_menu()
+            self._refresh_menu()
             logger.info("Tray icon rebuilt after system wake")
         except Exception as e:
             logger.debug("Failed to rebuild tray icon: %s", e)
@@ -755,7 +760,7 @@ class DaemonTray:
         for _ in range(30):
             if port_file.exists() and self._is_web_console_alive(port_file):
                 if self._icon:
-                    self._icon.update_menu()
+                    self._dispatch_to_main(self._refresh_menu)
                 if is_first_start:
                     try:
                         port = int(port_file.read_text().strip())
@@ -887,6 +892,9 @@ class DaemonTray:
     def _refresh_menu(self):
         """Refresh the tray menu (must be called on main thread)."""
         if self._icon:
+            if self._appindicator_menu_open:
+                self._menu_refresh_pending = True
+                return
             try:
                 if (
                     (
@@ -911,15 +919,88 @@ class DaemonTray:
                     # menu lets discovery add or remove any number of daemon
                     # submenus; the menu property updates native backends.
                     self._icon.menu = self._build_tray_menu()
+                    self._schedule_appindicator_menu_watch()
                 else:
                     self._icon.update_menu()
+                    self._schedule_appindicator_menu_watch()
             except Exception:
                 # Preserve the old refresh path when a test double or an
                 # optional tray backend cannot rebuild the descriptor tree.
                 try:
                     self._icon.update_menu()
+                    self._schedule_appindicator_menu_watch()
                 except Exception:
                     pass  # intentionally silent — best-effort operation
+
+    def _schedule_appindicator_menu_watch(self):
+        """Watch AppIndicator's exported menu for open/close events.
+
+        AppIndicator renders its GTK menu remotely through DBusMenu. The
+        ``Gtk.Menu`` visibility signals do not reliably reflect the panel's
+        popup state, so use the DBusMenu server's root-item events instead.
+        """
+        if not self._icon:
+            return
+        indicator = getattr(self._icon, "_appindicator", None)
+        if indicator is None or not type(indicator).__module__.startswith(
+            "gi.repository."
+        ):
+            return
+        try:
+            from gi.repository import GLib
+
+            # pystray schedules its native menu update on the GTK loop. Queue
+            # the watch after it so the DBusMenu server exposes the new root.
+            GLib.idle_add(self._watch_appindicator_menu)
+        except (ImportError, ValueError):
+            pass  # intentionally silent — AppIndicator requires optional PyGObject
+
+    def _watch_appindicator_menu(self):
+        """Attach to the current AppIndicator DBusMenu root item."""
+        indicator = getattr(self._icon, "_appindicator", None)
+        if indicator is None:
+            return False
+        try:
+            server = indicator.get_property("dbus-menu-server")
+            root = server.get_property("root-node") if server else None
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            logger.debug("Unable to inspect the AppIndicator DBusMenu server")
+            return False
+        if root is None or root is self._appindicator_menu_root:
+            return False
+
+        if self._appindicator_menu_root is not None:
+            try:
+                self._appindicator_menu_root.disconnect(self._appindicator_menu_handler)
+            except (AttributeError, RuntimeError, TypeError, ValueError):
+                logger.debug("Previous AppIndicator menu hook was unavailable")
+
+        try:
+            self._appindicator_menu_handler = root.connect(
+                "event", self._on_appindicator_menu_event
+            )
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            logger.debug("Unable to watch AppIndicator menu events")
+            self._appindicator_menu_root = None
+            self._appindicator_menu_handler = None
+            return False
+
+        self._appindicator_menu_root = root
+        self._appindicator_menu_open = False
+        return False
+
+    def _on_appindicator_menu_event(
+        self, _menu_item, event_name, _event_data, _timestamp
+    ):
+        """Defer native menu replacement until Plasma closes its popup."""
+        if event_name == "opened":
+            self._appindicator_menu_open = True
+        elif event_name == "closed":
+            self._appindicator_menu_open = False
+            if self._menu_refresh_pending:
+                self._menu_refresh_pending = False
+                self._dispatch_to_main(self._refresh_menu)
+        return False
 
     def _refresh_menu_if_changed(self):
         """Refresh the tray menu only if stats changed.

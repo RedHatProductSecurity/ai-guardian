@@ -2042,6 +2042,83 @@ class TestLinuxPauseMenuStability:
                 assert any(call[1]["visible"](None) for call in resume_calls)
 
 
+class TestAppIndicatorMenuRefreshStability:
+    """Do not replace exported menus while the desktop popup is open."""
+
+    class _MenuRoot:
+        def __init__(self):
+            self.callback = None
+            self.disconnected = []
+
+        def connect(self, signal_name, callback):
+            assert signal_name == "event"
+            self.callback = callback
+            return 1
+
+        def disconnect(self, handler_id):
+            self.disconnected.append(handler_id)
+
+    def _make_tray(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._icon = mock.MagicMock()
+        root = self._MenuRoot()
+        server = mock.Mock()
+        server.get_property.return_value = root
+        indicator = mock.Mock()
+        indicator.get_property.return_value = server
+        tray._icon._appindicator = indicator
+        return tray, root
+
+    def test_watches_current_appindicator_dbusmenu_root(self):
+        tray, root = self._make_tray()
+
+        assert tray._watch_appindicator_menu() is False
+
+        assert root.callback == tray._on_appindicator_menu_event
+        assert tray._appindicator_menu_root is root
+
+    def test_defers_refresh_until_appindicator_menu_closes(self):
+        tray, root = self._make_tray()
+        tray._watch_appindicator_menu()
+        menu_event = root.callback
+
+        assert menu_event(root, "opened", None, 0) is False
+        tray._refresh_menu()
+
+        assert tray._appindicator_menu_open is True
+        assert tray._menu_refresh_pending is True
+        tray._icon.update_menu.assert_not_called()
+
+        with (
+            mock.patch.object(tray, "_schedule_appindicator_menu_watch"),
+            mock.patch.object(
+                tray, "_dispatch_to_main", side_effect=lambda callback: callback()
+            ),
+        ):
+            assert menu_event(root, "closed", None, 0) is False
+
+        assert tray._appindicator_menu_open is False
+        assert tray._menu_refresh_pending is False
+        tray._icon.update_menu.assert_called_once()
+
+    def test_replaces_root_event_hook_when_native_menu_changes(self):
+        tray, first_root = self._make_tray()
+        tray._watch_appindicator_menu()
+        second_root = self._MenuRoot()
+        server = tray._icon._appindicator.get_property.return_value
+        server.get_property.return_value = second_root
+
+        tray._watch_appindicator_menu()
+
+        assert first_root.disconnected == [1]
+        assert tray._appindicator_menu_root is second_root
+        assert second_root.callback == tray._on_appindicator_menu_event
+
+
 class TestProjectDirectoryMenuRefresh:
     """Refresh directory pause menus when daemon project tracking changes."""
 
