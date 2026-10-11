@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Packaged TypeScript integration templates (#2535):** Move AI Guardian-owned
+  bridge, extension, and plugin sources into package resources while preserving
+  generated paths and version, executable, and integration-specific rendering.
 - **Tray pause controls (#2529):** Place `Pause...` directly below **Status** in
   single- and multi-daemon menus, retain the existing global duration/resume
   behavior, and group per-directory pause/resume controls in a separate nested
