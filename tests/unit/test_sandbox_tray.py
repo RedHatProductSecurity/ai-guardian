@@ -531,6 +531,177 @@ class TestSandboxTrayMenu:
         for daemon_item in items:
             assert "Status" in _walk_labels(daemon_item.action)
 
+    def test_multi_daemon_pause_controls_are_prominent_and_scoped(self):
+        targets = [
+            DaemonTarget(name="one", runtime="container", status="running"),
+            DaemonTarget(name="two", runtime="container", status="running"),
+        ]
+        tray = _make_tray(targets)
+        stats_by_name = {
+            "one": {
+                "paused": False,
+                "active_project_dirs": ["/project-one"],
+                "paused_dirs": {},
+            },
+            "two": {
+                "paused": False,
+                "active_project_dirs": ["/project-two"],
+                "paused_dirs": {"/project-two-paused": 0},
+            },
+        }
+        tray._multi_client.get_status.side_effect = lambda target: stats_by_name[
+            target.name
+        ]
+
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", FAKE_PYSTRAY),
+        ):
+            daemon_items = tray._menu._build_multi_daemon_menu_items()
+
+        second_daemon_menu = daemon_items[1].action
+        pause_item = next(
+            item
+            for item in second_daemon_menu.items
+            if isinstance(item, FakeMenuItem) and item.label == "Pause..."
+        )
+        console_item = next(
+            item
+            for item in second_daemon_menu.items
+            if isinstance(item, FakeMenuItem) and item.label == "Console"
+        )
+        assert second_daemon_menu.items.index(
+            pause_item
+        ) < second_daemon_menu.items.index(console_item)
+        assert pause_item.kwargs["visible"](None) is True
+
+        pause_menu = pause_item.action
+        global_item = pause_menu.items[0]
+        global_menu = global_item.action
+        global_actions = {item.label: item for item in global_menu.items}
+        assert {
+            "5 minutes",
+            "15 minutes",
+            "30 minutes",
+            "1 hour",
+            "Until resume",
+            "Resume",
+        } <= set(global_actions)
+        assert global_actions["15 minutes"].kwargs["visible"](None) is True
+        assert global_actions["Resume"].kwargs["visible"](None) is False
+
+        with mock.patch.object(tray, "_check_and_autostart_daemon"):
+            global_actions["15 minutes"].action(None, None)
+        tray._multi_client.send_pause.assert_called_once_with(targets[1], 15)
+
+        stats_by_name["two"]["paused"] = True
+        assert global_actions["Resume"].kwargs["visible"](None) is True
+        with mock.patch.object(tray, "_check_and_autostart_daemon"):
+            global_actions["Resume"].action(None, None)
+        tray._multi_client.send_resume.assert_called_once_with(targets[1])
+
+        directories_item = pause_menu.items[2]
+        assert directories_item.label == "Directories..."
+        assert directories_item.kwargs["visible"](None) is True
+        directory_items = directories_item.action.items
+        second_directory_items = [
+            item
+            for item in directory_items
+            if isinstance(item, FakeMenuItem) and item.kwargs["visible"](None)
+        ]
+        assert len(second_directory_items) == 2
+        assert all(
+            "/project-one" not in item.label(None) for item in second_directory_items
+        )
+
+        active_directory = next(
+            item
+            for item in second_directory_items
+            if item.label(None).endswith("/project-two")
+        )
+        active_directory_actions = {
+            item.label: item
+            for item in active_directory.action.items
+            if isinstance(item, FakeMenuItem)
+        }
+        assert active_directory_actions["15 minutes"].kwargs["visible"](None) is True
+        with mock.patch.object(tray, "_check_and_autostart_daemon"):
+            active_directory_actions["15 minutes"].action(None, None)
+        tray._multi_client.send_pause_dir.assert_called_once_with(
+            targets[1], "/project-two", 15
+        )
+
+        paused_directory = next(
+            item
+            for item in second_directory_items
+            if item.label(None).endswith("/project-two-paused")
+        )
+        paused_directory_actions = {
+            item.label: item
+            for item in paused_directory.action.items
+            if isinstance(item, FakeMenuItem)
+        }
+        assert paused_directory_actions["Resume"].kwargs["visible"](None) is True
+        with mock.patch.object(tray, "_check_and_autostart_daemon"):
+            paused_directory_actions["Resume"].action(None, None)
+        tray._multi_client.send_resume_dir.assert_called_once_with(
+            targets[1], "/project-two-paused"
+        )
+
+    def test_single_daemon_pause_menu_follows_status_and_groups_directories(self):
+        target = DaemonTarget(name="single", runtime="container", status="running")
+        tray = _make_tray([target])
+        stats = {
+            "paused": False,
+            "active_project_dirs": ["/single-project"],
+            "paused_dirs": {"/single-project-paused": 0},
+        }
+        tray._multi_client.get_status.return_value = stats
+
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", FAKE_PYSTRAY),
+        ):
+            menu_items = tray._menu._build_single_daemon_menu_items()
+            daemon_items = tray._menu._build_single_daemon_daemon_items()
+
+        status_item = next(item for item in menu_items if item.label == "Status")
+        pause_item = next(item for item in menu_items if item.label == "Pause...")
+        assert menu_items.index(pause_item) == menu_items.index(status_item) + 1
+        assert not any(
+            isinstance(item, FakeMenuItem) and item.label == "Pause..."
+            for item in daemon_items
+        )
+
+        pause_menu = pause_item.action
+        global_menu = pause_menu.items[0].action
+        global_actions = {
+            item.label: item
+            for item in global_menu.items
+            if isinstance(item, FakeMenuItem)
+        }
+        assert global_actions["15 minutes"].kwargs["visible"](None) is True
+        assert global_actions["Resume"].kwargs["visible"](None) is False
+        stats["paused"] = True
+        assert global_actions["Resume"].kwargs["visible"](None) is True
+
+        directories_item = pause_menu.items[2]
+        assert directories_item.label == "Directories..."
+        assert directories_item.kwargs["visible"](None) is True
+        visible_directories = [
+            item
+            for item in directories_item.action.items
+            if isinstance(item, FakeMenuItem) and item.kwargs["visible"](None)
+        ]
+        assert len(visible_directories) == 2
+        assert any(
+            item.label(None).endswith("/single-project") for item in visible_directories
+        )
+        assert any(
+            item.label(None).endswith("/single-project-paused")
+            for item in visible_directories
+        )
+
     def test_start_menu_lists_stopped_container_and_openshell_sandboxes(self):
         stopped_container = DaemonTarget(
             name="stopped-container",
@@ -1335,16 +1506,95 @@ class TestSandboxTrayMenu:
         assert policy_field["choices"][0] == "No additional policy"
         assert any("valid" in choice for choice in policy_field["choices"][1:])
 
-    def test_openshell_menu_exposes_readiness_and_policy_actions(self):
+    def test_openshell_readiness_is_a_standalone_menu_action(self):
         tray = _make_tray([])
         with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
             items = tray._menu._build_openshell_middleware_menu_items()
 
-        assert [item.label for item in items] == ["OpenShell middleware"]
-        assert _walk_labels(items[0].action) == [
-            "Check middleware readiness...",
-            "Apply policy to sandbox...",
+        assert [item.label for item in items] == ["Check middleware readiness..."]
+        assert callable(items[0].action)
+
+    def test_multi_daemon_policy_action_is_scoped_to_the_selected_openshell_target(
+        self,
+    ):
+        targets = [
+            DaemonTarget(
+                name="sandbox-one",
+                runtime="container",
+                runtime_type="openshell",
+                status="running",
+            ),
+            DaemonTarget(
+                name="sandbox-two",
+                runtime="container",
+                runtime_type="openshell",
+                status="running",
+            ),
+            DaemonTarget(name="container-one", runtime="container", status="running"),
         ]
+        tray = _make_tray(targets)
+
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", FAKE_PYSTRAY),
+        ):
+            daemon_items = tray._menu._build_multi_daemon_menu_items()
+
+        second_manage_item = next(
+            item
+            for item in daemon_items[1].action.items
+            if isinstance(item, FakeMenuItem) and item.label == "Manage sandbox"
+        )
+        apply_item = next(
+            item
+            for item in second_manage_item.action.items
+            if isinstance(item, FakeMenuItem)
+            and item.label == "Apply policy to sandbox..."
+        )
+        assert apply_item.kwargs["visible"](None) is True
+
+        third_manage_item = next(
+            item
+            for item in daemon_items[2].action.items
+            if isinstance(item, FakeMenuItem) and item.label == "Manage sandbox"
+        )
+        non_openshell_policy_item = next(
+            item
+            for item in third_manage_item.action.items
+            if isinstance(item, FakeMenuItem)
+            and item.label == "Apply policy to sandbox..."
+        )
+        assert non_openshell_policy_item.kwargs["visible"](None) is False
+
+        records = [
+            {"name": "sandbox-one", "phase": "running"},
+            {"name": "sandbox-two", "phase": "running"},
+        ]
+        with (
+            mock.patch.object(
+                tray._menu, "_capture_sandbox_screen_bounds", return_value=None
+            ),
+            mock.patch.object(tray._menu, "_start_sandbox_form") as start_form,
+            mock.patch(
+                "ai_guardian.sandbox.list_openshell_sandboxes", return_value=records
+            ) as list_sandboxes,
+            mock.patch(
+                "ai_guardian.tray.menu_builder.discover_openshell_policies",
+                return_value=(),
+            ),
+            mock.patch(
+                "ai_guardian.tray.menu_builder.threading.Thread", ImmediateThread
+            ),
+        ):
+            apply_item.action(None, None)
+
+        list_args = list_sandboxes.call_args.args[0]
+        assert list_args.openshell_cli is None
+        fields = start_form.call_args.args[2]
+        sandbox_field = next(field for field in fields if field["name"] == "sandbox")
+        assert sandbox_field["choices"] == ("sandbox-two (running)",)
+        assert sandbox_field["default"] == "sandbox-two (running)"
+        assert sandbox_field["editable"] is False
 
     def test_apply_openshell_policy_form_has_a_wider_profile_field(self):
         tray = _make_tray([])

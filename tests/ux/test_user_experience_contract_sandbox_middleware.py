@@ -245,13 +245,40 @@ def test_user_experience_apply_policy_profile_is_wide_and_descriptive():
         "ai_guardian.tray.menu_builder.discover_openshell_policies",
         return_value=(),
     ):
-        fields = TrayMenuBuilder._openshell_policy_apply_fields(None, [])
+        fields = TrayMenuBuilder(None)._openshell_policy_apply_fields([])
 
     profile = next(field for field in fields if field["name"] == "policy")
     assert profile["width"] == 68
     assert "enter a policy file path" in profile["help"]
     assert "overlay merges into the sandbox base" in profile["help"]
     assert "complete policy before replacement" in profile["help"]
+
+
+def test_user_experience_policy_form_is_scoped_to_its_sandbox_menu():
+    """
+    USER EXPERIENCE: Apply policy from a sandbox menu stays on that sandbox.
+
+    Expected experience:
+    - The menu action carries the selected OpenShell sandbox into the form.
+    - The sandbox selector shows only that sandbox and cannot be changed.
+    - Policy profile selection and complete-policy review remain available.
+    """
+    from ai_guardian.tray.menu_builder import TrayMenuBuilder
+
+    with patch(
+        "ai_guardian.tray.menu_builder.discover_openshell_policies",
+        return_value=(),
+    ):
+        fields = TrayMenuBuilder(None)._openshell_policy_apply_fields(
+            [{"name": "sandbox-two", "phase": "running"}],
+            sandbox_name="sandbox-two",
+        )
+
+    sandbox = next(field for field in fields if field["name"] == "sandbox")
+    assert sandbox["choices"] == ("sandbox-two (running)",)
+    assert sandbox["default"] == "sandbox-two (running)"
+    assert sandbox["editable"] is False
+    assert "scoped to the selected OpenShell sandbox" in sandbox["help"]
 
 
 def test_user_experience_policy_apply_allows_edit_before_replacement():

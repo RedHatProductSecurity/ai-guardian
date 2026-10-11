@@ -327,6 +327,13 @@
   pre-persistence deduplication, but that deduplicator does not merge
   independently persisted host-hook records.
 
+- **Tray menu organization (#2529):** Keep single-daemon `Pause...` directly
+  below **Status**, matching multi-daemon menus, while preserving its existing
+  pause/resume actions. Keep middleware readiness standalone; put policy apply
+  under the selected OpenShell target's **Manage sandbox** menu and scope the
+  form to that target. Do not show the OpenShell policy action for regular
+  container targets.
+
 ## Do-Not-Repeat
 
 - [2026-10-06] Do not place `exit` in copy-paste guards intended for an

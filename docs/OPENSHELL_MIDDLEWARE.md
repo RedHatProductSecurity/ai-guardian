@@ -115,7 +115,7 @@ Guardian daemon or hooks for middleware scanning.
 The tray provides guided checks without creating a second middleware control
 plane:
 
-1. Select **OpenShell middleware → Check middleware readiness...**.
+1. Select the standalone **Check middleware readiness...** tray action.
 2. The tray checks OpenShell and gateway health, reads the middleware endpoint
    from the effective gateway TOML, and calls its gRPC `Describe` method. It
    reports **Running** only when the endpoint responds with the AI Guardian
@@ -125,10 +125,11 @@ plane:
 3. Review the status and identity. A missing registration, unavailable endpoint,
    or different implementation is not reported as running. Check the service
    manager and gateway TOML, then run the check again.
-4. Use **Apply policy to sandbox...** after the service is running and
-   registered. The tray lists OpenShell sandboxes, reads the round-trippable
-   base policy, merges the selected profile, previews the resulting complete
-   policy, and asks for confirmation before replacement.
+4. From the selected OpenShell target's **Manage sandbox → Apply policy to
+   sandbox...** menu, apply a policy after the service is running and registered.
+   The form is scoped to that sandbox, reads its round-trippable base policy,
+   merges the selected profile, previews the resulting complete policy, and asks
+   for confirmation before replacement.
 
 The shipped middleware profile uses the `content-guard` registration name. If
 the gateway uses another registration name, select or provide a policy overlay
