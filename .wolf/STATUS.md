@@ -29,30 +29,41 @@ budget_tokens: 1000
   menu refreshes while the exported menu is open. Routed tray refresh paths
   through the guard and added three regression tests; `test_daemon_tray.py`
   passes all 441 tests.
+- Issue #2535: extracted the six AI Guardian-owned TypeScript bridge, extension,
+  and plugin templates to `src/ai_guardian/setup/templates/`. Setup loads them
+  through `importlib.resources`; rendering substitutions and output paths remain
+  unchanged. Added packaged-resource and unresolved-placeholder tests.
+- Verified all six resources in built sdist and wheel archives, and imported and
+  rendered setup from the wheel contents. The related unit tests pass (516).
+  Ruff, Black, and Pylint pass; Mypy retains the same 14 existing errors in
+  `skill_discovery.py:522` and `secret_validator.py:288`.
 
 ## 🚀 Next quest
 
-- Confirm whether issue #2532 correlates with the AI Guardian tray by comparing
-  the reported sequence (open the tray menu, then click outside) with the tray
-  running and stopped. The reporter's recollection is tentative, so the crash
-  remains unreproduced and the acceptance criterion is not yet complete.
-- Do not use `daf complete` until the correlation/reproduction check is resolved.
+- Review and finalize issue #2535 with `daf complete` outside the active agent
+  session; no commit has been created here.
+- Then resume the unresolved #2532 tray correlation check: compare the reported
+  sequence (open the tray menu, then click outside) with the tray running and
+  stopped. Do not complete #2532 until that check is resolved.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2532` / `RedHatProductSecurity/ai-guardian#2532`.
+- Branch/issue: `2535` / `RedHatProductSecurity/ai-guardian#2535`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
+- The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
+  unrelated `.opencode/plugins/openwolf/` middleware was not changed.
 - Do not regenerate `docs/notebooklm-export.md` during development; release
   workflow refreshes it.
 
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_daemon_tray.py -q  # 441 passed
-ruff check src/ai_guardian/tray/app.py src/ai_guardian/tray/health.py tests/unit/test_daemon_tray.py  # passed
-black --target-version py310 --check src/ai_guardian/tray/app.py src/ai_guardian/tray/health.py tests/unit/test_daemon_tray.py  # passed
+uv run --extra dev python -m pytest tests/unit/test_typescript_bridge.py tests/unit/test_aiderdesk_support.py tests/unit/test_openclaw_support.py tests/unit/test_pi_support.py tests/unit/test_opencode_support.py tests/unit/test_setup.py -q  # 516 passed
+uv build --sdist --wheel --out-dir /tmp/opencode/ai-guardian-2535-dist  # passed; archives verified
+ruff check src/ai_guardian/setup/hooks.py tests/unit/test_typescript_bridge.py  # passed
+black --target-version py310 --check src/ai_guardian/setup/hooks.py tests/unit/test_typescript_bridge.py  # passed
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text  # 10.00/10
 mypy src/ai_guardian/  # 14 pre-existing errors in skill_discovery.py and secret_validator.py
 git diff --check  # passed

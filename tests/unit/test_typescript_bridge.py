@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+from importlib import resources
 from pathlib import Path
 from unittest import mock
 
@@ -15,8 +16,58 @@ from ai_guardian.setup import (
     _AI_GUARDIAN_BRIDGE_TS,
     _OPENCLAW_PLUGIN_TS,
     _OPENCODE_PLUGIN_TS,
+    _OPENCODE_PLUGIN_V2_TS,
+    _PI_EXTENSION_TS,
 )
-from ai_guardian.setup.hooks import IDESetup
+from ai_guardian.setup.hooks import (
+    IDESetup,
+    _load_typescript_template,
+    _render_pi_extension_source,
+    _render_typescript_source,
+)
+
+TYPESCRIPT_TEMPLATES = {
+    "ai-guardian-bridge.ts": _AI_GUARDIAN_BRIDGE_TS,
+    "aiderdesk-extension.ts": _AIDERDESK_EXTENSION_TS,
+    "pi-extension.ts": _PI_EXTENSION_TS,
+    "opencode-plugin-v1.ts": _OPENCODE_PLUGIN_TS,
+    "opencode-plugin-v2.ts": _OPENCODE_PLUGIN_V2_TS,
+    "openclaw-plugin.ts": _OPENCLAW_PLUGIN_TS,
+}
+
+
+@pytest.mark.parametrize(("filename", "source"), TYPESCRIPT_TEMPLATES.items())
+def test_typescript_template_is_loaded_from_package_resources(filename, source):
+    packaged = resources.files("ai_guardian.setup").joinpath("templates", filename)
+    assert packaged.read_text(encoding="utf-8") == source
+    assert _load_typescript_template(filename) == source
+
+
+def test_generated_typescript_artifacts_resolve_template_placeholders():
+    binary_path = "/tmp/guardian path/ai-guardian"
+    setup = IDESetup()
+    rendered_sources = [
+        setup._render_guardian_bridge(binary_path),
+        _render_typescript_source(_AIDERDESK_EXTENSION_TS),
+        _render_pi_extension_source(enable_mcp=True, binary_path=binary_path),
+        _render_pi_extension_source(enable_mcp=False, binary_path=binary_path),
+        _render_typescript_source(_OPENCODE_PLUGIN_TS),
+        _render_typescript_source(_OPENCODE_PLUGIN_V2_TS),
+        _render_typescript_source(_OPENCLAW_PLUGIN_TS),
+    ]
+
+    for source in rendered_sources:
+        assert "__AI_GUARDIAN_" not in source
+        assert f"// ai-guardian-generated-version: {__version__}" in source
+
+    assert 'const GUARDIAN_BINARY = "/tmp/guardian path/ai-guardian";' in (
+        rendered_sources[0]
+    )
+    assert "const PI_MCP_ENABLED = true;" in rendered_sources[2]
+    assert "const PI_MCP_ENABLED = false;" in rendered_sources[3]
+    assert 'const GUARDIAN_BINARY = "/tmp/guardian path/ai-guardian";' in (
+        rendered_sources[2]
+    )
 
 
 def test_generated_hosts_delegate_to_shared_bridge():

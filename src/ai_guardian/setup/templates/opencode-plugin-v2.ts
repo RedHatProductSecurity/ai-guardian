@@ -1,0 +1,198 @@
+// ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
+// ai-guardian-opencode-generation: v2
+import { createGuardianBridge } from '../ai-guardian/ai-guardian-bridge';
+
+const guardian = createGuardianBridge({ ideType: 'opencode' });
+const OPENCODE_VERSION = '2.0.0';
+const PROMPT_REFUSAL_NOTICE =
+  'AI Guardian refused the previous prompt. The original prompt was not sent to the model. Do not answer or continue that request. Ask the user to provide a new prompt without the sensitive or blocked content.';
+const PRE_TOOL_REFUSAL_NOTICE =
+  'AI Guardian refused a tool call before execution. The tool did not run. Do not retry or continue that operation. Tell the user it was blocked and wait for a new instruction.';
+const POST_TOOL_REFUSAL_NOTICE =
+  'AI Guardian blocked a tool result after execution. The tool ran, but its result was withheld from the model. Do not infer or repeat the result. Tell the user it was blocked and wait for a new instruction.';
+
+type JsonRecord = Record<string, unknown>;
+
+function textValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
+
+function contentText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object') return textValue(value);
+  const record = value as JsonRecord;
+  if (typeof record.output === 'string') return record.output;
+  if (typeof record.text === 'string') return record.text;
+  if (Array.isArray(record.content)) {
+    return record.content
+      .map((part) => {
+        if (!part || typeof part !== 'object') return '';
+        const item = part as JsonRecord;
+        return typeof item.text === 'string' ? item.text : '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+  return JSON.stringify(value) || '';
+}
+
+function hookData(
+  hookEventName: string,
+  cwd: string,
+  extra: JsonRecord = {},
+  opencodeVersion: string = OPENCODE_VERSION,
+): JsonRecord {
+  return {
+    hook_event_name: hookEventName,
+    opencode_version: opencodeVersion,
+    hook_source: 'opencode',
+    cwd,
+    ...extra,
+  };
+}
+
+function resultWithReplacement(original: unknown, replacement: unknown): unknown {
+  if (original && typeof original === 'object' && !Array.isArray(original)) {
+    const record = original as JsonRecord;
+    if ('output' in record) {
+      return { ...record, output: replacement };
+    }
+    if ('content' in record) {
+      return {
+        ...record,
+        content: [{ type: 'text', text: textValue(replacement) }],
+      };
+    }
+  }
+  return { output: replacement };
+}
+
+export default {
+  id: 'ai-guardian',
+  async setup(ctx) {
+    const cwd = ctx.location.directory || process.cwd();
+    const opencodeVersion = ctx.app.version;
+    const recordRefusalNotice = async (
+      sessionID: string,
+      sourceID: unknown,
+      text: string,
+      kind: string,
+    ) => {
+      try {
+        await ctx.session.synthetic({
+          sessionID,
+          ...(typeof sourceID === 'string'
+            ? { id: `msg_ai_guardian_${sourceID}` }
+            : {}),
+          text,
+          description: `AI Guardian ${kind}`,
+          metadata: { source: 'ai-guardian', kind },
+          resume: false,
+        });
+      } catch {
+        console.error(
+          '[ai-guardian] Could not add a refusal notice to the OpenCode transcript',
+        );
+      }
+    };
+
+    await ctx.session.hook('prompt', async (event) => {
+      const prompt = event.prompt?.text || '';
+      if (!prompt) return;
+      const result = guardian.run(hookData('message.submit', cwd, {
+        prompt,
+        session_id: event.sessionID,
+      }, opencodeVersion));
+      if (result.blocked) {
+        await recordRefusalNotice(
+          event.sessionID,
+          event.messageID,
+          PROMPT_REFUSAL_NOTICE,
+          'prompt-refusal',
+        );
+        throw new Error('Blocked by ai-guardian');
+      }
+    });
+
+    await ctx.tool.hook('execute.before', async (event) => {
+      if (event.tool?.startsWith('ai-guardian')) return;
+      const input = (event.input || {}) as JsonRecord;
+      const result = guardian.run(hookData('tool.execute.before', cwd, {
+        tool_name: event.tool,
+        tool_use: { name: event.tool, input },
+        session_id: event.sessionID,
+        tool_use_id: event.id,
+      }, opencodeVersion));
+      if (result.blocked) {
+        await recordRefusalNotice(
+          event.sessionID,
+          event.id,
+          PRE_TOOL_REFUSAL_NOTICE,
+          'pre-tool-refusal',
+        );
+        throw new Error('AI Guardian blocked this tool call before execution');
+      }
+    });
+
+    await ctx.tool.hook('execute.after', async (event) => {
+      if (event.tool?.startsWith('ai-guardian')) return;
+      const input = (event.input || {}) as JsonRecord;
+      const error = event.error as unknown;
+      const output =
+        event.status === 'completed'
+          ? contentText(event.result)
+          : error && typeof error === 'object' && 'message' in error
+            ? textValue((error as JsonRecord).message)
+            : textValue(error);
+      const result = guardian.run(hookData('tool.execute.after', cwd, {
+        tool_name: event.tool,
+        tool_use: { name: event.tool, input },
+        tool_response: { output },
+        session_id: event.sessionID,
+        tool_use_id: event.id,
+      }, opencodeVersion));
+      if (result.blocked) {
+        await recordRefusalNotice(
+          event.sessionID,
+          event.id,
+          POST_TOOL_REFUSAL_NOTICE,
+          'post-tool-refusal',
+        );
+        throw new Error(
+          'AI Guardian blocked this tool result after execution; result withheld',
+        );
+      }
+      if (event.status === 'completed' && result.updatedOutput !== undefined) {
+        event.result = resultWithReplacement(
+          event.result,
+          result.updatedOutput,
+        ) as typeof event.result;
+      }
+    });
+
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+          const record = event as unknown as JsonRecord;
+          if (record.type !== 'session.idle' && record.type !== 'session.deleted') continue;
+          const properties = (record.properties || {}) as JsonRecord;
+          const sessionID = textValue(
+            properties.sessionID || properties.sessionId || record.sessionID,
+          );
+          if (sessionID) {
+            guardian.run(
+              hookData('SessionEnd', cwd, { session_id: sessionID }, opencodeVersion),
+            );
+          }
+        }
+      } catch {
+        // The subscription is expected to end when the plugin is unloaded.
+      }
+    })();
+
+    return () => controller.abort();
+  },
+};
