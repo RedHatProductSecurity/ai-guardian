@@ -2856,6 +2856,160 @@ class TestSetupHooks:
                 "cursor", dry_run=False, force=False
             )
 
+    def test_setup_hooks_unconfigured_target_keeps_generic_confirmation(self):
+        """First-time targeted setup retains its existing confirmation flow."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+            mock.patch("ai_guardian.setup._notify_daemon_reload"),
+            mock.patch("builtins.input", return_value="y") as prompt,
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+            mock_instance.get_config_path.return_value = "/tmp/claude/settings.json"
+            mock_instance._is_setup_already_configured.return_value = False
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+
+            assert setup_hooks(ide_type="claude", interactive=True) is True
+
+        prompt.assert_called_once_with("\nContinue? [y/N]: ")
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            "claude", dry_run=False, force=False
+        )
+
+    def test_setup_hooks_real_configuration_check_selects_overwrite_prompt(self):
+        """The real setup preflight recognizes a healthy managed hook set."""
+        setup = IDESetup()
+        config_path = Path("/tmp/claude/settings.json")
+        with (
+            mock.patch("ai_guardian.setup.IDESetup", return_value=setup),
+            mock.patch.object(setup, "get_config_path", return_value=str(config_path)),
+            mock.patch.object(
+                setup,
+                "verify_hooks_for_ide",
+                return_value={"diagnostics": [], "healthy": True},
+            ) as verify_hooks,
+            mock.patch.object(setup, "setup_ide_hooks") as setup_ide_hooks,
+            mock.patch("builtins.input", return_value="") as prompt,
+        ):
+            assert setup_hooks(ide_type="claude", interactive=True) is False
+
+        verify_hooks.assert_called_once_with("claude", scope="user", project_dir=None)
+        prompt.assert_called_once_with(
+            "\nForce setup and overwrite the existing configuration? [y/N]: "
+        )
+        setup_ide_hooks.assert_not_called()
+
+    @pytest.mark.parametrize("response", ["", "n"])
+    def test_setup_hooks_existing_configuration_defaults_to_no(self, response, capsys):
+        """Declining the overwrite prompt leaves the existing setup untouched."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("builtins.input", return_value=response) as prompt,
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+            mock_instance.get_config_path.return_value = "/tmp/claude/settings.json"
+            mock_instance._is_setup_already_configured.return_value = True
+
+            assert setup_hooks(ide_type="claude", interactive=True) is False
+
+        prompt.assert_called_once_with(
+            "\nForce setup and overwrite the existing configuration? [y/N]: "
+        )
+        mock_instance.setup_ide_hooks.assert_not_called()
+        output = capsys.readouterr().out
+        assert "AI Guardian hooks are already configured for Claude Code." in output
+        assert "Setup skipped; existing configuration was not changed." in output
+        assert "This will configure ai-guardian hooks" not in output
+
+    @pytest.mark.parametrize("cancel", [KeyboardInterrupt, EOFError])
+    def test_setup_hooks_cancelled_overwrite_prompt_skips_setup(self, cancel, capsys):
+        """Interrupting or closing the prompt does not overwrite the config."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("builtins.input", side_effect=cancel) as prompt,
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+            mock_instance.get_config_path.return_value = "/tmp/claude/settings.json"
+            mock_instance._is_setup_already_configured.return_value = True
+
+            assert setup_hooks(ide_type="claude", interactive=True) is False
+
+        prompt.assert_called_once()
+        mock_instance.setup_ide_hooks.assert_not_called()
+        assert "Setup skipped; existing configuration was not changed." in (
+            capsys.readouterr().out
+        )
+
+    def test_setup_hooks_confirming_overwrite_runs_force_setup(self):
+        """Confirming the contextual prompt retries the target with force."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+            mock.patch("ai_guardian.setup._notify_daemon_reload"),
+            mock.patch("builtins.input", return_value="yes") as prompt,
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+            mock_instance.get_config_path.return_value = "/tmp/claude/settings.json"
+            mock_instance._is_setup_already_configured.return_value = True
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+
+            assert setup_hooks(ide_type="claude", interactive=True) is True
+
+        prompt.assert_called_once_with(
+            "\nForce setup and overwrite the existing configuration? [y/N]: "
+        )
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            "claude", dry_run=False, force=True
+        )
+
+    def test_setup_hooks_explicit_force_skips_overwrite_prompt(self):
+        """An explicit --force overwrites without another confirmation."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("ai_guardian.setup._handle_mcp_setup"),
+            mock.patch("ai_guardian.setup._notify_daemon_reload"),
+            mock.patch("builtins.input") as prompt,
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+
+            assert setup_hooks(ide_type="claude", interactive=True, force=True) is True
+
+        prompt.assert_not_called()
+        mock_instance._is_setup_already_configured.assert_not_called()
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            "claude", dry_run=False, force=True
+        )
+
+    def test_setup_hooks_noninteractive_existing_configuration_does_not_force(
+        self, capsys
+    ):
+        """Non-interactive setup retains its safe no-overwrite behavior."""
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("builtins.input") as prompt,
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+            mock_instance.setup_ide_hooks.return_value = (
+                False,
+                "ai-guardian hooks already configured for Claude Code. Use --force to overwrite.",
+            )
+
+            assert setup_hooks(ide_type="claude", interactive=False) is False
+
+        prompt.assert_not_called()
+        mock_instance._is_setup_already_configured.assert_not_called()
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            "claude", dry_run=False, force=False
+        )
+        assert "Use --force to overwrite" in capsys.readouterr().out
+
     def test_setup_hooks_cursor_project_target(self, tmp_path):
         """Project setup forwards the selected workspace to hooks and MCP."""
         project_dir = tmp_path / "cloud-project"
@@ -4239,6 +4393,39 @@ class TestSetupJsonOutput:
         # No log text on stderr
         assert "AI Guardian" not in captured.err
         assert "initialized" not in captured.err
+
+    def test_json_existing_configuration_does_not_prompt_or_overwrite(
+        self, tmp_path, capsys
+    ):
+        """JSON setup preserves the existing no-overwrite contract."""
+        ide_config_file = tmp_path / "settings.json"
+
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as MockSetup,
+            mock.patch("builtins.input") as prompt,
+        ):
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {
+                "claude": {"name": "Claude Code", "config_path": str(ide_config_file)}
+            }
+            mock_instance.get_config_path.return_value = str(ide_config_file)
+            mock_instance.setup_ide_hooks.return_value = (
+                False,
+                "ai-guardian hooks already configured for Claude Code. Use --force to overwrite.",
+            )
+
+            assert (
+                setup_hooks(ide_type="claude", json_output=True, interactive=True)
+                is False
+            )
+
+        prompt.assert_not_called()
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            "claude", dry_run=False, force=False
+        )
+        result = json.loads(capsys.readouterr().out)
+        assert result["success"] is False
+        assert "Use --force to overwrite" in result["error"]
 
     def test_json_output_ide_dry_run(self, tmp_path, capsys):
         """setup --ide claude --json --dry-run outputs clean JSON."""

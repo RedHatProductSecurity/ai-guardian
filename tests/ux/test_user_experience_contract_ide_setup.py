@@ -365,7 +365,7 @@ def test_cli_setup_prompts_for_only_unconfigured_integrations():
         patch("ai_guardian.setup.IDESetup") as setup_class,
         patch("ai_guardian.setup._handle_mcp_setup"),
         patch("ai_guardian.setup._notify_daemon_reload"),
-        patch("builtins.input", return_value="y"),
+        patch("builtins.input", return_value="y") as prompt,
     ):
         setup = setup_class.return_value
         setup.list_installed_ides.return_value = ["claude", "cursor"]
@@ -383,6 +383,75 @@ def test_cli_setup_prompts_for_only_unconfigured_integrations():
         assert setup_hooks(interactive=True) is True
 
     setup.setup_ide_hooks.assert_called_once_with("cursor", dry_run=False, force=False)
+    prompt.assert_any_call("\nContinue? [y/N]: ")
+
+
+def test_cli_targeted_setup_confirms_before_overwriting_existing_hooks(capsys):
+    """
+    USER EXPERIENCE: Targeted setup for a configured integration -> force prompt.
+
+    Scenario:
+    1. The user selects an integration from the tray's Manual setup menu, which
+       launches ``ai-guardian setup --ide cursor``.
+    2. AI Guardian detects that its hooks are already configured.
+    3. The user confirms the contextual overwrite prompt.
+
+    Expected User Experience:
+    - The generic first-time setup confirmation is replaced with an overwrite
+      question whose default is No.
+    - Confirming runs the existing forced setup path.
+    - The configuration path is shown before the user approves the overwrite.
+    """
+    config_path = "/tmp/cursor/settings.json"
+    with (
+        patch("ai_guardian.setup.IDESetup") as setup_class,
+        patch("ai_guardian.setup._handle_mcp_setup"),
+        patch("ai_guardian.setup._notify_daemon_reload"),
+        patch("builtins.input", return_value="yes") as prompt,
+    ):
+        setup = setup_class.return_value
+        setup.IDE_CONFIGS = {"cursor": {"name": "Cursor IDE/CLI"}}
+        setup.get_config_path.return_value = config_path
+        setup._is_setup_already_configured.return_value = True
+        setup.setup_ide_hooks.return_value = (True, "configured")
+
+        assert setup_hooks(ide_type="cursor", interactive=True) is True
+
+    prompt.assert_called_once_with(
+        "\nForce setup and overwrite the existing configuration? [y/N]: "
+    )
+    setup.setup_ide_hooks.assert_called_once_with("cursor", dry_run=False, force=True)
+    output = capsys.readouterr().out
+    assert "AI Guardian hooks are already configured for Cursor IDE/CLI." in output
+    assert f"Config file: {config_path}" in output
+    assert "This will configure ai-guardian hooks" not in output
+
+
+def test_cli_targeted_setup_default_no_preserves_existing_hooks(capsys):
+    """
+    USER EXPERIENCE: Existing setup -> Enter keeps the current configuration.
+
+    Expected User Experience:
+    - Pressing Enter uses the safe No default.
+    - Setup reports that it was skipped and does not call the installer.
+    """
+    with (
+        patch("ai_guardian.setup.IDESetup") as setup_class,
+        patch("builtins.input", return_value="") as prompt,
+    ):
+        setup = setup_class.return_value
+        setup.IDE_CONFIGS = {"cursor": {"name": "Cursor IDE/CLI"}}
+        setup.get_config_path.return_value = "/tmp/cursor/settings.json"
+        setup._is_setup_already_configured.return_value = True
+
+        assert setup_hooks(ide_type="cursor", interactive=True) is False
+
+    prompt.assert_called_once_with(
+        "\nForce setup and overwrite the existing configuration? [y/N]: "
+    )
+    setup.setup_ide_hooks.assert_not_called()
+    output = capsys.readouterr().out
+    assert "Setup skipped; existing configuration was not changed." in output
 
 
 def test_cli_setup_yes_configures_all_pending_integrations():

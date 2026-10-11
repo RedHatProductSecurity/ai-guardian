@@ -37,19 +37,25 @@ budget_tokens: 1000
   rendered setup from the wheel contents. The related unit tests pass (516).
   Ruff, Black, and Pylint pass; Mypy retains the same 14 existing errors in
   `skill_discovery.py:522` and `secret_validator.py:288`.
+- Issue #2538: interactive targeted setup now identifies integrations whose
+  existing hooks require force, asks a default-No overwrite question, and leaves
+  the setup untouched when declined or cancelled. Explicit `--force` stays
+  prompt-free; non-interactive and JSON paths preserve no-overwrite behavior.
+  Added setup unit and UX contract coverage; all 404 related tests pass.
+  Ruff, Black, and Pylint pass; Mypy retains the same 14 existing errors.
 
 ## 🚀 Next quest
 
-- Review and finalize issue #2535 with `daf complete` outside the active agent
-  session; no commit has been created here.
-- Then resume the unresolved #2532 tray correlation check: compare the reported
-  sequence (open the tray menu, then click outside) with the tray running and
-  stopped. Do not complete #2532 until that check is resolved.
+- Complete issue #2538 with `daf complete` outside the active agent session; no
+  commit has been created here.
+- The prior handoff's #2535 finalization and #2532 tray correlation check remain
+  outstanding. For #2532, compare the reported sequence (open the tray menu,
+  then click outside) with the tray running and stopped before completing it.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2535` / `RedHatProductSecurity/ai-guardian#2535`.
+- Branch/issue: `2538` / `RedHatProductSecurity/ai-guardian#2538`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -60,10 +66,9 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_typescript_bridge.py tests/unit/test_aiderdesk_support.py tests/unit/test_openclaw_support.py tests/unit/test_pi_support.py tests/unit/test_opencode_support.py tests/unit/test_setup.py -q  # 516 passed
-uv build --sdist --wheel --out-dir /tmp/opencode/ai-guardian-2535-dist  # passed; archives verified
-ruff check src/ai_guardian/setup/hooks.py tests/unit/test_typescript_bridge.py  # passed
-black --target-version py310 --check src/ai_guardian/setup/hooks.py tests/unit/test_typescript_bridge.py  # passed
+uv run --extra dev python -m pytest tests/unit/test_setup.py tests/ux/test_user_experience_contract_ide_setup.py -q  # 404 passed
+ruff check src/ai_guardian/setup/__init__.py src/ai_guardian/setup/hooks.py tests/unit/test_setup.py tests/ux/test_user_experience_contract_ide_setup.py  # passed
+black --target-version py310 --check src/ai_guardian/setup/__init__.py src/ai_guardian/setup/hooks.py tests/unit/test_setup.py tests/ux/test_user_experience_contract_ide_setup.py  # passed
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text  # 10.00/10
 mypy src/ai_guardian/  # 14 pre-existing errors in skill_discovery.py and secret_validator.py
 git diff --check  # passed
@@ -74,4 +79,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2529`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2538`

@@ -663,21 +663,64 @@ def setup_hooks(
             ),
         )
 
-        print(f"\nThis will configure ai-guardian hooks for {ide_name}")
-        print(f"Config file: {ide_config_path}")
+        overwrite_existing = False
+        existing_setup_check = getattr(setup, "_is_setup_already_configured", None)
+        if callable(existing_setup_check) and isinstance(ide_config_path, (str, Path)):
+            try:
+                overwrite_existing = (
+                    existing_setup_check(
+                        selected_ide,
+                        Path(ide_config_path).expanduser(),
+                        scope=(
+                            normalized_scope
+                            if _supports_project_scope(selected_ide)
+                            else "user"
+                        ),
+                        project_dir=(
+                            normalized_project
+                            if _supports_project_scope(selected_ide)
+                            else None
+                        ),
+                        enable_mcp=not bool(no_mcp),
+                    )
+                    is True
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Unable to check whether %s hooks need overwrite confirmation: %s",
+                    selected_ide,
+                    exc,
+                )
+
+        if overwrite_existing:
+            print(f"\nAI Guardian hooks are already configured for {ide_name}.")
+            print(f"Config file: {ide_config_path}")
+            prompt = "\nForce setup and overwrite the existing configuration? [y/N]: "
+        else:
+            print(f"\nThis will configure ai-guardian hooks for {ide_name}")
+            print(f"Config file: {ide_config_path}")
+            prompt = "\nContinue? [y/N]: "
 
         try:
-            response = input("\nContinue? [y/N]: ")
-            if response.lower() not in ["y", "yes"]:
-                print("Aborted.")
-                if config_needs_reload:
-                    _notify_daemon_reload()
-                return False
-        except KeyboardInterrupt:
-            print("\nAborted.")
+            response = input(prompt).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            if overwrite_existing:
+                print("\nSetup skipped; existing configuration was not changed.")
+            else:
+                print("\nAborted.")
             if config_needs_reload:
                 _notify_daemon_reload()
             return False
+        if response not in ["y", "yes"]:
+            if overwrite_existing:
+                print("Setup skipped; existing configuration was not changed.")
+            else:
+                print("Aborted.")
+            if config_needs_reload:
+                _notify_daemon_reload()
+            return False
+        if overwrite_existing:
+            force = True
 
     setup_results = [
         _setup_single_ide(

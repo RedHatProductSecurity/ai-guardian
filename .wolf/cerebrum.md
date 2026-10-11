@@ -381,6 +381,12 @@
 
 ## Decision Log
 
+- [2026-10-11] Keep targeted CLI overwrite confirmation aligned with the exact
+  guard in `IDESetup.setup_ide_hooks`: share the existing-config classifier so
+  healthy managed hooks prompt for force while partial event hooks remain
+  repairable without force. Keep the prompt in interactive `setup_hooks`; tray,
+  `--yes`, and JSON callers retain their existing non-interactive behavior.
+
 - [2026-07-01] **Allow Once scoped to invocation-level set, not daemon_state** (#1439): `_record_allowed_for_transcript` now accepts a plain `set` (called `result_set`) instead of `daemon_state`+`session_id`. `_log_ask_decision` gains `invocation_allowed_findings: Optional[set]` param; call sites in `process_hook_data` pass `_invocation_allowed = set()` created fresh each invocation. Transcript scanners read `_invocation_allowed` directly. This scopes dedup to the current invocation only, so "Allow Once" no longer persists across hook invocations.
 - [2026-07-02] When adding a new scanner, update ALL count-assertion tests: `test_tui.py` (NAV_GROUPS leaf count), `test_tui_global_settings.py` (FEATURES count, FEATURE_ACTIONS count), `test_web_sidebar_search.py` (NAV_GROUPS item count), `test_aiguardignore_writer.py` (scanner types schema). Also update `aiguardignore.schema.json` to include the new scanner type.
 
