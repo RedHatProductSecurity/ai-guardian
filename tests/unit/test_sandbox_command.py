@@ -22,6 +22,7 @@ from ai_guardian.sandbox import (
     _initial_config_source,
     _load_snapshot_config,
     _openshell_create,
+    _openshell_native_create,
     _openshell_provider_environment,
     _expose_openshell_service,
     _run,
@@ -57,6 +58,7 @@ def _args(**overrides):
         "since": None,
         "model": None,
         "openshell_auth": None,
+        "openshell_mode": "ai-guardian",
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -1325,6 +1327,57 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         assert "--auto-providers" not in command
         assert command[command.index("--provider") + 1] == "codex-provider"
         assert Path(command[command.index("--policy") + 1]).name == "policy.yaml"
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_native_openshell_create_does_not_add_ai_guardian_bootstrap(tmp_path):
+    policy = tmp_path / "native.yaml"
+    policy.write_text(
+        "version: 1\nfilesystem_policy:\n  read_write: [/sandbox]\n",
+        encoding="utf-8",
+    )
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        openshell_mode="native",
+        name="native-demo",
+        cli="codex",
+        image="example/native:latest",
+        repo=None,
+        environment=["TERM=xterm"],
+        policy=[str(policy)],
+        provider=[],
+        openshell_auth="oauth",
+        label=["team=security"],
+        command_args=[],
+    )
+
+    with (
+        patch("ai_guardian.sandbox._openshell_cli_has_credentials", return_value=True),
+        patch("ai_guardian.sandbox._ensure_openshell_cli_provider") as ensure_provider,
+    ):
+        command, name, uploads, policy_dir = _openshell_native_create(args)
+    try:
+        assert name == "native-demo"
+        assert uploads is False
+        assert command[:5] == [
+            "openshell",
+            "sandbox",
+            "create",
+            "--detach",
+            "--name",
+        ]
+        assert command[command.index("--from") + 1] == "example/native:latest"
+        assert command[command.index("--env") + 1] == "TERM=xterm"
+        assert "--auto-providers" in command
+        assert "ai-guardian.managed=true" not in command
+        assert "/usr/local/bin/entrypoint.sh" not in command
+        ensure_provider.assert_not_called()
+        composed = yaml.safe_load(
+            Path(command[command.index("--policy") + 1]).read_text(encoding="utf-8")
+        )
+        assert composed["filesystem_policy"]["read_write"] == ["/sandbox"]
     finally:
         shutil.rmtree(policy_dir)
 

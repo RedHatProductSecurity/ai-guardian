@@ -110,6 +110,42 @@ address; it is different from the daemon address. Keep
 provided remote IP. The native OpenShell sandbox itself does not need an AI
 Guardian daemon or hooks for middleware scanning.
 
+## Tray workflow
+
+The tray provides guided checks without creating a second middleware control
+plane:
+
+1. Select **OpenShell middleware → Check middleware readiness...**.
+2. The tray checks OpenShell and gateway health, reads the middleware endpoint
+   from the effective gateway TOML, and calls its gRPC `Describe` method. It
+   reports **Running** only when the endpoint responds with the AI Guardian
+   implementation and a version. The gateway's separately reported extension
+   activation is shown as a distinct status. No binary path, registration name,
+   or endpoint needs to be entered in the tray.
+3. Review the status and identity. A missing registration, unavailable endpoint,
+   or different implementation is not reported as running. Check the service
+   manager and gateway TOML, then run the check again.
+4. Use **Apply policy to sandbox...** after the service is running and
+   registered. The tray lists OpenShell sandboxes, reads the round-trippable
+   base policy, merges the selected profile, previews the resulting complete
+   policy, and asks for confirmation before replacement.
+
+The shipped middleware profile uses the `content-guard` registration name. If
+the gateway uses another registration name, select or provide a policy overlay
+whose nested `middleware` value matches that operator-owned registration.
+
+The readiness check locates the gateway TOML through `OPENSHELL_GATEWAY_CONFIG`
+or the usual user-level config path, reads only the configured middleware names
+and endpoints, and probes each endpoint with a compatible `Describe` request.
+If the gateway was launched with a nonstandard `--config` path, make that path
+available to the tray through `OPENSHELL_GATEWAY_CONFIG`. A successful probe
+confirms that the endpoint is serving the expected implementation and version;
+it does not claim that the process is local to the tray host. OpenShell's
+reported extension activation remains a separate gateway status. The tray does
+not install, start, stop, or clean up the Rust service and does not edit gateway
+registration. The service manager owns process lifecycle; OpenShell owns
+gateway registration and `network_middlewares` activation.
+
 ## Release binaries
 
 Production AI Guardian tags publish the external middleware as versioned GitHub

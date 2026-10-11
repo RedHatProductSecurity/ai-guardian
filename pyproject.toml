@@ -32,6 +32,8 @@ dependencies = [
   "Pillow>=9.0.0",
   "docker>=7.0,<9",
   "mcp>=2.0.0",
+  "grpcio>=1.66.0",
+  "protobuf>=5.28.0",
   "rapidocr==3.9.2",
   # pip may evaluate every marker branch, including on Linux. Linux kernel
   # releases such as 6.17.0-1022-azure are not PEP 440 versions, so use

@@ -307,22 +307,53 @@ gateway and is represented inside the sandbox by an opaque placeholder.
 
 - The tray is running.
 - For Container, Docker/Podman is installed.
-- For OpenShell, complete [OpenShell provider setup](#openshell-provider-setup).
-- For OpenShell OAuth, run `codex login` in the environment used by the tray.
-- For OpenShell API key, either start the tray with `OPENAI_API_KEY` available,
+- For OpenShell **AI Guardian hooks**, complete [OpenShell provider setup](#openshell-provider-setup).
+- For OpenShell **AI Guardian hooks** with OAuth, run `codex login` in the
+  environment used by the tray.
+- For OpenShell **AI Guardian hooks** with an API key, either start the tray with `OPENAI_API_KEY` available,
   or create `ai-guardian-openai` in the gateway first and enter that name in
   **OpenShell provider override**.
+- Native OpenShell mode uses OpenShell's own workload/provider defaults and does
+  not require the AI Guardian provider setup above.
 
 **Steps**
 
 1. Open the tray menu and select **Create sandbox...**.
 2. Select **Runtime**: `container` or `openshell`.
-3. Select **CLI**: OpenShell currently offers `codex` only.
-4. For OpenShell, select **Codex authentication**: **OAuth** or **API key**.
-5. Select the repository and click **Create**.
+3. For OpenShell, select **OpenShell sandbox mode**: **AI Guardian hooks** or
+   **Native OpenShell**. The native path leaves workload setup to OpenShell.
+4. Select **CLI**: OpenShell currently offers `codex` only.
+5. For OpenShell **AI Guardian hooks**, select **Codex authentication**: **OAuth**
+   or **API key**. Native OpenShell leaves authentication to OpenShell.
+6. Select the repository and click **Create**.
 
-The tray uses the same implementation as the CLI. OAuth selects
-`ai-guardian-codex`; API key selects `ai-guardian-openai`.
+The tray uses the same implementation as the CLI for the hooked path. OAuth
+selects `ai-guardian-codex`; API key selects `ai-guardian-openai`.
+
+For OpenShell, **OpenShell sandbox mode** keeps the two supported paths
+explicit:
+
+- **AI Guardian hooks** uses the managed support image, hooks, daemon, and
+  selected CLI setup.
+- **Native OpenShell** delegates image, lifecycle, and workload setup entirely
+  to OpenShell. It does not add AI Guardian labels, hooks, or a daemon.
+
+The optional **OpenShell policy profile** selector discovers repository and
+configured policy files and shows a validation state and top-level preview.
+Selected profiles are passed through the existing OpenShell policy composition
+path; custom overlays remain available in **Additional policy files**.
+
+The tray's **OpenShell middleware → Check middleware readiness...** action checks
+the qualified OpenShell version and gateway health, reads middleware endpoints
+from the effective gateway TOML, and calls each endpoint's gRPC `Describe`
+method. It reports **Running** only for a responding endpoint that identifies
+itself as `ai-guardian/rust-middleware` and supplies a version; gateway-reported
+extension activation is shown separately. No binary path, registration name, or
+endpoint input is needed. The tray provides operator-owned service-manager and
+gateway-TOML guidance but does not install or stop the external Rust service.
+**Apply policy to sandbox...** lists live OpenShell sandboxes, exports each
+sandbox's round-trippable base policy, previews the complete replacement, and
+requires confirmation before calling `openshell policy set --wait`.
 
 ## After creation
 

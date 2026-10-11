@@ -619,12 +619,28 @@ def _show_local_image_picker(
         pass
 
 
+class _TkTextVariable:
+    """Adapt a multiline Tk text widget to the form variable interface."""
+
+    def __init__(self, widget):
+        self.widget = widget
+
+    def get(self):
+        return self.widget.get("1.0", "end-1c")
+
+    def set(self, value):
+        self.widget.delete("1.0", "end")
+        if value:
+            self.widget.insert("1.0", str(value))
+
+
 def _show_tkinter_form(
     title: str,
     message: str,
     fields: Iterable[Dict[str, Any]],
     *,
     screen_bounds: Optional[ScreenBounds] = None,
+    submit_label: str = "Continue",
 ) -> Optional[Dict[str, Any]]:
     """Show a blocking Tk form and return its values, or ``None`` on cancel."""
     import tkinter as tk
@@ -634,8 +650,8 @@ def _show_tkinter_form(
 
     _ensure_tcl_library()
     field_list = tuple(fields)
-    controls: Dict[str, Tuple[str, tk.Variable]] = {}
-    control_widgets: Dict[str, list[ttk.Widget]] = {}
+    controls: Dict[str, Tuple[str, Any]] = {}
+    control_widgets: Dict[str, list[Any]] = {}
     field_labels: Dict[str, list[ttk.Label]] = {}
     enabled_states: Dict[str, bool] = {}
     dynamic_defaults: Dict[str, str] = {}
@@ -673,9 +689,9 @@ def _show_tkinter_form(
 
     frame.bind("<Configure>", update_scroll_region)
     canvas.bind("<Configure>", resize_form)
-    variable: tk.Variable
-    control: ttk.Widget
-    widgets: list[ttk.Widget]
+    variable: Any
+    control: Any
+    widgets: list[Any]
     for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
         root.bind(sequence, scroll_form, add="+")
     ttk.Label(frame, text=message, justify="left", wraplength=600).grid(
@@ -713,6 +729,34 @@ def _show_tkinter_form(
                 width=int(field.get("width", 44)),
             )
             control.grid(row=row, column=1, sticky="w", pady=4)
+            widgets = [control]
+        elif kind == "textarea":
+            control_frame = ttk.Frame(frame)
+            control_frame.grid(row=row, column=1, sticky="nsew", pady=4)
+            control_frame.rowconfigure(0, weight=1)
+            control_frame.columnconfigure(0, weight=1)
+            control = tk.Text(
+                control_frame,
+                width=int(field.get("width", 80)),
+                height=int(field.get("height", 18)),
+                wrap="none",
+            )
+            control.insert("1.0", "" if default is None else str(default))
+            control.grid(row=0, column=0, sticky="nsew")
+            vertical_scrollbar = ttk.Scrollbar(
+                control_frame, orient="vertical", command=control.yview
+            )
+            vertical_scrollbar.grid(row=0, column=1, sticky="ns")
+            horizontal_scrollbar = ttk.Scrollbar(
+                control_frame, orient="horizontal", command=control.xview
+            )
+            horizontal_scrollbar.grid(row=1, column=0, sticky="ew")
+            control.configure(
+                yscrollcommand=vertical_scrollbar.set,
+                xscrollcommand=horizontal_scrollbar.set,
+            )
+            frame.rowconfigure(row, weight=1)
+            variable = _TkTextVariable(control)
             widgets = [control]
         elif kind == "image":
             variable = tk.StringVar(value="" if default is None else str(default))
@@ -844,7 +888,10 @@ def _show_tkinter_form(
             if not enabled and field.get("clear_when_disabled"):
                 controls[name][1].set("")
             for widget in control_widgets.get(name, ()):
-                widget.state(["!disabled"] if enabled else ["disabled"])
+                if controls[name][0] == "textarea":
+                    widget.configure(state="normal" if enabled else "disabled")
+                else:
+                    widget.state(["!disabled"] if enabled else ["disabled"])
             for widget in field_labels.get(name, ()):
                 widget.state(["!disabled"] if enabled else ["disabled"])
 
@@ -917,12 +964,17 @@ def _show_tkinter_form(
     ttk.Button(frame, text="Cancel", command=cancel).grid(
         row=button_row, column=0, sticky="w", pady=(14, 0)
     )
-    ttk.Button(frame, text="Continue", command=submit).grid(
+    ttk.Button(frame, text=submit_label, command=submit).grid(
         row=button_row, column=1, sticky="e", pady=(14, 0)
     )
     root.protocol("WM_DELETE_WINDOW", cancel)
     root.bind("<Escape>", lambda _event: cancel())
-    root.bind("<Return>", lambda _event: submit())
+    submit_key = (
+        "<Control-Return>"
+        if any(field.get("type") == "textarea" for field in field_list)
+        else "<Return>"
+    )
+    root.bind(submit_key, lambda _event: submit())
     root.lift()
     root.focus_force()
     try:
@@ -943,6 +995,7 @@ def _show_tkinter_form_subprocess(
     fields: Iterable[Dict[str, Any]],
     *,
     screen_bounds: Optional[ScreenBounds] = None,
+    submit_label: str = "Continue",
 ) -> Optional[Dict[str, Any]]:
     """Run a Tk form outside the tray process to isolate GUI toolkit state."""
     payload = json.dumps(
@@ -951,6 +1004,7 @@ def _show_tkinter_form_subprocess(
             "message": message,
             "fields": tuple(fields),
             "screen_bounds": screen_bounds,
+            "submit_label": submit_label,
         },
         ensure_ascii=False,
     )
@@ -959,7 +1013,8 @@ def _show_tkinter_form_subprocess(
         "from ai_guardian.tray.sandbox_dialog import _show_tkinter_form; "
         "p=json.loads(sys.argv[1]); "
         "v=_show_tkinter_form(p['title'], p['message'], p['fields'], "
-        "screen_bounds=p.get('screen_bounds')); "
+        "screen_bounds=p.get('screen_bounds'), "
+        "submit_label=p.get('submit_label', 'Continue')); "
         "print(json.dumps(v, ensure_ascii=False) if v is not None else '')"
     )
     try:
@@ -1131,7 +1186,9 @@ def _show_tkinter_progress(
                     message = str(update.get("message") or "")
                     if update.get("success"):
                         status.set(message or "Completed.")
-                        root.after(150, close)
+                        # Keep successful output available for review. Closing
+                        # after a short timer made fast operations look like a
+                        # modal flash and hid their completion details.
                     else:
                         status.set(message or "Operation failed. Review output.")
                 elif update_type == "eof" and not completed:
@@ -1556,6 +1613,7 @@ def _show_nicegui_form(
     fields: Iterable[Dict[str, Any]],
     *,
     screen_bounds: Optional[ScreenBounds] = None,
+    submit_label: str = "Continue",
 ) -> Optional[Dict[str, Any]]:
     """Show the sandbox form in a browser using NiceGUI."""
     del screen_bounds
@@ -1641,6 +1699,16 @@ def _show_nicegui_form(
                             label=label,
                         ).classes("w-full")
                     widgets[name] = ("choice", widget)
+                elif kind == "textarea":
+                    widget = ui.textarea(
+                        label=label,
+                        value="" if default is None else str(default),
+                    ).classes("w-full")
+                    widget.style(
+                        "height: 50vh; min-height: 320px; max-height: 620px; "
+                        "font-family: monospace;"
+                    )
+                    widgets[name] = ("textarea", widget)
                 else:
                     widget = ui.input(
                         label=label,
@@ -1673,7 +1741,7 @@ def _show_nicegui_form(
             ui.separator()
             with ui.row().classes("w-full justify-end"):
                 ui.button("Cancel", on_click=close).props("flat")
-                ui.button("Continue", on_click=submit, color="primary")
+                ui.button(submit_label, on_click=submit, color="primary")
 
     port = _find_free_port()
     from ai_guardian.desktop_utils import open_url
@@ -2017,6 +2085,7 @@ def _show_tkinter_upload_confirmation(
     message: str,
     *,
     error_lines: Iterable[str] = (),
+    confirm_label: str = "Continue upload",
     screen_bounds: Optional[ScreenBounds] = None,
 ) -> bool:
     """Show an upload summary and require explicit confirmation."""
@@ -2094,7 +2163,7 @@ def _show_tkinter_upload_confirmation(
     ttk.Button(button_frame, text="Cancel", command=cancel).pack(side="left")
     ttk.Button(
         button_frame,
-        text="Continue upload",
+        text=confirm_label,
         command=continue_upload,
     ).pack(side="left", padx=(8, 0))
     root.protocol("WM_DELETE_WINDOW", cancel)
@@ -2119,6 +2188,7 @@ def _show_tkinter_upload_confirmation_subprocess(
     message: str,
     *,
     error_lines: Iterable[str] = (),
+    confirm_label: str = "Continue upload",
     screen_bounds: Optional[ScreenBounds] = None,
 ) -> bool:
     """Run upload confirmation outside the tray process."""
@@ -2127,6 +2197,7 @@ def _show_tkinter_upload_confirmation_subprocess(
             "title": title,
             "message": message,
             "error_lines": tuple(error_lines),
+            "confirm_label": confirm_label,
             "screen_bounds": screen_bounds,
         },
         ensure_ascii=False,
@@ -2138,6 +2209,7 @@ def _show_tkinter_upload_confirmation_subprocess(
         "p=json.loads(sys.argv[1]); "
         "v=_show_tkinter_upload_confirmation(p['title'], p['message'], "
         "error_lines=p.get('error_lines', ()), "
+        "confirm_label=p.get('confirm_label', 'Continue upload'), "
         "screen_bounds=p.get('screen_bounds')); "
         "print('1' if v else '0')"
     )
@@ -2197,12 +2269,50 @@ def show_sandbox_upload_confirmation(
         return False
 
 
+def show_sandbox_policy_confirmation(
+    message: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> bool:
+    """Review a complete OpenShell policy and confirm its replacement."""
+    try:
+        from ai_guardian.ui.display import select_ui_provider
+
+        title = "Apply OpenShell policy"
+        # Policy previews can contain the entire merged YAML document, so use a
+        # rich dialog with scrollable content instead of a compact native prompt.
+        provider = select_ui_provider("form", screen_bounds=screen_bounds)
+        if provider == "tkinter":
+            if screen_bounds is None:
+                return _show_tkinter_upload_confirmation_subprocess(
+                    title,
+                    message,
+                    confirm_label="Replace policy",
+                )
+            return _show_tkinter_upload_confirmation_subprocess(
+                title,
+                message,
+                confirm_label="Replace policy",
+                screen_bounds=screen_bounds,
+            )
+        if provider == "native":
+            result = _show_native_confirmation(title, message, "Replace policy")
+            return bool(result) if result is not None else False
+        if provider == "nicegui":
+            return _show_nicegui_confirmation(title, message, "Replace policy")
+        return False
+    except Exception as exc:
+        logger.warning("OpenShell policy confirmation unavailable: %s", exc)
+        return False
+
+
 def show_sandbox_form(
     title: str,
     message: str,
     fields: Iterable[Dict[str, Any]],
     *,
     screen_bounds: Optional[ScreenBounds] = None,
+    submit_label: str = "Continue",
 ) -> Optional[Dict[str, Any]]:
     """Show a sandbox form using the configured provider cascade."""
     try:
@@ -2211,11 +2321,19 @@ def show_sandbox_form(
         field_list = list(fields)
         provider = select_ui_provider("form", screen_bounds=screen_bounds)
         if provider == "nicegui":
+            if submit_label == "Continue":
+                return _show_nicegui_form(
+                    title,
+                    message,
+                    field_list,
+                    screen_bounds=screen_bounds,
+                )
             return _show_nicegui_form(
                 title,
                 message,
                 field_list,
                 screen_bounds=screen_bounds,
+                submit_label=submit_label,
             )
         if provider == "headless":
             logger.warning("Sandbox form unavailable: preferred UI is headless")
@@ -2230,12 +2348,24 @@ def show_sandbox_form(
         # some Linux/GTK combinations, so keep the form in a short-lived child
         # process on every platform.
         if screen_bounds is None:
-            return _show_tkinter_form_subprocess(title, message, field_list)
+            if submit_label == "Continue":
+                return _show_tkinter_form_subprocess(title, message, field_list)
+            return _show_tkinter_form_subprocess(
+                title, message, field_list, submit_label=submit_label
+            )
+        if submit_label == "Continue":
+            return _show_tkinter_form_subprocess(
+                title,
+                message,
+                field_list,
+                screen_bounds=screen_bounds,
+            )
         return _show_tkinter_form_subprocess(
             title,
             message,
             field_list,
             screen_bounds=screen_bounds,
+            submit_label=submit_label,
         )
     except Exception as exc:
         logger.warning("Sandbox form unavailable: %s", exc)
@@ -2246,6 +2376,7 @@ __all__ = [
     "show_sandbox_confirmation",
     "show_sandbox_form",
     "show_sandbox_log",
+    "show_sandbox_policy_confirmation",
     "show_sandbox_progress",
     "show_sandbox_upload_confirmation",
 ]

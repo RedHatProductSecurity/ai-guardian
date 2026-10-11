@@ -553,6 +553,7 @@ class DaemonTray:
             *self._menu._build_single_daemon_daemon_items(),
             *self._menu._build_multi_daemon_menu_items(),
             pystray.Menu.SEPARATOR,
+            *self._menu._build_openshell_middleware_menu_items(),
             *self._menu._build_sandbox_create_menu_items(),
             *self._menu._build_sandbox_start_menu_items(),
             pystray.Menu.SEPARATOR,

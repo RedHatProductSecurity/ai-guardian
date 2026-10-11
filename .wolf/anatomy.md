@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1210 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1214 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~74232 tok)
+- `CHANGELOG.md` — Change log (~74511 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -24,8 +24,8 @@
 - `Makefile` — Make build targets (~62 tok)
 - `mkdocs.yml` (~1153 tok)
 - `NOTICE` (~55 tok)
-- `pyproject.toml` — Python project configuration (~2585 tok)
-- `README.md` — Project documentation (~10682 tok)
+- `pyproject.toml` — Python project configuration (~2597 tok)
+- `README.md` — Project documentation (~10695 tok)
 - `RELEASING.md` — Release Management Process (~7903 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
@@ -805,6 +805,7 @@
 ## container/policies/
 
 - `base.yaml` — Shared static baseline for the AI Guardian OpenShell support image. (~98 tok)
+- `openshell-middleware.yaml` — OpenShell policy overlay for the operator-registered AI Guardian middleware. (~240 tok)
 
 ## container/policies/agents/
 
@@ -921,13 +922,13 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~6961 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~7505 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
 - `README.md` — Project documentation (~1479 tok)
-- `requirements.txt` — Python dependencies (~36 tok)
-- `Sandbox.md` — Sandbox CLI (~3338 tok)
+- `requirements.txt` — Python dependencies (~59 tok)
+- `Sandbox.md` — Sandbox CLI (~3827 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2439 tok)
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
@@ -1068,10 +1069,11 @@
 - `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4397 tok)
 - `logging_utils.py` — Shared logging utilities. (~254 tok)
 - `opencode_support.py` — OpenCode runtime generation and version helpers. (~909 tok)
+- `openshell_policy.py` — OpenShell policy discovery and validation helpers. (~3025 tok)
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
 - `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
-- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~24174 tok)
+- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~27180 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)
@@ -1387,17 +1389,19 @@
 
 - `__init__.py` — System tray UI and daemon client. (~12 tok)
 - `animation.py` — Declares TrayIconManager (~1492 tok)
-- `app.py` — URL configuration (~16780 tok)
+- `app.py` — URL configuration (~16799 tok)
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1078 tok)
 - `health.py` — URL configuration (~16972 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — URL configuration (~37078 tok)
+- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn (~42548 tok)
 - `menu.py` — URL configuration (~2947 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
+- `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2296 tok)
+- `openshell_middleware.py` — OpenShell middleware readiness checks used by the system tray. (~5878 tok)
 - `plugin_runner.py` — Declares TrayPluginMenuBuilder (~8890 tok)
 - `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21430 tok)
 - `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~13275 tok)
-- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~22969 tok)
+- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24474 tok)
 
 ## src/ai_guardian/tui/
 

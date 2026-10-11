@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenShell middleware tray workflow (#2527):** Add guided external-service
+  readiness checks that probe configured gateway TOML endpoints with gRPC
+  `Describe`, verify implementation and version before reporting running, and
+  report gateway activation separately; add explicit native versus AI
+  Guardian-hooked OpenShell creation, validated policy profiles, and
+  complete-policy replacement for existing OpenShell sandboxes while preserving
+  OpenShell/service-manager ownership. The Apply policy dialog shows the selected
+  profile source and full merged YAML in an editable review; YAML is validated
+  and required base controls are preserved before the explicit **Replace policy**
+  action applies it. Its selector is wider for long profile descriptions.
+  Successful sandbox operation details remain open until the user closes the
+  dialog, and repository preflight leads directly to upload confirmation without
+  a brief progress-window interstitial.
+  The probe uses grpcio (Apache-2.0) and encodes its fixed protobuf wire fields
+  directly, avoiding a protobuf runtime dependency for readiness checks.
 - **OpenShell middleware release binaries (#2522):** Publish the external Rust
   middleware as versioned, SHA-256-checked GitHub Release assets for validated
   Linux x86_64/arm64 and macOS Intel/Apple Silicon targets. The release process

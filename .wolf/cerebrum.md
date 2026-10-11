@@ -20,6 +20,13 @@
 - OpenShell sandbox create tests should pass an explicit non-interactive command
   such as `-- /bin/true`; omitting it intentionally attaches an interactive
   shell, so use `sandbox connect` only after create returns.
+- The tray's **Apply policy to sandbox** profile selector should be wide enough
+  to distinguish long discovered profile summaries; its help should explain
+  that the selected profile is an overlay. Let users edit the full merged YAML
+  in the review dialog; validate edits, preserve required base controls, and
+  require explicit Replace policy approval before applying. Avoid
+  progress-window interstitials for fast preparation steps, and keep successful
+  sandbox operation details open until the user closes them.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
@@ -65,6 +72,16 @@
 - **OpenShell middleware deployment (#2525):** There is no Python bootstrap or
   sandbox coupling. Operators run the Rust binary with a service manager,
   register it in the gateway TOML, and apply a complete OpenShell policy.
+
+- **OpenShell middleware readiness auto-discovery (#2527):**
+  Gateway extension metadata is not process liveness and may remain active after
+  the middleware stops. Read configured gRPC endpoints from gateway TOML and
+  call `SupervisorMiddleware/Describe`; report running only when the endpoint
+  responds with `ai-guardian/rust-middleware` and a version. Keep this direct
+  endpoint result separate from gateway-reported activation. No binary path,
+  endpoint, or registration input belongs in the tray form. Updating
+  `pyproject.toml` does not refresh an already-installed tray environment; when
+  the probe reports missing `grpcio`, refresh AI Guardian and restart the tray.
 
 - **OpenShell middleware pause semantics (#2525):** A daemon pause suspends
   content inspection and passes provider traffic through for HTTP, response,
