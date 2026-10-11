@@ -9,51 +9,45 @@ budget_tokens: 1000
 
 ---
 
-## Current Quest: Issue #2527
+## ✅ Done
 
-- Open PR #2530 is on branch `2527`. Its current head `761ff9ed` includes the
-  `pymdown-extensions==11.0.1` pin; Read the Docs now passes.
-- The latest CI matrix run exposed two root causes: Windows tests cleared all
-  home variables before OpenShell policy discovery, and Ubuntu 26.04/Python 3.14
-  loaded incompatible system/PyPI protobuf components in the readiness probe.
-- Local fixes skip the optional XDG policy root when no home is available and
-  encode/decode the probe's fixed protobuf wire contract directly through gRPC.
-- The five affected unit/UX files pass (127 tests). Ruff, Black, Pylint, and
-  targeted Mypy pass. Full Mypy has 14 unrelated request-typing errors at
-  `skill_discovery.py:522` and `secret_validator.py:288`.
-- Changes remain uncommitted and unpushed. JIRA acceptance criteria are
-  unavailable because `JIRA_API_TOKEN` is unset.
+- Issue #2529: place single- and multi-daemon `Pause...` controls directly below
+  **Status**, preserve global pause/resume behavior, and group directory controls
+  under `Directories...`.
+- Make **Check middleware readiness...** a standalone action; put
+  **Apply policy to sandbox...** under the selected OpenShell target's
+  **Manage sandbox** menu and lock its form to that sandbox. Regular containers
+  correctly omit the OpenShell policy action.
+- Update `CHANGELOG.md`, `docs/Sandbox.md`, and `docs/OPENSHELL_MIDDLEWARE.md`;
+  add unit and UX coverage. The user confirmed the action appears for OpenShell
+  targets.
+- 541 affected unit/UX tests pass. Ruff, Black, and Pylint pass. Full Mypy still
+  reports 14 existing errors in `skill_discovery.py:522` and
+  `secret_validator.py:288`.
+- Prior #2527 OpenShell readiness work is on the current base via PR #2530.
 
-## Done
+## 🚀 Next quest
 
-- Completed the tray's OpenShell readiness, native-vs-hooked sandbox, policy
-  discovery/editing, and operator-owned middleware workflows with unit/UX
-  coverage and documentation.
-- Fixed the Read the Docs dependency regression; PR #2530's RTD check is green.
-
-## Next Quest
-
-- Use the DAF completion flow to publish the local CI fixes to PR #2530, then
-  verify a fresh matrix run. No commit or push has been made in this session.
+- Use `daf complete` outside this agent session to publish branch `2529` and
+  finish issue #2529. Changes are uncommitted; no commit or push was made here.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Current branch/issue: `2527` / `RedHatProductSecurity/ai-guardian#2527`.
-- The local direct tests ran on Python 3.14.7; CI remains at the older failed
-  run until the local changes are sent to the PR.
-- Do not regenerate `docs/notebooklm-export.md` during development; it is
-  refreshed only during the release process.
+- Branch/issue: `2529` / `RedHatProductSecurity/ai-guardian#2529`.
+- GitHub progress comment: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2529#issuecomment-6110128035`.
+- Do not regenerate `docs/notebooklm-export.md` during development; release
+  workflow refreshes it.
 
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_openshell_middleware_probe.py tests/unit/test_openshell_middleware_tray.py tests/unit/test_openshell_policy.py tests/unit/test_sandbox_tray.py tests/ux/test_user_experience_contract_sandbox_middleware.py -q  # 127 passed
+uv run --extra dev python -m pytest tests/unit/test_daemon_tray.py tests/unit/test_sandbox_tray.py tests/ux/test_user_experience_contract_sandbox_middleware.py -q  # 541 passed
 ruff check src/ai_guardian/ tests/  # passed
 black --target-version py310 --check src/ai_guardian/ tests/  # passed
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text  # 10.00/10
-mypy --follow-imports=silent src/ai_guardian/openshell_policy.py src/ai_guardian/tray/openshell_middleware_probe.py src/ai_guardian/tray/openshell_middleware.py  # passed
-git diff --check
+mypy src/ai_guardian/  # 14 pre-existing errors in skill_discovery.py and secret_validator.py
+git diff --check  # passed
 ```
 
 ## References
@@ -61,4 +55,4 @@ git diff --check
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2527`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2529`

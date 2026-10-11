@@ -343,17 +343,18 @@ configured policy files and shows a validation state and top-level preview.
 Selected profiles are passed through the existing OpenShell policy composition
 path; custom overlays remain available in **Additional policy files**.
 
-The tray's **OpenShell middleware → Check middleware readiness...** action checks
-the qualified OpenShell version and gateway health, reads middleware endpoints
-from the effective gateway TOML, and calls each endpoint's gRPC `Describe`
-method. It reports **Running** only for a responding endpoint that identifies
-itself as `ai-guardian/rust-middleware` and supplies a version; gateway-reported
-extension activation is shown separately. No binary path, registration name, or
-endpoint input is needed. The tray provides operator-owned service-manager and
+The standalone tray action **Check middleware readiness...** checks the qualified
+OpenShell version and gateway health, reads middleware endpoints from the
+effective gateway TOML, and calls each endpoint's gRPC `Describe` method. It
+reports **Running** only for a responding endpoint that identifies itself as
+`ai-guardian/rust-middleware` and supplies a version; gateway-reported extension
+activation is shown separately. No binary path, registration name, or endpoint
+input is needed. The tray provides operator-owned service-manager and
 gateway-TOML guidance but does not install or stop the external Rust service.
-**Apply policy to sandbox...** lists live OpenShell sandboxes, exports each
-sandbox's round-trippable base policy, previews the complete replacement, and
-requires confirmation before calling `openshell policy set --wait`.
+For an OpenShell target, use **Manage sandbox → Apply policy to sandbox...**;
+the form is scoped to that selected sandbox, exports its round-trippable base
+policy, previews the complete replacement, and requires confirmation before
+calling `openshell policy set --wait`.
 
 ## After creation
 

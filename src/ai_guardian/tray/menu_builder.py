@@ -1779,7 +1779,7 @@ class TrayMenuBuilder:
     def _openshell_sandbox_label(record):
         return f"{record['name']} ({record.get('phase', 'unknown')})"
 
-    def _openshell_policy_apply_fields(self, records):
+    def _openshell_policy_apply_fields(self, records, sandbox_name=None):
         """Return the form used to select a sandbox and a policy overlay."""
         options = discover_openshell_policies()
         sandbox_choices = tuple(
@@ -1793,12 +1793,15 @@ class TrayMenuBuilder:
                 "label": "OpenShell sandbox",
                 "type": "choice",
                 "choices": sandbox_choices,
-                "editable": True,
+                "editable": sandbox_name is None,
                 "default": sandbox_choices[0],
                 "required": True,
                 "help": (
-                    "Eligible live sandboxes are listed with their current phase; "
-                    "you may type a name if it was created after this list loaded."
+                    "This menu is scoped to the selected OpenShell sandbox."
+                    if sandbox_name is not None
+                    else "Eligible live sandboxes are listed with their current "
+                    "phase; you may type a name if it was created after this list "
+                    "loaded."
                 ),
             },
             {
@@ -1972,11 +1975,17 @@ class TrayMenuBuilder:
 
                 shutil.rmtree(temporary_dir, ignore_errors=True)
 
-    def _mk_openshell_policy_apply_action(self):
-        """Create the tray action that discovers and updates OpenShell sandboxes."""
+    def _mk_openshell_policy_apply_action(self, slot=None):
+        """Create an action that applies policy to an optionally selected target."""
 
         def action(icon, __):
             screen_bounds = self._capture_sandbox_screen_bounds(icon)
+            sandbox_name = None
+            if slot is not None:
+                target = self._sandbox_target_at(slot)
+                if target is None or not self._sandbox_is_openshell(slot):
+                    return
+                sandbox_name = target.name
 
             def load_form():
                 try:
@@ -1985,6 +1994,20 @@ class TrayMenuBuilder:
                     records = list_openshell_sandboxes(
                         SimpleNamespace(openshell_cli=None)
                     )
+                    if sandbox_name is not None:
+                        records = [
+                            record
+                            for record in records
+                            if record.get("name") == sandbox_name
+                        ]
+                        if not records:
+                            self._sandbox_error(
+                                "Apply OpenShell policy",
+                                f"OpenShell sandbox '{sandbox_name}' is no longer "
+                                "available.",
+                                **self._screen_bounds_kwargs(screen_bounds),
+                            )
+                            return
                 except Exception as exc:
                     logger.exception("OpenShell sandbox discovery failed")
                     self._sandbox_error(
@@ -1998,7 +2021,7 @@ class TrayMenuBuilder:
                     "Apply OpenShell policy",
                     "Select a sandbox and a validated policy profile. Existing policy "
                     "controls are preserved by composing a complete replacement.",
-                    self._openshell_policy_apply_fields(records),
+                    self._openshell_policy_apply_fields(records, sandbox_name),
                     lambda values, **kwargs: self._complete_openshell_policy_form(
                         values, records, **kwargs
                     ),
@@ -2015,20 +2038,11 @@ class TrayMenuBuilder:
         return action
 
     def _build_openshell_middleware_menu_items(self):
-        """Build middleware readiness and live OpenShell policy actions."""
+        """Build the standalone middleware readiness action."""
         return [
             pystray.MenuItem(
-                "OpenShell middleware",
-                pystray.Menu(
-                    pystray.MenuItem(
-                        "Check middleware readiness...",
-                        self._mk_openshell_middleware_readiness_action(),
-                    ),
-                    pystray.MenuItem(
-                        "Apply policy to sandbox...",
-                        self._mk_openshell_policy_apply_action(),
-                    ),
-                ),
+                "Check middleware readiness...",
+                self._mk_openshell_middleware_readiness_action(),
             )
         ]
 
@@ -2428,6 +2442,12 @@ class TrayMenuBuilder:
                 pystray.MenuItem(
                     "Status",
                     self._mk_sandbox_command_action(slot, "status", target_name),
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(
+                    "Apply policy to sandbox...",
+                    self._mk_openshell_policy_apply_action(slot),
+                    visible=lambda _item, slot=slot: self._sandbox_is_openshell(slot),
                 ),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(
@@ -2876,6 +2896,13 @@ class TrayMenuBuilder:
                 target=_poll_for_new_daemon, daemon=True, name="restart-poll"
             ).start()
 
+        pause_item = self._build_single_daemon_pause_menu_item(
+            _get_stats,
+            _pause_action,
+            _resume_action,
+            _single_running,
+        )
+
         return [
             pystray.MenuItem(
                 "⚠️ Daemon running old code — click to restart",
@@ -2893,6 +2920,7 @@ class TrayMenuBuilder:
                 0,
                 visible=lambda _item: self._tray._is_single_daemon(),
             ),
+            pause_item,
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Console",
@@ -2978,24 +3006,13 @@ class TrayMenuBuilder:
             self._build_sandbox_manage_menu_item(0),
         ]
 
-    def _build_single_daemon_daemon_items(self):
-        """Build daemon operation items for single-daemon mode.
-
-        Pause/Resume and Start/Stop/Restart grouped together without
-        internal separators. Separated from preceding items by a
-        separator. Must be called after _build_single_daemon_menu_items().
-        """
-        c = self._single_daemon_closures
-        _pause_action = c["pause_action"]
-        _resume_action = c["resume_action"]
-        _stop_action = c["stop_action"]
-        _restart_action = c["restart_action"]
-        _single_running = c["single_running"]
-        _single_not_running = c["single_not_running"]
-        _get_stats = c["get_stats"]
+    def _build_single_daemon_pause_menu_item(
+        self, get_stats_fn, pause_action, resume_action, visible
+    ):
+        """Build the prominent global and per-directory pause submenu."""
 
         def _global_pause_label(_item):
-            stats = _get_stats(_item)
+            stats = get_stats_fn(_item)
             if stats.get("paused"):
                 remaining = stats.get("pause_remaining_seconds", 0)
                 if remaining > 0 and self._tray._supports_live_pause_countdown():
@@ -3006,10 +3023,10 @@ class TrayMenuBuilder:
             return "● Daemon (global)"
 
         def _global_is_paused(_item):
-            return _get_stats(_item).get("paused", False)
+            return get_stats_fn(_item).get("paused", False)
 
         def _global_is_active(_item):
-            return not _get_stats(_item).get("paused", False)
+            return not get_stats_fn(_item).get("paused", False)
 
         def _pause_dir_action(directory, minutes):
             if self._tray._targets and self._tray._multi_client:
@@ -3026,61 +3043,76 @@ class TrayMenuBuilder:
                     directory,
                 )
 
-        dir_pause_items = self._build_dir_pause_items(
-            _get_stats,
-            _pause_dir_action,
-            _resume_dir_action,
+        def _has_dirs(_item):
+            return bool(self._get_merged_dir_list(get_stats_fn(_item)))
+
+        return pystray.MenuItem(
+            "Pause...",
+            pystray.Menu(
+                pystray.MenuItem(
+                    _global_pause_label,
+                    pystray.Menu(
+                        pystray.MenuItem(
+                            "5 minutes",
+                            pause_action(5),
+                            visible=_global_is_active,
+                        ),
+                        pystray.MenuItem(
+                            "15 minutes",
+                            pause_action(15),
+                            visible=_global_is_active,
+                        ),
+                        pystray.MenuItem(
+                            "30 minutes",
+                            pause_action(30),
+                            visible=_global_is_active,
+                        ),
+                        pystray.MenuItem(
+                            "1 hour",
+                            pause_action(60),
+                            visible=_global_is_active,
+                        ),
+                        pystray.MenuItem(
+                            "Until resume",
+                            pause_action(0),
+                            visible=_global_is_active,
+                        ),
+                        pystray.MenuItem(
+                            "Resume",
+                            resume_action,
+                            visible=_global_is_paused,
+                        ),
+                    ),
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(
+                    "Directories...",
+                    pystray.Menu(
+                        *self._build_dir_pause_items(
+                            get_stats_fn,
+                            _pause_dir_action,
+                            _resume_dir_action,
+                        )
+                    ),
+                    visible=_has_dirs,
+                ),
+            ),
+            visible=visible,
         )
 
-        def _has_dirs(_item):
-            stats = _get_stats(_item)
-            return bool(self._get_merged_dir_list(stats))
+    def _build_single_daemon_daemon_items(self):
+        """Build daemon operation items for single-daemon mode.
+
+        Start/Stop/Restart actions follow the single-daemon menu. Must be called
+        after _build_single_daemon_menu_items().
+        """
+        c = self._single_daemon_closures
+        _stop_action = c["stop_action"]
+        _restart_action = c["restart_action"]
+        _single_not_running = c["single_not_running"]
 
         return [
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(
-                "Pause...",
-                pystray.Menu(
-                    pystray.MenuItem(
-                        _global_pause_label,
-                        pystray.Menu(
-                            pystray.MenuItem(
-                                "5 minutes",
-                                _pause_action(5),
-                                visible=_global_is_active,
-                            ),
-                            pystray.MenuItem(
-                                "15 minutes",
-                                _pause_action(15),
-                                visible=_global_is_active,
-                            ),
-                            pystray.MenuItem(
-                                "30 minutes",
-                                _pause_action(30),
-                                visible=_global_is_active,
-                            ),
-                            pystray.MenuItem(
-                                "1 hour",
-                                _pause_action(60),
-                                visible=_global_is_active,
-                            ),
-                            pystray.MenuItem(
-                                "Until resume",
-                                _pause_action(0),
-                                visible=_global_is_active,
-                            ),
-                            pystray.MenuItem(
-                                "Resume",
-                                _resume_action,
-                                visible=_global_is_paused,
-                            ),
-                        ),
-                    ),
-                    pystray.Menu.SEPARATOR,
-                    *dir_pause_items,
-                ),
-                visible=_single_running,
-            ),
             pystray.MenuItem(
                 "Start daemon", _restart_action, visible=_single_not_running
             ),
@@ -3463,6 +3495,65 @@ class TrayMenuBuilder:
                 idx
             )
 
+            def _has_multi_pause_dirs(_item, stats_fn=stats_fns[13]):
+                return bool(self._get_merged_dir_list(stats_fn(_item)))
+
+            pause_item = pystray.MenuItem(
+                "Pause...",
+                pystray.Menu(
+                    pystray.MenuItem(
+                        lambda _i, _sf=stats_fns: self._multi_global_pause_label(
+                            _sf, _i
+                        ),
+                        pystray.Menu(
+                            pystray.MenuItem(
+                                "5 minutes",
+                                _mk_pause(5),
+                                visible=lambda _i, _sf=stats_fns: not _sf[11](_i),
+                            ),
+                            pystray.MenuItem(
+                                "15 minutes",
+                                _mk_pause(15),
+                                visible=lambda _i, _sf=stats_fns: not _sf[11](_i),
+                            ),
+                            pystray.MenuItem(
+                                "30 minutes",
+                                _mk_pause(30),
+                                visible=lambda _i, _sf=stats_fns: not _sf[11](_i),
+                            ),
+                            pystray.MenuItem(
+                                "1 hour",
+                                _mk_pause(60),
+                                visible=lambda _i, _sf=stats_fns: not _sf[11](_i),
+                            ),
+                            pystray.MenuItem(
+                                "Until resume",
+                                _mk_pause(0),
+                                visible=lambda _i, _sf=stats_fns: not _sf[11](_i),
+                            ),
+                            pystray.MenuItem(
+                                "Resume",
+                                _mk_resume(),
+                                visible=lambda _i, _sf=stats_fns: _sf[11](_i),
+                            ),
+                        ),
+                    ),
+                    pystray.Menu.SEPARATOR,
+                    pystray.MenuItem(
+                        "Directories...",
+                        pystray.Menu(
+                            *self._build_dir_pause_items(
+                                stats_fns[13],
+                                self._mk_multi_pause_dir(idx),
+                                self._mk_multi_resume_dir(idx),
+                            )
+                        ),
+                        visible=_has_multi_pause_dirs,
+                    ),
+                ),
+                visible=_is_slot_running,
+            )
+
             items.append(
                 pystray.MenuItem(
                     make_label,
@@ -3479,6 +3570,7 @@ class TrayMenuBuilder:
                             enabled=False,
                         ),
                         self._build_daemon_status_menu_item(idx),
+                        pause_item,
                         pystray.Menu.SEPARATOR,
                         pystray.MenuItem(
                             "Console",
@@ -3572,67 +3664,6 @@ class TrayMenuBuilder:
                         pystray.Menu.SEPARATOR,
                         *multi_plugin_items,
                         pystray.Menu.SEPARATOR,
-                        pystray.MenuItem(
-                            "Pause...",
-                            pystray.Menu(
-                                pystray.MenuItem(
-                                    lambda _i, _sf=stats_fns: (
-                                        self._multi_global_pause_label(_sf, _i)
-                                    ),
-                                    pystray.Menu(
-                                        pystray.MenuItem(
-                                            "5 minutes",
-                                            _mk_pause(5),
-                                            visible=lambda _i, _sf=stats_fns: (
-                                                not _sf[11](_i)
-                                            ),
-                                        ),
-                                        pystray.MenuItem(
-                                            "15 minutes",
-                                            _mk_pause(15),
-                                            visible=lambda _i, _sf=stats_fns: (
-                                                not _sf[11](_i)
-                                            ),
-                                        ),
-                                        pystray.MenuItem(
-                                            "30 minutes",
-                                            _mk_pause(30),
-                                            visible=lambda _i, _sf=stats_fns: (
-                                                not _sf[11](_i)
-                                            ),
-                                        ),
-                                        pystray.MenuItem(
-                                            "1 hour",
-                                            _mk_pause(60),
-                                            visible=lambda _i, _sf=stats_fns: (
-                                                not _sf[11](_i)
-                                            ),
-                                        ),
-                                        pystray.MenuItem(
-                                            "Until resume",
-                                            _mk_pause(0),
-                                            visible=lambda _i, _sf=stats_fns: (
-                                                not _sf[11](_i)
-                                            ),
-                                        ),
-                                        pystray.MenuItem(
-                                            "Resume",
-                                            _mk_resume(),
-                                            visible=lambda _i, _sf=stats_fns: (
-                                                _sf[11](_i)
-                                            ),
-                                        ),
-                                    ),
-                                ),
-                                pystray.Menu.SEPARATOR,
-                                *self._build_dir_pause_items(
-                                    stats_fns[13],
-                                    self._mk_multi_pause_dir(idx),
-                                    self._mk_multi_resume_dir(idx),
-                                ),
-                            ),
-                            visible=_is_slot_running,
-                        ),
                         pystray.MenuItem(
                             "Start daemon",
                             _mk_restart(),

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Tray pause controls (#2529):** Place `Pause...` directly below **Status** in
+  single- and multi-daemon menus, retain the existing global duration/resume
+  behavior, and group per-directory pause/resume controls in a separate nested
+  submenu. Make **Check middleware readiness...** a standalone tray action and
+  move **Apply policy to sandbox...** into the selected OpenShell sandbox menu,
+  with policy selection scoped to that sandbox.
 - **OpenShell middleware tray workflow (#2527):** Add guided external-service
   readiness checks that probe configured gateway TOML endpoints with gRPC
   `Describe`, verify implementation and version before reporting running, and
