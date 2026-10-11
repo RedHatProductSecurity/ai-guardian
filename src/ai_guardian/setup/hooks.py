@@ -3189,6 +3189,66 @@ class IDESetup:
         message += f"\n  Restart {ide_name} or reload its extensions for the change to take effect\n"
         return True, message
 
+    def _is_setup_already_configured(
+        self,
+        ide_type: str,
+        config_path: Path,
+        *,
+        scope: str = "user",
+        project_dir: Optional[str] = None,
+        enable_mcp: bool = True,
+    ) -> bool:
+        """Return whether setup would require force to replace existing hooks."""
+        ide_config = self.IDE_CONFIGS.get(ide_type, {})
+        if ide_type == "dummy-agent" or ide_config.get("mcp_only"):
+            return False
+
+        generated_artifact = (
+            ide_config.get("plugin_file")
+            or ide_config.get("extension_based")
+            or ide_config.get("extension_file")
+        )
+        if self.expected_hook_manifest(ide_type) and not generated_artifact:
+            verification = self.verify_hooks_for_ide(
+                ide_type, scope=scope, project_dir=project_dir
+            )
+            already_configured = not verification.get("diagnostics") and (
+                verification.get("healthy") is True
+            )
+        else:
+            already_configured = self.check_hooks_configured(config_path, ide_type)
+
+        if already_configured and ide_type == "pi":
+            pi_index = config_path / "ai-guardian" / "index.ts"
+            pi_legacy = config_path / "ai-guardian.ts"
+            if pi_legacy.is_file() or not pi_index.is_file():
+                already_configured = False
+            if already_configured:
+                try:
+                    pi_source = pi_index.read_text(encoding="utf-8")
+                except OSError:
+                    pi_source = ""
+                current_mcp_mode = "const PI_MCP_ENABLED = true;" in pi_source
+                if current_mcp_mode != enable_mcp:
+                    already_configured = False
+                else:
+                    from ai_guardian.setup.mcp import verify_pi_mcp_extension
+
+                    mcp_status = verify_pi_mcp_extension(
+                        scope=scope, project_dir=project_dir
+                    ).get("mcp_status")
+                    if mcp_status in {
+                        "missing_dependencies",
+                        "invalid_dependencies",
+                        "identity_missing",
+                        "stale",
+                        "invalid",
+                        "executable_changed",
+                        "identity_invalid",
+                    }:
+                        already_configured = False
+        return already_configured
+
     def setup_ide_hooks(
         self,
         ide_type: str,
@@ -3273,59 +3333,15 @@ class IDESetup:
                 )
                 return True, msg
 
-            # Check if hooks already configured
-            if not force:
-                # Generated plugin/extension artifacts are protected by the
-                # historical no-overwrite contract. Event-based hook files
-                # can be repaired in place, but an existing plugin/extension
-                # requires --force before replacing user-owned source.
-                generated_artifact = (
-                    ide_config.get("plugin_file")
-                    or ide_config.get("extension_based")
-                    or ide_config.get("extension_file")
-                )
-                if self.expected_hook_manifest(ide_type) and not generated_artifact:
-                    verification = self.verify_hooks_for_ide(
-                        ide_type, scope=scope, project_dir=project_dir
-                    )
-                    already_configured = not verification.get("diagnostics") and (
-                        verification.get("healthy") is True
-                    )
-                else:
-                    already_configured = self.check_hooks_configured(
-                        config_path, ide_type
-                    )
-            else:
-                already_configured = False
-            if already_configured and ide_type == "pi":
-                pi_index = config_path / "ai-guardian" / "index.ts"
-                pi_legacy = config_path / "ai-guardian.ts"
-                if pi_legacy.is_file() or not pi_index.is_file():
-                    already_configured = False
-                if already_configured:
-                    try:
-                        pi_source = pi_index.read_text(encoding="utf-8")
-                    except OSError:
-                        pi_source = ""
-                    current_mcp_mode = "const PI_MCP_ENABLED = true;" in pi_source
-                    if current_mcp_mode != enable_mcp:
-                        already_configured = False
-                    else:
-                        from ai_guardian.setup.mcp import verify_pi_mcp_extension
-
-                        mcp_status = verify_pi_mcp_extension(
-                            scope=scope, project_dir=project_dir
-                        ).get("mcp_status")
-                        if mcp_status in {
-                            "missing_dependencies",
-                            "invalid_dependencies",
-                            "identity_missing",
-                            "stale",
-                            "invalid",
-                            "executable_changed",
-                            "identity_invalid",
-                        }:
-                            already_configured = False
+            # Event-based hook files can be repaired in place, but existing
+            # generated plugins/extensions require explicit overwrite approval.
+            already_configured = not force and self._is_setup_already_configured(
+                ide_type,
+                config_path,
+                scope=scope,
+                project_dir=project_dir,
+                enable_mcp=enable_mcp,
+            )
             if already_configured:
                 return (
                     False,

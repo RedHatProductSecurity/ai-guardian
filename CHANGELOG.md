@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Targeted setup overwrite confirmation (#2538):** When an integration is
+  already configured, interactive `setup --ide` now offers a default-No force
+  overwrite prompt; declining or cancelling preserves the existing setup.
 - **Packaged TypeScript integration templates (#2535):** Move AI Guardian-owned
   bridge, extension, and plugin sources into package resources while preserving
   generated paths and version, executable, and integration-specific rendering.
