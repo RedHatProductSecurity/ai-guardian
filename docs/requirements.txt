@@ -1,3 +1,5 @@
 # Documentation-only dependencies. Keep these pinned for reproducible Read the Docs builds.
 mkdocs-material==9.7.7
 mkdocstrings[python]==1.0.6
+# mkdocstrings 1.0.6 expects the pre-12 Highlight constructor.
+pymdown-extensions==11.0.1

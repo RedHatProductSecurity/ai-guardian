@@ -44,7 +44,10 @@ budget_tokens: 1000
 - The full directly affected sandbox/middleware suite passes (124 tests).
 - Ruff, Black, Pylint, Mypy (302 source files), JSON validation, and
   `git diff --check` pass.
-- Changes remain uncommitted on branch `2527`.
+- PR #2530's Read the Docs failure came from `pymdown-extensions` 12.2 being
+  resolved against `mkdocstrings==1.0.6`. Pinned `pymdown-extensions==11.0.1`
+  locally; the isolated MkDocs build passes on Python 3.14. The fix remains
+  uncommitted and must be sent to the PR before RTD can rerun.
 
 ## Done
 
@@ -232,16 +235,20 @@ budget_tokens: 1000
 
 ## Next Quest
 
-- No follow-up pending for #2527 middleware readiness or policy review. Changes
-  remain uncommitted on branch `2527`.
+- Send the docs dependency pin to existing PR #2530 through the DAF completion
+  flow, then verify Read the Docs and any remaining pending checks. JIRA
+  acceptance criteria were unavailable because `JIRA_API_TOKEN` was unset.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
 - Branch: `2527`
 - Current issue: `RedHatProductSecurity/ai-guardian#2527`
-- The current working tree contains the broader uncommitted #2527 sandbox,
-  middleware-readiness, documentation, and test changes.
+- Branch `2527` backs open PR #2530 at `63f2fcb`. Local modifications are
+  `docs/requirements.txt` and the OpenWolf-generated `.wolf/anatomy.md` update;
+  no commit or push was made.
+- Read the Docs uses Python 3.12; the local docs build passed on Python 3.14,
+  and no local Python 3.12 interpreter was available.
 - The generated `docs/notebooklm-export.md` remains intentionally untouched;
   refresh it only during the release process.
 - `uv.lock` is ignored by this repository and was regenerated locally.
