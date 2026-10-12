@@ -282,27 +282,21 @@ without writing files back to the host. Pass `-- codex` to launch Codex
 directly instead of opening the shell.
 
 OpenShell integration is experimental and currently supports Codex only. Claude
-support is deferred until OpenShell `0.1.3`; Pi, Copilot, and OpenCode remain
-outside the current OpenShell contract.
+Code with Vertex AI remains deferred pending credential-bound qualification on
+OpenShell `0.1.3`; the upstream GCP metadata fix is necessary but not sufficient.
+Pi, Copilot, and OpenCode remain outside the current OpenShell contract.
 
 OpenCode is supported through the host integration and the normal Docker/Podman
 image, whose V1 executable is pinned at `1.18.34`. OpenCode is outside the
 OpenShell runtime scope; see the [OpenCode support record](docs/OPENCODE.md) for
 the V1/V2 plugin contracts and exact limitations.
 
-For Codex ChatGPT/OAuth credentials, OpenShell `0.1.2` requires Providers v2
-to be enabled on the active gateway:
+The `providers_v2_enabled` setting was specific to OpenShell `0.1.2` and is not
+used by the qualified `0.1.3` baseline. OpenShell `0.1.2` and earlier are below
+AI Guardian's supported range.
 
-```bash
-openshell settings set --global --key providers_v2_enabled --value true
-```
-
-Newer OpenShell releases may not expose this setting. If the command reports
-`unknown setting key 'providers_v2_enabled'`, skip it; the provider profile and
-credential setup remain the same.
-
-A Codex OAuth login does not require a separate API key after Providers v2 is
-enabled. Choose **OAuth** or **API key** in the tray's Create sandbox form, or
+A Codex OAuth login does not require a separate API key. Choose **OAuth** or
+**API key** in the tray's Create sandbox form, or
 pass `--openshell-auth oauth`/`--openshell-auth api-key` to select the matching
 `codex`/`openai` profile and `ai-guardian-codex`/`ai-guardian-openai` provider.
 The subcommand converts the gateway-provided OAuth placeholders into Codex's
@@ -415,7 +409,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |
 | [Multi-Agent Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapters for 17 AI coding agents with normalized input/output |
 | [Container Image](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) | UBI-based image with supported agent integrations and scanners, published to quay.io |
-| [OpenShell Supervisor Middleware](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENSHELL_MIDDLEWARE.md) | Rust external semantic scanning/redaction service plus tray readiness and complete-policy workflows for OpenShell-compatible releases (v0.1.2 baseline) |
+| [OpenShell Supervisor Middleware](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENSHELL_MIDDLEWARE.md) | Rust external semantic scanning/redaction service plus tray readiness and complete-policy workflows for OpenShell-compatible releases (v0.1.3 baseline) |
 | [Supply Chain Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) | Detect malicious patterns in agent hooks, MCP configs, and plugin files |
 | [Context Poisoning Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) | Detect persistent instruction injection in conversation context (OWASP LLM03) |
 | [Security SDK & REST API](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md) | Programmatic security checking for Python agents and multi-language support |

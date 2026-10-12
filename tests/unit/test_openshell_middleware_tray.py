@@ -108,7 +108,7 @@ def test_check_probes_configured_endpoint_and_verifies_ai_guardian_identity(
     )
 
     readiness = _check_with_cli(
-        "OpenShell 0.1.2\n",
+        "OpenShell 0.1.3\n",
         responses,
         config_path,
         {
@@ -149,7 +149,7 @@ def test_check_reports_wrong_registered_middleware_identity(tmp_path):
     )
 
     readiness = _check_with_cli(
-        "OpenShell 0.1.2\n",
+        "OpenShell 0.1.3\n",
         responses,
         config_path,
         {
@@ -173,7 +173,7 @@ def test_check_reports_wrong_registered_middleware_identity(tmp_path):
 def test_check_reports_when_gateway_toml_has_no_middleware_registration(tmp_path):
     config_path = _write_gateway_config(tmp_path)
     readiness = _check_with_cli(
-        "OpenShell 0.1.2\n",
+        "OpenShell 0.1.3\n",
         _healthy_gateway([]),
         config_path,
     )
@@ -189,7 +189,7 @@ def test_check_requires_live_endpoint_to_report_middleware_version(tmp_path):
     endpoint = "http://127.0.0.1:50051"
     config_path = _write_gateway_config(tmp_path, [("content-guard", endpoint)])
     readiness = _check_with_cli(
-        "OpenShell 0.1.2\n",
+        "OpenShell 0.1.3\n",
         _healthy_gateway([]),
         config_path,
         {endpoint: MiddlewareProbeIdentity(MIDDLEWARE_IMPLEMENTATION_NAME, "")},
@@ -204,7 +204,7 @@ def test_check_does_not_call_an_incomplete_describe_response_running(tmp_path):
     endpoint = "http://127.0.0.1:50051"
     config_path = _write_gateway_config(tmp_path, [("content-guard", endpoint)])
     readiness = _check_with_cli(
-        "OpenShell 0.1.2\n",
+        "OpenShell 0.1.3\n",
         _healthy_gateway([]),
         config_path,
         {
@@ -224,7 +224,7 @@ def test_missing_grpc_dependency_recommends_refreshing_tray_dependencies(tmp_pat
     endpoint = "http://127.0.0.1:50051"
     config_path = _write_gateway_config(tmp_path, [("content-guard", endpoint)])
     readiness = _check_with_cli(
-        "OpenShell 0.1.2\n",
+        "OpenShell 0.1.3\n",
         _healthy_gateway([]),
         config_path,
         {
@@ -258,7 +258,7 @@ def test_active_gateway_metadata_does_not_mask_a_stopped_middleware(tmp_path):
         ]
     )
     readiness = _check_with_cli(
-        "OpenShell 0.1.2\n",
+        "OpenShell 0.1.3\n",
         responses,
         config_path,
         {endpoint: MiddlewareProbeError("Describe RPC failed (UNAVAILABLE)")},
@@ -289,7 +289,7 @@ def test_invalid_gateway_toml_is_reported_as_configuration_error(tmp_path):
     config_path.write_text("[openshell\n", encoding="utf-8")
 
     readiness = _check_with_cli(
-        "OpenShell 0.1.2\n",
+        "OpenShell 0.1.3\n",
         _healthy_gateway([]),
         config_path,
     )
@@ -307,3 +307,15 @@ def test_check_surfaces_gateway_and_openshell_compatibility_errors(tmp_path):
     assert readiness.gateway_status == "error"
     assert readiness.middleware_status == "not_configured"
     assert any("gateway" in error.lower() for error in readiness.errors)
+
+
+def test_check_rejects_openshell_below_qualified_baseline(tmp_path):
+    config_path = _write_gateway_config(tmp_path)
+    readiness = _check_with_cli(
+        "OpenShell 0.1.2\n",
+        _healthy_gateway([]),
+        config_path,
+    )
+
+    assert readiness.compatibility_status == "error"
+    assert any("outside the qualified 0.1.3+" in error for error in readiness.errors)

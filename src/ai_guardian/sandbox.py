@@ -1384,7 +1384,7 @@ def _ensure_openshell_cli_provider(
     elif auth_mode == "api_key":
         provider_type = "openai"
     elif provider_environment.get("OPENAI_API_KEY"):
-        # OpenShell v0.1.2 codex profile declares OAuth credentials only.
+        # The OpenShell codex profile declares OAuth credentials only.
         # API-key Codex sessions must use the openai profile.
         provider_type = "openai"
     else:

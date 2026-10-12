@@ -112,7 +112,8 @@ Complete this once for each OpenShell gateway. It is required for Cases 3 and
 
 ### Prerequisites
 
-- OpenShell CLI and gateway `0.1.2` or newer.
+- OpenShell CLI and gateway `0.1.3` or a later `0.1.x` patch release. AI Guardian
+  does not qualify `0.1.2` or earlier, or other minor lines.
 - A configured OpenShell compute driver.
 - Rootless Podman users on Linux must have the Podman socket enabled.
 
@@ -122,7 +123,7 @@ Use the pinned release below for the documented AI Guardian path:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh \
-    | OPENSHELL_VERSION=v0.1.2 sh
+    | OPENSHELL_VERSION=v0.1.3 sh
 hash -r
 openshell --version
 openshell status
@@ -148,10 +149,10 @@ openshell status
 
 ```bash
 curl -fsSL \
-    https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/codex.yaml \
+    https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.3/providers/codex.yaml \
     -o /tmp/openshell-codex.yaml
 curl -fsSL \
-    https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/providers/openai.yaml \
+    https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.3/providers/openai.yaml \
     -o /tmp/openshell-openai.yaml
 
 openshell provider profile import \
@@ -164,16 +165,11 @@ openshell provider list-profiles
 The expected profiles are `codex` and `openai`. If import says a profile
 already exists, continue; it is already installed.
 
-### Step 3 — Enable Providers v2 on OpenShell 0.1.2
+### Step 3 — Use the v0.1.3 provider profiles
 
-```bash
-openshell settings set --global \
-    --key providers_v2_enabled \
-    --value true
-```
-
-If a newer OpenShell release reports `unknown setting key
-'providers_v2_enabled'`, skip this step. Do not change another setting.
+OpenShell v0.1.3 does not expose the legacy `providers_v2_enabled` setting;
+there is no gateway setting to enable for the qualified baseline. That setting
+was specific to OpenShell v0.1.2, which is below AI Guardian's supported range.
 
 The profiles (`codex` and `openai`) are provider types. AI Guardian creates or
 reuses the gateway provider instances `ai-guardian-codex` and
@@ -475,8 +471,10 @@ profiles are gateway-local; importing them on another machine is not enough.
 
 ### `unknown setting key 'providers_v2_enabled'`
 
-You are using a newer OpenShell release. Skip that v0.1.2-only setting and
-continue with the imported profiles.
+This is expected on OpenShell v0.1.3 and later: `providers_v2_enabled` was a
+v0.1.2-only setting and is not needed for the qualified baseline. Continue with
+the imported profiles. OpenShell v0.1.2 and earlier are not qualified by AI
+Guardian.
 
 ### API-key authentication is not found
 

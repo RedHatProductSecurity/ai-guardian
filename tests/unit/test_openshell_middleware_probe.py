@@ -59,7 +59,7 @@ def test_describe_probe_returns_live_implementation_and_version():
     try:
         identity = probe_middleware_endpoint(
             f"http://127.0.0.1:{port}",
-            openshell_version="OpenShell 0.1.2",
+            openshell_version="OpenShell 0.1.3",
             timeout=2,
         )
     finally:
@@ -72,7 +72,7 @@ def test_describe_probe_returns_live_implementation_and_version():
     gateway = (
         _bytes_field(1, protocol_version)
         + _bytes_field(2, b"openshell/gateway")
-        + _bytes_field(3, b"OpenShell 0.1.2")
+        + _bytes_field(3, b"OpenShell 0.1.3")
         + _bytes_field(4, b"openshell.supervisor-middleware.contract")
     )
     assert captured_requests == [_bytes_field(1, gateway)]

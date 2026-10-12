@@ -281,9 +281,11 @@ mod tests {
 
     #[test]
     fn openshell_release_uses_shared_compatibility_policy() {
-        assert!(compatibility::validate_openshell_release("0.1.2").is_ok());
-        assert!(compatibility::validate_openshell_release("v0.1.9").is_ok());
+        assert!(compatibility::validate_openshell_release("0.1.3").is_ok());
+        assert!(compatibility::validate_openshell_release("0.1.4").is_ok());
+        assert!(compatibility::validate_openshell_release("0.1.2").is_err());
         assert!(compatibility::validate_openshell_release("0.1.1").is_err());
+        assert!(compatibility::validate_openshell_release("v0.1.9").is_ok());
         assert!(compatibility::validate_openshell_release("0.2.0").is_err());
     }
 

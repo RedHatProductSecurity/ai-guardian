@@ -206,6 +206,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving the underlying container image reference used for selection.
 
 ### Changed
+- **OpenShell v0.1.3 compatibility baseline (#2531):** Raise the shared
+  middleware and tray compatibility floor to OpenShell v0.1.3 while retaining
+  supervisor protocol 1.0; v0.1.2 and earlier are rejected. The release restores
+  supervisor-backed GCP metadata discovery. Deterministic contract tests pass,
+  and live Codex OAuth qualification passed against the v0.1.3 CLI and gateway
+  using the AI Guardian 1.19.0 image. Claude Code/Vertex remain deferred pending
+  their own credential-bound validation.
 - **OpenShell middleware compatibility contract (#2525):** Inventory the
   shared launcher/control-plane modules and remove the Python
   gRPC/scanning/TLS/JWT fallback. Rust is now the only supported middleware

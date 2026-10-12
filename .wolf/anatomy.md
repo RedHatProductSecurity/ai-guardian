@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~74868 tok)
+- `CHANGELOG.md` — Change log (~74996 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -25,7 +25,7 @@
 - `mkdocs.yml` (~1153 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2597 tok)
-- `README.md` — Project documentation (~10707 tok)
+- `README.md` — Project documentation (~10678 tok)
 - `RELEASING.md` — Release Management Process (~7903 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
@@ -793,12 +793,12 @@
 - `.dockerignore` — Docker ignore rules (~7 tok)
 - `compose_openshell_policy.py` — Compose OpenShell policy fragments into one schema-valid YAML document. (~905 tok)
 - `Dockerfile` — Docker container definition (~3435 tok)
-- `Dockerfile.openshell` — syntax=docker/dockerfile:1 (~2108 tok)
+- `Dockerfile.openshell` — syntax=docker/dockerfile:1 (~2114 tok)
 - `Dockerfile.test` — ai-guardian hook-testing image (NOT for distribution) (~559 tok)
 - `entrypoint.sh` (~8491 tok)
 - `openshell-github-readonly-policy.yaml` — /info/refs*" } (~371 tok)
 - `openshell-github-readwrite-policy.yaml` — /info/refs*" } (~380 tok)
-- `README.md` — Project documentation (~13877 tok)
+- `README.md` — Project documentation (~13830 tok)
 - `run-scenarios.sh` (~313 tok)
 - `run.sh` (~3500 tok)
 
@@ -870,9 +870,9 @@
 ## container/tests/
 
 - `openshell-compatibility.schema.json` (~1459 tok)
-- `README.md` — Project documentation (~2535 tok)
+- `README.md` — Project documentation (~2593 tok)
 - `test_container_agents.py` — Run opt-in live Docker/Podman CLI smoke tests. (~4115 tok)
-- `test_openshell_agents.py` — Run opt-in live OpenShell CLI/provider smoke tests. (~10380 tok)
+- `test_openshell_agents.py` — Run opt-in live OpenShell CLI/provider smoke tests. (~10465 tok)
 
 ## deploy/kubernetes/base/
 
@@ -922,13 +922,13 @@
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
 - `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~7585 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~7678 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
 - `README.md` — Project documentation (~1479 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
-- `Sandbox.md` — Sandbox CLI (~3836 tok)
+- `Sandbox.md` — Sandbox CLI (~3894 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2439 tok)
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
@@ -1009,7 +1009,7 @@
 
 - `build.rs` (~232 tok)
 - `Cargo.toml` — Rust package manifest (~243 tok)
-- `README.md` — Project documentation (~996 tok)
+- `README.md` — Project documentation (~1016 tok)
 
 ## rust/openshell-middleware/src/
 
@@ -1020,7 +1020,7 @@
 - `main.rs` — AI Guardian Rust OpenShell middleware binary. (~40 tok)
 - `policy.rs` — OpenShell middleware policy validation and scanner ownership planning. (~927 tok)
 - `response.rs` — HTTP response inspection and redaction capability. (~4053 tok)
-- `service.rs` — Rust OpenShell supervisor middleware service wiring. (~5151 tok)
+- `service.rs` — Rust OpenShell supervisor middleware service wiring. (~5196 tok)
 - `websocket.rs` — Text WebSocket session inspection capability. (~4689 tok)
 
 ## rust/openshell-middleware/src/bin/
@@ -1030,7 +1030,7 @@
 ## scripts/
 
 - `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2713 tok)
-- `check_openshell_compatibility.py` — Verify the qualified OpenShell release and protocol contract. (~1585 tok)
+- `check_openshell_compatibility.py` — Verify the qualified OpenShell release and protocol contract. (~1717 tok)
 - `check_parser_compat.py` — get_leaktk_url, fetch_url, fetch_pattern_data, extract_schema + 4 more (~3274 tok)
 - `check_scanner_versions.py` — get_latest_version, get_latest_leaktk_pattern_version, get_version_age, compare_versions + 4 more (~4691 tok)
 - `install` (~202 tok)
@@ -1073,7 +1073,7 @@
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
 - `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
-- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~27180 tok)
+- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~27179 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)
@@ -1405,7 +1405,7 @@
 - `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~45086 tok)
 - `menu.py` — URL configuration (~3078 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
-- `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2296 tok)
+- `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2297 tok)
 - `openshell_middleware.py` — OpenShell middleware readiness checks used by the system tray. (~5878 tok)
 - `plugin_runner.py` — Declares TrayPluginMenuBuilder (~8890 tok)
 - `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21430 tok)

@@ -5,7 +5,7 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-11
+> Last updated: 2026-10-12
 
 ---
 
@@ -50,19 +50,26 @@ budget_tokens: 1000
   restart, and never synthesize identity for callers without stable IDs. Updated
   CLI/tray labels, docs, changelog, and UX coverage. All 1095 related unit/UX
   tests pass; Ruff, Black, and Pylint pass.
+- Issue #2531: qualified Codex OAuth live on OpenShell CLI and gateway v0.1.3
+  using the pinned AI Guardian 1.19.0 image and Codex 0.160.0. Creation, daemon,
+  service, agent, deterministic detection, restart, reconnect, and cleanup all
+  passed. Sanitized report: `/tmp/opencode/openshell-compatibility-report-2531.json`.
+  Claude Code/Vertex remain unsupported pending separate credential-bound
+  qualification. Fixed the report parser to read the gateway's explicit version
+  field rather than interpreting its IPv4 endpoint as a version. All 14 manual
+  qualification-runner unit tests pass; Ruff and Black pass for both changed
+  runner/test files.
 
 ## 🚀 Next quest
 
-- Complete issue #2534 with `daf complete` outside the active agent session; no
-  commit has been created here.
-- The prior handoff's #2535 finalization and #2532 tray correlation check remain
-  outstanding. For #2532, compare the reported sequence (open the tray menu,
-  then click outside) with the tray running and stopped before completing it.
+- Issue #2531 implementation and Codex qualification are complete. No commit or
+  push was made; use `daf complete` outside the active agent session when ready
+  to close the issue. Claude Code/Vertex remain explicitly deferred.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2534` / `RedHatProductSecurity/ai-guardian#2534`.
+- Branch/issue: `2531` / `RedHatProductSecurity/ai-guardian#2531`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -73,11 +80,16 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_daemon_client.py tests/unit/test_daemon_state.py tests/unit/test_daemon_server.py tests/unit/test_daemon_rest_api.py tests/unit/test_daemon_protocol.py tests/unit/test_daemon_multi_client.py tests/unit/test_cli_handlers.py tests/unit/test_daemon_tray.py tests/unit/test_sandbox_tray.py tests/ux/test_user_experience_contract_session_pause.py tests/ux/test_user_experience_contract_pause_resume.py -q  # 1093 passed; new UX contract file: 4 passed separately
+uv run --extra dev python -m pytest tests/unit/test_openshell_compatibility.py tests/unit/test_openshell_middleware_tray.py tests/unit/test_openshell_middleware_probe.py tests/ux/test_user_experience_contract_sandbox_middleware.py -q  # 32 passed
+cargo test --manifest-path rust/openshell-middleware/Cargo.toml  # 13 passed
+python scripts/check_openshell_compatibility.py  # passed
 ruff check src/ai_guardian/ tests/  # passed
 black --target-version py310 --check src/ai_guardian/ tests/  # passed
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text  # 10.00/10
-mypy src/ai_guardian/  # 14 pre-existing errors in skill_discovery.py and secret_validator.py
+mypy src/ai_guardian/  # 14 known errors in skill_discovery.py and secret_validator.py
+uv run --extra dev python -m pytest tests/unit/test_openshell_manual.py -q  # 14 passed
+ruff check container/tests/test_openshell_agents.py tests/unit/test_openshell_manual.py  # passed
+black --target-version py310 --check container/tests/test_openshell_agents.py tests/unit/test_openshell_manual.py  # passed
 git diff --check  # passed
 ```
 
@@ -86,4 +98,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2534`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2531`

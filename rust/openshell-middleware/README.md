@@ -97,7 +97,8 @@ modify gateway configuration or sandbox policy.
 
 The binary embeds the shared compatibility contract at
 `src/ai_guardian/middleware/openshell/compatibility.json`. It currently
-supports OpenShell `0.1.x` from `0.1.2` onward and supervisor protocol `1.0`.
+supports OpenShell `0.1.x` from `0.1.3` onward and supervisor protocol `1.0`.
+OpenShell `0.1.2` and earlier are below the qualified baseline and are rejected.
 An unsupported release, protocol, or capability negotiation fails before the
 service accepts traffic.
 

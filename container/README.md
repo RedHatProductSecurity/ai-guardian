@@ -62,7 +62,7 @@ accepted for Container sandboxes.
 
 | CLI/scenario | Provider/authentication | Status |
 | --- | --- | --- |
-| `codex` | Gateway Codex provider from OAuth or OpenAI API-key login | Supported; qualify on OpenShell v0.1.x from v0.1.2 |
+| `codex` | Gateway Codex provider from OAuth or OpenAI API-key login | Supported; qualify on OpenShell v0.1.x from v0.1.3 |
 
 The tray exposes only Codex when Runtime is OpenShell and rejects other CLI
 choices before creating a sandbox. Credential absence is reported separately
@@ -410,14 +410,15 @@ OpenShell prerequisites are:
 - A gateway compute driver configured for Docker, Podman, MicroVM, or
   Kubernetes.
 
-The sandbox command requires an OpenShell CLI and gateway at version `0.1.2` or
-newer, with support for `sandbox create --env` and the upload-based staging
-workflow. Install or
-update OpenShell on the host, then refresh the shell command and verify both
-the client and gateway:
+The sandbox command requires an OpenShell CLI and gateway at version `0.1.3` or
+newer in the `0.1.x` line, with support for `sandbox create --env` and the
+upload-based staging workflow. OpenShell `0.1.2` and earlier are below the
+qualified baseline. Install or update OpenShell on the host, then refresh the
+shell command and verify both the client and gateway:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh \
+    | OPENSHELL_VERSION=v0.1.3 sh
 hash -r
 openshell --version
 openshell status
@@ -426,7 +427,8 @@ openshell status
 On Fedora/Linux, the installer provides the CLI and a systemd user service:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh \
+    | OPENSHELL_VERSION=v0.1.3 sh
 systemctl --user status openshell-gateway
 openshell status
 ```
@@ -445,7 +447,8 @@ On macOS, the installer uses Homebrew and manages the gateway with a Homebrew
 service:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh \
+    | OPENSHELL_VERSION=v0.1.3 sh
 brew services list
 brew services restart openshell
 openshell status
@@ -492,16 +495,10 @@ openshell status
 For a containerized gateway, see OpenShell's [container gateway
 guide](https://docs.nvidia.com/openshell/about/container-gateway).
 
-Before the first sandbox command call, use the provider setup for the active
-OpenShell release. OpenShell `0.1.2` exposes this Providers v2 setting:
-
-```bash
-openshell settings set --global --key providers_v2_enabled --value true
-```
-
-Newer OpenShell releases may not expose this key. If the command reports
-`unknown setting key 'providers_v2_enabled'`, skip it and continue with the
-provider profile setup.
+Before the first sandbox command call, import the provider profiles for the
+active OpenShell release. The qualified `0.1.3` baseline does not expose the
+legacy `providers_v2_enabled` setting; it was specific to the unsupported
+OpenShell `0.1.2` release.
 
 ```bash
 ai-guardian sandbox create --runtime openshell        # opens a Codex sandbox shell
@@ -691,17 +688,10 @@ startup, the entrypoint writes those placeholders into the selected
 `$CODEX_HOME/auth.json` in Codex's native ChatGPT format; it never writes the
 host's real OAuth tokens into the sandbox. A synthetic JWT-shaped ID token is
 used only because Codex parses that field locally. With a gateway that
-advertises the `codex` profile and has the required Providers v2 support, Codex should
-start without showing its sign-in menu and a separate OpenAI API key is not
-required. On OpenShell `0.1.2`, enable the gateway feature once with:
-
-```bash
-openshell settings set --global --key providers_v2_enabled --value true
-```
-
-If a newer OpenShell release reports `unknown setting key
-'providers_v2_enabled'`, skip this command; that release no longer exposes the
-legacy setting.
+advertises the `codex` profile, Codex should start without showing its sign-in
+menu and a separate OpenAI API key is not required. The legacy
+`providers_v2_enabled` setting applied only to OpenShell `0.1.2`; the qualified
+`0.1.3` baseline does not expose it.
 
 For API-key authentication, the entrypoint instead runs `codex login
 --with-api-key` with the provider-injected `OPENAI_API_KEY` placeholder, so
