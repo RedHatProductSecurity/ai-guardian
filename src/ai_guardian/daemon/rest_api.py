@@ -8,6 +8,7 @@ Uses only stdlib http.server — no additional dependencies.
 
 import json
 import logging
+import math
 import os
 import socketserver
 import threading
@@ -240,6 +241,58 @@ class _RestHandler(BaseHTTPRequestHandler):
                     "middleware_pause": self._get_middleware_pause_status(directory),
                 }
             )
+        elif self.path == "/api/pause_session":
+            body = self._read_body()
+            if body is None:
+                return
+            session_key = body.get("session_key", "")
+            if not isinstance(session_key, str) or not session_key:
+                self._send_error(
+                    400,
+                    "session_key is required; session pause requires a stable hook identity",
+                )
+                return
+            minutes = body.get("minutes", 0)
+            if (
+                not isinstance(minutes, (int, float))
+                or isinstance(minutes, bool)
+                or minutes < 0
+                or minutes > 1440
+                or not math.isfinite(minutes)
+            ):
+                self._send_error(400, "minutes must be a number between 0 and 1440")
+                return
+            if not self.server.daemon_state.pause_session(session_key, minutes):
+                self._send_error(
+                    404,
+                    "session is not active; use directory-wide pause if no stable identity is available",
+                )
+                return
+            self._send_json(
+                {
+                    "status": "session_paused",
+                    "session_key": session_key,
+                    "minutes": minutes,
+                }
+            )
+        elif self.path == "/api/resume_session":
+            body = self._read_body()
+            if body is None:
+                return
+            session_key = body.get("session_key", "")
+            if not isinstance(session_key, str) or not session_key:
+                self._send_error(
+                    400,
+                    "session_key is required; session resume requires a stable hook identity",
+                )
+                return
+            if not self.server.daemon_state.resume_session(session_key):
+                self._send_error(
+                    404,
+                    "session is not active; use directory-wide controls if no stable identity is available",
+                )
+                return
+            self._send_json({"status": "session_resumed", "session_key": session_key})
         elif self.path == "/api/reload":
             self.server.daemon_state.force_reload_config()
             self._send_json({"status": "config_reloaded"})
@@ -876,8 +929,15 @@ class _RestHandler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
-        if state.paused or (cwd and state.is_dir_paused(cwd)):
-            from ai_guardian.daemon.server import handle_paused_otel
+        from ai_guardian.daemon.server import handle_paused_otel, track_hook_session
+
+        session_key = track_hook_session(state, body, cwd)
+
+        if (
+            state.paused
+            or (cwd and state.is_dir_paused(cwd))
+            or (session_key and state.is_session_paused(session_key))
+        ):
 
             handle_paused_otel(state, body, cwd)
 

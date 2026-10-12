@@ -18,6 +18,8 @@ class MockDaemonState:
         self._paused = False
         self._pause_minutes = 0
         self._config_reloaded = False
+        self.active_sessions = {}
+        self.paused_sessions = set()
 
     def get_stats(self):
         return {
@@ -28,6 +30,10 @@ class MockDaemonState:
             "uptime_seconds": 300.0,
             "config_error": None,
             "mcp_installed": False,
+            "active_sessions": [
+                {**session, "paused": key in self.paused_sessions}
+                for key, session in self.active_sessions.items()
+            ],
         }
 
     def pause(self, minutes):
@@ -37,6 +43,18 @@ class MockDaemonState:
     def resume(self):
         self._paused = False
         self._pause_minutes = 0
+
+    def pause_session(self, session_key, minutes=0):
+        if session_key not in self.active_sessions:
+            return False
+        self.paused_sessions.add(session_key)
+        return True
+
+    def resume_session(self, session_key):
+        if session_key not in self.active_sessions:
+            return False
+        self.paused_sessions.discard(session_key)
+        return True
 
     def force_reload_config(self):
         self._config_reloaded = True
@@ -250,6 +268,66 @@ class TestRestAPIEndpoints:
             data = json.loads(resp.read())
         assert data["status"] == "resumed"
         assert state._paused is False
+
+    def test_post_pause_and_resume_session(self, rest_api):
+        api, port, state = rest_api
+        session_key = "ClaudeAdapter:session-1"
+        state.active_sessions[session_key] = {
+            "session_key": session_key,
+            "session_id": "session-1",
+            "agent": "Claude Code",
+            "project_dir": "/project",
+        }
+
+        pause_req = Request(
+            f"http://127.0.0.1:{port}/api/pause_session",
+            data=json.dumps({"session_key": session_key, "minutes": 15}).encode(),
+            method="POST",
+        )
+        pause_req.add_header("Content-Type", "application/json")
+        with urlopen(pause_req, timeout=5) as resp:
+            paused = json.loads(resp.read())
+        assert paused["status"] == "session_paused"
+        assert state.paused_sessions == {session_key}
+
+        resume_req = Request(
+            f"http://127.0.0.1:{port}/api/resume_session",
+            data=json.dumps({"session_key": session_key}).encode(),
+            method="POST",
+        )
+        resume_req.add_header("Content-Type", "application/json")
+        with urlopen(resume_req, timeout=5) as resp:
+            resumed = json.loads(resp.read())
+        assert resumed["status"] == "session_resumed"
+        assert state.paused_sessions == set()
+
+    def test_post_pause_session_rejects_unknown_identity(self, rest_api):
+        api, port, state = rest_api
+        req = Request(
+            f"http://127.0.0.1:{port}/api/pause_session",
+            data=json.dumps({"session_key": "cwd:/project"}).encode(),
+            method="POST",
+        )
+        req.add_header("Content-Type", "application/json")
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 404
+
+    def test_post_pause_session_rejects_non_finite_duration(self, rest_api):
+        _, port, state = rest_api
+        req = Request(
+            f"http://127.0.0.1:{port}/api/pause_session",
+            data=json.dumps(
+                {"session_key": "Adapter:session-1", "minutes": float("nan")}
+            ).encode(),
+            method="POST",
+        )
+        req.add_header("Content-Type", "application/json")
+
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req, timeout=5)
+
+        assert exc_info.value.code == 400
 
     def test_post_reload(self, rest_api):
         api, port, state = rest_api
@@ -834,6 +912,19 @@ class TestAuthEnforcement:
             urlopen(req, timeout=5)
         assert exc_info.value.code == 401
 
+    def test_post_pause_session_rejected_without_token(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/pause_session"
+        req = Request(
+            url,
+            data=json.dumps({"session_key": "ClaudeAdapter:session-1"}).encode(),
+            method="POST",
+        )
+        req.add_header("Content-Type", "application/json")
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 401
+
     def test_get_status_with_valid_token(self, authed_api):
         api, port, state = authed_api
         url = f"http://127.0.0.1:{port}/api/status"
@@ -1051,6 +1142,35 @@ class TestHookEndpoint:
                 data = json.loads(resp.read())
 
         assert data["exit_code"] == 0
+
+    def test_session_pause_skips_rest_hook_scanning(self, hook_api):
+        api, port, state = hook_api
+        url = f"http://127.0.0.1:{port}/api/hook"
+        payload = json.dumps(
+            {"hook_event_name": "PreToolUse", "session_id": "session-1"}
+        ).encode()
+        req = Request(url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.server.track_hook_session",
+                return_value="Adapter:session-1",
+            ) as track_session,
+            mock.patch.object(
+                state, "is_session_paused", return_value=True, create=True
+            ),
+            mock.patch("ai_guardian.daemon.server.handle_paused_otel") as paused_otel,
+            mock.patch("ai_guardian.inject_security_only", return_value=None),
+            mock.patch("ai_guardian.process_hook_data") as process_hook,
+        ):
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+
+        assert data["exit_code"] == 0
+        track_session.assert_called_once()
+        paused_otel.assert_called_once()
+        process_hook.assert_not_called()
 
     def test_hook_requires_auth(self, authed_hook_api):
         api, port, state = authed_hook_api

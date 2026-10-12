@@ -23,7 +23,9 @@ from ai_guardian.daemon.client import (
     _send_remote,
     is_daemon_running,
     send_hook_request,
+    send_pause_session,
     send_reload_config,
+    send_resume_session,
     send_shutdown,
     send_status_request,
     start_daemon_background,
@@ -229,6 +231,62 @@ class TestSendShutdown:
     def test_returns_false_when_no_daemon(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
         assert not send_shutdown()
+
+
+class TestSendSessionPauseRequests:
+    @mock.patch("ai_guardian.daemon.client._connect")
+    @mock.patch("ai_guardian.daemon.client.encode_message", return_value=b"request")
+    @mock.patch(
+        "ai_guardian.daemon.client.decode_message",
+        return_value={"type": "response", "data": {"status": "session_paused"}},
+    )
+    def test_pause_session_sends_stable_session_key(
+        self, mock_decode, mock_encode, mock_connect
+    ):
+        sock = mock.MagicMock()
+        mock_connect.return_value = sock
+
+        result = send_pause_session("Adapter:session-1", 15, timeout=3.0)
+
+        assert result == {"status": "session_paused"}
+        mock_connect.assert_called_once_with(timeout=3.0)
+        mock_encode.assert_called_once_with(
+            {
+                "version": 1,
+                "type": "pause_session",
+                "data": {"session_key": "Adapter:session-1", "minutes": 15},
+            }
+        )
+        sock.sendall.assert_called_once_with(b"request")
+        mock_decode.assert_called_once_with(sock, timeout=3.0)
+        sock.close.assert_called_once_with()
+
+    @mock.patch("ai_guardian.daemon.client._connect")
+    @mock.patch("ai_guardian.daemon.client.encode_message", return_value=b"request")
+    @mock.patch(
+        "ai_guardian.daemon.client.decode_message",
+        return_value={"type": "response", "data": {"status": "session_resumed"}},
+    )
+    def test_resume_session_sends_stable_session_key(
+        self, mock_decode, mock_encode, mock_connect
+    ):
+        sock = mock.MagicMock()
+        mock_connect.return_value = sock
+
+        result = send_resume_session("Adapter:session-1", timeout=3.0)
+
+        assert result == {"status": "session_resumed"}
+        mock_connect.assert_called_once_with(timeout=3.0)
+        mock_encode.assert_called_once_with(
+            {
+                "version": 1,
+                "type": "resume_session",
+                "data": {"session_key": "Adapter:session-1"},
+            }
+        )
+        sock.sendall.assert_called_once_with(b"request")
+        mock_decode.assert_called_once_with(sock, timeout=3.0)
+        sock.close.assert_called_once_with()
 
 
 class TestSendStatusRequest:

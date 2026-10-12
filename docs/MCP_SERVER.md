@@ -142,6 +142,10 @@ as `paused`. The configured level is not changed and resumes automatically when
 the pause expires or the daemon resumes. Hooks remain the mandatory enforcement
 layer during every MCP pause.
 
+MCP action-gating requests do not carry the daemon's stable hook-session key, so
+session-scoped pauses do not affect MCP calls. Use a global pause or an applicable
+directory-wide pause when MCP action-gating should be paused.
+
 ## Tools
 
 ### Security Checks (Proactive)

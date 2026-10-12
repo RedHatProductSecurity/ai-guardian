@@ -433,7 +433,7 @@ def _handle_daemon_command(args):
             # Per-directory pauses (#958)
             paused_dirs = stats.get("paused_dirs", {})
             if paused_dirs:
-                print(f"Paused directories: {len(paused_dirs)}")
+                print(f"Paused directories (all sessions): {len(paused_dirs)}")
                 for d, remaining in paused_dirs.items():
                     if remaining > 0:
                         mins = int(remaining // 60)
@@ -441,6 +441,44 @@ def _handle_daemon_command(args):
                         print(f"  {d} ({mins}m {secs}s left)")
                     else:
                         print(f"  {d} (indefinite)")
+
+            active_sessions = stats.get("active_sessions")
+            if isinstance(active_sessions, list):
+                if active_sessions:
+                    print(
+                        f"Active hook sessions with stable IDs: {len(active_sessions)}"
+                    )
+                    for session in active_sessions:
+                        pause_status = ""
+                        if session.get("paused"):
+                            remaining = session.get("pause_remaining_seconds", 0)
+                            pause_status = (
+                                f" (paused {int(remaining // 60)}m "
+                                f"{int(remaining % 60)}s left)"
+                                if remaining > 0
+                                else " (paused until resume or session end)"
+                            )
+                        print(
+                            f"  {session.get('session_key')} — "
+                            f"{session.get('agent')} — "
+                            f"{session.get('project_dir') or 'unknown directory'}"
+                            f"{pause_status}"
+                        )
+                else:
+                    print("Active hook sessions with stable IDs: none")
+                    print(
+                        "Session-scoped pause is unavailable until a hook reports "
+                        "a stable session identity."
+                    )
+            else:
+                print(
+                    "Session-scoped pause is unavailable: this daemon does not "
+                    "report stable hook session identities."
+                )
+            print(
+                "Session pause applies only to listed stable-ID sessions; global "
+                "or directory-wide pause also covers callers without stable IDs."
+            )
 
             print(f"Active contexts: {stats.get('active_contexts', 0)}")
             print(f"Cached patterns: {stats.get('cached_patterns', 0)}")
@@ -495,6 +533,9 @@ def _handle_daemon_command(args):
             return 1
 
         directory = getattr(args, "dir", None)
+        session_key = getattr(args, "session", None)
+        if not isinstance(session_key, str) or not session_key:
+            session_key = None
         minutes = getattr(args, "minutes", 0)
 
         if directory:
@@ -502,11 +543,38 @@ def _handle_daemon_command(args):
             result = send_pause_dir(directory, minutes, timeout=_get_client_timeout())
             if result and result.get("status") == "dir_paused":
                 dur = f" for {minutes} minutes" if minutes > 0 else " indefinitely"
-                print(f"ai-guardian daemon: scanning paused{dur} for {directory}")
+                print(
+                    f"ai-guardian daemon: scanning paused{dur} for all sessions "
+                    f"in {directory}"
+                )
                 return 0
             else:
                 print("Failed to pause directory scanning", file=sys.stderr)
                 return 1
+        elif session_key:
+            from ai_guardian.daemon.client import send_pause_session
+
+            result = send_pause_session(
+                session_key, minutes, timeout=_get_client_timeout()
+            )
+            if result and result.get("status") == "session_paused":
+                dur = (
+                    f" for {minutes} minutes"
+                    if minutes > 0
+                    else " until resume or session end"
+                )
+                print(
+                    f"ai-guardian daemon: scanning paused{dur} for hook session "
+                    f"{session_key}"
+                )
+                return 0
+            print(
+                "Could not pause that session. Session-scoped pause requires a "
+                "currently active session with a stable identity; use --dir to "
+                "pause all sessions in a directory.",
+                file=sys.stderr,
+            )
+            return 1
         else:
             # Global pause via existing socket protocol
             from ai_guardian.daemon.protocol import encode_message, PROTOCOL_VERSION
@@ -543,16 +611,38 @@ def _handle_daemon_command(args):
             return 1
 
         directory = getattr(args, "dir", None)
+        session_key = getattr(args, "session", None)
+        if not isinstance(session_key, str) or not session_key:
+            session_key = None
 
         if directory:
             directory = os.path.realpath(directory)
             result = send_resume_dir(directory, timeout=_get_client_timeout())
             if result and result.get("status") == "dir_resumed":
-                print(f"ai-guardian daemon: scanning resumed for {directory}")
+                print(
+                    "ai-guardian daemon: scanning resumed for all sessions "
+                    f"in {directory}"
+                )
                 return 0
             else:
                 print("Failed to resume directory scanning", file=sys.stderr)
                 return 1
+        elif session_key:
+            from ai_guardian.daemon.client import send_resume_session
+
+            result = send_resume_session(session_key, timeout=_get_client_timeout())
+            if result and result.get("status") == "session_resumed":
+                print(
+                    "ai-guardian daemon: scanning resumed for hook session "
+                    f"{session_key}"
+                )
+                return 0
+            print(
+                "Could not resume that session. Session-scoped resume requires a "
+                "currently active session with a stable identity.",
+                file=sys.stderr,
+            )
+            return 1
         else:
             # Global resume via existing socket protocol
             from ai_guardian.daemon.protocol import encode_message, PROTOCOL_VERSION

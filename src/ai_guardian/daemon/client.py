@@ -24,8 +24,10 @@ from ai_guardian.daemon.protocol import (
     make_hook_request,
     make_ml_detect_request,
     make_pause_dir,
+    make_pause_session,
     make_ping,
     make_resume_dir,
+    make_resume_session,
     make_sdk_check,
     make_shutdown,
     make_status_request,
@@ -475,6 +477,42 @@ def send_resume_dir(directory, timeout=2.0):
 
         try:
             sock.sendall(encode_message(make_resume_dir(directory)))
+            response = decode_message(sock, timeout=timeout)
+            if response.get("type") == "response":
+                return response.get("data")
+            return None
+        finally:
+            sock.close()
+    except Exception:
+        return None
+
+
+def send_pause_session(session_key, minutes=0, timeout=2.0):
+    """Pause a currently active hook session by its daemon-reported key."""
+    try:
+        sock = _connect(timeout=timeout)
+        if sock is None:
+            return None
+        try:
+            sock.sendall(encode_message(make_pause_session(session_key, minutes)))
+            response = decode_message(sock, timeout=timeout)
+            if response.get("type") == "response":
+                return response.get("data")
+            return None
+        finally:
+            sock.close()
+    except Exception:
+        return None
+
+
+def send_resume_session(session_key, timeout=2.0):
+    """Resume a currently active hook session by its daemon-reported key."""
+    try:
+        sock = _connect(timeout=timeout)
+        if sock is None:
+            return None
+        try:
+            sock.sendall(encode_message(make_resume_session(session_key)))
             response = decode_message(sock, timeout=timeout)
             if response.get("type") == "response":
                 return response.get("data")

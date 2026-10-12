@@ -6,6 +6,7 @@ import re
 import sys
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
 
 import pytest
@@ -376,6 +377,118 @@ class TestPerDirectoryPause:
         stats = state.get_stats()
         assert "paused_dirs" in stats
         assert len(stats["paused_dirs"]) == 1
+
+
+class TestSessionPause:
+    def _record(self, state, session_id, project_dir, agent="Claude Code"):
+        session_key = f"TestAdapter:{session_id}"
+        state.record_session_activity(
+            session_key, session_id, agent, project_dir=str(project_dir)
+        )
+        return session_key
+
+    def test_pause_is_independent_for_sessions_in_same_directory(self, tmp_path):
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        project = tmp_path / "shared-project"
+        first = self._record(state, "session-one", project)
+        second = self._record(state, "session-two", project)
+
+        assert state.pause_session(first)
+
+        assert state.is_session_paused(first)
+        assert not state.is_session_paused(second)
+        sessions = {item["session_key"]: item for item in state.get_active_sessions()}
+        assert sessions[first]["project_dir"] == os.path.realpath(project)
+        assert sessions[first]["paused"] is True
+        assert sessions[second]["paused"] is False
+
+    def test_timed_session_pause_expires(self, tmp_path):
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        session_key = self._record(state, "timed", tmp_path)
+
+        assert state.pause_session(session_key, duration_minutes=0.002)
+        assert state.is_session_paused(session_key)
+        time.sleep(0.15)
+        assert not state.is_session_paused(session_key)
+
+    def test_indefinite_pause_ends_on_resume_or_session_end(self, tmp_path):
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        resumed_key = self._record(state, "resumed", tmp_path)
+        ended_key = self._record(state, "ended", tmp_path)
+
+        assert state.pause_session(resumed_key)
+        assert state.pause_session(ended_key)
+        assert state.resume_session(resumed_key)
+        assert state.end_session(ended_key)
+
+        assert not state.is_session_paused(resumed_key)
+        assert not state.is_session_paused(ended_key)
+        assert {item["session_key"] for item in state.get_active_sessions()} == {
+            resumed_key
+        }
+
+    def test_pause_requires_a_currently_observed_stable_identity(self, tmp_path):
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+
+        assert not state.record_session_activity("", "", "Unknown", tmp_path)
+        assert not state.pause_session("cwd:/project")
+        assert not state.resume_session("cwd:/project")
+        assert state.get_active_sessions() == []
+
+    @pytest.mark.parametrize("duration", [-1, 1441, True, float("nan")])
+    def test_pause_rejects_invalid_duration(self, tmp_path, duration):
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        session_key = self._record(state, "invalid-duration", tmp_path)
+
+        assert not state.pause_session(session_key, duration)
+        assert not state.is_session_paused(session_key)
+
+    def test_stale_session_and_pause_are_removed(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("ai_guardian.daemon.state.SESSION_TTL", 1)
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        session_key = self._record(state, "stale", tmp_path)
+        assert state.pause_session(session_key)
+        with state._lock:
+            state._active_sessions[session_key]["last_activity"] = time.monotonic() - 2
+
+        assert state.get_active_sessions() == []
+        assert not state.is_session_paused(session_key)
+
+    def test_session_pause_is_not_persisted_across_daemon_restart(self, tmp_path):
+        pause_file = tmp_path / "daemon.paused"
+        state = DaemonState(
+            config_path=tmp_path / "nonexistent.json", pause_file=pause_file
+        )
+        session_key = self._record(state, "restart", tmp_path)
+        assert state.pause_session(session_key)
+
+        restarted = DaemonState(
+            config_path=tmp_path / "nonexistent.json", pause_file=pause_file
+        )
+        assert not restarted.is_session_paused(session_key)
+        assert restarted.get_active_sessions() == []
+
+    def test_concurrent_session_pauses_remain_isolated(self, tmp_path):
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        session_keys = [
+            self._record(state, f"session-{index}", tmp_path / f"project-{index}")
+            for index in range(40)
+        ]
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            pause_results = list(executor.map(state.pause_session, session_keys[:20]))
+            snapshots = list(
+                executor.map(lambda _: state.get_active_sessions(), range(8))
+            )
+
+        assert all(pause_results)
+        assert all(len(snapshot) == len(session_keys) for snapshot in snapshots)
+        paused_keys = {
+            session["session_key"]
+            for session in state.get_active_sessions()
+            if session["paused"]
+        }
+        assert paused_keys == set(session_keys[:20])
 
 
 class TestPausePersistence:

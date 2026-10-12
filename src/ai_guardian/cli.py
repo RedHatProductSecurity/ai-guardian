@@ -1450,13 +1450,21 @@ def main():
 
         # Per-directory pause/resume (#958)
         daemon_pause_parser = daemon_sub.add_parser(
-            "pause", help="Pause scanning (global or per-directory)"
+            "pause",
+            help="Pause scanning globally, per session, or for all sessions in a directory",
         )
-        daemon_pause_parser.add_argument(
+        daemon_pause_scope = daemon_pause_parser.add_mutually_exclusive_group()
+        daemon_pause_scope.add_argument(
             "--dir",
             type=str,
             default=None,
-            help="Project directory to pause (default: global pause)",
+            help="Pause all sessions using this project directory",
+        )
+        daemon_pause_scope.add_argument(
+            "--session",
+            type=str,
+            default=None,
+            help="Stable session key shown by 'ai-guardian daemon status'",
         )
         daemon_pause_parser.add_argument(
             "--minutes",
@@ -1465,13 +1473,20 @@ def main():
             help="Pause duration in minutes (default: indefinite)",
         )
         daemon_resume_parser = daemon_sub.add_parser(
-            "resume", help="Resume scanning (global or per-directory)"
+            "resume", help="Resume scanning globally, per session, or for a directory"
         )
-        daemon_resume_parser.add_argument(
+        daemon_resume_scope = daemon_resume_parser.add_mutually_exclusive_group()
+        daemon_resume_scope.add_argument(
             "--dir",
             type=str,
             default=None,
-            help="Project directory to resume (default: global resume)",
+            help="Resume all sessions using this project directory",
+        )
+        daemon_resume_scope.add_argument(
+            "--session",
+            type=str,
+            default=None,
+            help="Stable session key shown by 'ai-guardian daemon status'",
         )
 
         # Standalone tray subcommand (Issue #527)

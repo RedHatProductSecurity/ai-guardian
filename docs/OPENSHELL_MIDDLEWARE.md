@@ -613,6 +613,10 @@ openshell sandbox delete mw-proof
   paused so a daemon resume takes effect for the next message without requiring
   a reconnect. Hooks remain independently enforced in any sandbox that uses
   the AI Guardian hook integration.
+- Session-scoped hook pauses do not affect provider middleware requests: the
+  middleware supplies project context, not a stable AI hook-session identity.
+  Use global pause or the applicable directory-wide pause to pause provider
+  scanning.
 - Pausing or stopping the external process is a service-manager/OpenShell
   decision; there is no middleware-specific AI Guardian pause command.
 - Rust middleware audit records use the normal AI Guardian daemon audit path:

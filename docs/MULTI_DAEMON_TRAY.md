@@ -267,10 +267,14 @@ Each daemon exposes a REST API for tray communication:
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
 | `/api/status` | GET | Daemon status (name, version, paused, middleware_pause, menu_tags, config_source, config_read_only) |
-| `/api/stats` | GET | Full stats (requests, blocked, violations, middleware_pause, menu_tags, config_source, config_read_only) |
+| `/api/stats` | GET | Full stats, including active stable-ID hook sessions (`active_sessions`) |
 | `/api/middleware/status` | GET | Effective daemon pause for OpenShell middleware; accepts optional `project_dir` |
 | `/api/pause` | POST | Pause scanning (`{"minutes": 15}`) |
 | `/api/resume` | POST | Resume scanning |
+| `/api/pause_session` | POST | Pause an active stable-ID hook session (`{"session_key": "...", "minutes": 15}`) |
+| `/api/resume_session` | POST | Resume an active stable-ID hook session (`{"session_key": "..."}`) |
+| `/api/pause_dir` | POST | Pause all hook sessions in a project directory (`{"dir": "...", "minutes": 15}`) |
+| `/api/resume_dir` | POST | Resume all hook sessions in a project directory (`{"dir": "..."}`) |
 
 ### Bind Address
 
@@ -335,7 +339,18 @@ ai-guardian tray start -b           # Start tray (background)
 ai-guardian tray start --no-discover  # Manual targets only
 ai-guardian tray stop               # Stop running tray
 ai-guardian tray restart            # Restart tray
+
+# List active stable-ID hook sessions and copy a session_key
+ai-guardian daemon status
+ai-guardian daemon pause --session '<session-key>' --minutes 15
+ai-guardian daemon pause --session '<session-key>'  # Until resume or session end
+ai-guardian daemon resume --session '<session-key>'
+ai-guardian daemon pause --dir /path/to/project --minutes 15  # All sessions there
 ```
+
+Session-scoped CLI controls require a currently active stable hook identity.
+For integrations that do not provide one, use global pause or `--dir` to pause
+all sessions in that project directory.
 
 ## Tray Plugins
 
@@ -570,14 +585,29 @@ selected. Linux pause labels therefore use a stable paused indicator instead of
 a live countdown; pause/resume visibility still refreshes when the pause state
 changes. macOS keeps the live countdown refresh behavior.
 
-### Project directories in the Pause menu
+### Session and directory pause controls
 
-The per-directory **Pause...** list combines explicitly paused directories with
-the daemon's `active_project_dirs` list. This list represents project
-directories recently observed in hook requests, not only currently open IDE
-sessions. Entries are retained until the daemon's project tracking TTL expires
-(currently 24 hours without another request), including while global scanning
-is paused.
+**Sessions...** lists active hook sessions that have a stable identity from their
+agent adapter. Each entry shows the session identity and project directory, so
+two sessions in the same directory can be paused independently. Session pause
+durations are 5, 15, or 30 minutes, 1 hour, or until resumed/session end. Timed
+pauses expire automatically; every session pause is cleared on a SessionEnd
+event, after 24 hours without hook activity, or when the daemon restarts. Session
+pauses are intentionally not persisted across restarts.
+
+The **All sessions in directory...** submenu is the explicit bulk control. It
+combines explicitly paused directories with `active_project_dirs`, which records
+recently observed project directories rather than currently open IDE sessions.
+Directory entries remain until the project tracking TTL expires (currently 24
+hours without another request), including while global scanning is paused.
+
+Session controls are offered only for hooks that provide a stable session ID;
+the daemon never guesses an identity from a project directory. Integrations,
+MCP callers, and provider middleware requests without a stable hook identity
+cannot be isolated by session. Use the global control or **All sessions in
+directory...** for those callers. `GET /api/stats` reports `active_sessions` with
+the daemon-issued `session_key` for CLI/API control. The tray pre-allocates 16
+session entries; additional sessions are listed by `ai-guardian daemon status`.
 
 ## Migration from v1.7.x
 

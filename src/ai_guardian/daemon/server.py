@@ -8,6 +8,7 @@ idle timeout and graceful shutdown.
 
 import json
 import logging
+import math
 import os
 import platform
 import signal
@@ -30,6 +31,7 @@ from ai_guardian.daemon.protocol import (
     make_response,
 )
 from ai_guardian.daemon.state import DaemonState
+from ai_guardian.constants import HookEvent
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,44 @@ IDLE_CHECK_INTERVAL = 60  # seconds
 
 # Kept as module-level alias for backward compatibility
 _is_pid_alive = is_pid_alive
+
+
+def track_hook_session(state, hook_data, cwd=None):
+    """Track hook sessions only when an adapter supplies a stable identity.
+
+    Project-directory and time-based fallbacks are intentionally not used:
+    they would make concurrent sessions appear to be one session.
+    """
+    try:
+        from ai_guardian.hook_processing import detect_adapter
+
+        adapter = detect_adapter(hook_data)
+        normalized = adapter.normalize_input(hook_data)
+        session_id = normalized.session_id
+        if (
+            not isinstance(session_id, str)
+            or not session_id
+            or len(session_id) > 512
+            or not session_id.isprintable()
+        ):
+            return None
+
+        session_key = f"{adapter.__class__.__name__}:{session_id}"
+        if normalized.event == HookEvent.SESSION_END:
+            state.end_session(session_key)
+            return session_key
+
+        project_dir = cwd or normalized.working_dir or hook_data.get("cwd")
+        state.record_session_activity(
+            session_key,
+            session_id,
+            adapter.name,
+            project_dir=project_dir,
+        )
+        return session_key
+    except Exception:
+        logger.warning("Unable to track stable hook session identity", exc_info=True)
+        return None
 
 
 def handle_paused_otel(state, hook_data, cwd=None):
@@ -427,6 +467,65 @@ class DaemonServer:
                             "dir": directory,
                         }
                     )
+            elif msg_type == "pause_session":
+                data = request.get("data", {})
+                session_key = data.get("session_key", "")
+                minutes = data.get("minutes", 0)
+                if not isinstance(session_key, str) or not session_key:
+                    response = make_response(
+                        {
+                            "error": "session_key is required and must identify a stable hook session"
+                        }
+                    )
+                elif (
+                    not isinstance(minutes, (int, float))
+                    or isinstance(minutes, bool)
+                    or minutes < 0
+                    or minutes > 1440
+                    or not math.isfinite(minutes)
+                ):
+                    response = make_response(
+                        {"error": "minutes must be a number between 0 and 1440"}
+                    )
+                elif not self.state.pause_session(session_key, minutes):
+                    response = make_response(
+                        {
+                            "error": (
+                                "session is not active; session-scoped pause requires "
+                                "a stable session identity"
+                            )
+                        }
+                    )
+                else:
+                    response = make_response(
+                        {
+                            "status": "session_paused",
+                            "session_key": session_key,
+                            "minutes": minutes,
+                        }
+                    )
+            elif msg_type == "resume_session":
+                data = request.get("data", {})
+                session_key = data.get("session_key", "")
+                if not isinstance(session_key, str) or not session_key:
+                    response = make_response(
+                        {
+                            "error": "session_key is required and must identify a stable hook session"
+                        }
+                    )
+                elif not self.state.resume_session(session_key):
+                    response = make_response(
+                        {
+                            "error": (
+                                "session is not active; session-scoped resume requires "
+                                "a stable session identity"
+                            )
+                        }
+                    )
+                else:
+                    response = make_response(
+                        {"status": "session_resumed", "session_key": session_key}
+                    )
             elif msg_type == "reload_config":
                 self.state.force_reload_config()
                 response = make_response({"status": "config_reloaded"})
@@ -535,6 +634,8 @@ class DaemonServer:
         except Exception:
             pass
 
+        session_key = track_hook_session(self.state, hook_data, cwd)
+
         if self.state.paused:
             return self._paused_hook_response(hook_data, cwd)
 
@@ -542,6 +643,8 @@ class DaemonServer:
 
         # Per-directory pause (#958): skip scanning if this directory is paused
         if cwd and self.state.is_dir_paused(cwd):
+            return self._paused_hook_response(hook_data, cwd)
+        if session_key and self.state.is_session_paused(session_key):
             return self._paused_hook_response(hook_data, cwd)
         if cwd:
             from ai_guardian.config.utils import (

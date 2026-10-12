@@ -1081,12 +1081,26 @@ ai-guardian daemon stop
 
 # Check daemon status
 ai-guardian daemon status
+
+# Pause/resume one active hook session (key is shown by daemon status)
+ai-guardian daemon pause --session '<session-key>' --minutes 15
+ai-guardian daemon pause --session '<session-key>'  # Until resume or session end
+ai-guardian daemon resume --session '<session-key>'
+
+# Pause/resume every hook session using one project directory
+ai-guardian daemon pause --dir /path/to/project --minutes 15
+ai-guardian daemon resume --dir /path/to/project
 ```
 
 The top-level `pause` and `resume` commands never auto-start a daemon. They
 control the existing local daemon through its socket and report an error when
 it is stopped or unreachable. The older `ai-guardian daemon pause/resume`
-commands remain available, including their `--dir` and `--minutes` options.
+commands remain available for global, session, or directory-wide control.
+Session-scoped controls require an active stable hook identity; session pauses
+expire on their timer, SessionEnd, 24 hours without hook activity, or daemon
+restart. `--dir` is a bulk pause for all sessions in that project directory.
+Integrations and MCP callers without stable hook identities must use global or
+directory-wide controls instead.
 
 ### Daemon start times out or says "Another daemon is starting"
 

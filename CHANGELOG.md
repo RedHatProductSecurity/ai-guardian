@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Session-scoped pause/resume (#2534):** Pause one active hook session without
+  affecting other sessions in the same project directory. Add CLI, tray, socket,
+  and REST controls; explicitly label directory pause as a bulk action and
+  report when a stable hook identity is unavailable.
 - **Targeted setup overwrite confirmation (#2538):** When an integration is
   already configured, interactive `setup --ide` now offers a default-No force
   overwrite prompt; declining or cancelling preserves the existing setup.
