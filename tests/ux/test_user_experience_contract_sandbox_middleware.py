@@ -49,7 +49,7 @@ def test_user_experience_tray_middleware_flow_preserves_ownership_boundary():
     report = format_middleware_readiness(
         OpenShellMiddlewareReadiness(
             cli="openshell",
-            openshell_version="OpenShell 0.1.2",
+            openshell_version="OpenShell 0.1.3",
             compatibility_status="ready",
             gateway_status="ready",
             gateway_detail="gateway connected",

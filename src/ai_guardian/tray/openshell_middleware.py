@@ -75,7 +75,7 @@ def _version(value: Any) -> Optional[Tuple[int, int, int]]:
 
 
 def _compatible(version: Optional[Tuple[int, int, int]]) -> bool:
-    return bool(version and version[:2] == (0, 1) and version[2] >= 2)
+    return bool(version and version[:2] == (0, 1) and version[2] >= 3)
 
 
 def _run_json(
@@ -383,7 +383,7 @@ def check_openshell_middleware(
         else:
             result.compatibility_status = "error"
             result.errors.append(
-                f"OpenShell {version_text} is outside the qualified 0.1.2+ / 0.1.x range"
+                f"OpenShell {version_text} is outside the qualified 0.1.3+ / 0.1.x range"
             )
 
         status, status_error = _run_json([cli, "status", "--output", "json"])

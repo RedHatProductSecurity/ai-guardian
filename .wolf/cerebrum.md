@@ -220,10 +220,19 @@
 
 - **OpenShell release pinning:** For a deterministic AI Guardian fresh-machine
   setup, install the qualified baseline with
-  `OPENSHELL_VERSION=v0.1.2` and import provider manifests from `v0.1.2`. The
-  `providers_v2_enabled` setting is a v0.1.2 command only; newer releases may
-  reject it as an unknown setting, while an existing provider profile is safe
-  to reuse.
+  `OPENSHELL_VERSION=v0.1.3` and import provider manifests from `v0.1.3`. The
+  `providers_v2_enabled` setting is legacy v0.1.2-only and absent in v0.1.3;
+  OpenShell v0.1.2 and earlier are below the current AI Guardian baseline.
+
+- **OpenShell v0.1.3 qualification (#2531):** The release restores
+  supervisor-backed GCP metadata discovery and its patch-train protobuf check
+  protects the v0.1.2 protocol boundary. Live native Codex OAuth qualification
+  passed with CLI and gateway v0.1.3 against the pinned AI Guardian 1.19.0 image;
+  creation, service, agent, detection, restart, reconnect, and cleanup passed.
+  Claude Code/Vertex remain unsupported until separately credential-bound
+  qualification passes. When extracting the gateway version from `openshell
+  status`, parse its explicit `Version:` field; the earlier generic numeric
+  matcher incorrectly treated the gateway's IPv4 endpoint as `127.0.0`.
 
 - **OpenShell workload identity:** OpenShell clears supplementary groups before
   capability-free launch. The NVIDIA Ubuntu base's `ubuntu` UID has default

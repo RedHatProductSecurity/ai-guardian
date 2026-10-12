@@ -2,11 +2,11 @@
   "openshell_release": {
     "major": 0,
     "minor": 1,
-    "minimum_patch": 2
+    "minimum_patch": 3
   },
   "supervisor_protocol": {
     "major": 1,
     "minor": 0
   },
-  "runtime_version": "0.1.2"
+  "runtime_version": "0.1.3"
 }

@@ -53,7 +53,7 @@ fn parse_openshell_version(value: &str) -> Result<(u32, u32, u32), AppError> {
     let components: Vec<&str> = core.split('.').collect();
     if components.len() != 3 || components.iter().any(|component| component.is_empty()) {
         return Err(AppError::Message(format!(
-            "OpenShell version must be a semantic version such as 0.1.2: {value}"
+            "OpenShell version must be a semantic version such as 0.1.3: {value}"
         )));
     }
     let parsed: Result<Vec<u32>, _> = components
@@ -62,7 +62,7 @@ fn parse_openshell_version(value: &str) -> Result<(u32, u32, u32), AppError> {
         .collect();
     let parsed = parsed.map_err(|_| {
         AppError::Message(format!(
-            "OpenShell version must be a semantic version such as 0.1.2: {value}"
+            "OpenShell version must be a semantic version such as 0.1.3: {value}"
         ))
     })?;
     Ok((parsed[0], parsed[1], parsed[2]))

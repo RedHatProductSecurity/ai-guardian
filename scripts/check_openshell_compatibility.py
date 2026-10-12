@@ -107,6 +107,18 @@ def verify_contract() -> str:
         f"{release['major']}.{release['minor']}.{release['minimum_patch'] + 1}",
         policy,
     )
+    if release["minimum_patch"] > 0:
+        older_release = (
+            f"{release['major']}.{release['minor']}." f"{release['minimum_patch'] - 1}"
+        )
+        try:
+            _validate_release(older_release, policy)
+        except ValueError:
+            pass
+        else:  # pragma: no cover - defensive contract check
+            raise ValueError(
+                f"unsupported older OpenShell release was accepted: {older_release}"
+            )
     unsupported = f"{release['major']}.{release['minor'] + 1}.0"
     try:
         _validate_release(unsupported, policy)

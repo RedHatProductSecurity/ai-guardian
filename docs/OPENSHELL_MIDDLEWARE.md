@@ -89,7 +89,8 @@ protocol validation before accepting the registration.
 
 ## Prerequisites
 
-- OpenShell v0.1.2 or a later qualified v0.1.x patch release.
+- OpenShell v0.1.3 or a later `0.1.x` patch release. OpenShell v0.1.2 and
+  earlier are below the middleware's qualified baseline.
 - A healthy, authenticated OpenShell gateway.
 - A host address reachable by both the gateway and OpenShell supervisors.
 - The Rust middleware binary obtained from a GitHub release asset, or a local
@@ -296,7 +297,7 @@ Registration is static and operator-owned. Add the service to the gateway's
 `$XDG_CONFIG_HOME/openshell/gateway.toml`, or
 `~/.config/openshell/gateway.toml` when `XDG_CONFIG_HOME` is unset. If the
 gateway was started with `--config` or `OPENSHELL_GATEWAY_CONFIG`, edit the
-file selected by that override instead. Common OpenShell 0.1.2 locations are:
+file selected by that override instead. Common OpenShell 0.1.3 locations are:
 
 | Installation | Usual gateway TOML location |
 | --- | --- |
@@ -308,9 +309,9 @@ The gateway's effective configuration is always the file selected by its
 `--config`/`OPENSHELL_GATEWAY_CONFIG` override or, without an override, by its
 package/default lookup.
 
-The OpenShell 0.1.2 gateway configuration reference lists the package paths in
+The OpenShell 0.1.3 gateway configuration reference lists the package paths in
 detail:
-[Gateway Configuration File](https://docs.nvidia.com/openshell/v0.1.2/how-it-works/gateways/configuration).
+[Gateway Configuration File](https://docs.nvidia.com/openshell/v0.1.3/how-it-works/gateways/configuration).
 
 The file normally already contains one `[openshell]` table with
 `version = 2`. Do **not** append a second `[openshell]` table. Add only the
@@ -367,7 +368,7 @@ transport, so this example uses `http://` and explicitly opts into
 `allow_insecure_transport`. Keep that listener on a trusted private network
 until TLS support is added.
 
-OpenShell v0.1.2 has no arbitrary external-middleware installation command.
+OpenShell v0.1.3 has no arbitrary external-middleware installation command.
 The service process and static gateway registration are intentionally separate.
 
 ## 4. Create an ordinary sandbox
@@ -632,8 +633,9 @@ rules, or arbitrary tool output outside the selected provider boundary.
 
 The qualified contract is stored in
 `src/ai_guardian/middleware/openshell/compatibility.json`: OpenShell `0.1.x`
-from `0.1.2` onward and supervisor protocol `1.0`. The Rust binary embeds and
-validates this contract before listening.
+from `0.1.3` onward and supervisor protocol `1.0`. The Rust binary embeds and
+validates this contract before listening; OpenShell `0.1.2` and earlier are
+rejected before it accepts traffic.
 
 Run the repository checks before deploying a new binary:
 
@@ -644,7 +646,10 @@ cargo test --manifest-path rust/openshell-middleware/Cargo.toml
 
 Credential-free CI can validate the binary, protocol, policy, and Codex
 installation. OAuth account/workspace routing still requires a manual local
-qualification with the operator's OpenShell credentials.
+qualification with the operator's OpenShell credentials. OpenShell v0.1.3
+restores supervisor-backed GCP metadata discovery, but that upstream fix alone
+does not qualify Claude Code with Vertex AI; AI Guardian continues to defer that
+combination until credential-bound validation passes.
 
 ## Clean reset for a new middleware test
 

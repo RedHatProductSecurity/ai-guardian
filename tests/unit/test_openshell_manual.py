@@ -135,6 +135,21 @@ def test_compatibility_report_validation_rejects_raw_output():
         runner.validate_compatibility_report(report)
 
 
+def test_gateway_version_parser_uses_explicit_field_not_server_ip():
+    runner = _load_runner()
+
+    assert (
+        runner._gateway_version_from_text(
+            "Server: https://127.0.0.1:17670\nVersion: 0.1.3\n"
+        )
+        == "0.1.3"
+    )
+    assert (
+        runner._gateway_version_from_text("Server: https://127.0.0.1:17670\n")
+        == "unknown"
+    )
+
+
 def test_compatibility_report_records_image_digest_and_managed_cli_versions():
     runner = _load_runner()
 

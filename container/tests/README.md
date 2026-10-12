@@ -8,11 +8,11 @@ not accept credential values on the command line.
 
 For OpenShell cases:
 
-- An OpenShell CLI and gateway at version `0.1.2` or newer
+- An OpenShell CLI and gateway at version `0.1.3` or later in the `0.1.x` line.
+  Versions `0.1.2` and earlier are below the qualified baseline.
 
 The commands below use `${OPENSHELL_VERSION}` for provider manifests. Set it to
 the exact release being qualified.
-- OpenShell Providers v2 enabled
 - Required Codex provider profiles imported into the active gateway (`codex` and
   `openai`)
 - Local credentials available for the selected provider
@@ -28,13 +28,15 @@ For either runtime, provide the credentials required by the selected case.
 Before running an OpenShell case, check the gateway:
 
 ```bash
+openshell --version
 openshell status
-# OpenShell 0.1.2 only; newer releases may report this key as unknown.
-openshell settings set --global --key providers_v2_enabled --value true
 ```
 
-If a newer OpenShell release reports `unknown setting key
-'providers_v2_enabled'`, skip that setting command.
+The `providers_v2_enabled` setting was specific to OpenShell `0.1.2`; it is not
+available or required for the qualified `0.1.3` baseline. Set
+`OPENSHELL_VERSION=0.1.3` when using the pinned profile-download examples below.
+For a v0.1.3 qualification, verify both the CLI and gateway report `0.1.3`;
+the sanitized qualification report records both versions.
 
 ## Run A Case
 
@@ -58,6 +60,7 @@ selects the OAuth profile for a normal Codex login and the OpenAI profile when
 Codex local auth contains `OPENAI_API_KEY`:
 
 ```bash
+export OPENSHELL_VERSION="${OPENSHELL_VERSION:-0.1.3}"
 curl -fsSL \
     "https://raw.githubusercontent.com/NVIDIA/OpenShell/v${OPENSHELL_VERSION}/providers/codex.yaml" \
     -o /tmp/openshell-codex.yaml

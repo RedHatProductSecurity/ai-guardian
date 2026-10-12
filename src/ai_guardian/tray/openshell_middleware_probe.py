@@ -45,7 +45,7 @@ def _encode_bytes_field(field_number: int, value: bytes) -> bytes:
 
 
 def _serialize_describe_request(openshell_version: str) -> bytes:
-    """Serialize the fixed OpenShell v0.1.2 Describe request wire fields."""
+    """Serialize the fixed OpenShell supervisor Describe request wire fields."""
     protocol_version = _encode_varint_field(1, 1)  # ProtocolVersion.major
     gateway = (
         _encode_bytes_field(1, protocol_version)  # PeerMetadata.protocol_version

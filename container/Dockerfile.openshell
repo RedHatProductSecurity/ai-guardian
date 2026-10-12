@@ -4,7 +4,7 @@
 # This image is deliberately separate from container/Dockerfile. The normal
 # UBI image remains the supported Docker/Podman support container; this image
 # packages the complete AI Guardian workload explicitly because supported
-# OpenShell releases 0.1.2 or newer
+# OpenShell v0.1.3 or later in the supported 0.1.x line
 # no longer supplies a Community workload image.
 #
 # Build from the repository root with the container directory as context:
