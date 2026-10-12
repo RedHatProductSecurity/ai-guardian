@@ -8,6 +8,7 @@ compiled regex pattern caching, and activity tracking for idle timeout.
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import stat
@@ -112,6 +113,13 @@ class DaemonState:
 
         # Per-directory pause (#958)
         self._paused_dirs = {}  # project_dir -> monotonic timestamp (0 = indefinite)
+
+        # Per-session pause state is in-memory only. A session can be isolated
+        # only when its hook adapter provides a stable identity.
+        self._active_sessions = {}  # session_key -> identity, project, last activity
+        self._paused_sessions = (
+            {}
+        )  # session_key -> monotonic timestamp (0 = indefinite)
 
         # Config reload tracking (#610)
         self._last_config_reload_at = None  # unix timestamp
@@ -1168,6 +1176,156 @@ class DaemonState:
         with self._lock:
             return self._get_paused_dirs_locked()
 
+    # --- Per-session pause/resume ---
+
+    def record_session_activity(self, session_key, session_id, agent, project_dir=None):
+        """Register or refresh a hook session with a stable adapter identity.
+
+        Session pause state is intentionally not persisted: daemon restart loses
+        the live-session registry, so retaining a pause would risk applying it
+        to a later session that reuses the same identity.
+        """
+        if not all(
+            isinstance(value, str) and value for value in (session_key, session_id)
+        ):
+            return False
+
+        normalized_dir = os.path.realpath(project_dir) if project_dir else None
+        now = time.monotonic()
+        with self._lock:
+            self._cleanup_stale_sessions_locked(now)
+            self._active_sessions[session_key] = {
+                "session_id": session_id,
+                "agent": str(agent or "Unknown agent"),
+                "project_dir": normalized_dir,
+                "last_activity": now,
+            }
+        return True
+
+    def end_session(self, session_key):
+        """Forget a hook session and any pause when its lifecycle ends."""
+        if not isinstance(session_key, str) or not session_key:
+            return False
+        with self._lock:
+            removed = self._active_sessions.pop(session_key, None) is not None
+            was_paused = self._paused_sessions.pop(session_key, None) is not None
+        if removed or was_paused:
+            self._notify_state_changed("session_ended", {"session_key": session_key})
+        return removed or was_paused
+
+    def pause_session(self, session_key, duration_minutes=0):
+        """Pause one currently active hook session; zero means until resume/end.
+
+        Returns False when the key is not a currently observed stable session.
+        """
+        if not isinstance(session_key, str) or not session_key:
+            return False
+        if (
+            not isinstance(duration_minutes, (int, float))
+            or isinstance(duration_minutes, bool)
+            or duration_minutes < 0
+            or duration_minutes > 1440
+            or not math.isfinite(duration_minutes)
+        ):
+            return False
+        now = time.monotonic()
+        with self._lock:
+            self._cleanup_stale_sessions_locked(now)
+            if session_key not in self._active_sessions:
+                return False
+            self._paused_sessions[session_key] = (
+                now + duration_minutes * 60 if duration_minutes > 0 else 0.0
+            )
+        logger.info(
+            "Hook session paused for %s minutes: %s", duration_minutes, session_key
+        )
+        self._notify_state_changed(
+            "session_paused",
+            {"session_key": session_key, "minutes": duration_minutes},
+        )
+        return True
+
+    def resume_session(self, session_key):
+        """Resume one currently active hook session; unknown sessions fail closed."""
+        if not isinstance(session_key, str) or not session_key:
+            return False
+        now = time.monotonic()
+        with self._lock:
+            self._cleanup_stale_sessions_locked(now)
+            if session_key not in self._active_sessions:
+                return False
+            was_paused = self._paused_sessions.pop(session_key, None) is not None
+        if was_paused:
+            logger.info("Hook session resumed: %s", session_key)
+            self._notify_state_changed("session_resumed", {"session_key": session_key})
+        return True
+
+    def is_session_paused(self, session_key):
+        """Return whether an active session is paused, expiring stale state."""
+        if not isinstance(session_key, str) or not session_key:
+            return False
+        now = time.monotonic()
+        with self._lock:
+            self._cleanup_stale_sessions_locked(now)
+            until = self._paused_sessions.get(session_key)
+            if until is None:
+                return False
+            if until > 0 and now >= until:
+                del self._paused_sessions[session_key]
+                return False
+            return True
+
+    def get_active_sessions(self):
+        """Return active stable-ID hook sessions for status and tray controls."""
+        with self._lock:
+            return self._get_active_sessions_locked()
+
+    def _cleanup_stale_sessions_locked(self, now):
+        """Remove sessions and pause entries idle for SESSION_TTL seconds."""
+        stale = [
+            key
+            for key, session in self._active_sessions.items()
+            if now - session["last_activity"] > SESSION_TTL
+        ]
+        for key in stale:
+            self._active_sessions.pop(key, None)
+            self._paused_sessions.pop(key, None)
+
+        for key, until in list(self._paused_sessions.items()):
+            if key not in self._active_sessions or (until > 0 and now >= until):
+                self._paused_sessions.pop(key, None)
+
+    def _get_active_sessions_locked(self):
+        """Return active sessions with pause metadata (must hold ``_lock``)."""
+        now = time.monotonic()
+        self._cleanup_stale_sessions_locked(now)
+        sessions = []
+        for session_key, session in self._active_sessions.items():
+            until = self._paused_sessions.get(session_key)
+            paused = until is not None
+            remaining = max(0.0, until - now) if until else 0.0
+            sessions.append(
+                {
+                    "session_key": session_key,
+                    "session_id": session["session_id"],
+                    "agent": session["agent"],
+                    "project_dir": session["project_dir"],
+                    "last_activity_seconds_ago": max(
+                        0.0, now - session["last_activity"]
+                    ),
+                    "paused": paused,
+                    "pause_remaining_seconds": remaining,
+                }
+            )
+        return sorted(
+            sessions,
+            key=lambda item: (
+                item["project_dir"] or "",
+                item["agent"],
+                item["session_key"],
+            ),
+        )
+
     # --- Pause persistence (#1319) ---
 
     def _load_pause_state(self):
@@ -1346,6 +1504,7 @@ class DaemonState:
                 "host_agent_cli_protection_scope": "global-only",
                 "mcp_installed": self._mcp_installed,
                 "paused_dirs": self._get_paused_dirs_locked(),
+                "active_sessions": self._get_active_sessions_locked(),
                 "active_project_dirs": sorted(
                     self._project_dir_last_seen.keys(),
                     key=lambda d: self._project_dir_last_seen[d],

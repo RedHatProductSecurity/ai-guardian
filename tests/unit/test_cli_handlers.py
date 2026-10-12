@@ -131,11 +131,12 @@ class TestDaemonReloadCommand:
 
 class TestGlobalPauseResumeCommands:
     @staticmethod
-    def _args(command, minutes=0, directory=None):
+    def _args(command, minutes=0, directory=None, session=None):
         args = mock.MagicMock()
         args.daemon_command = command
         args.minutes = minutes
         args.dir = directory
+        args.session = session
         return args
 
     def test_pause_indefinitely(self, capsys):
@@ -270,10 +271,149 @@ class TestGlobalPauseResumeCommands:
 
         assert result == 0
         send_pause_dir.assert_called_once_with(directory, 5, timeout=2.0)
-        assert directory in capsys.readouterr().out
+        assert capsys.readouterr().out == (
+            "ai-guardian daemon: scanning paused for 5 minutes for all sessions "
+            f"in {directory}\n"
+        )
+
+    def test_nested_per_directory_resume_is_explicitly_bulk(self, tmp_path, capsys):
+        directory = str(tmp_path)
+        args = self._args("resume", directory=directory)
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_resume_dir",
+                return_value={"status": "dir_resumed"},
+            ) as send_resume_dir,
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        send_resume_dir.assert_called_once_with(directory, timeout=2.0)
+        assert capsys.readouterr().out == (
+            "ai-guardian daemon: scanning resumed for all sessions " f"in {directory}\n"
+        )
+
+    def test_pause_session_reports_scope_and_duration(self, capsys):
+        session_key = "ClaudeAdapter:session-1"
+        args = self._args("pause", minutes=15, session=session_key)
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_pause_session",
+                return_value={"status": "session_paused"},
+            ) as send_pause_session,
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        send_pause_session.assert_called_once_with(session_key, 15, timeout=2.0)
+        assert capsys.readouterr().out == (
+            "ai-guardian daemon: scanning paused for 15 minutes for hook session "
+            f"{session_key}\n"
+        )
+
+    def test_resume_session_reports_scope(self, capsys):
+        session_key = "ClaudeAdapter:session-1"
+        args = self._args("resume", session=session_key)
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_resume_session",
+                return_value={"status": "session_resumed"},
+            ) as send_resume_session,
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        send_resume_session.assert_called_once_with(session_key, timeout=2.0)
+        assert capsys.readouterr().out == (
+            "ai-guardian daemon: scanning resumed for hook session " f"{session_key}\n"
+        )
+
+    def test_pause_session_explains_missing_stable_identity(self, capsys):
+        args = self._args("pause", session="unknown-session")
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_pause_session", return_value=None
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 1
+        assert (
+            "currently active session with a stable identity" in capsys.readouterr().err
+        )
 
 
 class TestDaemonStatusCommand:
+    def test_status_lists_stable_hook_sessions_and_pause_state(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        args = mock.MagicMock()
+        args.daemon_command = "status"
+        session_key = "ClaudeCodeAdapter:session-1"
+        stats = {
+            "uptime_seconds": 60,
+            "blocked_count": 0,
+            "request_count": 1,
+            "paused": False,
+            "last_config_reload_seconds_ago": None,
+            "active_sessions": [
+                {
+                    "session_key": session_key,
+                    "session_id": "session-1",
+                    "agent": "Claude Code",
+                    "project_dir": "/project",
+                    "paused": True,
+                    "pause_remaining_seconds": 0,
+                }
+            ],
+            "paused_dirs": {},
+        }
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_status_request", return_value=stats
+            ),
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert "Active hook sessions with stable IDs: 1" in output
+        assert session_key in output
+        assert "Claude Code" in output
+        assert "/project" in output
+        assert "paused until resume or session end" in output
+        assert "also covers callers without stable IDs" in output
+
     def test_status_not_running(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
         args = mock.MagicMock()

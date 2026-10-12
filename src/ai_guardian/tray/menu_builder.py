@@ -101,6 +101,8 @@ class TrayMenuBuilder:
         MAX_DIR_PAUSE_SLOTS as _MAX_DIR_PAUSE_SLOTS,
     )
 
+    _MAX_SESSION_PAUSE_SLOTS = _MAX_DIR_PAUSE_SLOTS
+
     def __init__(self, tray):
         self._tray = tray
         self._single_daemon_closures = {}
@@ -311,6 +313,28 @@ class TrayMenuBuilder:
 
         return resume_dir_fn
 
+    def _mk_multi_pause_session(self, slot):
+        """Create a pause-session callback for a multi-daemon slot."""
+
+        def pause_session_fn(session_key, minutes):
+            if slot < len(self._tray._targets) and self._tray._multi_client:
+                self._tray._multi_client.send_pause_session(
+                    self._tray._targets[slot], session_key, minutes
+                )
+
+        return pause_session_fn
+
+    def _mk_multi_resume_session(self, slot):
+        """Create a resume-session callback for a multi-daemon slot."""
+
+        def resume_session_fn(session_key):
+            if slot < len(self._tray._targets) and self._tray._multi_client:
+                self._tray._multi_client.send_resume_session(
+                    self._tray._targets[slot], session_key
+                )
+
+        return resume_session_fn
+
     def _build_dir_pause_items(self, get_stats_fn, pause_dir_fn, resume_dir_fn):
         """Build pre-allocated per-directory pause/resume menu items.
 
@@ -348,9 +372,9 @@ class TrayMenuBuilder:
                     if remaining > 0 and self._tray._supports_live_pause_countdown():
                         mins = int(remaining // 60)
                         secs = int(remaining % 60)
-                        return f"☾ {short} ({mins}m {secs}s)"
-                    return f"☾ {short}"
-                return f"● {short}"
+                        return f"☾ All sessions: {short} ({mins}m {secs}s)"
+                    return f"☾ All sessions: {short}"
+                return f"● All sessions: {short}"
 
             def _is_paused(_item, slot=slot):
                 stats = get_stats_fn(_item)
@@ -387,7 +411,7 @@ class TrayMenuBuilder:
             def _full_path_label(_item, slot=slot):
                 stats = get_stats_fn(_item)
                 d = _dir_at(None, stats, slot)
-                return shorten_path(d) if d else ""
+                return f"All sessions in: {shorten_path(d)}" if d else ""
 
             items.append(
                 pystray.MenuItem(
@@ -435,13 +459,154 @@ class TrayMenuBuilder:
             )
         return items
 
+    def _build_session_pause_items(
+        self, get_stats_fn, pause_session_fn, resume_session_fn
+    ):
+        """Build bounded, pre-allocated pause/resume controls for hook sessions."""
+        from ai_guardian.daemon.working_dir import shorten_path
+
+        def _sessions(stats):
+            sessions = stats.get("active_sessions")
+            return sessions if isinstance(sessions, list) else []
+
+        def _session_at(stats, slot):
+            sessions = _sessions(stats)
+            return sessions[slot] if slot < len(sessions) else None
+
+        def _no_sessions(_item):
+            return not _sessions(get_stats_fn(_item))
+
+        def _no_sessions_label(_item):
+            stats = get_stats_fn(_item)
+            if "active_sessions" not in stats:
+                return "Session pause is not supported by this daemon"
+            return "No active sessions with stable hook identities"
+
+        items = [
+            pystray.MenuItem(
+                _no_sessions_label,
+                None,
+                enabled=False,
+                visible=_no_sessions,
+            ),
+            pystray.MenuItem(
+                "Directory-wide pause also covers callers without stable session IDs",
+                None,
+                enabled=False,
+            ),
+        ]
+
+        for slot in range(self._MAX_SESSION_PAUSE_SLOTS):
+
+            def _is_visible(_item, slot=slot):
+                return _session_at(get_stats_fn(_item), slot) is not None
+
+            def _label(_item, slot=slot):
+                session = _session_at(get_stats_fn(_item), slot)
+                if session is None:
+                    return ""
+                icon = "☾" if session.get("paused") else "●"
+                label = f"{icon} {session.get('agent', 'Hook session')}: "
+                label += str(
+                    session.get("session_id") or session.get("session_key", "")
+                )
+                remaining = session.get("pause_remaining_seconds", 0)
+                if session.get("paused") and remaining > 0:
+                    if self._tray._supports_live_pause_countdown():
+                        label += f" ({int(remaining // 60)}m {int(remaining % 60)}s)"
+                return label
+
+            def _session_key_label(_item, slot=slot):
+                session = _session_at(get_stats_fn(_item), slot)
+                return (
+                    f"Session key: {session.get('session_key', '')}" if session else ""
+                )
+
+            def _project_label(_item, slot=slot):
+                session = _session_at(get_stats_fn(_item), slot)
+                project_dir = session.get("project_dir") if session else None
+                return (
+                    f"Project: {shorten_path(project_dir)}"
+                    if project_dir
+                    else "Project: unknown"
+                )
+
+            def _is_paused(_item, slot=slot):
+                session = _session_at(get_stats_fn(_item), slot)
+                return bool(session and session.get("paused"))
+
+            def _is_active(_item, slot=slot):
+                session = _session_at(get_stats_fn(_item), slot)
+                return bool(session and not session.get("paused"))
+
+            def _mk_pause(minutes, slot=slot):
+                def action(_, __):
+                    session = _session_at(get_stats_fn(None), slot)
+                    if session and session.get("session_key"):
+                        pause_session_fn(session["session_key"], minutes)
+
+                return action
+
+            def _mk_resume(slot=slot):
+                def action(_, __):
+                    session = _session_at(get_stats_fn(None), slot)
+                    if session and session.get("session_key"):
+                        resume_session_fn(session["session_key"])
+
+                return action
+
+            items.append(
+                pystray.MenuItem(
+                    _label,
+                    pystray.Menu(
+                        pystray.MenuItem(_session_key_label, None, enabled=False),
+                        pystray.MenuItem(_project_label, None, enabled=False),
+                        pystray.Menu.SEPARATOR,
+                        pystray.MenuItem("5 minutes", _mk_pause(5), visible=_is_active),
+                        pystray.MenuItem(
+                            "15 minutes", _mk_pause(15), visible=_is_active
+                        ),
+                        pystray.MenuItem(
+                            "30 minutes", _mk_pause(30), visible=_is_active
+                        ),
+                        pystray.MenuItem("1 hour", _mk_pause(60), visible=_is_active),
+                        pystray.MenuItem(
+                            "Until resumed or session ends",
+                            _mk_pause(0),
+                            visible=_is_active,
+                        ),
+                        pystray.MenuItem("Resume", _mk_resume(), visible=_is_paused),
+                    ),
+                    visible=_is_visible,
+                )
+            )
+
+        def _has_more_sessions(_item):
+            return len(_sessions(get_stats_fn(_item))) > self._MAX_SESSION_PAUSE_SLOTS
+
+        items.append(
+            pystray.MenuItem(
+                "Additional sessions are listed by 'ai-guardian daemon status'",
+                None,
+                enabled=False,
+                visible=_has_more_sessions,
+            )
+        )
+        return items
+
     def _version_annotated_label(self, target):
         """Format daemon label with version mismatch indicator if needed."""
         stats = self._tray._get_target_stats(target)
         active_dirs = stats.get("active_project_dirs") or []
+        active_sessions = stats.get("active_sessions") or []
         label = tray_menu.daemon_status_label(
             target,
             has_paused_dirs=bool(stats.get("paused_dirs")),
+            has_paused_sessions=any(
+                session.get("paused")
+                for session in active_sessions
+                if isinstance(session, dict)
+            ),
             active_project_dir=active_dirs[0] if active_dirs else None,
             project_count=len(active_dirs),
             forwarding_failed=target.name in self._tray._ask_forwarding_failed,
@@ -472,10 +637,19 @@ class TrayMenuBuilder:
             except Exception:
                 stats = {}
         has_paused_dirs = isinstance(stats, dict) and bool(stats.get("paused_dirs"))
+        active_sessions = (
+            stats.get("active_sessions", []) if isinstance(stats, dict) else []
+        )
+        has_paused_sessions = any(
+            session.get("paused")
+            for session in active_sessions
+            if isinstance(session, dict)
+        )
         key = (target.name, target.runtime)
         status, reason, warnings = tray_menu.daemon_status_explanation(
             target,
             has_paused_dirs=has_paused_dirs,
+            has_paused_sessions=has_paused_sessions,
             forwarding_failed=target.name
             in getattr(self._tray, "_ask_forwarding_failed", set()),
             version_mismatch=key
@@ -3043,6 +3217,18 @@ class TrayMenuBuilder:
                     directory,
                 )
 
+        def _pause_session_action(session_key, minutes):
+            if self._tray._targets and self._tray._multi_client:
+                self._tray._multi_client.send_pause_session(
+                    self._tray._targets[0], session_key, minutes
+                )
+
+        def _resume_session_action(session_key):
+            if self._tray._targets and self._tray._multi_client:
+                self._tray._multi_client.send_resume_session(
+                    self._tray._targets[0], session_key
+                )
+
         def _has_dirs(_item):
             return bool(self._get_merged_dir_list(get_stats_fn(_item)))
 
@@ -3086,7 +3272,17 @@ class TrayMenuBuilder:
                 ),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(
-                    "Directories...",
+                    "Sessions...",
+                    pystray.Menu(
+                        *self._build_session_pause_items(
+                            get_stats_fn,
+                            _pause_session_action,
+                            _resume_session_action,
+                        )
+                    ),
+                ),
+                pystray.MenuItem(
+                    "All sessions in directory...",
                     pystray.Menu(
                         *self._build_dir_pause_items(
                             get_stats_fn,
@@ -3540,7 +3736,17 @@ class TrayMenuBuilder:
                     ),
                     pystray.Menu.SEPARATOR,
                     pystray.MenuItem(
-                        "Directories...",
+                        "Sessions...",
+                        pystray.Menu(
+                            *self._build_session_pause_items(
+                                stats_fns[13],
+                                self._mk_multi_pause_session(idx),
+                                self._mk_multi_resume_session(idx),
+                            )
+                        ),
+                    ),
+                    pystray.MenuItem(
+                        "All sessions in directory...",
                         pystray.Menu(
                             *self._build_dir_pause_items(
                                 stats_fns[13],

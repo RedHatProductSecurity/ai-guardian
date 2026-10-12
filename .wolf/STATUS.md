@@ -43,10 +43,17 @@ budget_tokens: 1000
   prompt-free; non-interactive and JSON paths preserve no-overwrite behavior.
   Added setup unit and UX contract coverage; all 404 related tests pass.
   Ruff, Black, and Pylint pass; Mypy retains the same 14 existing errors.
+- Issue #2534: added session-scoped pause/resume using adapter-normalized stable
+  hook IDs, independent of project-directory pauses. Added socket, REST, CLI, and
+  tray controls; status displays daemon-issued session keys. Session pauses are
+  timed or indefinite, clear on SessionEnd, 24-hour inactivity, or daemon
+  restart, and never synthesize identity for callers without stable IDs. Updated
+  CLI/tray labels, docs, changelog, and UX coverage. All 1095 related unit/UX
+  tests pass; Ruff, Black, and Pylint pass.
 
 ## 🚀 Next quest
 
-- Complete issue #2538 with `daf complete` outside the active agent session; no
+- Complete issue #2534 with `daf complete` outside the active agent session; no
   commit has been created here.
 - The prior handoff's #2535 finalization and #2532 tray correlation check remain
   outstanding. For #2532, compare the reported sequence (open the tray menu,
@@ -55,7 +62,7 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2538` / `RedHatProductSecurity/ai-guardian#2538`.
+- Branch/issue: `2534` / `RedHatProductSecurity/ai-guardian#2534`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -66,9 +73,9 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_setup.py tests/ux/test_user_experience_contract_ide_setup.py -q  # 404 passed
-ruff check src/ai_guardian/setup/__init__.py src/ai_guardian/setup/hooks.py tests/unit/test_setup.py tests/ux/test_user_experience_contract_ide_setup.py  # passed
-black --target-version py310 --check src/ai_guardian/setup/__init__.py src/ai_guardian/setup/hooks.py tests/unit/test_setup.py tests/ux/test_user_experience_contract_ide_setup.py  # passed
+uv run --extra dev python -m pytest tests/unit/test_daemon_client.py tests/unit/test_daemon_state.py tests/unit/test_daemon_server.py tests/unit/test_daemon_rest_api.py tests/unit/test_daemon_protocol.py tests/unit/test_daemon_multi_client.py tests/unit/test_cli_handlers.py tests/unit/test_daemon_tray.py tests/unit/test_sandbox_tray.py tests/ux/test_user_experience_contract_session_pause.py tests/ux/test_user_experience_contract_pause_resume.py -q  # 1093 passed; new UX contract file: 4 passed separately
+ruff check src/ai_guardian/ tests/  # passed
+black --target-version py310 --check src/ai_guardian/ tests/  # passed
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text  # 10.00/10
 mypy src/ai_guardian/  # 14 pre-existing errors in skill_discovery.py and secret_validator.py
 git diff --check  # passed
@@ -79,4 +86,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2538`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2534`

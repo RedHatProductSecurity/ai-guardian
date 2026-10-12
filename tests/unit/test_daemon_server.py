@@ -799,6 +799,72 @@ class TestDaemonServerPausedHook:
 
         assert "exit_code" in result
 
+    def test_session_pause_only_skips_the_selected_session_in_shared_directory(
+        self, short_state_dir, tmp_path
+    ):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        project = str(tmp_path / "shared-project")
+        process_result = {"output": "checked", "exit_code": 0}
+
+        def hook(session_id):
+            return {
+                "hook_event_name": "PreToolUse",
+                "session_id": session_id,
+                "tool_name": "Bash",
+                "tool_input": {"command": "ls"},
+                "_daemon_cwd": project,
+            }
+
+        with mock.patch(
+            "ai_guardian.process_hook_data", return_value=process_result
+        ) as scan:
+            server._handle_hook_request(hook("session-one"))
+            server._handle_hook_request(hook("session-two"))
+
+            sessions = {
+                session["session_id"]: session
+                for session in server.state.get_active_sessions()
+            }
+            first_key = sessions["session-one"]["session_key"]
+            assert sessions["session-one"]["project_dir"] == os.path.realpath(project)
+            assert sessions["session-two"]["project_dir"] == os.path.realpath(project)
+            assert server.state.pause_session(first_key)
+
+            paused_result = server._handle_hook_request(hook("session-one"))
+            other_result = server._handle_hook_request(hook("session-two"))
+
+        assert paused_result["output"] == "{}"
+        assert other_result["output"] == "checked"
+        assert scan.call_count == 3
+
+    def test_session_end_clears_session_pause_and_stale_registration(
+        self, short_state_dir
+    ):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        session_start = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "ending-session",
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls"},
+        }
+
+        with mock.patch(
+            "ai_guardian.process_hook_data",
+            return_value={"output": "checked", "exit_code": 0},
+        ):
+            server._handle_hook_request(session_start)
+            session_key = server.state.get_active_sessions()[0]["session_key"]
+            assert server.state.pause_session(session_key)
+            server._handle_hook_request(
+                {
+                    "hook_event_name": "SessionEnd",
+                    "session_id": "ending-session",
+                }
+            )
+
+        assert server.state.get_active_sessions() == []
+        assert not server.state.is_session_paused(session_key)
+
 
 class TestPausedOtelTracking:
     """Test that OTEL lifecycle events are tracked while daemon is paused (#2034)."""
@@ -1146,6 +1212,85 @@ class TestDaemonServerPerDirPauseProtocol:
             assert len(stats["paused_dirs"]) == 1
         finally:
             sock.close()
+
+
+class TestDaemonServerSessionPauseProtocol:
+    """Test socket controls for stable-ID hook sessions."""
+
+    def test_pause_session_message(self, running_server):
+        server, sock_path = running_server
+        server.state.record_session_activity(
+            "ClaudeAdapter:session-a", "session-a", "Claude Code", "/project"
+        )
+
+        sock = _connect(sock_path)
+        try:
+            sock.sendall(
+                encode_message(
+                    {
+                        "version": 1,
+                        "type": "pause_session",
+                        "data": {
+                            "session_key": "ClaudeAdapter:session-a",
+                            "minutes": 15,
+                        },
+                    }
+                )
+            )
+            response = decode_message(sock, timeout=2.0)
+        finally:
+            sock.close()
+
+        assert response["data"] == {
+            "status": "session_paused",
+            "session_key": "ClaudeAdapter:session-a",
+            "minutes": 15,
+        }
+        assert server.state.is_session_paused("ClaudeAdapter:session-a")
+
+    def test_resume_session_message(self, running_server):
+        server, sock_path = running_server
+        server.state.record_session_activity(
+            "ClaudeAdapter:session-a", "session-a", "Claude Code", "/project"
+        )
+        server.state.pause_session("ClaudeAdapter:session-a")
+
+        sock = _connect(sock_path)
+        try:
+            sock.sendall(
+                encode_message(
+                    {
+                        "version": 1,
+                        "type": "resume_session",
+                        "data": {"session_key": "ClaudeAdapter:session-a"},
+                    }
+                )
+            )
+            response = decode_message(sock, timeout=2.0)
+        finally:
+            sock.close()
+
+        assert response["data"]["status"] == "session_resumed"
+        assert not server.state.is_session_paused("ClaudeAdapter:session-a")
+
+    def test_session_pause_requires_a_known_stable_identity(self, running_server):
+        _, sock_path = running_server
+        sock = _connect(sock_path)
+        try:
+            sock.sendall(
+                encode_message(
+                    {
+                        "version": 1,
+                        "type": "pause_session",
+                        "data": {"session_key": "cwd:/project", "minutes": 0},
+                    }
+                )
+            )
+            response = decode_message(sock, timeout=2.0)
+        finally:
+            sock.close()
+
+        assert "stable session identity" in response["data"]["error"]
 
 
 class TestDaemonStateAskDialog:

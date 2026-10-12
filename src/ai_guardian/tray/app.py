@@ -1608,9 +1608,12 @@ class DaemonTray:
         return self._get_stats()
 
     def _target_has_paused_dirs(self, target):
-        """Check whether a daemon target has any paused directories."""
+        """Check whether any session or project directory is partially paused."""
         stats = self._get_target_stats(target)
-        return bool(stats.get("paused_dirs"))
+        sessions = stats.get("active_sessions") or []
+        return bool(stats.get("paused_dirs")) or any(
+            session.get("paused") for session in sessions if isinstance(session, dict)
+        )
 
     def _on_restart_tray(self, icon, item):
         """Restart the tray process."""

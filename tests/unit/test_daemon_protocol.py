@@ -16,11 +16,13 @@ from ai_guardian.daemon.protocol import (
     make_event,
     make_hook_request,
     make_pause_dir,
+    make_pause_session,
     make_ping,
     make_pong,
     make_reload_config,
     make_response,
     make_resume_dir,
+    make_resume_session,
     make_shutdown,
     make_status_request,
     make_subscribe,
@@ -183,6 +185,21 @@ class TestMessageFactories:
         assert msg["version"] == PROTOCOL_VERSION
         assert msg["type"] == "resume_dir"
         assert msg["data"]["dir"] == "/project/a"
+
+    def test_make_pause_session(self):
+        msg = make_pause_session("ClaudeAdapter:session-1", minutes=15)
+        assert msg["version"] == PROTOCOL_VERSION
+        assert msg["type"] == "pause_session"
+        assert msg["data"] == {
+            "session_key": "ClaudeAdapter:session-1",
+            "minutes": 15,
+        }
+
+    def test_make_resume_session(self):
+        msg = make_resume_session("ClaudeAdapter:session-1")
+        assert msg["version"] == PROTOCOL_VERSION
+        assert msg["type"] == "resume_session"
+        assert msg["data"] == {"session_key": "ClaudeAdapter:session-1"}
 
     def test_make_subscribe(self):
         msg = make_subscribe()

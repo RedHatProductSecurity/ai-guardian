@@ -409,7 +409,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [MCP Security Advisor](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) | Read-only security tools for AI agents (proactive checks) |
 | [MCP Security Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md#mcp-security-scanning) | Audit MCP server configs and source code for supply chain risks |
 | [Project Config Overlay](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180) | Per-repo config with immutable fields and global-only section protection |
-| [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Discover and manage daemons across local, Podman/Docker, and Kubernetes |
+| [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Discover daemons and pause individual sessions or all sessions in a project across local, Podman/Docker, and Kubernetes |
 | [Desktop Shortcut & Autostart](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) | Install tray as desktop app with optional login startup |
 | [Tray Plugins](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) | Custom menu items with native tkinter or NiceGUI forms, platform-aware commands |
 | [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |

@@ -38,9 +38,9 @@ def build_about_text():
     return format_about_text(get_about_info())
 
 
-def _daemon_status_symbol(target, has_paused_dirs=False):
+def _daemon_status_symbol(target, has_paused_dirs=False, has_paused_sessions=False):
     """Return the symbol used for a daemon target's current state."""
-    if target.status == "running" and has_paused_dirs:
+    if target.status == "running" and (has_paused_dirs or has_paused_sessions):
         return "◐"
     return {
         "running": "●",
@@ -56,15 +56,25 @@ def daemon_status_explanation(
     target,
     *,
     has_paused_dirs=False,
+    has_paused_sessions=False,
     forwarding_failed=False,
     version_mismatch=False,
 ):
     """Return current status label, reason, and warning details for a daemon."""
     status = getattr(target, "status", None) or "unknown"
-    symbol = _daemon_status_symbol(target, has_paused_dirs=has_paused_dirs)
-    if status == "running" and has_paused_dirs:
+    symbol = _daemon_status_symbol(
+        target,
+        has_paused_dirs=has_paused_dirs,
+        has_paused_sessions=has_paused_sessions,
+    )
+    if status == "running" and (has_paused_dirs or has_paused_sessions):
         title = "Partially paused"
-        reason = "Daemon is running; one or more project directories are paused."
+        scopes = []
+        if has_paused_sessions:
+            scopes.append("hook sessions")
+        if has_paused_dirs:
+            scopes.append("project directories")
+        reason = f"Daemon is running; one or more {' and '.join(scopes)} are paused."
     else:
         status_details = {
             "running": ("Running", "Daemon is running and reachable."),
@@ -108,11 +118,16 @@ def daemon_status_label(
     active_project_dir=None,
     project_count=0,
     forwarding_failed=False,
+    has_paused_sessions=False,
 ):
     """Format a daemon target into a status header label."""
     from ai_guardian.daemon.working_dir import shorten_path
 
-    status_icon = _daemon_status_symbol(target, has_paused_dirs=has_paused_dirs)
+    status_icon = _daemon_status_symbol(
+        target,
+        has_paused_dirs=has_paused_dirs,
+        has_paused_sessions=has_paused_sessions,
+    )
     display_runtime = getattr(target, "runtime_type", None) or target.runtime
     if target.runtime == "container":
         runtime = f" ({display_runtime})"

@@ -907,6 +907,14 @@ class TestSingleDaemonFlatMenu:
             "⟳ Tray is newer than daemon; rebuild or upgrade the daemon.",
         )
 
+    def test_daemon_status_explanation_identifies_paused_sessions(self):
+        target = DaemonTarget(name="local", runtime="local", status="running")
+
+        current, reason, _ = daemon_status_explanation(target, has_paused_sessions=True)
+
+        assert current == "◐ Partially paused"
+        assert "hook sessions are paused" in reason
+
     def test_flat_menu_with_single_container_target(self):
         """Single container daemon uses flat layout — same as local."""
         tray = self._make_tray(
@@ -1583,6 +1591,19 @@ class TestTargetHasPausedDirs:
         )
         tray._targets = [t]
         assert tray._target_has_paused_dirs(t) is False
+
+    def test_paused_session_counts_as_partial_pause(self):
+        t = DaemonTarget(name="local", runtime="local", status="running")
+        tray = DaemonTray(
+            get_stats_callback=lambda: {
+                "active_sessions": [{"paused": True}],
+                "paused_dirs": {},
+            },
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._targets = [t]
+        assert tray._target_has_paused_dirs(t) is True
 
 
 class TestFormatDaemonListPauseIcons:

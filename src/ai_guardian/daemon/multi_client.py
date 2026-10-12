@@ -297,6 +297,41 @@ class MultiDaemonClient:
         )
         return result is not None
 
+    def send_pause_session(
+        self,
+        target: DaemonTarget,
+        session_key: str,
+        minutes: int,
+    ) -> bool:
+        """Pause one stable-ID hook session on the selected daemon."""
+        if target.runtime == "local":
+            from ai_guardian.daemon.client import send_pause_session
+
+            result = send_pause_session(session_key, minutes)
+            return bool(result and result.get("status") == "session_paused")
+        result = self._rest_request(
+            target,
+            "POST",
+            "/api/pause_session",
+            {"session_key": session_key, "minutes": minutes},
+        )
+        return result is not None
+
+    def send_resume_session(self, target: DaemonTarget, session_key: str) -> bool:
+        """Resume one stable-ID hook session on the selected daemon."""
+        if target.runtime == "local":
+            from ai_guardian.daemon.client import send_resume_session
+
+            result = send_resume_session(session_key)
+            return bool(result and result.get("status") == "session_resumed")
+        result = self._rest_request(
+            target,
+            "POST",
+            "/api/resume_session",
+            {"session_key": session_key},
+        )
+        return result is not None
+
     def send_stop(self, target: DaemonTarget) -> bool:
         """Stop daemon."""
         if target.runtime == "local":

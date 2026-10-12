@@ -289,6 +289,85 @@ class TestLocalDirPauseResumeRouting:
             )
 
 
+class TestSessionPauseRouting:
+    """Route stable-session pause controls through local and REST transports."""
+
+    @mock.patch(
+        "ai_guardian.daemon.client.send_pause_session",
+        return_value={"status": "session_paused"},
+    )
+    def test_pause_session_local_uses_daemon_client(self, mock_send):
+        client = MultiDaemonClient()
+        target = DaemonTarget(name="local", runtime="local")
+
+        assert client.send_pause_session(target, "Adapter:session-1", 15)
+        mock_send.assert_called_once_with("Adapter:session-1", 15)
+
+    @mock.patch(
+        "ai_guardian.daemon.client.send_resume_session",
+        return_value={"status": "session_resumed"},
+    )
+    def test_resume_session_local_uses_daemon_client(self, mock_send):
+        client = MultiDaemonClient()
+        target = DaemonTarget(name="local", runtime="local")
+
+        assert client.send_resume_session(target, "Adapter:session-1")
+        mock_send.assert_called_once_with("Adapter:session-1")
+
+    @mock.patch(
+        "ai_guardian.daemon.client.send_pause_session",
+        return_value={"error": "session is not active"},
+    )
+    def test_local_session_pause_reports_unknown_identity(self, mock_send):
+        client = MultiDaemonClient()
+        target = DaemonTarget(name="local", runtime="local")
+
+        assert not client.send_pause_session(target, "unknown-session", 0)
+        mock_send.assert_called_once()
+
+    def test_pause_session_remote_uses_rest(self):
+        client = MultiDaemonClient()
+        target = DaemonTarget(
+            name="remote",
+            runtime="container",
+            host="127.0.0.1",
+            port=49200,
+            container_id="abc123def456abc123",
+            container_engine="podman",
+        )
+        with mock.patch.object(
+            client, "_rest_request", return_value={"status": "session_paused"}
+        ) as mock_rest:
+            assert client.send_pause_session(target, "Adapter:session-1", 15)
+        mock_rest.assert_called_once_with(
+            target,
+            "POST",
+            "/api/pause_session",
+            {"session_key": "Adapter:session-1", "minutes": 15},
+        )
+
+    def test_resume_session_remote_uses_rest(self):
+        client = MultiDaemonClient()
+        target = DaemonTarget(
+            name="remote",
+            runtime="container",
+            host="127.0.0.1",
+            port=49200,
+            container_id="abc123def456abc123",
+            container_engine="podman",
+        )
+        with mock.patch.object(
+            client, "_rest_request", return_value={"status": "session_resumed"}
+        ) as mock_rest:
+            assert client.send_resume_session(target, "Adapter:session-1")
+        mock_rest.assert_called_once_with(
+            target,
+            "POST",
+            "/api/resume_session",
+            {"session_key": "Adapter:session-1"},
+        )
+
+
 class TestContainerRouting:
     def test_status_via_rest(self):
         client = MultiDaemonClient()

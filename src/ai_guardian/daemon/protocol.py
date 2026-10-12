@@ -179,6 +179,24 @@ def make_resume_dir(directory):
     }
 
 
+def make_pause_session(session_key, minutes=0):
+    """Create a pause request for one stable hook-session key."""
+    return {
+        "version": PROTOCOL_VERSION,
+        "type": "pause_session",
+        "data": {"session_key": session_key, "minutes": minutes},
+    }
+
+
+def make_resume_session(session_key):
+    """Create a resume request for one stable hook-session key."""
+    return {
+        "version": PROTOCOL_VERSION,
+        "type": "resume_session",
+        "data": {"session_key": session_key},
+    }
+
+
 def make_sdk_check(check_type, data):
     """Create an SDK security check request message.
 

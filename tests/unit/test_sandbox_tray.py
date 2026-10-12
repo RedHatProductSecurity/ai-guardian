@@ -542,11 +542,22 @@ class TestSandboxTrayMenu:
                 "paused": False,
                 "active_project_dirs": ["/project-one"],
                 "paused_dirs": {},
+                "active_sessions": [],
             },
             "two": {
                 "paused": False,
                 "active_project_dirs": ["/project-two"],
                 "paused_dirs": {"/project-two-paused": 0},
+                "active_sessions": [
+                    {
+                        "session_key": "ClaudeCodeAdapter:session-two",
+                        "session_id": "session-two",
+                        "agent": "Claude Code",
+                        "project_dir": "/project-two",
+                        "paused": False,
+                        "pause_remaining_seconds": 0,
+                    }
+                ],
             },
         }
         tray._multi_client.get_status.side_effect = lambda target: stats_by_name[
@@ -600,8 +611,41 @@ class TestSandboxTrayMenu:
             global_actions["Resume"].action(None, None)
         tray._multi_client.send_resume.assert_called_once_with(targets[1])
 
-        directories_item = pause_menu.items[2]
-        assert directories_item.label == "Directories..."
+        sessions_item = pause_menu.items[2]
+        assert sessions_item.label == "Sessions..."
+        assert sessions_item.action.items[1].label == (
+            "Directory-wide pause also covers callers without stable session IDs"
+        )
+        session_options = [
+            item
+            for item in sessions_item.action.items
+            if isinstance(item, FakeMenuItem)
+            and item.action is not None
+            and item.kwargs.get("visible", lambda _item: True)(None)
+        ]
+        assert len(session_options) == 1
+        session_actions = {
+            item.label: item
+            for item in session_options[0].action.items
+            if isinstance(item, FakeMenuItem)
+        }
+        assert session_actions["15 minutes"].kwargs["visible"](None) is True
+        with mock.patch.object(tray, "_check_and_autostart_daemon"):
+            session_actions["15 minutes"].action(None, None)
+        tray._multi_client.send_pause_session.assert_called_once_with(
+            targets[1], "ClaudeCodeAdapter:session-two", 15
+        )
+
+        stats_by_name["two"]["active_sessions"][0]["paused"] = True
+        assert session_actions["Resume"].kwargs["visible"](None) is True
+        with mock.patch.object(tray, "_check_and_autostart_daemon"):
+            session_actions["Resume"].action(None, None)
+        tray._multi_client.send_resume_session.assert_called_once_with(
+            targets[1], "ClaudeCodeAdapter:session-two"
+        )
+
+        directories_item = pause_menu.items[3]
+        assert directories_item.label == "All sessions in directory..."
         assert directories_item.kwargs["visible"](None) is True
         directory_items = directories_item.action.items
         second_directory_items = [
@@ -685,8 +729,8 @@ class TestSandboxTrayMenu:
         stats["paused"] = True
         assert global_actions["Resume"].kwargs["visible"](None) is True
 
-        directories_item = pause_menu.items[2]
-        assert directories_item.label == "Directories..."
+        directories_item = pause_menu.items[3]
+        assert directories_item.label == "All sessions in directory..."
         assert directories_item.kwargs["visible"](None) is True
         visible_directories = [
             item

@@ -539,3 +539,9 @@
   fallback. HTTP middleware denials are immediate 403 `middleware_denied`; a
   Codex custom Responses provider with `supports_websockets=false` avoids the
   retry loop.
+- [2026-10-11] **Session-scoped pause identity:** Build a daemon session key only
+  from an adapter-normalized stable session ID; never infer one from cwd or a
+  time bucket, since concurrent sessions can share a project directory. Keep
+  session pause state in memory and clear it on SessionEnd, inactivity expiry,
+  or daemon restart. Expose only known stable-ID sessions and direct other
+  callers to global or directory-wide controls.
