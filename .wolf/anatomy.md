@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~75145 tok)
+- `CHANGELOG.md` — Change log (~75448 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -796,8 +796,8 @@
 - `Dockerfile.openshell` — syntax=docker/dockerfile:1 (~2421 tok)
 - `Dockerfile.test` — ai-guardian hook-testing image (NOT for distribution) (~559 tok)
 - `entrypoint.sh` (~8520 tok)
-- `openshell-github-readonly-policy.yaml` — /info/refs*" } (~371 tok)
-- `openshell-github-readwrite-policy.yaml` — /info/refs*" } (~380 tok)
+- `openshell-github-readonly-policy.yaml` — /info/refs*" } (~358 tok)
+- `openshell-github-readwrite-policy.yaml` — /info/refs*" } (~367 tok)
 - `README.md` — Project documentation (~14156 tok)
 - `run-scenarios.sh` (~313 tok)
 - `run.sh` (~3500 tok)
@@ -809,7 +809,7 @@
 
 ## container/policies/agents/
 
-- `claude.yaml` — Claude Code network capability. (~474 tok)
+- `claude.yaml` — Claude Code network capability. (~555 tok)
 - `codex.yaml` — OpenAI Codex network capability. (~248 tok)
 - `copilot.yaml` — /copilot } (~381 tok)
 - `crush.yaml` — Crush network capability for the bundled/common provider endpoints. (~231 tok)
@@ -928,7 +928,7 @@
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
 - `README.md` — Project documentation (~1479 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
-- `Sandbox.md` — Sandbox CLI (~4987 tok)
+- `Sandbox.md` — Sandbox CLI (~5124 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2439 tok)
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
@@ -1073,7 +1073,7 @@
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
 - `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
-- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~30900 tok)
+- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~30988 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)
@@ -1402,7 +1402,7 @@
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1078 tok)
 - `health.py` — URL configuration (~16971 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~45128 tok)
+- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~45988 tok)
 - `menu.py` — URL configuration (~3078 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
 - `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2297 tok)
@@ -1410,7 +1410,7 @@
 - `plugin_runner.py` — Declares TrayPluginMenuBuilder (~8890 tok)
 - `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21430 tok)
 - `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~13275 tok)
-- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24456 tok)
+- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24468 tok)
 
 ## src/ai_guardian/tui/
 
