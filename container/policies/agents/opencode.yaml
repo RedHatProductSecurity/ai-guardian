@@ -1,0 +1,16 @@
+version: 1
+
+# OpenCode model access is added only for the selected gateway provider by the
+# managed sandbox command. This rule is a public, read-only model catalog.
+network_policies:
+  opencode_model_catalog:
+    name: opencode-model-catalog
+    endpoints:
+      - host: models.dev
+        port: 443
+        protocol: rest
+        access: read-only
+        enforcement: enforce
+    binaries:
+      - { path: /usr/local/bin/opencode }
+      - { path: /usr/bin/opencode }

@@ -644,12 +644,14 @@ python scripts/check_openshell_compatibility.py
 cargo test --manifest-path rust/openshell-middleware/Cargo.toml
 ```
 
-Credential-free CI can validate the binary, protocol, policy, and Codex
-installation. OAuth account/workspace routing still requires a manual local
-qualification with the operator's OpenShell credentials. OpenShell v0.1.3
-restores supervisor-backed GCP metadata discovery, but that upstream fix alone
-does not qualify Claude Code with Vertex AI; AI Guardian continues to defer that
-combination until credential-bound validation passes.
+Credential-free CI can validate the binary, protocol, policy, and bundled
+Codex/OpenCode clients. OAuth account/workspace routing and Vertex model access
+still require manual local qualification with the operator's OpenShell and GCP
+credentials. The AI Guardian OpenShell CLI now binds Claude Code and OpenCode
+Vertex requests to the gateway-owned `google-cloud` provider; see the
+[sandbox guide](Sandbox.md#openshell-provider-setup) and the manual qualification
+matrix. These workload checks are separate from qualifying the middleware
+service itself.
 
 ## Clean reset for a new middleware test
 

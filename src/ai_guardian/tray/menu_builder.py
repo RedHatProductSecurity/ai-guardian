@@ -39,8 +39,9 @@ from ai_guardian.tray import plugins as tray_plugins
 logger = logging.getLogger(__name__)
 
 
-# Tray exposes only the currently supported OpenShell CLI.
-TRAY_OPENSHELL_CLI_CHOICES = ("codex",)
+# Keep this aligned with the runtime-specific registry. Claude is installed only
+# after runtime ToS consent; OpenCode is bundled in the OpenShell image.
+TRAY_OPENSHELL_CLI_CHOICES = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["openshell"]
 TRAY_OPENSHELL_AUTH_CHOICES = ("OAuth", "API key")
 TRAY_OPENSHELL_MODE_CHOICES = ("AI Guardian hooks", "Native OpenShell")
 TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
@@ -1357,9 +1358,7 @@ class TrayMenuBuilder:
         if not repo_default:
             repo_default = os.path.expanduser("~")
         profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
-        opencode_agent_choices = (
-            ("",) if runtime == "openshell" else ("", "build", "plan", "claude")
-        )
+        opencode_agent_choices = ("", "build", "plan", "claude")
         agent_provider_choices = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
         if agent_provider not in agent_provider_choices:
             agent_provider = ""
@@ -1432,11 +1431,11 @@ class TrayMenuBuilder:
                     "OAuth uses the codex profile and ai-guardian-codex; API key "
                     "uses the openai profile and ai-guardian-openai."
                 ),
-                "enabled_when": {
-                    "field": "runtime",
-                    "values": ("openshell",),
-                },
-                "clear_when_disabled": True,
+                "enabled_when": (
+                    {"field": "runtime", "values": ("openshell",)},
+                    {"field": "openshell_mode", "values": ("AI Guardian hooks",)},
+                    {"field": "cli", "values": ("codex",)},
+                ),
             },
             {
                 "name": "name",

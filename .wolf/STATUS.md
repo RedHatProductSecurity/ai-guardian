@@ -59,17 +59,34 @@ budget_tokens: 1000
   field rather than interpreting its IPv4 endpoint as a version. All 14 manual
   qualification-runner unit tests pass; Ruff and Black pass for both changed
   runner/test files.
+- Issue #2473: implemented gateway-owned Google Cloud ADC for native Claude
+  Code/Vertex and OpenCode's `claude` agent/Vertex path. The sandbox attaches a
+  `google-cloud` provider, exposes metadata-emulator discovery without mounting
+  ADC or forwarding credentials, and binds only the selected regional plus
+  fixed global/replicated Vertex endpoints. OpenCode is bundled; Claude remains
+  a runtime install after explicit ToS consent. The OpenShell entrypoint,
+  registry, and tray now agree on supported clients. Added metadata readiness
+  and sanitized manual qualification rows for both combinations. No live Vertex
+  model qualification was run.
+- Validation: 330 directly related unit tests pass. Black, Ruff, Pylint, Mypy,
+  shell syntax, report-schema JSON, buglog JSON, and `git diff --check` pass.
+- Follow-up tray/network fixes for #2473: Codex authentication is disabled unless
+  runtime is OpenShell, mode is AI Guardian hooks, and CLI is Codex. Add the
+  Claude Console/OAuth `platform.claude.com` endpoint and sign-in redirect host
+  to its restricted network policy. All 165 tray/container contract tests pass;
+  Black, Ruff, Pylint, Mypy, and `git diff --check` pass.
 
 ## 🚀 Next quest
 
-- Issue #2531 implementation and Codex qualification are complete. No commit or
-  push was made; use `daf complete` outside the active agent session when ready
-  to close the issue. Claude Code/Vertex remain explicitly deferred.
+- Manually qualify Claude Code/Vertex and OpenCode/Vertex with OpenShell CLI and
+  gateway v0.1.3+, host ADC, project/region/model settings, and explicit Claude
+  ToS acknowledgement. Review the sanitized report; then commit/push issue #2473
+  on its existing branch when ready.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2531` / `RedHatProductSecurity/ai-guardian#2531`.
+- Branch/issue: `2473` / `RedHatProductSecurity/ai-guardian#2473`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -98,4 +115,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2531`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2473`

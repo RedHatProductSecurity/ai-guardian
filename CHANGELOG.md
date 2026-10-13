@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenShell native Vertex authentication (#2473):** Support Claude Code and
+  OpenCode's `claude` agent with gateway-owned Google Cloud ADC through the
+  OpenShell metadata emulator. Bind Vertex API endpoints to the attached
+  `google-cloud` provider, filter credential values from workload environments,
+  and add metadata-readiness and sanitized manual qualification contracts.
 - **Session-scoped pause/resume (#2534):** Pause one active hook session without
   affecting other sessions in the same project directory. Add CLI, tray, socket,
   and REST controls; explicitly label directory pause as a bulk action and
@@ -94,6 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **OpenShell Claude setup (#2473):** Restrict the Codex authentication selector
+  to OpenShell/Codex and allow the Claude Console authentication endpoint that
+  Claude Code needs in restricted-network sandboxes.
 - **KDE tray menu stability (#2532):** Defer AppIndicator menu refreshes while
   Plasma has the exported menu open, then apply the latest state after its
   close event so a refresh does not replace actions during menu dismissal.

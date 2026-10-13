@@ -80,11 +80,13 @@ surfaces.
 |---|---|---|---|---|
 | Host setup | Supported | V1 and V2 contracts | User OpenCode config directory | Version-aware unit, setup, session, transcript, and isolated structural tests |
 | Normal Docker/Podman | Supported for V1 | `opencode-ai` 1.18.34 | `/sandbox/.opencode/bin/opencode` | Normal-image V1 executable is pinned in `container/Dockerfile`; V2 is not bundled |
-| OpenShell | Out of scope | OpenCode is not installed | None | OpenShell currently supports Codex only; Claude support is deferred until `0.1.3` |
+| OpenShell | Supported for V1 Vertex auth | `opencode` 1.18.34 | `/usr/local/bin/opencode` | OpenShell image includes V1; native Vertex/ADC uses the `google-cloud` provider and metadata emulator; live model qualification is manual |
 
-The OpenShell selector does not expose `opencode`. OpenCode is not installed in
-`Dockerfile.openshell`, its policy, or the OpenShell compatibility matrix. Use
-the host integration or the normal Docker/Podman image for OpenCode.
+The OpenShell selector exposes OpenCode with an explicit agent profile. For the
+Vertex path, use the `claude` agent profile and a native
+`google-vertex/<model>` model ID. OpenShell V2 is not bundled in the
+dedicated image. See the [sandbox recipes](Sandbox.md) and the
+[manual qualification matrix](../container/tests/README.md).
 
 The OpenCode project and V1 plugin package are MIT licensed. Sources:
 

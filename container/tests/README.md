@@ -213,12 +213,30 @@ does not run a live provider or claim generic OpenShell compatibility.
 | Case | CLI command | Provider requirement |
 | --- | --- | --- |
 | `codex` | `codex exec --skip-git-repo-check "hello"` | Codex provider or local Codex login |
+| `claude-vertex` | `claude --bare --print "hello" --model MODEL` | Host gcloud ADC, Vertex project/model access, and explicit Claude Code ToS consent |
+| `opencode-claude-vertex` | `opencode run --agent claude --model google-vertex/MODEL "hello"` | Host gcloud ADC and Vertex project/model access |
 
-Run the supported OpenShell case with `--all` or `--case codex`:
+Run a supported OpenShell smoke case with `--case NAME`, or use `--all` for all
+three cases. The fixed manual qualification matrix also checks the metadata
+endpoint and writes a sanitized report:
 
 ```bash
-python container/tests/test_openshell_agents.py \
+gcloud auth application-default login
+python container/tests/test_openshell_agents.py --qualify \
+    --vertex-project PROJECT_ID \
+    --vertex-region us-east5 \
+    --claude-vertex-model CLAUDE_MODEL \
+    --opencode-vertex-model google-vertex/CLAUDE_MODEL \
+    --accept-proprietary-tos \
+    --report openshell-compatibility-report.json
 ```
+
+`--accept-proprietary-tos` explicitly acknowledges Claude Code's Terms of
+Service for the non-interactive run. A provider may be created from host ADC,
+or attached by name with `--provider claude-vertex=NAME` and
+`--provider opencode-claude-vertex=NAME`. Each attached provider must use the
+`google-cloud` profile. OpenShell v0.1.3 or later is required for the
+supervisor-backed metadata emulator.
 
 Provider values are names only. The script delegates credential resolution to
 AI Guardian and OpenShell; it does not expose credential contents in command
@@ -229,6 +247,12 @@ arguments or the sandbox environment.
 - `--case NAME` can be repeated; use `--all` for the full matrix.
 - `--prompt TEXT` changes the prompt; the default is `hello`.
 - `--provider CASE=NAME` attaches an existing gateway provider.
+- `--vertex-project ID` and `--vertex-region REGION` set non-secret Vertex
+  routing configuration; they are omitted from the compatibility report.
+- `--claude-vertex-model MODEL` and `--opencode-vertex-model PROVIDER/MODEL`
+  select the models used by the native calls; model output is captured and
+  discarded.
+- `--accept-proprietary-tos` acknowledges Claude Code's ToS for its manual case.
 - `--repo PATH` uploads an optional repository snapshot; it is omitted by default.
 - `--keep` retains sandboxes for inspection instead of deleting them.
 - `--executor podman` uses `podman exec` when the gateway exposes a local Podman container.

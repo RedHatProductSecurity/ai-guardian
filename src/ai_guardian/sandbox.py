@@ -54,6 +54,14 @@ OPENSHELL_PROVIDER_DOC_URL = (
     "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/Sandbox.md"
     "#openshell-provider-setup"
 )
+OPENSHELL_GCP_PROVIDER_TYPE = "google-cloud"
+OPENSHELL_GCP_PROVIDER_NAME = "ai-guardian-google-cloud"
+OPENSHELL_GCE_METADATA_HOST = "127.0.0.1:8174"
+OPENSHELL_GCE_METADATA_ENVIRONMENT = (
+    f"GCE_METADATA_HOST={OPENSHELL_GCE_METADATA_HOST}",
+    f"GCE_METADATA_IP={OPENSHELL_GCE_METADATA_HOST}",
+    "METADATA_SERVER_DETECTION=assume-present",
+)
 CONTAINER_GOOGLE_CREDENTIALS_PATH = (
     "/sandbox/.config/gcloud/application_default_credentials.json"
 )
@@ -66,6 +74,29 @@ SANDBOX_CONFIG_METADATA_FILENAME = "metadata.json"
 
 _OPENSHELL_BASE_POLICY_ENV = "AI_GUARDIAN_OPEN_SHELL_BASE_POLICY"
 _OPENSHELL_AGENT_POLICY_DIR_ENV = "AI_GUARDIAN_OPEN_SHELL_AGENT_POLICY_DIR"
+_OPENSHELL_GCP_CREDENTIAL_ENVIRONMENT = frozenset(
+    {
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_SERVICE_ACCOUNT_KEY",
+        "GOOGLE_CLOUD_KEYFILE_JSON",
+        "GOOGLE_API_KEY",
+        "GOOGLE_VERTEX_AI_TOKEN",
+        "GOOGLE_VERTEX_AI_SERVICE_ACCOUNT_TOKEN",
+        "VERTEX_AI_TOKEN",
+        "VERTEX_AI_SERVICE_ACCOUNT_TOKEN",
+        "GCP_ADC_ACCESS_TOKEN",
+        "GCP_SA_ACCESS_TOKEN",
+        "GCP_ACCESS_TOKEN",
+        "GCP_REFRESH_TOKEN",
+        "GCP_PRIVATE_KEY",
+        "GOOGLE_OAUTH_ACCESS_TOKEN",
+        "GOOGLE_OAUTH_REFRESH_TOKEN",
+        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_REFRESH_TOKEN",
+        "GCLOUD_SERVICE_KEY",
+        "GCLOUD_AUTH_ACCESS_TOKEN",
+    }
+)
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _OPENSHELL_SERVICE_URL_RE = re.compile(r"https?://[^\s<>\[\]{}\"']+")
 
@@ -1189,12 +1220,64 @@ def _merge_openshell_policy_values(base: Any, overlay: Any) -> Any:
     return overlay
 
 
+def _openshell_vertex_policy_overlay(
+    cli: str, provider: str, region: str
+) -> Dict[str, Any]:
+    """Bind native Vertex endpoints to the selected gateway-owned GCP provider."""
+    _validate_openshell_vertex_region(region)
+    binaries = (
+        [
+            "/sandbox/.local/bin/claude",
+            "/usr/local/bin/claude",
+            "/usr/bin/claude",
+            "/usr/local/bin/node",
+            "/usr/bin/node",
+        ]
+        if cli == "claude"
+        else ["/usr/local/bin/opencode", "/usr/bin/opencode"]
+    )
+    endpoints = [
+        "aiplatform.googleapis.com",
+        "aiplatform.us.rep.googleapis.com",
+        "aiplatform.eu.rep.googleapis.com",
+    ]
+    if region != "global":
+        endpoints.append(f"{region}-aiplatform.googleapis.com")
+    return {
+        "network_policies": {
+            "ai_guardian_google_vertex": {
+                "name": "ai-guardian-google-vertex",
+                "endpoints": [
+                    {
+                        "host": host,
+                        "port": 443,
+                        "protocol": "rest",
+                        "access": "read-write",
+                        "enforcement": "enforce",
+                        "credential_binding": {"provider": provider},
+                    }
+                    for host in endpoints
+                ],
+                "binaries": [{"path": path} for path in binaries],
+            }
+        }
+    }
+
+
+def _validate_openshell_vertex_region(region: str) -> None:
+    """Reject values that cannot safely identify a Google Cloud location."""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", region):
+        raise ValueError("Vertex region must be a single Google Cloud location name")
+
+
 def _compose_openshell_policy(
     args,
     cli: str,
     *,
     extra_overlays: Sequence[Path] = (),
     include_agent_policy: bool = True,
+    vertex_provider: Optional[str] = None,
+    vertex_region: str = "global",
 ) -> Tuple[Path, Path]:
     """Compose baseline, user overlays, and optional selected-CLI policy."""
     import yaml
@@ -1214,6 +1297,11 @@ def _compose_openshell_policy(
     policy_paths.extend(extra_overlays)
     for path in policy_paths:
         policy = _merge_openshell_policy_values(policy, _load_openshell_policy(path))
+    if vertex_provider:
+        policy = _merge_openshell_policy_values(
+            policy,
+            _openshell_vertex_policy_overlay(cli, vertex_provider, vertex_region),
+        )
     policy.setdefault("version", 1)
     if policy["version"] != 1:
         raise ValueError("OpenShell policy version must be 1")
@@ -1299,6 +1387,233 @@ def _openshell_provider_environment(args, cli: str) -> Dict[str, str]:
                 if not environment.get(environment_name) and tokens.get(token_key):
                     environment[environment_name] = str(tokens[token_key])
     return environment
+
+
+def _openshell_vertex_context(args, cli: str) -> Tuple[Optional[str], str]:
+    """Return non-secret Vertex project/region settings for supported agents."""
+    explicit_environment = _openshell_environment_values(args)
+
+    def configured_value(names: Sequence[str]) -> Optional[str]:
+        # Explicit sandbox options take precedence over the tray/CLI process
+        # environment even when they use a different accepted alias.
+        for source in (explicit_environment, os.environ):
+            for name in names:
+                value = source.get(name)
+                if value:
+                    return value
+        return None
+
+    project: Optional[str] = None
+    project = configured_value(
+        (
+            "ANTHROPIC_VERTEX_PROJECT_ID",
+            "VERTEX_AI_PROJECT_ID",
+            "GOOGLE_CLOUD_PROJECT",
+            "GCP_PROJECT",
+            "GCP_PROJECT_ID",
+        )
+    )
+    region = (
+        configured_value(("CLOUD_ML_REGION", "VERTEX_AI_REGION", "VERTEX_LOCATION"))
+        or "global"
+    )
+    if cli not in {"claude", "opencode"}:
+        return None, region
+    if cli == "opencode" and _opencode_agent(args, cli) != "claude":
+        return None, region
+    if project:
+        _validate_openshell_vertex_region(region)
+    return project, region
+
+
+def _openshell_google_adc_path(args) -> Path:
+    """Resolve the host ADC file used only by the gateway provider command."""
+    environment = os.environ.copy()
+    environment.update(_openshell_environment_values(args))
+    configured = environment.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if configured:
+        return Path(configured).expanduser()
+    appdata = environment.get("APPDATA")
+    if appdata:
+        candidate = Path(appdata) / "gcloud" / "application_default_credentials.json"
+        if candidate.is_file():
+            return candidate
+    home = Path(environment.get("HOME") or _openshell_host_home())
+    return home / ".config" / "gcloud" / "application_default_credentials.json"
+
+
+def _openshell_provider_type(args, name: str) -> Optional[str]:
+    """Read only the provider type, never credential/config values."""
+    result = _run_capture(
+        [_openshell_cli(args), "provider", "get", name, "--output", "json"]
+    )
+    if result is None or result.returncode != 0:
+        return None
+    payload = _parse_json_lines(result.stdout or "")
+    if not isinstance(payload, dict):
+        return None
+    provider = payload.get("provider", payload)
+    if not isinstance(provider, dict):
+        return None
+    provider_type = provider.get("type") or provider.get("provider_type")
+    return str(provider_type) if provider_type else None
+
+
+def _run_openshell_provider_command(
+    command: Sequence[str], environment: Mapping[str, str]
+) -> Optional[int]:
+    """Run a credential-bearing provider command without exposing its output."""
+    try:
+        return subprocess.run(
+            list(command),
+            env=dict(environment),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        ).returncode
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _ensure_openshell_google_cloud_provider(
+    args,
+    project: str,
+    region: str,
+    *,
+    output: Optional[List[str]] = None,
+) -> str:
+    """Create or refresh a gateway-owned Google Cloud ADC provider."""
+    profiles = _openshell_provider_profiles(args)
+    if OPENSHELL_GCP_PROVIDER_TYPE not in profiles:
+        raise ValueError(
+            _openshell_missing_profile_error(OPENSHELL_GCP_PROVIDER_TYPE, profiles)
+        )
+    exists = _openshell_provider_exists(args, OPENSHELL_GCP_PROVIDER_NAME)
+    if exists:
+        current_type = _openshell_provider_type(args, OPENSHELL_GCP_PROVIDER_NAME)
+        if current_type != OPENSHELL_GCP_PROVIDER_TYPE:
+            raise ValueError(
+                f"OpenShell provider '{OPENSHELL_GCP_PROVIDER_NAME}' has an "
+                "unavailable or unexpected type; verify it uses the imported "
+                f"'{OPENSHELL_GCP_PROVIDER_TYPE}' profile"
+            )
+        command = [
+            _openshell_cli(args),
+            "provider",
+            "update",
+            OPENSHELL_GCP_PROVIDER_NAME,
+            "--config",
+            f"project_id={project}",
+            "--config",
+            f"region={region}",
+            "--wait",
+        ]
+        _emit_output(
+            "Updating the gateway-managed Google Cloud provider's project settings",
+            output=output,
+        )
+        result = _run_openshell_provider_command(
+            command, _openshell_provider_environment(args, "claude")
+        )
+        if result != 0:
+            raise ValueError(
+                "unable to update the gateway-managed Google Cloud provider; "
+                "verify the active gateway and provider settings"
+            )
+        return OPENSHELL_GCP_PROVIDER_NAME
+
+    adc_path = _openshell_google_adc_path(args)
+    if not adc_path.is_file():
+        raise ValueError(
+            "Google Application Default Credentials were not found on the host; "
+            "run `gcloud auth application-default login` or set "
+            "GOOGLE_APPLICATION_CREDENTIALS before creating the sandbox"
+        )
+
+    provider_environment = _openshell_provider_environment(args, "claude")
+    command = [
+        _openshell_cli(args),
+        "provider",
+        "create",
+        "--name",
+        OPENSHELL_GCP_PROVIDER_NAME,
+        "--type",
+        OPENSHELL_GCP_PROVIDER_TYPE,
+    ]
+
+    command.extend(
+        [
+            "--from-gcloud-adc",
+            "--config",
+            f"project_id={project}",
+            "--config",
+            f"region={region}",
+        ]
+    )
+    _emit_output("Creating the gateway-managed Google Cloud provider", output=output)
+    result = _run_openshell_provider_command(command, provider_environment)
+    if result != 0:
+        raise ValueError(
+            "unable to create the gateway-managed Google Cloud provider; verify "
+            "host ADC, the imported google-cloud profile, and project access"
+        )
+    return OPENSHELL_GCP_PROVIDER_NAME
+
+
+def _openshell_vertex_provider_names(args, providers: Sequence[str]) -> List[str]:
+    """Return attached provider names verified as Google Cloud providers."""
+    matches = []
+    for name in providers:
+        if _openshell_provider_type(args, name) == OPENSHELL_GCP_PROVIDER_TYPE:
+            matches.append(name)
+    return matches
+
+
+def _openshell_sandbox_environment(args, *, vertex: bool) -> List[str]:
+    """Remove host ADC and refresh credentials from workload environment flags."""
+    blocked = set(_OPENSHELL_GCP_CREDENTIAL_ENVIRONMENT)
+    if vertex:
+        blocked.update(
+            {
+                "ANTHROPIC_API_KEY",
+                "ANTHROPIC_AUTH_TOKEN",
+                "CLAUDE_CODE_OAUTH_TOKEN",
+                "GCE_METADATA_HOST",
+                "GCE_METADATA_IP",
+                "METADATA_SERVER_DETECTION",
+                "ANTHROPIC_VERTEX_PROJECT_ID",
+                "VERTEX_AI_PROJECT_ID",
+                "GOOGLE_CLOUD_PROJECT",
+                "GCP_PROJECT",
+                "GCP_PROJECT_ID",
+                "CLOUD_ML_REGION",
+                "VERTEX_AI_REGION",
+                "VERTEX_LOCATION",
+            }
+        )
+    filtered = []
+    for raw_value in getattr(args, "environment", None) or []:
+        key, _separator, _value = str(raw_value).partition("=")
+        normalized_key = key.upper()
+        if normalized_key in blocked:
+            continue
+        if normalized_key.startswith(
+            (
+                "GOOGLE_",
+                "GCP_",
+                "GCLOUD_",
+                "CLOUDSDK_",
+                "VERTEX_",
+                "VERTEX_AI_",
+            )
+        ) and any(
+            marker in normalized_key
+            for marker in ("TOKEN", "SECRET", "PRIVATE_KEY", "CREDENTIAL")
+        ):
+            continue
+        filtered.append(str(raw_value))
+    return filtered
 
 
 def _openshell_provider_profiles(args) -> List[str]:
@@ -2087,6 +2402,9 @@ def _openshell_create(
         "AI_GUARDIAN_HOME=/sandbox/.config/ai-guardian",
         f"AI_GUARDIAN_SETUP_SCOPE={os.environ.get('AI_GUARDIAN_SETUP_SCOPE', 'selected')}",
     ]
+    opencode_agent = _opencode_agent(args, cli)
+    if opencode_agent:
+        environment.append(f"AI_GUARDIAN_OPENCODE_AGENT={opencode_agent}")
     environment.extend(
         [
             "CODEX_HOME=/sandbox/.codex",
@@ -2098,6 +2416,32 @@ def _openshell_create(
     )
     if selected_model:
         environment.append(f"AI_GUARDIAN_AGENT_MODEL={selected_model}")
+
+    vertex_project, vertex_region = _openshell_vertex_context(args, cli)
+    vertex_mode = bool(vertex_project)
+    if vertex_mode:
+        environment.extend(
+            [
+                *OPENSHELL_GCE_METADATA_ENVIRONMENT,
+                f"GCP_PROJECT_ID={vertex_project}",
+                f"GOOGLE_CLOUD_PROJECT={vertex_project}",
+                f"CLOUD_ML_REGION={vertex_region}",
+                f"GCP_LOCATION={vertex_region}",
+            ]
+        )
+    if vertex_mode and cli == "claude":
+        environment.extend(
+            [
+                "CLAUDE_CODE_USE_VERTEX=1",
+                f"ANTHROPIC_VERTEX_PROJECT_ID={vertex_project}",
+            ]
+        )
+    elif vertex_mode and cli == "opencode":
+        environment.extend(
+            [
+                f"VERTEX_LOCATION={vertex_region}",
+            ]
+        )
 
     profile = getattr(args, "profile", None)
     uploads_requested = False
@@ -2138,22 +2482,42 @@ def _openshell_create(
     explicit_providers = list(getattr(args, "provider", None) or [])
     provider_names = explicit_providers[:]
     provider_attached = bool(provider_names)
-    selected_auth_mode = _openshell_auth_mode(args)
-    should_auto_create_provider = bool(
-        not provider_names
-        and (
-            uploads_requested
-            or _openshell_cli_has_credentials(args, cli)
-            or selected_auth_mode is not None
+    vertex_provider = None
+    if vertex_mode:
+        assert vertex_project is not None
+        configured_vertex_providers = _openshell_vertex_provider_names(
+            args, provider_names
         )
-    )
-    if should_auto_create_provider:
-        provider_names = [_ensure_openshell_cli_provider(args, cli, output=output)]
+        if len(configured_vertex_providers) > 1:
+            raise ValueError(
+                "select only one Google Cloud provider for native Vertex access"
+            )
+        if configured_vertex_providers:
+            vertex_provider = configured_vertex_providers[0]
+        else:
+            vertex_provider = _ensure_openshell_google_cloud_provider(
+                args, vertex_project, vertex_region, output=output
+            )
+            if vertex_provider not in provider_names:
+                provider_names.append(vertex_provider)
         provider_attached = True
+    elif not provider_names:
+        selected_auth_mode = _openshell_auth_mode(args)
+        should_auto_create_provider = bool(
+            cli == "codex"
+            and (
+                uploads_requested
+                or _openshell_cli_has_credentials(args, cli)
+                or selected_auth_mode is not None
+            )
+        )
+        if should_auto_create_provider:
+            provider_names = [_ensure_openshell_cli_provider(args, cli, output=output)]
+            provider_attached = True
 
     for value in environment:
         command.extend(["--env", value])
-    for value in getattr(args, "environment", None) or []:
+    for value in _openshell_sandbox_environment(args, vertex=vertex_mode):
         command.extend(["--env", value])
     for provider in provider_names:
         command.extend(["--provider", provider])
@@ -2170,7 +2534,12 @@ def _openshell_create(
     else:
         command.append("--auto-providers")
 
-    policy_path, policy_dir = _compose_openshell_policy(args, cli)
+    policy_path, policy_dir = _compose_openshell_policy(
+        args,
+        cli,
+        vertex_provider=vertex_provider,
+        vertex_region=vertex_region,
+    )
     command.extend(["--policy", str(policy_path)])
 
     # A detached OpenShell sandbox with no upload still needs its entrypoint to

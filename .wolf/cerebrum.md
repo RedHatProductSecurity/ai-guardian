@@ -229,10 +229,27 @@
   protects the v0.1.2 protocol boundary. Live native Codex OAuth qualification
   passed with CLI and gateway v0.1.3 against the pinned AI Guardian 1.19.0 image;
   creation, service, agent, detection, restart, reconnect, and cleanup passed.
-  Claude Code/Vertex remain unsupported until separately credential-bound
-  qualification passes. When extracting the gateway version from `openshell
+  Claude Code/Vertex were still awaiting a separate credential-bound
+  implementation and manual qualification at that point. When extracting the gateway version from `openshell
   status`, parse its explicit `Version:` field; the earlier generic numeric
   matcher incorrectly treated the gateway's IPv4 endpoint as `127.0.0`.
+
+- **OpenShell native Vertex auth (#2473):** Use the imported endpointless
+  `google-cloud` profile and a gateway provider created from host ADC; never
+  upload or mount the ADC file or pass token values to the workload. Compose
+  credential bindings for regional, global, and replicated Vertex endpoints,
+  and probe `127.0.0.1:8174` before model qualification. OpenCode's built-in
+  Vertex provider ID is `google-vertex`, with `GOOGLE_CLOUD_PROJECT` and
+  `VERTEX_LOCATION`; explicit sandbox environment aliases must take precedence
+  over ambient tray/CLI values. Capture-and-discard agent output in both smoke
+  and qualification modes, including partial output on timeout. Live
+  Claude/OpenCode model qualification remains manual. Keep Vertex network
+  policy regional endpoints exact rather than wildcarding the first DNS label;
+  retain only the fixed global and replicated endpoints alongside the selected
+  location. Claude Console and OAuth operations require `platform.claude.com`,
+  and sign-in can redirect through `claude.com`. Tray form `enabled_when` can be
+  a tuple of conditions; Tk and NiceGUI both evaluate the conjunction through
+  `_field_enabled` for runtime/mode/CLI-specific controls.
 
 - **OpenShell workload identity:** OpenShell clears supplementary groups before
   capability-free launch. The NVIDIA Ubuntu base's `ubuntu` UID has default
@@ -483,7 +500,8 @@
 - [2026-10-04] **OpenShell Codex pin maintenance (#2478):** The issue's
   generated `0.159.3` target was superseded by npm's `0.160.0` release before
   implementation. Check the live version monitor before pinning maintenance
-  updates, while keeping the OpenShell image Codex-only.
+  updates; the OpenShell image was Codex-only at that time (Vertex clients were
+  added by #2473).
 
 - [2026-10-05] **OpenShell supervisor middleware (#2484):** External services
   use the v0.1.2 `Describe`/`ValidateConfig`/HTTP/WebSocket contracts and are

@@ -986,6 +986,25 @@ class TestSandboxTrayMenu:
         args = create.call_args.args[0]
         assert args.openshell_auth == "api_key"
 
+    def test_create_form_does_not_apply_codex_authentication_to_claude(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-claude",
+            "cli": "claude",
+            "openshell_auth": "API key",
+            "repo": "",
+            "providers": "",
+            "config_source": "Host/default",
+        }
+
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.cli == "claude"
+        assert args.openshell_auth is None
+
     def test_create_form_maps_native_mode_and_policy(self, tmp_path):
         tray = _make_tray([])
         policy = tmp_path / "native-policy.yaml"
@@ -1393,10 +1412,45 @@ class TestSandboxTrayMenu:
         assert auth_field["choices"] == TRAY_OPENSHELL_AUTH_CHOICES
         assert auth_field["default"] == "OAuth"
         assert auth_field["required"] is True
-        assert auth_field["enabled_when"] == {
-            "field": "runtime",
-            "values": ("openshell",),
-        }
+        assert auth_field["enabled_when"] == (
+            {"field": "runtime", "values": ("openshell",)},
+            {"field": "openshell_mode", "values": ("AI Guardian hooks",)},
+            {"field": "cli", "values": ("codex",)},
+        )
+        from ai_guardian.tray.sandbox_dialog import _field_enabled
+
+        assert _field_enabled(
+            auth_field,
+            {
+                "runtime": "openshell",
+                "openshell_mode": "AI Guardian hooks",
+                "cli": "codex",
+            },
+        )
+        assert not _field_enabled(
+            auth_field,
+            {
+                "runtime": "openshell",
+                "openshell_mode": "AI Guardian hooks",
+                "cli": "claude",
+            },
+        )
+        assert not _field_enabled(
+            auth_field,
+            {
+                "runtime": "container",
+                "openshell_mode": "AI Guardian hooks",
+                "cli": "codex",
+            },
+        )
+        assert not _field_enabled(
+            auth_field,
+            {
+                "runtime": "openshell",
+                "openshell_mode": "Native OpenShell",
+                "cli": "codex",
+            },
+        )
         assert "ai-guardian-codex" in auth_field["help"]
         assert "ai-guardian-openai" in auth_field["help"]
 
@@ -1410,7 +1464,7 @@ class TestSandboxTrayMenu:
 
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["type"] == "choice"
-        assert agent_field["choices"] == ("",)
+        assert agent_field["choices"] == ("", "build", "plan", "claude")
         assert agent_field["editable"] is True
         assert agent_field["default"] == ""
         assert agent_field["required"] is True
@@ -1434,13 +1488,13 @@ class TestSandboxTrayMenu:
             "values": ("pi",),
         }
 
-        invalid_opencode_env = base_env.copy()
-        invalid_opencode_env["AI_GUARDIAN_CLI"] = "opencode"
-        with mock.patch.dict(os.environ, invalid_opencode_env, clear=True):
+        opencode_env = base_env.copy()
+        opencode_env["AI_GUARDIAN_CLI"] = "opencode"
+        with mock.patch.dict(os.environ, opencode_env, clear=True):
             fields = tray._menu._sandbox_create_fields()
 
         cli_field = next(field for field in fields if field["name"] == "cli")
-        assert cli_field["default"] == "codex"
+        assert cli_field["default"] == "opencode"
         assert cli_field["choices"] == TRAY_OPENSHELL_CLI_CHOICES
 
         pi_env = base_env.copy()

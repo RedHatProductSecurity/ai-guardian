@@ -216,12 +216,13 @@ class TestContainerLaunchers:
         assert "Build OpenShell support image" in workflow
         assert "ai-guardian-readiness" in workflow
         assert "ai-guardian-openshell-readiness" in workflow
-        assert "Verify OpenShell image Codex CLI setup" in workflow
-        openshell_check = workflow.split("Verify OpenShell image Codex CLI setup", 1)[
-            1
-        ].split("Verify OpenShell compatibility metadata", 1)[0]
+        assert "Verify OpenShell image Codex and OpenCode CLI setup" in workflow
+        openshell_check = workflow.split(
+            "Verify OpenShell image Codex and OpenCode CLI setup", 1
+        )[1].split("Verify OpenShell compatibility metadata", 1)[0]
         assert "--entrypoint claude" not in openshell_check
         assert "--entrypoint codex" in openshell_check
+        assert "--entrypoint opencode" in openshell_check
 
         base_image = re.search(r"^ARG BASE_IMAGE=(\S+)$", dockerfile, re.MULTILINE)
         assert base_image
@@ -237,6 +238,7 @@ class TestContainerLaunchers:
         assert "uv pip install --python /sandbox/.venv/bin/python" in dockerfile
         assert "ARG CLAUDE_VERSION" not in dockerfile
         assert "ARG CODEX_VERSION=0.160.0" in dockerfile
+        assert "ARG OPENCODE_VERSION=1.18.34" in dockerfile
         assert "ARG PI_VERSION" not in dockerfile
         assert "ARG COPILOT_VERSION" not in dockerfile
         assert "npm install --global --prefix /usr" in dockerfile
@@ -259,10 +261,13 @@ class TestContainerLaunchers:
         assert "USER 1000:1000" not in dockerfile
         assert "/usr/sbin:/usr/bin:/sbin:/bin" in dockerfile
         assert "ai-guardian.openshell-base=true" in dockerfile
-        assert "ai-guardian.compatibility-report-schema=1" in dockerfile
+        assert "ai-guardian.compatibility-report-schema=2" in dockerfile
         assert 'ai-guardian.version="${AI_GUARDIAN_VERSION}"' in dockerfile
         assert 'ai-guardian.openshell.base-image="${BASE_IMAGE}"' in dockerfile
         assert 'ai-guardian.openshell.codex-version="${CODEX_VERSION}"' in dockerfile
+        assert (
+            'ai-guardian.openshell.opencode-version="${OPENCODE_VERSION}"' in dockerfile
+        )
 
     def test_normal_image_pins_and_checks_grok_build(self):
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
@@ -273,12 +278,19 @@ class TestContainerLaunchers:
         assert "grok --version" in dockerfile
         assert "XAI_API_KEY" in RUN_SCRIPT.read_text(encoding="utf-8")
 
-    def test_openshell_runtime_marks_grok_as_unsupported(self):
+    def test_openshell_runtime_cli_allowlist_matches_the_supported_clients(self):
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
         entrypoint = ENTRYPOINT_SCRIPT.read_text(encoding="utf-8")
 
         assert "AI_GUARDIAN_RUNTIME=openshell" in dockerfile
         assert '"${AI_GUARDIAN_RUNTIME:-container}" = "openshell"' in entrypoint
+        openshell_runtime = entrypoint.split(
+            '"${AI_GUARDIAN_RUNTIME:-container}" = "openshell"', 1
+        )[1].split("fi", 1)[0]
+        assert "SUPPORTED_AGENT_IDES=(" in openshell_runtime
+        assert "CLI_AGENT_IDES=(codex claude opencode)" in openshell_runtime
+        assert "    claude" in openshell_runtime
+        assert "    opencode" in openshell_runtime
 
     def test_fedora_openshell_selinux_guidance_preserves_host_hardening(self):
         troubleshooting = TROUBLESHOOTING_DOC.read_text(encoding="utf-8")
@@ -740,6 +752,17 @@ class TestContainerLaunchers:
             )
             assert set(fragment.get("network_policies", {})) == expected
 
+        claude_policy = yaml.safe_load(
+            (AGENT_POLICY_DIR / "claude.yaml").read_text(encoding="utf-8")
+        )
+        claude_endpoints = {
+            endpoint["host"]: endpoint
+            for policy in claude_policy["network_policies"].values()
+            for endpoint in policy.get("endpoints", [])
+        }
+        assert claude_endpoints["platform.claude.com"]["access"] == "read-write"
+        assert claude_endpoints["claude.com"]["access"] == "read-only"
+
     def test_node_based_agent_policies_allow_the_community_base_node_binary(self):
         for agent in (
             "claude",
@@ -948,6 +971,7 @@ fi
     env = {
         "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
         "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_RUNTIME": "openshell",
         "AI_GUARDIAN_AGENT": "claude",
         "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
         "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
@@ -1001,6 +1025,7 @@ fi
     env = {
         "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
         "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_RUNTIME": "openshell",
         "AI_GUARDIAN_AGENT": "claude",
         "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
         "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
@@ -1128,6 +1153,7 @@ fi
     env = {
         "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
         "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_RUNTIME": "openshell",
         "AI_GUARDIAN_AGENT": "opencode",
         "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
         "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",

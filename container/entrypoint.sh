@@ -74,13 +74,16 @@ SUPPORTED_AGENT_IDES=(
 CLI_AGENT_IDES=(claude copilot grok codex gemini kiro openclaw opencode pi crush antigravity)
 
 # The normal support image bundles Grok, while the separate OpenShell image
-# deliberately does not. Keep direct entrypoint invocations aligned with the
-# runtime-specific sandbox selector.
+# bundles Codex and OpenCode and installs Claude Code only after runtime ToS
+# consent. Keep direct entrypoint invocations aligned with the runtime-specific
+# sandbox selector.
 if [ "${AI_GUARDIAN_RUNTIME:-container}" = "openshell" ]; then
   SUPPORTED_AGENT_IDES=(
     codex
+    claude
+    opencode
   )
-  CLI_AGENT_IDES=(codex)
+  CLI_AGENT_IDES=(codex claude opencode)
 fi
 SUPPORTED_IDES=("${SUPPORTED_AGENT_IDES[@]}" dummy-agent)
 

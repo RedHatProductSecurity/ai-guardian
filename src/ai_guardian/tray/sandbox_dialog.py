@@ -873,17 +873,11 @@ def _show_tkinter_form(
                         widget.configure(
                             {"state": "normal" if editable else "readonly"}
                         )
-            condition = field.get("enabled_when")
-            enabled = True
-            if isinstance(condition, dict):
-                dependency = controls.get(str(condition.get("field", "")))
-                if dependency:
-                    dependency_value = dependency[1].get()
-                    expected = condition.get("values", condition.get("equals"))
-                    if isinstance(expected, (list, tuple, set)):
-                        enabled = dependency_value in expected
-                    elif expected is not None:
-                        enabled = dependency_value == expected
+            current_values = {
+                control_name: variable.get()
+                for control_name, (_kind, variable) in controls.items()
+            }
+            enabled = _field_enabled(field, current_values)
             enabled_states[name] = enabled
             if not enabled and field.get("clear_when_disabled"):
                 controls[name][1].set("")
@@ -1558,6 +1552,13 @@ def _show_tkinter_progress_subprocess(
 def _field_enabled(field: Dict[str, Any], values: Dict[str, Any]) -> bool:
     """Return whether a sandbox form field is active for current values."""
     condition = field.get("enabled_when")
+    if isinstance(condition, (list, tuple)):
+        return all(_condition_matches(item, values) for item in condition)
+    return _condition_matches(condition, values)
+
+
+def _condition_matches(condition: Any, values: Dict[str, Any]) -> bool:
+    """Evaluate one field/value dependency for sandbox form activation."""
     if not isinstance(condition, dict):
         return True
     actual = values.get(str(condition.get("field", "")))

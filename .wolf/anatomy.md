@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~74996 tok)
+- `CHANGELOG.md` — Change log (~75145 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -134,7 +134,7 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2031 tok)
-- `release-readiness.yml` — CI: Release Readiness (~8940 tok)
+- `release-readiness.yml` — CI: Release Readiness (~9022 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~6855 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -793,12 +793,12 @@
 - `.dockerignore` — Docker ignore rules (~7 tok)
 - `compose_openshell_policy.py` — Compose OpenShell policy fragments into one schema-valid YAML document. (~905 tok)
 - `Dockerfile` — Docker container definition (~3435 tok)
-- `Dockerfile.openshell` — syntax=docker/dockerfile:1 (~2114 tok)
+- `Dockerfile.openshell` — syntax=docker/dockerfile:1 (~2421 tok)
 - `Dockerfile.test` — ai-guardian hook-testing image (NOT for distribution) (~559 tok)
-- `entrypoint.sh` (~8491 tok)
+- `entrypoint.sh` (~8520 tok)
 - `openshell-github-readonly-policy.yaml` — /info/refs*" } (~371 tok)
 - `openshell-github-readwrite-policy.yaml` — /info/refs*" } (~380 tok)
-- `README.md` — Project documentation (~13830 tok)
+- `README.md` — Project documentation (~14156 tok)
 - `run-scenarios.sh` (~313 tok)
 - `run.sh` (~3500 tok)
 
@@ -809,14 +809,14 @@
 
 ## container/policies/agents/
 
-- `claude.yaml` — Claude Code network capability. (~407 tok)
+- `claude.yaml` — Claude Code network capability. (~474 tok)
 - `codex.yaml` — OpenAI Codex network capability. (~248 tok)
 - `copilot.yaml` — /copilot } (~381 tok)
 - `crush.yaml` — Crush network capability for the bundled/common provider endpoints. (~231 tok)
 - `gemini.yaml` — Gemini CLI network capability. (~222 tok)
 - `kiro.yaml` — Kiro has no bundled OpenShell provider profile in the supported gateway (~67 tok)
 - `openclaw.yaml` — OpenClaw can use different model providers. There is no single safe default (~52 tok)
-- `opencode.yaml` — OpenCode network capability for the bundled/common provider endpoints. (~704 tok)
+- `opencode.yaml` (~135 tok)
 - `pi.yaml` — Pi uses native Anthropic or OpenAI endpoints. OpenShell provider-backed (~443 tok)
 
 ## container/scenarios/minimal/
@@ -869,10 +869,10 @@
 
 ## container/tests/
 
-- `openshell-compatibility.schema.json` (~1459 tok)
-- `README.md` — Project documentation (~2593 tok)
+- `openshell-compatibility.schema.json` (~1563 tok)
+- `README.md` — Project documentation (~2972 tok)
 - `test_container_agents.py` — Run opt-in live Docker/Podman CLI smoke tests. (~4115 tok)
-- `test_openshell_agents.py` — Run opt-in live OpenShell CLI/provider smoke tests. (~10465 tok)
+- `test_openshell_agents.py` — Run opt-in live OpenShell CLI/provider smoke tests. (~12823 tok)
 
 ## deploy/kubernetes/base/
 
@@ -898,7 +898,7 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~15774 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~15784 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
@@ -921,14 +921,14 @@
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
-- `OPENCODE.md` — OpenCode Support (~1888 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~7678 tok)
+- `OPENCODE.md` — OpenCode Support (~1935 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~7707 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
 - `README.md` — Project documentation (~1479 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
-- `Sandbox.md` — Sandbox CLI (~3894 tok)
+- `Sandbox.md` — Sandbox CLI (~4987 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2439 tok)
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
@@ -1029,7 +1029,7 @@
 
 ## scripts/
 
-- `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2713 tok)
+- `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2778 tok)
 - `check_openshell_compatibility.py` — Verify the qualified OpenShell release and protocol contract. (~1717 tok)
 - `check_parser_compat.py` — get_leaktk_url, fetch_url, fetch_pattern_data, extract_schema + 4 more (~3274 tok)
 - `check_scanner_versions.py` — get_latest_version, get_latest_leaktk_pattern_version, get_version_age, compare_versions + 4 more (~4691 tok)
@@ -1066,14 +1066,14 @@
 - `hook_context.py` — HookContextManager: save_pretool_context, get_pretool_context, cleanup_session, cleanup (~2346 tok)
 - `hook_processing.py` — URL configuration (~37874 tok)
 - `ide_paths.py` — Canonical path resolution for supported IDE and agent integrations. (~2333 tok)
-- `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4397 tok)
+- `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4408 tok)
 - `logging_utils.py` — Shared logging utilities. (~254 tok)
 - `opencode_support.py` — OpenCode runtime generation and version helpers. (~909 tok)
 - `openshell_policy.py` — OpenShell policy discovery and validation helpers. (~3025 tok)
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
 - `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
-- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~27179 tok)
+- `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~30900 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)
@@ -1402,7 +1402,7 @@
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1078 tok)
 - `health.py` — URL configuration (~16971 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~45086 tok)
+- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~45128 tok)
 - `menu.py` — URL configuration (~3078 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
 - `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2297 tok)
@@ -1410,7 +1410,7 @@
 - `plugin_runner.py` — Declares TrayPluginMenuBuilder (~8890 tok)
 - `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21430 tok)
 - `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~13275 tok)
-- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24474 tok)
+- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24456 tok)
 
 ## src/ai_guardian/tui/
 

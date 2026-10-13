@@ -418,10 +418,10 @@ SUPPORTED_IDE_TYPES: Tuple[str, ...] = tuple(
 SUPPORTED_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in SUPPORTED_IDE_REGISTRY if integration.cli_capable
 )
-# The OpenShell image currently bundles these terminal clients. Keep this
-# separate from the broader host/container CLI registry so the OpenShell
-# selector cannot advertise agents that are outside its supported scope.
-SUPPORTED_OPENSHELL_CLI_IDE_TYPES: Tuple[str, ...] = ("codex",)
+# The OpenShell image bundles OpenCode and Codex; Claude Code is installed at
+# runtime only after explicit ToS consent. Keep this separate from the broader
+# host/container registry so the OpenShell selector reflects its image/runtime.
+SUPPORTED_OPENSHELL_CLI_IDE_TYPES: Tuple[str, ...] = ("codex", "claude", "opencode")
 # Runtime-specific sandbox selectors. Keep this matrix close to the canonical
 # CLI registry so the CLI validator and tray form cannot advertise different
 # runtime capabilities.
