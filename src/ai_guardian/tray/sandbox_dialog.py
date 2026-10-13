@@ -13,7 +13,7 @@ import tempfile
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +25,14 @@ _PROGRESS_READY_TIMEOUT = 5.0
 class SandboxProgress:
     """Send live sandbox output to an isolated Tk progress process."""
 
-    def __init__(self, process):
+    def __init__(self, process, on_connect: Optional[Callable[[], Any]] = None):
         self._process = process
+        self._on_connect = on_connect
         self._lock = threading.Lock()
         self._closed = False
         self._failed = False
+        self._connect_available = False
+        self._connect_requested = False
         self._ready = threading.Event()
         self._ready_success = False
         stream = getattr(process, "stdout", None)
@@ -45,16 +48,40 @@ class SandboxProgress:
             ).start()
 
     def _read_ready_signal(self, stream) -> None:
-        """Wait for the child Tk process to finish initializing its window."""
+        """Read readiness and user actions from the child Tk process."""
         try:
             for line in stream:
-                if str(line).strip() == _PROGRESS_READY:
+                value = str(line).strip()
+                if value == _PROGRESS_READY:
                     self._ready_success = True
-                    break
+                    self._ready.set()
+                    continue
+                try:
+                    event = json.loads(value)
+                except json.JSONDecodeError:
+                    logger.debug("Ignoring malformed sandbox progress event")
+                    continue
+                if isinstance(event, dict) and event.get("type") == "connect":
+                    self._request_connect()
         except (OSError, ValueError, TypeError):
             logger.debug("Unable to read sandbox progress readiness", exc_info=True)
         finally:
             self._ready.set()
+
+    def _request_connect(self) -> None:
+        """Run the registered connect action at most once after success."""
+        with self._lock:
+            if not self._connect_available or self._connect_requested:
+                return
+            handler = self._on_connect
+            if handler is None:
+                return
+            self._connect_requested = True
+
+        try:
+            handler()
+        except Exception:
+            logger.exception("Unable to connect from sandbox progress dialog")
 
     def wait_ready(self, timeout: float = _PROGRESS_READY_TIMEOUT) -> bool:
         """Wait for the isolated progress window to become usable."""
@@ -117,14 +144,25 @@ class SandboxProgress:
         """Close the dialog without presenting a completed operation."""
         return self._send_terminal({"type": "close"})
 
-    def finish(self, success: bool, message: str, log_text: str) -> bool:
+    def finish(
+        self,
+        success: bool,
+        message: str,
+        log_text: str,
+        *,
+        show_connect: bool = False,
+    ) -> bool:
         """Tell the dialog whether to close or remain open for inspection."""
+        connect_available = bool(success and show_connect and self._on_connect)
+        with self._lock:
+            self._connect_available = connect_available
         return self._send_terminal(
             {
                 "type": "complete",
                 "success": bool(success),
                 "message": str(message),
                 "log": str(log_text or ""),
+                "connect_available": connect_available,
             }
         )
 
@@ -158,7 +196,14 @@ class _FallbackSandboxProgress:
         self._closed = True
         return True
 
-    def finish(self, success: bool, message: str, _log_text: str) -> bool:
+    def finish(
+        self,
+        success: bool,
+        message: str,
+        _log_text: str,
+        *,
+        show_connect: bool = False,
+    ) -> bool:
         self._closed = True
         logger.debug(
             "Sandbox progress finished (%s, success=%s): %s",
@@ -1134,6 +1179,16 @@ def _show_tkinter_progress(
     def copy() -> None:
         copy_status.set(_copy_sandbox_log("".join(log_parts), clipboard_owner=root))
 
+    def connect() -> None:
+        connect_button.configure(state="disabled")
+        status.set("Opening sandbox connection...")
+        try:
+            print(json.dumps({"type": "connect"}), flush=True)
+        except (OSError, ValueError):
+            logger.debug("Unable to send sandbox connect action", exc_info=True)
+            status.set("Unable to open sandbox connection.")
+            connect_button.configure(state="normal")
+
     ttk.Label(frame, textvariable=copy_status, justify="left").grid(
         row=4, column=0, sticky="w", pady=(8, 0)
     )
@@ -1143,8 +1198,11 @@ def _show_tkinter_progress(
 
     button_frame = ttk.Frame(frame)
     button_frame.grid(row=5, column=0, sticky="e", pady=(12, 0))
-    ttk.Button(button_frame, text="Copy", command=copy).pack(side="left")
-    ttk.Button(button_frame, text="Close", command=close).pack(side="left", padx=(8, 0))
+    connect_button = ttk.Button(button_frame, text="Connect", command=connect)
+    copy_button = ttk.Button(button_frame, text="Copy", command=copy)
+    close_button = ttk.Button(button_frame, text="Close", command=close)
+    copy_button.pack(side="left")
+    close_button.pack(side="left", padx=(8, 0))
     root.protocol("WM_DELETE_WINDOW", close)
     root.bind("<Escape>", lambda _event: close())
 
@@ -1180,6 +1238,10 @@ def _show_tkinter_progress(
                     message = str(update.get("message") or "")
                     if update.get("success"):
                         status.set(message or "Completed.")
+                        if update.get("connect_available"):
+                            connect_button.pack(
+                                side="left", padx=(0, 8), before=copy_button
+                            )
                         # Keep successful output available for review. Closing
                         # after a short timer made fast operations look like a
                         # modal flash and hid their completion details.
@@ -1514,6 +1576,7 @@ def _show_tkinter_progress_subprocess(
     message: str,
     *,
     screen_bounds: Optional[ScreenBounds] = None,
+    on_connect: Optional[Callable[[], Any]] = None,
 ) -> Optional[SandboxProgress]:
     """Start the live progress window outside the tray process."""
     payload = json.dumps(
@@ -1539,7 +1602,7 @@ def _show_tkinter_progress_subprocess(
     except OSError as exc:
         logger.warning("Sandbox progress dialog could not be shown: %s", exc)
         return None
-    progress = SandboxProgress(process)
+    progress = SandboxProgress(process, on_connect=on_connect)
     if not progress.wait_ready():
         progress.close()
         terminate = getattr(process, "terminate", None)
@@ -1949,6 +2012,7 @@ def show_sandbox_progress(
     message: str,
     *,
     screen_bounds: Optional[ScreenBounds] = None,
+    on_connect: Optional[Callable[[], Any]] = None,
 ) -> Optional[Any]:
     """Start sandbox progress using the configured provider cascade."""
     try:
@@ -1956,14 +2020,12 @@ def show_sandbox_progress(
 
         provider = select_ui_provider("stream", screen_bounds=screen_bounds)
         if provider == "tkinter":
-            if screen_bounds is None:
-                progress = _show_tkinter_progress_subprocess(title, message)
-            else:
-                progress = _show_tkinter_progress_subprocess(
-                    title,
-                    message,
-                    screen_bounds=screen_bounds,
-                )
+            options: Dict[str, Any] = {}
+            if screen_bounds is not None:
+                options["screen_bounds"] = screen_bounds
+            if on_connect is not None:
+                options["on_connect"] = on_connect
+            progress = _show_tkinter_progress_subprocess(title, message, **options)
             if progress is not None:
                 return progress
         if provider != "headless":

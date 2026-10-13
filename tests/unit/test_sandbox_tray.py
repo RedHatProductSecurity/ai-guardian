@@ -1404,12 +1404,47 @@ class TestSandboxTrayMenu:
             "Operation: create\nRuntime: container\n"
             "Command is running; output appears below.",
             screen_bounds=None,
+            on_connect=mock.ANY,
         )
         progress.append.assert_called_once_with("creating sandbox\n")
         progress.finish.assert_called_once_with(
-            True, "Sandbox 'ag-test' created.", "creating sandbox"
+            True,
+            "Sandbox 'ag-test' created.",
+            "creating sandbox",
+            show_connect=True,
         )
         discovery.request_refresh.assert_called_once_with(wait=False)
+
+    @pytest.mark.parametrize("runtime", ["container", "openshell"])
+    def test_created_sandbox_connect_uses_selected_runtime(self, runtime):
+        tray = _make_tray([])
+        progress = mock.MagicMock()
+
+        with (
+            mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
+            mock.patch.object(
+                tray._menu, "_show_sandbox_progress", return_value=progress
+            ) as show_progress,
+            mock.patch(
+                "ai_guardian.tray.menu_builder.tray_menu.launch_sandbox_command"
+            ) as launch,
+            mock.patch(
+                "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
+            ),
+        ):
+            tray._menu._run_sandbox_create(
+                SimpleNamespace(runtime=runtime, name="ag-test")
+            )
+            on_connect = show_progress.call_args.kwargs["on_connect"]
+            on_connect()
+
+        create.assert_called_once()
+        target, operation, command_args = launch.call_args.args
+        assert target.name == "ag-test"
+        assert tray._menu._sandbox_runtime(target) == runtime
+        assert operation == "connect"
+        assert command_args == ["ag-test"]
+        assert launch.call_args.kwargs == {"keep_open": True}
 
     def test_create_keeps_failed_progress_open(self):
         tray = _make_tray([])
@@ -2474,9 +2509,33 @@ class TestSandboxDialogFallback:
                 "success": False,
                 "message": "Operation failed.",
                 "log": "runtime output",
+                "connect_available": False,
             },
         ]
         process.stdin.close.assert_called_once_with()
+
+    def test_progress_connect_event_runs_registered_action_once_after_success(self):
+        import json
+
+        from ai_guardian.tray.sandbox_dialog import SandboxProgress
+
+        handler = mock.Mock()
+        process = SimpleNamespace(
+            stdout=None,
+            stdin=mock.MagicMock(),
+            wait=mock.MagicMock(),
+        )
+        progress = SandboxProgress(process, on_connect=handler)
+
+        assert progress.wait_ready(timeout=1) is True
+        progress._request_connect()
+        handler.assert_not_called()
+
+        assert progress.finish(True, "Created.", "", show_connect=True)
+        progress._read_ready_signal(io.StringIO(json.dumps({"type": "connect"})))
+        progress._read_ready_signal(io.StringIO(json.dumps({"type": "connect"})))
+
+        handler.assert_called_once_with()
 
     def test_progress_reports_readiness_and_closes_without_completion(self):
         import json
@@ -2540,7 +2599,35 @@ class TestSandboxDialogFallback:
         assert isinstance(progress, SandboxProgress)
         progress.close()
 
-    def test_successful_progress_dialog_stays_open_for_user_to_close(self):
+    @pytest.mark.parametrize(
+        ("completion", "connect_visible"),
+        [
+            (
+                {
+                    "type": "complete",
+                    "success": True,
+                    "message": "Sandbox 'demo' created.",
+                    "log": "Sandbox ready",
+                    "connect_available": True,
+                },
+                True,
+            ),
+            (
+                {
+                    "type": "complete",
+                    "success": False,
+                    "message": "Unable to create sandbox 'demo'.",
+                    "log": "Runtime failed",
+                    "connect_available": False,
+                },
+                False,
+            ),
+            (None, False),
+        ],
+    )
+    def test_progress_dialog_shows_connect_only_after_success(
+        self, completion, connect_visible
+    ):
         import queue
         from types import ModuleType
 
@@ -2548,14 +2635,7 @@ class TestSandboxDialogFallback:
 
         class Updates:
             def __init__(self):
-                self.values = [
-                    {
-                        "type": "complete",
-                        "success": True,
-                        "message": "Sandbox 'demo' created.",
-                        "log": "Sandbox ready",
-                    }
-                ]
+                self.values = [completion] if completion is not None else []
 
             def get_nowait(self):
                 if self.values:
@@ -2594,7 +2674,14 @@ class TestSandboxDialogFallback:
         ttk_module.Checkbutton = mock.Mock(
             side_effect=lambda *_a, **_k: mock.MagicMock()
         )
-        ttk_module.Button = mock.Mock(side_effect=lambda *_a, **_k: mock.MagicMock())
+        buttons = {}
+
+        def make_button(_parent, *, text, **_kwargs):
+            button = mock.MagicMock()
+            buttons[text] = button
+            return button
+
+        ttk_module.Button = mock.Mock(side_effect=make_button)
         tk_module.ttk = ttk_module
 
         with (
@@ -2612,7 +2699,23 @@ class TestSandboxDialogFallback:
             _show_tkinter_progress("Creating sandbox", "Running")
 
         root.destroy.assert_not_called()
-        variables[0].set.assert_called_once_with("Sandbox 'demo' created.")
+        assert buttons["Connect"].pack.called is connect_visible
+        buttons["Copy"].pack.assert_called_once_with(side="left")
+        buttons["Close"].pack.assert_called_once_with(side="left", padx=(8, 0))
+        if completion is None:
+            variables[0].set.assert_not_called()
+        else:
+            variables[0].set.assert_called_once_with(completion["message"])
+        if connect_visible:
+            connect_call = next(
+                call
+                for call in ttk_module.Button.call_args_list
+                if call.kwargs["text"] == "Connect"
+            )
+            with mock.patch("builtins.print") as send_connect:
+                connect_call.kwargs["command"]()
+            send_connect.assert_called_once_with('{"type": "connect"}', flush=True)
+            buttons["Connect"].configure.assert_called_once_with(state="disabled")
 
     def test_sandbox_text_wrap_switches_between_wrapped_and_unwrapped(self):
         from ai_guardian.tray.sandbox_dialog import _set_text_wrap

@@ -1246,16 +1246,15 @@ class TrayMenuBuilder:
         )
 
     @staticmethod
-    def _show_sandbox_progress(title, message, *, screen_bounds=None):
+    def _show_sandbox_progress(title, message, *, screen_bounds=None, on_connect=None):
         """Start an isolated live progress dialog when the desktop supports it."""
         try:
             from ai_guardian.tray.sandbox_dialog import show_sandbox_progress
 
-            return show_sandbox_progress(
-                title,
-                message,
-                **TrayMenuBuilder._screen_bounds_kwargs(screen_bounds),
-            )
+            options = TrayMenuBuilder._screen_bounds_kwargs(screen_bounds)
+            if on_connect is not None:
+                options["on_connect"] = on_connect
+            return show_sandbox_progress(title, message, **options)
         except Exception:
             logger.exception("Unable to show sandbox progress dialog")
             return None
@@ -1934,11 +1933,31 @@ class TrayMenuBuilder:
     def _run_sandbox_create(self, args, *, screen_bounds=None):
         """Create a sandbox in-process and stream output to an isolated dialog."""
         runtime = str(getattr(args, "runtime", None) or "auto-detected")
+        on_connect = None
+        if runtime in {"container", "openshell"}:
+            target = SimpleNamespace(
+                name=args.name,
+                runtime=runtime,
+                runtime_type=runtime,
+                container_engine=getattr(args, "container_engine", None),
+            )
+
+            def connect_created_sandbox():
+                return tray_menu.launch_sandbox_command(
+                    target,
+                    "connect",
+                    [target.name],
+                    keep_open=True,
+                )
+
+            on_connect = connect_created_sandbox
+
         progress = self._show_sandbox_progress(
             f"Creating sandbox '{args.name}'",
             f"Operation: create\nRuntime: {runtime}\n"
             "Command is running; output appears below.",
             screen_bounds=screen_bounds,
+            on_connect=on_connect,
         )
         output = _SandboxOutput(progress.append if progress else None)
         try:
@@ -1970,7 +1989,12 @@ class TrayMenuBuilder:
             return
 
         if progress is not None:
-            progress.finish(True, f"Sandbox '{args.name}' created.", log_text)
+            progress.finish(
+                True,
+                f"Sandbox '{args.name}' created.",
+                log_text,
+                show_connect=on_connect is not None,
+            )
         tray_notifications.show_notification(
             "AI Guardian",
             f"Sandbox created: {args.name}",

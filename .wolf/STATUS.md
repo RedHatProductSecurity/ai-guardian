@@ -11,6 +11,13 @@ budget_tokens: 1000
 
 ## ✅ Done
 
+- Issue #2542: successful tray sandbox creation now adds a Connect button to the
+  completion dialog. It invokes the existing interactive connect flow for the
+  selected container or OpenShell runtime without rerunning creation. Connect is
+  absent while creation is running and on failure; output, Copy, and Close stay
+  available. Added unit/UX contracts and changelog entry. A live Tk dialog smoke
+  with mocked creation verified the button visibility and click event; no real
+  sandbox was created.
 - Issue #2529: place single- and multi-daemon `Pause...` controls directly below
   **Status**, preserve global pause/resume behavior, and group directory controls
   under `Directories...`.
@@ -106,15 +113,16 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
-- Manually qualify Claude Code/Vertex and OpenCode/Vertex with OpenShell CLI and
-  gateway v0.1.3+, host ADC, project/region/model settings, and explicit Claude
-  ToS acknowledgement. Review the sanitized report; then commit/push issue #2473
-  on its existing branch when ready.
+- Review and manually verify issue #2542 in the tray with container and
+  OpenShell sandboxes if those runtimes are available; then run `daf complete`
+  outside the agent session. Do not commit from this session.
+- Preserve the pending #2473 manual Claude Code/Vertex and OpenCode/Vertex
+  qualification from the previous handoff for follow-up after #2542.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2473` / `RedHatProductSecurity/ai-guardian#2473`.
+- Branch/issue: `2542` / `RedHatProductSecurity/ai-guardian#2542`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -125,6 +133,12 @@ budget_tokens: 1000
 ## Validation
 
 ```bash
+uv run --extra dev python -m pytest tests/unit/test_sandbox_tray.py tests/ux/test_user_experience_contract_sandbox_create_connect.py -q  # 108 passed
+ruff check src/ai_guardian/ tests/  # passed
+black --target-version py310 --check src/ai_guardian/ tests/  # passed
+pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text  # 10.00/10
+mypy src/ai_guardian/  # 14 existing errors in skill_discovery.py and secret_validator.py
+git diff --check  # passed
 uv run --extra dev python -m pytest tests/unit/test_openshell_compatibility.py tests/unit/test_openshell_middleware_tray.py tests/unit/test_openshell_middleware_probe.py tests/ux/test_user_experience_contract_sandbox_middleware.py -q  # 32 passed
 cargo test --manifest-path rust/openshell-middleware/Cargo.toml  # 13 passed
 python scripts/check_openshell_compatibility.py  # passed
