@@ -1474,8 +1474,11 @@ def test_openshell_vertex_attaches_an_existing_google_cloud_provider(tmp_path):
             endpoint["credential_binding"]["provider"] == "existing-gcp-provider"
             for endpoint in vertex_rule["endpoints"]
         )
-        assert "us-east5-aiplatform.googleapis.com" in {
-            endpoint["host"] for endpoint in vertex_rule["endpoints"]
+        assert {endpoint["host"] for endpoint in vertex_rule["endpoints"]} == {
+            "aiplatform.googleapis.com",
+            "aiplatform.us.rep.googleapis.com",
+            "aiplatform.eu.rep.googleapis.com",
+            "us-east5-aiplatform.googleapis.com",
         }
     finally:
         shutil.rmtree(policy_dir)
