@@ -38,6 +38,13 @@ OPENSHELL_CLI_VERSION_SPECS = {
         "source": "npm registry",
         "registry": "https://www.npmjs.com/package/%40openai/codex",
     },
+    "OPENCODE_VERSION": {
+        "package": "opencode-ai",
+        "name": "OpenCode",
+        "lookup": "opencode-ai",
+        "source": "npm registry",
+        "registry": "https://www.npmjs.com/package/opencode-ai",
+    },
 }
 
 NORMAL_CLI_VERSION_SPECS = {

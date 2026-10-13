@@ -180,7 +180,7 @@ class TestSandboxTrayCommands:
 
 
 class TestSandboxTrayMenu:
-    def test_openshell_top_level_connect_uses_sandbox_connect_action(self):
+    def test_openshell_connect_and_manage_follow_pause_and_connects(self):
         target = DaemonTarget(
             name="ag-test",
             runtime="container",
@@ -197,11 +197,19 @@ class TestSandboxTrayMenu:
         ):
             items = tray._menu._build_single_daemon_menu_items()
 
+            pause_item = next(item for item in items if item.label == "Pause...")
             connect_item = next(
                 item
                 for item in items
                 if isinstance(item, FakeMenuItem) and item.label == "Connect"
             )
+            manage_item = next(
+                item
+                for item in items
+                if isinstance(item, FakeMenuItem) and item.label == "Manage sandbox"
+            )
+            assert items.index(connect_item) == items.index(pause_item) + 1
+            assert items.index(manage_item) == items.index(connect_item) + 1
             connect_item.action(None, None)
 
         launch.assert_called_once_with(
@@ -944,6 +952,67 @@ class TestSandboxTrayMenu:
         assert create.call_args.kwargs["interactive"] is False
         assert isinstance(create.call_args.kwargs["output"], list)
 
+    def test_create_form_maps_profile_as_exclusive_config_source(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "container",
+            "name": "profile-sandbox",
+            "cli": "codex",
+            "config_source": "Profile",
+            "profile": "@strict",
+            "repo": "",
+        }
+
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.profile == "@strict"
+        assert args.config_dir is None
+        assert args.fresh_config is False
+        assert args.restore_config is None
+
+    def test_create_form_maps_host_directory_as_exclusive_config_source(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "container",
+            "name": "host-config-sandbox",
+            "cli": "codex",
+            "config_source": "Host config directory",
+            "config_dir": "/tmp/ai-guardian-config",
+            "repo": "",
+        }
+
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.profile is None
+        assert args.config_dir == "/tmp/ai-guardian-config"
+        assert args.fresh_config is False
+        assert args.restore_config is None
+
+    def test_create_form_rejects_config_values_not_selected_as_source(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "container",
+            "name": "conflicting-config-sources",
+            "cli": "codex",
+            "config_source": "Host/default",
+            "profile": "@strict",
+            "repo": "",
+        }
+
+        with (
+            mock.patch.object(tray._menu, "_sandbox_error") as show_error,
+            mock.patch("ai_guardian.sandbox.create_sandbox") as create,
+        ):
+            tray._menu._complete_sandbox_create_form(values)
+
+        show_error.assert_called_once()
+        assert "Profile as the initial config source" in show_error.call_args.args[1]
+        create.assert_not_called()
+
     def test_create_form_rejects_missing_snapshot_before_runtime(self, tmp_path):
         tray = _make_tray([])
         values = {
@@ -985,6 +1054,46 @@ class TestSandboxTrayMenu:
 
         args = create.call_args.args[0]
         assert args.openshell_auth == "api_key"
+
+    def test_create_form_does_not_apply_codex_authentication_to_claude(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-claude",
+            "cli": "claude",
+            "openshell_auth": "API key",
+            "repo": "",
+            "providers": "",
+            "config_source": "Host/default",
+        }
+
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.cli == "claude"
+        assert args.openshell_auth is None
+        assert "ACCEPT_PROPRIETARY_TOS=true" not in args.environment
+
+    def test_create_form_passes_explicit_claude_tos_acceptance(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "openshell_mode": "AI Guardian hooks",
+            "name": "ag-claude",
+            "cli": "claude",
+            "accept_claude_tos": True,
+            "environment": "DEBUG=1, ACCEPT_PROPRIETARY_TOS=false",
+            "repo": "",
+            "config_source": "Host/default",
+        }
+
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.cli == "claude"
+        assert args.environment == ["DEBUG=1", "ACCEPT_PROPRIETARY_TOS=true"]
 
     def test_create_form_maps_native_mode_and_policy(self, tmp_path):
         tray = _make_tray([])
@@ -1215,6 +1324,15 @@ class TestSandboxTrayMenu:
         tray = _make_tray([])
 
         fresh_fields = tray._menu._sandbox_create_fields()
+        profile_fields = tray._menu._sandbox_create_fields(
+            {"config_source": "Profile", "profile": "@strict"}
+        )
+        host_directory_fields = tray._menu._sandbox_create_fields(
+            {
+                "config_source": "Host config directory",
+                "config_dir": "/tmp/config",
+            }
+        )
         snapshot_fields = tray._menu._sandbox_create_fields(
             {"config_source": "Latest saved snapshot"}
         )
@@ -1226,6 +1344,8 @@ class TestSandboxTrayMenu:
             )
 
         assert config_source_default(fresh_fields) == "Host/default"
+        assert config_source_default(profile_fields) == "Profile"
+        assert config_source_default(host_directory_fields) == "Host config directory"
         assert config_source_default(snapshot_fields) == "Latest saved snapshot"
         assert config_source_default(empty_fields) == "Host/default"
 
@@ -1237,7 +1357,12 @@ class TestSandboxTrayMenu:
             "type": "choice",
             "default": "",
         }
-        choices = ("Host/default", "Latest saved snapshot")
+        choices = (
+            "Host/default",
+            "Profile",
+            "Host config directory",
+            "Latest saved snapshot",
+        )
 
         assert _choice_default(field, choices) == "Host/default"
         assert (
@@ -1376,6 +1501,11 @@ class TestSandboxTrayMenu:
 
         field_names = [field["name"] for field in fields]
         assert field_names.index("cli") < field_names.index("name")
+        assert (
+            field_names.index("config_source")
+            < field_names.index("profile")
+            < field_names.index("config_dir")
+        )
 
         runtime_field = next(field for field in fields if field["name"] == "runtime")
         assert runtime_field["default"] == "openshell"
@@ -1386,6 +1516,23 @@ class TestSandboxTrayMenu:
         assert cli_field["default"] == "codex"
         assert cli_field["required"] is True
 
+        claude_tos_field = next(
+            field for field in fields if field["name"] == "accept_claude_tos"
+        )
+        assert claude_tos_field["type"] == "bool"
+        assert claude_tos_field["default"] is False
+        assert claude_tos_field["required"] is True
+        assert claude_tos_field["enabled_when"] == {
+            "field": "cli",
+            "values": ("claude",),
+        }
+        assert "anthropic.com/legal/consumer-terms" in claude_tos_field["help"]
+        assert "skips installation" in claude_tos_field["help"]
+        from ai_guardian.tray.sandbox_dialog import _field_enabled
+
+        assert _field_enabled(claude_tos_field, {"cli": "claude"})
+        assert not _field_enabled(claude_tos_field, {"cli": "codex"})
+
         auth_field = next(
             field for field in fields if field["name"] == "openshell_auth"
         )
@@ -1393,10 +1540,44 @@ class TestSandboxTrayMenu:
         assert auth_field["choices"] == TRAY_OPENSHELL_AUTH_CHOICES
         assert auth_field["default"] == "OAuth"
         assert auth_field["required"] is True
-        assert auth_field["enabled_when"] == {
-            "field": "runtime",
-            "values": ("openshell",),
-        }
+        assert auth_field["enabled_when"] == (
+            {"field": "runtime", "values": ("openshell",)},
+            {"field": "openshell_mode", "values": ("AI Guardian hooks",)},
+            {"field": "cli", "values": ("codex",)},
+        )
+
+        assert _field_enabled(
+            auth_field,
+            {
+                "runtime": "openshell",
+                "openshell_mode": "AI Guardian hooks",
+                "cli": "codex",
+            },
+        )
+        assert not _field_enabled(
+            auth_field,
+            {
+                "runtime": "openshell",
+                "openshell_mode": "AI Guardian hooks",
+                "cli": "claude",
+            },
+        )
+        assert not _field_enabled(
+            auth_field,
+            {
+                "runtime": "container",
+                "openshell_mode": "AI Guardian hooks",
+                "cli": "codex",
+            },
+        )
+        assert not _field_enabled(
+            auth_field,
+            {
+                "runtime": "openshell",
+                "openshell_mode": "Native OpenShell",
+                "cli": "codex",
+            },
+        )
         assert "ai-guardian-codex" in auth_field["help"]
         assert "ai-guardian-openai" in auth_field["help"]
 
@@ -1410,7 +1591,7 @@ class TestSandboxTrayMenu:
 
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["type"] == "choice"
-        assert agent_field["choices"] == ("",)
+        assert agent_field["choices"] == ("", "build", "plan", "claude")
         assert agent_field["editable"] is True
         assert agent_field["default"] == ""
         assert agent_field["required"] is True
@@ -1434,13 +1615,13 @@ class TestSandboxTrayMenu:
             "values": ("pi",),
         }
 
-        invalid_opencode_env = base_env.copy()
-        invalid_opencode_env["AI_GUARDIAN_CLI"] = "opencode"
-        with mock.patch.dict(os.environ, invalid_opencode_env, clear=True):
+        opencode_env = base_env.copy()
+        opencode_env["AI_GUARDIAN_CLI"] = "opencode"
+        with mock.patch.dict(os.environ, opencode_env, clear=True):
             fields = tray._menu._sandbox_create_fields()
 
         cli_field = next(field for field in fields if field["name"] == "cli")
-        assert cli_field["default"] == "codex"
+        assert cli_field["default"] == "opencode"
         assert cli_field["choices"] == TRAY_OPENSHELL_CLI_CHOICES
 
         pi_env = base_env.copy()
@@ -1507,11 +1688,24 @@ class TestSandboxTrayMenu:
             "@moderator",
         )
         assert profile_field["editable"] is True
+        assert profile_field["required"] is True
         assert profile_field["enabled_when"] == {
             "field": "config_source",
-            "values": ("Host/default",),
+            "values": ("Profile",),
         }
         assert profile_field["clear_when_disabled"] is True
+        assert _field_enabled(profile_field, {"config_source": "Profile"})
+        assert not _field_enabled(profile_field, {"config_source": "Host/default"})
+
+        source_field = next(
+            field for field in fields if field["name"] == "config_source"
+        )
+        assert source_field["choices"] == (
+            "Host/default",
+            "Profile",
+            "Host config directory",
+            "Latest saved snapshot",
+        )
         provider_field = next(field for field in fields if field["name"] == "providers")
         assert provider_field["label"] == "OpenShell provider override"
         assert provider_field["type"] == "text"
@@ -1588,6 +1782,22 @@ class TestSandboxTrayMenu:
             item
             for item in daemon_items[1].action.items
             if isinstance(item, FakeMenuItem) and item.label == "Manage sandbox"
+        )
+        second_items = daemon_items[1].action.items
+        pause_item = next(
+            item
+            for item in second_items
+            if isinstance(item, FakeMenuItem) and item.label == "Pause..."
+        )
+        connect_item = next(
+            item
+            for item in second_items
+            if isinstance(item, FakeMenuItem) and item.label == "Connect"
+        )
+        assert second_items.index(connect_item) == second_items.index(pause_item) + 1
+        assert (
+            second_items.index(second_manage_item)
+            == second_items.index(connect_item) + 1
         )
         apply_item = next(
             item
@@ -1841,9 +2051,16 @@ class TestSandboxTrayMenu:
         assert config_dir_field["type"] == "directory"
         assert config_dir_field["enabled_when"] == {
             "field": "config_source",
-            "values": ("Host/default",),
+            "values": ("Host config directory",),
         }
+        assert config_dir_field["required"] is True
         assert config_dir_field["clear_when_disabled"] is True
+        from ai_guardian.tray.sandbox_dialog import _field_enabled
+
+        assert _field_enabled(
+            config_dir_field, {"config_source": "Host config directory"}
+        )
+        assert not _field_enabled(config_dir_field, {"config_source": "Profile"})
 
         labels_field = next(field for field in fields if field["name"] == "labels")
         assert "KEY=VALUE" in labels_field["help"]
@@ -2493,6 +2710,100 @@ class TestSandboxDialogFallback:
             [{"name": "policy_yaml", "type": "textarea"}],
             submit_label="Replace policy",
         )
+
+    def test_tk_form_clears_disabled_checkbox_to_false(self):
+        from types import ModuleType
+
+        from ai_guardian.tray.sandbox_dialog import _show_tkinter_form
+
+        class StrictVariable:
+            def __init__(self, value, *, is_boolean):
+                self.value = value
+                self.is_boolean = is_boolean
+
+            def get(self):
+                if self.is_boolean and not isinstance(self.value, bool):
+                    raise ValueError("BooleanVar contains non-boolean value")
+                return self.value
+
+            def set(self, value):
+                if self.is_boolean and not isinstance(value, bool):
+                    raise ValueError("BooleanVar requires a boolean value")
+                self.value = value
+
+            def trace_add(self, *_args):
+                return None
+
+        root = mock.MagicMock()
+        tk_module = ModuleType("tkinter")
+        tk_module.Tk = mock.Mock(return_value=root)
+        tk_module.Canvas = mock.Mock(return_value=mock.MagicMock())
+        tk_module.StringVar = mock.Mock(
+            side_effect=lambda value="", **_kwargs: StrictVariable(
+                value, is_boolean=False
+            )
+        )
+        tk_module.BooleanVar = mock.Mock(
+            side_effect=lambda value=False, **_kwargs: StrictVariable(
+                value, is_boolean=True
+            )
+        )
+        tk_module.Text = mock.Mock(return_value=mock.MagicMock())
+        tk_module.TclError = type("TclError", (Exception,), {})
+        tk_module.filedialog = ModuleType("tkinter.filedialog")
+        ttk_module = ModuleType("tkinter.ttk")
+        for widget in (
+            "Button",
+            "Checkbutton",
+            "Combobox",
+            "Entry",
+            "Frame",
+            "Label",
+            "Scrollbar",
+        ):
+            setattr(
+                ttk_module,
+                widget,
+                mock.Mock(side_effect=lambda *_args, **_kwargs: mock.MagicMock()),
+            )
+        tk_module.ttk = ttk_module
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "tkinter": tk_module,
+                    "tkinter.filedialog": tk_module.filedialog,
+                    "tkinter.ttk": ttk_module,
+                },
+            ),
+            mock.patch("ai_guardian.ui.display._ensure_tcl_library"),
+            mock.patch("ai_guardian.tray.sandbox_dialog._place_window_on_screen"),
+        ):
+            result = _show_tkinter_form(
+                "Create sandbox",
+                "Choose runtime",
+                [
+                    {
+                        "name": "cli",
+                        "type": "choice",
+                        "choices": ("codex", "claude"),
+                        "default": "codex",
+                    },
+                    {
+                        "name": "accept_claude_tos",
+                        "type": "bool",
+                        "default": False,
+                        "enabled_when": {
+                            "field": "cli",
+                            "values": ("claude",),
+                        },
+                        "clear_when_disabled": True,
+                    },
+                ],
+            )
+
+        assert result is None
 
     def test_tk_form_returns_edited_multiline_textarea(self):
         from types import ModuleType

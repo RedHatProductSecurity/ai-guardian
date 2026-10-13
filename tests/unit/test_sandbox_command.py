@@ -17,6 +17,7 @@ from ai_guardian.sandbox import (
     OPENSHELL_ENTRYPOINT,
     _compose_openshell_policy,
     _ensure_openshell_cli_provider,
+    _ensure_openshell_google_cloud_provider,
     _ensure_openshell_daemon,
     _fetch_sandbox_config,
     _initial_config_source,
@@ -24,6 +25,9 @@ from ai_guardian.sandbox import (
     _openshell_create,
     _openshell_native_create,
     _openshell_provider_environment,
+    _openshell_provider_type,
+    _openshell_sandbox_environment,
+    _openshell_vertex_context,
     _expose_openshell_service,
     _run,
     _runtime,
@@ -73,6 +77,11 @@ def sandbox_names_are_available():
             "ANTHROPIC_API_KEY",
             "ANTHROPIC_VERTEX_PROJECT_ID",
             "CLOUD_ML_REGION",
+            "GOOGLE_CLOUD_PROJECT",
+            "GCP_PROJECT",
+            "VERTEX_AI_PROJECT_ID",
+            "VERTEX_AI_REGION",
+            "VERTEX_LOCATION",
             "OPENAI_API_KEY",
             "OPENCODE_API_KEY",
             "GOOGLE_APPLICATION_CREDENTIALS",
@@ -310,18 +319,15 @@ def test_sandbox_create_reserves_agent_for_opencode_profiles():
         _validate_create_options(args)
 
 
-def test_sandbox_create_rejects_opencode_for_openshell():
+def test_sandbox_create_accepts_opencode_claude_profile_for_openshell():
     args = _args(
         sandbox_command="create",
         runtime="openshell",
         cli="opencode",
+        opencode_agent="claude",
     )
 
-    with pytest.raises(
-        ValueError,
-        match="CLI 'opencode' is not supported for openshell sandboxes",
-    ):
-        _validate_create_options(args)
+    _validate_create_options(args)
 
 
 def test_sandbox_create_rejects_cli_not_supported_by_openshell():
@@ -1329,6 +1335,304 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         assert Path(command[command.index("--policy") + 1]).name == "policy.yaml"
     finally:
         shutil.rmtree(policy_dir)
+
+
+@pytest.mark.parametrize(
+    ("cli", "agent", "project_variable", "region_variable"),
+    (
+        ("claude", None, "ANTHROPIC_VERTEX_PROJECT_ID", "CLOUD_ML_REGION"),
+        ("opencode", "claude", "GOOGLE_CLOUD_PROJECT", "VERTEX_LOCATION"),
+    ),
+)
+def test_openshell_vertex_create_attaches_gateway_adc_provider_without_workload_secrets(
+    tmp_path, cli, agent, project_variable, region_variable
+):
+    adc_path = tmp_path / "adc.json"
+    adc_path.write_text("{}\n", encoding="utf-8")
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="vertex-demo",
+        cli=cli,
+        opencode_agent=agent,
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[
+            f"{project_variable}=contract-project",
+            f"{region_variable}=us-east5",
+            f"GOOGLE_APPLICATION_CREDENTIALS={adc_path}",
+            "GCP_ADC_ACCESS_TOKEN=credential-placeholder",
+            "ANTHROPIC_API_KEY=anthropic-placeholder",
+            "ANTHROPIC_AUTH_TOKEN=anthropic-placeholder",
+            "CLAUDE_CODE_OAUTH_TOKEN=anthropic-placeholder",
+        ],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with (
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["google-cloud"],
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch(
+            "ai_guardian.sandbox._run_openshell_provider_command", return_value=0
+        ) as provider_run,
+    ):
+        command, _name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert uploads is False
+        assert "--provider" in command
+        assert command[command.index("--provider") + 1] == "ai-guardian-google-cloud"
+        assert "--no-auto-providers" in command
+        env_values = [
+            command[index + 1]
+            for index, value in enumerate(command[:-1])
+            if value == "--env"
+        ]
+        assert "GCE_METADATA_HOST=127.0.0.1:8174" in env_values
+        assert "GCE_METADATA_IP=127.0.0.1:8174" in env_values
+        assert "METADATA_SERVER_DETECTION=assume-present" in env_values
+        assert f"{project_variable}=contract-project" in env_values
+        assert f"{region_variable}=us-east5" in env_values
+        assert "GOOGLE_APPLICATION_CREDENTIALS" not in " ".join(env_values)
+        assert "GCP_ADC_ACCESS_TOKEN" not in " ".join(env_values)
+        assert str(adc_path) not in " ".join(env_values)
+        assert "credential-placeholder" not in " ".join(env_values)
+        assert "ANTHROPIC_API_KEY" not in " ".join(env_values)
+        assert "ANTHROPIC_AUTH_TOKEN" not in " ".join(env_values)
+        assert "CLAUDE_CODE_OAUTH_TOKEN" not in " ".join(env_values)
+        assert "anthropic-placeholder" not in " ".join(env_values)
+        assert provider_run.call_args.args[0][1:3] == ["provider", "create"]
+        provider_command = provider_run.call_args.args[0]
+        assert "--from-gcloud-adc" in provider_command
+        assert "contract-project" not in provider_command
+        assert all(adc_path.as_posix() not in value for value in provider_command)
+        policy = yaml.safe_load(
+            Path(command[command.index("--policy") + 1]).read_text(encoding="utf-8")
+        )
+        vertex_rules = [
+            rule
+            for rule in policy["network_policies"].values()
+            if rule.get("name") == "ai-guardian-google-vertex"
+        ]
+        assert len(vertex_rules) == 1
+        assert all(
+            endpoint["credential_binding"]["provider"] == "ai-guardian-google-cloud"
+            for endpoint in vertex_rules[0]["endpoints"]
+        )
+        binary_paths = {binary["path"] for binary in vertex_rules[0]["binaries"]}
+        if cli == "claude":
+            assert "/usr/local/bin/node" in binary_paths
+        else:
+            assert "/usr/local/bin/opencode" in binary_paths
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_vertex_attaches_an_existing_google_cloud_provider(tmp_path):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="vertex-existing-provider",
+        cli="opencode",
+        opencode_agent="claude",
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[
+            "GOOGLE_CLOUD_PROJECT=contract-project",
+            "VERTEX_LOCATION=us-east5",
+        ],
+        policy=[],
+        provider=["existing-gcp-provider"],
+        label=[],
+    )
+
+    with (
+        patch(
+            "ai_guardian.sandbox._openshell_provider_type",
+            return_value="google-cloud",
+        ),
+        patch("ai_guardian.sandbox._ensure_openshell_google_cloud_provider") as ensure,
+    ):
+        command, _name, _uploads, policy_dir = _openshell_create(args)
+    try:
+        assert command[command.index("--provider") + 1] == "existing-gcp-provider"
+        assert "--no-auto-providers" in command
+        ensure.assert_not_called()
+        policy = yaml.safe_load(
+            Path(command[command.index("--policy") + 1]).read_text(encoding="utf-8")
+        )
+        vertex_rule = policy["network_policies"]["ai_guardian_google_vertex"]
+        assert all(
+            endpoint["credential_binding"]["provider"] == "existing-gcp-provider"
+            for endpoint in vertex_rule["endpoints"]
+        )
+        assert {endpoint["host"] for endpoint in vertex_rule["endpoints"]} == {
+            "aiplatform.googleapis.com",
+            "aiplatform.us.rep.googleapis.com",
+            "aiplatform.eu.rep.googleapis.com",
+            "us-east5-aiplatform.googleapis.com",
+        }
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_provider_type_reads_human_readable_provider_get_output():
+    args = _args()
+    provider_name = "ai-guardian-google-cloud"
+    provider_output = (
+        "Provider:\n\n  Name: ai-guardian-google-cloud\n  Type: google-cloud\n"
+    )
+    result = subprocess.CompletedProcess([], 0, provider_output, "")
+
+    with patch("ai_guardian.sandbox._run_capture", return_value=result) as run_capture:
+        assert _openshell_provider_type(args, provider_name) == "google-cloud"
+
+    run_capture.assert_called_once_with(["openshell", "provider", "get", provider_name])
+
+
+def test_openshell_vertex_policy_binds_regional_and_replicated_endpoints(tmp_path):
+    args = _args(policy=[])
+    policy_path, policy_dir = _compose_openshell_policy(
+        args,
+        "claude",
+        vertex_provider="gateway-gcp",
+        vertex_region="us-east5",
+    )
+    try:
+        policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+    finally:
+        shutil.rmtree(policy_dir)
+
+    vertex_rule = policy["network_policies"]["ai_guardian_google_vertex"]
+    assert {endpoint["host"] for endpoint in vertex_rule["endpoints"]} == {
+        "aiplatform.googleapis.com",
+        "us-east5-aiplatform.googleapis.com",
+        "aiplatform.us.rep.googleapis.com",
+        "aiplatform.eu.rep.googleapis.com",
+    }
+    assert not any("*" in endpoint["host"] for endpoint in vertex_rule["endpoints"])
+    assert all(
+        endpoint["credential_binding"] == {"provider": "gateway-gcp"}
+        for endpoint in vertex_rule["endpoints"]
+    )
+    assert "/sandbox/.local/share/claude/versions/**" in {
+        binary["path"] for binary in vertex_rule["binaries"]
+    }
+
+
+def test_openshell_global_vertex_policy_omits_regional_endpoint(tmp_path):
+    policy_path, policy_dir = _compose_openshell_policy(
+        _args(policy=[]), "opencode", vertex_provider="gateway-gcp"
+    )
+    try:
+        policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+    finally:
+        shutil.rmtree(policy_dir)
+
+    hosts = {
+        endpoint["host"]
+        for endpoint in policy["network_policies"]["ai_guardian_google_vertex"][
+            "endpoints"
+        ]
+    }
+    assert hosts == {
+        "aiplatform.googleapis.com",
+        "aiplatform.us.rep.googleapis.com",
+        "aiplatform.eu.rep.googleapis.com",
+    }
+
+
+def test_openshell_vertex_policy_rejects_non_location_region(tmp_path):
+    with pytest.raises(ValueError, match="single Google Cloud location"):
+        _compose_openshell_policy(
+            _args(policy=[]),
+            "claude",
+            vertex_provider="gateway-gcp",
+            vertex_region="region.attacker.example",
+        )
+
+
+def test_existing_openshell_google_cloud_provider_updates_only_project_settings():
+    args = _args(openshell_cli="openshell")
+    with (
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["google-cloud"],
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_type",
+            return_value="google-cloud",
+        ),
+        patch(
+            "ai_guardian.sandbox._run_openshell_provider_command", return_value=0
+        ) as provider_run,
+    ):
+        provider_name = _ensure_openshell_google_cloud_provider(
+            args, "contract-project", "us-east5"
+        )
+
+    command = provider_run.call_args.args[0]
+    assert provider_name == "ai-guardian-google-cloud"
+    assert command[1:4] == ["provider", "update", provider_name]
+    assert "--from-gcloud-adc" not in command
+    assert "project_id=contract-project" in command
+    assert "region=us-east5" in command
+    assert "--wait" in command
+
+
+def test_openshell_vertex_environment_filters_credentials_and_routing_overrides():
+    args = _args(
+        environment=[
+            "GOOGLE_CLOUD_PROJECT=untrusted-project-override",
+            "VERTEX_LOCATION=untrusted-region-override",
+            "GOOGLE_APPLICATION_CREDENTIALS=/host/adc.json",
+            "GOOGLE_OAUTH_ACCESS_TOKEN=secret-placeholder",
+            "GCP_ADC_ACCESS_TOKEN=secret-placeholder",
+            "CLOUDSDK_AUTH_ACCESS_TOKEN=secret-placeholder",
+            "ANTHROPIC_API_KEY=secret-placeholder",
+            "ANTHROPIC_AUTH_TOKEN=secret-placeholder",
+            "CLAUDE_CODE_OAUTH_TOKEN=secret-placeholder",
+            "GCE_METADATA_HOST=attacker.example:8174",
+            "UNRELATED_SETTING=kept",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+        ]
+    )
+
+    environment = _openshell_sandbox_environment(args, vertex=True)
+
+    assert environment == ["UNRELATED_SETTING=kept"]
+
+
+def test_openshell_vertex_explicit_environment_overrides_process_aliases():
+    args = _args(
+        cli="opencode",
+        opencode_agent="claude",
+        environment=[
+            "GOOGLE_CLOUD_PROJECT=explicit-project",
+            "VERTEX_LOCATION=explicit-region",
+        ],
+    )
+
+    with patch.dict(
+        os.environ,
+        {
+            "ANTHROPIC_VERTEX_PROJECT_ID": "ambient-project",
+            "CLOUD_ML_REGION": "ambient-region",
+        },
+    ):
+        assert _openshell_vertex_context(args, "opencode") == (
+            "explicit-project",
+            "explicit-region",
+        )
 
 
 def test_native_openshell_create_does_not_add_ai_guardian_bootstrap(tmp_path):

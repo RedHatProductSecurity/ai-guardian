@@ -18,7 +18,7 @@
     "exclusions"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "report_type": { "const": "ai-guardian-openshell-compatibility" },
     "generated_at": { "type": "string", "minLength": 1 },
     "sanitized": { "const": true },
@@ -62,9 +62,10 @@
         "bundled_cli_versions": {
           "type": "object",
           "additionalProperties": false,
-           "required": ["codex"],
+           "required": ["codex", "opencode"],
            "properties": {
-             "codex": { "type": "string", "minLength": 1 }
+             "codex": { "type": "string", "minLength": 1 },
+             "opencode": { "type": "string", "minLength": 1 }
           }
         }
       }
@@ -97,10 +98,10 @@
         ],
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
-          "agent": { "type": "string", "enum": ["codex"] },
+          "agent": { "type": "string", "enum": ["codex", "claude", "opencode"] },
           "profile": { "type": "string", "minLength": 1 },
-          "provider_class": { "type": "string", "enum": ["openshell-codex"] },
-          "model_family": { "type": "string", "enum": ["Codex"] },
+          "provider_class": { "type": "string", "enum": ["openshell-codex", "openshell-google-cloud"] },
+          "model_family": { "type": "string", "enum": ["Codex", "Claude on Vertex"] },
           "result": { "enum": ["passed", "failed", "skipped"] },
           "steps": {
             "type": "object",
@@ -109,6 +110,7 @@
               "creation",
               "daemon",
               "service",
+              "metadata",
               "agent",
               "detection",
               "restart",
@@ -116,7 +118,7 @@
               "cleanup"
             ],
             "patternProperties": {
-              "^(creation|daemon|service|agent|detection|restart|reconnect|cleanup)$": {
+              "^(creation|daemon|service|metadata|agent|detection|restart|reconnect|cleanup)$": {
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["status", "exit_code", "failure_code"],
@@ -133,8 +135,12 @@
                       "gateway_unreachable",
                       "daemon_unreachable",
                       "service_unreachable",
+                      "metadata_unavailable",
                       "violation_not_detected",
                       "provider_not_configured",
+                      "model_not_configured",
+                      "terms_of_service_not_accepted",
+                      "not_applicable",
                       "retained_for_inspection",
                       "not_run_after_failure"
                     ]

@@ -39,8 +39,9 @@ from ai_guardian.tray import plugins as tray_plugins
 logger = logging.getLogger(__name__)
 
 
-# Tray exposes only the currently supported OpenShell CLI.
-TRAY_OPENSHELL_CLI_CHOICES = ("codex",)
+# Keep this aligned with the runtime-specific registry. Claude is installed only
+# after runtime ToS consent; OpenCode is bundled in the OpenShell image.
+TRAY_OPENSHELL_CLI_CHOICES = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["openshell"]
 TRAY_OPENSHELL_AUTH_CHOICES = ("OAuth", "API key")
 TRAY_OPENSHELL_MODE_CHOICES = ("AI Guardian hooks", "Native OpenShell")
 TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
@@ -49,6 +50,8 @@ TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
 }
 _SANDBOX_CONFIG_SOURCE_CHOICES = (
     "Host/default",
+    "Profile",
+    "Host config directory",
     "Latest saved snapshot",
 )
 _SANDBOX_DEFAULT_CONFIG_SOURCE = _SANDBOX_CONFIG_SOURCE_CHOICES[0]
@@ -1293,10 +1296,14 @@ class TrayMenuBuilder:
 
     def _sandbox_create_fields(self, values=None):
         """Return the create form fields used by the main tray menu."""
-        config_source = _normalize_sandbox_config_source(
-            values.get("config_source") if isinstance(values, dict) else None
-        )
         form_values = values if isinstance(values, dict) else {}
+        config_source_value = form_values.get("config_source")
+        if not config_source_value:
+            if form_values.get("profile"):
+                config_source_value = "Profile"
+            elif form_values.get("config_dir"):
+                config_source_value = "Host config directory"
+        config_source = _normalize_sandbox_config_source(config_source_value)
         runtime = form_values.get(
             "runtime", os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
         )
@@ -1357,9 +1364,7 @@ class TrayMenuBuilder:
         if not repo_default:
             repo_default = os.path.expanduser("~")
         profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
-        opencode_agent_choices = (
-            ("",) if runtime == "openshell" else ("", "build", "plan", "claude")
-        )
+        opencode_agent_choices = ("", "build", "plan", "claude")
         agent_provider_choices = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
         if agent_provider not in agent_provider_choices:
             agent_provider = ""
@@ -1422,6 +1427,22 @@ class TrayMenuBuilder:
                 "help": "Select the CLI to configure in the sandbox.",
             },
             {
+                "name": "accept_claude_tos",
+                "label": "I accept Anthropic's Claude Code Terms of Service",
+                "type": "bool",
+                "default": form_values.get("accept_claude_tos") is True,
+                "required": True,
+                "help": (
+                    "AI Guardian managed images do not bundle Claude Code. "
+                    "For non-interactive startup, check only after accepting "
+                    "Anthropic's terms: "
+                    "https://www.anthropic.com/legal/consumer-terms. "
+                    "Without consent, startup skips installation."
+                ),
+                "enabled_when": {"field": "cli", "values": ("claude",)},
+                "clear_when_disabled": True,
+            },
+            {
                 "name": "openshell_auth",
                 "label": "Codex authentication",
                 "type": "choice",
@@ -1432,11 +1453,11 @@ class TrayMenuBuilder:
                     "OAuth uses the codex profile and ai-guardian-codex; API key "
                     "uses the openai profile and ai-guardian-openai."
                 ),
-                "enabled_when": {
-                    "field": "runtime",
-                    "values": ("openshell",),
-                },
-                "clear_when_disabled": True,
+                "enabled_when": (
+                    {"field": "runtime", "values": ("openshell",)},
+                    {"field": "openshell_mode", "values": ("AI Guardian hooks",)},
+                    {"field": "cli", "values": ("codex",)},
+                ),
             },
             {
                 "name": "name",
@@ -1503,14 +1524,44 @@ class TrayMenuBuilder:
                 "default": repo_default,
             },
             {
+                "name": "config_source",
+                "label": "Initial config",
+                "type": "choice",
+                "choices": _SANDBOX_CONFIG_SOURCE_CHOICES,
+                "default": config_source,
+                "required": True,
+                "help": (
+                    "Choose one source: use host/default settings, a profile, a "
+                    "host config directory, or the latest saved snapshot."
+                ),
+            },
+            {
+                "name": "profile",
+                "label": "Profile",
+                "type": "choice",
+                "choices": profile_choices,
+                "editable": True,
+                "default": form_values.get("profile", ""),
+                "required": True,
+                "help": (
+                    "Choose a built-in profile or type a custom profile name/path."
+                ),
+                "enabled_when": {
+                    "field": "config_source",
+                    "values": ("Profile",),
+                },
+                "clear_when_disabled": True,
+            },
+            {
                 "name": "config_dir",
                 "label": "Host config directory",
                 "type": "directory",
                 "default": form_values.get("config_dir", ""),
-                "help": "Optional directory containing the initial ai-guardian.json.",
+                "required": True,
+                "help": "Directory containing the initial ai-guardian.json.",
                 "enabled_when": {
                     "field": "config_source",
-                    "values": ("Host/default",),
+                    "values": ("Host config directory",),
                 },
                 "clear_when_disabled": True,
             },
@@ -1531,23 +1582,6 @@ class TrayMenuBuilder:
                 "default": model_default,
                 "help": "CLI model or OpenShell inference model; empty uses the default.",
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
-                "clear_when_disabled": True,
-            },
-            {
-                "name": "profile",
-                "label": "Profile",
-                "type": "choice",
-                "choices": profile_choices,
-                "editable": True,
-                "default": form_values.get("profile", ""),
-                "help": (
-                    "Optional profile; choose a built-in or type a custom "
-                    "profile name/path."
-                ),
-                "enabled_when": {
-                    "field": "config_source",
-                    "values": ("Host/default",),
-                },
                 "clear_when_disabled": True,
             },
             {
@@ -1612,13 +1646,6 @@ class TrayMenuBuilder:
                 "help": "Runtime KEY=VALUE labels; separate values with commas or newlines.",
             },
             {
-                "name": "config_source",
-                "label": "Initial config",
-                "type": "choice",
-                "choices": _SANDBOX_CONFIG_SOURCE_CHOICES,
-                "default": config_source,
-            },
-            {
                 "name": "port",
                 "label": "Host port",
                 "default": "",
@@ -1652,15 +1679,54 @@ class TrayMenuBuilder:
         runtime = values.get("runtime")
         name = str(values.get("name") or "").strip()
         profile = str(values.get("profile") or "").strip()
+        config_dir = str(values.get("config_dir") or "").strip() or None
         openshell_mode = str(
             values.get("openshell_mode") or TRAY_OPENSHELL_MODE_CHOICES[0]
         ).strip()
-        config_source = _normalize_sandbox_config_source(values.get("config_source"))
+        config_source_value = values.get("config_source")
+        if not config_source_value:
+            if profile:
+                config_source_value = "Profile"
+            elif config_dir:
+                config_source_value = "Host config directory"
+        config_source = _normalize_sandbox_config_source(config_source_value)
         restore = config_source == "Latest saved snapshot"
         if restore and profile:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
                 "A saved configuration snapshot cannot be combined with a profile.",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            finish_flow()
+            return
+        if profile and config_source != "Profile":
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "Select Profile as the initial config source or clear the profile field.",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            finish_flow()
+            return
+        if config_dir and config_source != "Host config directory":
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "Select Host config directory as the initial config source or clear the directory field.",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            finish_flow()
+            return
+        if config_source == "Profile" and not profile:
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "Choose a profile for the selected initial config source.",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            finish_flow()
+            return
+        if config_source == "Host config directory" and not config_dir:
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "Choose a host config directory for the selected initial config source.",
                 **self._screen_bounds_kwargs(screen_bounds),
             )
             finish_flow()
@@ -1739,18 +1805,9 @@ class TrayMenuBuilder:
             finish_flow()
             return
         repo = str(values.get("repo") or "").strip() or None
-        config_dir = str(values.get("config_dir") or "").strip() or None
         image = str(values.get("image") or "").strip() or None
         model = str(values.get("model") or "").strip() or None
         profile_value = profile or None
-        if config_dir and (restore or profile):
-            self._sandbox_error(
-                "Create AI Guardian sandbox",
-                "The host config directory cannot be combined with a profile or saved snapshot.",
-                **self._screen_bounds_kwargs(screen_bounds),
-            )
-            finish_flow()
-            return
         policies = str(values.get("policies") or "").strip()
         policy_paths = []
         if runtime == "openshell":
@@ -1784,6 +1841,14 @@ class TrayMenuBuilder:
             entry = entry.strip()
             if entry:
                 environment_values.append(entry)
+        if cli == "claude" and values.get("accept_claude_tos") is True:
+            environment_values = [
+                entry
+                for entry in environment_values
+                if entry.partition("=")[0].strip().casefold()
+                != "accept_proprietary_tos"
+            ]
+            environment_values.append("ACCEPT_PROPRIETARY_TOS=true")
         labels = str(values.get("labels") or "").strip()
         label_values = []
         for label in labels.replace("\n", ",").split(","):
@@ -3095,6 +3160,8 @@ class TrayMenuBuilder:
                 visible=lambda _item: self._tray._is_single_daemon(),
             ),
             pause_item,
+            shell_item,
+            self._build_sandbox_manage_menu_item(0),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Console",
@@ -3176,8 +3243,6 @@ class TrayMenuBuilder:
                 self._mk_change_working_dir(0),
                 visible=_single_vis,
             ),
-            shell_item,
-            self._build_sandbox_manage_menu_item(0),
         ]
 
     def _build_single_daemon_pause_menu_item(
@@ -3777,6 +3842,8 @@ class TrayMenuBuilder:
                         ),
                         self._build_daemon_status_menu_item(idx),
                         pause_item,
+                        shell_item,
+                        self._build_sandbox_manage_menu_item(idx),
                         pystray.Menu.SEPARATOR,
                         pystray.MenuItem(
                             "Console",
@@ -3865,8 +3932,6 @@ class TrayMenuBuilder:
                             lambda _i, s=idx: self._working_dir_menu_label(s),
                             self._mk_change_working_dir(idx),
                         ),
-                        shell_item,
-                        self._build_sandbox_manage_menu_item(idx),
                         pystray.Menu.SEPARATOR,
                         *multi_plugin_items,
                         pystray.Menu.SEPARATOR,

@@ -36,7 +36,7 @@ DEFAULT_AI_GUARDIAN_COMMAND = (
     if (REPOSITORY_ROOT / "pyproject.toml").is_file()
     else "ai-guardian"
 )
-REPORT_SCHEMA_VERSION = 1
+REPORT_SCHEMA_VERSION = 2
 REPORT_TYPE = "ai-guardian-openshell-compatibility"
 REPORT_SCHEMA_PATH = Path(__file__).with_name("openshell-compatibility.schema.json")
 QUALIFICATION_DETECTION_TEXT = (
@@ -52,6 +52,8 @@ class SmokeCase:
     cli: str
     description: str
     agent_provider: Optional[str] = None
+    opencode_agent: Optional[str] = None
+    vertex: bool = False
     requires_gateway_provider: bool = False
     known_failure: bool = False
 
@@ -67,6 +69,7 @@ class QualificationCase:
     provider_class: str
     model_family: str
     requires_provider: bool = False
+    requires_metadata: bool = False
 
 
 CASES = {
@@ -75,10 +78,25 @@ CASES = {
         cli="codex",
         description="Native Codex through the OpenShell Codex provider",
     ),
+    "claude-vertex": SmokeCase(
+        name="claude-vertex",
+        cli="claude",
+        description="Native Claude Code through Vertex AI ADC metadata",
+        vertex=True,
+    ),
+    "opencode-claude-vertex": SmokeCase(
+        name="opencode-claude-vertex",
+        cli="opencode",
+        description="OpenCode claude agent through native Vertex AI ADC metadata",
+        opencode_agent="claude",
+        vertex=True,
+    ),
 }
 
 CASE_NAME_PARTS = {
     "codex": "cdx",
+    "claude-vertex": "clv",
+    "opencode-claude-vertex": "ocv",
 }
 
 
@@ -91,6 +109,24 @@ QUALIFICATION_CASES = (
         provider_class="openshell-codex",
         model_family="Codex",
         requires_provider=True,
+    ),
+    QualificationCase(
+        id="claude-vertex-openshell",
+        smoke_case="claude-vertex",
+        agent="claude",
+        profile="native-vertex",
+        provider_class="openshell-google-cloud",
+        model_family="Claude on Vertex",
+        requires_metadata=True,
+    ),
+    QualificationCase(
+        id="opencode-claude-vertex-openshell",
+        smoke_case="opencode-claude-vertex",
+        agent="opencode",
+        profile="claude-vertex",
+        provider_class="openshell-google-cloud",
+        model_family="Claude on Vertex",
+        requires_metadata=True,
     ),
 )
 
@@ -112,7 +148,7 @@ def _command_available(command: Sequence[str]) -> bool:
 def _run_quiet(
     command: Sequence[str], timeout: int
 ) -> Optional[subprocess.CompletedProcess]:
-    """Run a qualification probe without forwarding provider output."""
+    """Run a subprocess without forwarding provider or model output."""
     try:
         return subprocess.run(
             list(command),
@@ -122,8 +158,11 @@ def _run_quiet(
             text=True,
             timeout=timeout,
         )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, OSError):
         return None
+    except subprocess.TimeoutExpired:
+        # Do not preserve partial stdout/stderr from a timed-out provider call.
+        return subprocess.CompletedProcess(list(command), 124, stdout="", stderr="")
 
 
 def _failure_code(returncode: Optional[int]) -> str:
@@ -210,6 +249,7 @@ def _image_metadata(image: str) -> Dict[str, Any]:
         base_digest = base_reference.rsplit("@", 1)[1]
     versions = {
         "codex": args.get("CODEX_VERSION", "unknown"),
+        "opencode": args.get("OPENCODE_VERSION", "unknown"),
     }
     return {
         **_image_reference_parts(image),
@@ -296,6 +336,7 @@ def _not_run_steps(failure_code: str = "not_run_after_failure") -> Dict[str, Any
             "creation",
             "daemon",
             "service",
+            "metadata",
             "agent",
             "detection",
             "restart",
@@ -377,6 +418,19 @@ def _service_health(openshell_cli: str, name: str, timeout: int) -> bool:
         return False
 
 
+def _metadata_readiness_command() -> List[str]:
+    """Check the reserved GCE metadata endpoint without displaying its body."""
+    probe = (
+        'test "${GCE_METADATA_HOST:-}" = "127.0.0.1:8174" '
+        '&& test "${GCE_METADATA_IP:-}" = "127.0.0.1:8174" '
+        '&& test "${METADATA_SERVER_DETECTION:-}" = "assume-present" '
+        "&& curl --fail --silent --show-error --output /dev/null "
+        '--header "Metadata-Flavor: Google" '
+        "http://127.0.0.1:8174/computeMetadata/v1/project/project-id"
+    )
+    return ["/bin/bash", "-lc", probe]
+
+
 def _qualification_case_record(case: QualificationCase) -> Dict[str, Any]:
     """Return the report-safe static fields for one qualification row."""
     return {
@@ -415,6 +469,25 @@ def build_cli_command(case: SmokeCase, args: argparse.Namespace) -> List[str]:
         if args.codex_model:
             command.extend(["--model", args.codex_model])
         return [*command, prompt]
+    if case.name == "claude-vertex":
+        return [
+            "claude",
+            "--bare",
+            "--print",
+            prompt,
+            "--model",
+            args.claude_vertex_model,
+        ]
+    if case.name == "opencode-claude-vertex":
+        return [
+            "opencode",
+            "run",
+            "--agent",
+            case.opencode_agent or "claude",
+            "--model",
+            args.opencode_vertex_model,
+            prompt,
+        ]
     raise ValueError(f"unsupported smoke case: {case.name}")
 
 
@@ -448,6 +521,31 @@ def build_create_command(
         command.extend(["--agent-provider", case.agent_provider])
     if case.name == "codex" and args.codex_model:
         command.extend(["--model", args.codex_model])
+    if case.opencode_agent:
+        command.extend(["--opencode-agent-profile", case.opencode_agent])
+    if case.vertex:
+        project = args.vertex_project
+        region = args.vertex_region
+        if case.cli == "claude":
+            command.extend(
+                [
+                    "--env",
+                    f"ANTHROPIC_VERTEX_PROJECT_ID={project}",
+                    "--env",
+                    f"CLOUD_ML_REGION={region}",
+                ]
+            )
+            if args.accept_proprietary_tos:
+                command.extend(["--env", "ACCEPT_PROPRIETARY_TOS=true"])
+        else:
+            command.extend(
+                [
+                    "--env",
+                    f"GOOGLE_CLOUD_PROJECT={project}",
+                    "--env",
+                    f"VERTEX_LOCATION={region}",
+                ]
+            )
     if case.name in provider_overrides:
         command.extend(["--provider", provider_overrides[case.name]])
 
@@ -516,22 +614,11 @@ def _execute_case(
     command: Sequence[str],
     timeout: int,
 ) -> int:
-    """Execute one agent command using OpenShell or local Podman."""
-    if executor == "openshell":
-        return _run(
-            [openshell_cli, "sandbox", "exec", "--name", name, "--", *command],
-            timeout,
-        )
-
-    container_id = _find_podman_container(podman, name)
-    if not container_id:
-        print(
-            "ERROR: no local Podman container was found for this OpenShell sandbox; "
-            "use --executor openshell or a gateway with a local Podman driver",
-            file=sys.stderr,
-        )
-        return 127
-    return _run([podman, "exec", container_id, *command], timeout)
+    """Execute an agent command without forwarding model or provider output."""
+    result = _execute_case_quiet(
+        openshell_cli, podman, executor, name, command, timeout
+    )
+    return result.returncode if result is not None else 127
 
 
 def _execute_case_quiet(
@@ -542,7 +629,7 @@ def _execute_case_quiet(
     command: Sequence[str],
     timeout: int,
 ) -> Optional[subprocess.CompletedProcess]:
-    """Execute a qualification command while discarding model output."""
+    """Execute a command while capturing and discarding all output."""
     if executor == "openshell":
         return _run_quiet(
             [
@@ -616,9 +703,27 @@ def _step_from_result(
         "failed",
         exit_code=result.returncode,
         failure_code=(
-            failure_code if result.returncode != 127 else "command_unavailable"
+            "command_unavailable"
+            if result.returncode == 127
+            else "timed_out" if result.returncode == 124 else failure_code
         ),
     )
+
+
+def _creation_failure_code(result: subprocess.CompletedProcess) -> str:
+    """Map provider setup errors to a safe code without retaining their text."""
+    output = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+    if any(
+        marker in output
+        for marker in (
+            "application default credentials were not found",
+            "no provider profile for",
+            "google-cloud profile",
+            "provider_not_configured",
+        )
+    ):
+        return "provider_not_configured"
+    return "command_failed"
 
 
 def _qualify_case(
@@ -630,12 +735,48 @@ def _qualify_case(
     """Run one matrix row and retain only boolean/exit-code outcomes."""
     record = _qualification_case_record(case)
     steps = record["steps"]
+    if not case.requires_metadata:
+        steps["metadata"] = _report_step("skipped", failure_code="not_applicable")
     if case.requires_provider and case.smoke_case not in provider_overrides:
         steps["creation"] = _report_step(
             "skipped", failure_code="provider_not_configured"
         )
         record["result"] = "skipped"
         record["known_failures"] = ["provider_not_configured"]
+        return record
+    if case.requires_metadata and not args.vertex_project:
+        steps["creation"] = _report_step(
+            "skipped", failure_code="provider_not_configured"
+        )
+        steps["metadata"] = _report_step(
+            "not_run", failure_code="not_run_after_failure"
+        )
+        record["result"] = "skipped"
+        record["known_failures"] = ["provider_not_configured"]
+        return record
+    if case.requires_metadata and (
+        (case.smoke_case == "claude-vertex" and not args.claude_vertex_model)
+        or (
+            case.smoke_case == "opencode-claude-vertex"
+            and not args.opencode_vertex_model
+        )
+    ):
+        steps["creation"] = _report_step("skipped", failure_code="model_not_configured")
+        steps["metadata"] = _report_step(
+            "not_run", failure_code="not_run_after_failure"
+        )
+        record["result"] = "skipped"
+        record["known_failures"] = ["model_not_configured"]
+        return record
+    if case.smoke_case == "claude-vertex" and not args.accept_proprietary_tos:
+        steps["creation"] = _report_step(
+            "skipped", failure_code="terms_of_service_not_accepted"
+        )
+        steps["metadata"] = _report_step(
+            "not_run", failure_code="not_run_after_failure"
+        )
+        record["result"] = "skipped"
+        record["known_failures"] = ["terms_of_service_not_accepted"]
         return record
 
     qualification_args = argparse.Namespace(**vars(args))
@@ -661,7 +802,7 @@ def _qualify_case(
         steps["creation"] = _report_step("passed", exit_code=0)
     else:
         steps["creation"] = _step_from_result(
-            create_result, failure_code="command_failed"
+            create_result, failure_code=_creation_failure_code(create_result)
         )
 
     sandbox_created = bool(create_result and create_result.returncode == 0)
@@ -712,15 +853,39 @@ def _qualify_case(
             failure_code=None if service_ok else "service_unreachable",
         )
 
-        agent_result = _execute_case_quiet(
-            args.openshell_cli,
-            args.podman,
-            args.executor,
-            name,
-            build_cli_command(smoke_case, qualification_args),
-            args.timeout,
-        )
-        steps["agent"] = _step_from_result(agent_result, failure_code="command_failed")
+        metadata_ready = True
+        if case.requires_metadata:
+            metadata_result = _execute_case_quiet(
+                args.openshell_cli,
+                args.podman,
+                args.executor,
+                name,
+                _metadata_readiness_command(),
+                args.timeout,
+            )
+            steps["metadata"] = _step_from_result(
+                metadata_result, failure_code="metadata_unavailable"
+            )
+            metadata_ready = bool(
+                metadata_result is not None and metadata_result.returncode == 0
+            )
+
+        if metadata_ready:
+            agent_result = _execute_case_quiet(
+                args.openshell_cli,
+                args.podman,
+                args.executor,
+                name,
+                build_cli_command(smoke_case, qualification_args),
+                args.timeout,
+            )
+            steps["agent"] = _step_from_result(
+                agent_result, failure_code="command_failed"
+            )
+        else:
+            steps["agent"] = _report_step(
+                "not_run", failure_code="not_run_after_failure"
+            )
 
         detection_result = _execute_case_quiet(
             args.openshell_cli,
@@ -824,6 +989,8 @@ def _qualify_case(
         "restart",
         "reconnect",
     )
+    if case.requires_metadata:
+        required_steps = (*required_steps, "metadata")
     if any(steps[name]["status"] == "failed" for name in required_steps):
         record["result"] = "failed"
     elif any(steps[name]["status"] == "skipped" for name in required_steps):
@@ -905,13 +1072,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--all",
         action="store_true",
-        help=("Run the supported Codex case"),
+        help="Run all supported local smoke cases",
     )
     parser.add_argument(
         "--qualify",
         action="store_true",
         help=(
-            "Run the fixed Codex/OpenShell qualification matrix and write a "
+            "Run the fixed OpenShell provider qualification matrix and write a "
             "sanitized report"
         ),
     )
@@ -961,6 +1128,51 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--codex-model", help="Optional native Codex model")
     parser.add_argument(
+        "--claude-vertex-model",
+        default=os.environ.get("AI_GUARDIAN_CLAUDE_VERTEX_MODEL"),
+        help="Claude model ID for the Claude/Vertex case",
+    )
+    parser.add_argument(
+        "--opencode-vertex-model",
+        default=os.environ.get("AI_GUARDIAN_OPENCODE_VERTEX_MODEL"),
+        help="OpenCode google-vertex provider/model ID for the OpenCode/Vertex case",
+    )
+    parser.add_argument(
+        "--vertex-project",
+        default=next(
+            (
+                os.environ.get(name)
+                for name in (
+                    "ANTHROPIC_VERTEX_PROJECT_ID",
+                    "VERTEX_AI_PROJECT_ID",
+                    "GOOGLE_CLOUD_PROJECT",
+                    "GCP_PROJECT",
+                    "GCP_PROJECT_ID",
+                )
+                if os.environ.get(name)
+            ),
+            None,
+        ),
+        help="Non-secret GCP project ID for the Vertex cases",
+    )
+    parser.add_argument(
+        "--vertex-region",
+        default=next(
+            (
+                os.environ.get(name)
+                for name in ("CLOUD_ML_REGION", "VERTEX_AI_REGION", "VERTEX_LOCATION")
+                if os.environ.get(name)
+            ),
+            "global",
+        ),
+        help="Non-secret Vertex region (default: global)",
+    )
+    parser.add_argument(
+        "--accept-proprietary-tos",
+        action="store_true",
+        help="Acknowledge Claude Code's Terms of Service for its Vertex case",
+    )
+    parser.add_argument(
         "--keep", action="store_true", help="Keep created sandboxes for inspection"
     )
     parser.add_argument(
@@ -1008,6 +1220,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error(f"Podman command is not available: {args.podman}")
 
     selected = list(CASES) if args.all else list(dict.fromkeys(args.case))
+    for case_name in selected:
+        case = CASES[case_name]
+        if case.vertex and not args.vertex_project:
+            parser.error(
+                "Vertex cases require --vertex-project or a project environment variable"
+            )
+        if case.name == "claude-vertex":
+            if not args.claude_vertex_model:
+                parser.error("the Claude/Vertex case requires --claude-vertex-model")
+            if not args.accept_proprietary_tos:
+                parser.error("the Claude/Vertex case requires --accept-proprietary-tos")
+        if case.name == "opencode-claude-vertex" and not args.opencode_vertex_model:
+            parser.error("the OpenCode/Vertex case requires --opencode-vertex-model")
     created: List[str] = []
     results: List[str] = []
     unexpected_failure = False

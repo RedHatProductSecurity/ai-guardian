@@ -12,7 +12,9 @@ at the end cover lifecycle commands and less common options.
 | 2 | Docker/Podman | Codex API key | [Container API key](#case-2--dockerpodman--codex-api-key) |
 | 3 | OpenShell | Codex OAuth | [OpenShell OAuth](#case-3--openshell--codex-oauth) |
 | 4 | OpenShell | Codex API key | [OpenShell API key](#case-4--openshell--codex-api-key) |
-| 5 | Tray | Either runtime | [Tray](#case-5--tray-create-sandbox) |
+| 5 | OpenShell | Claude Code + Vertex AI | [Claude/Vertex](#case-5--openshell--claude-code--vertex-ai) |
+| 6 | OpenShell | OpenCode `claude` agent + Vertex AI | [OpenCode/Vertex](#case-6--openshell--opencode-claude-agent--vertex-ai) |
+| 7 | Tray | Either runtime | [Tray](#case-7--tray-create-sandbox) |
 
 All recipes assume that `ai-guardian` is installed and that you run the
 commands from the repository you want to protect:
@@ -107,8 +109,7 @@ when the sandbox is created. Do not commit it or copy it into the repository.
 
 ## OpenShell provider setup
 
-Complete this once for each OpenShell gateway. It is required for Cases 3 and
-4.
+Complete this once for each OpenShell gateway. It is required for Cases 3–6.
 
 ### Prerequisites
 
@@ -164,6 +165,30 @@ openshell provider list-profiles
 
 The expected profiles are `codex` and `openai`. If import says a profile
 already exists, continue; it is already installed.
+
+### Additional profile for Vertex AI cases
+
+For Claude Code/Vertex and OpenCode/Vertex, also import the endpointless
+`google-cloud` profile. OpenShell 0.1.3 or later provides the supervisor-backed
+metadata emulator required for native Google Application Default Credentials:
+
+```bash
+curl -fsSL \
+    https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.3/providers/google-cloud.yaml \
+    -o /tmp/openshell-google-cloud.yaml
+openshell provider profile import \
+    --file /tmp/openshell-google-cloud.yaml --global
+```
+
+On the host that runs AI Guardian, configure gateway bootstrap credentials once
+with `gcloud auth application-default login`, then provide a non-secret project
+ID and Vertex region when creating a sandbox. AI Guardian creates or reuses the
+`ai-guardian-google-cloud` provider from host ADC when it does not exist;
+OpenShell retains the refresh material at the gateway and the workload receives
+only an opaque token placeholder through `GCE_METADATA_HOST=127.0.0.1:8174`.
+Do not upload or mount the host ADC file, and do not pass token or refresh values
+with `--env`. An existing `--provider NAME` may be used instead if it has type
+`google-cloud`.
 
 ### Step 3 — Use the v0.1.3 provider profiles
 
@@ -297,7 +322,88 @@ to the sandbox.
 AI Guardian creates or reuses `ai-guardian-openai`; the real key stays in the
 gateway and is represented inside the sandbox by an opaque placeholder.
 
-## Case 5 — Tray Create sandbox
+## Case 5 — OpenShell + Claude Code + Vertex AI
+
+**Prerequisites**
+
+- Complete [OpenShell provider setup](#openshell-provider-setup), including the
+  `google-cloud` profile.
+- Run `gcloud auth application-default login` on the host running AI Guardian.
+- Have a Vertex-enabled project, model access, and the Vertex AI User IAM role.
+- Accept Claude Code's Terms of Service. The OpenShell image installs Claude
+  Code at runtime only after explicit consent.
+
+**Steps**
+
+1. Create the sandbox with non-secret project and region settings:
+
+   ```bash
+   ai-guardian sandbox create \
+       --runtime openshell \
+       --name guardian-claude-vertex \
+       --cli claude \
+       --env ANTHROPIC_VERTEX_PROJECT_ID=PROJECT_ID \
+       --env CLOUD_ML_REGION=us-east5 \
+       --env ACCEPT_PROPRIETARY_TOS=true \
+       --repo .
+   ```
+
+2. The explicit `ACCEPT_PROPRIETARY_TOS=true` setting acknowledges Claude
+   Code's Terms of Service for the non-interactive sandbox bootstrap. Start
+   Claude Code in Vertex mode and select a model available to your project:
+
+   ```bash
+   claude --bare
+   ```
+
+When creating the managed OpenShell sandbox from the tray, select **Claude**
+and check **I accept Anthropic's Claude Code Terms of Service** after reviewing
+the linked terms. This checkbox is required to continue with Claude selected.
+The tray passes consent only when checked; without it, non-interactive startup
+skips the runtime installation.
+
+The sandbox sets `CLAUDE_CODE_USE_VERTEX=1` and binds regional and replicated
+Vertex endpoints to the gateway-owned Google Cloud provider. ADC files and
+refresh material stay out of the sandbox.
+
+## Case 6 — OpenShell + OpenCode `claude` agent + Vertex AI
+
+**Prerequisites**
+
+- Complete [OpenShell provider setup](#openshell-provider-setup), including the
+  `google-cloud` profile.
+- Run `gcloud auth application-default login` on the host running AI Guardian.
+- Have a Vertex-enabled project, access to a Claude model, and the Vertex AI User
+  IAM role.
+
+**Steps**
+
+1. Create the sandbox with the OpenCode `claude` agent profile:
+
+   ```bash
+   ai-guardian sandbox create \
+       --runtime openshell \
+       --name guardian-opencode-vertex \
+       --cli opencode \
+       --opencode-agent-profile claude \
+       --env GOOGLE_CLOUD_PROJECT=PROJECT_ID \
+       --env VERTEX_LOCATION=global \
+       --repo .
+   ```
+
+2. Select a Vertex-hosted Claude model and run it natively:
+
+   ```bash
+   opencode run --agent claude \
+       --model google-vertex/MODEL_ID \
+       "hello"
+   ```
+
+The gateway-owned provider supplies ADC through the metadata emulator; OpenCode
+uses Vertex's native endpoint and request format. No ADC file or GCP token is
+uploaded to the workload.
+
+## Case 7 — Tray Create sandbox
 
 **Prerequisites**
 
@@ -318,10 +424,16 @@ gateway and is represented inside the sandbox by an opaque placeholder.
 2. Select **Runtime**: `container` or `openshell`.
 3. For OpenShell, select **OpenShell sandbox mode**: **AI Guardian hooks** or
    **Native OpenShell**. The native path leaves workload setup to OpenShell.
-4. Select **CLI**: OpenShell currently offers `codex` only.
-5. For OpenShell **AI Guardian hooks**, select **Codex authentication**: **OAuth**
-   or **API key**. Native OpenShell leaves authentication to OpenShell.
-6. Select the repository and click **Create**.
+4. Select **CLI**: `codex`, `claude`, or `opencode`. For OpenCode, select the
+   `claude` agent profile to use the Vertex route.
+5. For OpenShell **AI Guardian hooks**, Codex authentication offers **OAuth** or
+   **API key**. For Claude/Vertex or OpenCode/Vertex, expose the non-secret
+   project and region variables to the tray process before creating the sandbox.
+   Native OpenShell leaves workload setup to OpenShell.
+6. Choose one **Initial config** source: **Host/default**, **Profile**, **Host
+   config directory**, or **Latest saved snapshot**. Only the selected source's
+   profile or directory field is enabled.
+7. Select the repository and click **Create**.
 
 The tray uses the same implementation as the CLI for the hooked path. OAuth
 selects `ai-guardian-codex`; API key selects `ai-guardian-openai`.
@@ -392,7 +504,7 @@ The most useful options are:
 | Option | Use |
 | --- | --- |
 | `--runtime container` | Use Docker/Podman instead of the OpenShell default. |
-| `--cli NAME` | Select the CLI. OpenShell supports `codex` only. |
+| `--cli NAME` | Select the CLI. OpenShell supports `codex`, `claude`, and `opencode`. |
 | `--repo DIR` | Mount a container repository or upload it to OpenShell. |
 | `--name NAME` | Choose the sandbox name. |
 | `--profile PROFILE` | Start with a bundled or custom AI Guardian profile. |
@@ -400,7 +512,7 @@ The most useful options are:
 | `--provider NAME` | Attach an existing OpenShell provider; repeatable. |
 | `--openshell-auth {oauth,api-key}` | Select automatic OpenShell Codex authentication. |
 | `--agent-provider NAME` | Select Pi's provider in Container sandboxes. |
-| `--opencode-agent-profile NAME` | Select an OpenCode profile in Container sandboxes. |
+| `--opencode-agent-profile NAME` | Select an OpenCode profile in Container or OpenShell sandboxes. |
 | `--env KEY=VALUE` | Add an environment variable; repeatable. |
 | `--model MODEL` | Select the CLI or OpenShell model. |
 
@@ -491,6 +603,12 @@ openshell status
 systemctl --user status openshell-gateway
 systemctl --user status podman.socket
 ```
+
+For Claude/Vertex or OpenCode/Vertex, the manual compatibility runner also
+reports a `metadata_unavailable` step if the sandbox cannot reach
+`127.0.0.1:8174`. Confirm the active gateway is OpenShell 0.1.3 or later and
+that a `google-cloud` provider is attached; provider-backed GCE metadata is
+served by the supervisor, not by the host's cloud metadata service.
 
 ## Manual Live Provider Smoke Tests
 

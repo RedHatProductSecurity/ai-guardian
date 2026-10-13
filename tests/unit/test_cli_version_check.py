@@ -15,7 +15,10 @@ import check_cli_versions as cli_versions  # noqa: E402
 def test_load_pinned_versions_reads_openshell_dockerfile():
     pinned = cli_versions.load_pinned_versions(cli_versions.DEFAULT_DOCKERFILE)
 
-    assert pinned == {"CODEX_VERSION": "0.160.0"}
+    assert pinned == {
+        "CODEX_VERSION": "0.160.0",
+        "OPENCODE_VERSION": "1.18.34",
+    }
 
 
 def test_load_pinned_versions_reads_normal_opencode_pin():
@@ -41,6 +44,7 @@ def test_compare_versions(first, second, expected):
 def test_check_versions_writes_report_and_detects_updates(tmp_path):
     latest = {
         "@openai/codex": "0.160.1",
+        "opencode-ai": "1.18.34",
     }
     report = tmp_path / "cli-versions.json"
 

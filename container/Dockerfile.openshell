@@ -27,6 +27,7 @@ ARG BASE_IMAGE
 ARG AI_GUARDIAN_VERSION=1.19.0
 ARG UV_VERSION=0.11.16
 ARG CODEX_VERSION=0.160.0
+ARG OPENCODE_VERSION=1.18.34
 
 # The supported OpenShell workload is intentionally minimal. Install every
 # runtime dependency needed by the support image instead of relying on a
@@ -77,6 +78,27 @@ RUN set -eux; \
     ln -sf /sandbox/.venv/bin/ai-guardian /usr/local/bin/ai-guardian; \
     ai-guardian --version
 
+# Install OpenCode from its pinned Linux release archive.
+RUN set -eux; \
+    case "$(uname -m)" in \
+        x86_64) OPENCODE_ARCH=x64 ;; \
+        aarch64|arm64) OPENCODE_ARCH=arm64 ;; \
+        *) echo "Unsupported OpenCode architecture: $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    if [ "$OPENCODE_ARCH" = "x64" ] \
+        && ! grep -qwi avx2 /proc/cpuinfo 2>/dev/null; then \
+        OPENCODE_ARCH=x64-baseline; \
+    fi; \
+    archive="/tmp/opencode-linux-${OPENCODE_ARCH}.tar.gz"; \
+    curl -fsSL --retry 3 -o "$archive" \
+        "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OPENCODE_ARCH}.tar.gz"; \
+    mkdir -p /opt/opencode/.opencode/bin; \
+    tar -xzf "$archive" -C /opt/opencode/.opencode/bin; \
+    rm "$archive"; \
+    test -x /opt/opencode/.opencode/bin/opencode; \
+    install -m 755 /opt/opencode/.opencode/bin/opencode /usr/local/bin/opencode; \
+    opencode --version
+
 # Install the supported redistributable Node-based client explicitly.
 RUN npm install --global --prefix /usr --no-fund --no-audit \
         "@openai/codex@${CODEX_VERSION}" \
@@ -126,6 +148,7 @@ RUN set -eux; \
 # host configuration, when selected by the sandbox command, is uploaded separately.
 RUN mkdir -p \
         /sandbox/.config/ai-guardian/profiles \
+        /sandbox/.config/opencode /sandbox/.local/share/opencode \
         /sandbox/.claude /sandbox/.cursor /sandbox/.codex \
         /sandbox/.gemini /sandbox/.github/hooks \
         /sandbox/.kiro /sandbox/.openclaw /sandbox/.cline \
@@ -133,7 +156,8 @@ RUN mkdir -p \
         /sandbox/.augment /sandbox/.crush \
         /sandbox/.local/bin /sandbox/.local/state/ai-guardian \
     && chown -R sandbox:sandbox \
-        /sandbox/.config /sandbox/.claude /sandbox/.cursor /sandbox/.codex \
+        /sandbox/.config /sandbox/.local/share/opencode \
+        /sandbox/.claude /sandbox/.cursor /sandbox/.codex \
         /sandbox/.gemini /sandbox/.github /sandbox/.kiro /sandbox/.openclaw \
         /sandbox/.cline /sandbox/.clinerules /sandbox/.junie \
         /sandbox/.aider-desk /sandbox/.augment /sandbox/.crush \
@@ -157,10 +181,11 @@ ENV AI_GUARDIAN_REST_PORT=${AI_GUARDIAN_REST_PORT} \
 LABEL ai-guardian.daemon=true \
       ai-guardian.support-image=true \
       ai-guardian.openshell-base=true \
-       ai-guardian.compatibility-report-schema=1 \
+        ai-guardian.compatibility-report-schema=2 \
        ai-guardian.version="${AI_GUARDIAN_VERSION}" \
        ai-guardian.openshell.base-image="${BASE_IMAGE}" \
-       ai-guardian.openshell.codex-version="${CODEX_VERSION}"
+       ai-guardian.openshell.codex-version="${CODEX_VERSION}" \
+       ai-guardian.openshell.opencode-version="${OPENCODE_VERSION}"
 
 EXPOSE ${AI_GUARDIAN_REST_PORT}
 

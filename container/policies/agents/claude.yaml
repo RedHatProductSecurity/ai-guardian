@@ -1,7 +1,6 @@
 # Claude Code network capability.
-# Google Vertex access is supplied by the google-vertex-ai provider when
-# Claude Code is configured for Vertex; it is intentionally not duplicated
-# here.
+# The managed sandbox command adds a credential-bound Vertex policy when
+# Claude Code uses the gateway-owned google-cloud ADC provider.
 version: 1
 
 network_policies:
@@ -23,7 +22,17 @@ network_policies:
         protocol: rest
         access: read-write
         enforcement: enforce
+      - host: platform.claude.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
       - host: claude.ai
+        port: 443
+        protocol: rest
+        access: read-only
+        enforcement: enforce
+      - host: claude.com
         port: 443
         protocol: rest
         access: read-only
@@ -38,6 +47,8 @@ network_policies:
       - { path: /usr/bin/claude }
       - { path: /usr/local/bin/claude }
       - { path: /sandbox/.local/bin/claude }
+      # The native launcher resolves to its versioned binary under this directory.
+      - { path: /sandbox/.local/share/claude/versions/** }
   claude_install:
     name: claude-install
     endpoints:
@@ -53,3 +64,5 @@ network_policies:
         enforcement: enforce
     binaries:
       - { path: /usr/bin/curl }
+      # The native installer fetches release metadata from this versioned temp binary.
+      - { path: /sandbox/.claude/downloads/claude-* }

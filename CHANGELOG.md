@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Tray Claude Code runtime consent:** Require an explicit, default-unchecked
+  Anthropic Terms of Service acceptance when Claude is selected, and forward
+  consent only when the user checks it.
+- **OpenShell native Vertex authentication (#2473):** Support Claude Code and
+  OpenCode's `claude` agent with gateway-owned Google Cloud ADC through the
+  OpenShell metadata emulator. Bind Vertex API endpoints to the attached
+  `google-cloud` provider, filter credential values from workload environments,
+  and add metadata-readiness and sanitized manual qualification contracts.
 - **Session-scoped pause/resume (#2534):** Pause one active hook session without
   affecting other sessions in the same project directory. Add CLI, tray, socket,
   and REST controls; explicitly label directory pause as a bulk action and
@@ -94,6 +102,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **OpenShell Claude setup (#2473):** Restrict the Codex authentication selector
+  to OpenShell/Codex and allow the Claude Console authentication endpoint that
+  Claude Code needs in restricted-network sandboxes.
+- **OpenShell Vertex provider reuse (#2473):** Read existing provider types from
+  the supported `provider get` output instead of passing its unsupported
+  `--output json` flag, so valid `google-cloud` providers work on OpenShell 0.1.3.
+- **OpenShell GitHub policy compatibility:** Remove unsupported TLS mode values
+  from bundled read-only and read/write GitHub endpoint overlays; OpenShell uses
+  automatic TLS termination when the field is omitted.
+- **OpenShell Claude runtime install and update:** Allow the temporary installer
+  and installed versioned Claude binary to reach `downloads.claude.ai`; permit
+  the installed binary to use the selected Vertex endpoints.
 - **KDE tray menu stability (#2532):** Defer AppIndicator menu refreshes while
   Plasma has the exported menu open, then apply the latest state after its
   close event so a refresh does not replace actions during menu dismissal.
@@ -206,6 +226,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving the underlying container image reference used for selection.
 
 ### Changed
+- **Sandbox tray menu order:** Place sandbox **Connect** and **Manage sandbox**
+  actions immediately below **Pause...** for easier access.
+- **Tray sandbox initial config source:** Replace overlapping profile, snapshot,
+  and host-directory controls with one mutually exclusive source selector; show
+  only the selected source's value field.
 - **OpenShell v0.1.3 compatibility baseline (#2531):** Raise the shared
   middleware and tray compatibility floor to OpenShell v0.1.3 while retaining
   supervisor protocol 1.0; v0.1.2 and earlier are rejected. The release restores
