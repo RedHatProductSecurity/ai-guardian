@@ -5,7 +5,7 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-12
+> Last updated: 2026-10-13
 
 ---
 
@@ -68,6 +68,34 @@ budget_tokens: 1000
   registry, and tray now agree on supported clients. Added metadata readiness
   and sanitized manual qualification rows for both combinations. No live Vertex
   model qualification was run.
+- Fixed OpenShell 0.1.3 provider discovery: `provider get` has no `--output` flag
+  and emits a human-readable `Type:` row. The sandbox command regression suite
+  passes (89 tests).
+- Removed unsupported `tls: terminate` from bundled GitHub read-only and
+  read/write policies. Both direct policy tests pass; the full container script
+  suite has 26 unrelated failures because macOS Bash 3.2 aborts on unset
+  `USERNS_ARGS[@]` under `set -u`.
+- Tray Create sandbox requires an explicit Anthropic ToS acceptance when
+  Claude is selected and forwards `ACCEPT_PROPRIETARY_TOS=true` only when
+  checked. Fixed tray form regression: disabled Tk checkbox values clear to
+  `False`, avoiding invalid `BooleanVar` initialization. Existing sandbox
+  `ag-claude` started without consent; `connect` does not rerun startup. Update
+  host tool with `uv tool install --editable .`, restart tray, and create a new
+  sandbox; image rebuild is not needed.
+- Validation: 100 tray tests and 89 sandbox command tests pass. Ruff, Black, and
+  Pylint pass; Mypy reports two errors in untouched UI files.
+- Reordered sandbox target actions so **Connect** and **Manage sandbox** appear
+  immediately below **Pause...** in single- and multi-daemon menus.
+- Reworked tray initial configuration into mutually exclusive Host/default,
+  Profile, Host config directory, and Latest saved snapshot sources; only the
+  selected source input stays enabled.
+- Validation: all 100 `tests/unit/test_sandbox_tray.py` tests pass; Ruff, Black,
+  and `git diff --check` pass.
+- Fixed Claude installer/update egress: allow its temporary installer binary to
+  fetch `downloads.claude.ai`, and its installed versioned binary to reach Claude
+  downloads and Vertex endpoints. Host composes this policy; no image rebuild is
+  needed. The `ANTHROPIC_VERTEX_PROJECT_ID` setting was detected, so project ID
+  is not cause of the reported connection refusal. Three focused policy tests pass.
 - Validation: 330 directly related unit tests pass. Black, Ruff, Pylint, Mypy,
   shell syntax, report-schema JSON, buglog JSON, and `git diff --check` pass.
 - Follow-up tray/network fixes for #2473: Codex authentication is disabled unless
@@ -105,10 +133,18 @@ black --target-version py310 --check src/ai_guardian/ tests/  # passed
 pylint src/ai_guardian/ --disable=all --enable=E --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 --output-format=text  # 10.00/10
 mypy src/ai_guardian/  # 14 known errors in skill_discovery.py and secret_validator.py
 uv run --extra dev python -m pytest tests/unit/test_openshell_manual.py -q  # 14 passed
+uv run --extra dev python -m pytest tests/unit/test_sandbox_command.py -q  # 89 passed
+uv run --extra dev python -m pytest tests/unit/test_sandbox_tray.py -q  # 100 passed
+uv run --extra dev python -m pytest tests/unit/test_container_scripts.py::TestContainerLaunchers::test_github_policy_allows_read_only_api_and_git_operations tests/unit/test_container_scripts.py::TestContainerLaunchers::test_github_readwrite_policy_allows_api_and_git_writes -q  # 2 passed
+uv run --extra dev python -m pytest tests/unit/test_container_scripts.py::TestContainerLaunchers::test_agent_policy_fragments_are_scoped_to_one_selected_agent tests/unit/test_container_scripts.py::TestContainerLaunchers::test_policy_composer_merges_only_the_selected_agent_fragment -q  # 2 passed
 ruff check container/tests/test_openshell_agents.py tests/unit/test_openshell_manual.py  # passed
 black --target-version py310 --check container/tests/test_openshell_agents.py tests/unit/test_openshell_manual.py  # passed
 git diff --check  # passed
 ```
+
+- Follow-up lint/type validation: Ruff, Black, and Pylint pass. Mypy reports two
+  existing errors in `src/ai_guardian/ui/clipboard.py:39` and
+  `src/ai_guardian/ui/ask_dialog.py:512`.
 
 ## References
 

@@ -880,7 +880,7 @@ def _show_tkinter_form(
             enabled = _field_enabled(field, current_values)
             enabled_states[name] = enabled
             if not enabled and field.get("clear_when_disabled"):
-                controls[name][1].set("")
+                controls[name][1].set(False if controls[name][0] == "bool" else "")
             for widget in control_widgets.get(name, ()):
                 if controls[name][0] == "textarea":
                     widget.configure(state="normal" if enabled else "disabled")

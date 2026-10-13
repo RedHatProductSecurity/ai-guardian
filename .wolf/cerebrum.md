@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-06
+> Last updated: 2026-10-13
 
 ## User Preferences
 
@@ -27,6 +27,11 @@
   require explicit Replace policy approval before applying. Avoid
   progress-window interstitials for fast preparation steps, and keep successful
   sandbox operation details open until the user closes them.
+- In sandbox target menus, place **Connect** and **Manage sandbox** immediately
+  after **Pause...**.
+- Tray sandbox initial configuration uses one exclusive source choice:
+  Host/default, Profile, Host config directory, or Latest saved snapshot. Show
+  only the matching profile/directory input.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
@@ -250,6 +255,39 @@
   and sign-in can redirect through `claude.com`. Tray form `enabled_when` can be
   a tuple of conditions; Tk and NiceGUI both evaluate the conjunction through
   `_field_enabled` for runtime/mode/CLI-specific controls.
+
+- **OpenShell provider lookup (#2473):** In v0.1.3, `openshell provider get
+  NAME` has no `--output` option and prints a human-readable `Type:` row.
+  Requesting JSON makes valid existing `google-cloud` providers appear
+  unavailable; read the type from supported CLI output instead.
+
+- **OpenShell endpoint TLS policy:** Omit `tls: terminate` from bundled endpoint
+  policies; OpenShell rejects that value and automatically terminates TLS when
+  the field is absent. Check all policy overlays, not only agent fragments.
+
+- **OpenShell Claude bootstrap:** Claude Code is not bundled in the support image
+  because of its redistribution terms. Non-interactive creation needs explicit
+  ToS consent; host `ACCEPT_PROPRIETARY_TOS` is not forwarded automatically.
+  Tray creation requires a default-unchecked acceptance checkbox when Claude is
+  selected and passes the environment value only when checked. Existing sandboxes do not rerun startup;
+  update the host tool with `uv tool install --editable .`, restart the tray, and
+  create a new sandbox. Image rebuild is not needed for this UI-only change.
+
+- **OpenShell Claude installer egress:** The setup shell downloads a versioned
+  native installer under `/sandbox/.claude/downloads/claude-*`; that binary makes
+  the release metadata request to `downloads.claude.ai`. Permit that narrow path
+  in `claude_install`, not just `/usr/bin/curl`. Installed native launchers
+  resolve into `/sandbox/.local/share/claude/versions/**`; include that path in
+  both Claude download and Vertex rules, or auto-update/inference can be denied.
+
+- **Tk boolean form clearing:** When a disabled form field has type `bool`, clear
+  its `BooleanVar` with `False`, never `""`; an empty string invalidates Tk's
+  boolean variable during initial form rendering.
+
+- **macOS Bash nounset tests:** Bash 3.2 with `set -u` aborts when
+  `container/run.sh` expands an unset optional `USERNS_ARGS[@]` array. The full
+  launcher suite fails before the mocked container engine runs; focused policy
+  contract tests remain usable until that separate shell fix is made.
 
 - **OpenShell workload identity:** OpenShell clears supplementary groups before
   capability-free launch. The NVIDIA Ubuntu base's `ubuntu` UID has default

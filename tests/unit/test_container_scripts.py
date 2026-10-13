@@ -697,8 +697,10 @@ class TestContainerLaunchers:
         api_endpoint = policy["network_policies"]["github_api_readonly"]["endpoints"][0]
         assert api_endpoint["host"] == "api.github.com"
         assert api_endpoint["access"] == "read-only"
+        assert "tls" not in api_endpoint
 
         git_endpoint = policy["network_policies"]["github_git_readonly"]["endpoints"][0]
+        assert "tls" not in git_endpoint
         rules = [rule["allow"] for rule in git_endpoint["rules"]]
         assert {rule["method"] for rule in rules} == {"GET", "POST"}
         assert "/**/info/refs*" in [rule["path"] for rule in rules]
@@ -721,8 +723,10 @@ class TestContainerLaunchers:
         api_endpoint = policy["network_policies"]["github_api"]["endpoints"][0]
         assert api_endpoint["host"] == "api.github.com"
         assert api_endpoint["access"] == "read-write"
+        assert "tls" not in api_endpoint
 
         git_endpoint = policy["network_policies"]["github_git"]["endpoints"][0]
+        assert "tls" not in git_endpoint
         rules = [rule["allow"] for rule in git_endpoint["rules"]]
         assert {rule["method"] for rule in rules} == {"GET", "POST"}
         assert "/**/git-upload-pack" in [rule["path"] for rule in rules]
@@ -762,6 +766,21 @@ class TestContainerLaunchers:
         }
         assert claude_endpoints["platform.claude.com"]["access"] == "read-write"
         assert claude_endpoints["claude.com"]["access"] == "read-only"
+        claude_code_binaries = {
+            binary["path"]
+            for binary in claude_policy["network_policies"]["claude_code"]["binaries"]
+        }
+        assert "/sandbox/.local/share/claude/versions/**" in claude_code_binaries
+        claude_install = claude_policy["network_policies"]["claude_install"]
+        assert any(
+            endpoint["host"] == "downloads.claude.ai"
+            and endpoint["access"] == "read-only"
+            for endpoint in claude_install["endpoints"]
+        )
+        claude_install_binaries = {
+            binary["path"] for binary in claude_install["binaries"]
+        }
+        assert "/sandbox/.claude/downloads/claude-*" in claude_install_binaries
 
     def test_node_based_agent_policies_allow_the_community_base_node_binary(self):
         for agent in (

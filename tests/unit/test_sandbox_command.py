@@ -25,6 +25,7 @@ from ai_guardian.sandbox import (
     _openshell_create,
     _openshell_native_create,
     _openshell_provider_environment,
+    _openshell_provider_type,
     _openshell_sandbox_environment,
     _openshell_vertex_context,
     _expose_openshell_service,
@@ -1480,6 +1481,20 @@ def test_openshell_vertex_attaches_an_existing_google_cloud_provider(tmp_path):
         shutil.rmtree(policy_dir)
 
 
+def test_openshell_provider_type_reads_human_readable_provider_get_output():
+    args = _args()
+    provider_name = "ai-guardian-google-cloud"
+    provider_output = (
+        "Provider:\n\n  Name: ai-guardian-google-cloud\n  Type: google-cloud\n"
+    )
+    result = subprocess.CompletedProcess([], 0, provider_output, "")
+
+    with patch("ai_guardian.sandbox._run_capture", return_value=result) as run_capture:
+        assert _openshell_provider_type(args, provider_name) == "google-cloud"
+
+    run_capture.assert_called_once_with(["openshell", "provider", "get", provider_name])
+
+
 def test_openshell_vertex_policy_binds_regional_and_replicated_endpoints(tmp_path):
     args = _args(policy=[])
     policy_path, policy_dir = _compose_openshell_policy(
@@ -1505,6 +1520,9 @@ def test_openshell_vertex_policy_binds_regional_and_replicated_endpoints(tmp_pat
         endpoint["credential_binding"] == {"provider": "gateway-gcp"}
         for endpoint in vertex_rule["endpoints"]
     )
+    assert "/sandbox/.local/share/claude/versions/**" in {
+        binary["path"] for binary in vertex_rule["binaries"]
+    }
 
 
 def test_openshell_global_vertex_policy_omits_regional_endpoint(tmp_path):

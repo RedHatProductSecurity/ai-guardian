@@ -356,6 +356,12 @@ gateway and is represented inside the sandbox by an opaque placeholder.
    claude --bare
    ```
 
+When creating the managed OpenShell sandbox from the tray, select **Claude**
+and check **I accept Anthropic's Claude Code Terms of Service** after reviewing
+the linked terms. This checkbox is required to continue with Claude selected.
+The tray passes consent only when checked; without it, non-interactive startup
+skips the runtime installation.
+
 The sandbox sets `CLAUDE_CODE_USE_VERTEX=1` and binds regional and replicated
 Vertex endpoints to the gateway-owned Google Cloud provider. ADC files and
 refresh material stay out of the sandbox.
@@ -424,7 +430,10 @@ uploaded to the workload.
    **API key**. For Claude/Vertex or OpenCode/Vertex, expose the non-secret
    project and region variables to the tray process before creating the sandbox.
    Native OpenShell leaves workload setup to OpenShell.
-6. Select the repository and click **Create**.
+6. Choose one **Initial config** source: **Host/default**, **Profile**, **Host
+   config directory**, or **Latest saved snapshot**. Only the selected source's
+   profile or directory field is enabled.
+7. Select the repository and click **Create**.
 
 The tray uses the same implementation as the CLI for the hooked path. OAuth
 selects `ai-guardian-codex`; API key selects `ai-guardian-openai`.

@@ -1228,6 +1228,7 @@ def _openshell_vertex_policy_overlay(
     binaries = (
         [
             "/sandbox/.local/bin/claude",
+            "/sandbox/.local/share/claude/versions/**",
             "/usr/local/bin/claude",
             "/usr/bin/claude",
             "/usr/local/bin/node",
@@ -1444,19 +1445,22 @@ def _openshell_google_adc_path(args) -> Path:
 
 def _openshell_provider_type(args, name: str) -> Optional[str]:
     """Read only the provider type, never credential/config values."""
-    result = _run_capture(
-        [_openshell_cli(args), "provider", "get", name, "--output", "json"]
-    )
+    result = _run_capture([_openshell_cli(args), "provider", "get", name])
     if result is None or result.returncode != 0:
         return None
-    payload = _parse_json_lines(result.stdout or "")
+    provider_output = result.stdout or ""
+    payload = _parse_json_lines(provider_output)
     if not isinstance(payload, dict):
-        return None
+        # OpenShell 0.1.3's provider-get command has no output-format flag and
+        # prints a human-readable "Type: ..." row.
+        type_line = re.search(r"(?m)^\s*Type:\s*(\S+)\s*$", provider_output)
+        return type_line.group(1) if type_line else None
     provider = payload.get("provider", payload)
-    if not isinstance(provider, dict):
-        return None
-    provider_type = provider.get("type") or provider.get("provider_type")
-    return str(provider_type) if provider_type else None
+    if isinstance(provider, dict):
+        provider_type = provider.get("type") or provider.get("provider_type")
+        if provider_type:
+            return str(provider_type)
+    return None
 
 
 def _run_openshell_provider_command(

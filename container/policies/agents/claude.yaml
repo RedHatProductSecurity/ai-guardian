@@ -47,6 +47,8 @@ network_policies:
       - { path: /usr/bin/claude }
       - { path: /usr/local/bin/claude }
       - { path: /sandbox/.local/bin/claude }
+      # The native launcher resolves to its versioned binary under this directory.
+      - { path: /sandbox/.local/share/claude/versions/** }
   claude_install:
     name: claude-install
     endpoints:
@@ -62,3 +64,5 @@ network_policies:
         enforcement: enforce
     binaries:
       - { path: /usr/bin/curl }
+      # The native installer fetches release metadata from this versioned temp binary.
+      - { path: /sandbox/.claude/downloads/claude-* }
