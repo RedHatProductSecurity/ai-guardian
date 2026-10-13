@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Tray sandbox creation Connect action (#2542):** Offer a Connect button after
+  successful container or OpenShell creation, launching the selected sandbox's
+  interactive connection without rerunning creation while preserving the output.
 - **Tray Claude Code runtime consent:** Require an explicit, default-unchecked
   Anthropic Terms of Service acceptance when Claude is selected, and forward
   consent only when the user checks it.

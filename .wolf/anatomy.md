@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~75448 tok)
+- `CHANGELOG.md` — Change log (~75508 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -1402,7 +1402,7 @@
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1078 tok)
 - `health.py` — URL configuration (~16971 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~45988 tok)
+- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~46225 tok)
 - `menu.py` — URL configuration (~3078 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
 - `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2297 tok)
@@ -1410,7 +1410,7 @@
 - `plugin_runner.py` — Declares TrayPluginMenuBuilder (~8890 tok)
 - `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21430 tok)
 - `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~13275 tok)
-- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24468 tok)
+- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~25156 tok)
 
 ## src/ai_guardian/tui/
 
