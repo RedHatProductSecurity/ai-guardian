@@ -3,6 +3,8 @@
 import io
 import os
 import sys
+import threading
+import time
 from types import SimpleNamespace
 from unittest import mock
 
@@ -26,7 +28,10 @@ def isolated_server(tmp_path, monkeypatch):
 @pytest.fixture
 def pause_clock(monkeypatch):
     clock = mock.Mock(return_value=1000.0)
-    monkeypatch.setattr("ai_guardian.daemon.state.time.monotonic", clock)
+    monkeypatch.setattr(
+        "ai_guardian.daemon.state.time",
+        SimpleNamespace(monotonic=clock, time=time.time),
+    )
     return clock
 
 
@@ -54,7 +59,7 @@ def active_cli_sessions(isolated_server, tmp_path, pause_clock):
 
 
 @pytest.fixture
-def run_scoped_cli(isolated_server):
+def run_scoped_cli(isolated_server, cli_connect):
     """Exercise real CLI/client/protocol/state code over in-memory mock sockets."""
 
     def connect(timeout):
@@ -75,26 +80,59 @@ def run_scoped_cli(isolated_server):
         client.sendall.side_effect = send
         return client
 
+    cli_connect.side_effect = connect
+
     def run(arguments):
+        cli_connect.reset_mock()
         with (
             mock.patch.object(sys, "argv", ["ai-guardian", *arguments]),
             mock.patch(
                 "ai_guardian.daemon.client.is_daemon_running", return_value=True
             ),
             mock.patch(
-                "ai_guardian.daemon.client._connect", side_effect=connect
-            ) as connection,
-            mock.patch(
                 "ai_guardian.cli_handlers._load_config_file", return_value=({}, None)
             ),
             mock.patch("ai_guardian.cli._ensure_daemon_started") as auto_start,
         ):
             result = main()
-        connection.assert_called_once_with(timeout=2.0)
+        cli_connect.assert_called_once_with(timeout=2.0)
         auto_start.assert_not_called()
         return result
 
     return run
+
+
+def test_scoped_cli_transport_ignores_background_connections(
+    active_cli_sessions, run_scoped_cli, monkeypatch
+):
+    """USER EXPERIENCE: Unrelated tray traffic cannot enter the CLI test transport."""
+    from ai_guardian.daemon import client
+
+    original_main = main
+    background_connections = []
+
+    def main_with_background_connection():
+        def connect_in_background():
+            connection = client._connect(timeout=2.0)
+            background_connections.append(connection)
+            if connection is not None:
+                connection.close()
+
+        worker = threading.Thread(target=connect_in_background)
+        worker.start()
+        worker.join(timeout=5)
+        assert not worker.is_alive()
+        return original_main()
+
+    monkeypatch.setattr(sys.modules[__name__], "main", main_with_background_connection)
+    key = active_cli_sessions["first"]["session_key"]
+    assert run_scoped_cli(["pause", "--session", key]) == 0
+    assert background_connections == [None]
+
+
+def test_pause_clock_does_not_replace_the_process_clock(pause_clock):
+    """A deterministic session timer must not alter unrelated tray thread deadlines."""
+    assert time.monotonic is not pause_clock
 
 
 @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])

@@ -9,6 +9,24 @@ budget_tokens: 1000
 
 ---
 
+## PR #2550 CI follow-up — 2026-10-14
+
+- Run `38622505163` failed five Python/OS jobs at head `76c8b1b5`. All failures
+  came from new CLI UX transport mocks counting background tray subscriber
+  connections, not production pause/resume behavior.
+- Added an opt-in test-thread transport fixture that declines background
+  connections without counting them or feeding them into the in-memory server.
+  Retained exact CLI call assertions; global UX now uses real wire framing.
+  Session timers replace only daemon-state's clock namespace, not process time.
+- Deterministic background-connection and process-clock regressions failed
+  before the fix. All 552 related unit/UX tests, including both complete affected
+  UX files, pass. Ruff, Black (`--target-version py310`), Pylint, uv-environment
+  Mypy, and diff checks pass. No full suite or container scenarios ran locally.
+- Changes are test-only plus OpenWolf bookkeeping, local on branch `2547`.
+  The user explicitly authorized direct commit and push to existing PR #2550.
+  Publication uses branch `2547`; CI must validate the corrected head. No old-head
+  rerun, full-suite run, or local container validation is needed for this fix.
+
 ## Issue #2547 scoped top-level pause/resume — 2026-10-14
 
 - Implemented mutually exclusive `--dir DIRECTORY` and `--session SESSION_KEY`

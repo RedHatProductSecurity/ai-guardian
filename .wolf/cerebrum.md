@@ -37,6 +37,17 @@
 
 ## Key Learnings
 
+- **Scoped CLI UX isolation (PR #2550):** Process-wide `_connect` mocks also
+  intercept leaked/background tray subscriber threads during full-suite CI.
+  Bind the opt-in test transport to the owning thread and return no connection
+  to other threads; retain strict foreground call-count assertions. Use real
+  protocol framing rather than globally mocking encode/decode. Replace the
+  daemon-state module's clock namespace, not the shared standard-library
+  `time.monotonic`, so unrelated thread deadlines keep using the real clock.
+- **Numeric GitHub branches:** `gh pr view 2547` interprets the value as a PR
+  number, not the numeric branch name. Discover the PR with `gh pr list --head
+  2547` first, then use its actual PR number for CI diagnostics.
+
 - **Scoped short CLI controls (#2547):** Share mutually exclusive scope options
   between top-level and nested pause/resume parsers. Reject empty and
   whitespace-only values before dispatch: the existing handler treats falsey
