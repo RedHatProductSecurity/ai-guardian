@@ -355,3 +355,86 @@ def test_shared_bridge_runtime_contract(tmp_path, case_name, expected):
     if case_name == "allow":
         assert "--ide" in result["output"]
         assert "test" in result["output"]
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_v2_idle_preserves_session_and_deletion_ends_it(tmp_path):
+    """Execute the generated plugin with the published V2 event envelope."""
+    (tmp_path / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
+    plugin_dir = tmp_path / "ai-guardian-plugin"
+    plugin_dir.mkdir()
+    bridge_dir = tmp_path / "ai-guardian"
+    bridge_dir.mkdir()
+    (plugin_dir / "index.ts").write_text(
+        _OPENCODE_PLUGIN_V2_TS.replace(
+            "'../ai-guardian/ai-guardian-bridge'",
+            "'../ai-guardian/ai-guardian-bridge.ts'",
+        ),
+        encoding="utf-8",
+    )
+    (bridge_dir / "ai-guardian-bridge.ts").write_text(
+        """export function createGuardianBridge() {
+  return { run(data) { globalThis.guardianCalls.push(data); return { blocked: false }; } };
+}
+""",
+        encoding="utf-8",
+    )
+    events = [
+        {"type": "session.created", "data": {"sessionID": "session-one"}},
+        {"type": "session.idle", "data": {"sessionID": "session-one"}},
+        {"type": "session.idle", "data": {"sessionID": "session-one"}},
+        {"type": "session.deleted", "data": {"sessionID": "session-two"}},
+        {"type": "session.deleted", "data": {"sessionID": "session-one"}},
+        {"type": "session.idle", "data": {}},
+        {"type": "session.deleted"},
+    ]
+    runner = tmp_path / "run-plugin.mjs"
+    runner.write_text(
+        """import plugin from './ai-guardian-plugin/index.ts';
+globalThis.guardianCalls = [];
+let finish;
+let subscriptionSignal;
+const finished = new Promise(resolve => { finish = resolve; });
+const ctx = {
+  location: { directory: process.cwd() },
+  app: { version: '2.0.22' },
+  session: { hook: async () => {} },
+  tool: { hook: async () => {} },
+  event: { async *subscribe({ signal }) {
+    subscriptionSignal = signal;
+    try { yield* JSON.parse(process.env.OPENCODE_EVENTS); }
+    finally { finish(); }
+  } },
+};
+const cleanup = await plugin.setup(ctx);
+await finished;
+cleanup();
+console.log(JSON.stringify({ calls: globalThis.guardianCalls, aborted: subscriptionSignal.aborted }));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        env={**os.environ, "OPENCODE_EVENTS": json.dumps(events)},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert [
+        (call["hook_event_name"], call["session_id"]) for call in result["calls"]
+    ] == [
+        ("Stop", "session-one"),
+        ("Stop", "session-one"),
+        ("SessionEnd", "session-two"),
+        ("SessionEnd", "session-one"),
+    ]
+    assert all(call["opencode_version"] == "2.0.22" for call in result["calls"])
+    assert all(call["cwd"] == str(tmp_path) for call in result["calls"])
+    assert result["aborted"] is True

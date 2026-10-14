@@ -139,7 +139,8 @@ export default {
     await ctx.tool.hook('execute.after', async (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
       const input = (event.input || {}) as JsonRecord;
-      const error = event.error as unknown;
+      const error =
+        event.status === 'completed' ? undefined : (event.error as unknown);
       const output =
         event.status === 'completed'
           ? contentText(event.result)
@@ -178,13 +179,13 @@ export default {
         for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
           const record = event as unknown as JsonRecord;
           if (record.type !== 'session.idle' && record.type !== 'session.deleted') continue;
-          const properties = (record.properties || {}) as JsonRecord;
-          const sessionID = textValue(
-            properties.sessionID || properties.sessionId || record.sessionID,
-          );
+          const data = (record.data || {}) as JsonRecord;
+          const sessionID = textValue(data.sessionID);
           if (sessionID) {
+            // Idle ends a turn, not the session or its session-scoped pause.
+            const hookEvent = record.type === 'session.deleted' ? 'SessionEnd' : 'Stop';
             guardian.run(
-              hookData('SessionEnd', cwd, { session_id: sessionID }, opencodeVersion),
+              hookData(hookEvent, cwd, { session_id: sessionID }, opencodeVersion),
             );
           }
         }

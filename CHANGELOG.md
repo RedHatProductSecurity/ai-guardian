@@ -105,6 +105,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **Release publishing:** Keep OpenShell middleware archives separate from the
+  Python distributions uploaded to PyPI/TestPyPI, while including all archives,
+  wheels, and checksums in the GitHub Release.
+- **OpenShell response inspection:** Require bounded whole-body inspection rather
+  than scanning arbitrary streaming units independently, preventing split
+  detections and split UTF-8 failures. Explicitly deny body-bearing responses
+  when whole-body mode is unavailable; accept headers-only inspection for
+  bodyless `HEAD`, `204`, and `304` responses.
+- **OpenCode V2 session lifecycle:** Read session IDs from the native event data;
+  treat idle as turn completion instead of session termination so session-scoped
+  pauses survive subsequent turns. Clear the session only when it is deleted.
+  Narrow the tool-event union before reading an error so the generated template
+  passes the published V2 types.
 - **OpenShell Claude setup (#2473):** Restrict the Codex authentication selector
   to OpenShell/Codex and allow the Claude Console authentication endpoint that
   Claude Code needs in restricted-network sandboxes.

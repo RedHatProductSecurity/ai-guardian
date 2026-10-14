@@ -162,7 +162,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           pattern: openshell-middleware-*
-          path: dist
+          path: release-assets
           merge-multiple: true
 
       - name: Publish to ${{ steps.target.outputs.registry }}
@@ -176,7 +176,8 @@ jobs:
       - name: Generate checksums
         if: steps.target.outputs.create_release == 'true'
         run: |
-          cd dist
+          cp dist/*.tar.gz dist/*.whl release-assets/
+          cd release-assets
           sha256sum *.tar.gz *.whl > checksums.txt
           cat checksums.txt
 
@@ -204,8 +205,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            dist/*.tar.gz
-            dist/*.whl
-            dist/checksums.txt
+            release-assets/*.tar.gz
+            release-assets/*.whl
+            release-assets/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
