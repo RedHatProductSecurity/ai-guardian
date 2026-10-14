@@ -110,6 +110,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **GitGuardian installation verification:** Allow up to 60 seconds for
+  `ggshield --version` to initialize its bundled Python runtime on slow/emulated
+  ARM64 builds. Version discovery uses the same bounded check; timeouts and
+  nonzero exits still fail verification, and other scanners retain their
+  five-second probes.
 - **Tray session title follow-up (#2546):** Render literal ampersands in Windows
   session menus without changing stored titles or pause targets. Track the shared
   title helper for editable-install daemon stale-code warnings.

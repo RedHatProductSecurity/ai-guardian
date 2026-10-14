@@ -1250,6 +1250,16 @@ class ScannerInstaller:
 
         return False
 
+    def _get_version_probe(
+        self, scanner_name: str, binary_path: str
+    ) -> tuple[list[list[str]], int]:
+        """Return supported version commands and their startup timeout."""
+        if scanner_name == "gitguardian":
+            # ggshield's bundled Python runtime can take more than five seconds
+            # to start under QEMU. It supports the flag, not a version subcommand.
+            return [[binary_path, "--version"]], 60
+        return [[binary_path, "version"], [binary_path, "--version"]], 5
+
     def _get_installed_version(self, scanner_name: str) -> Optional[str]:
         """
         Get the currently installed version of a scanner.
@@ -1264,13 +1274,7 @@ class ScannerInstaller:
         if not binary_path:
             return None
 
-        # Different scanners have different version commands
-        # gitleaks, betterleaks, leaktk, trufflehog: <binary> version
-        # detect-secrets: <binary> --version
-        version_commands = [
-            [binary_path, "version"],  # Try subcommand first
-            [binary_path, "--version"],  # Fallback to flag
-        ]
+        version_commands, timeout = self._get_version_probe(scanner_name, binary_path)
 
         # Try to get version
         for cmd in version_commands:
@@ -1278,7 +1282,7 @@ class ScannerInstaller:
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
-                    timeout=5,
+                    timeout=timeout,
                     text=True,
                 )
                 if result.returncode == 0:
@@ -1356,22 +1360,19 @@ class ScannerInstaller:
         if not binary_path:
             return False
 
-        # Try both version command formats
-        version_commands = [
-            [binary_path, "version"],  # Try subcommand first
-            [binary_path, "--version"],  # Fallback to flag
-        ]
+        version_commands, timeout = self._get_version_probe(scanner_name, binary_path)
 
         for cmd in version_commands:
             try:
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
-                    timeout=5,
+                    timeout=timeout,
                 )
                 if result.returncode == 0:
                     return True
-            except (subprocess.TimeoutExpired, FileNotFoundError):
+            except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+                logger.debug("Scanner verification command failed: %s", exc)
                 continue
 
         return False

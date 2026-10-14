@@ -9,6 +9,20 @@ budget_tokens: 1000
 
 ---
 
+## PR #2548 CI follow-up — 2026-10-14
+
+- Failed run `38587480047`, job `115933219257`: OpenShell ARM64 image installed
+  GitGuardian with a valid checksum, then exhausted two five-second version
+  probes under QEMU. AMD64 installation passed; this is unrelated to tray labels.
+- Installer verification and version discovery now share `ggshield --version`
+  with a bounded 60-second timeout. Other scanners retain their five-second
+  fallback probes. Timeouts/nonzero exits still fail verification.
+- The slow-startup regression failed before the fix. All 120 related installer,
+  setup-install, and scanner CLI tests pass; focused installer coverage is 72%.
+  Ruff, Black (`--target-version py310`), Pylint, Mypy, and diff checks pass.
+- Branch `2546` / PR #2548 remains the publication target. Full Buildx/QEMU
+  validation is left to CI; no container builds or scenarios were run locally.
+
 ## PR #2548 review and fixes — 2026-10-14
 
 - Reviewed head `07291dd64df900ead4d00b323170c1f397449c59`, then fixed both P3
@@ -19,7 +33,7 @@ budget_tokens: 1000
   tests now pass, including full sandbox tray, daemon client/tray, and session
   pause UX files. Ruff, Black (`--target-version py310`), Pylint, and Mypy pass.
 - Updated tray documentation, changelog, and OpenWolf learnings/buglog. Changes
-  are approved by the user for commit and push on branch `2546` to PR #2548.
+  were committed and pushed as `ccf91624` on branch `2546` to PR #2548.
   Windows rendering is source-confirmed and platform-simulated, not live-tested.
 
 ## ✅ Done
@@ -147,7 +161,8 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
-- Monitor PR #2548 CI after publishing the approved review fixes.
+- Monitor PR #2548 CI, particularly the multi-architecture OpenShell build after
+  the ggshield startup-timeout fix.
 - Optionally verify named/unnamed and renamed OpenCode sessions in the live tray
   after deploying/reloading the updated managed plugin.
 - Preserve the pending #2473 manual Claude Code/Vertex and OpenCode/Vertex

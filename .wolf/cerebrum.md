@@ -37,6 +37,13 @@
 
 ## Key Learnings
 
+- **ggshield startup probes (PR #2548 CI):** The bundled Python runtime can
+  exceed five seconds under QEMU. `ggshield` supports `--version`, not the
+  `version` subcommand; two short probes caused a checksum-verified ARM64 image
+  build to fail after ten seconds. Installation verification and version
+  discovery now share one bounded 60-second probe; other scanners keep their
+  five-second fallback behavior. Checksums and successful exits remain required.
+
 - **Win32 tray title rendering (PR #2548 review):** pystray passes menu text
   directly to `MENUITEMINFO.dwTypeData`; single ampersands become mnemonic
   markers. Escape only final Windows menu text, preserving stored titles and
