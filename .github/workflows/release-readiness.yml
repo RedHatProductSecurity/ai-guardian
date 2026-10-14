@@ -418,6 +418,93 @@ jobs:
           ai-guardian pause
           ai-guardian resume
 
+      - name: Verify top-level directory and session scopes
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import tempfile
+          from pathlib import Path
+          from ai_guardian.daemon.client import send_hook_request, send_status_request
+
+          def command(*arguments, expected=0):
+              result = subprocess.run(
+                  ['ai-guardian', *arguments], capture_output=True, text=True, timeout=30
+              )
+              assert result.returncode == expected, (arguments, result.stdout, result.stderr)
+
+          def stats():
+              result = send_status_request()
+              assert result is not None, 'Daemon status unavailable'
+              return result
+
+          with tempfile.TemporaryDirectory() as root:
+              project = Path(root) / 'shared-project'
+              project.mkdir()
+              previous_directory = Path.cwd()
+              try:
+                  # Hook transport records the caller's cwd, not a payload override.
+                  os.chdir(project)
+                  for session_id in ('readiness-first', 'readiness-second'):
+                      response = send_hook_request({
+                          'hook_event_name': 'SessionStart',
+                          'session_id': session_id,
+                          'cwd': str(project),
+                      })
+                      assert response is not None, 'Session registration failed'
+              finally:
+                  os.chdir(previous_directory)
+              sessions = {
+                  session['session_id']: session['session_key']
+                  for session in stats()['active_sessions']
+              }
+              first = sessions['readiness-first']
+              second = sessions['readiness-second']
+              directory = os.path.realpath(project)
+              assert all(
+                  session['project_dir'] == directory
+                  for session in stats()['active_sessions']
+                  if session['session_key'] in (first, second)
+              )
+              alias = str(project / '..' / 'shared-project')
+              for duration in (['1'], [], ['0']):
+                  command('pause', *duration, '--dir', alias)
+                  snapshot = stats()
+                  assert directory in snapshot['paused_dirs']
+                  assert not snapshot['paused']
+                  command('resume', '--dir', alias)
+                  assert directory not in stats()['paused_dirs']
+
+                  command('pause', *duration, '--session', first)
+                  paused = {s['session_key']: s['paused'] for s in stats()['active_sessions']}
+                  assert paused[first] and not paused[second]
+                  assert not stats()['paused'] and not stats()['paused_dirs']
+                  command('resume', '--session', first)
+                  assert not any(s['paused'] for s in stats()['active_sessions'])
+
+              # Legacy syntax stays supported; resume removes only its own layer.
+              command('daemon', 'pause', '--minutes', '1', '--dir', alias)
+              command('pause', '--session', first)
+              command('pause')
+              command('resume', '--session', first)
+              assert stats()['paused'] and directory in stats()['paused_dirs']
+              command('resume', '--dir', alias)
+              assert stats()['paused']
+              command('resume')
+              assert not stats()['paused'] and not stats()['paused_dirs']
+
+              for operation in ('pause', 'resume'):
+                  command(operation, '--session', 'not-an-active-session', expected=1)
+                  command(operation, '--dir', alias, '--session', first, expected=2)
+                  for selector in ('--dir', '--session'):
+                      command(operation, selector, expected=2)
+                      command(operation, selector, '', expected=2)
+              for duration in ('-1', '1441', 'not-an-integer'):
+                  command('pause', duration, '--session', first, expected=2)
+              assert not stats()['paused'] and not stats()['paused_dirs']
+              assert not any(s['paused'] for s in stats()['active_sessions'])
+          PY
+
       - name: Test REST API
         run: |
           # Read REST port from PID file
@@ -483,6 +570,29 @@ jobs:
           else
             echo "Warning: daemon may still be running"
           fi
+
+      - name: Verify scoped controls do not auto-start a stopped daemon
+        run: |
+          python - <<'PY'
+          import subprocess
+          from ai_guardian.daemon import get_state_dir
+          from ai_guardian.daemon.client import is_daemon_running
+
+          assert not is_daemon_running(), 'Daemon did not stop'
+          pause_file = get_state_dir() / 'daemon.paused'
+          before = pause_file.read_bytes() if pause_file.exists() else None
+          for operation in ('pause', 'resume'):
+              for selector in ([], ['--dir', '.'], ['--session', 'not-an-active-session']):
+                  result = subprocess.run(
+                      ['ai-guardian', operation, *selector],
+                      capture_output=True, text=True, timeout=30,
+                  )
+                  assert result.returncode == 1, (result.stdout, result.stderr)
+                  assert 'daemon is not running' in result.stderr
+                  assert not is_daemon_running(), 'Control command auto-started a daemon'
+          after = pause_file.read_bytes() if pause_file.exists() else None
+          assert after == before, 'Offline controls changed persisted pause state'
+          PY
 
   smoke-tests:
     name: Smoke Tests

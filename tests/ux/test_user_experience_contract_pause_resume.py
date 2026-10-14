@@ -3,7 +3,18 @@
 import sys
 from unittest import mock
 
+import pytest
+
 from ai_guardian.cli import main
+from ai_guardian.tools.policy import ToolPolicyChecker
+
+
+@pytest.fixture(autouse=True)
+def isolated_cli_config():
+    with mock.patch(
+        "ai_guardian.cli_handlers._load_config_file", return_value=({}, None)
+    ):
+        yield
 
 
 def _run_command(argv, response_data):
@@ -66,20 +77,81 @@ def test_resume_command_controls_existing_daemon_without_tray(capsys):
     assert capsys.readouterr().out == "ai-guardian daemon: scanning resumed\n"
 
 
-def test_pause_command_reports_unreachable_daemon(capsys):
+@pytest.mark.parametrize("command", ["pause", "resume"])
+@pytest.mark.parametrize(
+    "selector", [[], ["--dir", "project"], ["--session", "Adapter:session-1"]]
+)
+def test_pause_resume_command_reports_unreachable_daemon(
+    command, selector, tmp_path, monkeypatch, capsys
+):
     """
     USER EXPERIENCE: Daemon unavailable -> fail clearly without auto-starting.
 
     The command must not silently launch a daemon or pretend that scanning was
     paused when the existing daemon cannot be reached.
     """
+    state_dir = tmp_path / "offline-state"
+    state_dir.mkdir()
+    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(state_dir))
     with (
-        mock.patch.object(sys, "argv", ["ai-guardian", "pause"]),
+        mock.patch.object(sys, "argv", ["ai-guardian", command, *selector]),
         mock.patch("ai_guardian.cli._ensure_daemon_started") as auto_start,
         mock.patch("ai_guardian.daemon.client.is_daemon_running", return_value=False),
+        mock.patch("ai_guardian.daemon.client.start_daemon_background") as start,
+        mock.patch("ai_guardian.daemon.client._connect") as connect,
     ):
         result = main()
 
     auto_start.assert_not_called()
+    start.assert_not_called()
+    connect.assert_not_called()
+    assert list(state_dir.iterdir()) == []
     assert result == 1
     assert capsys.readouterr().err == "ai-guardian daemon is not running\n"
+
+
+@pytest.mark.parametrize("command", ["pause", "resume"])
+@pytest.mark.parametrize("scope", ["--dir", "--session"])
+def test_empty_scope_is_a_usage_error_not_a_global_operation(command, scope, capsys):
+    """
+    USER EXPERIENCE: Empty explicit selector -> usage error, never global control.
+
+    Manual verification: Run either command with ``--dir ''`` or ``--session ''``
+    in a human terminal; expect exit status 2 and no pause-state change.
+    """
+    with (
+        mock.patch.object(sys, "argv", ["ai-guardian", command, scope, ""]),
+        mock.patch("ai_guardian.cli._handle_daemon_command") as handler,
+        mock.patch("ai_guardian.cli._ensure_daemon_started") as auto_start,
+    ):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+    assert exc_info.value.code == 2
+    assert (
+        f"argument {scope}: scope selector must not be empty" in capsys.readouterr().err
+    )
+    handler.assert_not_called()
+    auto_start.assert_not_called()
+
+
+@pytest.mark.parametrize("command", ["pause", "resume"])
+@pytest.mark.parametrize("scope", ["--dir", "--session"])
+def test_ai_cannot_execute_scoped_protection_controls(command, scope):
+    """
+    USER EXPERIENCE: AI tries a scoped protection command -> immutable denial.
+
+    Scoped forms are human-operated controls, not a new agent or MCP capability.
+    """
+    checker = ToolPolicyChecker(config={"permissions": []})
+    allowed, reason, _ = checker.check_tool_allowed(
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_use": {
+                "name": "Bash",
+                "input": {"command": f"ai-guardian {command} {scope} project-or-key"},
+            },
+        }
+    )
+    assert not allowed
+    assert reason

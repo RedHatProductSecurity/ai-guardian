@@ -1069,8 +1069,27 @@ CLI_SELF_PROTECTION_BLOCKED_COMMANDS = [
     # pause
     pytest.param("ai-guardian pause 5", id="pause-with-minutes"),
     pytest.param("ai-guardian pause", id="pause-no-args"),
+    pytest.param("ai-guardian pause 5 --dir /project", id="pause-directory"),
+    pytest.param("ai-guardian pause --session Adapter:session-1", id="pause-session"),
     # resume
     pytest.param("ai-guardian resume", id="resume"),
+    pytest.param("ai-guardian resume --dir /project", id="resume-directory"),
+    pytest.param("ai-guardian resume --session Adapter:session-1", id="resume-session"),
+    pytest.param(
+        "ai-guardian daemon pause --dir /project --minutes 5",
+        id="daemon-pause-directory",
+    ),
+    pytest.param(
+        "ai-guardian daemon pause --session Adapter:session-1",
+        id="daemon-pause-session",
+    ),
+    pytest.param(
+        "ai-guardian daemon resume --dir /project", id="daemon-resume-directory"
+    ),
+    pytest.param(
+        "ai-guardian daemon resume --session Adapter:session-1",
+        id="daemon-resume-session",
+    ),
     # stop
     pytest.param("ai-guardian stop", id="stop"),
     # disable

@@ -4,6 +4,8 @@ import json
 import os
 from unittest import mock
 
+import pytest
+
 from ai_guardian.cli_handlers import (
     _get_daemon_mode,
     _get_client_timeout,
@@ -130,6 +132,13 @@ class TestDaemonReloadCommand:
 
 
 class TestGlobalPauseResumeCommands:
+    @pytest.fixture(autouse=True)
+    def isolated_config(self):
+        with mock.patch(
+            "ai_guardian.cli_handlers._load_config_file", return_value=({}, None)
+        ):
+            yield
+
     @staticmethod
     def _args(command, minutes=0, directory=None, session=None):
         args = mock.MagicMock()
@@ -363,6 +372,130 @@ class TestGlobalPauseResumeCommands:
         assert (
             "currently active session with a stable identity" in capsys.readouterr().err
         )
+
+    @pytest.mark.parametrize("command", ["pause", "resume"])
+    @pytest.mark.parametrize("path_kind", ["relative", "symlink"])
+    def test_directory_scope_normalizes_the_project_path(
+        self, command, path_kind, tmp_path, monkeypatch, capsys
+    ):
+        project = tmp_path / "project with spaces"
+        project.mkdir()
+        monkeypatch.chdir(tmp_path)
+        directory = os.path.join(".", project.name, "..", project.name)
+        if path_kind == "symlink":
+            link = tmp_path / "project-link"
+            try:
+                link.symlink_to(project, target_is_directory=True)
+            except OSError as exc:
+                pytest.skip(f"Directory symlinks are unavailable: {exc}")
+            directory = str(link)
+
+        args = self._args(command, minutes=15, directory=directory)
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                f"ai_guardian.daemon.client.send_{command}_dir",
+                return_value={"status": f"dir_{command}d"},
+            ) as send,
+            mock.patch("ai_guardian.daemon.client._connect") as global_connect,
+            mock.patch(
+                f"ai_guardian.daemon.client.send_{command}_session"
+            ) as session_send,
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        expected_args = (
+            (os.path.realpath(project), 15)
+            if command == "pause"
+            else (os.path.realpath(project),)
+        )
+        send.assert_called_once_with(*expected_args, timeout=2.0)
+        global_connect.assert_not_called()
+        session_send.assert_not_called()
+        assert (
+            f"for all sessions in {os.path.realpath(project)}"
+            in capsys.readouterr().out
+        )
+
+    @pytest.mark.parametrize("scope", ["directory", "session"])
+    def test_scoped_indefinite_pause_reports_the_existing_lifetime(self, scope, capsys):
+        args = self._args(
+            "pause",
+            directory="project" if scope == "directory" else None,
+            session="Adapter:session-1" if scope == "session" else None,
+        )
+        suffix = "dir" if scope == "directory" else "session"
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                f"ai_guardian.daemon.client.send_pause_{suffix}",
+                return_value={"status": f"{suffix}_paused"},
+            ) as send,
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        target = (
+            os.path.realpath("project") if scope == "directory" else "Adapter:session-1"
+        )
+        send.assert_called_once_with(target, 0, timeout=2.0)
+        lifetime = (
+            "indefinitely" if scope == "directory" else "until resume or session end"
+        )
+        assert lifetime in capsys.readouterr().out
+
+    @pytest.mark.parametrize("command", ["pause", "resume"])
+    @pytest.mark.parametrize("scope", ["directory", "session"])
+    @pytest.mark.parametrize(
+        "response",
+        [
+            None,
+            {},
+            {"error": "session is not active"},
+            {"error": "unknown message type"},
+            {"status": "paused"},
+        ],
+    )
+    def test_failed_scoped_request_never_falls_back_to_another_scope(
+        self, command, scope, response, capsys
+    ):
+        args = self._args(
+            command,
+            directory="project" if scope == "directory" else None,
+            session="unknown-session" if scope == "session" else None,
+        )
+        suffix = "dir" if scope == "directory" else "session"
+        other_suffix = "session" if scope == "directory" else "dir"
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                f"ai_guardian.daemon.client.send_{command}_{suffix}",
+                return_value=response,
+            ) as send,
+            mock.patch(
+                f"ai_guardian.daemon.client.send_{command}_{other_suffix}"
+            ) as other_send,
+            mock.patch("ai_guardian.daemon.client._connect") as global_connect,
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 1
+        send.assert_called_once()
+        other_send.assert_not_called()
+        global_connect.assert_not_called()
+        output = capsys.readouterr()
+        assert output.out == ""
+        if scope == "session":
+            assert "currently active session with a stable identity" in output.err
+        else:
+            assert output.err == f"Failed to {command} directory scanning\n"
 
 
 class TestDaemonStatusCommand:

@@ -37,6 +37,22 @@
 
 ## Key Learnings
 
+- **Scoped short CLI controls (#2547):** Share mutually exclusive scope options
+  between top-level and nested pause/resume parsers. Reject empty and
+  whitespace-only values before dispatch: the existing handler treats falsey
+  selectors as global control. Preserve exact non-empty paths and stable keys;
+  reuse daemon normalization, transports, state, and lifetimes.
+- **Release hook-session registration (#2547):** `send_hook_request()` always
+  supplies `_daemon_cwd` from the caller's actual working directory. A payload
+  `cwd` alone does not put registered sessions in a synthetic project. Change
+  into the isolated project for registration, restore cwd in `finally`, and
+  assert the status-reported project directories before scoped CLI checks.
+- **Local Mypy environments (#2547):** The declared `uv --extra dev` environment
+  passes the source check. The standalone executable still reports the known
+  14 request-stub errors in unchanged `skill_discovery.py:522` and
+  `scanners/secret_validator.py:288`; distinguish tool environments rather than
+  expanding an unrelated change to fix baseline diagnostics.
+
 - **ggshield startup probes (PR #2548 CI):** The bundled Python runtime can
   exceed five seconds under QEMU. `ggshield` supports `--version`, not the
   `version` subcommand; two short probes caused a checksum-verified ARM64 image
