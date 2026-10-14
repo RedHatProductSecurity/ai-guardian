@@ -6,11 +6,13 @@ Split from tray.py (Issue #1542). TrayMenuBuilder constructs pystray
 MenuItem trees by reading state from DaemonTray and its sub-managers.
 """
 
+import hashlib
 import logging
 import json
 import os
 import shlex
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -467,10 +469,24 @@ class TrayMenuBuilder:
     ):
         """Build bounded, pre-allocated pause/resume controls for hook sessions."""
         from ai_guardian.daemon.working_dir import shorten_path
+        from ai_guardian.sessions.base import resolve_session_title
 
         def _sessions(stats):
             sessions = stats.get("active_sessions")
-            return sessions if isinstance(sessions, list) else []
+            return (
+                [
+                    session
+                    for session in sessions[: self._MAX_SESSION_PAUSE_SLOTS]
+                    if isinstance(session, dict)
+                ]
+                if isinstance(sessions, list)
+                else []
+            )
+
+        def _display_name(session):
+            return resolve_session_title(
+                explicit=[session.get("session_title")]
+            ) or str(session.get("session_id") or session.get("session_key", ""))
 
         def _session_at(stats, slot):
             sessions = _sessions(stats)
@@ -505,19 +521,36 @@ class TrayMenuBuilder:
                 return _session_at(get_stats_fn(_item), slot) is not None
 
             def _label(_item, slot=slot):
-                session = _session_at(get_stats_fn(_item), slot)
+                stats = get_stats_fn(_item)
+                session = _session_at(stats, slot)
                 if session is None:
                     return ""
                 icon = "☾" if session.get("paused") else "●"
                 label = f"{icon} {session.get('agent', 'Hook session')}: "
-                label += str(
-                    session.get("session_id") or session.get("session_key", "")
-                )
+                name = _display_name(session)
+                label += name
+                if (
+                    sum(
+                        other.get("agent") == session.get("agent")
+                        and _display_name(other) == name
+                        for other in _sessions(stats)
+                    )
+                    > 1
+                ):
+                    # Fingerprint the stable key rather than shortening a common
+                    # ID prefix/suffix. Names that truncate identically also collide.
+                    identity = str(
+                        session.get("session_key") or session.get("session_id")
+                    )
+                    suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
+                    label += f" [{suffix}]"
                 remaining = session.get("pause_remaining_seconds", 0)
                 if session.get("paused") and remaining > 0:
                     if self._tray._supports_live_pause_countdown():
                         label += f" ({int(remaining // 60)}m {int(remaining % 60)}s)"
-                return label
+                # Win32 treats '&' as a mnemonic marker. Escape only the final
+                # menu text, never stored titles, collision comparisons, or keys.
+                return label.replace("&", "&&") if sys.platform == "win32" else label
 
             def _session_key_label(_item, slot=slot):
                 session = _session_at(get_stats_fn(_item), slot)
@@ -585,7 +618,11 @@ class TrayMenuBuilder:
             )
 
         def _has_more_sessions(_item):
-            return len(_sessions(get_stats_fn(_item))) > self._MAX_SESSION_PAUSE_SLOTS
+            sessions = get_stats_fn(_item).get("active_sessions")
+            return (
+                isinstance(sessions, list)
+                and len(sessions) > self._MAX_SESSION_PAUSE_SLOTS
+            )
 
         items.append(
             pystray.MenuItem(

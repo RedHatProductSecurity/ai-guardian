@@ -82,6 +82,211 @@ def _make_tray(targets):
     return tray
 
 
+class TestSessionPauseLabels:
+    @staticmethod
+    def _items(stats, live_countdown=False):
+        pause, resume = mock.Mock(), mock.Mock()
+        tray = SimpleNamespace(_supports_live_pause_countdown=lambda: live_countdown)
+        with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
+            items = TrayMenuBuilder(tray)._build_session_pause_items(
+                lambda _item: stats, pause, resume
+            )
+        return items[2:], pause, resume
+
+    @pytest.mark.parametrize(
+        "title", [None, "", " \n\t ", 42, {}, ["invalid"], "\x00\u202e"]
+    )
+    @pytest.mark.parametrize("has_id", [True, False])
+    def test_invalid_titles_and_older_daemons_fall_back_to_identity(
+        self, title, has_id
+    ):
+        session = {"session_key": "Adapter:session-id", "agent": "OpenCode"}
+        if has_id:
+            session["session_id"] = "session-id"
+        stats = {"active_sessions": [session]}
+        items, _, _ = self._items(stats)
+        expected = "● OpenCode: " + ("session-id" if has_id else "Adapter:session-id")
+        assert items[0].label(None) == expected  # older daemon: no title field
+        session["session_title"] = title
+        assert items[0].label(None) == expected
+
+    def test_names_refresh_and_pause_indicators_are_unchanged(self):
+        session = {
+            "session_key": "Adapter:session-id",
+            "session_id": "session-id",
+            "agent": "OpenCode",
+            "session_title": "  Fix\n\ttray\u202e labels\x00 ",
+            "paused": True,
+            "pause_remaining_seconds": 75,
+        }
+        stats = {"active_sessions": [session]}
+        items, _, _ = self._items(stats, live_countdown=True)
+        assert items[0].label(None) == "☾ OpenCode: Fix tray labels (1m 15s)"
+        session["session_title"] = "x" * 1000
+        assert items[0].label(None) == "☾ OpenCode: " + "x" * 77 + "... (1m 15s)"
+        items, _, _ = self._items(stats, live_countdown=False)
+        assert items[0].label(None) == "☾ OpenCode: " + "x" * 77 + "..."
+        session["session_title"] = "Renamed session"
+        session["paused"] = False
+        assert items[0].label(None) == "● OpenCode: Renamed session"
+
+    @pytest.mark.parametrize("title", ["Shared name", "x" * 1000])
+    def test_colliding_names_keep_distinct_labels_and_stable_control_keys(self, title):
+        sessions = [
+            {
+                "session_key": f"Adapter:session-{index}-common-suffix",
+                "session_id": f"session-{index}-common-suffix",
+                "session_title": title + str(index) if len(title) > 80 else title,
+                "agent": "OpenCode",
+                "project_dir": "/shared-project",
+                "paused": False,
+            }
+            for index in range(2)
+        ]
+        items, pause, resume = self._items({"active_sessions": sessions})
+        labels = [item.label(None) for item in items[:2]]
+        assert labels[0] != labels[1]
+        assert all(label.endswith("]") for label in labels)
+        assert all(len(label) <= len("● OpenCode: ") + 80 + 11 for label in labels)
+        for index, item in enumerate(items[:2]):
+            assert (
+                item.action.items[0].label(None)
+                == f"Session key: {sessions[index]['session_key']}"
+            )
+            assert item.action.items[1].label(None) == "Project: /shared-project"
+            actions = {
+                child.label: child
+                for child in item.action.items
+                if isinstance(child, FakeMenuItem)
+            }
+            actions["15 minutes"].action(None, None)
+            pause.assert_called_with(sessions[index]["session_key"], 15)
+            sessions[index]["paused"] = True
+            actions["Resume"].action(None, None)
+            resume.assert_called_with(sessions[index]["session_key"])
+        sessions[1]["session_title"] = "Different name"
+        assert "[" not in items[0].label(None)
+
+    @pytest.mark.parametrize(
+        ("platform", "expected_titles"),
+        [
+            ("win32", ["Fix A&&B", "Fix AB", "Fix A&&&&B"]),
+            ("linux", ["Fix A&B", "Fix AB", "Fix A&&B"]),
+            ("darwin", ["Fix A&B", "Fix AB", "Fix A&&B"]),
+        ],
+    )
+    def test_literal_ampersands_are_escaped_only_for_windows_display(
+        self, monkeypatch, platform, expected_titles
+    ):
+        monkeypatch.setattr(
+            "ai_guardian.tray.menu_builder.sys", SimpleNamespace(platform=platform)
+        )
+        titles = ["Fix A&B", "Fix AB", "Fix A&&B"]
+        sessions = [
+            {
+                "session_key": f"Adapter:session-{index}",
+                "session_id": f"session-{index}",
+                "session_title": title,
+                "agent": "OpenCode",
+                "paused": False,
+            }
+            for index, title in enumerate(titles)
+        ]
+        items, pause, resume = self._items({"active_sessions": sessions})
+        assert [item.label(None) for item in items[:3]] == [
+            f"● OpenCode: {title}" for title in expected_titles
+        ]
+        assert [session["session_title"] for session in sessions] == titles
+        for index, item in enumerate(items[:3]):
+            actions = {
+                child.label: child
+                for child in item.action.items
+                if isinstance(child, FakeMenuItem)
+            }
+            actions["15 minutes"].action(None, None)
+            pause.assert_called_with(sessions[index]["session_key"], 15)
+            sessions[index]["paused"] = True
+            actions["Resume"].action(None, None)
+            resume.assert_called_with(sessions[index]["session_key"])
+
+    def test_collision_work_is_bounded_to_visible_session_slots(self):
+        # An identical name outside the pre-allocated slots does not require a
+        # suffix on a uniquely displayed session or additional metadata work.
+        limit = TrayMenuBuilder._MAX_SESSION_PAUSE_SLOTS
+        sessions = [
+            {
+                "session_key": f"Adapter:{index}",
+                "session_id": str(index),
+                "session_title": f"Name {index}",
+                "agent": "OpenCode",
+            }
+            for index in range(limit + 1)
+        ]
+        sessions[-1]["session_title"] = "Name 0"
+        items, _, _ = self._items({"active_sessions": sessions})
+        assert len(items) == limit + 1  # existing overflow/status hint
+        assert items[-1].kwargs["visible"](None) is True
+        assert items[0].label(None) == "● OpenCode: Name 0"
+
+    @pytest.mark.parametrize("multi", [False, True])
+    @pytest.mark.parametrize("runtime", ["local", "container", "remote"])
+    def test_single_and_multi_daemon_names_route_to_selected_target(
+        self, multi, runtime
+    ):
+        target = DaemonTarget(name="selected", runtime=runtime, status="running")
+        targets = (
+            [DaemonTarget(name="other", runtime="local", status="running"), target]
+            if multi
+            else [target]
+        )
+        tray = _make_tray(targets)
+        stats = {
+            "active_sessions": [
+                {
+                    "agent": "OpenCode",
+                    "session_id": "id",
+                    "session_key": "Adapter:id",
+                    "session_title": "Fix tray labels",
+                }
+            ]
+        }
+        tray._multi_client.get_status.side_effect = lambda selected: (
+            stats if selected is target else {}
+        )
+        tray._get_stats = mock.Mock(return_value=stats)
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", FAKE_PYSTRAY),
+        ):
+            if multi:
+                menu = tray._menu._build_multi_daemon_menu_items()[1].action
+                pause_menu = next(
+                    item
+                    for item in menu.items
+                    if isinstance(item, FakeMenuItem) and item.label == "Pause..."
+                ).action
+            else:
+                pause_menu = tray._menu._build_single_daemon_pause_menu_item(
+                    lambda _: stats, lambda _: mock.Mock(), mock.Mock(), lambda _: True
+                ).action
+        session_item = pause_menu.items[2].action.items[2]
+        assert session_item.label(None) == "● OpenCode: Fix tray labels"
+        actions = {
+            child.label: child
+            for child in session_item.action.items
+            if isinstance(child, FakeMenuItem)
+        }
+        with mock.patch.object(tray, "_check_and_autostart_daemon"):
+            actions["15 minutes"].action(None, None)
+            actions["Resume"].action(None, None)
+        tray._multi_client.send_pause_session.assert_called_once_with(
+            target, "Adapter:id", 15
+        )
+        tray._multi_client.send_resume_session.assert_called_once_with(
+            target, "Adapter:id"
+        )
+
+
 class TestSandboxTrayCommands:
     def test_container_command_uses_target_engine_and_runtime_name(self):
         target = DaemonTarget(

@@ -318,6 +318,20 @@ class TestSessionDetailPages:
         )
 
 
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("  Fix\n\ttray\u202e labels\x00  ", "Fix tray labels"),
+        ("\x00\u202e", ""),
+        (42, ""),
+        ({"title": "not a string"}, ""),
+        ("x" * 1000, "x" * 77 + "..."),
+    ],
+)
+def test_display_title_is_safe_and_bounded(title, expected):
+    assert resolve_session_title(explicit=title) == expected
+
+
 class TestCodexReadSessionMeta:
     @staticmethod
     def _write_session(path, *payloads):
@@ -738,11 +752,12 @@ class TestOpenCodeSessionAdapter:
         conn.commit()
         conn.close()
 
-    def test_discovers_session_metadata(self, tmp_path):
+    def test_discovers_session_metadata(self, tmp_path, monkeypatch):
         db_path = tmp_path / "opencode.db"
         self._create_db(db_path)
         adapter = OpenCodeSessionAdapter()
 
+        monkeypatch.setenv("OPENCODE_DB", str(db_path))
         with patch.object(adapter, "resolve_session_dir", return_value=tmp_path):
             sessions = adapter.discover()
 
@@ -765,11 +780,12 @@ class TestOpenCodeSessionAdapter:
         assert len(sessions) == 1
         assert sessions[0]["file_path"] == str(db_path)
 
-    def test_filters_sessions_by_project(self, tmp_path):
+    def test_filters_sessions_by_project(self, tmp_path, monkeypatch):
         db_path = tmp_path / "opencode.db"
         self._create_db(db_path)
         adapter = OpenCodeSessionAdapter()
 
+        monkeypatch.setenv("OPENCODE_DB", str(db_path))
         with patch.object(adapter, "resolve_session_dir", return_value=tmp_path):
             assert len(adapter.discover(project_path="/tmp/project")) == 1
             assert adapter.discover(project_path="/tmp/other") == []

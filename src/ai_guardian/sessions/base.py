@@ -15,7 +15,12 @@ def normalize_title(value) -> str:
     """Return a compact, display-safe title candidate."""
     if not isinstance(value, str):
         return ""
-    return " ".join(value.split())
+    # Preserve word boundaries, but exclude control/format characters (including
+    # bidi overrides) that could obscure the identity displayed by native menus.
+    printable = "".join(
+        " " if char.isspace() else char if char.isprintable() else "" for char in value
+    )
+    return " ".join(printable.split())
 
 
 def truncate_title(value: str, max_length: int = TITLE_MAX_LENGTH) -> str:

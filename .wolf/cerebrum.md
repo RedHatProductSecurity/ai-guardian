@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-13
+> Last updated: 2026-10-14
 
 ## User Preferences
 
@@ -36,6 +36,38 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **ggshield startup probes (PR #2548 CI):** The bundled Python runtime can
+  exceed five seconds under QEMU. `ggshield` supports `--version`, not the
+  `version` subcommand; two short probes caused a checksum-verified ARM64 image
+  build to fail after ten seconds. Installation verification and version
+  discovery now share one bounded 60-second probe; other scanners keep their
+  five-second fallback behavior. Checksums and successful exits remain required.
+
+- **Win32 tray title rendering (PR #2548 review):** pystray passes menu text
+  directly to `MENUITEMINFO.dwTypeData`; single ampersands become mnemonic
+  markers. Escape only final Windows menu text, preserving stored titles and
+  stable control keys. Test doubled ampersands and non-Windows literal strings;
+  raw-string collision tests alone do not cover native rendering.
+- **New daemon helper dependencies (PR #2548 review):** Adding a daemon import
+  of an isolated shared helper also requires reviewing `_DAEMON_SOURCE_PATHS`.
+  `sessions/base.py` is now tracked for editable-install stale-code warnings;
+  unrelated session readers remain excluded. Inventory tests live in
+  `tests/unit/test_daemon_client.py::TestGetPackageMaxMtime`.
+
+- **Tray session titles (#2546):** `active_sessions.session_title` is optional
+  display metadata; control routing and pause state still use the adapter-issued
+  `session_key`. Invalid/omitted titles preserve the last usable name. Wrap a
+  scalar metadata value in a candidate list when using `resolve_session_title`,
+  otherwise a malformed list-valued field is mistaken for valid candidates.
+  OpenCode V2 `ctx.session.get` returns metadata directly and accepts a request
+  abort signal; cache exact-session lookups/misses and bound both time and size.
+  Do not call native session summary readers just for a label: some load messages.
+- **Session test isolation (#2546):** OpenCode V2 database discovery precedes
+  the legacy `resolve_session_dir` path; discovery fixtures must set `OPENCODE_DB`
+  to their temporary database. Tray local status comes from `_get_stats`, remote
+  status from the multi-client; REST `/api/stats`, not `/api/status`, contains the
+  full active-session list. Generic Claude hooks use `BaseAgentAdapter` keys.
 
 - **OpenCode runtime selection (#2470):** User-facing setup, CLI doctor, and
   Console health checks do not require an AI Guardian-specific environment

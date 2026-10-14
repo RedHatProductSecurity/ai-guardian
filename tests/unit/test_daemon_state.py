@@ -380,6 +380,44 @@ class TestPerDirectoryPause:
 
 
 class TestSessionPause:
+    @pytest.mark.parametrize(
+        "title", [None, "", " \n\t ", 42, {}, ["invalid"], "\x00\u202e"]
+    )
+    def test_invalid_or_omitted_title_preserves_known_name_and_pause(
+        self, tmp_path, title
+    ):
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        key = "TestAdapter:session-one"
+        state.record_session_activity(key, "session-one", "OpenCode", tmp_path)
+        assert state.get_active_sessions()[0]["session_title"] == ""
+        assert state.pause_session(key, 15)
+        until = state._paused_sessions[key]
+
+        state.record_session_activity(
+            key,
+            "session-one",
+            "OpenCode",
+            tmp_path,
+            session_title="  Fix\ntray labels  ",
+        )
+        state.record_session_activity(
+            key, "session-one", "OpenCode", tmp_path, session_title=title
+        )
+        session = state.get_stats()["active_sessions"][0]
+        assert session["session_title"] == "Fix tray labels"
+        assert session["session_key"] == key
+        assert session["paused"] is True
+        assert state._paused_sessions[key] == until
+
+        state.record_session_activity(
+            key, "session-one", "OpenCode", tmp_path, session_title="Renamed session"
+        )
+        assert state.get_active_sessions()[0]["session_title"] == "Renamed session"
+        assert state._paused_sessions[key] == until
+        state.end_session(key)
+        state.record_session_activity(key, "session-one", "OpenCode", tmp_path)
+        assert state.get_active_sessions()[0]["session_title"] == ""
+
     def _record(self, state, session_id, project_dir, agent="Claude Code"):
         session_key = f"TestAdapter:{session_id}"
         state.record_session_activity(

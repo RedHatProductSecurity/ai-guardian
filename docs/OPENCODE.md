@@ -40,6 +40,14 @@ session or clear a session-scoped pause. `session.deleted` forwards `SessionEnd`
 and clears that session's daemon registration and pause. Unloading the plugin
 only closes its event subscription; it does not delete persistent sessions.
 
+V2 prompt, tool, and idle hooks also forward the native title obtained from
+`ctx.session.get({ sessionID })` as optional `session_title` display metadata.
+Lookup is bounded to 500 ms and cached for 30 seconds per exact session (including
+misses, at most 128 entries). Later activity refreshes generated/renamed titles.
+Unavailable or invalid metadata never skips hook checks: the tray retains a known
+title or uses the stable ID fallback. Deletion clears the cached entry. No
+messages or full transcripts are loaded to obtain a title.
+
 Blocked pre-tool calls add a fixed notice saying the tool did not run. Blocked
 post-tool results add a notice saying the tool ran but its result was withheld;
 the tool's side effects cannot be undone. Both notices avoid tool arguments and

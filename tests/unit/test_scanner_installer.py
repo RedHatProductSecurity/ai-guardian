@@ -381,6 +381,101 @@ class TestScannerInstaller:
             assert installer.install_dir == Path.home() / ".local" / "bin"
 
 
+@pytest.mark.parametrize("method", ["verify_installation", "_get_installed_version"])
+class TestScannerVersionProbes:
+    """Version checks tolerate slow ggshield startup without accepting failures."""
+
+    @mock.patch("ai_guardian.scanners.installer.subprocess.run")
+    @mock.patch(
+        "ai_guardian.scanners.installer.ScannerInstaller._find_installed_binary",
+        return_value="/fake/bin/ggshield",
+    )
+    def test_slow_gitguardian_startup(self, mock_find, mock_run, tmp_path, method):
+        """QEMU startup can exceed five seconds even for a healthy bundle."""
+
+        def slow_probe(cmd, **kwargs):
+            if kwargs["timeout"] < 12:
+                raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+            return subprocess.CompletedProcess(
+                cmd,
+                returncode=0 if cmd[1:] == ["--version"] else 2,
+                stdout="ggshield, version 1.54.0\n",
+            )
+
+        mock_run.side_effect = slow_probe
+        installer = ScannerInstaller(install_dir=tmp_path)
+
+        result = getattr(installer, method)("gitguardian")
+
+        assert result == (True if method == "verify_installation" else "1.54.0")
+        mock_find.assert_called_once_with("gitguardian")
+        mock_run.assert_called_once()
+        assert mock_run.call_args.args[0] == ["/fake/bin/ggshield", "--version"]
+        assert mock_run.call_args.kwargs["timeout"] == 60
+
+    @pytest.mark.parametrize("failure", ["timeout", "exit_error"])
+    @mock.patch("ai_guardian.scanners.installer.subprocess.run")
+    @mock.patch(
+        "ai_guardian.scanners.installer.ScannerInstaller._find_installed_binary",
+        return_value="/fake/bin/ggshield",
+    )
+    def test_gitguardian_failures_are_not_accepted(
+        self, _mock_find, mock_run, tmp_path, method, failure
+    ):
+        if failure == "timeout":
+            mock_run.side_effect = subprocess.TimeoutExpired("ggshield", 60)
+        else:
+            mock_run.return_value = subprocess.CompletedProcess(
+                ["ggshield", "--version"],
+                returncode=2,
+                stdout="ggshield, version 1.54.0\n",
+            )
+        installer = ScannerInstaller(install_dir=tmp_path)
+
+        result = getattr(installer, method)("gitguardian")
+
+        assert result is (False if method == "verify_installation" else None)
+        mock_run.assert_called_once()
+        assert mock_run.call_args.args[0] == ["/fake/bin/ggshield", "--version"]
+        assert mock_run.call_args.kwargs["timeout"] == 60
+
+    @pytest.mark.parametrize(
+        "scanner",
+        [
+            "gitleaks",
+            "betterleaks",
+            "leaktk",
+            "trufflehog",
+            "detect-secrets",
+            "secretlint",
+        ],
+    )
+    @mock.patch("ai_guardian.scanners.installer.subprocess.run")
+    @mock.patch(
+        "ai_guardian.scanners.installer.ScannerInstaller._find_installed_binary",
+        return_value="/fake/bin/scanner",
+    )
+    def test_other_scanners_keep_short_timeout_and_fallback(
+        self, _mock_find, mock_run, tmp_path, method, scanner
+    ):
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(["scanner", "version"], returncode=2),
+            subprocess.CompletedProcess(
+                ["scanner", "--version"], returncode=0, stdout="1.2.3\n"
+            ),
+        ]
+        installer = ScannerInstaller(install_dir=tmp_path)
+
+        result = getattr(installer, method)(scanner)
+
+        assert result == (True if method == "verify_installation" else "1.2.3")
+        assert [call.args[0] for call in mock_run.call_args_list] == [
+            ["/fake/bin/scanner", "version"],
+            ["/fake/bin/scanner", "--version"],
+        ]
+        assert all(call.kwargs["timeout"] == 5 for call in mock_run.call_args_list)
+
+
 class TestPlatformDetection:
     """Tests for platform-specific detection."""
 

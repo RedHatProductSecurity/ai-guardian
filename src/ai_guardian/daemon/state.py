@@ -1178,7 +1178,9 @@ class DaemonState:
 
     # --- Per-session pause/resume ---
 
-    def record_session_activity(self, session_key, session_id, agent, project_dir=None):
+    def record_session_activity(
+        self, session_key, session_id, agent, project_dir=None, session_title=None
+    ):
         """Register or refresh a hook session with a stable adapter identity.
 
         Session pause state is intentionally not persisted: daemon restart loses
@@ -1190,12 +1192,19 @@ class DaemonState:
         ):
             return False
 
+        from ai_guardian.sessions.base import resolve_session_title
+
+        title = resolve_session_title(explicit=[session_title])
         normalized_dir = os.path.realpath(project_dir) if project_dir else None
         now = time.monotonic()
         with self._lock:
             self._cleanup_stale_sessions_locked(now)
+            previous = self._active_sessions.get(session_key, {})
             self._active_sessions[session_key] = {
                 "session_id": session_id,
+                # Missing/invalid metadata is not a rename or a request to clear
+                # an already-known title. Display names never affect pause keys.
+                "session_title": title or previous.get("session_title", ""),
                 "agent": str(agent or "Unknown agent"),
                 "project_dir": normalized_dir,
                 "last_activity": now,
@@ -1308,6 +1317,7 @@ class DaemonState:
                 {
                     "session_key": session_key,
                     "session_id": session["session_id"],
+                    "session_title": session.get("session_title", ""),
                     "agent": session["agent"],
                     "project_dir": session["project_dir"],
                     "last_activity_seconds_ago": max(
@@ -1658,6 +1668,7 @@ class DaemonState:
             "reporting/latency.py",
             "reporting/metrics.py",
             "reporting/sarif.py",
+            "sessions/base.py",
             "tray/__init__.py",
             "tray/plugins.py",
         }

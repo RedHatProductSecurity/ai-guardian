@@ -87,7 +87,8 @@ modules under `config/`, `hook_adapters/`, `hook_events/`, `patterns/`,
 `scanners/`, `sdk/`, `setup/`, `tools/`, `utils/`, `violations/`, and
 `observability/`; the package initializer and root hook, configuration, adapter,
 health-check, and self-test modules; and selected daemon lifecycle, REST API,
-reporting, MCP audit, prompt, pattern-editor, and tray-plugin helpers. It tracks
+reporting, MCP audit, prompt, pattern-editor, and tray-plugin helpers, plus the
+shared `sessions/base.py` title helper. It tracks
 the bundled `patterns/data/*.toml` rules, `templates/tray-plugins/*.json`, and
 `schemas/ai-guardian-config.schema.json` because daemon paths read those files
 at runtime. The exact directory and path allowlists live beside
@@ -588,8 +589,27 @@ changes. macOS keeps the live countdown refresh behavior.
 ### Session and directory pause controls
 
 **Sessions...** lists active hook sessions that have a stable identity from their
-agent adapter. Each entry shows the session identity and project directory, so
-two sessions in the same directory can be paused independently. Session pause
+agent adapter. Entries prefer a human-readable session title, for example
+`OpenCode: Fix tray labels`, and fall back to the session ID, then the stable
+session key when no usable title is known (including older daemons). Titles are
+compact, single-line, display-safe text capped at 80 characters. Identical labels
+receive an eight-character stable-key fingerprint so they remain distinguishable.
+Windows menu text escapes literal ampersands so titles such as `Fix A&B` retain
+the `&` instead of turning it into a keyboard mnemonic. Stored titles and other
+platforms' menu text are unchanged.
+The submenu retains the full session key and project directory; controls always
+target that key, never the title. This works for local, remote, and container
+daemons, so two sessions in the same directory can be paused independently.
+
+Titles reported by later hook activity update existing entries without changing
+identity or pause state. Missing, blank, or invalid title metadata does not erase
+a previously known title. OpenCode V2 reads native metadata for the exact session
+through its plugin API, with a 500 ms lookup deadline and a 30-second cache
+(including misses; at most 128 entries). Other integrations use supplied hook
+name/title metadata; unknown titles keep the ID fallback. No transcript or
+conversation-wide discovery is performed for tray labels.
+
+Session pause
 durations are 5, 15, or 30 minutes, 1 hour, or until resumed/session end. Timed
 pauses expire automatically; every session pause is cleared on a SessionEnd
 event, after 24 hours without hook activity, or when the daemon restarts. Session

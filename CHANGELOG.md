@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Readable tray session names (#2546):** Prefer optional hook/native session
+  titles in local, remote, and container pause controls, with safe bounded text,
+  ID fallback, and duplicate-name disambiguation. OpenCode V2 forwards native
+  titles through bounded cached metadata lookups; renames preserve stable
+  control keys and existing pause state.
 - **Tray sandbox creation Connect action (#2542):** Offer a Connect button after
   successful container or OpenShell creation, launching the selected sandbox's
   interactive connection without rerunning creation while preserving the output.
@@ -105,6 +110,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **GitGuardian installation verification:** Allow up to 60 seconds for
+  `ggshield --version` to initialize its bundled Python runtime on slow/emulated
+  ARM64 builds. Version discovery uses the same bounded check; timeouts and
+  nonzero exits still fail verification, and other scanners retain their
+  five-second probes.
+- **Tray session title follow-up (#2546):** Render literal ampersands in Windows
+  session menus without changing stored titles or pause targets. Track the shared
+  title helper for editable-install daemon stale-code warnings.
 - **Release publishing:** Keep OpenShell middleware archives separate from the
   Python distributions uploaded to PyPI/TestPyPI, while including all archives,
   wheels, and checksums in the GitHub Release.

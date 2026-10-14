@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18013 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~75508 tok)
+- `CHANGELOG.md` — Change log (~75963 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -133,7 +133,7 @@
 - `lint.yml` — GitHub Actions CI/CD - Lint Workflow (~689 tok)
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
-- `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2031 tok)
+- `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
 - `release-readiness.yml` — CI: Release Readiness (~9022 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~6855 tok)
@@ -898,7 +898,7 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~15784 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~15800 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
@@ -917,12 +917,12 @@
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
 - `MCP_SERVER.md` — MCP Security Advisor Server (~4148 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
-- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~7806 tok)
+- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~8122 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
-- `OPENCODE.md` — OpenCode Support (~1935 tok)
-- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~7707 tok)
+- `OPENCODE.md` — OpenCode Support (~2167 tok)
+- `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~8054 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
@@ -1009,7 +1009,7 @@
 
 - `build.rs` (~232 tok)
 - `Cargo.toml` — Rust package manifest (~243 tok)
-- `README.md` — Project documentation (~1016 tok)
+- `README.md` — Project documentation (~1137 tok)
 
 ## rust/openshell-middleware/src/
 
@@ -1019,7 +1019,7 @@
 - `http.rs` — HTTP request capability and supervisor handshake RPCs. (~2110 tok)
 - `main.rs` — AI Guardian Rust OpenShell middleware binary. (~40 tok)
 - `policy.rs` — OpenShell middleware policy validation and scanner ownership planning. (~927 tok)
-- `response.rs` — HTTP response inspection and redaction capability. (~4053 tok)
+- `response.rs` — HTTP response inspection and redaction capability. (~9190 tok)
 - `service.rs` — Rust OpenShell supervisor middleware service wiring. (~5196 tok)
 - `websocket.rs` — Text WebSocket session inspection capability. (~4689 tok)
 
@@ -1105,8 +1105,8 @@
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 14 more (~2027 tok)
 - `rest_api.py` — _ThreadedHTTPServer: log_message, do_GET, do_POST (~20809 tok)
-- `server.py` — URL configuration (~14190 tok)
-- `state.py` — URL configuration (~21757 tok)
+- `server.py` — URL configuration (~14325 tok)
+- `state.py` — URL configuration (~21922 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
 - `violation_rescan.py` — Rescan a file at a violation location to retrieve matched text. (~3372 tok)
@@ -1282,7 +1282,7 @@
 - `file_scanner.py` — FileScanner: scan_directory, scan_files, scan_text (~16930 tok)
 - `gitleaks.py` — class: find_project_root, load_gitleaks_allowlist, should_skip_file, filter_findings + 2 more (~2822 tok)
 - `image_scanner.py` — class: is_image_file, is_image_bytes, is_base64_image, strip_base64_images + 6 more (~3596 tok)
-- `installer.py` — InstallMethod: get_github_repo, get_pattern_servers, get_pinned_version, detect_platform + 2 more (~15424 tok)
+- `installer.py` — InstallMethod: get_github_repo, get_pattern_servers, get_pinned_version, detect_platform + 2 more (~15496 tok)
 - `listen_mode.py` — Persistent leaktk listen-mode process for zero-overhead secret scanning. (~2141 tok)
 - `manager.py` — from: list_configured, list_installed, print_scanner_list, get_scanner_info + 5 more (~4068 tok)
 - `ml_detection.py` — MLEngine: is_ml_available, get_models_dir, list_registered_models, download_model + 3 more (~5724 tok)
@@ -1339,7 +1339,7 @@
 
 - `__init__.py` — IDE session discovery and reading for multi-IDE conversation browser. (~186 tok)
 - `adapters.py` — Per-IDE session adapter implementations. (~24749 tok)
-- `base.py` — SessionAdapter base class for IDE session discovery and reading. (~4113 tok)
+- `base.py` — SessionAdapter base class for IDE session discovery and reading. (~4194 tok)
 - `discovery.py` — IDE session discovery — locate session files for each supported IDE. (~462 tok)
 - `reader.py` — IDE session reader — read and parse session content. (~1299 tok)
 
@@ -1358,7 +1358,7 @@
 - `aiderdesk-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~928 tok)
 - `openclaw-plugin.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~470 tok)
 - `opencode-plugin-v1.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~870 tok)
-- `opencode-plugin-v2.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~1944 tok)
+- `opencode-plugin-v2.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~2613 tok)
 - `pi-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~3203 tok)
 
 ## src/ai_guardian/skills/
@@ -1402,7 +1402,7 @@
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1078 tok)
 - `health.py` — URL configuration (~16971 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~46225 tok)
+- `menu_builder.py` — _SandboxOutput: append, action, pause_dir_fn, resume_dir_fn + 2 more (~46677 tok)
 - `menu.py` — URL configuration (~3078 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
 - `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2297 tok)
