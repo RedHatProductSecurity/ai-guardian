@@ -22,8 +22,9 @@ def isolated_server(tmp_path, monkeypatch):
     return DaemonServer(idle_timeout=0, enable_rest_api=False)
 
 
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
 def test_two_sessions_in_one_directory_can_be_paused_independently(
-    isolated_server, tmp_path
+    isolated_server, tmp_path, monkeypatch, platform
 ):
     """
     USER EXPERIENCE: Shared project and title -> pause targets one hook session.
@@ -40,7 +41,19 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
     - Duplicate compact titles get distinct short stable-key suffixes. The
       selected session key and project remain accessible in its submenu.
     - Renaming a paused session updates its label without resuming scanning.
+    - Windows renders literal ampersands, not keyboard mnemonic markers; other
+      platforms retain their literal menu strings. Stored titles remain unescaped.
+
+    Manual verification:
+    1. On Windows, name two sessions "Fix A&B" and "Fix AB".
+    2. Open Sessions... and confirm the ampersand is visible and labels differ.
+    3. Pause/resume the first session and confirm the second is unaffected.
     """
+    monkeypatch.setattr(
+        "ai_guardian.tray.menu_builder.sys", SimpleNamespace(platform=platform)
+    )
+    title = "Fix A&B"
+    display_title = "Fix A&&B" if platform == "win32" else title
     server = isolated_server
     project = tmp_path / "shared-project"
     project.mkdir()
@@ -64,8 +77,8 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
             "exit_code": 0,
         },
     ) as scan:
-        server._handle_hook_request(hook("session-one", "Fix tray labels"))
-        server._handle_hook_request(hook("session-two", "Fix tray labels"))
+        server._handle_hook_request(hook("session-one", title))
+        server._handle_hook_request(hook("session-two", title))
         sessions = {
             session["session_id"]: session
             for session in server.state.get_active_sessions()
@@ -88,7 +101,7 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
                 server.state.resume_session,
             )
         first, second = items[2:4]
-        assert first.label(None).startswith("● Claude Code: Fix tray labels [")
+        assert first.label(None).startswith(f"● Claude Code: {display_title} [")
         assert first.label(None) != second.label(None)
         assert first.action.items[0].label(None) == f"Session key: {first_key}"
         assert (
@@ -102,10 +115,8 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
         paused = server._handle_hook_request(hook("session-one", "Renamed session"))
         other = server._handle_hook_request(hook("session-two"))
         assert first.label(None) == "☾ Claude Code: Renamed session"
-        assert second.label(None) == "● Claude Code: Fix tray labels"
-        assert (
-            server.state.get_active_sessions()[1]["session_title"] == "Fix tray labels"
-        )
+        assert second.label(None) == f"● Claude Code: {display_title}"
+        assert server.state.get_active_sessions()[1]["session_title"] == title
 
     assert paused["output"] == "{}"
     assert other["output"] == "scanned"

@@ -1668,6 +1668,7 @@ class DaemonState:
             "reporting/latency.py",
             "reporting/metrics.py",
             "reporting/sarif.py",
+            "sessions/base.py",
             "tray/__init__.py",
             "tray/plugins.py",
         }

@@ -167,6 +167,48 @@ class TestSessionPauseLabels:
         sessions[1]["session_title"] = "Different name"
         assert "[" not in items[0].label(None)
 
+    @pytest.mark.parametrize(
+        ("platform", "expected_titles"),
+        [
+            ("win32", ["Fix A&&B", "Fix AB", "Fix A&&&&B"]),
+            ("linux", ["Fix A&B", "Fix AB", "Fix A&&B"]),
+            ("darwin", ["Fix A&B", "Fix AB", "Fix A&&B"]),
+        ],
+    )
+    def test_literal_ampersands_are_escaped_only_for_windows_display(
+        self, monkeypatch, platform, expected_titles
+    ):
+        monkeypatch.setattr(
+            "ai_guardian.tray.menu_builder.sys", SimpleNamespace(platform=platform)
+        )
+        titles = ["Fix A&B", "Fix AB", "Fix A&&B"]
+        sessions = [
+            {
+                "session_key": f"Adapter:session-{index}",
+                "session_id": f"session-{index}",
+                "session_title": title,
+                "agent": "OpenCode",
+                "paused": False,
+            }
+            for index, title in enumerate(titles)
+        ]
+        items, pause, resume = self._items({"active_sessions": sessions})
+        assert [item.label(None) for item in items[:3]] == [
+            f"● OpenCode: {title}" for title in expected_titles
+        ]
+        assert [session["session_title"] for session in sessions] == titles
+        for index, item in enumerate(items[:3]):
+            actions = {
+                child.label: child
+                for child in item.action.items
+                if isinstance(child, FakeMenuItem)
+            }
+            actions["15 minutes"].action(None, None)
+            pause.assert_called_with(sessions[index]["session_key"], 15)
+            sessions[index]["paused"] = True
+            actions["Resume"].action(None, None)
+            resume.assert_called_with(sessions[index]["session_key"])
+
     def test_collision_work_is_bounded_to_visible_session_slots(self):
         # An identical name outside the pre-allocated slots does not require a
         # suffix on a uniquely displayed session or additional metadata work.

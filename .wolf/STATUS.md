@@ -9,6 +9,19 @@ budget_tokens: 1000
 
 ---
 
+## PR #2548 review and fixes — 2026-10-14
+
+- Reviewed head `07291dd64df900ead4d00b323170c1f397449c59`, then fixed both P3
+  findings at the user's request. Final Windows session-menu text escapes literal
+  ampersands without changing titles, collision comparisons, or pause keys.
+  `sessions/base.py` is now included in the daemon dev source inventory.
+- Regression tests reproduced both bugs before the fixes. 681 related unit/UX
+  tests now pass, including full sandbox tray, daemon client/tray, and session
+  pause UX files. Ruff, Black (`--target-version py310`), Pylint, and Mypy pass.
+- Updated tray documentation, changelog, and OpenWolf learnings/buglog. Changes
+  are approved by the user for commit and push on branch `2546` to PR #2548.
+  Windows rendering is source-confirmed and platform-simulated, not live-tested.
+
 ## ✅ Done
 
 - Issue #2546: carry optional `session_title` through hook tracking and the
@@ -134,9 +147,9 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
+- Monitor PR #2548 CI after publishing the approved review fixes.
 - Optionally verify named/unnamed and renamed OpenCode sessions in the live tray
-  after deploying/reloading the updated managed plugin; then run `daf complete`
-  outside the agent session for #2546. Do not commit from this session.
+  after deploying/reloading the updated managed plugin.
 - Preserve the pending #2473 manual Claude Code/Vertex and OpenCode/Vertex
   qualification from the previous handoff for follow-up after #2542.
 

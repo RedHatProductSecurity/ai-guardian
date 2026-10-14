@@ -110,6 +110,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **Tray session title follow-up (#2546):** Render literal ampersands in Windows
+  session menus without changing stored titles or pause targets. Track the shared
+  title helper for editable-install daemon stale-code warnings.
 - **Release publishing:** Keep OpenShell middleware archives separate from the
   Python distributions uploaded to PyPI/TestPyPI, while including all archives,
   wheels, and checksums in the GitHub Release.

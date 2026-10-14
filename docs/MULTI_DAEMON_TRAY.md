@@ -87,7 +87,8 @@ modules under `config/`, `hook_adapters/`, `hook_events/`, `patterns/`,
 `scanners/`, `sdk/`, `setup/`, `tools/`, `utils/`, `violations/`, and
 `observability/`; the package initializer and root hook, configuration, adapter,
 health-check, and self-test modules; and selected daemon lifecycle, REST API,
-reporting, MCP audit, prompt, pattern-editor, and tray-plugin helpers. It tracks
+reporting, MCP audit, prompt, pattern-editor, and tray-plugin helpers, plus the
+shared `sessions/base.py` title helper. It tracks
 the bundled `patterns/data/*.toml` rules, `templates/tray-plugins/*.json`, and
 `schemas/ai-guardian-config.schema.json` because daemon paths read those files
 at runtime. The exact directory and path allowlists live beside
@@ -593,6 +594,9 @@ agent adapter. Entries prefer a human-readable session title, for example
 session key when no usable title is known (including older daemons). Titles are
 compact, single-line, display-safe text capped at 80 characters. Identical labels
 receive an eight-character stable-key fingerprint so they remain distinguishable.
+Windows menu text escapes literal ampersands so titles such as `Fix A&B` retain
+the `&` instead of turning it into a keyboard mnemonic. Stored titles and other
+platforms' menu text are unchanged.
 The submenu retains the full session key and project directory; controls always
 target that key, never the title. This works for local, remote, and container
 daemons, so two sessions in the same directory can be paused independently.

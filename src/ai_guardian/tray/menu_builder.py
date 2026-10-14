@@ -12,6 +12,7 @@ import json
 import os
 import shlex
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -547,7 +548,9 @@ class TrayMenuBuilder:
                 if session.get("paused") and remaining > 0:
                     if self._tray._supports_live_pause_countdown():
                         label += f" ({int(remaining // 60)}m {int(remaining % 60)}s)"
-                return label
+                # Win32 treats '&' as a mnemonic marker. Escape only the final
+                # menu text, never stored titles, collision comparisons, or keys.
+                return label.replace("&", "&&") if sys.platform == "win32" else label
 
             def _session_key_label(_item, slot=slot):
                 session = _session_at(get_stats_fn(_item), slot)

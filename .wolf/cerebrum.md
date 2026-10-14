@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-13
+> Last updated: 2026-10-14
 
 ## User Preferences
 
@@ -36,6 +36,17 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **Win32 tray title rendering (PR #2548 review):** pystray passes menu text
+  directly to `MENUITEMINFO.dwTypeData`; single ampersands become mnemonic
+  markers. Escape only final Windows menu text, preserving stored titles and
+  stable control keys. Test doubled ampersands and non-Windows literal strings;
+  raw-string collision tests alone do not cover native rendering.
+- **New daemon helper dependencies (PR #2548 review):** Adding a daemon import
+  of an isolated shared helper also requires reviewing `_DAEMON_SOURCE_PATHS`.
+  `sessions/base.py` is now tracked for editable-install stale-code warnings;
+  unrelated session readers remain excluded. Inventory tests live in
+  `tests/unit/test_daemon_client.py::TestGetPackageMaxMtime`.
 
 - **Tray session titles (#2546):** `active_sessions.session_title` is optional
   display metadata; control routing and pause state still use the adapter-issued
