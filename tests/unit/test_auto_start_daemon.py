@@ -195,6 +195,139 @@ class TestDaemonCommandsNoAutoStart:
         assert args.dir == "/tmp/project"
         assert args.minutes == 5
 
+    @pytest.mark.parametrize("nested", [False, True])
+    @pytest.mark.parametrize(
+        "scope, value",
+        [
+            (None, None),
+            ("--dir", "./project with spaces"),
+            ("--session", "ClaudeCodeAdapter:session-1"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "command, minutes",
+        [
+            ("pause", None),
+            ("pause", 0),
+            ("pause", 15),
+            ("pause", 1440),
+            ("resume", None),
+        ],
+    )
+    def test_pause_resume_scopes_dispatch_without_autostart(
+        self, nested, scope, value, command, minutes
+    ):
+        argv = ["ai-guardian", "daemon"] if nested else ["ai-guardian"]
+        argv.append(command)
+        if minutes is not None:
+            argv.extend(["--minutes", str(minutes)] if nested else [str(minutes)])
+        if scope:
+            argv.extend([scope, value])
+
+        with (
+            mock.patch.object(sys, "argv", argv),
+            mock.patch("ai_guardian.cli._ensure_daemon_started") as auto_start,
+            mock.patch(
+                "ai_guardian.cli._handle_daemon_command", return_value=0
+            ) as handler,
+        ):
+            from ai_guardian.cli import main
+
+            assert main() == 0
+
+        auto_start.assert_not_called()
+        handler.assert_called_once()
+        args = handler.call_args.args[0]
+        assert args.daemon_command == command
+        assert args.dir == (value if scope == "--dir" else None)
+        assert args.session == (value if scope == "--session" else None)
+        if command == "pause":
+            assert args.minutes == (minutes or 0)
+
+    @pytest.mark.parametrize("nested", [False, True])
+    @pytest.mark.parametrize("command", ["pause", "resume"])
+    @pytest.mark.parametrize(
+        "selectors",
+        [
+            ["--dir", "project", "--session", "Adapter:session"],
+            ["--dir"],
+            ["--session"],
+            ["--dir", ""],
+            ["--session", ""],
+            ["--dir", " \t"],
+            ["--session", " \t"],
+        ],
+    )
+    def test_pause_resume_scopes_reject_invalid_selectors(
+        self, nested, command, selectors
+    ):
+        argv = ["ai-guardian", "daemon"] if nested else ["ai-guardian"]
+        with (
+            mock.patch.object(sys, "argv", [*argv, command, *selectors]),
+            mock.patch("ai_guardian.cli._ensure_daemon_started") as auto_start,
+            mock.patch("ai_guardian.cli._handle_daemon_command") as handler,
+        ):
+            from ai_guardian.cli import main
+
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 2
+        handler.assert_not_called()
+        auto_start.assert_not_called()
+
+    @pytest.mark.parametrize("scope", ["--dir", "--session"])
+    @pytest.mark.parametrize("minutes", ["-1", "1441", "1.5", "not-an-integer"])
+    def test_scoped_top_level_pause_rejects_invalid_duration(
+        self, scope, minutes, capsys
+    ):
+        with (
+            mock.patch.object(
+                sys, "argv", ["ai-guardian", "pause", minutes, scope, "project-or-key"]
+            ),
+            mock.patch("ai_guardian.cli._ensure_daemon_started") as auto_start,
+            mock.patch("ai_guardian.cli._handle_daemon_command") as handler,
+        ):
+            from ai_guardian.cli import main
+
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 2
+        handler.assert_not_called()
+        auto_start.assert_not_called()
+        message = (
+            "pause duration must be between 0 and 1440 minutes"
+            if minutes in ("-1", "1441")
+            else "pause duration must be an integer"
+        )
+        assert message in capsys.readouterr().err
+
+    @pytest.mark.parametrize("nested", [False, True])
+    @pytest.mark.parametrize("command", ["pause", "resume"])
+    def test_pause_resume_scope_help(self, nested, command, capsys):
+        argv = ["ai-guardian", "daemon"] if nested else ["ai-guardian"]
+        with (
+            mock.patch.object(sys, "argv", [*argv, command, "--help"]),
+            mock.patch("ai_guardian.cli._ensure_daemon_started") as auto_start,
+            mock.patch("ai_guardian.cli._handle_daemon_command") as handler,
+        ):
+            from ai_guardian.cli import main
+
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 0
+        output = " ".join(capsys.readouterr().out.split())
+        assert "--dir DIRECTORY | --session SESSION_KEY" in output
+        assert "all sessions using this project directory" in output
+        assert "ai-guardian daemon status" in output
+        assert "Without a selector" in output
+        assert "global" in output
+        assert "callers without stable hook identities" in output
+        handler.assert_not_called()
+        auto_start.assert_not_called()
+
     def test_other_commands_do_autostart(self):
         mock_ensure = mock.MagicMock()
         with (

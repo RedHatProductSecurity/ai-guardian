@@ -37,6 +37,33 @@
 
 ## Key Learnings
 
+- **Scoped CLI UX isolation (PR #2550):** Process-wide `_connect` mocks also
+  intercept leaked/background tray subscriber threads during full-suite CI.
+  Bind the opt-in test transport to the owning thread and return no connection
+  to other threads; retain strict foreground call-count assertions. Use real
+  protocol framing rather than globally mocking encode/decode. Replace the
+  daemon-state module's clock namespace, not the shared standard-library
+  `time.monotonic`, so unrelated thread deadlines keep using the real clock.
+- **Numeric GitHub branches:** `gh pr view 2547` interprets the value as a PR
+  number, not the numeric branch name. Discover the PR with `gh pr list --head
+  2547` first, then use its actual PR number for CI diagnostics.
+
+- **Scoped short CLI controls (#2547):** Share mutually exclusive scope options
+  between top-level and nested pause/resume parsers. Reject empty and
+  whitespace-only values before dispatch: the existing handler treats falsey
+  selectors as global control. Preserve exact non-empty paths and stable keys;
+  reuse daemon normalization, transports, state, and lifetimes.
+- **Release hook-session registration (#2547):** `send_hook_request()` always
+  supplies `_daemon_cwd` from the caller's actual working directory. A payload
+  `cwd` alone does not put registered sessions in a synthetic project. Change
+  into the isolated project for registration, restore cwd in `finally`, and
+  assert the status-reported project directories before scoped CLI checks.
+- **Local Mypy environments (#2547):** The declared `uv --extra dev` environment
+  passes the source check. The standalone executable still reports the known
+  14 request-stub errors in unchanged `skill_discovery.py:522` and
+  `scanners/secret_validator.py:288`; distinguish tool environments rather than
+  expanding an unrelated change to fix baseline diagnostics.
+
 - **ggshield startup probes (PR #2548 CI):** The bundled Python runtime can
   exceed five seconds under QEMU. `ggshield` supports `--version`, not the
   `version` subcommand; two short probes caused a checksum-verified ARM64 image

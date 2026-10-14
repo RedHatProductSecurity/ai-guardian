@@ -341,17 +341,44 @@ ai-guardian tray start --no-discover  # Manual targets only
 ai-guardian tray stop               # Stop running tray
 ai-guardian tray restart            # Restart tray
 
+# Global controls without a tray (no selector means global)
+ai-guardian pause 15
+ai-guardian pause                   # Indefinite global pause
+ai-guardian resume
+
 # List active stable-ID hook sessions and copy a session_key
 ai-guardian daemon status
-ai-guardian daemon pause --session '<session-key>' --minutes 15
-ai-guardian daemon pause --session '<session-key>'  # Until resume or session end
-ai-guardian daemon resume --session '<session-key>'
-ai-guardian daemon pause --dir /path/to/project --minutes 15  # All sessions there
+ai-guardian pause 15 --session '<session-key>'
+ai-guardian pause --session '<session-key>'  # Until resume or session end
+ai-guardian resume --session '<session-key>'
+
+# All sessions using the normalized project directory
+ai-guardian pause 15 --dir /path/to/project
+ai-guardian pause --dir /path/to/project     # Indefinite directory pause
+ai-guardian resume --dir /path/to/project
 ```
 
-Session-scoped CLI controls require a currently active stable hook identity.
-For integrations that do not provide one, use global pause or `--dir` to pause
-all sessions in that project directory.
+Syntax: `pause [MINUTES] [--dir DIRECTORY | --session SESSION_KEY]` and
+`resume [--dir DIRECTORY | --session SESSION_KEY]`. Selectors are mutually
+exclusive and require non-empty values. Integer durations range from 0 through
+1440 minutes; 0 or omission means indefinite within that scope's existing
+lifetime. The nested `daemon pause --minutes MINUTES` and `daemon resume` forms
+remain supported with the same scope selectors.
+
+Session-scoped controls require a currently active stable hook identity. Use
+the full `session_key` from status, not a display title, raw session ID, directory,
+or an inferred current session. Unknown/expired keys and unsupported session
+requests fail with non-zero status and never fall back to broader control.
+Session pauses clear on timed expiry, resume, SessionEnd, 24 hours of inactivity,
+or daemon restart. Integrations without stable identities are covered only by
+global or directory-wide pauses.
+
+Resume clears only the selected scope's pause; other pause layers still apply.
+All forms reuse the existing configured daemon and do not auto-start a daemon
+or tray or change pause state offline. A stopped/unreachable daemon is an error.
+They remain human-operated CLI controls protected against execution by AI
+sessions; there is no mutating MCP pause/resume tool. Multi-daemon selection
+continues to use the tray's existing target routing, not a new CLI selector.
 
 ## Tray Plugins
 

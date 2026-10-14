@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Top-level scoped pause/resume (#2547):** Add mutually exclusive `--dir` and
+  `--session` selectors to the short CLI commands, reusing existing daemon
+  handling, normalized directory scopes, and stable session keys. Preserve
+  positional durations, global/nested behavior, pause lifetimes, and AI-session
+  self-protection; reject empty selectors in both command forms without falling
+  back to global control. Add scoped unit/UX and release-readiness coverage.
 - **Readable tray session names (#2546):** Prefer optional hook/native session
   titles in local, remote, and container pause controls, with safe bounded text,
   ID fallback, and duplicate-name disambiguation. OpenCode V2 forwards native

@@ -1071,8 +1071,8 @@ Default is `30` minutes. The daemon shuts down after this idle period and auto-s
 # Reload config without restart
 ai-guardian daemon reload
 
-# Pause/resume the existing daemon without the system tray
-ai-guardian pause             # Pause indefinitely
+# Pause/resume global scanning on the existing daemon without the system tray
+ai-guardian pause             # Pause global scanning indefinitely
 ai-guardian pause 15          # Pause for 15 minutes (maximum: 1440)
 ai-guardian resume
 
@@ -1083,24 +1083,39 @@ ai-guardian daemon stop
 ai-guardian daemon status
 
 # Pause/resume one active hook session (key is shown by daemon status)
-ai-guardian daemon pause --session '<session-key>' --minutes 15
-ai-guardian daemon pause --session '<session-key>'  # Until resume or session end
-ai-guardian daemon resume --session '<session-key>'
+ai-guardian pause 15 --session '<session-key>'
+ai-guardian pause --session '<session-key>'  # Until resume or session end
+ai-guardian resume --session '<session-key>'
 
 # Pause/resume every hook session using one project directory
-ai-guardian daemon pause --dir /path/to/project --minutes 15
-ai-guardian daemon resume --dir /path/to/project
+ai-guardian pause 15 --dir /path/to/project
+ai-guardian pause --dir /path/to/project     # Indefinite directory pause
+ai-guardian resume --dir /path/to/project
 ```
 
 The top-level `pause` and `resume` commands never auto-start a daemon. They
-control the existing local daemon through its socket and report an error when
-it is stopped or unreachable. The older `ai-guardian daemon pause/resume`
-commands remain available for global, session, or directory-wide control.
-Session-scoped controls require an active stable hook identity; session pauses
-expire on their timer, SessionEnd, 24 hours without hook activity, or daemon
-restart. `--dir` is a bulk pause for all sessions in that project directory.
-Integrations and MCP callers without stable hook identities must use global or
-directory-wide controls instead.
+reuse the existing daemon command handling and report a non-zero error when
+the configured daemon is stopped or unreachable; they never start a tray or
+write an offline pause. With no selector they control global scanning. Choose
+either `--dir DIRECTORY` (all sessions using the normalized project directory)
+or `--session SESSION_KEY` (exactly one active hook session), never both. Missing,
+empty, or whitespace-only selectors are usage errors. Pause durations must be
+integer minutes from 0 through 1440; 0 or omission means indefinite under the
+existing scope-specific lifetime rules.
+
+Copy the full stable `session_key` from `ai-guardian daemon status`, not a display
+name, raw session ID, or directory. Unknown, expired, and unsupported session
+keys fail without falling back to a directory-wide or global operation. Session
+pauses expire on their timer, SessionEnd, 24 hours without hook activity, or
+daemon restart. Callers without stable hook identities are covered by global
+and directory pauses, not individual-session controls. Resume removes only the
+requested scope's pause; other global, directory, or session pauses still apply.
+
+The older `ai-guardian daemon pause --minutes 15 --dir DIRECTORY` and
+`ai-guardian daemon resume --dir DIRECTORY` forms remain supported, as do their
+global and `--session` variants. These are human-operated controls: AI-session
+self-protection still denies their execution, and MCP has no mutating
+pause/resume tool.
 
 ### Daemon start times out or says "Another daemon is starting"
 

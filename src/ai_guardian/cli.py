@@ -162,6 +162,40 @@ def _parse_pause_minutes(value):
     return minutes
 
 
+def _parse_pause_scope(value):
+    """Reject empty selectors without changing directory paths or session keys."""
+    if not value.strip():
+        raise argparse.ArgumentTypeError("scope selector must not be empty")
+    return value
+
+
+def _add_pause_scope_options(parser, operation):
+    """Keep top-level and nested pause/resume scope selection identical."""
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument(
+        "--dir",
+        type=_parse_pause_scope,
+        default=None,
+        metavar="DIRECTORY",
+        help=f"{operation.capitalize()} all sessions using this project directory",
+    )
+    scope.add_argument(
+        "--session",
+        type=_parse_pause_scope,
+        default=None,
+        metavar="SESSION_KEY",
+        help="Stable session key shown by 'ai-guardian daemon status' (not a display name)",
+    )
+    parser.epilog = (
+        "Without a selector, control global scanning. Session scope requires a "
+        "currently active stable hook identity; global or directory scope also "
+        "covers callers without stable hook identities. Session pauses end on "
+        "resume, timed expiry, SessionEnd, 24 hours of inactivity, or daemon restart. "
+        "Resume removes only the selected scope's pause; other pauses still apply. "
+        "These commands never start a daemon or tray."
+    )
+
+
 def _handle_ml_command(args, ml_parser):
     """Handle ML model management subcommands."""
     cmd = getattr(args, "ml_command", None)
@@ -1396,10 +1430,12 @@ def main():
             "--json", action="store_true", dest="json_output", help="Output JSON"
         )
 
-        # Tray-independent global pause/resume commands (#2427)
+        # Tray-independent pause/resume commands (#2427, #2547)
         pause_parser = subparsers.add_parser(
-            "pause", help="Pause global scanning without starting the daemon"
+            "pause",
+            help="Pause scanning globally, for a directory, or for one hook session without starting the daemon",
         )
+        _add_pause_scope_options(pause_parser, "pause")
         pause_parser.add_argument(
             "minutes",
             nargs="?",
@@ -1411,9 +1447,11 @@ def main():
                 f"maximum: {_MAX_PAUSE_MINUTES})"
             ),
         )
-        subparsers.add_parser(
-            "resume", help="Resume global scanning without starting the daemon"
+        resume_parser = subparsers.add_parser(
+            "resume",
+            help="Resume scanning globally, for a directory, or for one hook session without starting the daemon",
         )
+        _add_pause_scope_options(resume_parser, "resume")
 
         # Daemon subcommand
         daemon_parser = subparsers.add_parser(
@@ -1453,19 +1491,7 @@ def main():
             "pause",
             help="Pause scanning globally, per session, or for all sessions in a directory",
         )
-        daemon_pause_scope = daemon_pause_parser.add_mutually_exclusive_group()
-        daemon_pause_scope.add_argument(
-            "--dir",
-            type=str,
-            default=None,
-            help="Pause all sessions using this project directory",
-        )
-        daemon_pause_scope.add_argument(
-            "--session",
-            type=str,
-            default=None,
-            help="Stable session key shown by 'ai-guardian daemon status'",
-        )
+        _add_pause_scope_options(daemon_pause_parser, "pause")
         daemon_pause_parser.add_argument(
             "--minutes",
             type=int,
@@ -1475,19 +1501,7 @@ def main():
         daemon_resume_parser = daemon_sub.add_parser(
             "resume", help="Resume scanning globally, per session, or for a directory"
         )
-        daemon_resume_scope = daemon_resume_parser.add_mutually_exclusive_group()
-        daemon_resume_scope.add_argument(
-            "--dir",
-            type=str,
-            default=None,
-            help="Resume all sessions using this project directory",
-        )
-        daemon_resume_scope.add_argument(
-            "--session",
-            type=str,
-            default=None,
-            help="Stable session key shown by 'ai-guardian daemon status'",
-        )
+        _add_pause_scope_options(daemon_resume_parser, "resume")
 
         # Standalone tray subcommand (Issue #527)
         tray_parser = subparsers.add_parser(

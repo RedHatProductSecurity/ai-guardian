@@ -9,6 +9,50 @@ budget_tokens: 1000
 
 ---
 
+## PR #2550 CI follow-up — 2026-10-14
+
+- Run `38622505163` failed five Python/OS jobs at head `76c8b1b5`. All failures
+  came from new CLI UX transport mocks counting background tray subscriber
+  connections, not production pause/resume behavior.
+- Added an opt-in test-thread transport fixture that declines background
+  connections without counting them or feeding them into the in-memory server.
+  Retained exact CLI call assertions; global UX now uses real wire framing.
+  Session timers replace only daemon-state's clock namespace, not process time.
+- Deterministic background-connection and process-clock regressions failed
+  before the fix. All 552 related unit/UX tests, including both complete affected
+  UX files, pass. Ruff, Black (`--target-version py310`), Pylint, uv-environment
+  Mypy, and diff checks pass. No full suite or container scenarios ran locally.
+- Changes are test-only plus OpenWolf bookkeeping, local on branch `2547`.
+  The user explicitly authorized direct commit and push to existing PR #2550.
+  Publication uses branch `2547`; CI must validate the corrected head. No old-head
+  rerun, full-suite run, or local container validation is needed for this fix.
+
+## Issue #2547 scoped top-level pause/resume — 2026-10-14
+
+- Implemented mutually exclusive `--dir DIRECTORY` and `--session SESSION_KEY`
+  selectors for the short pause/resume commands through a shared parser helper.
+  Empty/whitespace selectors fail before dispatch in both short and nested forms.
+  Global syntax, positional durations, existing daemon handlers/transports,
+  normalized directories, stable identities, pause lifetimes, and self-protection
+  remain unchanged.
+- Added parser/handler/self-protection regressions and complete scoped UX
+  contracts, including in-memory real client/protocol/server-state routing.
+  Covered shared-directory isolation, timers/lifecycles, layered resume, unknown
+  or expired identities, unsupported requests, and no auto-start/offline writes.
+- Updated cookbook, tray CLI reference, changelog, and release-readiness checks.
+  The workflow registers two sessions from the actual isolated project cwd and
+  discovers their stable keys from status; workflow YAML/Python contracts pass.
+- Final validation: 549 related unit/UX tests pass, including both full affected
+  UX files. New scope helpers have 100% statement coverage. Ruff, Black
+  (`--target-version py310`), Pylint, and Mypy in the declared uv dev environment
+  pass. Standalone Mypy retains 14 known request-stub errors in two untouched
+  files; no unrelated source fixes were made.
+- No full-suite, integration/container scenarios, release lifecycle job, live
+  daemon controls, installed integration changes, commits, or PRs were run.
+  Coverage artifacts are in `/tmp/opencode/guardian-2547*`; no project dependency
+  was added. OpenWolf hooks maintain anatomy/memory automatically.
+- Branch `2547` is ready for the user's `daf complete` outside this agent session.
+
 ## PR #2548 CI follow-up — 2026-10-14
 
 - Failed run `38587480047`, job `115933219257`: OpenShell ARM64 image installed
@@ -161,6 +205,9 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
+- Complete #2547 with `daf complete` outside the agent session; let CI run the
+  remaining matrix and new release-readiness lifecycle checks.
+- Previous handoff follow-ups remain below; they are not part of #2547.
 - Monitor PR #2548 CI, particularly the multi-architecture OpenShell build after
   the ggshield startup-timeout fix.
 - Optionally verify named/unnamed and renamed OpenCode sessions in the live tray
@@ -171,7 +218,7 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2546` / `RedHatProductSecurity/ai-guardian#2546`.
+- Branch/issue: `2547` / `RedHatProductSecurity/ai-guardian#2547`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -221,4 +268,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2546`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2547`
