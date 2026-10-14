@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Readable tray session names (#2546):** Prefer optional hook/native session
+  titles in local, remote, and container pause controls, with safe bounded text,
+  ID fallback, and duplicate-name disambiguation. OpenCode V2 forwards native
+  titles through bounded cached metadata lookups; renames preserve stable
+  control keys and existing pause state.
 - **Tray sandbox creation Connect action (#2542):** Offer a Connect button after
   successful container or OpenShell creation, launching the selected sandbox's
   interactive connection without rerunning creation while preserving the output.

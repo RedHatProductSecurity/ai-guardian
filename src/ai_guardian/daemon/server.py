@@ -68,11 +68,27 @@ def track_hook_session(state, hook_data, cwd=None):
             return session_key
 
         project_dir = cwd or normalized.working_dir or hook_data.get("cwd")
+        from ai_guardian.sessions.base import resolve_session_title
+
+        title = resolve_session_title(
+            explicit=[
+                hook_data.get(key)
+                for key in (
+                    "session_name",
+                    "session_title",
+                    "title",
+                    "sessionTitle",
+                    "customTitle",
+                    "aiTitle",
+                )
+            ]
+        )
         state.record_session_activity(
             session_key,
             session_id,
             adapter.name,
             project_dir=project_dir,
+            session_title=title,
         )
         return session_key
     except Exception:

@@ -275,6 +275,7 @@ class TestRestAPIEndpoints:
         state.active_sessions[session_key] = {
             "session_key": session_key,
             "session_id": "session-1",
+            "session_title": "Fix tray labels",
             "agent": "Claude Code",
             "project_dir": "/project",
         }
@@ -289,6 +290,12 @@ class TestRestAPIEndpoints:
             paused = json.loads(resp.read())
         assert paused["status"] == "session_paused"
         assert state.paused_sessions == {session_key}
+
+        with urlopen(f"http://127.0.0.1:{port}/api/stats", timeout=5) as resp:
+            session = json.loads(resp.read())["active_sessions"][0]
+        assert session["session_key"] == session_key
+        assert session["session_title"] == "Fix tray labels"
+        assert session["paused"] is True
 
         resume_req = Request(
             f"http://127.0.0.1:{port}/api/resume_session",

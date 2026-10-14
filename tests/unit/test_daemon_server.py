@@ -26,7 +26,7 @@ from ai_guardian.daemon.protocol import (
     make_status_request,
     make_subscribe,
 )
-from ai_guardian.daemon.server import DaemonServer
+from ai_guardian.daemon.server import DaemonServer, track_hook_session
 from ai_guardian.daemon.state import DaemonState
 
 
@@ -864,6 +864,37 @@ class TestDaemonServerPausedHook:
 
         assert server.state.get_active_sessions() == []
         assert not server.state.is_session_paused(session_key)
+
+
+class TestSessionTitleMetadata:
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "session_name",
+            "session_title",
+            "title",
+            "sessionTitle",
+            "customTitle",
+            "aiTitle",
+        ],
+    )
+    def test_hook_title_metadata_is_tracked_without_changing_identity(
+        self, short_state_dir, field
+    ):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        hook = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "named-session",
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls"},
+            "session_name": {},
+            field: "  Fix\ntray\u202e labels  ",
+        }
+        key = track_hook_session(server.state, hook)
+        assert key == "BaseAgentAdapter:named-session"
+        session = server.state.get_active_sessions()[0]
+        assert session["session_title"] == "Fix tray labels"
+        assert session["session_key"] == key
 
 
 class TestPausedOtelTracking:

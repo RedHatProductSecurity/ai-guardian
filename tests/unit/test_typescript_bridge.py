@@ -357,12 +357,8 @@ def test_shared_bridge_runtime_contract(tmp_path, case_name, expected):
         assert "test" in result["output"]
 
 
-@pytest.mark.skipif(
-    not _node_supports_type_stripping(),
-    reason="Node.js with TypeScript type stripping is required",
-)
-def test_opencode_v2_idle_preserves_session_and_deletion_ends_it(tmp_path):
-    """Execute the generated plugin with the published V2 event envelope."""
+def _write_opencode_plugin_runtime(tmp_path):
+    """Load the actual generated plugin with a recording, non-scanning bridge."""
     (tmp_path / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
     plugin_dir = tmp_path / "ai-guardian-plugin"
     plugin_dir.mkdir()
@@ -382,6 +378,15 @@ def test_opencode_v2_idle_preserves_session_and_deletion_ends_it(tmp_path):
 """,
         encoding="utf-8",
     )
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_v2_idle_preserves_session_and_deletion_ends_it(tmp_path):
+    """Execute the generated plugin with the published V2 event envelope."""
+    _write_opencode_plugin_runtime(tmp_path)
     events = [
         {"type": "session.created", "data": {"sessionID": "session-one"}},
         {"type": "session.idle", "data": {"sessionID": "session-one"}},
@@ -401,7 +406,7 @@ const finished = new Promise(resolve => { finish = resolve; });
 const ctx = {
   location: { directory: process.cwd() },
   app: { version: '2.0.22' },
-  session: { hook: async () => {} },
+  session: { hook: async () => {}, get: async () => ({ title: 'Native title' }) },
   tool: { hook: async () => {} },
   event: { async *subscribe({ signal }) {
     subscriptionSignal = signal;
@@ -438,3 +443,109 @@ console.log(JSON.stringify({ calls: globalThis.guardianCalls, aborted: subscript
     assert all(call["opencode_version"] == "2.0.22" for call in result["calls"])
     assert all(call["cwd"] == str(tmp_path) for call in result["calls"])
     assert result["aborted"] is True
+    assert all(call["session_title"] == "Native title" for call in result["calls"][:2])
+    assert all("session_title" not in call for call in result["calls"][2:])
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_v2_session_titles_runtime(tmp_path):
+    """Metadata lookup is exact, bounded/cached, refreshable, and never skips hooks."""
+    _write_opencode_plugin_runtime(tmp_path)
+    runner = tmp_path / "run-titles.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import plugin from './ai-guardian-plugin/index.ts';
+globalThis.guardianCalls = [];
+const hooks = {};
+const requests = [];
+const signals = [];
+const titles = new Map([['first', 'Original title'], ['other', 'Other title']]);
+let now = 1000;
+Date.now = () => now;
+let mode = 'ok';
+const cleanup = await plugin.setup({
+  location: { directory: process.cwd() },
+  app: { version: '2.0.22' },
+  session: {
+    hook: async (name, handler) => { hooks[name] = handler; },
+    get: async ({ sessionID }, { signal }) => {
+      requests.push(sessionID);
+      signals.push(signal);
+      if (mode === 'throw') throw new Error('metadata unavailable');
+      if (mode === 'hang') return new Promise(() => {});
+      if (mode === 'delay') await new Promise(resolve => setTimeout(resolve, 20));
+      return { title: titles.get(sessionID) };
+    },
+  },
+  tool: { hook: async (name, handler) => { hooks[name] = handler; } },
+  event: { async *subscribe() {} },
+});
+const prompt = (sessionID) => hooks.prompt({ sessionID, prompt: { text: 'hello' } });
+const before = (sessionID) => hooks['execute.before']({ sessionID, id: 'call-1', tool: 'read', input: {} });
+const after = (sessionID) => hooks['execute.after']({ sessionID, id: 'call-1', tool: 'read', input: {}, status: 'completed', result: { output: 'clean' } });
+const last = () => globalThis.guardianCalls.at(-1);
+mode = 'delay';
+await Promise.all([prompt('first'), before('first'), after('first')]);
+assert.deepEqual(requests, ['first']);
+assert.ok(globalThis.guardianCalls.every(call => call.session_title === 'Original title'));
+mode = 'ok';
+await prompt('other');
+assert.equal(last().session_title, 'Other title');
+titles.set('first', 'Renamed title');
+await prompt('first');
+assert.equal(last().session_title, 'Original title');
+now += 30_001;
+await prompt('first');
+assert.equal(last().session_title, 'Renamed title');
+await prompt('late');
+assert.equal(last().session_title, '');
+titles.set('late', 'Later title');
+now += 30_001;
+await prompt('late');
+assert.equal(last().session_title, 'Later title');
+for (const title of [null, 42, {}, [], undefined]) {
+  now += 30_001;
+  titles.set('invalid', title);
+  await before('invalid');
+  assert.equal(last().session_title, '');
+  assert.equal(last().session_id, 'invalid');
+}
+titles.set('long', 'x'.repeat(9000));
+await prompt('long');
+assert.equal(last().session_title.length, 4096);
+mode = 'throw';
+await prompt('failure');
+await before('failure');
+await after('failure');
+assert.equal(requests.filter(id => id === 'failure').length, 1);
+assert.equal(last().session_title, '');
+assert.equal(last().hook_event_name, 'tool.execute.after');
+mode = 'hang';
+await prompt('timeout');
+assert.equal(signals.at(-1).aborted, true);
+assert.equal(last().session_title, '');
+assert.equal(last().session_id, 'timeout');
+mode = 'ok';
+for (let index = 0; index < 130; index++) await prompt(`cache-${index}`);
+const beforeEviction = requests.filter(id => id === 'cache-0').length;
+await prompt('cache-0');
+assert.equal(requests.filter(id => id === 'cache-0').length, beforeEviction + 1);
+cleanup();
+console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, requests: requests.length }));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["calls"] > result["requests"] >= 130

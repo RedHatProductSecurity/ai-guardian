@@ -37,6 +37,20 @@
 
 ## Key Learnings
 
+- **Tray session titles (#2546):** `active_sessions.session_title` is optional
+  display metadata; control routing and pause state still use the adapter-issued
+  `session_key`. Invalid/omitted titles preserve the last usable name. Wrap a
+  scalar metadata value in a candidate list when using `resolve_session_title`,
+  otherwise a malformed list-valued field is mistaken for valid candidates.
+  OpenCode V2 `ctx.session.get` returns metadata directly and accepts a request
+  abort signal; cache exact-session lookups/misses and bound both time and size.
+  Do not call native session summary readers just for a label: some load messages.
+- **Session test isolation (#2546):** OpenCode V2 database discovery precedes
+  the legacy `resolve_session_dir` path; discovery fixtures must set `OPENCODE_DB`
+  to their temporary database. Tray local status comes from `_get_stats`, remote
+  status from the multi-client; REST `/api/stats`, not `/api/status`, contains the
+  full active-session list. Generic Claude hooks use `BaseAgentAdapter` keys.
+
 - **OpenCode runtime selection (#2470):** User-facing setup, CLI doctor, and
   Console health checks do not require an AI Guardian-specific environment
   variable. They resolve the active `opencode` executable and run

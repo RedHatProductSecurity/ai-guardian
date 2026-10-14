@@ -588,8 +588,24 @@ changes. macOS keeps the live countdown refresh behavior.
 ### Session and directory pause controls
 
 **Sessions...** lists active hook sessions that have a stable identity from their
-agent adapter. Each entry shows the session identity and project directory, so
-two sessions in the same directory can be paused independently. Session pause
+agent adapter. Entries prefer a human-readable session title, for example
+`OpenCode: Fix tray labels`, and fall back to the session ID, then the stable
+session key when no usable title is known (including older daemons). Titles are
+compact, single-line, display-safe text capped at 80 characters. Identical labels
+receive an eight-character stable-key fingerprint so they remain distinguishable.
+The submenu retains the full session key and project directory; controls always
+target that key, never the title. This works for local, remote, and container
+daemons, so two sessions in the same directory can be paused independently.
+
+Titles reported by later hook activity update existing entries without changing
+identity or pause state. Missing, blank, or invalid title metadata does not erase
+a previously known title. OpenCode V2 reads native metadata for the exact session
+through its plugin API, with a 500 ms lookup deadline and a 30-second cache
+(including misses; at most 128 entries). Other integrations use supplied hook
+name/title metadata; unknown titles keep the ID fallback. No transcript or
+conversation-wide discovery is performed for tray labels.
+
+Session pause
 durations are 5, 15, or 30 minutes, 1 hour, or until resumed/session end. Timed
 pauses expire automatically; every session pause is cleared on a SessionEnd
 event, after 24 hours without hook activity, or when the daemon restarts. Session

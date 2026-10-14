@@ -2,13 +2,16 @@
 
 import os
 import sys
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
 
 from ai_guardian.daemon.server import DaemonServer
+from ai_guardian.daemon.working_dir import shorten_path
 from ai_guardian.cli import main
 from ai_guardian.setup.hooks import _OPENCODE_PLUGIN_V2_TS
+from ai_guardian.tray.menu_builder import TrayMenuBuilder
 
 
 @pytest.fixture
@@ -23,10 +26,10 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
     isolated_server, tmp_path
 ):
     """
-    USER EXPERIENCE: Shared project directory -> pause targets one hook session.
+    USER EXPERIENCE: Shared project and title -> pause targets one hook session.
 
     Scenario:
-    1. Two AI sessions report stable, distinct hook session IDs from one project.
+    1. Two AI sessions report the same title with distinct IDs from one project.
     2. The user pauses the first session from the session list.
     3. Both sessions continue sending hooks from the same project directory.
 
@@ -34,19 +37,25 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
     - Hooks from the selected session are allowed without running scanners.
     - The other session continues through normal security scanning.
     - Project-directory sharing does not cause the sessions to share pause state.
+    - Duplicate compact titles get distinct short stable-key suffixes. The
+      selected session key and project remain accessible in its submenu.
+    - Renaming a paused session updates its label without resuming scanning.
     """
     server = isolated_server
     project = tmp_path / "shared-project"
     project.mkdir()
 
-    def hook(session_id):
-        return {
+    def hook(session_id, title=None):
+        data = {
             "hook_event_name": "PreToolUse",
             "session_id": session_id,
             "tool_name": "Bash",
             "tool_input": {"command": "ls"},
             "_daemon_cwd": str(project),
         }
+        if title is not None:
+            data["session_title"] = title
+        return data
 
     with mock.patch(
         "ai_guardian.process_hook_data",
@@ -55,8 +64,8 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
             "exit_code": 0,
         },
     ) as scan:
-        server._handle_hook_request(hook("session-one"))
-        server._handle_hook_request(hook("session-two"))
+        server._handle_hook_request(hook("session-one", "Fix tray labels"))
+        server._handle_hook_request(hook("session-two", "Fix tray labels"))
         sessions = {
             session["session_id"]: session
             for session in server.state.get_active_sessions()
@@ -64,10 +73,39 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
         first_key = sessions["session-one"]["session_key"]
         assert sessions["session-one"]["project_dir"] == os.path.realpath(project)
         assert sessions["session-two"]["project_dir"] == os.path.realpath(project)
-        assert server.state.pause_session(first_key)
+        tray = SimpleNamespace(_supports_live_pause_countdown=lambda: False)
+        menus = SimpleNamespace(
+            Menu=lambda *items: SimpleNamespace(items=items),
+            MenuItem=lambda label, action=None, **kwargs: SimpleNamespace(
+                label=label, action=action, kwargs=kwargs
+            ),
+        )
+        menus.Menu.SEPARATOR = object()
+        with mock.patch("ai_guardian.tray.menu_builder.pystray", menus):
+            items = TrayMenuBuilder(tray)._build_session_pause_items(
+                lambda _: server.state.get_stats(),
+                server.state.pause_session,
+                server.state.resume_session,
+            )
+        first, second = items[2:4]
+        assert first.label(None).startswith("● Claude Code: Fix tray labels [")
+        assert first.label(None) != second.label(None)
+        assert first.action.items[0].label(None) == f"Session key: {first_key}"
+        assert (
+            first.action.items[1].label(None)
+            == f"Project: {shorten_path(str(project))}"
+        )
+        # Until resumed/session end, selected by stable key rather than title.
+        first.action.items[7].action(None, None)
+        assert server.state.is_session_paused(first_key)
 
-        paused = server._handle_hook_request(hook("session-one"))
+        paused = server._handle_hook_request(hook("session-one", "Renamed session"))
         other = server._handle_hook_request(hook("session-two"))
+        assert first.label(None) == "☾ Claude Code: Renamed session"
+        assert second.label(None) == "● Claude Code: Fix tray labels"
+        assert (
+            server.state.get_active_sessions()[1]["session_title"] == "Fix tray labels"
+        )
 
     assert paused["output"] == "{}"
     assert other["output"] == "scanned"

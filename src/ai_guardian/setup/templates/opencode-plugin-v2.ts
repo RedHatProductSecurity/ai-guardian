@@ -4,6 +4,9 @@ import { createGuardianBridge } from '../ai-guardian/ai-guardian-bridge';
 
 const guardian = createGuardianBridge({ ideType: 'opencode' });
 const OPENCODE_VERSION = '2.0.0';
+const SESSION_TITLE_TTL_MS = 30_000;
+const SESSION_TITLE_TIMEOUT_MS = 500;
+const MAX_SESSION_TITLES = 128;
 const PROMPT_REFUSAL_NOTICE =
   'AI Guardian refused the previous prompt. The original prompt was not sent to the model. Do not answer or continue that request. Ask the user to provide a new prompt without the sensitive or blocked content.';
 const PRE_TOOL_REFUSAL_NOTICE =
@@ -74,6 +77,54 @@ export default {
   async setup(ctx) {
     const cwd = ctx.location.directory || process.cwd();
     const opencodeVersion = ctx.app.version;
+    // Cache only metadata for the exact session, including misses and concurrent
+    // lookups. Never load messages/transcripts just to name a tray entry.
+    const sessionTitles = new Map<string, { expires: number; title: Promise<string> }>();
+    const readSessionTitle = (sessionID: string): Promise<string> => {
+      const now = Date.now();
+      const cached = sessionTitles.get(sessionID);
+      if (cached && cached.expires > now) return cached.title;
+      for (const [id, entry] of sessionTitles) {
+        if (entry.expires <= now) sessionTitles.delete(id);
+      }
+      if (sessionTitles.size >= MAX_SESSION_TITLES) {
+        const oldest = sessionTitles.keys().next().value;
+        if (oldest !== undefined) sessionTitles.delete(oldest);
+      }
+      const title = (async () => {
+        const controller = new AbortController();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const session = await Promise.race([
+            ctx.session.get({ sessionID }, { signal: controller.signal }),
+            new Promise<undefined>((resolve) => {
+              timer = setTimeout(() => {
+                controller.abort();
+                resolve(undefined);
+              }, SESSION_TITLE_TIMEOUT_MS);
+            }),
+          ]);
+          return typeof session?.title === 'string' ? session.title.slice(0, 4096) : '';
+        } catch {
+          console.error('[ai-guardian] Could not read OpenCode session title');
+          return '';
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
+        }
+      })();
+      sessionTitles.set(sessionID, { expires: now + SESSION_TITLE_TTL_MS, title });
+      return title;
+    };
+    const sessionHookData = async (
+      hookEventName: string,
+      sessionID: string,
+      extra: JsonRecord = {},
+    ): Promise<JsonRecord> => hookData(hookEventName, cwd, {
+      ...extra,
+      session_id: sessionID,
+      session_title: await readSessionTitle(sessionID),
+    }, opencodeVersion);
+
     const recordRefusalNotice = async (
       sessionID: string,
       sourceID: unknown,
@@ -101,10 +152,9 @@ export default {
     await ctx.session.hook('prompt', async (event) => {
       const prompt = event.prompt?.text || '';
       if (!prompt) return;
-      const result = guardian.run(hookData('message.submit', cwd, {
+      const result = guardian.run(await sessionHookData('message.submit', event.sessionID, {
         prompt,
-        session_id: event.sessionID,
-      }, opencodeVersion));
+      }));
       if (result.blocked) {
         await recordRefusalNotice(
           event.sessionID,
@@ -119,12 +169,11 @@ export default {
     await ctx.tool.hook('execute.before', async (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
       const input = (event.input || {}) as JsonRecord;
-      const result = guardian.run(hookData('tool.execute.before', cwd, {
+      const result = guardian.run(await sessionHookData('tool.execute.before', event.sessionID, {
         tool_name: event.tool,
         tool_use: { name: event.tool, input },
-        session_id: event.sessionID,
         tool_use_id: event.id,
-      }, opencodeVersion));
+      }));
       if (result.blocked) {
         await recordRefusalNotice(
           event.sessionID,
@@ -147,13 +196,12 @@ export default {
           : error && typeof error === 'object' && 'message' in error
             ? textValue((error as JsonRecord).message)
             : textValue(error);
-      const result = guardian.run(hookData('tool.execute.after', cwd, {
+      const result = guardian.run(await sessionHookData('tool.execute.after', event.sessionID, {
         tool_name: event.tool,
         tool_use: { name: event.tool, input },
         tool_response: { output },
-        session_id: event.sessionID,
         tool_use_id: event.id,
-      }, opencodeVersion));
+      }));
       if (result.blocked) {
         await recordRefusalNotice(
           event.sessionID,
@@ -184,8 +232,11 @@ export default {
           if (sessionID) {
             // Idle ends a turn, not the session or its session-scoped pause.
             const hookEvent = record.type === 'session.deleted' ? 'SessionEnd' : 'Stop';
+            if (hookEvent === 'SessionEnd') sessionTitles.delete(sessionID);
             guardian.run(
-              hookData(hookEvent, cwd, { session_id: sessionID }, opencodeVersion),
+              hookEvent === 'SessionEnd'
+                ? hookData(hookEvent, cwd, { session_id: sessionID }, opencodeVersion)
+                : await sessionHookData(hookEvent, sessionID),
             );
           }
         }

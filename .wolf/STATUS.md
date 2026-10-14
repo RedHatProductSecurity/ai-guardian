@@ -5,11 +5,32 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-13
+> Last updated: 2026-10-14
 
 ---
 
 ## ✅ Done
+
+- Issue #2546: carry optional `session_title` through hook tracking and the
+  live-session registry; retain known titles on missing/invalid metadata and
+  preserve stable identity and pause timers through renames. Tray session menus
+  prefer safe single-line titles capped at 80 characters, fall back to IDs/keys,
+  and disambiguate identical displayed labels with short stable-key fingerprints.
+  Label/collision work is bounded to the 16 visible slots; local, remote, and
+  container actions continue using the selected target and full session key.
+- OpenCode V2 forwards exact-session native title metadata with a 500 ms timeout,
+  30-second positive/negative cache, and 128-entry bound; failures never skip
+  hook checks, and deletion clears the cached entry. No transcripts are loaded
+  for labels. Updated tray/OpenCode docs, changelog, unit tests, and session-pause
+  UX contract; fixed two existing discovery fixtures to avoid the host database.
+- Validation for #2546: 1028 related unit/UX tests passed; the final 577-test
+  tray/UX rerun also passes, including the added visible-slot/overflow regression.
+  Ruff, Black, Pylint, Mypy, buglog JSON, and `git diff --check` pass.
+  Generated TypeScript passes strict checking against `@opencode/plugin@2.0.22`.
+  Temporary compiler dependencies live only in `/tmp/opencode/guardian-2546-ts`.
+- No commits, PRs, live tray restarts, or installed integration changes were made
+  in this DAF session. The pre-existing `.wolf/anatomy.md` change was preserved;
+  OpenWolf hooks also refresh that index as source files change.
 
 - Issue #2542: successful tray sandbox creation now adds a Connect button to the
   completion dialog. It invokes the existing interactive connect flow for the
@@ -113,16 +134,16 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
-- Review and manually verify issue #2542 in the tray with container and
-  OpenShell sandboxes if those runtimes are available; then run `daf complete`
-  outside the agent session. Do not commit from this session.
+- Optionally verify named/unnamed and renamed OpenCode sessions in the live tray
+  after deploying/reloading the updated managed plugin; then run `daf complete`
+  outside the agent session for #2546. Do not commit from this session.
 - Preserve the pending #2473 manual Claude Code/Vertex and OpenCode/Vertex
   qualification from the previous handoff for follow-up after #2542.
 
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2542` / `RedHatProductSecurity/ai-guardian#2542`.
+- Branch/issue: `2546` / `RedHatProductSecurity/ai-guardian#2546`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -131,6 +152,13 @@ budget_tokens: 1000
   workflow refreshes it.
 
 ## Validation
+
+For #2546, Ruff, Black (`--target-version py310`), Pylint, Mypy, generated-plugin
+TypeScript checking, and `git diff --check` pass. Related tests include the complete
+`tests/ux/test_user_experience_contract_session_pause.py` and OpenCode self-protection
+UX contract, plus daemon state/server/REST/tray, sandbox tray, IDE-session,
+TypeScript bridge runtime, and OpenCode support unit files. Live tray verification
+was not performed. Historical validation for prior tasks follows.
 
 ```bash
 uv run --extra dev python -m pytest tests/unit/test_sandbox_tray.py tests/ux/test_user_experience_contract_sandbox_create_connect.py -q  # 108 passed
@@ -165,4 +193,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2473`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2546`
