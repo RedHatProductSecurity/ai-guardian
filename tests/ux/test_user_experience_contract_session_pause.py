@@ -8,6 +8,7 @@ import pytest
 
 from ai_guardian.daemon.server import DaemonServer
 from ai_guardian.cli import main
+from ai_guardian.setup.hooks import _OPENCODE_PLUGIN_V2_TS
 
 
 @pytest.fixture
@@ -107,6 +108,63 @@ def test_hook_without_stable_identity_is_not_presented_as_a_session(
 
     assert server.state.get_active_sessions() == []
     assert not server.state.pause_session(f"cwd:{project}")
+
+
+def test_opencode_idle_keeps_pause_until_the_session_is_deleted(
+    isolated_server, tmp_path
+):
+    """
+    USER EXPERIENCE: OpenCode finishes a turn -> its session pause stays active.
+
+    Manual verification:
+    1. Pause an active OpenCode V2 session using its daemon-issued session key.
+    2. Let the current turn finish, then send another prompt in the same session.
+    3. Delete the session in OpenCode and inspect the daemon's active sessions.
+
+    Expected User Experience:
+    - session.idle forwards Stop, not SessionEnd; the next turn remains paused.
+    - session.deleted forwards SessionEnd and removes that session and its pause.
+    - Plugin unloading is not treated as deletion of a persistent session.
+    """
+    assert (
+        "record.type === 'session.deleted' ? 'SessionEnd' : 'Stop'"
+        in _OPENCODE_PLUGIN_V2_TS
+    )
+    assert "const sessionID = textValue(data.sessionID)" in _OPENCODE_PLUGIN_V2_TS
+    server = isolated_server
+    identity = {
+        "hook_source": "opencode",
+        "opencode_version": "2.0.22",
+        "session_id": "opencode-session",
+        "cwd": str(tmp_path),
+    }
+    with mock.patch(
+        "ai_guardian.process_hook_data",
+        return_value={"output": "scanned", "exit_code": 0},
+    ) as scan:
+        server._handle_hook_request(
+            {**identity, "hook_event_name": "message.submit", "prompt": "hello"}
+        )
+        session_key = server.state.get_active_sessions()[0]["session_key"]
+        assert server.state.pause_session(session_key)
+
+        stopped = server._handle_hook_request({**identity, "hook_event_name": "Stop"})
+        next_turn = server._handle_hook_request(
+            {**identity, "hook_event_name": "message.submit", "prompt": "hello again"}
+        )
+
+        assert stopped["output"] == "{}"
+        # Paused prompts may still receive fixed security instructions, but
+        # content scanners must not run on this turn.
+        assert next_turn["exit_code"] == 0
+        scan.assert_called_once()
+        assert server.state.is_session_paused(session_key)
+        assert server.state.get_active_sessions()[0]["session_key"] == session_key
+
+        server._handle_hook_request({**identity, "hook_event_name": "SessionEnd"})
+
+    assert server.state.get_active_sessions() == []
+    assert not server.state.is_session_paused(session_key)
 
 
 def test_session_pause_cli_targets_the_status_session_key(capsys):

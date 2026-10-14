@@ -34,6 +34,12 @@ events expose a mutable `event.result`; failed after-tool events expose
 `event.error` instead. AI Guardian scans both paths and only applies output
 redaction to completed results.
 
+V2 lifecycle events carry the stable session ID in `event.data.sessionID`.
+`session.idle` ends a turn and forwards `Stop`; it does not remove the active
+session or clear a session-scoped pause. `session.deleted` forwards `SessionEnd`
+and clears that session's daemon registration and pause. Unloading the plugin
+only closes its event subscription; it does not delete persistent sessions.
+
 Blocked pre-tool calls add a fixed notice saying the tool did not run. Blocked
 post-tool results add a notice saying the tool ran but its result was withheld;
 the tool's side effects cannot be undone. Both notices avoid tool arguments and

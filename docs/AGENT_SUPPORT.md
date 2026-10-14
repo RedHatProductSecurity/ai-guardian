@@ -150,7 +150,7 @@ future integrations. For this repository, the main evidence paths are
 | Cline / ZooCode | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Kiro | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Augment Code | N/A | N/A | Yes | Yes | N/A | N/A | N/A |
-| OpenCode | N/A | Yes (chat.message) | Yes | Yes | N/A | N/A | N/A |
+| OpenCode V1/V2 | N/A | Yes (chat.message / prompt) | Yes | Yes | N/A | N/A | Yes (V1 session.end; V2 session.deleted) |
 | Pi | Yes (`session_start`) | Yes (`input`) | Yes (`tool_call`, `user_bash`) | Yes (`tool_result`) | N/A | N/A | Yes (`session_shutdown`) |
 | Antigravity CLI | N/A | Yes (PreInvocation) | Yes | Yes (no output) | N/A | N/A | N/A |
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
@@ -184,7 +184,7 @@ integration guides.
 | Antigravity CLI (agy) | Command hooks | PreInvocation, PreToolUse, PostToolUse | Supported (partial output surface) |
 | AiderDesk | Extension | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | OpenClaw | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
-| OpenCode | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
+| OpenCode | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop, SessionEnd | Supported |
 | Pi | Extension | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd | Supported |
 | Crush | Command hooks | PreToolUse | Supported (partial hook surface) |
 | Junie | MCP | None | MCP-only; no hook latency |

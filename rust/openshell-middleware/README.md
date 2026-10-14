@@ -56,6 +56,13 @@ The service owns OpenShell gRPC, protocol negotiation, daemon-backed scanning,
 request/response/WebSocket inspection, redaction, and fail-closed behavior.
 Python gRPC bindings and a Python middleware runtime are not required.
 
+HTTP response content inspection requires bounded `WHOLE_BODY_BYTES` input.
+The current protocol cannot safely scan or redact matches spanning arbitrary
+`STREAM_BYTES` units without retaining input, which it forbids. Body-bearing
+responses without whole-body mode are explicitly denied with
+`response_inspection_unavailable`; `HEAD`, `204`, and `304` responses accept
+`HEADERS_ONLY`. See the [response inspection limits](../../docs/OPENSHELL_MIDDLEWARE.md#response-inspection-limits).
+
 ## Environment
 
 | Variable | Default |

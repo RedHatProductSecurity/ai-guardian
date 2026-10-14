@@ -87,6 +87,29 @@ deliberately configures them to be the same reachable service.
 At gateway startup, OpenShell also calls the Rust service for capability and
 protocol validation before accepting the registration.
 
+### Response inspection limits
+
+Body-bearing HTTP responses require OpenShell's `WHOLE_BODY_BYTES` mode. The
+gateway buffers the complete normalized body within the effective payload limit
+before the middleware scans or redacts it and before committing delivery. This
+preserves detections and UTF-8 characters across transport boundaries.
+
+The current supervisor protocol processes `STREAM_BYTES` units in lockstep and
+forbids retaining input for a later unit. Independent unit scanning cannot
+reliably detect or redact content spanning arbitrary unit boundaries, so AI
+Guardian does not select that mode. When whole-body inspection is unavailable,
+the middleware explicitly blocks delivery with
+`reason_code: response_inspection_unavailable`; OpenShell returns its canonical
+middleware-denial response, not the upstream body. This includes responses over
+the whole-body limit and body-bearing responses limited to headers-only mode
+(for example, encoded, partial, or no-transform responses). Unknown-length
+responses can be buffered, but exceeding the limit follows OpenShell's
+whole-body capacity failure policy. The shipped policy is fail-closed.
+
+Semantically bodyless responses (`HEAD`, `204`, and `304`) use `HEADERS_ONLY`
+without a body scan. Daemon pauses retain the existing successful skip behavior;
+an unavailable daemon still blocks delivery, including for bodyless responses.
+
 ## Prerequisites
 
 - OpenShell v0.1.3 or a later `0.1.x` patch release. OpenShell v0.1.2 and

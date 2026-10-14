@@ -342,7 +342,10 @@ def test_v2_plugin_template_uses_domain_hooks():
     assert "tool_use_id: event.id" in _OPENCODE_PLUGIN_V2_TS
     assert "event.callID" not in _OPENCODE_PLUGIN_V2_TS
     assert "event.status === 'completed'" in _OPENCODE_PLUGIN_V2_TS
-    assert "const error = event.error as unknown" in _OPENCODE_PLUGIN_V2_TS
+    assert (
+        "event.status === 'completed' ? undefined : (event.error as unknown)"
+        in _OPENCODE_PLUGIN_V2_TS
+    )
     assert "'message' in error" in _OPENCODE_PLUGIN_V2_TS
     assert "event.result =" in _OPENCODE_PLUGIN_V2_TS
 
