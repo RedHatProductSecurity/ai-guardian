@@ -271,6 +271,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving the underlying container image reference used for selection.
 
 ### Changed
+- **Support-image OpenCode V1 (#2555):** Update the pinned OpenCode client from
+  `1.18.34` to `1.19.0` in both support images (MIT license). Correct the OpenShell
+  bundled-client documentation and keep Codex at `0.160.0` pending the required
+  local OAuth/workspace-routing and middleware qualification of `0.162.1`,
+  tracked separately in #2556.
 - **Sandbox tray menu order:** Place sandbox **Connect** and **Manage sandbox**
   actions immediately below **Pause...** for easier access.
 - **Tray sandbox initial config source:** Replace overlapping profile, snapshot,

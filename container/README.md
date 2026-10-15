@@ -325,19 +325,21 @@ podman build \
 ```
 
 The pinned base is a minimal Ubuntu workload, so `Dockerfile.openshell`
-installs Codex explicitly:
+installs Codex and OpenCode V1 explicitly:
 
 | Build argument | Package | Default |
 |----------------|---------|---------|
 | `CODEX_VERSION` | `@openai/codex` | `0.160.0` |
+| `OPENCODE_VERSION` | `opencode-ai` | `1.19.0` |
 
 These are pinned rather than installed through a mutable `latest` tag so an
-image can be reproduced and rolled back. Override the managed version
+image can be reproduced and rolled back. Override the managed versions
 deliberately when testing another release. Rebuild the image and recreate the
 sandbox after changing it; existing sandboxes retain the client version from
 their original image.
-OpenCode is not installed in this image. See [`docs/OPENCODE.md`](../docs/OPENCODE.md)
-for the normal-image and host integration record.
+OpenCode is installed from its versioned Linux release archive in both support
+images. This pin deliberately stays on V1; see
+[`docs/OPENCODE.md`](../docs/OPENCODE.md) for V1/V2 integration details.
 
 ```bash
 podman build -f container/Dockerfile.openshell \
@@ -373,26 +375,30 @@ credentials (`codex --version`, `codex --help`, and `codex exec --help`), and
 opens or updates a maintenance issue when the managed pin is behind. ChatGPT
 OAuth workspace-routing behavior cannot be tested safely on a hosted runner;
 the issue links to the local OpenShell qualification procedure for that step.
+Before advancing `CODEX_VERSION`, record successful local OAuth startup,
+`account/read` workspace routing, and middleware denial checks in the maintenance
+issue. A credential-free smoke alone does not qualify the candidate, so Codex
+remains pinned to `0.160.0` pending that qualification.
 
 #### CLI scope and image contents
 
-AI Guardian has 16 public integrations. The default OpenShell image currently
-installs and supports the `codex` terminal client. The GUI/editor integrations
-and other terminal clients remain available to the normal container setup but
-are not shown in the OpenShell selector.
+The OpenShell selector supports `codex`, `claude`, and `opencode`. The image
+bundles the pinned Codex and OpenCode V1 clients; Claude Code is installed at
+runtime only after explicit ToS consent. GUI/editor integrations and other
+terminal clients remain available to the normal container setup but are not
+shown in the OpenShell selector.
 
-The derived image explicitly installs the pinned Codex client. The version
-monitor checks the managed pin. A custom image may add another client, but it
-must also add its runtime policy, provider/auth flow, and validation before it
-is advertised as supported.
+The version monitor checks both bundled client pins. A custom image may add
+another client, but it must also add its runtime policy, provider/auth flow, and
+validation before it is advertised as supported.
 
 #### License and redistribution
 
 There is no blanket license clearance for the complete derived image. The
 NVIDIA Ubuntu base and each explicitly installed client retain their separate
-licenses and notices. Codex is Apache-2.0. Users remain responsible for the
-licenses and service terms of any client added to a custom image, as well as
-their own authorized account or API access.
+licenses and notices. Codex is Apache-2.0; OpenCode is MIT. Users remain
+responsible for the licenses and service terms of any client added to a custom
+image, as well as their own authorized account or API access.
 Review the exact
 package and base image notices before making a Quay repository public or
 redistributing the image. The build workflow deliberately publishes OpenShell
@@ -1260,13 +1266,13 @@ Access from the host: `http://localhost:63152`
 | `AI_GUARDIAN_VERSION` | `1.19.0` | PyPI version or `.whl` filename |
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
-| `OPENCODE_VERSION` | `1.18.34` | OpenCode V1 version for the normal image |
+| `OPENCODE_VERSION` | `1.19.0` | OpenCode V1 version for both support images |
 | `PI_VERSION` | `0.86.0` | Pi coding agent version for the normal image |
 
 The dedicated OpenShell image also records its qualification inputs as OCI
 labels: the report schema version, AI Guardian build value, pinned NVIDIA base
-reference, and managed Codex version. Release readiness inspects these labels
-and runs the bundled Codex client with `--version` without contacting a
+reference, and managed Codex/OpenCode versions. Release readiness inspects these
+labels and runs both bundled clients with `--version` without contacting a
 provider.
 
 ## Test Image (Dockerfile.test)

@@ -238,7 +238,7 @@ class TestContainerLaunchers:
         assert "uv pip install --python /sandbox/.venv/bin/python" in dockerfile
         assert "ARG CLAUDE_VERSION" not in dockerfile
         assert "ARG CODEX_VERSION=0.160.0" in dockerfile
-        assert "ARG OPENCODE_VERSION=1.18.34" in dockerfile
+        assert "ARG OPENCODE_VERSION=1.19.0" in dockerfile
         assert "ARG PI_VERSION" not in dockerfile
         assert "ARG COPILOT_VERSION" not in dockerfile
         assert "npm install --global --prefix /usr" in dockerfile
@@ -272,7 +272,7 @@ class TestContainerLaunchers:
     def test_normal_image_pins_and_checks_grok_build(self):
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
 
-        assert "ARG OPENCODE_VERSION=1.18.34" in dockerfile
+        assert "ARG OPENCODE_VERSION=1.19.0" in dockerfile
         assert "ARG GROK_VERSION=1.0.41" in dockerfile
         assert '"@xai-official/grok@${GROK_VERSION}"' in dockerfile
         assert "grok --version" in dockerfile

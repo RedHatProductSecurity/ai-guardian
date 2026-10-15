@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-14
+> Last updated: 2026-10-15
 
 ## User Preferences
 
@@ -36,6 +36,17 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **Support-image CLI pin maintenance (#2555):** Both support Dockerfiles now
+  bundle pinned OpenCode V1. Update the version-check fixtures, manual-report
+  expectations, both container README tables, and `docs/OPENCODE.md` runtime
+  rows together. Documentation consistency regressions guard these surfaces.
+  Codex candidate installation/version/help success does not qualify OAuth
+  `account/read` workspace routing or middleware denials; require the operator's
+  successful local qualification before advancing its pin.
+  When splitting that deferred update into a follow-up, move the
+  `openshell-cli-version-update` label with it: the version-health workflow
+  selects an open issue by that label, so retaining it on both creates ambiguity.
 
 - **KDE closed-before-clicked delivery (#2549 follow-up):** Native DBus tracing
   showed root `closed` preceding the selected item's `clicked` by about 3 ms.

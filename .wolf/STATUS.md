@@ -9,6 +9,35 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2555 support-image terminal CLI pins — 2026-10-15
+
+- Updated OpenCode V1 from `1.18.34` to `1.19.0` in both support Dockerfiles.
+  Reviewed the stable release notes and MIT license. Synchronized the container
+  README, OpenCode runtime record, version-check fixtures, and manual-report
+  expectations; added pin/documentation consistency regressions.
+- Codex remains at `0.160.0`. The operator confirmed `0.162.1` has **not yet**
+  passed the required OAuth startup, `account/read` workspace-routing, and
+  middleware-denial qualification. That work now belongs to linked follow-up
+  #2556; do not advance the Codex pin before qualification.
+- Isolated credential-free Linux x64 smoke passed for OpenCode `1.19.0`
+  (GitHub archive SHA-256, version/help/run-help) and Codex `0.162.1`
+  (npm install, version/help/exec-help). No credentials were loaded. Report:
+  `/tmp/opencode/guardian-2555-smoke-cagntxvh/smoke-report.json`.
+- All 104 tests in `test_cli_version_check.py`, `test_container_scripts.py`, and
+  `test_openshell_manual.py` pass. Ruff, Black (`--target-version py310`), Pylint,
+  Mypy in the uv dev environment, and diff checks pass. No production Python
+  logic changed; no full suite, integration/container scenarios, image builds,
+  live protection controls, commits, or PRs ran.
+- The live registry check reports both OpenCode pins current and only Codex
+  outdated (expected exit 1). Report:
+  `/tmp/opencode/guardian-2555-cli-versions.json`.
+- Branch `2555` contains uncommitted OpenCode-only changes. Image rebuild/runtime
+  smoke remains pending for #2555. Operator Codex qualification and its eventual
+  pin update are tracked separately in #2556. Both issues remain open.
+- With user approval, renamed/narrowed #2555 to OpenCode only and created #2556
+  for Codex. Moved the `openshell-cli-version-update` automation label to #2556
+  so future version-health comments follow the remaining Codex update.
+
 ## Issue #2549 scoped tray Pause/Resume — 2026-10-14
 
 - Native follow-up (2026-10-15 UTC): user saw current sessions/directories but
@@ -243,6 +272,13 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
+- For #2555, rebuild and smoke-test both support images in CI or the operator's
+  validation environment before closing the OpenCode-only issue.
+- For #2556, obtain the operator's Codex `0.162.1` OAuth/OpenShell qualification
+  results before advancing its pin. Host CLI help checks are not image or
+  credential-backed qualification; keep the follow-up open until complete.
+- The following
+  desktop and older handoff tasks are historical and outside #2555.
 - Manually verify #2549 native Linux session/directory controls if available:
   rapid pause/resume, idle external changes/expiry, overlapping scopes, and
   selectable nested Resume. Compare macOS/Windows where available.
@@ -259,7 +295,7 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2549` / `RedHatProductSecurity/ai-guardian#2549`.
+- Branch/issue: `2555` / `RedHatProductSecurity/ai-guardian#2555`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
