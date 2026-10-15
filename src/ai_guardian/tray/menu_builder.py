@@ -111,6 +111,8 @@ class TrayMenuBuilder:
     def __init__(self, tray):
         self._tray = tray
         self._single_daemon_closures = {}
+        self._stats_cache = {}
+        self._rendered_targets = {}
         self._sandbox_create_lock = threading.Lock()
         self._sandbox_create_in_progress = False
 
@@ -293,16 +295,80 @@ class TrayMenuBuilder:
             return "☾ Daemon (global)"
         return "● Daemon (global)"
 
+    def _invalidate_stats(self, target=None):
+        """Discard snapshots before native rendering or after a scoped request."""
+        if target is None:
+            self._stats_cache.clear()
+        else:
+            self._stats_cache.pop(id(target), None)
+
+    def _get_menu_stats(self, target):
+        """Share one target snapshot across headers, status, and scope controls."""
+        now = time.monotonic()
+        cached = self._stats_cache.get(id(target))
+        if cached is not None and cached[0] is target and now - cached[1] < 2.0:
+            return cached[2]
+        stats = self._tray._get_target_stats(target) or {}
+        if stats and should_update_target_name(target, stats.get("name")):
+            target.name = stats["name"]
+        if "paused" in stats and target.status in ("running", "paused"):
+            target.status = "paused" if stats["paused"] else "running"
+        key = (target.name, target.runtime)
+        if "mcp_installed" in stats:
+            self._tray._mcp_installed_per_daemon[key] = stats["mcp_installed"]
+        if "version" in stats:
+            self._tray._health._daemon_versions[key] = stats["version"]
+        self._stats_cache[id(target)] = (target, now, stats)
+        return stats
+
+    def _get_slot_stats(self, slot):
+        if slot >= len(self._tray._targets):
+            return {}
+        target = self._tray._targets[slot]
+        # Discovery can reorder/replace targets while Linux's popup is open.
+        # Requests must use the target whose controls were actually rendered.
+        self._rendered_targets[slot] = target
+        return self._get_menu_stats(target)
+
+    def _send_scoped_control(self, slot, scope, identity, minutes=None):
+        """Request exactly one scope; never infer success or broaden a failure."""
+        target = self._rendered_targets.get(slot)
+        if target is None and slot < len(self._tray._targets):
+            target = self._tray._targets[slot]
+        verb = "resume" if minutes is None else "pause"
+        success = False
+        try:
+            if target is not None and self._tray._multi_client:
+                send = getattr(self._tray._multi_client, f"send_{verb}_{scope}")
+                args = (
+                    (target, identity)
+                    if minutes is None
+                    else (target, identity, minutes)
+                )
+                success = bool(send(*args))
+        except Exception:
+            logger.warning("Scoped %s request failed (%s)", verb, scope, exc_info=True)
+        if not success:
+            name = target.name if target is not None else "unavailable daemon"
+            scope_name = "session" if scope == "session" else "directory"
+            tray_notifications.show_notification(
+                "AI Guardian",
+                f"Could not {verb} {scope_name} on {name}. The daemon did not confirm the request. "
+                "It may be unreachable, the selected scope may no longer exist, or this operation may be unsupported. "
+                "No broader pause or resume was requested.",
+            )
+        # Even an unconfirmed request may have reached the daemon. Re-read its
+        # authoritative state, without optimistically changing any pause flags.
+        self._invalidate_stats(target)
+        self._tray._refresh_event.set()
+        self._tray._dispatch_to_main(self._tray._refresh_menu)
+        return success
+
     def _mk_multi_pause_dir(self, slot):
         """Create a pause_dir callback for a multi-daemon slot."""
 
         def pause_dir_fn(directory, minutes):
-            if slot < len(self._tray._targets) and self._tray._multi_client:
-                self._tray._multi_client.send_pause_dir(
-                    self._tray._targets[slot],
-                    directory,
-                    minutes,
-                )
+            return self._send_scoped_control(slot, "dir", directory, minutes)
 
         return pause_dir_fn
 
@@ -310,11 +376,7 @@ class TrayMenuBuilder:
         """Create a resume_dir callback for a multi-daemon slot."""
 
         def resume_dir_fn(directory):
-            if slot < len(self._tray._targets) and self._tray._multi_client:
-                self._tray._multi_client.send_resume_dir(
-                    self._tray._targets[slot],
-                    directory,
-                )
+            return self._send_scoped_control(slot, "dir", directory)
 
         return resume_dir_fn
 
@@ -322,10 +384,7 @@ class TrayMenuBuilder:
         """Create a pause-session callback for a multi-daemon slot."""
 
         def pause_session_fn(session_key, minutes):
-            if slot < len(self._tray._targets) and self._tray._multi_client:
-                self._tray._multi_client.send_pause_session(
-                    self._tray._targets[slot], session_key, minutes
-                )
+            return self._send_scoped_control(slot, "session", session_key, minutes)
 
         return pause_session_fn
 
@@ -333,10 +392,7 @@ class TrayMenuBuilder:
         """Create a resume-session callback for a multi-daemon slot."""
 
         def resume_session_fn(session_key):
-            if slot < len(self._tray._targets) and self._tray._multi_client:
-                self._tray._multi_client.send_resume_session(
-                    self._tray._targets[slot], session_key
-                )
+            return self._send_scoped_control(slot, "session", session_key)
 
         return resume_session_fn
 
@@ -350,14 +406,15 @@ class TrayMenuBuilder:
         from ai_guardian.daemon.working_dir import shorten_path
 
         items = []
+        selected_dirs = {}
         for i in range(self._MAX_DIR_PAUSE_SLOTS):
             slot = i
 
             def _dir_at(s, stats, slot=slot):
                 dirs = self._get_merged_dir_list(stats)
-                if slot < len(dirs):
-                    return dirs[slot]
-                return None
+                directory = dirs[slot] if slot < len(dirs) else None
+                selected_dirs[slot] = directory
+                return directory
 
             def _is_visible(_item, slot=slot):
                 stats = get_stats_fn(_item)
@@ -397,8 +454,7 @@ class TrayMenuBuilder:
 
             def _mk_dir_pause(minutes, slot=slot):
                 def action(_, __):
-                    stats = get_stats_fn(None)
-                    d = _dir_at(None, stats, slot)
+                    d = selected_dirs.get(slot)
                     if d:
                         pause_dir_fn(d, minutes)
 
@@ -406,8 +462,7 @@ class TrayMenuBuilder:
 
             def _mk_dir_resume(slot=slot):
                 def action(_, __):
-                    stats = get_stats_fn(None)
-                    d = _dir_at(None, stats, slot)
+                    d = selected_dirs.get(slot)
                     if d:
                         resume_dir_fn(d)
 
@@ -458,6 +513,11 @@ class TrayMenuBuilder:
                             _mk_dir_resume(),
                             visible=_is_paused,
                         ),
+                        pystray.MenuItem(
+                            "Directory pause only; global/session pauses may still apply",
+                            None,
+                            enabled=False,
+                        ),
                     ),
                     visible=_is_visible,
                 )
@@ -470,6 +530,8 @@ class TrayMenuBuilder:
         """Build bounded, pre-allocated pause/resume controls for hook sessions."""
         from ai_guardian.daemon.working_dir import shorten_path
         from ai_guardian.sessions.base import resolve_session_title
+
+        selected_sessions = {}
 
         def _sessions(stats):
             sessions = stats.get("active_sessions")
@@ -490,7 +552,9 @@ class TrayMenuBuilder:
 
         def _session_at(stats, slot):
             sessions = _sessions(stats)
-            return sessions[slot] if slot < len(sessions) else None
+            session = sessions[slot] if slot < len(sessions) else None
+            selected_sessions[slot] = session.get("session_key") if session else None
+            return session
 
         def _no_sessions(_item):
             return not _sessions(get_stats_fn(_item))
@@ -577,17 +641,17 @@ class TrayMenuBuilder:
 
             def _mk_pause(minutes, slot=slot):
                 def action(_, __):
-                    session = _session_at(get_stats_fn(None), slot)
-                    if session and session.get("session_key"):
-                        pause_session_fn(session["session_key"], minutes)
+                    session_key = selected_sessions.get(slot)
+                    if session_key:
+                        pause_session_fn(session_key, minutes)
 
                 return action
 
             def _mk_resume(slot=slot):
                 def action(_, __):
-                    session = _session_at(get_stats_fn(None), slot)
-                    if session and session.get("session_key"):
-                        resume_session_fn(session["session_key"])
+                    session_key = selected_sessions.get(slot)
+                    if session_key:
+                        resume_session_fn(session_key)
 
                 return action
 
@@ -612,6 +676,11 @@ class TrayMenuBuilder:
                             visible=_is_active,
                         ),
                         pystray.MenuItem("Resume", _mk_resume(), visible=_is_paused),
+                        pystray.MenuItem(
+                            "Session pause only; global/directory pauses may still apply",
+                            None,
+                            enabled=False,
+                        ),
                     ),
                     visible=_is_visible,
                 )
@@ -636,7 +705,7 @@ class TrayMenuBuilder:
 
     def _version_annotated_label(self, target):
         """Format daemon label with version mismatch indicator if needed."""
-        stats = self._tray._get_target_stats(target)
+        stats = self._get_menu_stats(target)
         active_dirs = stats.get("active_project_dirs") or []
         active_sessions = stats.get("active_sessions") or []
         label = tray_menu.daemon_status_label(
@@ -671,9 +740,9 @@ class TrayMenuBuilder:
 
         target = self._tray._targets[slot]
         stats = getattr(target, "stats", None)
-        if target.status == "running" and not isinstance(stats, dict):
+        if target.status in ("running", "paused"):
             try:
-                stats = self._tray._get_target_stats(target)
+                stats = self._get_menu_stats(target)
             except Exception:
                 stats = {}
         has_paused_dirs = isinstance(stats, dict) and bool(stats.get("paused_dirs"))
@@ -3016,33 +3085,8 @@ class TrayMenuBuilder:
 
             threading.Thread(target=_poll, daemon=True, name="restart-poll").start()
 
-        _cache = {"stats": {}, "time": 0}
-
         def _get_stats(_item):
-            import time as time_mod
-
-            now = time_mod.monotonic()
-            if now - _cache["time"] < 2.0:
-                return _cache["stats"]
-            if not self._tray._targets:
-                return {}
-            target = self._tray._targets[0]
-            if self._tray._multi_client and target.runtime != "local":
-                result = self._tray._multi_client.get_status(target)
-                if result and should_update_target_name(target, result.get("name")):
-                    target.name = result["name"]
-                _cache["stats"] = result or {}
-            else:
-                _cache["stats"] = self._tray._get_stats()
-            stats = _cache["stats"]
-            if stats:
-                key = (target.name, target.runtime)
-                if "mcp_installed" in stats:
-                    self._tray._mcp_installed_per_daemon[key] = stats["mcp_installed"]
-                if "version" in stats:
-                    self._tray._health._daemon_versions[key] = stats["version"]
-            _cache["time"] = now
-            return stats
+            return self._get_slot_stats(0)
 
         def _s_requests(_item):
             s = _get_stats(_item)
@@ -3328,33 +3372,6 @@ class TrayMenuBuilder:
         def _global_is_active(_item):
             return not get_stats_fn(_item).get("paused", False)
 
-        def _pause_dir_action(directory, minutes):
-            if self._tray._targets and self._tray._multi_client:
-                self._tray._multi_client.send_pause_dir(
-                    self._tray._targets[0],
-                    directory,
-                    minutes,
-                )
-
-        def _resume_dir_action(directory):
-            if self._tray._targets and self._tray._multi_client:
-                self._tray._multi_client.send_resume_dir(
-                    self._tray._targets[0],
-                    directory,
-                )
-
-        def _pause_session_action(session_key, minutes):
-            if self._tray._targets and self._tray._multi_client:
-                self._tray._multi_client.send_pause_session(
-                    self._tray._targets[0], session_key, minutes
-                )
-
-        def _resume_session_action(session_key):
-            if self._tray._targets and self._tray._multi_client:
-                self._tray._multi_client.send_resume_session(
-                    self._tray._targets[0], session_key
-                )
-
         def _has_dirs(_item):
             return bool(self._get_merged_dir_list(get_stats_fn(_item)))
 
@@ -3402,8 +3419,8 @@ class TrayMenuBuilder:
                     pystray.Menu(
                         *self._build_session_pause_items(
                             get_stats_fn,
-                            _pause_session_action,
-                            _resume_session_action,
+                            self._mk_multi_pause_session(0),
+                            self._mk_multi_resume_session(0),
                         )
                     ),
                 ),
@@ -3412,8 +3429,8 @@ class TrayMenuBuilder:
                     pystray.Menu(
                         *self._build_dir_pause_items(
                             get_stats_fn,
-                            _pause_dir_action,
-                            _resume_dir_action,
+                            self._mk_multi_pause_dir(0),
+                            self._mk_multi_resume_dir(0),
                         )
                     ),
                     visible=_has_dirs,
@@ -3682,37 +3699,8 @@ class TrayMenuBuilder:
                 return label
 
             def _mk_stats(slot=idx):
-                _cache = {"stats": {}, "time": 0}
-
                 def _get(_item):
-                    import time as time_mod
-
-                    now = time_mod.monotonic()
-                    if now - _cache["time"] < 2.0:
-                        return _cache["stats"]
-                    if slot >= len(self._tray._targets):
-                        return {}
-                    target = self._tray._targets[slot]
-                    if self._tray._multi_client and target.runtime != "local":
-                        result = self._tray._multi_client.get_status(target)
-                        if result and should_update_target_name(
-                            target, result.get("name")
-                        ):
-                            target.name = result["name"]
-                        _cache["stats"] = result or {}
-                    else:
-                        _cache["stats"] = self._tray._get_stats()
-                    stats = _cache["stats"]
-                    if stats:
-                        key = (target.name, target.runtime)
-                        if "mcp_installed" in stats:
-                            self._tray._mcp_installed_per_daemon[key] = stats[
-                                "mcp_installed"
-                            ]
-                        if "version" in stats:
-                            self._tray._health._daemon_versions[key] = stats["version"]
-                    _cache["time"] = now
-                    return stats
+                    return self._get_slot_stats(slot)
 
                 def requests(_item):
                     s = _get(_item)

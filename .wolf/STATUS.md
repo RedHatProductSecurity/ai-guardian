@@ -5,9 +5,47 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-14
+> Last updated: 2026-10-15
 
 ---
+
+## Issue #2549 scoped tray Pause/Resume — 2026-10-14
+
+- Native follow-up (2026-10-15 UTC): user saw current sessions/directories but
+  indefinite session Pause and About selections did nothing. DBus trace showed
+  KDE root `closed` arriving ~3 ms before the selected item's `clicked`; immediate
+  pending refresh deleted its native action ID. Keep the guard through a 150 ms
+  GLib click-delivery grace period and invalidate old close callbacks on reopen.
+  Deterministic unit/UX regressions reproduce the pre-fix loss. The user restarted
+  only the tray and reported it working afterward. No agent-run live controls.
+- Implemented coherent per-target menu stats for headers, Status, and scoped
+  controls. Scoped operations require explicit acknowledgements, invalidate
+  cached state, and request refresh without optimistic flags or broader fallback.
+  Retain rendered stable keys/project paths/targets across list/discovery changes.
+- Idle refresh detection includes session metadata/pause and directory/global
+  state for local, remote, and container targets. Linux still ignores countdown
+  noise and defers native replacement while open; closing renders fresh state.
+  Single-remote global sync now reads the selected daemon, not host stats.
+- Preserve all three scopes, layered hook enforcement, persistence/lifetimes,
+  CLI/SDK/configuration and API contracts, older-daemon directory/global controls,
+  and AI-session self-protection. Updated tray docs, changelog, and UX contracts.
+- Validation: final six-file run passes 1,028 related tests (944 tray/client unit
+  tests and 84 tests in both complete affected UX files). Another 119 related
+  daemon state/server pause/session tests passed earlier; 1,147 distinct related
+  tests overall. Ruff, Black (`--target-version py310`), Pylint, Mypy in the uv
+  dev environment, and diff checks pass. Changed-source statement coverage is
+  100% (123/123 executable lines), not a full-project coverage estimate. Artifacts:
+  `/tmp/opencode/guardian-2549-followup.coverage` and
+  `/tmp/opencode/guardian-2549-followup-coverage.json`.
+- Coverage (Apache-2.0) was used only as a transient validation dependency; no
+  project dependency was added. No full suite, integration/container scenarios,
+  live daemon/tray controls by the agent, installed integration changes, commits,
+  or PRs ran. Native traces were read-only; harmless About tests and tray restart
+  were performed by the user.
+- Branch `2549` is ready for the user's `daf complete` outside this session.
+  User reported the Linux native retest working after restart. Broader native
+  timing/desktop coverage and macOS/Windows manual QA remain unverified;
+  unit/UX coverage simulates the relevant platform and popup contracts.
 
 ## PR #2550 CI follow-up — 2026-10-14
 
@@ -205,9 +243,12 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
-- Complete #2547 with `daf complete` outside the agent session; let CI run the
-  remaining matrix and new release-readiness lifecycle checks.
-- Previous handoff follow-ups remain below; they are not part of #2547.
+- Manually verify #2549 native Linux session/directory controls if available:
+  rapid pause/resume, idle external changes/expiry, overlapping scopes, and
+  selectable nested Resume. Compare macOS/Windows where available.
+- Complete #2549 with `daf complete` outside the agent session; let CI run the
+  remaining matrix and non-unit validation.
+- Previous handoff follow-ups remain below; they are not part of #2549.
 - Monitor PR #2548 CI, particularly the multi-architecture OpenShell build after
   the ggshield startup-timeout fix.
 - Optionally verify named/unnamed and renamed OpenCode sessions in the live tray
@@ -218,7 +259,7 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2547` / `RedHatProductSecurity/ai-guardian#2547`.
+- Branch/issue: `2549` / `RedHatProductSecurity/ai-guardian#2549`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -268,4 +309,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2547`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2549`

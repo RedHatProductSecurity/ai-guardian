@@ -2,6 +2,8 @@
 
 from unittest import mock
 
+import pytest
+
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.daemon.multi_client import MultiDaemonClient
@@ -216,29 +218,27 @@ class TestLocalPauseResumeRouting:
 class TestLocalDirPauseResumeRouting:
     """Test per-directory pause/resume via socket (#997)."""
 
-    @mock.patch.object(MultiDaemonClient, "_local_socket_send", return_value=True)
+    @mock.patch(
+        "ai_guardian.daemon.client.send_pause_dir",
+        return_value={"status": "dir_paused"},
+    )
     def test_pause_dir_local_sends_socket_message(self, mock_send):
         client = MultiDaemonClient()
         target = DaemonTarget(name="local", runtime="local")
         result = client.send_pause_dir(target, "/home/user/project", 5)
         assert result is True
-        mock_send.assert_called_once_with(
-            {
-                "version": 1,
-                "type": "pause_dir",
-                "data": {"dir": "/home/user/project", "minutes": 5},
-            }
-        )
+        mock_send.assert_called_once_with("/home/user/project", 5)
 
-    @mock.patch.object(MultiDaemonClient, "_local_socket_send", return_value=True)
+    @mock.patch(
+        "ai_guardian.daemon.client.send_resume_dir",
+        return_value={"status": "dir_resumed"},
+    )
     def test_resume_dir_local_sends_socket_message(self, mock_send):
         client = MultiDaemonClient()
         target = DaemonTarget(name="local", runtime="local")
         result = client.send_resume_dir(target, "/home/user/project")
         assert result is True
-        mock_send.assert_called_once_with(
-            {"version": 1, "type": "resume_dir", "data": {"dir": "/home/user/project"}}
-        )
+        mock_send.assert_called_once_with("/home/user/project")
 
     def test_pause_dir_remote_uses_rest(self):
         client = MultiDaemonClient()
@@ -365,6 +365,56 @@ class TestSessionPauseRouting:
             "POST",
             "/api/resume_session",
             {"session_key": "Adapter:session-1"},
+        )
+
+
+class TestScopedPauseAcknowledgements:
+    @pytest.mark.parametrize("runtime", ["local", "manual", "container"])
+    @pytest.mark.parametrize("scope", ["dir", "session"])
+    @pytest.mark.parametrize("resume", [False, True])
+    @pytest.mark.parametrize(
+        "response",
+        [
+            None,
+            {},
+            [],
+            {"error": "unsupported"},
+            {"status": "error"},
+            {"status": "paused"},
+        ],
+    )
+    def test_only_matching_scope_acknowledgements_count_as_success(
+        self, runtime, scope, resume, response
+    ):
+        client = MultiDaemonClient()
+        target = DaemonTarget(name="selected", runtime=runtime)
+        verb = "resume" if resume else "pause"
+        method = getattr(client, f"send_{verb}_{scope}")
+        args = (
+            (target, "selected-identity")
+            if resume
+            else (target, "selected-identity", 5)
+        )
+        with (
+            mock.patch.object(client, "_rest_request", return_value=response),
+            mock.patch(
+                f"ai_guardian.daemon.client.send_{verb}_{scope}", return_value=response
+            ),
+            mock.patch.object(
+                MultiDaemonClient, "_local_socket_send", return_value=True
+            ),
+        ):
+            assert method(*args) is False
+
+    @pytest.mark.parametrize(
+        "status", ["dir_paused", "dir_resumed", "session_paused", "session_resumed"]
+    )
+    def test_acknowledgement_with_error_is_not_success(self, status):
+        assert not MultiDaemonClient._scoped_acknowledged(
+            {"status": status, "error": "denied"}, status
+        )
+        assert MultiDaemonClient._scoped_acknowledged(
+            {"status": status, "error": None}, status
         )
 
 

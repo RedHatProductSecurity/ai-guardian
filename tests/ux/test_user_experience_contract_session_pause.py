@@ -10,11 +10,14 @@ from unittest import mock
 
 import pytest
 
-from ai_guardian.daemon.server import DaemonServer
+from ai_guardian.daemon.server import DaemonServer, track_hook_session
+from ai_guardian.daemon.discovery import DaemonTarget
+from ai_guardian.daemon.multi_client import MultiDaemonClient
 from ai_guardian.daemon.working_dir import shorten_path
 from ai_guardian.cli import main
 from ai_guardian.setup.hooks import _OPENCODE_PLUGIN_V2_TS
 from ai_guardian.tray.menu_builder import TrayMenuBuilder
+from ai_guardian.tray.app import DaemonTray
 
 
 @pytest.fixture
@@ -133,6 +136,374 @@ def test_scoped_cli_transport_ignores_background_connections(
 def test_pause_clock_does_not_replace_the_process_clock(pause_clock):
     """A deterministic session timer must not alter unrelated tray thread deadlines."""
     assert time.monotonic is not pause_clock
+
+
+@pytest.fixture
+def scoped_tray(isolated_server, active_cli_sessions, run_scoped_cli, monkeypatch):
+    """Native menu test double; real local clients/protocol use isolated sockets."""
+    menus = SimpleNamespace(
+        Menu=lambda *items: SimpleNamespace(items=items),
+        MenuItem=lambda label, action=None, **kwargs: SimpleNamespace(
+            label=label, action=action, kwargs=kwargs
+        ),
+    )
+    menus.Menu.SEPARATOR = object()
+    monkeypatch.setattr("ai_guardian.tray.menu_builder.pystray", menus)
+    monkeypatch.setattr("ai_guardian.tray.plugin_runner.pystray", menus)
+    monkeypatch.setattr(
+        DaemonTray, "_read_proactive_level", staticmethod(lambda: "low")
+    )
+    monkeypatch.setattr("ai_guardian.tray.app.is_mcp_installed", lambda: False)
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    client = MultiDaemonClient()
+    # The extra target exercises layout only; no real remote calls are permitted.
+    monkeypatch.setattr(client, "_rest_request", mock.Mock(return_value={}))
+    client.send_pause = mock.Mock(wraps=client.send_pause)
+    client.send_resume = mock.Mock(wraps=client.send_resume)
+    # Session registration and project tracking are independent daemon registries.
+    # Hooks normally populate both; initialize project tracking without sending
+    # another hook during the tray transitions under test.
+    for session in active_cli_sessions.values():
+        isolated_server.state.end_session(session["session_key"])
+        session["session_key"] = track_hook_session(
+            isolated_server.state,
+            {
+                "hook_event_name": "PreToolUse",
+                "session_id": session["session_id"],
+                "session_title": session["session_title"],
+                "tool_name": "Bash",
+                "tool_input": {"command": "ls"},
+            },
+            session["project_dir"],
+        )
+        assert session["session_key"]
+        isolated_server.state.check_project_config(session["project_dir"])
+
+    def build(multi, scope):
+        target = DaemonTarget(name="selected", runtime="local", status="running")
+        tray = DaemonTray(
+            isolated_server.state.get_stats,
+            lambda: None,
+            mock.Mock(),
+            multi_client=client,
+        )
+        tray._targets = [target]
+        tray._icon = mock.Mock()
+        tray._dispatch_to_main = lambda callback: callback()
+        tray._schedule_appindicator_menu_watch = mock.Mock()
+        tray._defer_appindicator_menu_close = mock.Mock()
+        if multi:
+            tray._targets.insert(0, DaemonTarget(name="other", runtime="manual"))
+            header = tray._menu._build_multi_daemon_menu_items()[1]
+            items = header.action.items
+        else:
+            items = tray._menu._build_single_daemon_menu_items()
+            header = items[2]
+        pause = next(
+            item for item in items if getattr(item, "label", None) == "Pause..."
+        ).action
+        first = active_cli_sessions["first"]
+        candidates = pause.items[2 if scope == "session" else 3].action.items
+        expected = (
+            f"Session key: {first['session_key']}"
+            if scope == "session"
+            else f"All sessions in: {shorten_path(first['project_dir'])}"
+        )
+        control = next(
+            item
+            for item in candidates
+            if getattr(item, "action", None) is not None
+            and item.kwargs.get("visible", lambda _: True)(None)
+            and item.action.items[0].label(None) == expected
+        )
+        actions = {
+            item.label: item
+            for item in control.action.items
+            if isinstance(getattr(item, "label", None), str)
+        }
+        return tray, header, pause.items[0], control, actions
+
+    return build
+
+
+@pytest.mark.parametrize("multi", [False, True])
+@pytest.mark.parametrize("scope", ["session", "dir"])
+@pytest.mark.parametrize("minutes", [0, 5])
+def test_tray_scope_pause_resume_is_selectable_without_another_hook(
+    scoped_tray, isolated_server, multi, scope, minutes
+):
+    """
+    USER EXPERIENCE: Pause one scope -> next opening exposes selectable Resume.
+
+    Manual verification on Linux (also compare macOS/Windows):
+    1. In Pause..., pick Sessions... or All sessions in directory..., then pause.
+    2. Immediately reopen that same submenu, within the two-second cache window.
+    3. Expect its ☾ indicator and Resume, with no duration choices.
+    4. Select Resume; the next opening shows ● and duration choices again.
+    5. Repeat with a timed and indefinite pause; no hook/restart is necessary.
+    6. Daemon (global) stays ● for these scoped pauses; the header shows ◐.
+    """
+    tray, header, global_control, control, actions = scoped_tray(multi, scope)
+    assert control.label(None).startswith("●")
+    assert actions["Resume"].kwargs["visible"](None) is False
+    choice = (
+        "5 minutes"
+        if minutes
+        else ("Until resumed or session ends" if scope == "session" else "Until resume")
+    )
+    actions[choice].action(None, None)
+    assert actions["Resume"].kwargs["visible"](None) is True
+    assert actions["5 minutes"].kwargs["visible"](None) is False
+    assert control.label(None).startswith("☾")
+    assert header.label(None).startswith("◐")
+    assert global_control.label(None) == "● Daemon (global)"
+    actions["Resume"].action(None, None)
+    assert actions["5 minutes"].kwargs["visible"](None) is True
+    assert actions["Resume"].kwargs["visible"](None) is False
+    assert control.label(None).startswith("●")
+    assert header.label(None).startswith("●")
+    assert not isolated_server.state.get_stats()["paused_dirs"]
+    assert not any(
+        session["paused"] for session in isolated_server.state.get_active_sessions()
+    )
+    tray._multi_client.send_pause.assert_not_called()
+    tray._multi_client.send_resume.assert_not_called()
+
+
+@pytest.mark.parametrize("multi", [False, True])
+@pytest.mark.parametrize("scope", ["session", "dir"])
+@pytest.mark.parametrize("operation", ["indefinite", "timed", "resume"])
+def test_linux_closed_before_clicked_keeps_scoped_action_deliverable(
+    scoped_tray, isolated_server, active_cli_sessions, multi, scope, operation
+):
+    """
+    USER EXPERIENCE: KDE closes the popup before delivering its selected action.
+
+    Observed native order: root closed, then clicked roughly 3 ms later.
+    Rebuilding on closed deletes the selected ID, silently losing even About.
+    Keep native IDs through the click-delivery grace period; only then rebuild.
+    Manual verification: with traffic/discovery pending, choose a session or
+    directory duration/Resume; expect the action to execute and the next opening
+    to show its authoritative pause state. About must open its dialog as well.
+    """
+    first = active_cli_sessions["first"]
+    identity = first["session_key"] if scope == "session" else first["project_dir"]
+    if operation == "resume":
+        getattr(isolated_server.state, f"pause_{scope}")(identity, 0)
+    tray, header, global_control, control, actions = scoped_tray(multi, scope)
+    control.label(None)
+    choice = (
+        "Resume"
+        if operation == "resume"
+        else (
+            "5 minutes"
+            if operation == "timed"
+            else (
+                "Until resumed or session ends"
+                if scope == "session"
+                else "Until resume"
+            )
+        )
+    )
+    native_actions = {17: actions[choice].action}
+    tray._icon.update_menu.side_effect = native_actions.clear
+    tray._on_appindicator_menu_event(None, "opened", None, 0)
+    tray._refresh_menu()
+    tray._on_appindicator_menu_event(None, "closed", None, 0)
+    assert 17 in native_actions
+    native_actions[17](None, None)
+    expected_paused = operation != "resume"
+    assert (
+        getattr(isolated_server.state, f"is_{scope}_paused")(identity)
+        is expected_paused
+    )
+    tray._icon.update_menu.assert_not_called()
+
+    tray._defer_appindicator_menu_close.call_args.args[0]()
+    tray._icon.update_menu.assert_called_once_with()
+    assert control.label(None).startswith("☾" if expected_paused else "●")
+    assert actions["Resume"].kwargs["visible"](None) is expected_paused
+    assert header.label(None).startswith("◐" if expected_paused else "●")
+    assert global_control.label(None) == "● Daemon (global)"
+    tray._multi_client.send_pause.assert_not_called()
+    tray._multi_client.send_resume.assert_not_called()
+
+
+@pytest.mark.parametrize("scope", ["session", "dir"])
+def test_idle_external_scope_change_and_expiry_refresh_without_countdown_churn(
+    scoped_tray, isolated_server, active_cli_sessions, pause_clock, scope
+):
+    """
+    USER EXPERIENCE: External pause/expiry while idle -> scope controls refresh.
+
+    Linux keeps nested submenus stable during the countdown, deferring native
+    replacement while a popup is open. Closing it applies the freshest state.
+    Manual verification: pause externally, leave the daemon idle, reopen the
+    menu before/after expiry, and verify nested Resume remains selectable.
+    """
+    tray, _, _, control, actions = scoped_tray(True, scope)
+    first = active_cli_sessions["first"]
+    identity = first["session_key"] if scope == "session" else first["project_dir"]
+    control.label(None)
+    tray._last_stats_snapshot = tray._build_stats_snapshot()
+    getattr(isolated_server.state, f"pause_{scope}")(identity, 5)
+    tray._refresh_menu_if_changed()
+    assert control.label(None).startswith("☾")
+    assert actions["Resume"].kwargs["visible"](None) is True
+    tray._icon.update_menu.reset_mock()
+    pause_clock.return_value += 10
+    tray._refresh_menu_if_changed()
+    tray._icon.update_menu.assert_not_called()
+    tray._on_appindicator_menu_event(None, "opened", None, 0)
+    pause_clock.return_value += 300
+    tray._refresh_menu_if_changed()
+    tray._icon.update_menu.assert_not_called()
+    assert tray._menu_refresh_pending is True
+    tray._on_appindicator_menu_event(None, "closed", None, 0)
+    tray._icon.update_menu.assert_not_called()
+    tray._defer_appindicator_menu_close.call_args.args[0]()
+    tray._icon.update_menu.assert_called_once()
+    assert control.label(None).startswith("●")
+    assert actions["Resume"].kwargs["visible"](None) is False
+
+
+@pytest.mark.parametrize("scope", ["session", "dir"])
+@pytest.mark.parametrize("resume", [False, True])
+def test_tray_unconfirmed_scope_request_reports_failure_without_broadening(
+    scoped_tray, isolated_server, active_cli_sessions, scope, resume
+):
+    """
+    USER EXPERIENCE: Unreachable/unsupported scoped operation -> clear feedback.
+
+    No success is claimed and no global or other-scope operation is attempted.
+    An ended session's stable key is never replaced by its title or project.
+    Manual verification: disconnect a remote target (or end a selected session)
+    before invoking its scoped control; expect this notification, not success.
+    """
+    first = active_cli_sessions["first"]
+    identity = first["session_key"] if scope == "session" else first["project_dir"]
+    if resume:
+        getattr(isolated_server.state, f"pause_{scope}")(identity, 0)
+    tray, _, _, control, actions = scoped_tray(False, scope)
+    control.label(None)
+    verb = "resume" if resume else "pause"
+    with (
+        mock.patch.object(
+            tray._multi_client, f"send_{verb}_{scope}", return_value=False
+        ) as send,
+        mock.patch(
+            "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
+        ) as notify,
+    ):
+        actions["Resume" if resume else "5 minutes"].action(None, None)
+    scope_name = "session" if scope == "session" else "directory"
+    notify.assert_called_once_with(
+        "AI Guardian",
+        f"Could not {verb} {scope_name} on selected. The daemon did not confirm the request. "
+        "It may be unreachable, the selected scope may no longer exist, or this operation may be unsupported. "
+        "No broader pause or resume was requested.",
+    )
+    args = (tray._targets[0], identity) if resume else (tray._targets[0], identity, 5)
+    send.assert_called_once_with(*args)
+    assert control.label(None).startswith("☾" if resume else "●")
+    tray._multi_client.send_pause.assert_not_called()
+    tray._multi_client.send_resume.assert_not_called()
+
+
+def test_older_daemon_retains_directory_and_global_controls(
+    scoped_tray, isolated_server, active_cli_sessions
+):
+    """USER EXPERIENCE: Older stats -> session limitation, directory/global retained."""
+    tray, _, global_control, directory, actions = scoped_tray(False, "dir")
+    get_stats = tray._get_stats
+    tray._get_stats = lambda: {
+        key: value for key, value in get_stats().items() if key != "active_sessions"
+    }
+    tray._refresh_menu()
+    items = tray._menu._build_single_daemon_menu_items()
+    pause = next(
+        item for item in items if getattr(item, "label", None) == "Pause..."
+    ).action
+    unsupported = pause.items[2].action.items[0]
+    assert unsupported.kwargs["visible"](None) is True
+    assert unsupported.label(None) == "Session pause is not supported by this daemon"
+    assert unsupported.kwargs["enabled"] is False
+    directory.label(None)
+    actions["5 minutes"].action(None, None)
+    assert isolated_server.state.is_dir_paused(
+        active_cli_sessions["first"]["project_dir"]
+    )
+    assert directory.label(None).startswith("☾")
+    assert global_control.label(None) == "● Daemon (global)"
+
+
+@pytest.mark.parametrize("scope", ["session", "dir"])
+def test_tray_resume_clears_only_selected_layer_and_hooks_still_obey_other_pauses(
+    scoped_tray, isolated_server, active_cli_sessions, scope
+):
+    """
+    USER EXPERIENCE: Resume one layer -> broader/independent pauses still apply.
+
+    A ● scoped indicator means that scope has no pause, not that scanning is
+    necessarily active. The submenu explains this; global/directory/session
+    precedence is verified through isolated hook requests, not only symbols.
+    Directory pause also covers callers without a stable ID in that project.
+    """
+    server = isolated_server
+    first, second, other = (
+        active_cli_sessions[key] for key in ("first", "second", "other")
+    )
+    server.state.pause_session(first["session_key"], 0)
+    server.state.pause_dir(first["project_dir"], 0)
+    server.state.pause(0)
+    tray, header, global_control, control, actions = scoped_tray(True, scope)
+    assert control.label(None).startswith("☾")
+    explanation = (
+        "Session pause only; global/directory pauses may still apply"
+        if scope == "session"
+        else "Directory pause only; global/session pauses may still apply"
+    )
+    assert actions[explanation].kwargs["enabled"] is False
+    actions["Resume"].action(None, None)
+    assert control.label(None).startswith("●")
+    assert header.label(None).startswith("☾")
+    assert global_control.label(None) == "☾ Daemon (global)"
+    assert server.state.is_session_paused(first["session_key"]) is (scope == "dir")
+    assert server.state.is_dir_paused(first["project_dir"]) is (scope == "session")
+
+    def hook(session, stable=True):
+        data = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls"},
+            "_daemon_cwd": session["project_dir"],
+        }
+        if stable:
+            data["session_id"] = session["session_id"]
+        return server._handle_hook_request(data)
+
+    with mock.patch(
+        "ai_guardian.process_hook_data",
+        return_value={"output": "blocked by scanner", "exit_code": 2},
+    ) as scan:
+        for session in (first, second, other):
+            assert hook(session)["exit_code"] == 0  # global still applies
+        scan.assert_not_called()
+        server.state.resume()
+        assert hook(first)["exit_code"] == 0  # remaining directory/session layer
+        assert hook(second)["exit_code"] == (0 if scope == "session" else 2)
+        assert hook(first, stable=False)["exit_code"] == (
+            0 if scope == "session" else 2
+        )
+        assert hook(other)["exit_code"] == 2  # directory does not cover other projects
+        if scope == "session":
+            server.state.resume_dir(first["project_dir"])
+        else:
+            server.state.resume_session(first["session_key"])
+        assert hook(first)["exit_code"] == 2
+        assert hook(second)["exit_code"] == 2
+    tray._multi_client.send_pause.assert_not_called()
+    tray._multi_client.send_resume.assert_not_called()
 
 
 @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])

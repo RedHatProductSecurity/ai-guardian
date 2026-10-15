@@ -2092,6 +2092,8 @@ class TestAppIndicatorMenuRefreshStability:
         indicator = mock.Mock()
         indicator.get_property.return_value = server
         tray._icon._appindicator = indicator
+        tray._defer_appindicator_menu_close = mock.Mock()
+        tray._dispatch_to_main = lambda callback: callback()
         return tray, root
 
     def test_watches_current_appindicator_dbusmenu_root(self):
@@ -2122,9 +2124,77 @@ class TestAppIndicatorMenuRefreshStability:
         ):
             assert menu_event(root, "closed", None, 0) is False
 
+        # KDE delivers a selected item's click after the root's closed event.
+        assert tray._appindicator_menu_open is True
+        tray._icon.update_menu.assert_not_called()
+        settle = tray._defer_appindicator_menu_close.call_args.args[0]
+        assert settle() is False
         assert tray._appindicator_menu_open is False
         assert tray._menu_refresh_pending is False
         tray._icon.update_menu.assert_called_once()
+
+    @pytest.mark.parametrize("refresh_before_close", [False, True])
+    def test_closed_before_clicked_keeps_native_action_alive(
+        self, refresh_before_close
+    ):
+        tray, root = self._make_tray()
+        tray._watch_appindicator_menu()
+        selected_action = mock.Mock()
+        native_actions = {17: selected_action}
+        # A native rebuild removes the action IDs held by Plasma's popup.
+        tray._icon.update_menu.side_effect = native_actions.clear
+        root.callback(root, "opened", None, 0)
+        if refresh_before_close:
+            tray._refresh_menu()
+
+        root.callback(root, "closed", None, 0)
+        tray._refresh_menu()  # A stats/discovery tick can also land in this gap.
+        assert 17 in native_actions
+        native_actions[17]()  # KDE's clicked event arrives after closed.
+        selected_action.assert_called_once_with()
+        tray._icon.update_menu.assert_not_called()
+
+        settle = tray._defer_appindicator_menu_close.call_args.args[0]
+        assert settle() is False
+        assert native_actions == {}
+        tray._icon.update_menu.assert_called_once_with()
+
+    def test_reopening_invalidates_an_older_close_callback(self):
+        tray, root = self._make_tray()
+        tray._watch_appindicator_menu()
+        root.callback(root, "opened", None, 0)
+        tray._refresh_menu()
+        root.callback(root, "closed", None, 0)
+        first_close = tray._defer_appindicator_menu_close.call_args.args[0]
+
+        root.callback(root, "opened", None, 0)
+        assert first_close() is False
+        assert tray._appindicator_menu_open is True
+        assert tray._menu_refresh_pending is True
+        tray._icon.update_menu.assert_not_called()
+
+        root.callback(root, "closed", None, 0)
+        latest_close = tray._defer_appindicator_menu_close.call_args.args[0]
+        assert latest_close() is False
+        assert tray._appindicator_menu_open is False
+        tray._icon.update_menu.assert_called_once_with()
+
+    def test_close_grace_is_scheduled_on_the_glib_loop(self):
+        tray, _ = self._make_tray()
+        glib = mock.Mock()
+        callback = mock.Mock(return_value=False)
+        repository = types.ModuleType("gi.repository")
+        repository.GLib = glib
+        with mock.patch.dict(sys.modules, {"gi.repository": repository}):
+            DaemonTray._defer_appindicator_menu_close(callback)
+        glib.timeout_add.assert_called_once_with(150, callback)
+        callback.assert_not_called()
+
+    def test_close_without_glib_retains_the_non_appindicator_fallback(self):
+        callback = mock.Mock(return_value=False)
+        with mock.patch.dict(sys.modules, {"gi": None, "gi.repository": None}):
+            DaemonTray._defer_appindicator_menu_close(callback)
+        callback.assert_called_once_with()
 
     def test_replaces_root_event_hook_when_native_menu_changes(self):
         tray, first_root = self._make_tray()
@@ -2195,6 +2265,131 @@ class TestProjectDirectoryMenuRefresh:
             tray._refresh_menu_if_changed()
 
         refresh_menu.assert_called_once_with()
+
+
+class TestScopedPauseMenuRefresh:
+    """Idle polling tracks scope state, not session activity/countdown noise."""
+
+    @pytest.mark.parametrize("runtime", ["manual", "container"])
+    @pytest.mark.parametrize("paused", [False, True])
+    def test_single_remote_pause_sync_uses_selected_daemon_not_host(
+        self, runtime, paused
+    ):
+        client = mock.Mock()
+        client.get_status.return_value = {"paused": paused}
+        tray = DaemonTray(
+            lambda: {"paused": not paused},
+            lambda: None,
+            lambda _: None,
+            multi_client=client,
+        )
+        target = DaemonTarget(name="selected", runtime=runtime, status="running")
+        tray._targets = [target]
+        with mock.patch.object(tray, "update_status") as update:
+            tray._sync_pause_state()
+        assert target.status == ("paused" if paused else "running")
+        if paused:
+            update.assert_called_once_with("paused")
+        else:
+            update.assert_not_called()
+
+    @pytest.mark.parametrize("runtime", ["local", "manual", "container"])
+    @pytest.mark.parametrize(
+        "change",
+        [
+            "pause",
+            "resume",
+            "expiry",
+            "end",
+            "add",
+            "title",
+            "project",
+            "directory",
+            "global",
+            "support",
+        ],
+    )
+    def test_scope_change_refreshes_without_hook_requests(self, runtime, change):
+        stats = {
+            "paused": False,
+            "active_project_dirs": ["/project"],
+            "paused_dirs": {},
+            "active_sessions": [
+                {
+                    "session_key": "Adapter:key",
+                    "session_id": "id",
+                    "session_title": "Title",
+                    "agent": "OpenCode",
+                    "project_dir": "/project",
+                    "paused": change in ("resume", "expiry"),
+                    "pause_remaining_seconds": 60,
+                }
+            ],
+        }
+        client = mock.Mock()
+        client.get_status.side_effect = lambda _: stats
+        tray = DaemonTray(
+            lambda: stats if runtime == "local" else {},
+            lambda: None,
+            lambda _: None,
+            multi_client=client,
+        )
+        tray._targets = [
+            DaemonTarget(name="selected", runtime=runtime, status="running")
+        ]
+        with (
+            mock.patch("platform.system", return_value="Linux"),
+            mock.patch.object(tray, "_refresh_menu") as refresh,
+        ):
+            tray._last_stats_snapshot = tray._build_stats_snapshot()
+            session = stats["active_sessions"][0]
+            if change == "pause":
+                session["paused"] = True
+            elif change in ("resume", "expiry"):
+                session["paused"] = False
+            elif change == "end":
+                stats["active_sessions"] = []
+            elif change == "add":
+                stats["active_sessions"].append({"session_key": "Adapter:second"})
+            elif change == "title":
+                session["session_title"] = "Renamed"
+            elif change == "project":
+                session["project_dir"] = "/other-project"
+            elif change == "directory":
+                stats["paused_dirs"]["/project"] = 0
+            elif change == "global":
+                stats["paused"] = True
+            else:
+                del stats["active_sessions"]
+            tray._refresh_menu_if_changed()
+            tray._refresh_menu_if_changed()
+        refresh.assert_called_once_with()
+
+    @pytest.mark.parametrize("platform", ["Linux", "Darwin", "Windows"])
+    def test_scoped_countdown_and_activity_only_refresh_where_supported(self, platform):
+        stats = {
+            "paused_dirs": {"/project": 60},
+            "active_sessions": [
+                {
+                    "session_key": "Adapter:key",
+                    "paused": True,
+                    "pause_remaining_seconds": 60,
+                }
+            ],
+        }
+        tray = DaemonTray(lambda: stats, lambda: None, lambda _: None)
+        tray._targets = [DaemonTarget(name="local", runtime="local")]
+        with (
+            mock.patch("platform.system", return_value=platform),
+            mock.patch.object(tray, "_refresh_menu") as refresh,
+        ):
+            tray._last_stats_snapshot = tray._build_stats_snapshot()
+            stats["paused_dirs"]["/project"] = 50
+            stats["active_sessions"][0].update(
+                pause_remaining_seconds=50, last_activity_seconds_ago=10
+            )
+            tray._refresh_menu_if_changed()
+        assert refresh.call_count == (0 if platform == "Linux" else 1)
 
 
 class TestWakeDetection:

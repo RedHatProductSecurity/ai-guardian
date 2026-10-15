@@ -613,6 +613,15 @@ selected. Linux pause labels therefore use a stable paused indicator instead of
 a live countdown; pause/resume visibility still refreshes when the pause state
 changes. macOS keeps the live countdown refresh behavior.
 
+AppIndicator popup replacement is deferred until the popup closes and a short
+click-delivery grace period elapses, then renders fresh daemon stats. KDE sends
+the popup's close event before the selected item's click; rebuilding immediately
+can discard that action, including Pause/Resume or About. Rapid reopening keeps
+the new popup protected from an older close callback.
+Scoped actions and idle polling refresh actual pause/resume
+transitions, expiry, session end, and session/project-list changes; countdown-only
+changes do not replace Linux menus. Windows and macOS retain countdown updates.
+
 ### Session and directory pause controls
 
 **Sessions...** lists active hook sessions that have a stable identity from their
@@ -647,6 +656,30 @@ combines explicitly paused directories with `active_project_dirs`, which records
 recently observed project directories rather than currently open IDE sessions.
 Directory entries remain until the project tracking TTL expires (currently 24
 hours without another request), including while global scanning is paused.
+
+In both single- and multi-daemon layouts, a confirmed session or directory pause
+shows **☾** and a selectable **Resume** on the next menu opening, even immediately
+within the stats-cache window. Resume restores **●** and the duration choices.
+Headers, Status, and scoped controls share the same stats snapshot; no additional
+hook request, unrelated menu interaction, or tray restart is needed.
+
+| Indicator | Meaning |
+|-----------|---------|
+| **● Daemon (global)** | No global pause; session/directory pauses may still apply |
+| **☾ Daemon (global)** | Scanning is paused globally |
+| **● / ☾** on a session or directory | That scope's own pause is absent / present |
+| **◐** on a daemon header | Daemon is not globally paused, but at least one session or directory is paused |
+
+Resuming a session does not clear a directory or global pause. Resuming a
+directory does not clear individual session or global pauses. Thus a scoped
+**●** is not a promise that effective scanning has resumed; each submenu explains
+that other pause layers may still apply. Directory controls remain the bulk
+control for all callers in that project, including those without stable IDs.
+
+Scoped requests require an explicit daemon acknowledgement. An unreachable,
+unsupported, or ended scope produces a failure notification without claiming
+success or falling back to a broader scope. Older daemons without session support
+show that limitation while retaining their directory/global controls.
 
 Session controls are offered only for hooks that provide a stable session ID;
 the daemon never guesses an identity from a project directory. Integrations,

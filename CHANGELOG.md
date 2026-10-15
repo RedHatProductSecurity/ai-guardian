@@ -116,6 +116,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **Scoped tray Pause/Resume state (#2549):** Share authoritative menu stats and
+  invalidate stale cached state after scoped requests, exposing Resume immediately
+  in single- and multi-daemon layouts. Refresh idle session/directory transitions,
+  expiry, and list changes while preserving Linux popup/countdown stability.
+  Require explicit scoped acknowledgements, report failures without broadening
+  requests, and retain rendered stable identities/targets across discovery changes.
+  Keep native actions alive through KDE's close-before-click delivery order so
+  pending refreshes do not silently discard Pause/Resume or About selections.
+  Clarify scope indicators and preserve global/directory/session pause isolation,
+  persistence, lifetimes, existing APIs, and AI-session self-protection.
 - **GitGuardian installation verification:** Allow up to 60 seconds for
   `ggshield --version` to initialize its bundled Python runtime on slow/emulated
   ARM64 builds. Version discovery uses the same bounded check; timeouts and
