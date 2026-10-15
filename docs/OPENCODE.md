@@ -93,12 +93,12 @@ surfaces.
 | Runtime | Status | Version/package | Executable or location | Evidence and limitation |
 |---|---|---|---|---|
 | Host setup | Supported | V1 and V2 contracts | User OpenCode config directory | Version-aware unit, setup, session, transcript, and isolated structural tests |
-| Normal Docker/Podman | Supported for V1 | `opencode-ai` 1.18.34 | `/sandbox/.opencode/bin/opencode` | Normal-image V1 executable is pinned in `container/Dockerfile`; V2 is not bundled |
-| OpenShell | Supported for V1 Vertex auth | `opencode` 1.18.34 | `/usr/local/bin/opencode` | OpenShell image includes V1; native Vertex/ADC uses the `google-cloud` provider and metadata emulator; live model qualification is manual |
+| Normal Docker/Podman | Supported for V1 | `opencode-ai` 1.19.0 | `/sandbox/.opencode/bin/opencode` | Normal-image V1 executable is pinned in `container/Dockerfile`; V2 is not bundled |
+| OpenShell | Supported for V1 Vertex auth | `opencode` 1.19.0 | `/usr/local/bin/opencode` | OpenShell image includes V1; native Vertex/ADC uses the `google-cloud` provider and metadata emulator; live model qualification is manual |
 
 The OpenShell selector exposes OpenCode with an explicit agent profile. For the
 Vertex path, use the `claude` agent profile and a native
-`google-vertex/<model>` model ID. OpenShell V2 is not bundled in the
+`google-vertex/<model>` model ID. OpenCode V2 is not bundled in the
 dedicated image. See the [sandbox recipes](Sandbox.md) and the
 [manual qualification matrix](../container/tests/README.md).
 
@@ -152,12 +152,13 @@ normal users leave it unset:
 
 ```bash
 AI_GUARDIAN_TEST_IDE=opencode \
-AI_GUARDIAN_OPENCODE_VERSION=1.18.34 \
+AI_GUARDIAN_OPENCODE_VERSION=1.19.0 \
 uv run --extra dev python -m pytest \
   tests/integration/test_ide_hooks_e2e.py -q
 ```
 
-The normal-image V1 pin is `1.18.34`. OpenShell is not an OpenCode runtime.
+Both support images pin OpenCode V1 to `1.19.0`. Live OpenShell Vertex model
+qualification remains manual.
 
 A disposable normal-image model-request smoke test, including provider
 authentication, remains a release-environment requirement. It is not claimed
