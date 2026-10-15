@@ -37,6 +37,34 @@
 
 ## Key Learnings
 
+- **KDE closed-before-clicked delivery (#2549 follow-up):** Native DBus tracing
+  showed root `closed` preceding the selected item's `clicked` by about 3 ms.
+  Immediate refresh on close can remove the exported action ID, silently losing
+  any selection (even About), not just scoped pauses. Keep the refresh guard
+  through a short GLib click-delivery grace period and invalidate older close
+  callbacks when a popup reopens. Root open/close events were present; expanding
+  observation to every descendant was not the missing fix. Regression tests
+  must model native-ID removal and closed-before-clicked order, not only invoke
+  descriptor callbacks directly.
+
+- **Scoped tray menu state (#2549):** Headers, Status, and scoped controls must
+  share one target stats cache. Invalidate it before actual native rendering and
+  after scoped requests; deferred AppIndicator refreshes must fetch fresh state
+  after close. Snapshot stable session metadata/pause flags and directory state,
+  excluding Linux countdowns and last-activity noise. A nonempty REST response or
+  completed socket exchange is not success: require the matching scoped status
+  and no error. An error field with `None` is not itself an error.
+- **Rendered tray targeting (#2549):** Do not re-resolve a selected scope by its
+  list slot on click: expiry, new sessions/projects, and discovery can reorder
+  lists while the old popup remains open. Retain the rendered stable key/path
+  and daemon target until the native menu renders again; never broaden failure.
+- **Scoped tray UX registries (#2549):** Direct session registration does not
+  populate `active_project_dirs`; initialize project tracking separately with
+  `check_project_config`. For hook enforcement tests, obtain canonical stable
+  keys with `track_hook_session`, not a guessed adapter class prefix borrowed
+  from CLI fixtures. Otherwise a hook creates a different session and appears
+  to ignore the selected pause. Keep deterministic clocks module-local.
+
 - **Scoped CLI UX isolation (PR #2550):** Process-wide `_connect` mocks also
   intercept leaked/background tray subscriber threads during full-suite CI.
   Bind the opt-in test transport to the owning thread and return no connection

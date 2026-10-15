@@ -268,34 +268,26 @@ class MultiDaemonClient:
     ) -> bool:
         """Pause scanning for a specific directory."""
         if target.runtime == "local":
-            return MultiDaemonClient._local_socket_send(
-                {
-                    "version": 1,
-                    "type": "pause_dir",
-                    "data": {"dir": directory, "minutes": minutes},
-                }
+            from ai_guardian.daemon.client import send_pause_dir
+
+            result = send_pause_dir(directory, minutes)
+        else:
+            result = self._rest_request(
+                target, "POST", "/api/pause_dir", {"dir": directory, "minutes": minutes}
             )
-        result = self._rest_request(
-            target,
-            "POST",
-            "/api/pause_dir",
-            {"dir": directory, "minutes": minutes},
-        )
-        return result is not None
+        return self._scoped_acknowledged(result, "dir_paused")
 
     def send_resume_dir(self, target: DaemonTarget, directory: str) -> bool:
         """Resume scanning for a specific directory."""
         if target.runtime == "local":
-            return MultiDaemonClient._local_socket_send(
-                {"version": 1, "type": "resume_dir", "data": {"dir": directory}}
+            from ai_guardian.daemon.client import send_resume_dir
+
+            result = send_resume_dir(directory)
+        else:
+            result = self._rest_request(
+                target, "POST", "/api/resume_dir", {"dir": directory}
             )
-        result = self._rest_request(
-            target,
-            "POST",
-            "/api/resume_dir",
-            {"dir": directory},
-        )
-        return result is not None
+        return self._scoped_acknowledged(result, "dir_resumed")
 
     def send_pause_session(
         self,
@@ -308,14 +300,14 @@ class MultiDaemonClient:
             from ai_guardian.daemon.client import send_pause_session
 
             result = send_pause_session(session_key, minutes)
-            return bool(result and result.get("status") == "session_paused")
-        result = self._rest_request(
-            target,
-            "POST",
-            "/api/pause_session",
-            {"session_key": session_key, "minutes": minutes},
-        )
-        return result is not None
+        else:
+            result = self._rest_request(
+                target,
+                "POST",
+                "/api/pause_session",
+                {"session_key": session_key, "minutes": minutes},
+            )
+        return self._scoped_acknowledged(result, "session_paused")
 
     def send_resume_session(self, target: DaemonTarget, session_key: str) -> bool:
         """Resume one stable-ID hook session on the selected daemon."""
@@ -323,14 +315,20 @@ class MultiDaemonClient:
             from ai_guardian.daemon.client import send_resume_session
 
             result = send_resume_session(session_key)
-            return bool(result and result.get("status") == "session_resumed")
-        result = self._rest_request(
-            target,
-            "POST",
-            "/api/resume_session",
-            {"session_key": session_key},
+        else:
+            result = self._rest_request(
+                target, "POST", "/api/resume_session", {"session_key": session_key}
+            )
+        return self._scoped_acknowledged(result, "session_resumed")
+
+    @staticmethod
+    def _scoped_acknowledged(result, status):
+        """Transport success alone is not acknowledgement of a scoped request."""
+        return bool(
+            isinstance(result, dict)
+            and result.get("status") == status
+            and result.get("error") is None
         )
-        return result is not None
 
     def send_stop(self, target: DaemonTarget) -> bool:
         """Stop daemon."""

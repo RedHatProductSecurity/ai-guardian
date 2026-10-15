@@ -315,6 +315,7 @@ class DaemonTray:
         self._appindicator_menu_root = None
         self._appindicator_menu_handler = None
         self._appindicator_menu_open = False
+        self._appindicator_menu_close_serial = 0
         self._menu_refresh_pending = False
         self._thread = None
         self._pause_timer = None
@@ -896,6 +897,9 @@ class DaemonTray:
                 self._menu_refresh_pending = True
                 return
             try:
+                # Deferred updates must render current stats, not the snapshot
+                # cached before an action/expiry while the popup was open.
+                self._menu._invalidate_stats()
                 if (
                     (
                         self._menu_target_count is not None
@@ -992,15 +996,40 @@ class DaemonTray:
     def _on_appindicator_menu_event(
         self, _menu_item, event_name, _event_data, _timestamp
     ):
-        """Defer native menu replacement until Plasma closes its popup."""
+        """Keep native actions alive through Plasma's closed-before-clicked order."""
         if event_name == "opened":
+            self._appindicator_menu_close_serial += 1
             self._appindicator_menu_open = True
         elif event_name == "closed":
-            self._appindicator_menu_open = False
-            if self._menu_refresh_pending:
-                self._menu_refresh_pending = False
-                self._dispatch_to_main(self._refresh_menu)
+            self._appindicator_menu_close_serial += 1
+            serial = self._appindicator_menu_close_serial
+            # Plasma sends closed before clicked (observed ~3 ms apart).
+            # Replacing the exported tree on closed deletes the selected ID
+            # before its activation arrives. Guard new refreshes in this gap too.
+            self._appindicator_menu_open = True
+
+            def finish_close():
+                if serial != self._appindicator_menu_close_serial:
+                    return False  # A reopened popup must retain its native tree.
+                self._appindicator_menu_open = False
+                if self._menu_refresh_pending:
+                    self._menu_refresh_pending = False
+                    self._refresh_menu()
+                return False
+
+            self._defer_appindicator_menu_close(finish_close)
         return False
+
+    @staticmethod
+    def _defer_appindicator_menu_close(callback):
+        """Allow queued DBus activations to arrive before rebuilding GTK menus."""
+        try:
+            from gi.repository import GLib
+        except (ImportError, ValueError):
+            logger.debug("AppIndicator close grace unavailable without GLib")
+            callback()
+            return
+        GLib.timeout_add(150, callback)
 
     def _refresh_menu_if_changed(self):
         """Refresh the tray menu only if stats changed.
@@ -1020,24 +1049,18 @@ class DaemonTray:
         try:
             stats = self._get_stats()
             paused_dirs = stats.get("paused_dirs") or {}
-            target_dir_snapshots = []
+            target_scope_snapshots = []
             for target in self._targets:
                 target_stats = (
                     stats
                     if target.runtime == "local"
                     else self._get_target_stats(target)
                 ) or {}
-                target_paused_dirs = target_stats.get("paused_dirs") or {}
-                target_dir_snapshots.append(
+                target_scope_snapshots.append(
                     (
                         target.name,
                         target.runtime,
-                        tuple(target_stats.get("active_project_dirs") or ()),
-                        (
-                            tuple(sorted(target_paused_dirs.keys()))
-                            if target_paused_dirs
-                            else ()
-                        ),
+                        self._pause_scope_snapshot(target_stats),
                     )
                 )
             return (
@@ -1056,7 +1079,7 @@ class DaemonTray:
                 len(self._targets),
                 tuple((t.name, t.status) for t in self._targets),
                 tuple(stats.get("active_project_dirs") or ()),
-                tuple(target_dir_snapshots),
+                tuple(target_scope_snapshots),
                 tuple(
                     (t.name, getattr(t, "container_id", None))
                     for t in self._stopped_container_targets
@@ -1065,6 +1088,40 @@ class DaemonTray:
             )
         except Exception:
             return None
+
+    def _pause_scope_snapshot(self, stats):
+        """Track scope transitions/identity changes without Linux countdown churn."""
+        live_countdown = self._supports_live_pause_countdown()
+
+        def countdown(remaining):
+            return (remaining or 0) // 5 if live_countdown else None
+
+        sessions = stats.get("active_sessions")
+        return (
+            stats.get("paused", False),
+            countdown(stats.get("pause_remaining_seconds", 0)),
+            tuple(stats.get("active_project_dirs") or ()),
+            tuple(
+                (directory, countdown(remaining))
+                for directory, remaining in sorted(
+                    (stats.get("paused_dirs") or {}).items()
+                )
+            ),
+            "active_sessions" in stats,
+            tuple(
+                (
+                    session.get("session_key"),
+                    session.get("session_id"),
+                    session.get("session_title"),
+                    session.get("agent"),
+                    session.get("project_dir"),
+                    session.get("paused", False),
+                    countdown(session.get("pause_remaining_seconds", 0)),
+                )
+                for session in (sessions if isinstance(sessions, list) else [])
+                if isinstance(session, dict)
+            ),
+        )
 
     def _refresh_icon_running(self):
         """Refresh icon and menu to reflect resumed state (main thread)."""
@@ -1083,7 +1140,11 @@ class DaemonTray:
         if self._is_multi_daemon():
             self._update_global_pause_status()
             return
-        stats = self._get_stats()
+        stats = (
+            self._get_target_stats(self._targets[0])
+            if self._targets
+            else self._get_stats()
+        )
         if not stats:
             return
         is_paused = stats.get("paused", False)
