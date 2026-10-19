@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-15
+> Last updated: 2026-10-19
 
 ## User Preferences
 
@@ -36,6 +36,14 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **Pattern research evidence (#2554):** Review path-specific commit histories,
+  not repository push timestamps. OWASP's general LLM Top 10 landing page still
+  lists 2025 while its separate 2026 resource page is current. Distinguish a
+  bundled-engine standalone credential gap from generic assignment detection or
+  external-engine coverage. A no-network address-classification probe is not
+  proof of live network exploitability. Do not infer a fixed credential layout
+  from inconsistent vendor examples; keep those candidates deferred.
 
 - **Support-image CLI pin maintenance (#2555):** Both support Dockerfiles now
   bundle pinned OpenCode V1. Update the version-check fixtures, manual-report
