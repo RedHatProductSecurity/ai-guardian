@@ -9,6 +9,29 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2558 standalone NuGet V4 and Sonar credentials — 2026-10-19
+
+- Added four bounded bundled secret rules with service attribution and normal
+  output redaction. NuGet follows the vendor's separately encoded identifier
+  and GUID password; Sonar covers user/project/global-analysis prefixes only.
+  Generic assignment rules and external engines are unchanged. Legacy
+  unprefixed Sonar and Kong Konnect remain out of scope.
+- Positive fixtures are deterministic and unissued. Unit/runner UX regressions
+  reproduced the standalone gap before the fix. A committed benign corpus of
+  20 build/code/documentation samples plus 200 deterministic identifiers has
+  0/220 findings; this is not a population-wide false-positive estimate.
+- All 791 related unit/UX tests pass, including both complete affected UX files.
+  Ruff, Black (`--target-version py310`), Pylint, Mypy in the uv dev environment,
+  and diff checks pass. Three existing UX deprecation warnings remain.
+- Updated source/license attribution, TOML docs/counts, changelog, and installed
+  scanner canaries in both smoke and fresh-install release-readiness workflows.
+  Unit contracts parse YAML and compile the new workflow Python blocks.
+- No live credentials, verification requests, dependencies, full suite,
+  integration/container runs, live protection controls, commits, or PRs.
+  Broader CI/matrix and manual native hook validation remain for CI/operator QA.
+- All six issue criteria are checked and DAF notes are updated. Branch `2558`
+  is ready for the user's `daf complete` outside this agent session.
+
 ## Issue #2554 security pattern research — 2026-10-19
 
 - Completed the October 1–19 priority-source review and all nine scanner
@@ -295,6 +318,8 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
+- Complete #2558 with `daf complete` outside this agent session; let CI run the
+  remaining matrix and non-unit validation. Older handoffs follow below.
 - Complete #2554 with `daf complete` outside the agent session. Implement
   #2558/#2559 in separate sessions with isolated unit/UX and false-positive
   validation; do not treat this research review as either fix being shipped.
@@ -321,7 +346,7 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2554` / `RedHatProductSecurity/ai-guardian#2554`.
+- Branch/issue: `2558` / `RedHatProductSecurity/ai-guardian#2558`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -371,4 +396,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2554`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2558`

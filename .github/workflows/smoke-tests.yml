@@ -51,6 +51,24 @@ jobs:
           rm -rf "$TEST_DIR"
           echo "Secret detection: PASS"
 
+      - name: Verify standalone NuGet V4 and Sonar tokens
+        run: |
+          python - <<'PY'
+          from ai_guardian.scanners.toml_patterns import TomlPatternsScanner
+          from tests.fixtures.nuget_sonar_tokens import CREDENTIAL_CASES
+
+          scanner = TomlPatternsScanner()
+          assert len(CREDENTIAL_CASES) == 4
+          for rule_id, description, token in CREDENTIAL_CASES:
+              assert any(
+                  finding.rule_id == rule_id
+                  and finding.description == description
+                  and finding.matched_text == token
+                  for finding in scanner.scan(token)
+              ), f"Standalone credential not recognized: {rule_id}"
+          print("Standalone NuGet V4/Sonar: 4 synthetic credentials detected")
+          PY
+
       - name: "PII Phase 1 (SSN, credit card, phone)"
         run: |
           TEST_DIR=$(mktemp -d)

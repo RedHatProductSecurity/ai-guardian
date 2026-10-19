@@ -16,8 +16,12 @@ from io import StringIO
 from unittest import TestCase
 from unittest.mock import patch
 
+import pytest
+
 import ai_guardian
 from ai_guardian.hook_events.scanners import run_secret_scan as _run_secret_scan
+from ai_guardian.scanners.secret_redactor import SecretRedactor
+from tests.fixtures.nuget_sonar_tokens import CREDENTIAL_CASES
 
 
 class PostToolUseSecretBlockingTests(TestCase):
@@ -689,6 +693,73 @@ class PostToolUseEnvVarDetectionTests(TestCase):
         assert (
             result.detected
         ), "env-variable pattern must detect JIRA_API_TOKEN in env output"
+
+
+class TestStandaloneNugetSonarCredentials:
+    """USER EXPERIENCE: standalone publishing/analysis tokens remain protected (#2558).
+
+    Manual verification in an isolated test project:
+    1. Use the bundled engine and synthetic fixtures, never issued credentials.
+    2. Ask the agent to write a fixture to a text file: the write is denied.
+    3. Print a fixture from a tool: normal output redaction masks its value.
+    4. Prefix-only documentation and environment-variable references remain usable.
+
+    The scanner runner and redactor below are real; configuration is explicit
+    and the pattern-server loader is mocked so no user config or network is used.
+    """
+
+    @pytest.mark.parametrize(
+        "rule_id,description,token",
+        CREDENTIAL_CASES,
+        ids=[c[0] for c in CREDENTIAL_CASES],
+    )
+    @pytest.mark.parametrize(
+        "event,tool", (("PreToolUse", "Write"), ("PostToolUse", "Bash"))
+    )
+    @patch(
+        "ai_guardian.scanners.secret_scanning._load_pattern_server_config",
+        return_value=None,
+    )
+    def test_standalone_value_is_detected_and_blocked(
+        self, mock_pattern, rule_id, description, token, event, tool
+    ):
+        """A bare token, without assignment context, must trigger secret protection."""
+        result = _run_secret_scan(
+            token,
+            filename="credential-output.txt",
+            config={"enabled": True, "engines": ["toml-patterns"]},
+            secret_context={"hook_event": event},
+            tool_name=tool,
+        )
+        assert result is not None
+        assert result.detected
+        assert result.should_block
+        assert "Secret Detected" in result.error_message
+        assert "Scanner: toml-patterns" in result.error_message
+        assert token not in result.error_message
+        assert any(f["rule_id"] == rule_id for f in result.findings)
+
+    @pytest.mark.parametrize(
+        "rule_id,description,token",
+        CREDENTIAL_CASES,
+        ids=[c[0] for c in CREDENTIAL_CASES],
+    )
+    def test_posttooluse_redaction_preserves_surrounding_output(
+        self, rule_id, description, token
+    ):
+        """The agent sees masked output with useful attribution, not the credential."""
+        redactor = SecretRedactor(
+            config={"enabled": True, "log_redactions": False},
+            pii_config={"enabled": False},
+        )
+        output = f'Build output:\n  "{token}"\nFinished.'
+        result = redactor.redact(output)
+        assert (
+            result["redacted_text"]
+            == f'Build output:\n  "{token[:6]}...{token[-4:]}"\nFinished.'
+        )
+        assert token not in result["redacted_text"]
+        assert result["redactions"][0]["type"] == description
 
 
 class GitleaksAllowGuidanceTests(TestCase):

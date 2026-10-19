@@ -37,6 +37,15 @@
 
 ## Key Learnings
 
+- **NuGet/Sonar pattern fixtures (#2558):** NuGet V4 encodes its identifier
+  and GUID password separately; concatenating bytes before base32 encoding
+  produces the wrong layout. Use scoped ASCII case folding for token alphabets
+  while leaving identifier boundaries Unicode-aware. The pattern-server loader
+  used by secret scanning returns an optional dict, not a `(config, error)`
+  pair. Scanner-runner results expose `error_message`. Normal SecretRedactor
+  preserves six leading/four trailing characters; PatternCache's similarly
+  named strategy preserves four/four, so test the correct component's contract.
+
 - **Pattern research evidence (#2554):** Review path-specific commit histories,
   not repository push timestamps. OWASP's general LLM Top 10 landing page still
   lists 2025 while its separate 2026 resource page is current. Distinguish a
