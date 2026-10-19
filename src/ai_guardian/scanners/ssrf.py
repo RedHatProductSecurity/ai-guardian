@@ -107,16 +107,21 @@ class SSRFProtector:
         "fe80::/10",  # IPv6 link-local
     ]
 
-    # IMMUTABLE: Core blocked domains (cloud metadata endpoints)
-    # These CANNOT be disabled via configuration
-    CORE_BLOCKED_DOMAINS = [
+    # IMMUTABLE: Metadata hosts, shared by literal and resolved IP checks.
+    CORE_METADATA_HOSTS = [
         "metadata.google.internal",  # GCP metadata
         "metadata.goog",  # GCP metadata (alternative)
-        "169.254.169.254",  # AWS/Azure metadata IP as domain
+        "169.254.169.254",  # AWS/Azure metadata
         "fd00:ec2::254",  # AWS IPv6 metadata
         "instance-data",  # AWS instance metadata
         "100.100.100.200",  # Alibaba Cloud metadata
         "192.0.0.192",  # Oracle Cloud (OCI) metadata
+    ]
+
+    # IMMUTABLE: Core blocked domains (cloud metadata endpoints)
+    # These CANNOT be disabled via configuration
+    CORE_BLOCKED_DOMAINS = [
+        *CORE_METADATA_HOSTS,
         "localhost",  # Localhost (unless allow_localhost is True)
     ]
 
@@ -545,9 +550,30 @@ class SSRFProtector:
 
         return host
 
+    @staticmethod
+    def _ip_destinations(
+        ip_addr: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    ) -> Iterable[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        """Yield the native IP and its protocol-defined IPv4 endpoints (#2559).
+
+        Use the standard library's mapped, RFC 3056 (6to4), and RFC 4380
+        (Teredo) properties, not arbitrary IPv6 suffixes or ``is_private``.
+        Teredo's client is the tunneled endpoint; its server may receive setup
+        and control traffic. Both roles therefore receive destination policy.
+        This classification does not establish reachability on a given stack.
+        """
+        yield ip_addr
+        if isinstance(ip_addr, ipaddress.IPv6Address):
+            for embedded in (ip_addr.ipv4_mapped, ip_addr.sixtofour):
+                if embedded is not None:
+                    yield embedded
+            teredo = ip_addr.teredo
+            if teredo is not None:
+                yield from teredo
+
     def _is_ip_blocked(self, ip_str: str) -> bool:
         """
-        Check if an IP address is in a blocked range.
+        Check native and embedded IP endpoints against existing destination policy.
 
         Args:
             ip_str: IP address string (IPv4 or IPv6)
@@ -557,30 +583,23 @@ class SSRFProtector:
         """
         try:
             ip_addr = ipaddress.ip_address(ip_str)
-
-            for network in self._blocked_ip_networks:
-                if ip_addr in network:
-                    logger.debug(f"IP {ip_str} is in blocked range {network}")
-                    return True
-
-            # Check for IPv6-mapped IPv4 addresses (e.g., ::ffff:169.254.169.254)
-            # These bypass IPv4 range checks because they're treated as IPv6
-            if isinstance(ip_addr, ipaddress.IPv6Address) and ip_addr.ipv4_mapped:
-                mapped_ipv4 = ip_addr.ipv4_mapped
-                for network in self._blocked_ip_networks:
-                    if (
-                        isinstance(network, ipaddress.IPv4Network)
-                        and mapped_ipv4 in network
-                    ):
-                        logger.debug(
-                            f"IPv6-mapped IPv4 {ip_str} (mapped to {mapped_ipv4}) is in blocked range {network}"
-                        )
-                        return True
-
-            return False
         except ValueError:
             # Not a valid IP address
             return False
+
+        for destination in self._ip_destinations(ip_addr):
+            # Metadata singletons outside private ranges are protected too,
+            # including caller-supplied DNS results and transition endpoints.
+            if str(destination) in self.CORE_METADATA_HOSTS:
+                return True
+            for network in self._blocked_ip_networks:
+                if destination in network:
+                    # Input-derived addresses can carry sensitive text (e.g.
+                    # IPv6 scope IDs). Keep this diagnostic value-free.
+                    logger.debug("SSRF destination matches a blocked IP range")
+                    return True
+
+        return False
 
     @staticmethod
     def _resolved_address_value(address: Any) -> Optional[str]:
@@ -869,15 +888,7 @@ class SSRFProtector:
         # IMMUTABLE: Check core metadata endpoints (cannot be overridden by allow-list)
         hostname_lower = hostname.lower()
 
-        if hostname_lower in [
-            "metadata.google.internal",
-            "metadata.goog",
-            "169.254.169.254",
-            "fd00:ec2::254",
-            "instance-data",
-            "100.100.100.200",  # Alibaba Cloud metadata
-            "192.0.0.192",  # Oracle Cloud (OCI) metadata
-        ]:
+        if hostname_lower in self.CORE_METADATA_HOSTS:
             return True, f"blocked domain '{hostname}'", True
 
         for core_metadata in ["metadata.google.internal", "metadata.goog"]:

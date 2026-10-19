@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18388 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20500 tok)
-- `CHANGELOG.md` — Change log (~76609 tok)
+- `CHANGELOG.md` — Change log (~76784 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -983,7 +983,7 @@
 - `README.md` — Project documentation (~1632 tok)
 - `SECRET_REDACTION.md` — Secret Redaction (~4748 tok)
 - `SECRET_SCANNING.md` — Secret Scanning Configuration Guide (~9341 tok)
-- `SSRF_PROTECTION.md` — SSRF Protection (~5935 tok)
+- `SSRF_PROTECTION.md` — SSRF Protection (~6619 tok)
 - `UNICODE_ATTACKS.md` — Unicode-Based Attack Detection (~3861 tok)
 
 ## examples/
@@ -1301,7 +1301,7 @@
 - `secret_scanning.py` — Secret scanning functions extracted from hook_processing.py (Phase 5a, #1491). (~29010 tok)
 - `secret_types.py` — Human-readable display names for secret scanner rule IDs. (~1497 tok)
 - `secret_validator.py` — from: parse_custom_validator (~5974 tok)
-- `ssrf.py` — Declares SSRFProtector (~13888 tok)
+- `ssrf.py` — Declares SSRFProtector (~14059 tok)
 - `strategies.py` — URL configuration (~4253 tok)
 - `supply_chain.py` — URL patterns: 2 routes (~5474 tok)
 - `toml_patterns.py` — TomlPatternsScanner: configure, scan (~2015 tok)

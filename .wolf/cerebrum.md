@@ -37,6 +37,24 @@
 
 ## Key Learnings
 
+- **Classifier log privacy (PR #2562):** CodeQL can trace scanned content into
+  SSRF hostname diagnostics. Even parsed IP text is not inherently safe logging
+  metadata: IPv6 scope IDs retain arbitrary input. Use a constant diagnostic for
+  the policy decision, without raw/decoded destinations or configured ranges;
+  test actual DEBUG records for all embedded formats and synthetic scope text.
+  Do not dismiss the alert or change analyzer settings to address a log sink.
+
+- **Embedded SSRF destinations (#2559):** `_is_ip_blocked` is shared by literal,
+  resolved-destination, and redirect checks. Classify the native IPv6 address
+  plus protocol-defined mapped/6to4 endpoints and both Teredo roles; the server
+  can receive control traffic, while the client is the tunneled endpoint.
+  Reuse explicit policy, not `is_private` (whose prefix classifications vary
+  across Python versions), and keep numeric metadata singletons consistent with
+  literal host checks. Compare `ipaddress` objects in fixed-layout tests: newer
+  Python renders mapped addresses using dotted IPv4, older versions use hex.
+  No-network regression matrices establish classification, not routing or a
+  population-wide false-positive rate.
+
 - **CodeQL bundled-path false positive (PR #2561):** A test lookup of
   `BUNDLED_FILES["secrets"]` is heuristically classified as a credential source;
   the Python SARIF trace then follows that file path into parser logs. For

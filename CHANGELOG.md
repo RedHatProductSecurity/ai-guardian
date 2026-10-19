@@ -124,6 +124,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **IPv6 embedded SSRF destinations (#2559):** Apply existing IP policy to
+  mapped IPv4, 6to4 routing endpoints, and both Teredo server/client addresses
+  consistently across literal URLs and caller-supplied DNS/redirect checks.
+  Share existing immutable numeric metadata protections with resolved and
+  embedded addresses; preserve public/native IPv6 controls, policy semantics,
+  and API contracts. Keep classifier debug diagnostics free of input-derived
+  addresses and ranges. Add isolated, no-network unit/UX regressions. Independently
+  authored using Python's standard library and RFC 3056/4380, following review
+  #2554 and CVE-2026-108115 in another product; no live exploit was tested.
 - **Scoped tray Pause/Resume state (#2549):** Share authoritative menu stats and
   invalidate stale cached state after scoped requests, exposing Resume immediately
   in single- and multi-daemon layouts. Refresh idle session/directory transitions,
