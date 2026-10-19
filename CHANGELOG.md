@@ -129,7 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consistently across literal URLs and caller-supplied DNS/redirect checks.
   Share existing immutable numeric metadata protections with resolved and
   embedded addresses; preserve public/native IPv6 controls, policy semantics,
-  and API contracts. Add isolated, no-network unit/UX regressions. Independently
+  and API contracts. Keep classifier debug diagnostics free of input-derived
+  addresses and ranges. Add isolated, no-network unit/UX regressions. Independently
   authored using Python's standard library and RFC 3056/4380, following review
   #2554 and CVE-2026-108115 in another product; no live exploit was tested.
 - **Scoped tray Pause/Resume state (#2549):** Share authoritative menu stats and

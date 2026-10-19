@@ -9,6 +9,31 @@ budget_tokens: 1000
 
 ---
 
+## PR #2562 CodeQL follow-up — 2026-10-19
+
+- The original #2559 change was published externally as `e485b801` on existing
+  branch `2559`, PR #2562. The workspace was clean before this follow-up.
+- Inspected failed CodeQL check `118227020729`, alert #307, inline comment
+  `4317265670`, and Python SARIF analysis `1983068885`. The reported sink is the
+  classifier debug f-string at `scanners/ssrf.py:598`, with flows from scanned
+  content and synthetic secret fixtures through URL/hostname processing.
+- Replaced that log call with a constant, value-free match diagnostic. Parsed
+  IPv6 scope IDs can retain arbitrary text, so input-derived addresses are not
+  inherently safe log metadata. No classification, immutable decision, API,
+  or user-facing message changes; no alert dismissal or analyzer changes.
+- Seven deterministic no-network logging regressions failed before the fix.
+  All 1,144 related tests pass: the prior 1,133, seven new regressions, and four
+  related exfiltration use-case tests. Both affected SSRF/MCP UX files pass in
+  full. SSRF statement coverage remains 85%; artifact:
+  `/tmp/opencode/guardian-2562-codeql.coverage`.
+- Ruff, Black (`--target-version py310`), Pylint, Mypy, and diff checks pass.
+  Updated changelog, DAF notes, and replied to the inline review at
+  `https://github.com/RedHatProductSecurity/ai-guardian/pull/2562#discussion_r4317345770`.
+- The correction is local/uncommitted on `2559`; publish through the external
+  `daf complete` workflow for existing PR #2562, then verify CodeQL on the new
+  head. The old-head failure cannot validate this correction. No agent-run
+  commits, pushes, old-head reruns, full suite, container runs, or live controls.
+
 ## Issue #2559 IPv6 embedded SSRF destinations — 2026-10-19
 
 - Initialized managed DAF development session on existing branch `2559`.
@@ -368,9 +393,10 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
-- Complete #2559 with `daf complete` outside this agent session; let CI validate
-  the remaining matrix/non-unit suites. Keep routing and live exploitability
-  unverified rather than treating scanner classification as a network test.
+- Publish the local #2559 CodeQL log correction with `daf complete` outside this
+  agent session to existing PR #2562, then verify the new head's checks. Let CI
+  validate the remaining matrix/non-unit suites. Keep routing and live
+  exploitability unverified rather than treating classification as a network test.
 - The following completion tasks are historical and outside #2559.
 - Publish the local PR #2561 CodeQL fixture correction through the external DAF
   completion workflow, then verify the new head's checks.

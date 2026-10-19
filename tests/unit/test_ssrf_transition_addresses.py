@@ -1,6 +1,7 @@
 """No-network regression coverage for embedded IPv4 destination policy (#2559)."""
 
 import ipaddress
+import logging
 import socket
 
 import pytest
@@ -285,3 +286,43 @@ def test_protocol_defined_destinations_have_fixed_layouts(address, expected):
     assert list(SSRFProtector._ip_destinations(ipaddress.ip_address(address))) == [
         ipaddress.ip_address(destination) for destination in expected
     ]
+
+
+@pytest.mark.parametrize("address_format", ADDRESS_FORMATS)
+def test_classifier_debug_diagnostic_does_not_include_destination_values(
+    address_format, caplog
+):
+    """Keep the policy decision observable without logging input-derived values."""
+    protector = SSRFProtector({"enabled": True})
+    address = _destination_address("10.23.45.67", address_format)
+
+    with caplog.at_level(logging.DEBUG, logger="ai_guardian.scanners.ssrf"):
+        assert protector._is_ip_blocked(address)
+
+    diagnostics = [
+        record
+        for record in caplog.records
+        if record.name == "ai_guardian.scanners.ssrf"
+        and record.levelno == logging.DEBUG
+    ]
+    assert [record.getMessage() for record in diagnostics] == [
+        "SSRF destination matches a blocked IP range"
+    ]
+    assert diagnostics[0].args == ()
+    assert address not in caplog.text
+    assert "10.23.45.67" not in caplog.text
+    assert "10.0.0.0/8" not in caplog.text
+
+
+@pytest.mark.parametrize("address", ["fe80::abcd", "2002:a17:2d43::1"])
+def test_classifier_debug_diagnostic_does_not_disclose_ipv6_scope(address, caplog):
+    """An accepted IPv6 scope is arbitrary text, not safe diagnostic metadata."""
+    protector = SSRFProtector({"enabled": True})
+    marker = "SYNTHETIC_SCOPE_VALUE"
+    scoped_address = f"{address}%{marker}"
+
+    with caplog.at_level(logging.DEBUG, logger="ai_guardian.scanners.ssrf"):
+        assert protector._is_ip_blocked(scoped_address)
+
+    assert marker not in caplog.text
+    assert scoped_address not in caplog.text

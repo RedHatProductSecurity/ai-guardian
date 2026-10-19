@@ -594,9 +594,9 @@ class SSRFProtector:
                 return True
             for network in self._blocked_ip_networks:
                 if destination in network:
-                    logger.debug(
-                        f"IP {ip_str} (endpoint {destination}) is in blocked range {network}"
-                    )
+                    # Input-derived addresses can carry sensitive text (e.g.
+                    # IPv6 scope IDs). Keep this diagnostic value-free.
+                    logger.debug("SSRF destination matches a blocked IP range")
                     return True
 
         return False

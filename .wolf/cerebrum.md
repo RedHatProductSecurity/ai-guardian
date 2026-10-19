@@ -37,6 +37,13 @@
 
 ## Key Learnings
 
+- **Classifier log privacy (PR #2562):** CodeQL can trace scanned content into
+  SSRF hostname diagnostics. Even parsed IP text is not inherently safe logging
+  metadata: IPv6 scope IDs retain arbitrary input. Use a constant diagnostic for
+  the policy decision, without raw/decoded destinations or configured ranges;
+  test actual DEBUG records for all embedded formats and synthetic scope text.
+  Do not dismiss the alert or change analyzer settings to address a log sink.
+
 - **Embedded SSRF destinations (#2559):** `_is_ip_blocked` is shared by literal,
   resolved-destination, and redirect checks. Classify the native IPv6 address
   plus protocol-defined mapped/6to4 endpoints and both Teredo roles; the server
