@@ -134,6 +134,50 @@ These protections **CANNOT be disabled** via configuration:
 - `ldap://` - LDAP protocol
 - `ldaps://` - Secure LDAP
 
+## IPv6 Embedded IPv4 Destinations
+
+Literal URL checks and caller-supplied DNS/redirect revalidation apply the same
+destination policy to these protocol-defined IPv4 endpoints:
+
+| IPv6 format | Endpoints checked in addition to the original IPv6 address |
+| --- | --- |
+| IPv4-mapped (`::ffff:0:0/96`) | The mapped IPv4 address |
+| 6to4 (`2002::/16`) | The IPv4 routing endpoint encoded after the prefix |
+| Teredo (`2001::/32`) | Both the server IPv4 address and decoded client IPv4 address |
+
+The Teredo client identifies the tunneled endpoint. Its server can receive
+setup/control traffic, so both roles are relevant to destination policy; the
+server is not treated as the application-data destination. Existing blocked
+ranges and immutable numeric metadata endpoints apply to these addresses, not
+a blanket ban on transition prefixes. Numeric metadata checks also cover fresh
+DNS results, including the existing Alibaba Cloud (`100.100.100.200`) and Oracle
+Cloud (`192.0.0.192`) endpoints outside the core private ranges. Classification
+uses the existing standard-library `ipaddress` properties without DNS or sockets.
+
+Public transition endpoints and native public IPv6 remain allowed by this
+check. Private-looking bits in an unrelated IPv6 address, or in a 6to4 interface
+identifier rather than its routing endpoint, do not make it an IPv4 destination.
+Deterministic unit/UX controls cover range boundaries, adjacent addresses,
+native IPv6, both Teredo roles, and the supported policy semantics. They are
+regression evidence, not a population-wide false-positive estimate.
+
+**Deployment limitation:** classification does not prove that an address is
+reachable. Actual behavior depends on the operating system, routes, relays,
+and transition infrastructure. Issue #2559 was reproduced using synthetic
+scanner inputs only; no live exploit, DNS lookup, or request against a protected
+resource was performed. The hook still cannot observe runtime connections,
+resolve names, or discover redirects. Network-aware callers must enforce the
+result at their connection boundary, as described below.
+
+**Research attribution:** follow-up to [review #2554](https://github.com/RedHatProductSecurity/ai-guardian/issues/2554).
+[CVE-2026-108115](https://nvd.nist.gov/vuln/detail/CVE-2026-108115) described a
+validation failure in another product; it is not a CVE assignment for AI Guardian.
+Implementation is independently authored from protocol facts in
+[RFC 3056](https://www.rfc-editor.org/rfc/rfc3056.html),
+[RFC 4380](https://www.rfc-editor.org/rfc/rfc4380.html), and the
+[Python IPv6 address properties](https://docs.python.org/3/library/ipaddress.html#ipaddress.IPv6Address.sixtofour).
+No third-party detector code or dependency was added.
+
 ## DNS and Redirect Revalidation
 
 The PreToolUse hook deliberately does not perform DNS lookups or follow HTTP

@@ -9,6 +9,37 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2559 IPv6 embedded SSRF destinations — 2026-10-19
+
+- Initialized managed DAF development session on existing branch `2559`.
+  Ticket read once with the qualified GitHub repository. No hierarchical
+  ENTERPRISE/ORGANIZATION/TEAM/USER markdown or hierarchical skills were present.
+- Centralized native/mapped/6to4/Teredo destination enumeration. Both Teredo
+  roles use existing policy: client for tunneled traffic, server for potential
+  setup/control traffic. Share existing immutable metadata hosts so numeric
+  endpoints also receive consistent resolved/embedded classification.
+- Preserve public transition/native IPv6, explicit range policies, supported
+  localhost semantics, immutable decisions, domain/action behavior, and return
+  contracts. No DNS, redirect following, or network requests added to hooks.
+- Unit and UX regressions reproduced the gap before the fix. All 1,133 related
+  tests pass, including both complete directly affected SSRF/MCP UX files and
+  related validator, warning, column, multi-finding, and Hermes unit tests.
+  The bounded policy controls have 0/368 false-positive checks; these are
+  synthetic checks across formats/entry points, not independent population data.
+- SSRF statement coverage is 85%; all 21 changed executable lines are covered.
+  Artifacts: `/tmp/opencode/guardian-2559.coverage` and
+  `/tmp/opencode/guardian-2559-coverage.json`. Coverage (Apache-2.0) was a transient
+  validation tool only, not a project dependency.
+- Ruff, Black (`--target-version py310`), Pylint, Mypy in the uv dev environment,
+  and diff checks pass. Updated SSRF docs, research attribution, and changelog.
+  No full suite, integration/container scenarios, protected destination requests,
+  live exploit qualification, security controls, commits, pushes, or PRs ran.
+- All seven issue criteria are checked, DAF notes are updated, and the summary
+  is posted at `https://github.com/RedHatProductSecurity/ai-guardian/issues/2559#issuecomment-6273180237`.
+  Branch `2559` is ready for the user's external `daf complete` workflow.
+  CI owns the remaining platform/matrix validation.
+- Older handoffs below are historical and outside #2559.
+
 ## PR #2561 CodeQL follow-up — 2026-10-19
 
 - Inspected failing CodeQL check `118148056624` at head `7eb59c1d`. Its two
@@ -337,6 +368,10 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
+- Complete #2559 with `daf complete` outside this agent session; let CI validate
+  the remaining matrix/non-unit suites. Keep routing and live exploitability
+  unverified rather than treating scanner classification as a network test.
+- The following completion tasks are historical and outside #2559.
 - Publish the local PR #2561 CodeQL fixture correction through the external DAF
   completion workflow, then verify the new head's checks.
 - Complete #2558 with `daf complete` outside this agent session; let CI run the
@@ -367,7 +402,7 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2558` / `RedHatProductSecurity/ai-guardian#2558`.
+- Branch/issue: `2559` / `RedHatProductSecurity/ai-guardian#2559`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -417,4 +452,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2558`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2559`
