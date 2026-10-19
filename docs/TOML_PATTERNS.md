@@ -1,6 +1,6 @@
 # TOML Pattern Engine
 
-AI Guardian ships with 267 built-in detection patterns stored in TOML files. These patterns are loaded automatically at startup — **no configuration required**. All detection features (secret redaction, PII scanning, prompt injection, unicode attacks, SSRF, config exfiltration) use the bundled TOML patterns as their primary source.
+AI Guardian ships with 357 built-in detection patterns stored in TOML files. These patterns are loaded automatically at startup — **no configuration required**. All detection features (secret redaction, PII scanning, prompt injection, unicode attacks, SSRF, config exfiltration) use the bundled TOML patterns as their primary source.
 
 ## Zero-Config Usage
 
@@ -36,16 +36,65 @@ Or use alongside external scanners:
 
 ## Bundled Pattern Files
 
-AI Guardian ships with 267 pre-compiled rules across 6 categories:
+AI Guardian ships with 357 pre-compiled rules across 6 categories:
 
 | File | Category | Rules | Description |
 |------|----------|-------|-------------|
-| `secrets.toml` | Secret detection | 44 | API keys, tokens, credentials, connection strings |
+| `secrets.toml` | Secret detection | 129 | API keys, tokens, credentials, connection strings |
 | `pii.toml` | PII detection | 13 | SSN, credit cards, phone numbers, email, passports |
 | `prompt-injection.toml` | Prompt injection | 73 | Jailbreaks, instruction override, exfiltration |
 | `unicode.toml` | Unicode attacks | 107 | Homoglyphs, zero-width chars, bidi overrides |
-| `config-exfil.toml` | Config exfiltration | 8 | Credential theft via curl, wget, aws s3 |
+| `config-exfil.toml` | Config exfiltration | 10 | Credential theft via curl, wget, aws s3 |
 | `ssrf.toml` | SSRF protection | 25 | Private/reserved IPs, cloud metadata, dangerous schemes |
+
+### NuGet V4 and prefixed Sonar credentials
+
+The bundled secret engine recognizes standalone NuGet V4 API keys and Sonar
+user, project-analysis, and global-analysis tokens (#2558). Assignment context
+is not required. Each type has its own rule attribution:
+
+| Rule ID | Credential |
+|---------|------------|
+| `nuget-api-key` | NuGet V4 API key |
+| `sonar-user-token` | Sonar user token |
+| `sonar-project-analysis-token` | Sonar project-analysis token |
+| `sonar-global-analysis-token` | Sonar global-analysis token |
+
+These rules use bounded service-specific formats, ASCII case handling, and
+token boundaries rather than broadening generic hexadecimal/base64 detection.
+NuGet recognition follows the separately encoded identifier/password layout
+and fixed-bit constraints. Sonar recognition covers the three distinctive
+prefixes and the compatible source's fixed-length extended alphabet. Existing
+entropy and placeholder filtering remains in effect. The same bundled patterns
+also mask these values in normal PostToolUse secret redaction.
+
+Legacy unprefixed Sonar values and Kong Konnect formats are not added by this
+change. Generic assignment rules and independently configured external engines
+retain their existing behavior. No dependency, configuration option, or live
+credential verifier is added.
+
+**Sources and licenses:**
+
+- NuGet layout: [NuGetGallery `ApiKeyV4.cs`](https://github.com/NuGet/NuGetGallery/blob/63b66c98287c61c7e00fe6aefaff86c0d73ba157/src/NuGetGallery.Services/Authentication/ApiKeyV4.cs)
+  (Apache-2.0); [NuGet scoped API key documentation](https://learn.microsoft.com/en-us/nuget/nuget-org/scoped-api-keys).
+- Compatible pattern research: [Betterleaks NuGet addition](https://github.com/betterleaks/betterleaks/commit/340b2455ac7e0409d97c85eadefa7c2035b59bda),
+  [Sonar rule](https://github.com/betterleaks/betterleaks/blob/c613797a684337a014168063577bb6fa6e3b6296/cmd/generate/config/rules/sonar.go),
+  and [alphabet definition](https://github.com/betterleaks/betterleaks/blob/c613797a684337a014168063577bb6fa6e3b6296/cmd/generate/config/utils/patterns.go)
+  (MIT); [SonarSource token documentation](https://docs.sonarsource.com/sonarqube-server/user-guide/managing-tokens).
+  No AGPL detector implementation or patterns were used.
+
+**Regression evidence:** `tests/unit/test_nuget_sonar_patterns.py` uses
+deterministic, unissued fixtures, including vendor-layout NuGet values, quoted
+and CLI/configuration contexts, malformed alphabets, fixed bits, lengths, and
+identifier boundaries. A committed corpus of 20 legitimate build, analysis,
+code, and documentation samples plus 200 deterministic checksums/base32
+identifiers produces **0/220 false positives** with the default bundled engine
+(target: <1%). This is a bounded regression corpus, not a population-wide
+false-positive estimate. The complete PostToolUse secret UX contract also
+checks scanner-runner blocking and normal redaction with explicit isolated
+configuration. Tests never issue credentials or send verification requests.
+The smoke-test workflow and the Python 3.10–3.14 fresh-install release gate also
+check all four synthetic standalone values against the installed bundled engine.
 
 ## Match Types
 

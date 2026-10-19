@@ -1,0 +1,22 @@
+[
+  {"name": "dotnet-project", "content": "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.3\" /></ItemGroup></Project>"},
+  {"name": "nuget-sources", "content": "<configuration><packageSources><add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" /></packageSources></configuration>"},
+  {"name": "dotnet-build", "content": "dotnet restore\ndotnet build --configuration Release\ndotnet pack --no-build --configuration Release"},
+  {"name": "dotnet-publish", "content": "dotnet nuget push artifacts/*.nupkg --api-key \"${NUGET_API_KEY}\" --source https://api.nuget.org/v3/index.json"},
+  {"name": "nuget-powershell", "content": "nuget push .\\artifacts\\Package.nupkg -ApiKey $env:NUGET_API_KEY -Source https://api.nuget.org/v3/index.json"},
+  {"name": "nuget-ci", "content": "- name: Publish\n  run: dotnet nuget push artifacts/*.nupkg --api-key \"${{ secrets.NUGET_API_KEY }}\"\n  if: startsWith(github.ref, 'refs/tags/')"},
+  {"name": "sonar-properties", "content": "sonar.projectKey=org-service\nsonar.projectName=Service\nsonar.sources=src\nsonar.host.url=https://sonar.example.invalid"},
+  {"name": "sonar-cli", "content": "sonar-scanner -Dsonar.token=\"${SONAR_TOKEN}\" -Dsonar.projectKey=org-service"},
+  {"name": "sonar-maven", "content": "mvn verify sonar:sonar -Dsonar.token=\"$SONAR_TOKEN\" -Dsonar.host.url=https://sonar.example.invalid"},
+  {"name": "sonar-ci", "content": "steps:\n  - uses: actions/checkout@v4\n  - run: sonar-scanner\n    env:\n      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}"},
+  {"name": "sonar-types-documentation", "content": "Sonar user tokens use squ_, project-analysis tokens use sqp_, and global-analysis tokens use sqa_. Use the SONAR_TOKEN environment variable."},
+  {"name": "nuget-documentation", "content": "NuGet V4 keys are base32 encoded. An oy2 prefix on its own is not a complete API key. Prefer scoped, expiring package-publishing credentials."},
+  {"name": "nuget-log", "content": "Pushing Package.1.2.3.nupkg to 'https://www.nuget.org/api/v2/package'...\nYour package was pushed.\nElapsed: 00:00:01.234"},
+  {"name": "sonar-log", "content": "INFO: Scanner configuration file: sonar-scanner.properties\nINFO: Project root configuration file: sonar-project.properties\nINFO: ANALYSIS SUCCESSFUL\nINFO: EXECUTION SUCCESS"},
+  {"name": "csharp-source", "content": "using System;\nnamespace Registry;\npublic record Package(string Name, Version Version);\n// Credentials are supplied by the build environment."},
+  {"name": "python-source", "content": "import os\nfrom pathlib import Path\nreport = Path('artifacts') / 'report.json'\nendpoint = os.environ.get('SONAR_HOST_URL')"},
+  {"name": "json-report", "content": "{\"status\":\"SUCCESS\",\"project\":\"org-service\",\"qualityGate\":\"OK\",\"issues\":0}"},
+  {"name": "truncated-examples", "content": "oy2abc...\nsqu_012345...\nsqp_abcdef...\nsqa_abcdef..."},
+  {"name": "identifiers", "content": "sonar_user_token = os.environ['SONAR_TOKEN']\nnuget_api_key = os.environ['NUGET_API_KEY']\noy2_build_name = 'release'"},
+  {"name": "readme-snippet", "content": "# Build and analysis\n1. Restore .NET packages.\n2. Run unit tests.\n3. Run Sonar analysis.\n4. Publish tagged packages to NuGet.\nNever print publishing or analysis credentials."}
+]

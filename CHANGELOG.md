@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Standalone NuGet V4 and Sonar credential detection (#2558):** Add bundled
+  rules for NuGet V4 API keys and prefixed Sonar user/project/global-analysis
+  tokens, with service attribution, bounded formats, and normal output
+  redaction. Add synthetic unit/UX regressions and a 220-sample legitimate-content
+  corpus (0 false positives), plus smoke/release-readiness canaries.
+  Sources: NuGetGallery (Apache-2.0), Betterleaks
+  (MIT), and vendor documentation; no verifier, dependency, or configuration
+  change. Legacy unprefixed Sonar and Kong Konnect formats remain out of scope.
 - **Top-level scoped pause/resume (#2547):** Add mutually exclusive `--dir` and
   `--session` selectors to the short CLI commands, reusing existing daemon
   handling, normalized directory scopes, and stable session keys. Preserve
