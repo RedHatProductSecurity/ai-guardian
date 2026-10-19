@@ -271,6 +271,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving the underlying container image reference used for selection.
 
 ### Changed
+- **Security pattern research (#2554):** Complete the October 19 source and
+  nine-scanner review; record standalone NuGet/prefixed Sonar coverage work in
+  #2558 and IPv6 transition-address validation in #2559. Defer Kong Konnect
+  pending authoritative format evidence, refresh the OWASP source link, and
+  document architectural research without claiming new shipped protections.
 - **Support-image OpenCode V1 (#2555):** Update the pinned OpenCode client from
   `1.18.34` to `1.19.0` in both support images (MIT license). Correct the OpenShell
   bundled-client documentation and keep Codex at `0.160.0` pending the required

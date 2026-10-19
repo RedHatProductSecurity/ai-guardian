@@ -5,9 +5,32 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-15
+> Last updated: 2026-10-19
 
 ---
+
+## Issue #2554 security pattern research — 2026-10-19
+
+- Completed the October 1–19 priority-source review and all nine scanner
+  categories. Prior #2481, #2482, and #2322 are closed. Detailed source citations,
+  decisions, completed checklists, and research limitations belong to #2554.
+- Created #2558 for standalone NuGet V4/prefixed Sonar token recognition and
+  #2559 for IPv6 transition-address destination classification. No detection
+  change is shipped by this review. Kong Konnect remains deferred because
+  compatible vendor examples do not establish a consistent exact layout.
+- Isolated probes used synthetic tokens and explicit scanner configuration,
+  without credentials, DNS, HTTP, daemon controls, or hook changes. Sanitized
+  observations: `/tmp/opencode/guardian-2554-observations.json`. Scanner-level
+  results do not demonstrate live routing exploitability or an empirical
+  false-positive rate; those implementation gates remain in the follow-ups.
+- Updated both research dates, the OWASP current-edition link, review summary,
+  and changelog. Changes are documentation-only on branch `2554`; no tests,
+  full suite, integration/container scenarios, commits, or PRs are needed here.
+- Posted the completed review and checklists to #2554:
+  `https://github.com/RedHatProductSecurity/ai-guardian/issues/2554#issuecomment-6268266376`.
+  `git diff --check` passes. The session is ready for the user's `daf complete`;
+  keep commits, PR creation, and issue closure in that external workflow.
+- Older issue handoffs below are historical and outside this review.
 
 ## Issue #2555 support-image terminal CLI pins — 2026-10-15
 
@@ -272,6 +295,9 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
+- Complete #2554 with `daf complete` outside the agent session. Implement
+  #2558/#2559 in separate sessions with isolated unit/UX and false-positive
+  validation; do not treat this research review as either fix being shipped.
 - For #2555, rebuild and smoke-test both support images in CI or the operator's
   validation environment before closing the OpenCode-only issue.
 - For #2556, obtain the operator's Codex `0.162.1` OAuth/OpenShell qualification
@@ -295,7 +321,7 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2555` / `RedHatProductSecurity/ai-guardian#2555`.
+- Branch/issue: `2554` / `RedHatProductSecurity/ai-guardian#2554`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the
@@ -345,4 +371,4 @@ git diff --check  # passed
 - `.wolf/cerebrum.md` - user preferences and project learnings
 - `.wolf/buglog.json` - known bugs and fixes
 - `AGENTS.md` - repository contribution rules
-- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2549`
+- Current GitHub issue: `https://github.com/RedHatProductSecurity/ai-guardian/issues/2554`
