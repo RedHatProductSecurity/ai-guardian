@@ -37,6 +37,13 @@
 
 ## Key Learnings
 
+- **CodeQL bundled-path false positive (PR #2561):** A test lookup of
+  `BUNDLED_FILES["secrets"]` is heuristically classified as a credential source;
+  the Python SARIF trace then follows that file path into parser logs. For
+  bundled-file test fixtures, use the explicit `DATA_DIR / "secrets.toml"` path
+  like the existing bundled TOML tests. Inspect source-to-sink traces before
+  changing runtime code or interpreting a logging alert as a real token leak.
+
 - **NuGet/Sonar pattern fixtures (#2558):** NuGet V4 encodes its identifier
   and GUID password separately; concatenating bytes before base32 encoding
   produces the wrong layout. Use scoped ASCII case folding for token alphabets

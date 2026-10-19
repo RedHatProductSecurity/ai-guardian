@@ -9,6 +9,25 @@ budget_tokens: 1000
 
 ---
 
+## PR #2561 CodeQL follow-up — 2026-10-19
+
+- Inspected failing CodeQL check `118148056624` at head `7eb59c1d`. Its two
+  high-severity findings point to unchanged parser logging at
+  `patterns/toml_parser.py:262,264`, not failed credential detection.
+- Python SARIF analysis `1981946486` traces both findings from the new test's
+  `BUNDLED_FILES["secrets"]` lookup: CodeQL mistakes a bundled data-file path
+  for credential data. No token value flows through the reported path.
+- Changed only the unit fixture to resolve `DATA_DIR / "secrets.toml"`, matching
+  the existing bundled-pattern tests. Runtime parser/detection/logging and
+  analyzer checks remain unchanged; no alerts were dismissed or suppressed.
+- All 462 focused unit/UX tests pass, including the complete affected
+  PostToolUse contract. Ruff, Black (`--target-version py310`), Pylint, Mypy,
+  and diff checks pass. No full suite or container runs were performed locally.
+- Fix is local and uncommitted on branch `2558` for existing PR #2561. Publish
+  through the user's external `daf complete` workflow and verify CodeQL on the
+  new head; the old-head failure cannot validate this fix. Windows/container
+  checks were still pending at the latest inspection. No commits or pushes ran.
+
 ## Issue #2558 standalone NuGet V4 and Sonar credentials — 2026-10-19
 
 - Added four bounded bundled secret rules with service attribution and normal
@@ -318,6 +337,8 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
+- Publish the local PR #2561 CodeQL fixture correction through the external DAF
+  completion workflow, then verify the new head's checks.
 - Complete #2558 with `daf complete` outside this agent session; let CI run the
   remaining matrix and non-unit validation. Older handoffs follow below.
 - Complete #2554 with `daf complete` outside the agent session. Implement

@@ -9,7 +9,7 @@ from uuid import UUID
 import pytest
 import yaml
 
-from ai_guardian.patterns import BUNDLED_FILES
+from ai_guardian.patterns import DATA_DIR
 from ai_guardian.patterns.toml_parser import load_and_compile
 from ai_guardian.scanners.toml_patterns import TomlPatternsScanner
 from tests.fixtures.nuget_sonar_tokens import (
@@ -28,8 +28,9 @@ def scanner():
 
 @pytest.fixture(scope="module")
 def rules():
+    # This is a data-file path, not a credential read from a secrets mapping.
     return {
-        rule.id: rule for rule in load_and_compile(BUNDLED_FILES["secrets"], "secrets")
+        rule.id: rule for rule in load_and_compile(DATA_DIR / "secrets.toml", "secrets")
     }
 
 
