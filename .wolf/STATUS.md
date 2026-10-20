@@ -5,9 +5,47 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-19
+> Last updated: 2026-10-20
 
 ---
+
+## Issue #2564 OpenShell experimental documentation — 2026-10-20
+
+- Initialized managed DAF `open` session on existing branch `2564`; read the
+  repository-qualified ticket once. No hierarchical context markdown or skills
+  were present. This real-workspace development session needs no temp-clone sync.
+- Added matching upstream `0.x`/pre-1.0 notices before setup in the sandbox and
+  middleware guides, plus a direct-entry reminder at OpenShell provider setup.
+  Qualified README preferred/default recommendations with concise linked warnings
+  and marked the middleware feature experimental. Updated the changelog.
+- Explained that supported release/protocol ranges do not fully qualify every
+  client/provider combination or guarantee production stability. Existing security
+  requirements, version guidance, defaults, policies, and pins remain unchanged.
+- Documentation consistency, notice placement, local link anchors, and
+  `git diff --check` pass. No code tests, linters, MkDocs build, runtime operations,
+  commits, pushes, or PR creation were needed or performed.
+- All five acceptance criteria are checked on #2564 and DAF notes are updated.
+  Changes are local and ready for the user's `daf complete` outside this agent
+  session. Pre-existing OpenShell handoff/learnings below remain preserved;
+  this documentation task does not resolve the separate sandbox deletion problem.
+
+## OpenShell ag-codex deletion blocked — 2026-10-20
+
+- User requested deletion of `ag-codex` only. Retried the named deletion on
+  gateway `openshell`; it failed with the same pending-driver-operation error.
+- CLI/gateway/Podman driver report v0.1.3. Sandbox is `Error`, provisioning is
+  `ready`, `driver_operation_pending` is true, and both deadlines are null.
+  This matches the unresolved upstream report NVIDIA/OpenShell#4409; the exact
+  local interruption that left the operation pending is not established.
+- CLI delete has no force option. A rootless Podman lookup by the sandbox-id
+  label returned no containers, but backend absence alone cannot establish that
+  a pending external operation is settled. No matching shutdown/recovery warning
+  was found in the bounded, sandbox-scoped gateway log query.
+- Deletion remains unresolved. No gateway stop/restart, database access/edit,
+  container removal, provider/policy changes, upgrade, or unrelated cleanup ran.
+  Obtain approval for gateway downtime before an offline, backed-up recovery
+  investigation; do not assume a restart or a cleared flag safely resolves it.
+- No product code changed or tests ran. Older handoffs below are historical.
 
 ## PR #2562 CodeQL follow-up — 2026-10-19
 

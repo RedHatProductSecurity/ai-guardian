@@ -288,6 +288,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving the underlying container image reference used for selection.
 
 ### Changed
+- **OpenShell experimental status (#2564):** Make upstream's `0.x`/pre-1.0
+  maturity prominent before sandbox and middleware setup and alongside README
+  runtime recommendations. Distinguish supported version ranges from full
+  client/provider qualification and production-stability guarantees; keep
+  security requirements, runtime defaults, policies, and version pins unchanged.
 - **Security pattern research (#2554):** Complete the October 19 source and
   nine-scanner review; record standalone NuGet/prefixed Sonar coverage work in
   #2558 and IPv6 transition-address validation in #2559. Defer Kong Konnect

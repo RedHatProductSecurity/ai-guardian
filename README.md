@@ -163,11 +163,11 @@ curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/m
 
 A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with ai-guardian and the supported agent integrations. Redistributable headless CLIs are bundled; proprietary or GUI-only agents are configured at startup without being embedded:
 
-For provider-backed sessions, OpenShell is the preferred runtime when
-available: provider credentials remain in the gateway and OpenShell supplies
-deny-by-default network/filesystem policy and per-sandbox isolation. The plain
-Docker/Podman container is the simpler fallback; credentials passed to it are
-available inside the container and may be readable by the selected agent.
+For provider-backed sessions, OpenShell is preferred when available, but remains
+**experimental (upstream pre-1.0)**; [validate compatibility first](docs/Sandbox.md#openshell-maturity-and-compatibility).
+Provider credentials remain in the gateway, with deny-by-default network/filesystem
+policy and per-sandbox isolation. Docker/Podman is the simpler fallback;
+credentials passed to it are available inside and may be readable by the agent.
 
 ```bash
 # Recommended — run.sh handles auth, port mapping, config sharing, and ToS consent
@@ -176,7 +176,7 @@ chmod +x run.sh
 OPENAI_API_KEY=... \
     ./run.sh --agent codex --repo $(pwd)
 
-# Preferred OpenShell sandbox (published image; local build is also supported)
+# Preferred OpenShell sandbox (experimental, upstream pre-1.0; published or local image)
 # OpenShell currently supports Codex only; Claude support is deferred until 0.1.3.
 # Complete the gateway/provider setup in docs/Sandbox.md first.
 podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
@@ -226,8 +226,9 @@ ai-guardian sandbox config save guardian-codex
 ai-guardian sandbox delete guardian-codex
 ```
 
-New sandbox creation defaults to OpenShell; use `--runtime container` explicitly
-when a plain Docker/Podman sandbox is required. Named lifecycle commands
+New sandbox creation defaults to OpenShell (**experimental; upstream pre-1.0**);
+[check compatibility first](docs/Sandbox.md#openshell-maturity-and-compatibility), or use `--runtime container`
+explicitly when a plain Docker/Podman sandbox is required. Named lifecycle commands
 automatically detect the runtime from AI Guardian labels and OpenShell
 metadata when `--runtime` is omitted. An unqualified `list` includes both
 runtimes. OpenShell operations use the installed `openshell` CLI and its active
@@ -409,7 +410,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |
 | [Multi-Agent Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapters for 17 AI coding agents with normalized input/output |
 | [Container Image](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) | UBI-based image with supported agent integrations and scanners, published to quay.io |
-| [OpenShell Supervisor Middleware](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENSHELL_MIDDLEWARE.md) | Rust external semantic scanning/redaction service plus tray readiness and complete-policy workflows for OpenShell-compatible releases (v0.1.3 baseline) |
+| [OpenShell Supervisor Middleware](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENSHELL_MIDDLEWARE.md) | Experimental Rust external semantic scanning/redaction service plus tray readiness and complete-policy workflows for OpenShell-compatible releases (v0.1.3 baseline) |
 | [Supply Chain Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) | Detect malicious patterns in agent hooks, MCP configs, and plugin files |
 | [Context Poisoning Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) | Detect persistent instruction injection in conversation context (OWASP LLM03) |
 | [Security SDK & REST API](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md) | Programmatic security checking for Python agents and multi-language support |

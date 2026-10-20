@@ -37,6 +37,21 @@
 
 ## Key Learnings
 
+- **OpenShell maturity versus qualification (#2564):** Upstream `0.x`/pre-1.0
+  maturity, supported release/protocol ranges, and exact client/provider live
+  qualification are distinct. Keep experimental notices alongside preferred/default
+  recommendations and before setup; do not interpret range support or middleware
+  readiness as a production-stability guarantee or relax security requirements.
+
+- **OpenShell pending-operation deletion (2026-10-20):** On v0.1.3, `ag-codex`
+  deletion was refused with a persisted `driver_operation_pending` flag and null
+  deadlines. NVIDIA/OpenShell#4409 reports the exact symptom after lost driver
+  ownership, including graceful shutdown/startup-recovery interruptions. The
+  installed CLI has no force-delete flag. A missing backend container does not
+  prove a pending external request cannot still complete; do not blindly clear
+  the claim or recommend restart loops. Separate a matched symptom from a proven
+  local root cause, and obtain approval before gateway downtime/state repair.
+
 - **Classifier log privacy (PR #2562):** CodeQL can trace scanned content into
   SSRF hostname diagnostics. Even parsed IP text is not inherently safe logging
   metadata: IPv6 scope IDs retain arbitrary input. Use a constant diagnostic for
