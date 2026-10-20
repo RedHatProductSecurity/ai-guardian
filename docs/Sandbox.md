@@ -4,6 +4,22 @@ Use the recipe that matches your runtime and authentication method. The quick
 recipes below are the supported first-time setup paths. The reference sections
 at the end cover lifecycle commands and less common options.
 
+## OpenShell maturity and compatibility
+
+> **Experimental:** AI Guardian's OpenShell integration relies on upstream
+> [OpenShell](https://github.com/NVIDIA/OpenShell/releases), which is still in
+> the `0.x`/pre-1.0 phase and has not yet reached 1.0. Integration interfaces,
+> compatibility, and operational behavior may change. Check the documented
+> version and client/provider compatibility, and validate your deployment
+> before relying on it.
+
+A supported OpenShell version range does not mean every CLI/gateway and
+client/provider combination has been fully qualified, nor is it a
+production-stability guarantee. Follow the [manual live provider qualification
+guidance](#manual-live-provider-smoke-tests) for your exact deployment.
+Experimental status does not relax the credential, isolation, or network-policy
+requirements below.
+
 ## Choose a case
 
 | Case | Runtime | Authentication | Start here |
@@ -108,6 +124,10 @@ The key is passed to the container because it is present in the environment
 when the sandbox is created. Do not commit it or copy it into the repository.
 
 ## OpenShell provider setup
+
+> **Experimental:** Upstream OpenShell is pre-1.0. Review the
+> [maturity and compatibility guidance](#openshell-maturity-and-compatibility)
+> before setup.
 
 Complete this once for each OpenShell gateway. It is required for Cases 3–6.
 

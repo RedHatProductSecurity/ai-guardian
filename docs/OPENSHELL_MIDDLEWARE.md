@@ -5,6 +5,18 @@ It is not an `ai-guardian` subcommand and it is not part of sandbox creation.
 OpenShell-savvy operators manage the service, gateway registration, and policy
 with their normal service manager and the `openshell` CLI.
 
+> **Experimental:** AI Guardian's OpenShell integration relies on upstream
+> [OpenShell](https://github.com/NVIDIA/OpenShell/releases), which is still in
+> the `0.x`/pre-1.0 phase and has not yet reached 1.0. Integration interfaces,
+> compatibility, and operational behavior may change. Check the documented
+> version and client/provider compatibility, and validate your deployment
+> before relying on it.
+
+Meeting the supported release/protocol range does not fully qualify every
+client/provider combination or guarantee production stability. Follow the
+[compatibility and validation guidance](#compatibility-and-validation) for your
+exact deployment; all security requirements below still apply.
+
 This follows OpenShell's documented custom-service sequence:
 
 1. Start the gRPC service where the gateway and supervisors can reach it.
