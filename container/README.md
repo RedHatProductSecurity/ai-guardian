@@ -4,7 +4,7 @@ The published image is a UBI-based Docker/Podman support image with
 ai-guardian and the supported agent integrations. Headless-capable CLIs are
 bundled; GUI-only integrations receive their hooks when the container starts.
 
-OpenShell v0.1.x patch releases from v0.1.2 use a separate image definition, `Dockerfile.openshell`, based
+OpenShell v0.1.x patch releases from v0.1.3 use a separate image definition, `Dockerfile.openshell`, based
 on the pinned `nvcr.io/nvidia/base/ubuntu:24.04` workload image. OpenShell's
 default workload is intentionally minimal, so this Dockerfile installs the
 filesystem layout, networking tools, users, and supported agent CLIs explicitly.
@@ -36,7 +36,8 @@ the selected agent may be able to read that credential material.
 
 The tray and `ai-guardian sandbox create` use the same runtime-specific CLI
 matrix. Container sandboxes support the broader CLI set; OpenShell is limited
-to the clients bundled with the dedicated OpenShell image.
+to Codex, OpenCode with an explicit agent profile, and consent-gated runtime
+installation of Claude Code.
 
 ### Docker/Podman Container
 
@@ -281,10 +282,17 @@ bundles Codex and OpenCode; Claude Code is installed at runtime after explicit
 ToS consent. Native Claude/Vertex and OpenCode/Vertex use the gateway-owned
 `google-cloud` provider and OpenShell's GCE metadata emulator.
 
-OpenShell integration is experimental. The documented workflows have been
-tested for Codex provider authentication. Vertex model calls remain an opt-in,
-credential-backed manual qualification; see the [sandbox recipes](../docs/Sandbox.md)
-and [qualification runner](tests/README.md).
+OpenShell integration is experimental. Earlier Codex authentication results do
+not qualify every current image, account/workspace, or middleware policy.
+Codex `0.162.1` qualification is deferred to `1.22.0` in
+[#2556](https://github.com/RedHatProductSecurity/ai-guardian/issues/2556), awaiting
+supported managed app-server integration; the default pin remains `0.160.0`
+without a new compatibility certification. Clean candidate model traffic with
+middleware attached, provider-boundary threat denial, and lifecycle checks are
+incomplete. Vertex model calls also remain an opt-in, credential-backed manual
+qualification. Read the
+[current limitations](../docs/Sandbox.md#1200-qualification-limitations),
+[sandbox recipes](../docs/Sandbox.md), and [qualification runner](tests/README.md).
 
 ```bash
 podman build -f container/Dockerfile.openshell \

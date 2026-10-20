@@ -20,6 +20,30 @@ guidance](#manual-live-provider-smoke-tests) for your exact deployment.
 Experimental status does not relax the credential, isolation, or network-policy
 requirements below.
 
+### 1.20.0 qualification limitations
+
+- The OpenShell image retains Codex `0.160.0`. Qualification of `0.162.1` is
+  deferred to `1.22.0` in
+  [#2556](https://github.com/RedHatProductSecurity/ai-guardian/issues/2556),
+  awaiting supported managed app-server integration in
+  [NVIDIA/OpenShell#4751](https://github.com/NVIDIA/OpenShell/issues/4751).
+  The candidate reached the intended OAuth account/workspace after a local
+  identity-handoff fix, but clean model traffic under the attached middleware
+  policy, actual provider-boundary threat denial, and lifecycle qualification
+  remain incomplete. Do not advance the bundled pin on that evidence.
+- Retaining `0.160.0` is not a new compatibility certification. Earlier
+  qualification with an older image does not qualify every current
+  account/workspace, executable layout, or middleware policy. OAuth startup
+  and managed-executable network authorization can still fail; do not broaden
+  executable permissions or change authentication modes to claim a passing test.
+- Claude Code/Vertex and OpenCode's `claude` agent/Vertex paths are implemented
+  but still require credential-backed live model qualification. Pi is not an
+  OpenShell selector option.
+- A successful service `Describe` probe confirms middleware identity and
+  reachability, not successful provider traffic or threat denial. Qualify normal
+  traffic, a real provider-boundary denial, and lifecycle behavior separately
+  using the exact image, CLI/gateway versions, and effective policy.
+
 ## Choose a case
 
 | Case | Runtime | Authentication | Start here |

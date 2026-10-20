@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-19
+> Last updated: 2026-10-20
 
 ## User Preferences
 
@@ -36,6 +36,17 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **Release 1.20 preflight (#2563):** `release.sh` calculates from the latest
+  production tag and requires clean main or a release branch; even a dry run
+  rejects a DAF issue branch. The user launches it outside the agent after
+  preparation review/merge. Test tags route `publish.yml` to TestPyPI without
+  changing metadata; changing only the tag cannot replace an uploaded version.
+  Match workflow evidence to source/tag SHA and require a successful conclusion
+  (`gh run watch --exit-status`). Final script completion can follow verification
+  warnings and is not publication proof. Rust version checks require an explicit
+  `--version`, including `--check`. Preserve the release issue until every gate
+  and deliverable is verified.
 
 - **OpenShell maturity versus qualification (#2564):** Upstream `0.x`/pre-1.0
   maturity, supported release/protocol ranges, and exact client/provider live

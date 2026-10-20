@@ -10,6 +10,20 @@ The Console is intended for deliberate, user-visible configuration changes.
 Saving a setting requires an explicit action in the browser. AI Guardian does
 not expose a terminal UI fallback.
 
+## Upgrading from 1.19.x
+
+AI Guardian 1.20.0 requires Python 3.10 or newer; `1.19.x` is the last
+Python 3.9-compatible line. Upgrade Python first, or retain that line with
+`ai-guardian<1.20`.
+
+The Textual terminal console has been removed. Run `ai-guardian console` to
+open the NiceGUI browser console; `ai-guardian tui` remains an alias for the
+same browser UI, not a terminal fallback. NiceGUI is installed as a core
+dependency. Existing persisted `textual` dialog preferences are interpreted as
+`nicegui`, so no configuration rewrite is required for that migration. Review
+the [requirements](#requirements) and [browser troubleshooting](#troubleshooting)
+before upgrading a browserless environment.
+
 ## Requirements
 
 - Python 3.10 or newer
