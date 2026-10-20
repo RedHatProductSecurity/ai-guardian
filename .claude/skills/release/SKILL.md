@@ -107,7 +107,7 @@ When invoked with arguments (e.g., `/release minor`), this skill guides you thro
 
 **Steps**:
 1. Create test release branch
-2. Calculate test version (add `-test` suffix)
+2. Use the reviewed release's package version; a test tag does not rewrite metadata
 3. Update version in both files
 4. Create test tag (v*-test* pattern)
 5. Provide TestPyPI verification steps
@@ -161,12 +161,12 @@ from `CHANGELOG.md`, so it does not require a manually maintained version pin.
 **Version Format**:
 - Production: `"1.0.0"` (semantic versioning)
 - Development: `"1.1.0-dev"` (on main branch)
-- Test: `"1.2.0-test1"` (for TestPyPI testing)
+- TestPyPI preview: the reviewed package version, such as `"1.2.0"`; the tag is `v1.2.0-test1`
 
 **Version Transitions**:
 - Regular release: `1.1.0-dev` → `1.2.0` (remove -dev)
 - Hotfix: `1.1.0` → `1.1.1` (increment patch)
-- Test: `1.2.0-dev` → `1.2.0-test1` (replace -dev with -test1)
+- TestPyPI preview: keep reviewed `1.2.0` metadata and select TestPyPI with `v1.2.0-test1`
 - Post-release: `1.2.0` → `1.3.0-dev` (increment minor, add -dev)
 
 ## CHANGELOG.md Format
@@ -264,15 +264,17 @@ Before creating the release branch, trigger the automated release readiness work
    gh workflow run release-readiness.yml --ref $(git branch --show-current)
    ```
 
-2. **Wait for completion** (polls every 30 seconds):
+2. **Identify and wait for the matching run**:
    ```bash
-   # Get the run ID
-   sleep 5
-   RUN_ID=$(gh run list --workflow=release-readiness.yml --limit 1 --json databaseId --jq '.[0].databaseId')
-
-   # Wait for it to finish
-   gh run watch "$RUN_ID"
+   gh run list --workflow=release-readiness.yml --branch "$(git branch --show-current)" \
+       --json databaseId,headSha,headBranch,event,createdAt,status,conclusion,url
+   # Set RUN_ID to the dispatched run after verifying its source commit/ref.
+   gh run view "$RUN_ID" --json headSha,headBranch,event,status,conclusion,url
+   gh run watch "$RUN_ID" --exit-status
    ```
+
+   Do not treat the latest unrelated run, or a watch command without checking
+   the final conclusion, as readiness evidence. Require `conclusion: success`.
 
 3. **Check results**:
    - If **all jobs pass**: proceed with the release
@@ -417,7 +419,11 @@ Removes debug hooks from hooks.json, deletes debug script and log files, removes
 
 Before creating the production tag, verify the package builds and renders correctly on TestPyPI. This catches README rendering issues, missing files, and metadata problems before they reach the real PyPI (where you can't re-upload the same version).
 
-**Workflow**: `.github/workflows/publish-test.yml`
+**Workflow**: `.github/workflows/publish.yml` routes `v*-test*` tags to TestPyPI.
+The tag selects the registry; package metadata selects the uploaded version.
+The canonical release script keeps metadata at `X.Y.Z`, so its `vX.Y.Z-test1`
+tag uploads `X.Y.Z`, not a test-suffixed distribution version. Manual dispatch
+on a non-test ref follows the production path, not TestPyPI.
 
 **Steps**:
 
@@ -429,18 +435,21 @@ Before creating the production tag, verify the package builds and renders correc
 
 2. **Wait for TestPyPI publish** workflow to complete:
    ```bash
-   sleep 5
-   RUN_ID=$(gh run list --workflow=publish-test.yml --limit 1 --json databaseId --jq '.[0].databaseId')
-   gh run watch "$RUN_ID"
+   # Select the publish.yml run matching the exact test tag and source commit.
+   # Set RUN_ID after verifying the matching run's tag and commit.
+   gh run view "$RUN_ID" --json headSha,headBranch,event,status,conclusion,url
+   gh run watch "$RUN_ID" --exit-status
    ```
 
 3. **Verify on TestPyPI**:
-   - Check the project page: `https://test.pypi.org/project/ai-guardian/X.Y.Z-test1/`
+   - Check the actual metadata version, normally `https://test.pypi.org/project/ai-guardian/X.Y.Z/`
    - Verify README renders correctly (install URLs, badges, formatting)
    - Verify metadata (version, description, classifiers)
-   - Optionally test install: `pip install -i https://test.pypi.org/simple/ ai-guardian==X.Y.Z.test1`
+   - Verify the uploaded wheel's SHA-256 and install that exact local wheel in a fresh environment; obtain dependencies from ordinary PyPI without mixing indexes to select the project package.
+   - Check package contents, CLI/doctor, and upgrade from the previous stable version.
+   - An existing version can be skipped by the upload action. A green run does not prove a new artifact was uploaded; reconcile actual metadata and artifact identity before approval.
 
-4. **If issues found**: fix on release branch, delete the test tag, create a new test tag (`-test2`), and re-verify.
+4. **If issues found**: stop and reconcile the release commit, metadata, and TestPyPI artifacts. A new test tag (`-test2`) alone does not change the package version or replace an existing upload. Re-verify any changed build before production approval.
 
 5. **If clean**: proceed with production tag creation.
 
@@ -480,7 +489,7 @@ both manifests and at least one runtime version from each image:
 podman manifest inspect quay.io/redhatproductsecurity/ai-guardian:X.Y.Z
 podman manifest inspect quay.io/redhatproductsecurity/ai-guardian-openshell:X.Y.Z
 podman run --rm quay.io/redhatproductsecurity/ai-guardian:X.Y.Z ai-guardian --version
-podman run --rm --entrypoint /usr/local/bin/claude \
+podman run --rm --entrypoint ai-guardian \
     quay.io/redhatproductsecurity/ai-guardian-openshell:X.Y.Z --version
 ```
 
@@ -531,7 +540,7 @@ to it, stop the release and have a maintainer provision
 9. [ ] Ensure main branch `README.md` install URLs point to `main` (not a version tag — there is no PyPI release for dev versions)
 10. [ ] Push main branch
 11. [ ] (Hotfix only) Cherry-pick fix to main
-12. [ ] Generate combined docs export — run the shell one-liner from AGENTS.md "Generating Combined Documentation for LLM Upload" section to create `docs/notebooklm-export.md`
+12. [ ] Verify the tagged combined docs export was generated before tagging, after source documentation and stable references were finalized; do not defer its generation until after publication
 13. [ ] Update NotebookLM sources — if the `notebooklm-mcp` MCP server is available, upload the generated `docs/notebooklm-export.md` and update other sources in the AI Guardian notebook using `source_add`
 14. [ ] Generate demo guide — create `X.Y-demo-guide.md` in the external docs directory (see AGENTS.md) documenting new features with step-by-step demonstrations for stakeholder walkthroughs
 
@@ -584,7 +593,7 @@ to it, stop the release and have a maintainer provision
 
 # Skill will:
 # 1. Create release-1.2-test branch
-# 2. Update version 1.2.0-dev → 1.2.0-test1 in all configured files
+# 2. Prepare reviewed package metadata; the test tag selects TestPyPI
 # 3. Commit changes
 # 4. Create test tag v1.2.0-test1
 # 5. Provide test verification steps

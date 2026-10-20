@@ -9,6 +9,43 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2563 release 1.20.0 preparation — 2026-10-20
+
+- Initialized the managed DAF `open` session on existing branch `2563`; the
+  qualified ticket was read once. At preflight, HEAD, main, and origin/main
+  matched `63efde002a08380146daa5d38e2783488c703cd7`; the checkout was clean.
+- The user will launch `scripts/release.sh`, not the agent. Prepared only
+  documentation: curated Unreleased notes, highlighted Python 3.10/Web Console
+  migration, reconciled OpenShell support/qualification, and corrected release
+  guide/skill TestPyPI routing, artifact-version, CI, and verification guidance.
+- #2556 is already deferred by the operator to 1.22.0, linked to
+  NVIDIA/OpenShell#4751. Retain Codex 0.160.0 without claiming new compatibility;
+  candidate clean middleware traffic, actual denial, and lifecycle remain
+  unqualified. Do not resume that stopped qualification or merge its local work.
+- No open Dependabot alerts or PRs; release tools are installed and GitHub
+  permission is ADMIN. The only open 1.20.0-labelled issue is #2563.
+  The version helper calculates 1.19.0 + minor = 1.20.0. Remote release/test tags
+  and release-1.20 are absent; both registries returned 404 for package 1.20.0.
+- The existing PR #2565 test/lint/smoke matrix passed. Main wheel and CodeQL
+  passed; its container run 39476298823 also succeeded at the exact baseline
+  SHA. These are baseline results, not validation of the pending documentation
+  commit or a substitute for fresh 1.20.0 Release Readiness evidence.
+- Validation passes: 15 added local links/anchors, unchanged historical
+  changelog, one Unreleased section, current stable-reference/Rust version
+  checks, OpenShell compatibility, and diff whitespace. Documentation-only:
+  no code tests, linters, MkDocs, local containers, or full suites were run.
+- Next: review/land preparation through the user's external DAF workflow,
+  keeping #2563 open. From clean, updated main with refreshed tags, the user
+  previews `scripts/release.sh --dry-run minor`, confirms exactly 1.20.0 /
+  release-1.20 / 1.21.0-dev, then runs `scripts/release.sh minor`.
+- Cursor/manual checks, fresh source-matched Release Readiness, TestPyPI,
+  maintainer tag approval, all production deliverables, and merge-back remain
+  pending. The script's final message is not sufficient release evidence.
+- Package/Cargo versions, image pins, root installer URLs, release script, and
+  generated export remain unchanged for the canonical script. No commits,
+  pushes, PRs, tags, workflow dispatches, runtime controls, or publishing ran.
+  Older handoffs below are historical and outside this release preparation.
+
 ## Issue #2564 OpenShell experimental documentation — 2026-10-20
 
 - Initialized managed DAF `open` session on existing branch `2564`; read the

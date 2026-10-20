@@ -544,8 +544,13 @@ generated files and reports that server activation is unverified. Unknown or
 unavailable CLI versions retain the V1 compatibility fallback; an existing
 generated V2 plugin is preserved when the runtime cannot report a version. The
 two generations cannot share one active `opencode` executable on the same PATH.
-OpenCode is supported on the host and in the normal image only; the OpenShell
-image does not install or advertise OpenCode.
+Both support images bundle OpenCode V1 `1.19.0`. The OpenShell selector exposes
+OpenCode with an explicit agent profile; the implemented `claude` profile uses
+native Vertex AI with gateway-owned Google Cloud ADC. That path still requires
+credential-backed live qualification. OpenCode V2 support is a host integration,
+not a bundled OpenShell V2 runtime. See the
+[sandbox compatibility limitations](Sandbox.md#openshell-maturity-and-compatibility)
+before treating an implemented path as a qualified deployment.
 
 See [OpenCode Support](OPENCODE.md) for the runtime support record, exact
 container versions, database path precedence, generated V1/V2 hook contracts,

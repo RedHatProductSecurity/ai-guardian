@@ -672,6 +672,18 @@ from `0.1.3` onward and supervisor protocol `1.0`. The Rust binary embeds and
 validates this contract before listening; OpenShell `0.1.2` and earlier are
 rejected before it accepts traffic.
 
+For 1.20.0, Codex `0.162.1` qualification is deferred to `1.22.0` in
+[#2556](https://github.com/RedHatProductSecurity/ai-guardian/issues/2556), pending
+supported managed app-server integration in
+[NVIDIA/OpenShell#4751](https://github.com/NVIDIA/OpenShell/issues/4751).
+The image retains `0.160.0`, but that is not a new certification of the retained
+client. Clean candidate model traffic under the attached policy, actual
+provider-boundary threat denial, and lifecycle checks remain incomplete.
+Claude Code/Vertex and OpenCode/Vertex also remain live-unqualified. See the
+[sandbox qualification limitations](Sandbox.md#1200-qualification-limitations).
+Service readiness and protocol compatibility do not replace those workload
+checks; keep the existing fail-closed policy and credential boundaries intact.
+
 Run the repository checks before deploying a new binary:
 
 ```bash

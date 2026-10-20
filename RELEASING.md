@@ -11,10 +11,34 @@ scripts/release.sh minor              # minor release (X.Y.Z -> X.(Y+1).0)
 scripts/release.sh patch              # patch release (X.Y.Z -> X.Y.(Z+1))
 scripts/release.sh major              # major release (X.Y.Z -> (X+1).0.0)
 scripts/release.sh --dry-run minor    # preview without executing
-scripts/release.sh --skip-cursor patch # skip Cursor hook verification
 ```
 
-The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI and versioned Read the Docs verification, bounded retry verification of both container repositories, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
+The script automates prerequisite validation, Release Readiness CI, interactive
+Cursor verification, release preparation, TestPyPI, production tagging,
+publication checks, and merge-back. Run it as an authorized maintainer in your
+terminal, outside an active DAF agent session. Land preparation changes through
+the normal feature-branch review workflow first; do not launch it from a DAF
+issue branch such as `2563`.
+
+Start from a clean `main` synchronized with `origin/main`, with current remote
+production tags. The script calculates the target from the latest local
+production `v*` tag, not the development package version. For the 1.20.0 release,
+preview with `scripts/release.sh --dry-run minor` and confirm `v1.19.0` →
+`1.20.0`, branch `release-1.20`, and next development version `1.21.0-dev`.
+Only then run `scripts/release.sh minor`. A dry run is a plan, not evidence that
+the release gates passed. Complete all six Cursor events when prompted, and
+verify TestPyPI and the reviewed release notes before approving production.
+
+**Do not blindly re-run after a partial or published release.** A newly created
+production tag changes the next calculated version. Reconcile the intended
+version, existing branch/tags, and registry artifacts before resuming; never
+replace an already published PyPI version.
+
+**The final completion message is not release evidence.** Some publication,
+container, and documentation failures only produce warnings. Match every CI run
+to the intended source/tag commit, check its final conclusion, and independently
+verify every deliverable in the [release checklist](#release-checklist). Keep
+the release issue open until that evidence and the post-release checks exist.
 
 **Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`, `curl`, `git-cliff` (`brew install git-cliff`).
 
@@ -138,8 +162,7 @@ The `tag-monitor.yml` workflow provides additional security:
 - Provides audit trail
 
 **Protected via CODEOWNERS**:
-- `.github/workflows/publish.yml` - Production PyPI publishing
-- `.github/workflows/publish-test.yml` - TestPyPI publishing  
+- `.github/workflows/publish.yml` - Tag-routed PyPI/TestPyPI publishing
 - `.github/workflows/tag-monitor.yml` - Tag creation monitoring
 - `RELEASING.md` - This file
 
@@ -245,9 +268,14 @@ Update version in **src/ai_guardian/__init__.py**:
 __version__ = "1.0.0"  # Remove -dev suffix
 ```
 
+Synchronize the Rust package manifest and lockfile:
+```bash
+python3 scripts/sync_rust_middleware_version.py --version 1.0.0
+```
+
 Commit the version bump:
 ```bash
-git add pyproject.toml
+git add pyproject.toml src/ai_guardian/__init__.py rust/openshell-middleware/Cargo.toml rust/openshell-middleware/Cargo.lock
 git commit -m "$(cat <<'EOF'
 chore: bump version to 1.0.0 for release
 
@@ -261,7 +289,8 @@ EOF
 
 #### 3. Update CHANGELOG.md
 
-Move Unreleased section entries to a new version section:
+Review and consolidate user-impact entries, then move them into a dated version
+section. Preserve a fresh `## [Unreleased]` section and update comparison links:
 
 ```markdown
 ## [1.0.0] - 2025-01-15
@@ -279,9 +308,17 @@ Move Unreleased section entries to a new version section:
 [1.0.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.0
 ```
 
+**Before committing or tagging**, change the release-branch README installer
+URLs from `main` to the exact production tag. Synchronize active stable
+references with `python3 scripts/sync_release_versions.py --stable-version 1.0.0`.
+After all source documentation and references are final, regenerate
+`docs/notebooklm-export.md` using the
+[release export recipe](AGENTS.md#generating-combined-documentation-for-llm-upload).
+Do not rewrite historical changelog entries or historical examples.
+
 Commit the changelog:
 ```bash
-git add CHANGELOG.md
+git add CHANGELOG.md README.md container/Dockerfile container/Dockerfile.openshell container/README.md docs/notebooklm-export.md
 git commit -m "$(cat <<'EOF'
 docs: update CHANGELOG.md for v1.0.0 release
 
@@ -294,20 +331,15 @@ EOF
 
 #### 4. Run Tests and Final Validation
 
+Use CI for the complete Python/OS test matrix, lint, integrations, smoke/scenario
+containers, multi-architecture builds, and Rust validation. Locally, run only
+directly related unit tests and complete affected UX contract files when fixing
+code; documentation-only preparation does not require a full test run.
+
 ```bash
-# Run full test suite (if tests exist)
-pytest
-
-# Verify version command
-python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-
-# Test installation in clean environment
-python -m venv /tmp/test-ai-guardian-install
-source /tmp/test-ai-guardian-install/bin/activate
-pip install .
-ai-guardian --help
-deactivate
-rm -rf /tmp/test-ai-guardian-install
+python3 .claude/skills/release/release_helper.py get-version
+python3 scripts/sync_rust_middleware_version.py --version 1.0.0 --check
+python3 scripts/sync_release_versions.py --check
 ```
 
 #### 5. Push Release Branch
@@ -316,6 +348,16 @@ rm -rf /tmp/test-ai-guardian-install
 # Push the release branch with version bump and changelog
 git push origin release-1.0
 ```
+
+Obtain successful standard CI and Release Readiness evidence for the intended
+source. Identify the actual workflow run by ref, commit, event, and creation
+time, not simply the latest run. `gh run watch RUN_ID --exit-status` must finish
+successfully and the run's conclusion must be `success`. Readiness must include
+the Python 3.10–3.14 install matrix, upgrade, IDE/hooks, daemon/config/MCP,
+smoke/scenario, container-build, and Rust middleware gates.
+
+Complete [TestPyPI verification](#testing-releases-with-testpypi) from the
+reviewed release commit before creating the production tag.
 
 #### 6. Create Git Tag
 
@@ -347,8 +389,8 @@ it is not represented by an `openshell` tag in the normal image repository.
 After pushing the tag:
 
 1. Go to GitHub Actions: https://github.com/RedHatProductSecurity/ai-guardian/actions
-2. Check the "Publish Package" workflow run — verify it completes successfully
-3. Check the "Build Container Image" workflow run — verify it completes successfully
+2. Check the "Publish Package" run for this exact tag/commit — require `success`
+3. Check the "Build Container Image" run for this exact tag/commit — require `success`
 4. Check PyPI: https://pypi.org/project/ai-guardian/
 5. Check GitHub Releases: https://github.com/RedHatProductSecurity/ai-guardian/releases
 6. Verify the versioned container image on quay.io:
@@ -356,15 +398,19 @@ After pushing the tag:
    podman pull quay.io/redhatproductsecurity/ai-guardian:<version>
    podman run -it quay.io/redhatproductsecurity/ai-guardian:<version> ai-guardian --version
    podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:<version>
-   podman run --rm --entrypoint /usr/local/bin/claude \
+   podman run --rm --entrypoint ai-guardian \
        quay.io/redhatproductsecurity/ai-guardian-openshell:<version> --version
    ```
-7. Verify the versioned documentation at `https://ai-guardian.readthedocs.io/en/v<version>/`
+7. Verify the GitHub Release wheel, sdist, four Rust archives, and `checksums.txt`;
+   check SHA-256 values and agreement between Python and middleware versions.
+8. Record both container manifests/digests and runtime AI Guardian versions.
+9. Verify the exact versioned documentation at `https://ai-guardian.readthedocs.io/en/v<version>/`,
+   `/en/stable/` at that release, and `/en/latest/` at `main`.
 
-If the workflow fails, you may need to:
-- Fix the issue
-- Delete the tag: `git tag -d v1.0.0 && git push origin :refs/tags/v1.0.0`
-- Increment the patch version and try again
+If a workflow fails, stop and inspect the matching run before deciding recovery.
+Do not delete/repoint a published production tag or replace an uploaded PyPI
+version. A partially published release needs an explicit maintainer recovery
+decision and may require a new patch version.
 
 #### 8. Update Install URLs in README.md
 
@@ -373,12 +419,9 @@ The `README.md` contains `curl` install commands that reference a specific git r
 - **Release branches** (`release-X.Y`): URLs point to the **release tag** (e.g., `v1.11.1`) so users install the exact released version
 - **Main branch**: URLs point to **`main`** since there is no PyPI release for the dev version — developers browsing main get the latest install script
 
-**On the release branch** (already done during the release):
-```bash
-# Replace all occurrences of the old version tag with the new one
-# e.g., v1.11.0 → v1.11.1
-sed -i '' 's/v1.0.0/v1.1.0/g' README.md  # macOS
-```
+**On the release branch:** verify that step 3 pinned installer URLs **before the
+tag was created**. PyPI uses the README snapshot in that tag; changing URLs
+after publication cannot repair the uploaded package.
 
 **On main** (during merge-back):
 ```bash
@@ -406,18 +449,21 @@ git cherry-pick <changelog-commit-sha>  # Or manually add the version section
 # For minor/major releases, merge the release branch:
 git merge release-1.0 --no-ff -m "Merge release-1.0 into main"
 
-# Bump version to next dev cycle in pyproject.toml
-# Update version to "1.1.0-dev"
+# Bump both Python version files to "1.1.0-dev"
 ```
 
-Edit pyproject.toml:
-```toml
-version = "1.1.0-dev"
+Update both Python version files, synchronize Rust, restore README installer
+URLs to `main`, and retain the new stable container references:
+```bash
+python3 .claude/skills/release/release_helper.py update-version 1.1.0-dev
+python3 scripts/sync_rust_middleware_version.py --version 1.1.0-dev
+python3 scripts/sync_rust_middleware_version.py --version 1.1.0-dev --check
+python3 scripts/sync_release_versions.py --check
 ```
 
 Commit and push:
 ```bash
-git add pyproject.toml
+git add pyproject.toml src/ai_guardian/__init__.py rust/openshell-middleware/Cargo.toml rust/openshell-middleware/Cargo.lock README.md
 git commit -m "$(cat <<'EOF'
 chore: bump version to 1.1.0-dev
 
@@ -654,34 +700,41 @@ Use this checklist for each release:
 
 ### Pre-Release
 - [ ] All planned features merged to `main`
-- [ ] All tests pass (`pytest`)
-- [ ] CHANGELOG.md updated with all changes
-- [ ] Version bump PR reviewed and approved
-- [ ] GitHub issues marked as complete
-- [ ] Cursor hook compatibility verified (`/release` automates this)
+- [ ] Clean, synchronized maintainer checkout; tooling/authentication available
+- [ ] Standard test/lint CI passes for the intended source
+- [ ] Dependencies/security reviewed; critical/high fixes addressed and deferrals recorded
+- [ ] Scope resolved; deferred issues remain open with limitations disclosed
+- [ ] CHANGELOG.md reviewed for user impact, breaking upgrades, and current qualification evidence
+- [ ] Cursor version and all six setup/manual-test/analyze/cleanup results recorded
+- [ ] Dry run selects the intended version, release branch, and next development version
 
 ### Release Branch
 - [ ] Create release branch (`release-X.Y`)
-- [ ] Update version in `pyproject.toml` (remove `-dev`)
+- [ ] Update both Python version files and synchronize Cargo.toml/Cargo.lock
+- [ ] Preserve fresh Unreleased section, dated release notes, and correct comparison links
+- [ ] Pin README installer URLs to the production tag before tagging
 - [ ] Synchronize stable container references (`python scripts/sync_release_versions.py --stable-version X.Y.Z`)
-- [ ] Update CHANGELOG.md (move Unreleased to version section)
-- [ ] Run full test suite
-- [ ] Test installation in clean environment
+- [ ] Regenerate docs/notebooklm-export.md after source docs/references are final
 - [ ] Push release branch
-- [ ] Create and push git tag (`vX.Y.Z`)
+- [ ] Successful Release Readiness evidence includes every required job for the intended source
+- [ ] TestPyPI actual package version, metadata, README, contents, and clean installation verified
+- [ ] Clean up temporary test tag; authorized maintainer approves production tag (`vX.Y.Z`)
 
 ### GitHub Actions & Release
-- [ ] Verify GitHub Actions workflow completes successfully
-- [ ] Verify package published to PyPI
-- [ ] Verify GitHub Release created
-- [ ] Test installation from PyPI: `uv tool install ai-guardian` (or `pip install ai-guardian`)
-- [ ] Verify `quay.io/redhatproductsecurity/ai-guardian:<version>` is available
-- [ ] Verify `quay.io/redhatproductsecurity/ai-guardian-openshell:<version>` is available
-- [ ] Verify versioned documentation published on Read the Docs
+- [ ] Matching Publish Package and Build Container Image runs both conclude `success`
+- [ ] PyPI exact version, clean installation, CLI/doctor, and previous-stable upgrade verified
+- [ ] GitHub Release notes, wheel, sdist, four middleware archives, and checksums verified
+- [ ] Python/middleware versions agree; non-Python archives are not PyPI distributions
+- [ ] Both separate Quay repositories have versioned manifests/digests and runtime-version evidence
+- [ ] Exact versioned Read the Docs site works; stable points to it and latest remains main
 
 ### Post-Release
 - [ ] Merge release branch back to `main`
-- [ ] Bump version to next dev cycle (`X.Y+1.0-dev`)
+- [ ] Bump both Python files and Rust to the next development version (`X.Y+1.0-dev`)
+- [ ] Restore README installer URLs to main and retain new stable container references
+- [ ] Rust/stable-reference checks pass and the new Unreleased section is usable
+- [ ] Attach source/tag, CI/manual evidence, registry URLs, checksums/digests, docs, and deferrals to the issue
+- [ ] Close the release issue only after all deliverables are independently verified
 - [ ] Announce release (if applicable)
 
 ### Patch / Hotfix (if needed)
@@ -760,22 +813,26 @@ later release; users who cannot upgrade should pin `ai-guardian<1.20`.
 
 ### Workflows
 
-The repository includes four GitHub Actions workflows:
+The release-relevant GitHub Actions workflows include:
 
 1. **test.yml** - Runs tests on Python 3.10, 3.11, 3.12, 3.13, 3.14
    - Triggered on: push to main, pull requests
    - Includes coverage reporting
 
-2. **lint.yml** - Runs code quality checks (pylint, black, ruff)
+2. **lint.yml** - Runs code quality checks (pylint, black, ruff, mypy)
    - Triggered on: pull requests
 
-3. **publish-test.yml** - Publishes to TestPyPI for testing (see [Testing Releases with TestPyPI](#testing-releases-with-testpypi))
-   - Triggered on: test tags (v*-test*), manual workflow dispatch
-   - Requires: TestPyPI trusted publishing configured
+3. **publish.yml** - Routes `v*-test*` tags to TestPyPI; production version tags
+   publish Python distributions to PyPI and create the GitHub Release with Rust
+   middleware assets and checksums. The tag selects the registry; package
+   metadata selects the uploaded version. Manual dispatch is not inherently a
+   TestPyPI operation. Both registries require their matching trusted publisher.
 
-4. **publish.yml** - Publishes to PyPI and creates GitHub Release
-   - Triggered on: version tags (v*)
-   - Requires: PyPI trusted publishing configured
+4. **release-readiness.yml** - Validates installs, upgrade, IDE/hooks, daemon,
+   config/MCP, smoke/scenarios, containers, and middleware compatibility.
+
+5. **build-container.yml** - Publishes both separate versioned Quay images;
+   `latest` remains the main-branch channel.
 
 ### Ubuntu Runner Policy
 
@@ -801,10 +858,10 @@ To enable automatic PyPI publishing:
 2. Navigate to "Publishing" section
 3. Add a new publisher:
    - **PyPI Project Name**: ai-guardian
-   - **Owner**: itdove (your GitHub org/user)
+   - **Owner**: RedHatProductSecurity
    - **Repository**: ai-guardian
    - **Workflow**: publish.yml
-   - **Environment**: (leave blank)
+   - **Environment**: production
 
 This allows GitHub Actions to publish without storing API tokens.
 
@@ -818,9 +875,9 @@ To enable automatic TestPyPI publishing for testing (recommended):
 4. Click "Add a new pending publisher"
 5. Configure publisher:
    - **PyPI Project Name**: ai-guardian
-   - **Owner**: itdove (your GitHub org/user)
+   - **Owner**: RedHatProductSecurity
    - **Repository**: ai-guardian
-   - **Workflow**: publish-test.yml
+   - **Workflow**: publish.yml
    - **Environment**: testpypi
 6. Create GitHub environment at https://github.com/RedHatProductSecurity/ai-guardian/settings/environments:
    - Name: `testpypi`
@@ -852,9 +909,9 @@ Create an account at https://test.pypi.org/account/register/ and verify your ema
 2. Click "Add a new pending publisher"
 3. Configure publisher settings:
    - **PyPI Project Name**: `ai-guardian`
-   - **Owner**: `itdove`
+   - **Owner**: `RedHatProductSecurity`
    - **Repository name**: `ai-guardian`
-   - **Workflow name**: `publish-test.yml`
+   - **Workflow name**: `publish.yml`
    - **Environment name**: `testpypi`
 4. Save configuration
 
@@ -865,114 +922,88 @@ Create an account at https://test.pypi.org/account/register/ and verify your ema
 3. Name: `testpypi`
 4. (Optional) Add protection rules:
    - Required reviewers: yourself
-   - Deployment branches: only `release-*` branches
+   - Deployment policy must admit the intended `v*-test*` tag refs, not only release branches
 5. Save environment
 
 ### Testing a Release
 
-#### Step 1: Create Test Release Branch
+#### Step 1: Use the reviewed release commit
+
+The canonical script creates the test tag from the prepared release branch,
+after version, README URL, stable-reference, and documentation-export updates.
+For example, package metadata stays at `1.2.0` while the test tag is
+`v1.2.0-test1`. The tag selects TestPyPI; it does **not** rewrite the distribution
+version. Do not assume a `-test1` package version exists.
+
+#### Step 2: Create and push the test tag
 
 ```bash
-# Update main branch
-git checkout main
-git pull origin main
-
-# Create test release branch
-git checkout -b release-1.2-test main
-```
-
-#### Step 2: Update Version to Test Version
-
-Update version in **pyproject.toml**:
-```toml
-[project]
-version = "1.2.0-test1"  # Add -test suffix
-```
-
-Update version in **src/ai_guardian/__init__.py**:
-```python
-__version__ = "1.2.0-test1"  # Add -test suffix
-```
-
-Commit changes:
-```bash
-git add pyproject.toml src/ai_guardian/__init__.py
-git commit -m "$(cat <<'EOF'
-chore: bump version to 1.2.0-test1 for TestPyPI
-
-Prepare test release for TestPyPI to verify release process.
-
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
-EOF
-)"
-```
-
-#### Step 3: Create and Push Test Tag
-
-```bash
-# Create test tag
-git tag -a v1.2.0-test1 -m "Test release for TestPyPI
-
-Testing release process before production release.
-"
-
-# Push tag to trigger workflow
+git tag -a v1.2.0-test1 -m "Test release v1.2.0-test1"
 git push origin v1.2.0-test1
 ```
 
-**Note:** The tag MUST match the pattern `v*-test*` to trigger the TestPyPI workflow.
+The tag must contain `-test` to select TestPyPI in `publish.yml`. Production
+tags must not contain it. The script performs these operations for you.
 
-#### Step 4: Monitor GitHub Actions
+#### Step 3: Monitor the matching Publish Package run
 
-1. Go to https://github.com/RedHatProductSecurity/ai-guardian/actions
-2. Check the "Publish to TestPyPI" workflow run
-3. Verify it completes successfully
+Select the `Publish Package` run for the exact test tag and source commit.
+Require a successful conclusion; `gh run watch RUN_ID --exit-status` reports a
+failed run as a command failure. Do not use an unrelated latest run as evidence.
+Test tags publish Python distributions only, not production middleware assets
+or a GitHub Release.
 
-#### Step 5: Verify TestPyPI Publication
+#### Step 4: Verify the actual uploaded package
 
-1. Check TestPyPI: https://test.pypi.org/project/ai-guardian/
-2. Verify the test version appears (e.g., 1.2.0-test1)
+For the example above, inspect
+`https://test.pypi.org/project/ai-guardian/1.2.0/`, not a guessed test-suffixed
+version. Verify metadata, Python minimum, README rendering and installer URLs,
+package resources, wheel/sdist contents, and artifact identity against the
+matching source and workflow hashes.
 
-#### Step 6: Test Installation from TestPyPI
+An existing TestPyPI version can be skipped rather than uploaded again. A green
+workflow alone therefore does not prove the new artifact was tested. If files
+already exist or the build changed, stop and reconcile the metadata and uploaded
+artifacts; incrementing only the test tag does not change the package version.
+
+#### Step 5: Install the verified TestPyPI wheel in a clean environment
+
+Download the exact wheel from the matching TestPyPI version page and verify its
+SHA-256 against that upload's evidence. Create a fresh virtual environment, then
+install that local wheel; dependencies can come from ordinary PyPI:
 
 ```bash
-# Create clean test environment
-python -m venv /tmp/test-ai-guardian-testpypi
-source /tmp/test-ai-guardian-testpypi/bin/activate
-
-# Install from TestPyPI
-# Note: --extra-index-url allows installing dependencies from production PyPI
-pip install --index-url https://test.pypi.org/simple/ \
-  --extra-index-url https://pypi.org/simple/ \
-  ai-guardian==1.2.0-test1
-
-# Test the package
+python -m pip install ./ai_guardian-1.2.0-py3-none-any.whl
+python -m pip check
 ai-guardian --version
 ai-guardian --help
-
-# Clean up
-deactivate
-rm -rf /tmp/test-ai-guardian-testpypi
+ai-guardian doctor
 ```
 
-#### Step 7: Proceed with Production Release (if successful)
+Do not mix TestPyPI and PyPI indexes to select `ai-guardian`: the same version
+could be resolved from the wrong registry. Installing the verified local wheel
+establishes which artifact is under test. Also validate upgrade from the previous
+stable version in an isolated environment.
 
-If the TestPyPI release works correctly:
+#### Step 6: Clean up the temporary tag and approve production
 
-1. Delete test tag and branch:
-   ```bash
-   git tag -d v1.2.0-test1
-   git push origin :refs/tags/v1.2.0-test1
-   git branch -D release-1.2-test
-   ```
+After recording verification, remove only the intended temporary test tag:
 
-2. Follow the normal [Release Workflow](#release-workflow) to create production release
+```bash
+git tag -d v1.2.0-test1
+git push origin --delete v1.2.0-test1
+```
+
+Keep the reviewed release branch. Production must use the same reviewed commit;
+any intervening change needs renewed verification. The script cleans up its test
+tag and asks for explicit production-tag approval. Do not approve while any gate
+or artifact identity is unresolved.
 
 ### Tag Naming Convention
 
 - **TestPyPI:** `v1.2.0-test`, `v1.2.0-test1`, `v1.2.0-test2`
-  - Pattern: `v*-test*` triggers TestPyPI workflow
-  - Use sequential numbers for multiple test attempts
+  - Pattern: `v*-test*` selects TestPyPI in `publish.yml`
+  - Tag numbering does not change package metadata or permit replacing an upload
 
 - **Production PyPI:** `v1.2.0`, `v1.2.1`, `v1.3.0`
   - Pattern: `v*` (without `-test` suffix) triggers production workflow
@@ -980,29 +1011,25 @@ If the TestPyPI release works correctly:
 
 ### Manual Workflow Trigger
 
-You can also trigger the TestPyPI workflow manually without creating a tag:
-
-1. Go to https://github.com/RedHatProductSecurity/ai-guardian/actions/workflows/publish-test.yml
-2. Click "Run workflow"
-3. Select the branch you want to test
-4. Click "Run workflow" button
-
-This is useful for testing workflow changes without creating tags.
+`publish.yml` also accepts manual dispatch, but it is **not** a dedicated
+TestPyPI workflow. Registry routing still depends on the selected ref containing
+`-test`. A dispatch on `main` or another non-test ref takes the production path;
+do not use it as a TestPyPI shortcut. Prefer the reviewed test-tag route above.
 
 ### Troubleshooting
 
 **Workflow fails with authentication error:**
 - Verify TestPyPI Trusted Publishing is configured correctly
 - Check that the GitHub environment `testpypi` exists
-- Ensure workflow name matches: `publish-test.yml`
+- Ensure workflow name matches `publish.yml` and environment matches `testpypi`
 
 **Package upload fails:**
-- Verify version number is unique (TestPyPI doesn't allow re-uploading same version)
-- Increment test number (e.g., `v1.2.0-test2`)
+- Verify the actual package metadata version and whether files already exist
+- Do not expect a new test tag alone to produce a new package version
 
 **Installation from TestPyPI fails:**
-- TestPyPI may not have all dependencies
-- Use `--extra-index-url https://pypi.org/simple/` to fetch dependencies from production PyPI
+- Install the verified local TestPyPI wheel in a fresh environment
+- Resolve its dependencies separately from ordinary PyPI; retain artifact hashes
 
 ## Manual PyPI Publishing
 
@@ -1029,10 +1056,11 @@ python -m build
 ```bash
 # Upload to TestPyPI
 python -m twine upload --repository testpypi dist/*
-
-# Test installation
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple ai-guardian
 ```
+
+Verify and install the exact uploaded wheel as described in
+[TestPyPI verification](#testing-releases-with-testpypi), rather than mixing
+package indexes.
 
 ### 4. Publish to Production PyPI
 

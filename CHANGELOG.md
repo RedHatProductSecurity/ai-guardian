@@ -7,121 +7,132 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking: Python 3.10 minimum (#2419):** AI Guardian `1.20.0` requires
+  Python 3.10 or newer. `1.19.x` is the last Python 3.9-compatible line. Upgrade
+  Python before upgrading AI Guardian, or pin `ai-guardian<1.20`.
+- **Web Console migration (#2424):** Replace the Textual terminal console with
+  the NiceGUI browser console. `ai-guardian console` and the compatibility alias
+  `ai-guardian tui` open the browser; persisted `textual` dialog preferences
+  migrate to `nicegui`. NiceGUI is a core dependency and there is no interactive
+  terminal fallback. See the [Console migration guidance](docs/CONSOLE.md#upgrading-from-119x).
+- **Experimental OpenShell integration (#2531, #2564):** Require OpenShell CLI
+  and gateway `0.1.3` or a later `0.1.x` patch, with supervisor protocol `1.0`;
+  `0.1.2` and earlier are rejected. Upstream remains pre-1.0. Version/protocol
+  compatibility and service readiness do not qualify every client/provider path
+  or establish production stability.
+- **Support-image clients (#2478, #2555):** Bundle Codex `0.160.0` and OpenCode
+  V1 `1.19.0` (MIT) in the OpenShell image; the normal image also pins OpenCode V1
+  `1.19.0`. Claude Code is installed in OpenShell at runtime only after explicit
+  Anthropic Terms of Service consent. The OpenShell selector exposes Codex,
+  Claude Code, and OpenCode with an explicit agent profile; Pi remains excluded.
+- **Deferred Codex/OpenShell qualification (#2556):** Keep Codex at `0.160.0`.
+  Qualification of `0.162.1` is deferred to `1.22.0`, awaiting supported managed
+  app-server executable integration in NVIDIA/OpenShell#4751. Normal model
+  traffic under the attached middleware policy, actual provider-boundary threat
+  denial, and lifecycle checks remain incomplete. The retained pin is not a new
+  compatibility certification. Claude Code/Vertex and OpenCode/Vertex also
+  require credential-backed live qualification; see the
+  [deployment limitations](docs/Sandbox.md#openshell-maturity-and-compatibility).
+- **Ubuntu 26.04 CI (#2491):** Move Linux validation and publishing to the
+  explicit `ubuntu-26.04` runner, including reusable scanner, scenario, Buildx,
+  QEMU, and multi-architecture container validation in Release Readiness.
+- **Strict typing (#2401, #2510):** Enable strict Mypy checking and explicitly
+  annotate nullable defaults, retaining documented exceptions at dynamic API
+  boundaries.
+- **Release verification guidance (#2563):** Align maintainer instructions and
+  skill checklists with tag-routed TestPyPI publishing, actual package metadata,
+  source-matched CI evidence, pre-tag documentation preparation, and independent
+  verification of every release deliverable.
+
 ### Added
 - **Standalone NuGet V4 and Sonar credential detection (#2558):** Add bundled
   rules for NuGet V4 API keys and prefixed Sonar user/project/global-analysis
   tokens, with service attribution, bounded formats, and normal output
-  redaction. Add synthetic unit/UX regressions and a 220-sample legitimate-content
-  corpus (0 false positives), plus smoke/release-readiness canaries.
-  Sources: NuGetGallery (Apache-2.0), Betterleaks
-  (MIT), and vendor documentation; no verifier, dependency, or configuration
-  change. Legacy unprefixed Sonar and Kong Konnect formats remain out of scope.
-- **Top-level scoped pause/resume (#2547):** Add mutually exclusive `--dir` and
-  `--session` selectors to the short CLI commands, reusing existing daemon
-  handling, normalized directory scopes, and stable session keys. Preserve
-  positional durations, global/nested behavior, pause lifetimes, and AI-session
-  self-protection; reject empty selectors in both command forms without falling
-  back to global control. Add scoped unit/UX and release-readiness coverage.
+  redaction. Sources: NuGetGallery (Apache-2.0), Betterleaks (MIT), and vendor
+  documentation. Legacy unprefixed Sonar and Kong Konnect remain out of scope.
+- **Session-scoped pause/resume (#2534, #2547):** Pause one active hook session
+  without affecting other sessions in the same directory. Add CLI, tray, socket,
+  and REST controls, plus mutually exclusive `--dir` and `--session` selectors
+  on the short CLI commands. Preserve existing global/directory semantics,
+  stable session identities, pause lifetimes, and AI-session self-protection;
+  unsupported or failed scoped requests never broaden to global control.
 - **Readable tray session names (#2546):** Prefer optional hook/native session
   titles in local, remote, and container pause controls, with safe bounded text,
-  ID fallback, and duplicate-name disambiguation. OpenCode V2 forwards native
-  titles through bounded cached metadata lookups; renames preserve stable
-  control keys and existing pause state.
+  ID fallback, duplicate-name disambiguation, and Windows-safe literal text.
+  OpenCode V2 forwards titles through bounded cached lookups; renames preserve
+  stable control keys and pause state.
 - **Tray sandbox creation Connect action (#2542):** Offer a Connect button after
   successful container or OpenShell creation, launching the selected sandbox's
   interactive connection without rerunning creation while preserving the output.
-- **Tray Claude Code runtime consent:** Require an explicit, default-unchecked
-  Anthropic Terms of Service acceptance when Claude is selected, and forward
-  consent only when the user checks it.
-- **OpenShell native Vertex authentication (#2473):** Support Claude Code and
-  OpenCode's `claude` agent with gateway-owned Google Cloud ADC through the
-  OpenShell metadata emulator. Bind Vertex API endpoints to the attached
-  `google-cloud` provider, filter credential values from workload environments,
-  and add metadata-readiness and sanitized manual qualification contracts.
-- **Session-scoped pause/resume (#2534):** Pause one active hook session without
-  affecting other sessions in the same project directory. Add CLI, tray, socket,
-  and REST controls; explicitly label directory pause as a bulk action and
-  report when a stable hook identity is unavailable.
-- **Targeted setup overwrite confirmation (#2538):** When an integration is
-  already configured, interactive `setup --ide` now offers a default-No force
-  overwrite prompt; declining or cancelling preserves the existing setup.
-- **Packaged TypeScript integration templates (#2535):** Move AI Guardian-owned
-  bridge, extension, and plugin sources into package resources while preserving
-  generated paths and version, executable, and integration-specific rendering.
-- **Tray pause controls (#2529):** Place `Pause...` directly below **Status** in
-  single- and multi-daemon menus, retain the existing global duration/resume
-  behavior, and group per-directory pause/resume controls in a separate nested
-  submenu. Make **Check middleware readiness...** a standalone tray action and
-  move **Apply policy to sandbox...** into the selected OpenShell sandbox menu,
-  with policy selection scoped to that sandbox.
-- **OpenShell middleware tray workflow (#2527):** Add guided external-service
-  readiness checks that probe configured gateway TOML endpoints with gRPC
-  `Describe`, verify implementation and version before reporting running, and
-  report gateway activation separately; add explicit native versus AI
-  Guardian-hooked OpenShell creation, validated policy profiles, and
-  complete-policy replacement for existing OpenShell sandboxes while preserving
-  OpenShell/service-manager ownership. The Apply policy dialog shows the selected
-  profile source and full merged YAML in an editable review; YAML is validated
-  and required base controls are preserved before the explicit **Replace policy**
-  action applies it. Its selector is wider for long profile descriptions.
-  Successful sandbox operation details remain open until the user closes the
-  dialog, and repository preflight leads directly to upload confirmation without
-  a brief progress-window interstitial.
-  The probe uses grpcio (Apache-2.0) and encodes its fixed protobuf wire fields
-  directly, avoiding a protobuf runtime dependency for readiness checks.
-- **OpenShell middleware release binaries (#2522):** Publish the external Rust
-  middleware as versioned, SHA-256-checked GitHub Release assets for validated
-  Linux x86_64/arm64 and macOS Intel/Apple Silicon targets. The release process
-  keeps the binary's Cargo package version aligned with the AI Guardian release.
-- **OpenShell middleware pause coupling (#2506):** Couple daemon global/project
-  pause state to external middleware checks and add explicit pass-through
-  `middleware_paused` decisions and audit metadata. A pause suspends scanning
-  without blocking provider traffic; middleware remains fail-closed when its
-  daemon control plane is unavailable. Middleware pause state is controlled by
-  the ordinary daemon/OpenShell deployment; AI Guardian has no middleware
-  lifecycle command.
-- **OpenShell tray authentication selector:** Add an explicit Codex OAuth/API-key
-  choice to the Create sandbox form. OAuth maps to the `codex` profile and
-  `ai-guardian-codex`; API key maps to `openai` and `ai-guardian-openai`, even
-  when the tray process does not inherit the interactive shell environment.
-- **OpenShell supervisor middleware (#2484):** Add an optional, external
-  OpenShell v0.1.2 Rust gRPC service for semantic provider-content scanning and
-  response redaction. The operator-managed service supports protocol
-  negotiation, bounded HTTP/WebSocket/streaming payloads, scanner ownership
-  routing, and fail-closed behavior. The gateway registration and
-  `network_middlewares` policy remain operator-managed OpenShell resources.
-  See `docs/OPENSHELL_MIDDLEWARE.md`.
-- **OpenShell middleware attribution (#2484):** Rust denials carry safe
-  AI Guardian source metadata, scanner/rule attribution, structured service
-  fields, and daemon-backed audit records. Provider payload text is excluded
-  from scanner diagnostics; the standard daemon audit path is used.
+- **Tray navigation and configuration (#2529):** Group directory controls under
+  **Directories...**, place sandbox **Connect** and **Manage sandbox** directly
+  after **Pause...**, and expose middleware readiness as a standalone action.
+  Use one exclusive initial-configuration source selector for host/default,
+  profile, host directory, or saved snapshot.
+- **OpenShell native Vertex authentication (#2473):** Implement Claude Code and
+  OpenCode's `claude` agent paths using gateway-owned Google Cloud ADC through
+  the supervisor metadata emulator. Bind Vertex endpoints to the attached
+  `google-cloud` provider without forwarding credentials into the workload.
+  These paths are implemented, not yet live-qualified for this release.
+- **OpenShell authentication selection:** Add explicit Codex OAuth/API-key
+  selection in the tray and CLI. OAuth selects the `codex` provider profile;
+  API keys select `openai`. Preserve the distinction when the tray does not
+  inherit the interactive shell environment.
+- **External Rust OpenShell middleware (#2484, #2525):** Add operator-managed
+  provider-content scanning and response redaction with protocol negotiation,
+  bounded HTTP and text-WebSocket inspection, scanner-ownership routing,
+  fail-closed control-plane behavior, and daemon-backed audit attribution without
+  provider payloads in diagnostics. Body-bearing responses require bounded
+  whole-body inspection; unsupported inspection modes deny delivery rather than
+  scanning independent stream fragments. Rust is the only middleware runtime;
+  there is no Python fallback or AI Guardian middleware lifecycle command.
+  The current service is plaintext-only and restricts listener binding by
+  default; deployment requires an appropriate private/authenticated transport
+  boundary. Explicit scanner ownership `both` remains unsupported.
+  OpenShell owns gateway registration and complete `network_middlewares`
+  policy activation. See the [middleware guide](docs/OPENSHELL_MIDDLEWARE.md).
+- **Middleware pause coupling (#2506):** Follow ordinary daemon global/project
+  pause state, with audited `middleware_paused` pass-through decisions and
+  per-message WebSocket resume checks. Hook-session pauses do not pause provider
+  middleware. An unavailable daemon remains fail-closed.
+- **Middleware tray workflow (#2527):** Probe configured gRPC endpoints with
+  `Describe`, report service identity separately from gateway activation, and
+  review a complete merged policy for the selected sandbox before explicit
+  replacement. Validate edits and preserve required base controls. Readiness
+  probes use grpcio (Apache-2.0) without a protobuf runtime dependency.
+- **Middleware release binaries (#2522):** Publish version-aligned Rust archives
+  for Linux x86_64/arm64 and macOS Intel/Apple Silicon, with SHA-256 checksums.
+  Keep these GitHub Release assets separate from Python distributions uploaded
+  to PyPI/TestPyPI.
 - **Automatic CLI/IDE setup discovery (#2494):** Make plain `ai-guardian setup`
   reuse tray installation and integrity checks, skip healthy integrations,
   prompt for a selectable subset when several need setup, and let `--yes` or
   `--json` configure pending integrations non-interactively.
+- **Targeted setup overwrite confirmation (#2538):** Offer a default-No
+  overwrite prompt for already configured integrations in interactive
+  `setup --ide`; declining or cancelling preserves the existing setup.
 - **Two-step IDE/CLI setup postponement (#2496):** Add a Later action to the
   setup prompt, open a separate 1h/6h/1d/1w delay chooser, default closed
   prompts to a one-hour snooze, and preserve explicit permanent dismissal
   across Tkinter, NiceGUI, macOS, and Linux tray dialog providers.
 - **OpenCode V2 support (#2470):** Detect OpenCode 1.x versus 2.x during
-  setup, generate the matching plugin lifecycle contract, reconcile the V1
-  `plugin` and V2 `plugins` configuration keys, and discover V2 database paths
-  through `OPENCODE_DB` or `opencode debug paths db` without replacing the
-  existing V1 integration.
+  setup, generate the matching plugin lifecycle contract, and discover V2
+  database paths without replacing V1 support. Use V2 local-plugin discovery,
+  protect unrelated plugins during migration, preserve session pauses between
+  turns, and provide safe transcript feedback for blocked prompts/tools without
+  exposing withheld content. Doctor distinguishes configured files from verified
+  server activation. See [OpenCode support](docs/OPENCODE.md).
+- **Packaged TypeScript templates (#2535):** Include AI Guardian-owned bridge,
+  extension, and plugin resources in wheels and source distributions while
+  preserving their integration-specific generated paths and rendering.
 - **CLI version visibility in doctor:** Report detected versions for installed
   CLI integrations in human-readable and structured hook health output. OpenCode
   also reports whether the active CLI uses the V1 or V2 plugin contract.
 - **Biweekly Codex candidate smoke checks:** The support-image version-health
-  workflow now installs and validates a newly released Codex candidate without
-  credentials, then records the required local OAuth/OpenShell qualification
-  steps in the maintenance issue. GitHub Actions does not receive ChatGPT OAuth
-  tokens.
-- **OpenShell compatibility contract (#2525):** Validate the installed
-  OpenShell release against the Rust middleware contract before the service
-  accepts traffic. The Python middleware launcher, middleware lifecycle
-  commands, sandbox middleware flags, and generated bootstrap coupling were
-  removed; OpenShell and the external service manager now own deployment,
-  registration, policy activation, and cleanup.
+  workflow checks candidate installation/version/help without credentials, then
+  records the remaining operator qualification steps. An offline smoke is not
+  OAuth or provider-boundary qualification; CI receives no ChatGPT OAuth tokens.
 
 ### Fixed
 - **IPv6 embedded SSRF destinations (#2559):** Apply existing IP policy to
@@ -130,137 +141,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Share existing immutable numeric metadata protections with resolved and
   embedded addresses; preserve public/native IPv6 controls, policy semantics,
   and API contracts. Keep classifier debug diagnostics free of input-derived
-  addresses and ranges. Add isolated, no-network unit/UX regressions. Independently
+  addresses and ranges. Independently
   authored using Python's standard library and RFC 3056/4380, following review
   #2554 and CVE-2026-108115 in another product; no live exploit was tested.
-- **Scoped tray Pause/Resume state (#2549):** Share authoritative menu stats and
-  invalidate stale cached state after scoped requests, exposing Resume immediately
-  in single- and multi-daemon layouts. Refresh idle session/directory transitions,
-  expiry, and list changes while preserving Linux popup/countdown stability.
-  Require explicit scoped acknowledgements, report failures without broadening
-  requests, and retain rendered stable identities/targets across discovery changes.
-  Keep native actions alive through KDE's close-before-click delivery order so
-  pending refreshes do not silently discard Pause/Resume or About selections.
-  Clarify scope indicators and preserve global/directory/session pause isolation,
-  persistence, lifetimes, existing APIs, and AI-session self-protection.
+- **Linux tray reliability (#2532, #2549):** Defer native menu replacement while
+  a popup is open and preserve actions through KDE's close-before-click delivery
+  order. Refresh authoritative pause state after scoped operations and idle
+  transitions without losing the selected session, directory, or daemon target.
 - **GitGuardian installation verification:** Allow up to 60 seconds for
   `ggshield --version` to initialize its bundled Python runtime on slow/emulated
-  ARM64 builds. Version discovery uses the same bounded check; timeouts and
-  nonzero exits still fail verification, and other scanners retain their
-  five-second probes.
-- **Tray session title follow-up (#2546):** Render literal ampersands in Windows
-  session menus without changing stored titles or pause targets. Track the shared
-  title helper for editable-install daemon stale-code warnings.
-- **Release publishing:** Keep OpenShell middleware archives separate from the
-  Python distributions uploaded to PyPI/TestPyPI, while including all archives,
-  wheels, and checksums in the GitHub Release.
-- **OpenShell response inspection:** Require bounded whole-body inspection rather
-  than scanning arbitrary streaming units independently, preventing split
-  detections and split UTF-8 failures. Explicitly deny body-bearing responses
-  when whole-body mode is unavailable; accept headers-only inspection for
-  bodyless `HEAD`, `204`, and `304` responses.
-- **OpenCode V2 session lifecycle:** Read session IDs from the native event data;
-  treat idle as turn completion instead of session termination so session-scoped
-  pauses survive subsequent turns. Clear the session only when it is deleted.
-  Narrow the tool-event union before reading an error so the generated template
-  passes the published V2 types.
-- **OpenShell Claude setup (#2473):** Restrict the Codex authentication selector
-  to OpenShell/Codex and allow the Claude Console authentication endpoint that
-  Claude Code needs in restricted-network sandboxes.
-- **OpenShell Vertex provider reuse (#2473):** Read existing provider types from
-  the supported `provider get` output instead of passing its unsupported
-  `--output json` flag, so valid `google-cloud` providers work on OpenShell 0.1.3.
+  ARM64 builds. Timeouts and nonzero exits still fail verification.
 - **OpenShell GitHub policy compatibility:** Remove unsupported TLS mode values
   from bundled read-only and read/write GitHub endpoint overlays; OpenShell uses
   automatic TLS termination when the field is omitted.
-- **OpenShell Claude runtime install and update:** Allow the temporary installer
-  and installed versioned Claude binary to reach `downloads.claude.ai`; permit
-  the installed binary to use the selected Vertex endpoints.
-- **KDE tray menu stability (#2532):** Defer AppIndicator menu refreshes while
-  Plasma has the exported menu open, then apply the latest state after its
-  close event so a refresh does not replace actions during menu dismissal.
-- **OpenShell middleware readiness (#2525):** Validate the effective Rust
-  service and OpenShell release before traffic is accepted, including when an
-  older policy artifact or service process is present.
-- **OpenShell OAuth provider-boundary coverage (#2525):** Include
-  `chatgpt.com` and `ab.chatgpt.com` in the generated middleware attachment for
-  Codex OAuth, so provider-content scanning remains effective when local hooks
-  are disabled. Explicit endpoint overrides remain authoritative.
-- **OpenShell middleware policy validation (#2525):** Require the registered
-  service name in the policy's nested `middleware` field while leaving policy
-  composition and application to the OpenShell operator.
-- **Codex Apps OpenShell troubleshooting:** Document the optional regional
-  `*.oaiusercontent.com` endpoint required by Codex's separate `codex_apps`
-  remote MCP client and the `policy_dns_ineligible` symptom when it is absent.
-- **OpenShell/OpenCode regressions (#2520):** Route canary-owned scans through
-  the Rust middleware, preserve warn/log-only scanner actions across daemon IPC
-  and REST, treat empty scanner groups as clean, propagate configured payload
-  limits, support stream-only response inspection, and preflight OpenCode V2
-  migration before writing generated plugin artifacts.
 - **Tracing Settings initialization (#2517):** Prevent initial control hydration
   from saving the tracing configuration or displaying a save notification; edits
   continue to save once after the page has loaded.
-- **OpenShell Rust WebSocket scanning:** Advertise and enforce the text-WebSocket
-  middleware binding so Codex requests using its WebSocket transport are scanned
-  before provider credentials and fail closed on sensitive content.
-- **OpenShell daemon IPC checks:** Unwrap the daemon's nested Unix-socket response
-  envelope and reuse the cached scanner config for redaction, so clean provider
-  content is allowed and detected PII/secrets return `middleware_denied` instead
-  of `middleware_failed`.
-- **OpenShell middleware fail-closed hardening:** Bound Unix-socket exchanges,
-  propagate scanner errors, route offensive/canary ownership checks, normalize
-  middleware finding types, and preserve wildcard-bind restart options.
-- **OpenShell middleware pause/resume:** Keep paused WebSocket sessions in the
-  inspectable path and re-check daemon state per message, so resuming the daemon
-  re-enables PII/secret scanning without requiring a new provider connection.
-- **OpenShell setup guidance:** Document local gateway installation and startup,
-  put the required Providers v2/profile-import sequence before the first
-  sandbox example, clarify automatic OAuth/API-key provider selection, and link
-  missing-profile errors directly to the setup instructions.
-- **OpenCode V2 prompt refusal feedback:** Add a safe synthetic AI Guardian
-  refusal notice to the transcript before rejecting a blocked prompt, so the
-  next model turn knows the original request was refused without receiving its
-  contents.
-- **OpenCode V2 tool refusal feedback:** Add safe transcript notices for blocked
-  pre-tool calls and withheld post-tool results, with fixed tool errors that
-  tell the model why the operation failed without exposing its contents.
-- **OpenCode V2 plugin loading (#2495):** Use OpenCode's local plugin
-  auto-discovery instead of registering a TypeScript file as a package
-  directory, and avoid the V2 plugin API import that the server resolver
-  cannot load. Doctor now distinguishes configured plugin files from verified
-  server activation, and setup refuses to rewrite V2 configuration when an
-  unrelated local TypeScript plugin file would be migrated implicitly.
-- **OpenShell middleware config overrides:** Preserve saved bootstrap, gateway,
-  policy, and bind arguments when `restart --config FILE` changes only
-  the middleware YAML path. Simplify the guide to create config, start/bootstrap,
-  verify gateway health/registration, and create a sandbox attached through the
-  generated policy; move curl probes and audit redirection to optional sections.
-  Document gateway restart commands for Homebrew, systemd, Snap, containers,
-  and manual launches, plus recovery when no background start state exists.
-  Rust binds the selected host interface directly; no Python gRPC relay is
-  involved.
-- **Strict Mypy optional parameters (#2510):** Remove the legacy implicit-
-  optional compatibility override and annotate nullable defaults explicitly
-  across scanner, setup, daemon, policy, hook, and configuration-scope APIs.
 - **Host CLI setup backups (#2505):** Back up existing hook and MCP JSON/JSONC/
   TOML configurations byte-for-byte before every mutation, stop safely when a
   backup fails, retain numbered snapshots across repeated writes, and surface
   the affected path in CLI and tray setup results.
-- **OpenShell middleware sandbox qualification (#2484):** Document the
-  Community workload image, Codex provider prerequisites, the explicit `curl`
-  probe policy required to reach L7, one-step create/connect commands, the
-  shared XDG audit path used by the Console, conditional gateway restart after
-  registration changes, remembered middleware lifecycle configuration, cleanup,
-  and the OpenShell v0.1.2 delegated-workload `Permission denied` failure mode
-  that occurs before middleware evaluation. The guide now follows one linear
-  qualification path with separate deployment and response references.
-- **OpenShell middleware timeout encoding (#2484):** Encode multi-second
-  `timeout_ms` values as normalized protobuf `Duration` seconds and nanoseconds
-  so gateway registration negotiation accepts valid timeouts above one second.
-- **OpenShell middleware plaintext binding (#2484):** Reject wildcard listen
-  addresses by default, preventing an accidental unauthenticated Rust listener
-  on every host interface. Deployment examples use a specific reachable
-  interface for local development.
 - **Consistent Fedora tray setup prompts (#2497):** Keep structured Linux
   setup and snooze flows on one rich UI provider, avoid silently dropping
   install/profile choices in native dialogs, and serialize setup and upgrade
@@ -270,8 +170,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scanner versions into false CI failures.
 - **Tray Console health runtime context:** Local Console health checks now run
   through the active daemon REST endpoint before falling back to the Console
-  process, preventing stale tray-launched processes from reporting an older CLI
-  runtime such as OpenCode V1 instead of the daemon's V2 runtime.
+  process, avoiding stale CLI version reports.
 - **ONNX Runtime install markers:** Avoid parsing non-PEP 440 Linux kernel
   release strings as versions during dependency resolution. The installer
   smoke test now builds and installs the wheel from the checked-out source.
@@ -286,77 +185,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepts the resolved workload identity under Podman.
 - **Sandbox image picker timestamps:** Show local-time creation timestamps while
   preserving the underlying container image reference used for selection.
-
-### Changed
-- **OpenShell experimental status (#2564):** Make upstream's `0.x`/pre-1.0
-  maturity prominent before sandbox and middleware setup and alongside README
-  runtime recommendations. Distinguish supported version ranges from full
-  client/provider qualification and production-stability guarantees; keep
-  security requirements, runtime defaults, policies, and version pins unchanged.
-- **Security pattern research (#2554):** Complete the October 19 source and
-  nine-scanner review; record standalone NuGet/prefixed Sonar coverage work in
-  #2558 and IPv6 transition-address validation in #2559. Defer Kong Konnect
-  pending authoritative format evidence, refresh the OWASP source link, and
-  document architectural research without claiming new shipped protections.
-- **Support-image OpenCode V1 (#2555):** Update the pinned OpenCode client from
-  `1.18.34` to `1.19.0` in both support images (MIT license). Correct the OpenShell
-  bundled-client documentation and keep Codex at `0.160.0` pending the required
-  local OAuth/workspace-routing and middleware qualification of `0.162.1`,
-  tracked separately in #2556.
-- **Sandbox tray menu order:** Place sandbox **Connect** and **Manage sandbox**
-  actions immediately below **Pause...** for easier access.
-- **Tray sandbox initial config source:** Replace overlapping profile, snapshot,
-  and host-directory controls with one mutually exclusive source selector; show
-  only the selected source's value field.
-- **OpenShell v0.1.3 compatibility baseline (#2531):** Raise the shared
-  middleware and tray compatibility floor to OpenShell v0.1.3 while retaining
-  supervisor protocol 1.0; v0.1.2 and earlier are rejected. The release restores
-  supervisor-backed GCP metadata discovery. Deterministic contract tests pass,
-  and live Codex OAuth qualification passed against the v0.1.3 CLI and gateway
-  using the AI Guardian 1.19.0 image. Claude Code/Vertex remain deferred pending
-  their own credential-bound validation.
-- **OpenShell middleware compatibility contract (#2525):** Inventory the
-  shared launcher/control-plane modules and remove the Python
-  gRPC/scanning/TLS/JWT fallback. Rust is now the only supported middleware
-  runtime; Python retains launcher/control-plane responsibilities. Both use one
-  v0.1.x-from-0.1.2 release and protocol 1.0 contract; unsupported OpenShell
-  minor releases, protocol mismatches, and direct Rust launches without a
-  validated release fail closed.
-  Separate CI coverage now verifies middleware compatibility apart from bundled
-  terminal-CLI version health.
-- **OpenShell scanner ownership coverage (#2523):** Clarify that
-  `scanner_ownership` routes provider-boundary checks without disabling host
-  hooks, document hook-versus-middleware coverage for local and provider
-  surfaces, explain `auto` fallback and `both` correlation/deduplication
-  requirements, and record the Rust v0.1.2 limitation that rejects explicit
-  `both`.
-- **OpenShell Codex CLI (#2478):** Update the pinned `@openai/codex` client from
-  `0.154.0` to `0.160.0`. OpenShell remains intentionally limited to the
-  Codex CLI; OpenCode and Pi stay available only through the normal image.
-- **OpenCode container boundary (#2470):** Pin OpenCode V1 `1.18.34` in the
-  normal Docker/Podman image and remove OpenCode from the OpenShell image,
-  policy, and qualification matrix. OpenShell support now targets `0.1.x`
-  patch releases from `0.1.2`.
-- **Ubuntu 26.04 runner migration (#2491):** Move all intended GitHub Actions
-  Linux jobs to the available `ubuntu-26.04` runner, including tests, lint,
-  release readiness, publishing, scanners, smoke tests, scenarios, and
-  maintenance workflows. Replace the temporary compatibility workflow with a
-  focused reusable container-build validation gate covering Buildx, QEMU, and
-  multi-architecture images.
-
-- **Python support policy (#2419):** AI Guardian `1.20.0` requires Python
-  3.10 or newer. This is a documented breaking support change; the `1.19.x`
-  release line (`1.19.0` last stable) is the last compatible line for Python
-  3.9. Upgrade Python before upgrading to `1.20.0` or later, or pin
-  `ai-guardian<1.20`.
-- **Console UI migration (#2424):** Remove the Textual terminal console and
-  make the NiceGUI browser console the supported interactive UI. The `tui`
-  command remains a compatibility alias, and persisted `textual` dialog
-  preferences migrate to `nicegui`.
-- **Strict Mypy baseline (#2401):** Enable strict Mypy soundness checks,
-  including checking untyped function bodies and unreachable-code detection.
-  Existing dynamic JSON, CLI, and UI boundaries retain explicit transitional
-  exceptions while their annotations are migrated.
 
 ## [1.19.0] - 2026-10-01
 
