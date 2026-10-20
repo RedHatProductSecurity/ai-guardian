@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "ai-guardian-openshell-middleware"
-version = "1.20.0"
+version = "1.21.0-dev"
 dependencies = [
  "async-stream",
  "prost",
