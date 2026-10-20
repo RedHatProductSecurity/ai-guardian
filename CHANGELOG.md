@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-10-20
+
 ### Changed
 - **Breaking: Python 3.10 minimum (#2419):** AI Guardian `1.20.0` requires
   Python 3.10 or newer. `1.19.x` is the last Python 3.9-compatible line. Upgrade
@@ -4273,7 +4275,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.19.0...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.20.0...HEAD
+[1.20.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.20.0
 [1.19.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.19.0
 [1.18.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.18.0
 [1.17.1]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.17.1
