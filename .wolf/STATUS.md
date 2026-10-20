@@ -5,9 +5,442 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-19
+> Last updated: 2026-10-20
 
 ---
+
+## Issue #2556 Codex candidate qualification — 2026-10-19
+
+### Current: deferred to 1.22.0; awaiting upstream-supported Codex integration
+
+- USER DIRECTION (2026-10-20): stop the additional executable-policy fix and
+  qualification; prefer waiting for upstream OpenShell integration support.
+  This supersedes the preceding Prepare fix selection. Do not implement a
+  cached-daemon authorization, resume probes, or change live resources unless
+  explicitly asked. Preserve the original identity fix and other uncommitted
+  work on `2556`; default Codex pin remains `0.160.0` and #2556 stays open.
+- User explicitly authorized publishing the neutral upstream report:
+  https://github.com/NVIDIA/OpenShell/issues/4751
+  It is a concrete documentation/integration request, not a confirmed core bug.
+  Verified its body contains no AI Guardian branding and retains custom-image/
+  wrapper context, no default-image reproduction, and no live v0.1.4 claim.
+- User requested a current-issue comment and deferral to 1.22 while retaining
+  branch `2556` for a later retry. Posted the upstream link and deferred status:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2556#issuecomment-6295221104
+  Created the missing `1.22.0` release label using the repository convention;
+  replaced only `1.20.0` with `1.22.0` on #2556. Verified OPEN and other labels
+  unchanged. Branch and all local/uncommitted work remain untouched; no commit,
+  push, PR, branch cleanup, live resource change, or qualification resume.
+- Security correction before publication: tagged OpenShell `identity.rs`
+  implements SHA-256 trust-on-first-use caching and rejects later changed hashes
+  at pinned paths. Earlier blanket same-path replacement statements were too
+  broad. Both the upstream report and current-issue comment acknowledge existing
+  integrity checks and focus on package provenance/supported update handling.
+- Existing project issue updated with sanitized paused-qualification evidence:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2556#issuecomment-6294479693
+- User then requested a read-only upstream issue lookup. As of 2026-10-20,
+  searches across NVIDIA/OpenShell issues/PRs (including comments) for the
+  managed app-server path, denial code, candidate version, and broader Codex
+  terms found no exact matching report/fix. Do not assert none can exist or
+  promise a planned release. #440 is an older closed policy-path discussion
+  explicitly calling binary+endpoint denial expected; it does not track this
+  managed-daemon layout. #4214/#4215 concern the earlier fixed identity issue,
+   not this executable authorization gap. No report was created at that lookup;
+   the subsequently authorized publication is linked above.
+- Current guidance lookup: both OpenShell `v0.1.4` and `main` reference Codex
+  profiles still list launcher/npm paths and explicitly require operator edits
+  to match the image's real binary paths. #440 collaborator comments recommend
+  a base-policy update for its older case; its port-forward advice concerns old
+  sign-in, not our already-working OAuth routing. No specific secure managed-
+  daemon-cache recommendation/fix was found. Explain generic configuration
+  guidance separately from version-specific support; do not promise a gateway
+   upgrade resolves this. User's initial "ok" approved drafting, not publishing;
+   the later explicit publication request has now been completed.
+  Current draft: `/tmp/opencode/openshell-codex-managed-daemon-issue-draft.md`;
+   now published as #4751. User requested no AI Guardian mentions in the report.
+  Removed branding and implementation-specific service version, while retaining
+  the custom image/wrapper and external-middleware context. Do not claim native
+  upstream reproduction or omit relevant custom-environment limitations.
+- Version follow-up: fetched tagged sources confirm `providers/codex.yaml` is
+  byte-for-byte identical in `v0.1.3` and `v0.1.4`; it omits the observed managed
+  daemon path. Reviewed v0.1.4 release notes and comparison commits: no specific
+  managed-daemon authorization fix identified. This is source/document evidence,
+  not a live v0.1.4 reproduction. Do not claim every runtime behavior is unchanged
+  or that a v0.1.4 failure was reproduced. Upgrade alone is not an established
+  solution; keep the upstream draft's observed runtime version at 0.1.3.
+
+- Latest operator result (2026-10-20): creation now works, the operator can connect
+  to the rebuilt sandbox, launch Codex, and reports that it reaches the agent/model.
+  This is positive operator-reported startup/connectivity evidence after the
+  identity fix, not a full qualification. Operator now reports actual runtime
+  Codex `0.162.1`, AI Guardian `1.19.0`, and OpenCode `1.19.0`; rebuilt image digest
+  is `sha256:cdea12f2ebfb2a1af0ced1b6e40893c9b75cebe8cfa295689f43ac246c0009d7`,
+  platform `linux/amd64`. Operator account probe now passes `account/read` with
+  ChatGPT auth, present workspace routing, and identity matching bootstrap.
+  Operator explicitly confirms the intended identity/context is their personal
+  account, completing the account/workspace gate. Gateway now reports healthy
+  OpenShell `0.1.3` with registered `content-guard` implementation
+  `ai-guardian/rust-middleware 1.20.0-dev` (protocol 1.0). The sandbox effective
+  policy is now version 2, submitted and loaded after the operator restarted
+  the external service. Effective policy preserves the original controls and
+  attaches `content-guard` fail-closed on all three Codex hosts. This resolves
+  the earlier ValidateConfig TCP-connect blocker at application time. Clean
+  Codex traffic now fails after submitting the prompt with `Reconnecting...
+  waiting for network...`. Current direct Describe confirms Running,
+  `ai-guardian/rust-middleware 1.20.0-dev`, registration `content-guard`; gateway
+  also reports Active. This does not verify the sandbox-to-service route or
+  scanner-daemon backend. Normal traffic qualification remains blocked, not a
+  successful threat-denial test. Native logs now identify a concrete blocker:
+  `transparent_tcp_policy_denied` for the canonical managed app-server daemon
+  `/sandbox/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/bin/codex`
+  connecting to chatgpt.com:443. Both Codex rules lack this executable path;
+  the denied connection is stopped before content middleware. Tagged upstream
+  documentation confirms the managed package layout. User has now stopped the
+  additional fix in favor of upstream-supported integration; do not authorize
+  a writable `/sandbox` cache or continue live qualification. Preserve policy;
+  no restart, credential changes, pin update, or lifecycle/denial testing yet.
+- User authorized the compatibility fix. Updated `sandbox.py` to return the
+  managed provider's literal account identity from the same credential snapshot,
+  validate it before provider mutation, and forward it separately as
+  `CODEX_ACCOUNT_ID`. Conflicting overrides fail; duplicate values are removed.
+  Raw Codex credential flags (including API keys) stay in the provider process,
+  not sandbox arguments. Explicit providers use only explicit identity metadata.
+- Updated `container/entrypoint.sh` to use the literal identity for local routing,
+  retain opaque access/refresh tokens and the synthetic ID token, and reject
+  missing/placeholder/invalid identity or incomplete OAuth without API fallback.
+  Preserve atomic auth writes, restrictive permissions, and existing auth on error.
+- Added/updated isolated unit and complete UX contracts, sandbox docs, changelog,
+  and a credential-free, no-network bootstrap smoke step for release-readiness CI.
+  No new project dependency, SDK/config schema change, pin update, or routing
+  validation weakening. Codex stays `0.160.0`; retaining it is not qualification.
+- Regressions reproduced the mismatch before the fix. All 398 related tests pass
+  across sandbox command, container scripts, sandbox tray, the new Codex OAuth UX
+  contract, and the existing create/connect UX contract (one existing GI warning).
+  Ruff, Black (`--target-version py310`), Pylint, Mypy and diff checks pass.
+  Related sandbox statement coverage is 74%; 23/24 changed executable lines are
+  covered (the uncovered line is the moved existing Providers-v2 error raise).
+  Coverage artifacts: `/tmp/opencode/guardian-2556-compat.coverage` and
+  `/tmp/opencode/guardian-2556-compat-coverage.json`. Coverage is a transient
+  Apache-2.0 validation tool only. Manual simplification review completed;
+  no `/simplify` skill is available in this harness.
+- Keep #2556 open. Rebuilt candidate identity/runtime versions and intended
+  personal-account selection are recorded; next verify middleware
+  registration/version/policy/denial and lifecycle checks.
+  Do not retrofit the existing sandbox or copy credentials. No agent live gateway
+  controls, credential reads, builds/container scenarios, commits, pushes, or PRs.
+- Operator now reports the rebuild passed for
+  `localhost/ai-guardian-openshell:codex-0.162.1-identity-fix` using
+  `CODEX_VERSION=0.162.1`. Subsequent digest/runtime outputs are recorded above.
+  Socket existence/listening were verified and the operator subsequently reports
+  successful creation/connect/startup. Account/workspace qualification has since
+  passed; middleware and lifecycle qualification are next. Stop on a fresh-login prompt;
+  do not reuse or modify the old failed candidate sandbox.
+- Follow-up 2026-10-20: the suggested `ag-codex-2556-identity` name was 22
+  characters; OpenShell rejected it with `name exceeds maximum length (22 > 19)`.
+  This was an agent guidance error, before Codex startup, not evidence against
+  the rebuilt image. Provider refresh was acknowledged persisted with
+  `waiting_for_supervisor`; do not treat that as proof all supervisors applied it.
+  The unrelated host-config Git-filtering warning also appeared. Retry ordinary
+  creation with the shorter `ag-2556-id` (10 characters); no image rebuild or
+  production change is needed for this name error. The wrapper intentionally
+  preserves OpenShell names and native validation rather than silently truncating.
+- The shorter-name retry also failed before Codex startup: the configured
+  `/run/user/<uid>/podman/podman.sock` is missing again (`ENOENT`) and failed-create
+  cleanup remains pending for `ag-2556-id`. The reason the socket disappeared is
+  unknown; do not assume a disabled service or a candidate regression. Provider
+  refresh again persisted with `waiting_for_supervisor`; config Git-filtering
+  warning remains separate. Ask the operator to check socket enablement, start
+  the existing user socket without sudo, confirm active, and inspect only this
+  named sandbox. Require `sandbox not found` before retrying; no manual container
+  removal, blanket delete, gateway restart, or new image build.
+- Operator confirms `podman.socket` is enabled and active after starting it.
+  `ag-2556-id` remains `Deleting` / `ConfigurationPending`, with no main process
+  or workload activation. A bounded recheck still reported the same phase and
+  resource version. Require absence before retrying creation; do not issue
+  repeated deletes or manually remove managed containers.
+- Checked installed diagnostic help and upstream `v0.1.3` compute reconciliation:
+  sweeps are one minute and orphan grace is five minutes from record creation.
+  Thus the earlier 30–60-second check alone did not establish a stall. Pruning
+  also requires successful backend probes and no pending driver operation;
+  none of those runtime conditions is yet proved. No promise of cleanup by six
+  minutes or restart recommendation is justified.
+- Next operator diagnostics, read-only/no sudo: verify the configured socket's
+  file type, show `ActiveState`/`SubState`/`Listen` for `podman.socket`, and inspect
+  `openshell logs ag-2556-id --source gateway --level warn --since 1h -n 40`.
+  Share only sanitized socket/cleanup/deletion warnings, not full logs. The
+  installed CLI supports this sandbox-scoped gateway log query; its doctor
+  command is a local development-prerequisite checker, not a cleanup repair.
+  If the resource is now absent, confirm by named get before any retry. Socket
+  recurrence cause and Codex qualification remain unknown; no live agent controls.
+- Prior operator diagnostics: configured path is a socket; the user unit is
+  `active` / `listening` and `Listen` matches that path. The sandbox-scoped log
+  query now returns `sandbox not found`, suggesting the failed record was pruned.
+  Confirm with `openshell sandbox get ag-2556-id`; only if absent, retry ordinary
+  creation with the same rebuilt image and explicit OAuth. No rebuild is needed.
+  This is prerequisite/cleanup evidence, not Codex startup or middleware evidence.
+- Prepared a temporary operator-only account probe at
+  `/tmp/opencode/guardian-2556-account-probe.py`; not project/runtime source.
+  Upload only that file to `/tmp/guardian-2556-account-probe.py` in `ag-2556-id`,
+  then run it from the already-connected sandbox shell. It starts its own local
+  Codex app-server, negotiates `experimentalApi` plus explicit gateway OAuth,
+  sends `initialized`, and requests `account/read` with `refreshToken: false`.
+  It requests no login/model turn or config mutation, suppresses raw RPC/stderr,
+  prints status/auth-type/routing-presence/identity-match only, and cleans up only
+  its own probe child. A shared 40-second deadline bounds the handshake/read.
+  Thirteen synthetic offline checks, Black, and Ruff pass; no real Codex/provider
+  or sandbox was invoked by the agent. Fixture:
+  `/tmp/opencode/guardian-2556-fake-app-server.py` (do not upload).
+  Positive probe output establishes routing matches `CODEX_ACCOUNT_ID`, not that
+  the operator intended that workspace. Ask for a separate private intended-host-
+  workspace match/mismatch/unknown attestation. Synthetic sandbox email is not
+  account identity proof. Operator uploaded and ran the probe successfully:
+  `account_read=passed`, `auth_type=chatgpt`, `workspace_routing=present`,
+  `identity_matches_bootstrap=yes`. The standalone-file upload warning is expected
+  and upload completed. This is positive OAuth/account-read/routing evidence,
+  not independent proof of intended selection or middleware enforcement. Ask the
+  operator whether the host Codex account/workspace used for creation is the
+  intended one: match/mismatch/unknown only; no names, emails, or IDs. Keep the
+  default pin unchanged and #2556 open until the remaining gates are complete.
+- Operator tentatively inferred intended account selection from model access and
+  asked whether workspace means the empty `/sandbox` directory. Do not record
+  that as independent account-selection confirmation. Clarify: workspace routing
+  refers to the ChatGPT personal/organization account context, not filesystem
+  content. A valid model reply proves usable authentication; the probe additionally
+  proves routing matches bootstrap metadata, not operator intent. The guided
+  qualification create omitted `--repo`, so no project upload was requested.
+  For OpenShell, `--repo .` at creation uploads to `/sandbox/repo`, not a live
+  host bind mount. No recreation/upload is needed for this auth check. Ask only
+  whether the host Codex login is the intended account/context; no identity data.
+- Operator then explicitly confirmed their intended personal account. Combined
+  with the successful account/read and routing-to-bootstrap probe, record the
+  account/workspace gate as passed (operator-reported). Next read-only checks:
+  `openshell gateway info` for gateway registration/activation and
+  `openshell policy get ag-2556-id --full` for effective `network_middlewares`
+  attachment, nested registration name, `on_error`, and included Codex hosts.
+  Request only these non-secret fields, not raw config/provider responses. The
+  tray's standalone Check middleware readiness action can separately report the
+  external Rust implementation/version via Describe; sandbox Python package
+  version is not service-version evidence. Do not restart services or replace
+  policy before inspecting current state; actual middleware denial remains untested.
+- Operator supplied gateway and effective-policy evidence: gateway healthy,
+  Podman/credential driver `0.1.3`, `content-guard` registered as AI Guardian Rust
+  middleware `1.20.0-dev`, protocol 1.0. Keep this external-service version
+  distinct from sandbox Python package `1.19.0`. Effective policy revision 1 has
+  expected filesystem/provider network rules but no `network_middlewares`, so
+  provider-boundary scanning is not yet attached to `ag-2556-id`.
+  Next operator-only step: export this sandbox's `--base` policy (not `--full`),
+  strip CLI table metadata, append only the `network_middlewares` mapping from
+  `container/policies/openshell-middleware.yaml`, review preserved base controls
+  and exactly one middleware mapping, then apply the complete file with native
+  `openshell policy set ag-2556-id --policy ... --wait`. Use a fresh
+  `/tmp/opencode/ag-2556-id-policy.yaml`; no matching file currently exists.
+  Never apply the overlay alone or provider-composed effective export. The
+  shipped profile matches registration `content-guard`, fails closed, and
+  includes api.openai.com/chatgpt.com/ab.chatgpt.com. Confirm effective attachment
+  after application; ask only for apply status and the middleware section.
+  No image rebuild, gateway restart, or agent-run runtime/policy operation.
+- Operator attempted the complete-policy update. OpenShell rejected it with
+  `middleware config 'content-guard' is invalid: middleware ValidateConfig failed`
+  followed by service-unavailable/TCP-connect/tonic ConnectError. This reports a
+  transport failure, not a specific YAML/schema defect or Codex regression.
+  The following effective-policy query still shows revision 1, the previous hash,
+  and no middleware attachment. The external Rust endpoint is unreachable from
+  the gateway; stopped process, wrong listener/address, and other connectivity
+  causes remain unverified. Existing gateway extension metadata is not liveness.
+  Next ask how the operator runs the external service (terminal, actual user
+  unit, other manager/container, unknown), then inspect that process/listener
+  with read-only diagnostics; the tray Describe readiness check is available.
+  Do not assume the example systemd unit is installed, retry policy repeatedly,
+  restart gateway, rebuild images, weaken fail-closed policy, or read credentials.
+- Operator answered the launch-method question: the Rust service was started in
+  a terminal and may have stopped. Its exit/liveness is not yet confirmed.
+  Next: inspect the original terminal; only if it exited, relaunch the existing
+  binary with the original registration, bind address/port, OpenShell version,
+  and daemon connection settings, and keep that terminal open. Do not start a
+  duplicate if it is still running. Once listening, retry the existing complete
+  policy once from a second host terminal; on success query effective attachment.
+  Keep the same registered endpoint; no gateway restart or rebuild is needed for
+  restoring that foreground process. On another error stop and request only its
+  sanitized diagnostic, not raw logs, environment dumps, or authentication files.
+- Latest direct readiness result is Not responding / Describe UNAVAILABLE;
+  gateway extension Active is explicitly metadata only. The operator's initial
+  belief that the process remained running was withdrawn as uncertain. Before
+  any relaunch/retry, request host-only `pgrep -fl` (PID/name, not full arguments)
+  for the Rust binary and `ss -ltnp` filtered to Guardian/default-port listeners.
+  If there is a live listener, next compare its bind with the effective gateway
+  registration (scheme/host/port only); no raw TOML, environment, or logs.
+- Operator ran both host diagnostics; `pgrep -fl` for the standard middleware
+  binary and `ss` filtered to Guardian/default-port listeners produced no output.
+  Report this as no expected process/listener found, not a universal process
+  search or proof of a specific exit cause. Guide operator to rerun the original
+  launch command for the existing binary with the same endpoint/registration/
+  daemon settings, keeping its host terminal open. If that command is unavailable,
+  ask only for the configured content-guard endpoint (scheme/host/port) to prepare
+  a correct launch; do not guess a bind address or request credentials. After
+  startup, request direct tray readiness status/version (or sanitized startup
+  error). No policy retry until ready; no gateway restart or rebuild.
+- Operator's documented launch attempt stopped at the shell guard because
+  `MIDDLEWARE_HOST` was unset/empty; it was not a Codex failure or proof of a
+  successful Rust launch. The operator subsequently says the middleware is
+  restarted. Treat this as operator start status only, not endpoint reachability.
+  Request current direct tray readiness implementation/version. Only if Running
+  retry `/tmp/opencode/ag-2556-id-policy.yaml` with native `policy set --wait`;
+  only on success inspect effective policy. Stop on an error and share sanitized
+  status only. Actual provider-boundary denial and lifecycle gates remain pending.
+- Existing `.wolf/STATUS.md` / `cerebrum.md` work was preserved. OpenWolf hooks
+  updated the anatomy index automatically; the new UX contract is untracked until
+  the external DAF publication workflow stages it with the other changes.
+
+- Operator now reports `Policy version 2 submitted` and `loaded (active version:
+  2)`. Effective revision 2 includes `network_middlewares.content-guard` with
+  `middleware: content-guard`, `on_error: fail_closed`, response redaction,
+  shipped scanner ownership, and api.openai.com/chatgpt.com/ab.chatgpt.com.
+  Filesystem and provider network controls remain present. This is successful
+  middleware validation/attachment evidence, not an actual inspected/denied
+  request. First run a fresh Codex process in the same sandbox and request
+  `Reply with OK without using tools.` to establish normal traffic after policy
+  activation. Stop on fresh-login prompts/errors; share only sanitized status.
+  Then qualify actual provider-boundary denial (not a hook block/model refusal)
+  and sandbox lifecycle. No default pin update or agent runtime controls.
+
+- Latest operator result: fresh Codex attempt after policy activation failed to
+  connect to the model. Operator suspects middleware; no exact error is supplied,
+  so do not assign a root cause or call this expected threat blocking. The
+  fail-closed path may also block clean requests on service/backend/inspection
+  failures. Request exact sanitized user-visible error (HTTP status/reason_code
+  if visible), startup vs after the OK request, and current direct tray readiness.
+  Only a correlated reason/status from middleware logs is needed, not raw logs,
+  payloads, authentication files, or env dumps. Prior Oct 9 paused-middleware
+  denial is logged and fixed, but current evidence does not establish recurrence.
+  Keep #2556 open and pin unchanged; clean baseline must pass before continuing.
+
+- Operator clarifies startup succeeded; failure occurs after submitting the
+  prompt, shown as `Reconnecting... waiting for network...`. The post-restart
+  readiness check now directly confirms AI Guardian Rust middleware `1.20.0-dev`
+  Running and gateway registration `content-guard` Active. Need runtime failure
+  evidence, not another account/login fix or assumption that the listener died.
+  Next operator-only diagnostic: `openshell logs ag-2556-id --source all --level
+  warn --since 20m -n 40`; inspect privately and share only matching sanitized
+  error/status/reason fields. In Rust terminal, look for request/response/
+  WebSocket decision metadata (`blocked`, `reason_code`, finding_count) or control-
+  plane-unavailable warning. Say no matching middleware event if none. Local
+  source logs decisions at INFO and backend failures at WARN; gateway WARN output
+  alone is not proof of no scanner decision. No raw logs/payloads/auth/env output.
+
+- Operator's native log query returned only `log buffer contains only the last
+  40 lines; --since results may be incomplete`, with no warning diagnostic.
+  This does not prove absence of errors, middleware events, or scanning. The
+  external Rust terminal output has not been supplied. Next request its
+  existing-attempt decision/warning metadata only; if it has only startup output,
+  report that explicitly. Do not repeat the same WARN query or infer a cause.
+
+- Operator supplied Rust startup and request-only INFO logs. Middleware listened
+  on a specific host IP:50051 (do not copy private address to tracked/public docs).
+  Logged POSTs to ab.chatgpt.com from 14:37 through 15:01 UTC all have allow
+  decisions/zero findings, many at one-minute intervals. No request paths,
+  elapsed/deadline/status, or response/WebSocket decisions are supplied; do not
+  equate these with the failed generation request or prove scanners actively ran.
+  Local response preflight/mode/size rejection branches do not emit the normal
+  response-decision INFO log, so their absence is inconclusive. Tagged OpenShell
+  v0.1.3 emits native `HTTP_RESPONSE_MIDDLEWARE`, `WEBSOCKET_MIDDLEWARE`, and
+  response-failure events with outcome/status/failure metadata. Next operator
+  query: retained native logs `--source all -n 300`, no level/time filter, with
+  local text filtering to middleware/denial/timeout/upstream/WebSocket/reset
+  diagnostics. Share only safe fields, not full lines/payloads/headers/URLs.
+  Codex can be exited normally to stop automatic reconnects; do not stop/restart
+  sandbox/service or change policy. No new prompt needed for this inspection.
+
+- Concrete network denial supplied: supervisor/OCSF attributes the chatgpt.com
+  connection to the managed `app-server-daemon` release executable above, not
+  `/usr/bin/codex` or the image npm tree. Neither provider-composed nor base
+  `codex_openai` rule includes it. This explains at least one generation blocker;
+  no evidence that content middleware rejected those bytes. Official OpenShell
+  v0.1.3 provider comments identify ab.chatgpt.com as experiment lookups, so the
+  earlier allowed POSTs are not model-success evidence. Tagged Codex README
+  documents managed package copying/selection under CODEX_HOME and independent
+  daemon lifecycle. Do not blindly add `/sandbox/**` or a mutable-cache wildcard.
+  Existing branch changes are preserved; no additional production/policy change
+  yet. Ask operator to approve a narrowly scoped trusted-component fix and tests
+  before changing executable authorization; qualification and pin remain blocked.
+
+- Stop decision: operator requested the security tradeoff explanation and said
+  they prefer an OpenShell-side supported integration rather than proceeding
+  with a local executable-policy fix. No second production/policy fix was made.
+  Explain that path authorization in writable CODEX_HOME can trust replacement
+  bytes at the same path; a broad glob worsens this, while existing endpoint and
+  middleware controls still apply. A trusted image-owned read-only package is
+  a different boundary. The observed issue is profile/package-layout coverage,
+  not proof of incorrect OpenShell core enforcement or the first affected Codex
+  version. An upstream change might be a profile/integration update, and an
+  upgrade alone may not replace already-imported or locally shipped profiles.
+  Do not promise an upstream fix/version or create an upstream issue without
+  permission. Record sanitized findings on existing #2556; leave it open.
+  No cleanup/revert, commit, push, PR, image build, or further runtime control.
+
+### Qualification history before this local fix
+
+- Initialized managed DAF development session on existing clean branch `2556`;
+  read the repository-qualified issue once. No hierarchical context markdown or
+  hierarchical skills were present. Loaded applicable DAF/OpenWolf instructions.
+- Reviewed stable Codex releases `0.161.0`, `0.162.0`, and `0.162.1`, the tagged
+  Apache-2.0 license and NOTICE, and current OpenAI authentication/service terms.
+  This is a technical review, not legal approval or acceptance for the operator.
+- Default `CODEX_VERSION=0.160.0` remains unchanged. Read-only host probes report
+  OpenShell `0.1.3` and Codex `0.160.0`; no agent build or live qualification ran.
+- The operator built `localhost/ai-guardian-openshell:codex-0.162.1-qualification`
+  and supplied digest
+  `sha256:1d8af44690e9b62c5fb5c118d4e88ab2894cdcd26d9a4fecf40e1d610871779d`,
+  platform `linux/amd64`, and version output `codex-cli 0.162.1`. This is
+  operator-reported image smoke, not independently reproduced OAuth evidence.
+- Operator creation of dedicated sandbox `ag-codex-2556` failed before Codex
+  startup: the gateway's rootless Podman socket was missing (`ENOENT`), and
+  failed-create cleanup remains pending. The ordinary provider refresh persisted;
+  no credential values were shared. This is not a candidate Codex regression.
+- Operator restored `podman.socket`, confirmed it active, and subsequently
+  confirmed `openshell sandbox get ag-codex-2556` returns `sandbox not found`.
+  Failed-create cleanup and subsequent creation are operator-confirmed.
+- Candidate `codex` then failed during TUI bootstrap with:
+  `account/read failed during TUI bootstrap: account/read failed: selected workspace missing from routing discovery (code -32603)`.
+  Startup/account/workspace qualification therefore failed; no model reply,
+  actual middleware denial, or candidate restart/reconnect qualification passed.
+- Static diagnosis: `container/entrypoint.sh:375-379,450-458` intentionally uses
+  opaque account placeholders; candidate Codex routing code selects an exactly
+  matching account ID from discovery or emits MissingWorkspace. This is consistent
+  with an identity-metadata compatibility gap, not proof of the private runtime
+  mapping or a universal upstream regression. No auth files/payloads were read.
+- Agent read-only image inspection confirms candidate digest/platform and labels:
+  Codex `0.162.1`, AI Guardian `1.19.0`, OpenCode `1.19.0`. The explicit gateway
+  status field reports `0.1.3` with exit 0. Existing `:dev` differs in Guardian
+  (`1.20.0.dev0`) and OpenCode (`1.18.34`), so it is not a controlled A/B baseline.
+  Middleware version/registration/policy/denial remain unverified; the prior
+  failed-resource policy had no attachment, not proof of the recreated policy.
+- Decision: stop qualification at the failed startup gate; retain `0.160.0` and
+  leave #2556 open. No login/configuration workaround or routing-check weakening.
+  A secure identity-metadata integration and renewed operator qualification are
+  required before any pin change. No automatic candidate sandbox deletion.
+- Upstream lookup found exact-match NVIDIA/OpenShell #4214, closed as completed
+  by merged PR #4215 on 2026-10-06 (commit `5601d71b014545678c9fcb572dad7e6cc09fc448`).
+  It reports the same placeholder/discovery mismatch, including Codex `0.160.0`.
+  The fix passes literal non-bearer account metadata through Gator's launcher/
+  harness while retaining opaque tokens; it is not a generic gateway rewrite.
+  GitHub ancestry confirms inclusion in both `v0.1.3` and `v0.1.4`. Our custom
+  `container/entrypoint.sh:457` still uses `CODEX_AUTH_ACCOUNT_ID` as account_id,
+  with no `CODEX_ACCOUNT_ID` path. This strongly supports adapting our custom
+  integration rather than filing a duplicate or assuming a gateway-only upgrade
+  resolves it. Keeping the existing pin is not evidence that `0.160.0` works.
+  User requested lookup only; no upstream issue/comment or production edit made.
+- Existing report caveats: metadata comes from Dockerfile defaults rather than
+  the overridden image; `--qualify` runs all three rows including unrelated
+  Vertex cases; neither `account/read` nor middleware denial is tested. Record
+  actual image metadata and those manual checks separately, not as runner proof.
+- Review/progress comment sources: `/tmp/opencode/guardian-2556-review.md` and
+  `/tmp/opencode/guardian-2556-candidate-image.md`.
+  Infrastructure failure: `/tmp/opencode/guardian-2556-runtime-prerequisite.md`.
+  Startup failure: `/tmp/opencode/guardian-2556-startup-failure.md`.
+  No agent credential access, live controls, local builds/container scenarios,
+  source/pin changes, commits, pushes, or PRs. JSON/diff checks cover bookkeeping;
+  no production code changed, so code tests/linters were not required.
+- Older handoffs below are historical and outside #2556.
 
 ## PR #2562 CodeQL follow-up — 2026-10-19
 
@@ -393,6 +826,14 @@ budget_tokens: 1000
 
 ## 🚀 Next quest
 
+- #2556 compatibility fix is local and validated offline; retain Codex `0.160.0`
+  and leave the issue open. The operator must rebuild the candidate with the new
+  entrypoint, use the patched creator, and create a fresh sandbox. Repeat startup,
+  private account/workspace, actual middleware denial, and lifecycle qualification
+  before any pin update. Do not treat the old candidate sandbox or the CI-only
+  bootstrap smoke as proof of live compatibility. Publish only through the
+  external DAF workflow when the user decides; no automatic cleanup or live controls.
+- Prior publication/validation tasks below are historical and outside #2556.
 - Publish the local #2559 CodeQL log correction with `daf complete` outside this
   agent session to existing PR #2562, then verify the new head's checks. Let CI
   validate the remaining matrix/non-unit suites. Keep routing and live
@@ -428,7 +869,7 @@ budget_tokens: 1000
 ## Context
 
 - Working directory: `/home/itdove/development/ai/ai-guardian`
-- Branch/issue: `2559` / `RedHatProductSecurity/ai-guardian#2559`.
+- Branch/issue: `2556` / `RedHatProductSecurity/ai-guardian#2556`.
 - Local desktop: KDE Plasma 6.7.4, Qt 6.11.2, Wayland; AI Guardian tray is
   running. No crash was deliberately triggered on the live desktop.
 - The OpenCode JavaScript/TypeScript CodeQL workflow is not configured; the

@@ -6,6 +6,21 @@
 
 ## User Preferences
 
+- For this upstream OpenShell/Codex support report, omit AI Guardian branding.
+  Keep the custom-image/wrapper and external-middleware caveats accurate; do not
+  present it as an independently reproduced default OpenShell/Gator issue.
+   Explicit publication approval was subsequently given: NVIDIA/OpenShell#4751.
+   Do not make additional upstream posts without a new request.
+
+- For #2556, stop when qualification requires an additional local OpenShell
+  executable-policy fix for the managed Codex daemon; user prefers waiting for
+  upstream-supported integration. The latest stop request supersedes the earlier
+  Prepare fix selection. Do not broaden writable-cache authorization or resume
+  implementation/qualification without an explicit new request.
+  User requested deferral of #2556 to the `1.22.0` release label and intends to
+  retain branch `2556` for a later retry. Keep the issue open and preserve its
+  uncommitted work; retaining a branch is not a commit or remote backup.
+
 - Dev install must use `uv tool install --editable .` — `uv tool install --force .` copies a snapshot; subsequent source changes are NOT reflected in the binary.
 - When DAF metadata labels a repository issue as JIRA but the user identifies it as GitHub, use the repository-qualified `gh issue view` flow.
 - Pi OpenShell remains unqualified; local v0.1.2 validation must use supported Codex or OpenCode paths instead.
@@ -36,6 +51,138 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **Codex candidate evidence (#2556):** The manual OpenShell runner derives
+  image CLI versions from Dockerfile defaults, so a `CODEX_VERSION` build override
+  is not reflected in its report. Record inspected candidate digest/platform/
+  labels and runtime versions separately. `--qualify` currently runs three rows
+  including Vertex despite an older Codex-only README paragraph, and tests
+  neither `account/read` workspace selection nor provider-boundary middleware
+  denial. A runner pass is not evidence for either manual qualification gate.
+  In tagged Codex `0.162.1`, `workspaceRouting` is an experimental response
+  field omitted from the stable generated TypeScript `GetAccountResponse`;
+  negotiate `experimentalApi` when probing it and use the tagged Rust protocol
+  and app-server README as the reference. Compare identifiers privately and
+  publish only match/status results, never raw account responses.
+  Operator candidate startup subsequently failed with MissingWorkspace during
+  `account/read`. The bootstrap intentionally uses OpenShell's opaque account
+  placeholder, while the candidate requires an equal ID in discovery results.
+  Treat this as a failed qualification and a likely identity-metadata gap, not
+  proof of private payload contents or a universal upstream regression. Keep the
+  existing pin and routing protections intact. The existing local `:dev` image
+  also has different Guardian/OpenCode versions, so it is not a version-only
+  A/B baseline for the candidate.
+
+- **Known upstream Codex identity fix (#2556):** NVIDIA/OpenShell #4214 reports
+  this exact MissingWorkspace error with opaque account IDs, including Codex
+  `0.160.0`. Merged PR #4215 (`5601d71b014545678c9fcb572dad7e6cc09fc448`, Oct 6)
+  fixes only the bundled Gator launcher/harness by separating literal account
+  identity metadata from opaque bearer credentials. Both `v0.1.3` and `v0.1.4`
+  contain that commit; a gateway-only upgrade did not retrofit our custom
+  entrypoint, which assigned the account placeholder before the #2556 fix.
+  Prefer secure integration parity and renewed qualification, not duplicate
+  upstream reporting or assuming the retained `0.160.0` pin is a working baseline.
+  The local fix returns the managed provider and identity together, validates
+  before mutation, sends only `CODEX_ACCOUNT_ID` as literal metadata, and strips
+  raw credential flags from workload arguments. Explicit providers must supply
+  their own matching metadata; never infer it from an unrelated host account.
+  Both the creator and rebuilt entrypoint are required; existing images/sandboxes
+  are not retrofitted. Preserve synthetic ID tokens and atomic mode-0600 auth.
+  In negative tests, pass NUL-containing values through the argument dictionary,
+  not `os.environ`, which rejects embedded NUL before application validation.
+  For live `account/read` qualification, the experimental routing object's key
+  is `workspaceRouting.chatgptAccountId`; compare privately to `CODEX_ACCOUNT_ID`.
+  API-key/signed-out paths may have null routing and do not qualify the OAuth
+  workspace gate. Negotiate `experimentalApi` and do not proactively refresh or
+  initiate login merely to inspect status. A status-only local probe can suppress
+  raw RPC/stderr and return match booleans. The ID-token email is deliberately
+  synthetic; never treat it as proof of the real account. Matching bootstrap
+  metadata still needs an independent operator attestation about intended workspace.
+  In operator guidance, explicitly distinguish ChatGPT personal/organization
+  workspace (account-routing context) from sandbox filesystem workspace. Model
+  access alone does not independently identify the intended account. The #2556
+  guided create omitted `--repo`; empty `/sandbox` is not an OAuth symptom.
+  With OpenShell, `--repo .` uploads a copy to `/sandbox/repo`, not a live bind
+  mount. Do not recreate a working qualification sandbox just to populate files.
+
+- **Codex managed-daemon executable identity (#2556):** Codex `0.162.1` can
+  perform generation from the canonical CODEX_HOME package release binary
+  `/sandbox/.codex/packages/app-server-daemon/releases/0.162.1-x86_64-unknown-linux-musl/bin/codex`,
+  not the npm/launcher path. Tagged daemon README documents managed copies and
+  separate lifecycle/version selection. Native `transparent_tcp_policy_denied`
+  on that path is a binary authorization failure before content middleware,
+  not a content-denial test. Verify package provenance and scope any policy fix
+  deliberately; never broadly authorize executables under writable `/sandbox`.
+  Official OpenShell v0.1.3 Codex profile labels ab.chatgpt.com as experiment
+  lookups; allowed POSTs there are not proof of working model generation.
+  As checked 2026-10-20, v0.1.4 and main retain the same reference binary list
+  (v0.1.3 and v0.1.4 profile contents are byte-for-byte identical). No specific
+  managed-daemon authorization fix was identified in v0.1.4 release notes or
+  comparison commits; this is not a live v0.1.4 reproduction. The profiles
+  explicitly tell operators to tailor the paths to their image. Distinguish this
+  generic policy recommendation from a secure recommendation for managed
+  writable-cache binaries. The older #440 collaborator guidance is a base-policy
+  update; its sign-in port forwarding is not applicable to already-working OAuth.
+  Tagged `identity.rs` already implements SHA-256 TOFU caching and rejects later
+  changed hashes at pinned paths. Do not repeat the overly broad claim that
+  path authorization always accepts replacement bytes. Package provenance and
+  supported managed-install/update handling remain the documentation question.
+  Neutral upstream report: NVIDIA/OpenShell#4751; current-issue deferral and
+  security clarification: #2556 comment 6295221104. Release target is `1.22.0`.
+
+- **OpenShell failed-create cleanup (#2556):** A missing rootless Podman API
+  socket can fail creation and compensation before Codex starts. Restoring the
+  user `podman.socket` service does not prove resource cleanup: the gateway can
+  retain a `Deleting` record. Verify absence before reusing the test sandbox name.
+  In OpenShell `0.1.3`, a repeated delete on an already-Deleting record returns
+  Accepted without issuing another driver deletion; acceptance is not cleanup
+  evidence. Preserve OpenShell ownership rather than removing containers directly.
+  The socket prerequisite recurred after a successful operator image rebuild on
+  Oct 20; CLI build success does not prove Podman's API socket is available to
+  OpenShell. The reason for recurrence is unverified. Inspect user-unit state
+  rather than assuming enablement or changing persistent service settings.
+  Upstream `v0.1.3` compute code uses a one-minute reconciliation sweep and a
+  five-minute orphan grace from creation; a 30–60-second recheck alone does not
+  prove a cleanup stall. Pending driver operations, retained backend resources,
+  or failed backend probes can prevent pruning; do not promise a fixed completion
+  time. Installed `openshell logs NAME --source gateway --level warn --since 1h
+  -n 40` is a supported read-only diagnostic, scoped to that sandbox. Request only
+  redacted relevant warnings, not raw logs; `doctor check` checks local gateway
+  development prerequisites rather than repairing deletion state.
+  During middleware attachment, `ValidateConfig` can fail with a service-
+  unavailable/TCP ConnectError even though gateway info lists the negotiated
+  registration. That is transport/liveness evidence, not a specific bad-YAML
+  finding. Check the effective revision before claiming policy applied; identify
+  the operator's actual process/service rather than assuming the documentation's
+  example systemd unit exists. Restore endpoint reachability before retrying.
+  A live Describe and successful ValidateConfig do not prove the sandbox
+  supervisor's route or the separate scanning-daemon backend works. Rust HTTP,
+  response, and WebSocket decision logs expose `blocked`, `reason_code`, and
+  finding_count at INFO; control-plane errors are WARN. Ask for only correlated
+  metadata, not full payload/log dumps. Gateway WARN logs alone can miss a
+  successfully executed scanner decision.
+  An OpenShell `--since` log query can return only a bounded-buffer/incomplete-
+  results warning. No diagnostic output is inconclusive, not proof of no error.
+  Check the external Rust process's separate terminal rather than assuming its
+  INFO decision logs are included in a gateway/sandbox WARN query.
+  `blocked=false`/zero findings on a Rust HTTP request log is only an allow
+  decision for that request, not proof it is model-generation traffic or that a
+  response passed. Correlate host/method with status/outcome; periodic POSTs can
+  be background traffic. Response preflight/mode/size blocks currently return
+  decisions before the ordinary response-decision INFO log. Native OpenShell
+  v0.1.3 emits `HTTP_RESPONSE_MIDDLEWARE`/`WEBSOCKET_MIDDLEWARE` network events;
+  inspect their metadata before inferring a root cause from missing Rust logs.
+  Its CLI prints the --since buffer warning whenever since and buffer_total are
+  positive; that warning alone does not establish overflow or missing events.
+
+- **OpenShell sandbox name budget (#2556):** The operator's `0.1.3` gateway
+  rejected the suggested 22-character `ag-codex-2556-identity` name with a maximum
+  of 19. Use short qualification names such as `ag-2556-id` (10 characters).
+  `_resolve_sandbox_name` intentionally preserves OpenShell names and defers
+  validation to the runtime (`test_resolve_sandbox_name_preserves_long_openshell_name`);
+  do not silently truncate or apply container collision suffixes. A persisted
+  provider-refresh receipt with `waiting_for_supervisor` is separate from sandbox
+  creation and does not establish supervisor application or successful Codex startup.
 
 - **Classifier log privacy (PR #2562):** CodeQL can trace scanned content into
   SSRF hostname diagnostics. Even parsed IP text is not inherently safe logging

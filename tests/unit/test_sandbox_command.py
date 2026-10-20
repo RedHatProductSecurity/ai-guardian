@@ -69,7 +69,7 @@ def _args(**overrides):
 
 
 @pytest.fixture(autouse=True)
-def sandbox_names_are_available():
+def sandbox_names_are_available(tmp_path):
     """Keep command-construction tests independent of installed runtimes."""
     credential_environment = {
         name: ""
@@ -85,8 +85,16 @@ def sandbox_names_are_available():
             "OPENAI_API_KEY",
             "OPENCODE_API_KEY",
             "GOOGLE_APPLICATION_CREDENTIALS",
+            "CODEX_ACCOUNT_ID",
+            "CODEX_AUTH_ACCESS_TOKEN",
+            "CODEX_AUTH_REFRESH_TOKEN",
+            "CODEX_AUTH_ACCOUNT_ID",
+            "CODEX_AUTH_ID_TOKEN",
         )
     }
+    credential_environment.update(
+        {"HOME": str(tmp_path), "CODEX_HOME": str(tmp_path / ".codex")}
+    )
     with (
         patch("ai_guardian.sandbox._sandbox_name_exists", return_value=False),
         patch.dict(os.environ, credential_environment, clear=False),
@@ -1716,7 +1724,10 @@ def test_existing_openshell_codex_provider_refreshes_local_credentials(tmp_path)
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
         patch("ai_guardian.sandbox._run", return_value=0) as run,
     ):
-        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+        assert _ensure_openshell_cli_provider(args, "codex") == (
+            "ai-guardian-codex",
+            "account-placeholder",
+        )
 
     command = run.call_args.args[0]
     assert command[:4] == [
@@ -1754,7 +1765,10 @@ def test_existing_openshell_codex_provider_refreshes_api_key(tmp_path):
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
         patch("ai_guardian.sandbox._run", return_value=0) as run,
     ):
-        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-openai"
+        assert _ensure_openshell_cli_provider(args, "codex") == (
+            "ai-guardian-openai",
+            None,
+        )
 
     command = run.call_args.args[0]
     assert command[:4] == [
@@ -1803,7 +1817,10 @@ def test_explicit_openshell_oauth_selection_does_not_fall_back_to_api_key(
         patch("ai_guardian.sandbox._openshell_providers_v2_enabled", return_value=True),
         patch("ai_guardian.sandbox._run", return_value=0) as run,
     ):
-        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+        assert _ensure_openshell_cli_provider(args, "codex") == (
+            "ai-guardian-codex",
+            "account-secret",
+        )
 
     command = run.call_args.args[0]
     assert command[command.index("--type") + 1] == "codex"
@@ -1859,7 +1876,10 @@ def test_explicit_openshell_api_key_reuses_existing_provider_without_oauth_refre
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
         patch("ai_guardian.sandbox._run") as run,
     ):
-        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-openai"
+        assert _ensure_openshell_cli_provider(args, "codex") == (
+            "ai-guardian-openai",
+            None,
+        )
 
     run.assert_not_called()
 
@@ -1932,7 +1952,10 @@ def test_openshell_provider_environment_bridges_codex_oauth_without_command_leak
             clear=False,
         ),
     ):
-        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+        assert _ensure_openshell_cli_provider(args, "codex") == (
+            "ai-guardian-codex",
+            "account-secret",
+        )
 
     command = run.call_args.args[0]
     assert "access-secret" not in command
@@ -1968,12 +1991,219 @@ def test_openshell_provider_environment_bridges_codex_api_key_without_command_le
             clear=True,
         ),
     ):
-        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-openai"
+        assert _ensure_openshell_cli_provider(args, "codex") == (
+            "ai-guardian-openai",
+            None,
+        )
 
     command = run.call_args.args[0]
     assert "api-secret" not in command
     assert command[command.index("--credential") + 1] == "OPENAI_API_KEY"
     assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
+
+
+@pytest.mark.parametrize("provider_exists", [False, True])
+@pytest.mark.parametrize("credential_source", ["auth-file", "environment"])
+def test_openshell_codex_handoff_separates_routing_identity_from_credentials(
+    tmp_path, provider_exists, credential_source
+):
+    tokens = {
+        "access_token": "unit-access-credential",
+        "refresh_token": "unit-refresh-credential",
+        "account_id": "unit-workspace-id",
+        "id_token": "unit-id-credential",
+    }
+    explicit_environment = [
+        "OPENAI_API_KEY=unit-api-credential",
+        "CODEX_ACCOUNT_ID=unit-workspace-id",
+    ]
+    if credential_source == "auth-file":
+        codex_home = tmp_path / ".codex"
+        codex_home.mkdir()
+        (codex_home / "auth.json").write_text(
+            json.dumps({"tokens": tokens}), encoding="utf-8"
+        )
+    else:
+        explicit_environment.extend(
+            f"CODEX_AUTH_{key.upper()}={value}" for key, value in tokens.items()
+        )
+    args = _args(
+        runtime="openshell",
+        cli="codex",
+        openshell_auth="oauth",
+        environment=explicit_environment,
+    )
+    output = []
+    with (
+        patch("ai_guardian.sandbox._initial_config_source", return_value=None),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_exists",
+            return_value=provider_exists,
+        ),
+        patch("ai_guardian.sandbox._openshell_providers_v2_enabled", return_value=True),
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+    ):
+        command, _name, _uploads, policy_dir = _openshell_create(args, output=output)
+    try:
+        assert command.count("CODEX_ACCOUNT_ID=unit-workspace-id") == 1
+        assert "ai-guardian-codex" in command
+        for key in ("ACCESS_TOKEN", "REFRESH_TOKEN", "ACCOUNT_ID", "ID_TOKEN"):
+            assert not any(value.startswith(f"CODEX_AUTH_{key}=") for value in command)
+        assert not any(value.startswith("OPENAI_API_KEY=") for value in command)
+        for credential in (
+            tokens["access_token"],
+            tokens["refresh_token"],
+            tokens["id_token"],
+            "unit-api-credential",
+        ):
+            assert credential not in " ".join(command)
+            assert credential not in "".join(output)
+        provider_environment = run.call_args.kwargs["env"]
+        assert provider_environment["CODEX_AUTH_ACCOUNT_ID"] == tokens["account_id"]
+        assert provider_environment["CODEX_AUTH_ACCESS_TOKEN"] == tokens["access_token"]
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+@pytest.mark.parametrize("provider_exists", [False, True])
+@pytest.mark.parametrize(
+    "account_id",
+    [
+        None,
+        "",
+        "openshell:resolve:env:CODEX_AUTH_ACCOUNT_ID",
+        " \t",
+        "bad\nid",
+        "bad\x00id",
+    ],
+)
+def test_openshell_codex_rejects_invalid_identity_before_provider_mutation(
+    provider_exists, account_id
+):
+    environment = {
+        "CODEX_AUTH_ACCESS_TOKEN": "unit-access-credential",
+        "CODEX_AUTH_REFRESH_TOKEN": "unit-refresh-credential",
+    }
+    if account_id is not None:
+        environment["CODEX_AUTH_ACCOUNT_ID"] = account_id
+    with (
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_exists",
+            return_value=provider_exists,
+        ),
+        patch("ai_guardian.sandbox._openshell_providers_v2_enabled", return_value=True),
+        patch("ai_guardian.sandbox._run") as run,
+        pytest.raises(
+            ValueError,
+            match="Codex OAuth requires a literal account ID for workspace routing",
+        ),
+    ):
+        _ensure_openshell_cli_provider(
+            _args(
+                environment=[f"{key}={value}" for key, value in environment.items()],
+                openshell_auth="oauth",
+            ),
+            "codex",
+        )
+    run.assert_not_called()
+
+
+def test_openshell_codex_rejects_conflicting_routing_identity():
+    with (
+        patch.dict(os.environ, {"CODEX_AUTH_ACCOUNT_ID": "unit-workspace-id"}),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
+        patch("ai_guardian.sandbox._run") as run,
+        pytest.raises(
+            ValueError,
+            match="Codex account identity does not match the selected local OAuth credentials",
+        ),
+    ):
+        _ensure_openshell_cli_provider(
+            _args(
+                environment=["CODEX_ACCOUNT_ID=other-workspace-id"],
+                openshell_auth="oauth",
+            ),
+            "codex",
+        )
+    run.assert_not_called()
+
+
+def test_openshell_codex_api_key_handoff_does_not_add_oauth_identity():
+    args = _args(
+        runtime="openshell",
+        cli="codex",
+        openshell_auth="api-key",
+        environment=["OPENAI_API_KEY=unit-api-credential"],
+    )
+    with (
+        patch("ai_guardian.sandbox._initial_config_source", return_value=None),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["openai"]
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch("ai_guardian.sandbox._run", return_value=0),
+    ):
+        command, _name, _uploads, policy_dir = _openshell_create(args)
+    try:
+        assert "ai-guardian-openai" in command
+        assert not any(value.startswith("CODEX_ACCOUNT_ID=") for value in command)
+        assert "unit-api-credential" not in " ".join(command)
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_explicit_openshell_codex_provider_uses_only_explicit_identity_metadata():
+    args = _args(
+        runtime="openshell",
+        cli="codex",
+        provider=["remote-codex"],
+        environment=["CODEX_ACCOUNT_ID=remote-workspace-id"],
+    )
+    with (
+        patch("ai_guardian.sandbox._initial_config_source", return_value=None),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_environment"
+        ) as provider_environment,
+        patch("ai_guardian.sandbox._ensure_openshell_cli_provider") as ensure_provider,
+    ):
+        command, _name, _uploads, policy_dir = _openshell_create(args)
+    try:
+        assert command.count("CODEX_ACCOUNT_ID=remote-workspace-id") == 1
+        provider_environment.assert_not_called()
+        ensure_provider.assert_not_called()
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+@pytest.mark.parametrize("provider_exists", [False, True])
+def test_openshell_codex_requires_complete_credentials_for_identity_handoff(
+    provider_exists,
+):
+    with (
+        patch.dict(os.environ, {"CODEX_AUTH_ACCOUNT_ID": "unit-workspace-id"}),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_exists",
+            return_value=provider_exists,
+        ),
+        patch("ai_guardian.sandbox._run") as run,
+        pytest.raises(ValueError, match="local Codex OAuth credentials are incomplete"),
+    ):
+        _ensure_openshell_cli_provider(
+            _args(environment=[], openshell_auth="oauth"), "codex"
+        )
+    run.assert_not_called()
 
 
 def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
@@ -2007,7 +2237,7 @@ def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
         patch.dict(os.environ, {"AI_GUARDIAN_STATE_DIR": str(state_dir)}, clear=False),
         patch(
             "ai_guardian.sandbox._ensure_openshell_cli_provider",
-            return_value="ai-guardian-codex",
+            return_value=("ai-guardian-codex", "unit-workspace-id"),
         ),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
@@ -2197,7 +2427,7 @@ def test_openshell_create_stages_uploads_before_entrypoint_exec(tmp_path):
     with (
         patch(
             "ai_guardian.sandbox._ensure_openshell_cli_provider",
-            return_value="ai-guardian-codex",
+            return_value=("ai-guardian-codex", "unit-workspace-id"),
         ),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
@@ -2267,7 +2497,7 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
     with (
         patch(
             "ai_guardian.sandbox._ensure_openshell_cli_provider",
-            return_value="ai-guardian-codex",
+            return_value=("ai-guardian-codex", "unit-workspace-id"),
         ),
         patch(
             "ai_guardian.sandbox._expose_openshell_service", return_value=0

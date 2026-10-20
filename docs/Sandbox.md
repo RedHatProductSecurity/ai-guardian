@@ -238,6 +238,13 @@ ai-guardian sandbox create \
 
 Use `ai-guardian-openai` instead when attaching the API-key provider.
 
+For an explicitly selected OAuth provider, also supply
+`--env 'CODEX_ACCOUNT_ID=<matching-account-id>'` with that provider's literal
+account/workspace identifier. This is non-bearer identity metadata, not an OAuth
+token. AI Guardian does not guess the identity from an unrelated local login or
+read credentials back from the selected gateway provider. Missing or placeholder
+identity metadata stops OAuth bootstrap; do not upload host authentication files.
+
 ## Case 3 — OpenShell + Codex OAuth
 
 **Prerequisites**
@@ -276,7 +283,24 @@ Use `ai-guardian-openai` instead when attaching the API-key provider.
    ```
 
 The OAuth credentials remain in the OpenShell gateway. They are not uploaded
-to the sandbox.
+to the sandbox. AI Guardian supplies the account/workspace identifier separately
+as `CODEX_ACCOUNT_ID` from the same local credential snapshot used to create or
+refresh the managed provider. Codex needs this literal, non-bearer identifier for
+local workspace-routing comparisons; access/refresh tokens remain opaque
+OpenShell placeholders, and the local ID token remains synthetic. Treat account
+identifiers as private metadata: do not publish auth files or account responses.
+
+This follows the identity separation in
+[OpenShell PR #4215](https://github.com/NVIDIA/OpenShell/pull/4215). It requires the
+updated AI Guardian creator **and a rebuilt support image** containing the updated
+entrypoint; existing images/sandboxes are not retrofitted. A missing or placeholder
+identity, or an override conflicting with the managed provider's local identity,
+fails before provider mutation or Codex startup rather than changing auth modes.
+API-key authentication does not require this identity metadata.
+
+The Codex image pin remains `0.160.0`. This compatibility fix does not qualify a
+new CLI version: repeat operator startup, private account/workspace selection,
+and actual provider-boundary middleware-denial checks before advancing it.
 
 ## Case 4 — OpenShell + Codex API key
 

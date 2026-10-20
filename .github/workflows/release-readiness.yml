@@ -697,6 +697,34 @@ jobs:
           test -n "$(docker inspect --format='{{index .Config.Labels "ai-guardian.openshell.codex-version"}}' ai-guardian-openshell-readiness)"
           test -n "$(docker inspect --format='{{index .Config.Labels "ai-guardian.openshell.opencode-version"}}' ai-guardian-openshell-readiness)"
 
+      - name: Verify credential-free Codex OAuth identity bootstrap
+        run: |
+          # Bootstrap only: no account, network, or live-provider qualification.
+          docker run --rm -i --network none \
+            -e AI_GUARDIAN_AGENT=codex \
+            -e AI_GUARDIAN_SETUP_SCOPE=selected \
+            -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=false \
+            -e AI_GUARDIAN_OPEN_SHELL_PROVIDER=true \
+            -e CODEX_HOME=/sandbox/.codex \
+            -e CODEX_ACCOUNT_ID=readiness-workspace-id \
+            -e CODEX_AUTH_ACCESS_TOKEN=openshell:resolve:env:CODEX_AUTH_ACCESS_TOKEN \
+            -e CODEX_AUTH_REFRESH_TOKEN=openshell:resolve:env:CODEX_AUTH_REFRESH_TOKEN \
+            -e CODEX_AUTH_ACCOUNT_ID=openshell:resolve:env:CODEX_AUTH_ACCOUNT_ID \
+            ai-guardian-openshell-readiness python3 - <<'PY'
+          import json
+          import os
+          import stat
+          from pathlib import Path
+
+          auth_path = Path(os.environ["CODEX_HOME"]) / "auth.json"
+          auth = json.loads(auth_path.read_text(encoding="utf-8"))
+          assert auth["auth_mode"] == "chatgpt"
+          assert auth["tokens"]["account_id"] == "readiness-workspace-id"
+          for key in ("access_token", "refresh_token"):
+              assert auth["tokens"][key].startswith("openshell:resolve:")
+          assert stat.S_IMODE(auth_path.stat().st_mode) == 0o600
+          PY
+
   config-validation:
     name: Config Validation
     runs-on: ubuntu-26.04

@@ -1575,8 +1575,18 @@ def _openshell_vertex_provider_names(args, providers: Sequence[str]) -> List[str
 
 
 def _openshell_sandbox_environment(args, *, vertex: bool) -> List[str]:
-    """Remove host ADC and refresh credentials from workload environment flags."""
+    """Keep provider credentials out of workload environment flags."""
     blocked = set(_OPENSHELL_GCP_CREDENTIAL_ENVIRONMENT)
+    if _selected_cli(args, DEFAULT_OPENSHELL_CLI) == "codex":
+        blocked.update(
+            {
+                "OPENAI_API_KEY",
+                "CODEX_AUTH_ACCESS_TOKEN",
+                "CODEX_AUTH_REFRESH_TOKEN",
+                "CODEX_AUTH_ACCOUNT_ID",
+                "CODEX_AUTH_ID_TOKEN",
+            }
+        )
     if vertex:
         blocked.update(
             {
@@ -1685,8 +1695,8 @@ def _openshell_missing_profile_error(provider_type: str, profiles: List[str]) ->
 
 def _ensure_openshell_cli_provider(
     args, cli: str, *, output: Optional[List[str]] = None
-) -> str:
-    """Create or reuse the default provider needed by staged CLI setup."""
+) -> Tuple[str, Optional[str]]:
+    """Return the managed provider and its non-bearer Codex routing identity."""
     if cli != "codex":
         raise ValueError(
             f"the active OpenShell gateway has no automatic provider mapping for '{cli}'; "
@@ -1712,6 +1722,37 @@ def _ensure_openshell_cli_provider(
     profiles = _openshell_provider_profiles(args)
     if provider_type not in profiles:
         raise ValueError(_openshell_missing_profile_error(provider_type, profiles))
+
+    account_id = None
+    if provider_type == "codex":
+        # Codex compares account IDs locally during workspace discovery. This
+        # identity metadata must be literal, unlike the gateway-owned tokens.
+        account_id = provider_environment.get("CODEX_AUTH_ACCOUNT_ID", "")
+        if (
+            not account_id
+            or account_id.startswith("openshell:")
+            or any(
+                char.isspace() or ord(char) < 32 or ord(char) == 127
+                for char in account_id
+            )
+        ):
+            raise ValueError(
+                "Codex OAuth requires a literal account ID for workspace routing"
+            )
+        requested_account_id = provider_environment.get("CODEX_ACCOUNT_ID")
+        if requested_account_id and requested_account_id != account_id:
+            raise ValueError(
+                "Codex account identity does not match the selected local OAuth credentials"
+            )
+        if not all(
+            provider_environment.get(key)
+            for key in ("CODEX_AUTH_ACCESS_TOKEN", "CODEX_AUTH_REFRESH_TOKEN")
+        ):
+            raise ValueError(
+                "OpenShell OAuth authentication was selected, but local Codex OAuth "
+                "credentials are incomplete; run `codex login` before creating the "
+                "sandbox"
+            )
 
     # Keep OAuth and API-key credentials in separate provider instances. An
     # existing Codex provider cannot be updated with the OpenAI API-key
@@ -1740,15 +1781,7 @@ def _ensure_openshell_cli_provider(
                 provider_name,
                 "--from-existing",
             ]
-        has_oauth_credentials = provider_type == "codex" and all(
-            provider_environment.get(key)
-            for key in (
-                "CODEX_AUTH_ACCESS_TOKEN",
-                "CODEX_AUTH_REFRESH_TOKEN",
-                "CODEX_AUTH_ACCOUNT_ID",
-            )
-        )
-        if provider_environment.get("OPENAI_API_KEY") or has_oauth_credentials:
+        if provider_environment.get("OPENAI_API_KEY") or provider_type == "codex":
             _emit_output(
                 f"Refreshing existing OpenShell provider from local credentials: {provider_name}",
                 output=output,
@@ -1766,7 +1799,7 @@ def _ensure_openshell_cli_provider(
         _emit_output(
             f"Using existing OpenShell provider: {provider_name}", output=output
         )
-        return provider_name
+        return provider_name, account_id
 
     if provider_type == "openai" and not provider_environment.get("OPENAI_API_KEY"):
         raise ValueError(
@@ -1774,28 +1807,12 @@ def _ensure_openshell_cli_provider(
             "was found in the tray/CLI environment or local Codex auth state"
         )
 
-    if provider_type == "codex":
-        missing_oauth_credentials = [
-            key
-            for key in (
-                "CODEX_AUTH_ACCESS_TOKEN",
-                "CODEX_AUTH_REFRESH_TOKEN",
-                "CODEX_AUTH_ACCOUNT_ID",
-            )
-            if not provider_environment.get(key)
-        ]
-        if missing_oauth_credentials:
-            raise ValueError(
-                "OpenShell OAuth authentication was selected, but local Codex OAuth "
-                "credentials are incomplete; run `codex login` before creating the "
-                "sandbox"
-            )
-        if _openshell_providers_v2_enabled(args) is False:
-            raise ValueError(
-                "Codex OAuth credentials were found, but OpenShell Providers v2 is "
-                "disabled on the active gateway. Enable it with: openshell settings "
-                "set --global --key providers_v2_enabled --value true"
-            )
+    if provider_type == "codex" and _openshell_providers_v2_enabled(args) is False:
+        raise ValueError(
+            "Codex OAuth credentials were found, but OpenShell Providers v2 is "
+            "disabled on the active gateway. Enable it with: openshell settings "
+            "set --global --key providers_v2_enabled --value true"
+        )
 
     _emit_output(
         f"Creating OpenShell provider from existing local credentials: {provider_name}",
@@ -1826,7 +1843,7 @@ def _ensure_openshell_cli_provider(
             f"unable to create OpenShell provider '{provider_name}'; "
             "create a compatible provider and pass it with --provider NAME"
         )
-    return provider_name
+    return provider_name, account_id
 
 
 def _openshell_cli_has_credentials(args, cli: str) -> bool:
@@ -2486,6 +2503,7 @@ def _openshell_create(
     explicit_providers = list(getattr(args, "provider", None) or [])
     provider_names = explicit_providers[:]
     provider_attached = bool(provider_names)
+    codex_account_id = None
     vertex_provider = None
     if vertex_mode:
         assert vertex_project is not None
@@ -2516,12 +2534,23 @@ def _openshell_create(
             )
         )
         if should_auto_create_provider:
-            provider_names = [_ensure_openshell_cli_provider(args, cli, output=output)]
+            provider_name, codex_account_id = _ensure_openshell_cli_provider(
+                args, cli, output=output
+            )
+            provider_names = [provider_name]
             provider_attached = True
 
+    if codex_account_id is not None:
+        environment.append(f"CODEX_ACCOUNT_ID={codex_account_id}")
     for value in environment:
         command.extend(["--env", value])
     for value in _openshell_sandbox_environment(args, vertex=vertex_mode):
+        if (
+            codex_account_id is not None
+            and value.partition("=")[0] == "CODEX_ACCOUNT_ID"
+        ):
+            # The identity and provider refresh must use the same snapshot.
+            continue
         command.extend(["--env", value])
     for provider in provider_names:
         command.extend(["--provider", provider])

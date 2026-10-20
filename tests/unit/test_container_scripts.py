@@ -59,6 +59,24 @@ def _latest_stable_release_version() -> str:
     return match.group("version")
 
 
+def test_release_readiness_checks_codex_identity_without_live_credentials():
+    workflow = yaml.safe_load(RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8"))
+    step = next(
+        step
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if step.get("name") == "Verify credential-free Codex OAuth identity bootstrap"
+    )
+    script = step["run"]
+    assert "--network none" in script
+    assert "CODEX_ACCOUNT_ID=readiness-workspace-id" in script
+    assert "CODEX_AUTH_ACCESS_TOKEN=openshell:resolve:" in script
+    assert "CODEX_AUTH_REFRESH_TOKEN=openshell:resolve:" in script
+    assert 'auth["tokens"]["account_id"] == "readiness-workspace-id"' in script
+    python_body = script.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    compile(python_body, str(RELEASE_READINESS_WORKFLOW), "exec")
+
+
 def _executable_script(path: Path, body: str) -> Path:
     path.write_text(body, encoding="utf-8")
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
@@ -99,6 +117,7 @@ def _launcher_env(tmp_path: Path, executable: Path, capture: Path) -> dict:
         "GOOGLE_VERTEX_AI_SERVICE_ACCOUNT_TOKEN",
         "VERTEX_AI_SERVICE_ACCOUNT_TOKEN",
         "CODEX_HOME",
+        "CODEX_ACCOUNT_ID",
         "CODEX_AUTH_ACCESS_TOKEN",
         "CODEX_AUTH_REFRESH_TOKEN",
         "CODEX_AUTH_ACCOUNT_ID",
@@ -1249,7 +1268,10 @@ fi
 @pytest.mark.skipif(
     os.name == "nt", reason="The container entrypoint is a POSIX shell script"
 )
-def test_entrypoint_bootstraps_codex_oauth_placeholders(tmp_path):
+@pytest.mark.parametrize("provider_account_id_present", [False, True])
+def test_entrypoint_bootstraps_codex_oauth_placeholders(
+    tmp_path, provider_account_id_present
+):
     codex_home = tmp_path / "codex-home"
     config_dir = tmp_path / "config"
     _executable_script(
@@ -1277,8 +1299,11 @@ fi
         "CODEX_AUTH_ACCESS_TOKEN": ("openshell:resolve:env:CODEX_AUTH_ACCESS_TOKEN"),
         "CODEX_AUTH_REFRESH_TOKEN": ("openshell:resolve:env:CODEX_AUTH_REFRESH_TOKEN"),
         "CODEX_AUTH_ACCOUNT_ID": "openshell:resolve:env:CODEX_AUTH_ACCOUNT_ID",
+        "CODEX_ACCOUNT_ID": "unit-workspace-id",
         "CODEX_AUTH_ID_TOKEN": "openshell:resolve:env:CODEX_AUTH_ID_TOKEN",
     }
+    if not provider_account_id_present:
+        env.pop("CODEX_AUTH_ACCOUNT_ID")
 
     result = subprocess.run(
         ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
@@ -1295,7 +1320,8 @@ fi
     assert auth["auth_mode"] == "chatgpt"
     assert auth["tokens"]["access_token"] == env["CODEX_AUTH_ACCESS_TOKEN"]
     assert auth["tokens"]["refresh_token"] == env["CODEX_AUTH_REFRESH_TOKEN"]
-    assert auth["tokens"]["account_id"] == env["CODEX_AUTH_ACCOUNT_ID"]
+    assert auth["tokens"]["account_id"] == env["CODEX_ACCOUNT_ID"]
+    assert auth["tokens"]["account_id"] != env.get("CODEX_AUTH_ACCOUNT_ID")
     assert auth["tokens"]["id_token"].count(".") == 2
     assert all(auth["tokens"]["id_token"].split("."))
     assert auth["tokens"]["id_token"] != env["CODEX_AUTH_ID_TOKEN"]
@@ -1308,6 +1334,79 @@ fi
     assert "https://api.openai.com/auth" not in id_token_payload
     assert auth["last_refresh"].endswith("Z")
     assert stat.S_IMODE(auth_path.stat().st_mode) == stat.S_IRUSR | stat.S_IWUSR
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="The container entrypoint is a POSIX shell script"
+)
+@pytest.mark.parametrize(
+    ("account_id", "missing_credential"),
+    [
+        (None, None),
+        ("", None),
+        ("openshell:resolve:env:CODEX_AUTH_ACCOUNT_ID", None),
+        (" \t", None),
+        ("bad\nid", None),
+        ("unit-workspace-id", "CODEX_AUTH_ACCESS_TOKEN"),
+        ("unit-workspace-id", "CODEX_AUTH_REFRESH_TOKEN"),
+    ],
+)
+@pytest.mark.parametrize("api_key_present", [False, True])
+def test_entrypoint_rejects_invalid_codex_routing_identity(
+    tmp_path, account_id, missing_credential, api_key_present
+):
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    _executable_script(tmp_path / "codex", "#!/usr/bin/env bash\nexit 0\n")
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    auth_path = codex_home / "auth.json"
+    auth_path.write_text("existing-auth\n", encoding="utf-8")
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "codex",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_OPEN_SHELL_PROVIDER": "true",
+        "CODEX_HOME": str(codex_home),
+        "CODEX_AUTH_ACCESS_TOKEN": "openshell:resolve:env:CODEX_AUTH_ACCESS_TOKEN",
+        "CODEX_AUTH_REFRESH_TOKEN": "openshell:resolve:env:CODEX_AUTH_REFRESH_TOKEN",
+        "CODEX_AUTH_ACCOUNT_ID": "openshell:resolve:env:CODEX_AUTH_ACCOUNT_ID",
+    }
+    if account_id is not None:
+        env["CODEX_ACCOUNT_ID"] = account_id
+    if api_key_present:
+        env["OPENAI_API_KEY"] = "openshell:resolve:env:OPENAI_API_KEY"
+    if missing_credential:
+        env.pop(missing_credential)
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    expected_error = (
+        "Error: incomplete OpenShell Codex OAuth credentials"
+        if missing_credential
+        else "Error: Codex OAuth requires a literal CODEX_ACCOUNT_ID for workspace routing"
+    )
+    assert expected_error in result.stderr
+    assert auth_path.read_text(encoding="utf-8") == "existing-auth\n"
+    assert list(codex_home.iterdir()) == [auth_path]
+    assert "Configured Codex API-key authentication" not in result.stdout
 
 
 @pytest.mark.skipif(

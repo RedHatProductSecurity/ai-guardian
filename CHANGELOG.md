@@ -124,6 +124,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration, policy activation, and cleanup.
 
 ### Fixed
+- **OpenShell Codex workspace identity (#2556):** Supply literal account-routing
+  metadata separately from opaque OAuth credentials, following OpenShell #4214 /
+  PR #4215. Keep bearer/refresh credentials gateway-managed, reject missing,
+  placeholder, or conflicting routing identities without exposing their values,
+  and prevent raw Codex credential environment flags from reaching the workload.
+  Add isolated unit/UX and credential-free release-readiness bootstrap coverage.
+  Requires a rebuilt support image; the Codex pin remains `0.160.0` pending live
+  operator qualification of the candidate, account/workspace, and middleware.
 - **IPv6 embedded SSRF destinations (#2559):** Apply existing IP policy to
   mapped IPv4, 6to4 routing endpoints, and both Teredo server/client addresses
   consistently across literal URLs and caller-supplied DNS/redirect checks.

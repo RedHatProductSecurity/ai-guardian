@@ -374,8 +374,10 @@ fi
 
 # Codex reads OAuth state from auth.json rather than from the provider-specific
 # CODEX_AUTH_* environment variables. OpenShell supplies those variables as
-# opaque placeholders, so materialize only the placeholders in Codex's normal
-# auth format. The id token is parsed locally by Codex and must be JWT-shaped;
+# opaque credential placeholders. CODEX_ACCOUNT_ID is separate non-bearer
+# identity metadata: workspace discovery compares it locally, so it must be
+# literal. Keep the access/refresh placeholders in Codex's normal auth format.
+# The id token is parsed locally by Codex and must be JWT-shaped;
 # it is intentionally synthetic and contains no real user or account data.
 _bootstrap_codex_openshell_auth() {
   local codex_home
@@ -396,9 +398,8 @@ _bootstrap_codex_openshell_auth() {
     return 0
   fi
 
-  if [ -z "${CODEX_AUTH_ACCESS_TOKEN:-}" ] ||
-    [ -z "${CODEX_AUTH_REFRESH_TOKEN:-}" ] ||
-    [ -z "${CODEX_AUTH_ACCOUNT_ID:-}" ]; then
+  if [ -z "${CODEX_AUTH_ACCESS_TOKEN:-}" ] &&
+    [ -z "${CODEX_AUTH_REFRESH_TOKEN:-}" ]; then
     if [ -z "${OPENAI_API_KEY:-}" ]; then
       # This may be an explicitly supplied provider with a different credential
       # shape. Leave providers without a Codex-compatible credential alone.
@@ -416,6 +417,12 @@ _bootstrap_codex_openshell_auth() {
     return 0
   fi
 
+  if [ -z "${CODEX_AUTH_ACCESS_TOKEN:-}" ] ||
+    [ -z "${CODEX_AUTH_REFRESH_TOKEN:-}" ]; then
+    echo "Error: incomplete OpenShell Codex OAuth credentials" >&2
+    return 1
+  fi
+
   if ! python3 - "$auth_path" <<'PY'
 import base64
 import json
@@ -423,6 +430,17 @@ import os
 import sys
 import tempfile
 from datetime import datetime, timezone
+
+
+account_id = os.environ.get("CODEX_ACCOUNT_ID", "")
+if (
+    not account_id
+    or account_id.startswith("openshell:")
+    or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in account_id)
+):
+    raise SystemExit(
+        "Error: Codex OAuth requires a literal CODEX_ACCOUNT_ID for workspace routing"
+    )
 
 
 def _jwt_part(value):
@@ -454,7 +472,7 @@ auth = {
     "tokens": {
         "access_token": os.environ["CODEX_AUTH_ACCESS_TOKEN"],
         "refresh_token": os.environ["CODEX_AUTH_REFRESH_TOKEN"],
-        "account_id": os.environ["CODEX_AUTH_ACCOUNT_ID"],
+        "account_id": account_id,
         "id_token": synthetic_id_token,
     },
 }
