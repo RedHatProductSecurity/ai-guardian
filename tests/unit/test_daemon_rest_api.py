@@ -243,6 +243,8 @@ class TestRestAPIEndpoints:
         assert "platform" in data
         assert "scanners" in data
         assert "url" in data
+        assert data["author"] == "Dominique Vernier"
+        assert data["author_url"] == "https://github.com/itdove"
 
     def test_post_pause(self, rest_api):
         api, port, state = rest_api

@@ -52,6 +52,15 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`.
 
+For `support`, defaults select `export_destination: "github-discussions"`
+and `github_category: "bug-reports"`; only `"q-a"` is an alternative category.
+Preparation is local and public publication requires native user-only approval.
+Empty/missing destinations use GitHub. Explicit local/S3/GCS/email settings remain
+in effect for tray, CLI and MCP. For GitHub, **Contact supports** offers a local-only
+ZIP or explicitly approved public Discussion, without changing those settings.
+See [Support bundles](SUPPORT.md) for migration,
+authentication, public-visibility warnings, and content/attachment limits.
+
 ### Hook Process Failure Policy
 
 The existing top-level `on_scan_error` setting controls both scanner failures

@@ -174,6 +174,9 @@ try:
 
     HAS_PYSTRAY = True
 except Exception:
+    # Keep the optional module name available for tests and callers that inject
+    # a compatible menu implementation when pystray is not installed.
+    pystray = None
     HAS_PYSTRAY = False
 
 
@@ -567,6 +570,9 @@ class DaemonTray:
             pystray.MenuItem("Restart", self._on_restart_tray),
             pystray.MenuItem("Quit", self._on_quit),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "Contact supports", lambda _, __: tray_menu.launch_support()
+            ),
             pystray.MenuItem(
                 tray_menu.about_label,
                 self._menu._on_about,

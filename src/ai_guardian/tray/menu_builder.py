@@ -20,6 +20,7 @@ from types import SimpleNamespace
 from urllib.parse import urlparse
 
 from ai_guardian.daemon.discovery import should_update_target_name
+from ai_guardian.daemon.about import AUTHOR_HANDLE, AUTHOR_URL
 from ai_guardian.ide_registry import (
     SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
     SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
@@ -148,6 +149,7 @@ class TrayMenuBuilder:
                 show_dialog(
                     title,
                     text,
+                    links=((f"({AUTHOR_HANDLE})", AUTHOR_URL),),
                     **self._screen_bounds_kwargs(screen_bounds),
                 )
             except Exception:
@@ -199,6 +201,7 @@ class TrayMenuBuilder:
                     show_dialog(
                         f"About {target.name}",
                         text,
+                        links=((f"({AUTHOR_HANDLE})", AUTHOR_URL),),
                         **self._screen_bounds_kwargs(screen_bounds),
                     )
                 except Exception:

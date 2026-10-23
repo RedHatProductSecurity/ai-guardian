@@ -1683,7 +1683,7 @@ def main():
 
         # Support bundle subcommand (Issue #511)
         support_parser = subparsers.add_parser(
-            "support", help="Manage support bundles for troubleshooting"
+            "support", help="Prepare and send support without an agent or MCP"
         )
         support_sub = support_parser.add_subparsers(
             dest="support_command", help="Support commands"
@@ -1712,6 +1712,21 @@ def main():
         support_prepare_parser.add_argument(
             "--json", action="store_true", help="Output bundle info as JSON"
         )
+        support_prepare_parser.add_argument(
+            "--title",
+            default="",
+            help="Proposed public support title (blank by default; required during review)",
+        )
+        support_prepare_parser.add_argument(
+            "--description",
+            default="",
+            help="Troubleshooting message (required during review; sanitized before preview)",
+        )
+        support_prepare_parser.add_argument(
+            "--category",
+            choices=("bug-reports", "q-a"),
+            help="GitHub support category (default: Bug Reports)",
+        )
 
         # support send
         support_send_parser = support_sub.add_parser(
@@ -1720,10 +1735,13 @@ def main():
         support_send_parser.add_argument(
             "--prepare",
             action="store_true",
-            help="Prepare and send in one step (with confirmation unless --yes)",
+            help="Prepare then send; public GitHub publication always requires native user review",
         )
         support_send_parser.add_argument(
-            "--yes", "-y", action="store_true", help="Skip confirmation prompt"
+            "--yes",
+            "-y",
+            action="store_true",
+            help="Skip legacy transport confirmation (never public GitHub approval)",
         )
         support_send_parser.add_argument(
             "--bundle",
@@ -1929,6 +1947,7 @@ def main():
             "dummy-agent",
             "check-update",
             "upgrade",
+            "support",
         }
         if args.command and args.command not in _no_autostart:
             _ensure_daemon_started()

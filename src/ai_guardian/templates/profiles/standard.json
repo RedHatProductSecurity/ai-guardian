@@ -362,9 +362,10 @@
   "mcp_server": {
     "proactive_level": "low"
   },
-  "_comment_support": "Support bundle export. Two-step process: prepare (sanitize + review) then send (with user approval). Destination: local path, S3 URI, GCS URI (gs://bucket-name/), or email (mailto:support@company.com). (NEW in v1.7.0, Issue #477; email: Issue #932)",
+  "_comment_support": "Prepare locally and review. Default: GitHub, offering Create ZIP only (no authentication/upload; not encrypted) or public Discussions in RedHatProductSecurity/ai-guardian with native final user approval. Only Bug Reports (default) and Q&A are supported. Missing/empty destinations use GitHub; explicit local/S3/GCS/email destinations are honored by tray, CLI and MCP. Logs/violations cover the last 12 hours; only logs may be truncated. Configurations and included violation records stay complete and fully viewable through pages.",
   "support": {
-    "export_destination": "",
+    "export_destination": "github-discussions",
+    "github_category": "bug-reports",
     "auth": {
       "method": "none",
       "token_env": ""

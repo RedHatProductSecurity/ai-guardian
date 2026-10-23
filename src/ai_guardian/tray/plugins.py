@@ -1056,13 +1056,21 @@ def _show_linux_snooze_dialog(options: Tuple[str, ...], provider: str) -> str:
     return default_result
 
 
-def show_dialog(title: str, message: str, *, screen_bounds=None) -> bool:
+def show_dialog(
+    title: str,
+    message: str,
+    *,
+    screen_bounds=None,
+    links: Iterable[Tuple[str, str]] = (),
+) -> bool:
     """Show a modal dialog box. Returns True on success.
 
     Uses platform-native dialogs: AppleScript on macOS, zenity/kdialog
     on Linux, PowerShell on Windows. When a tray click supplied explicit
     macOS display bounds, use an isolated Tk dialog so the window can be
     centered on that display before falling back to AppleScript.
+    Explicit (anchor, URL) links use isolated Tk when available; the original
+    text remains visible in the native fallback. URLs in text are not auto-opened.
     """
     import subprocess
 
@@ -1073,26 +1081,30 @@ def show_dialog(title: str, message: str, *, screen_bounds=None) -> bool:
         return False
 
     system = platform.system()
+    links = tuple(links)
     try:
-        if system == "Darwin":
-            if screen_bounds is not None:
-                from ai_guardian.ui.display import (
-                    _tkinter_available,
-                    get_preferred_ui,
+        if links or (system == "Darwin" and screen_bounds is not None):
+            from ai_guardian.ui.display import _tkinter_available
+
+            if get_preferred_ui() in {"auto", "tkinter"} and _tkinter_available():
+                from ai_guardian.tray.dialog_placement import (
+                    show_tkinter_message_subprocess,
                 )
 
-                if get_preferred_ui() in {"auto", "tkinter"} and _tkinter_available():
-                    from ai_guardian.tray.dialog_placement import (
-                        show_tkinter_message_subprocess,
-                    )
-
+                if links:
                     shown = show_tkinter_message_subprocess(
                         title,
                         message,
                         screen_bounds=screen_bounds,
+                        links=links,
                     )
-                    if shown is not None:
-                        return shown
+                else:
+                    shown = show_tkinter_message_subprocess(
+                        title, message, screen_bounds=screen_bounds
+                    )
+                if shown is not None:
+                    return shown
+        if system == "Darwin":
             from ai_guardian.daemon.multi_client import _escape_for_applescript
 
             msg = (

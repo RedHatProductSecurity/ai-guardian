@@ -6,6 +6,7 @@ import sys
 from nicegui import run, ui
 
 from ai_guardian import __version__
+from ai_guardian.daemon.about import AUTHOR_HANDLE, AUTHOR_NAME, AUTHOR_URL
 from ai_guardian.web.components.header import create_header, create_sidebar
 
 
@@ -55,6 +56,12 @@ def create_about_page(service, daemon_name: str):
 
         with ui.card().classes("w-full"):
             ui.label("Project").classes("text-lg font-bold")
+            with ui.row().classes("items-center gap-2"):
+                ui.label("Author:").classes("text-sm text-grey-6 w-32")
+                ui.label(AUTHOR_NAME).classes("text-sm")
+                ui.link(f"({AUTHOR_HANDLE})", AUTHOR_URL, new_tab=True).classes(
+                    "text-sm text-blue-4"
+                )
             ui.link(
                 "GitHub Repository",
                 "https://github.com/RedHatProductSecurity/ai-guardian",

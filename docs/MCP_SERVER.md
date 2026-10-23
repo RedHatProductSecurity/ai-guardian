@@ -210,8 +210,8 @@ also be returned. An MCP startup failure reports `startup_failure` or
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `prepare_support_bundle` | — | bundle_id, temp_path, file list | Create sanitized diagnostics |
-| `send_support_bundle` | `bundle_id` | sent/error | Send after user review |
+| `prepare_support_bundle` | `title?`, `description?`, `category?` | bundle_id, temp_path, destination, file list/redaction counts | Prepare locally; never publish |
+| `send_support_bundle` | `bundle_id` | sent/error; `discussion_url` on GitHub success | Native final public approval; no agent approval parameter |
 
 ## Resources
 
@@ -255,24 +255,64 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 
 ## Support Bundle Flow
 
-The support bundle uses a two-step process with user approval:
+The support bundle uses local preparation and native user approval:
 
 1. **Prepare**: `prepare_support_bundle()` creates a sanitized temp directory (protected by `.ai-read-deny`)
 2. **Review**: AI shows the file list with redaction counts and the temp path — the user reviews and deletes unwanted files
-3. **Send**: After user approval, `send_support_bundle(bundle_id)` sends remaining files to the configured destination
+3. **Send**: After the user's local file review, `send_support_bundle(bundle_id)` opens the configured delivery flow. GitHub has a **Destination** dropdown and **Next**, offering **Create ZIP only** (default; no authentication/upload) or **Gist + Discussion** (Next disabled without GitHub credentials). Public delivery first requires native approval of the exact files uploaded to an unlisted, user-owned Gist, then separate approval of the exact Discussion containing the actual Gist link. Unlisted is not private. The account, fixed repository/category, and exact title/body/files are backend-verified; the agent cannot approve either step on the user's behalf.
 
-Sanitized files include: config (tokens redacted), violations (paths truncated), metrics (aggregate only), doctor results, system info, and full log (secrets/PII redacted).
+Files are alphabetical with **doctor.json** first and checked by default on new
+lists; saved selections, including deselections, are retained. The title starts
+blank unless supplied. GitHub review requires a title and message, ZIP/legacy
+review requires a message, and both need at least one selected diagnostic.
 
-Default destination: `~/.local/state/ai-guardian/support-bundles/`. Configure via `support.export_destination` (local path, `s3://bucket/prefix/`, or `gs://bucket-name/`).
+Sanitized files include: AI Guardian config, individual CLI settings/hooks/MCP config copies (not auth stores or conversations), all violation records from the last 12 hours (paths redacted, no count/size cap), metrics (aggregate only), doctor results, system info, and the last 12 hours of logs (secrets/PII redacted, newest text retained). Only the log may be visibly truncated; collected configuration and other structured files remain complete and fully viewable through next/previous pages. The user can delete any unwanted prepared files from the printed review directory before sending; original CLI settings remain unchanged.
+
+A local destination is **export only**, not a support submission. Results identify
+`delivery_status: local_only`, give the retained directory, and state that no
+Discussion was created. That reviewed copy remains available across CLI processes
+within the original bundle lifetime; removed files are not restored.
+
+**Create ZIP only** results use `delivery_status: zip_only` and return `zip_path`.
+Show that local path and explain that nothing was uploaded/sent, no Discussion
+was created, and the ZIP is not encrypted. The user arranges any later sharing;
+there is no automatic email or Gist upload. The original bundle remains available
+to `support send` until expiry, with its configured destination unchanged.
+
+Successful public results return `discussion_url` and `gist_url`. If Discussion
+publication is cancelled or fails after Gist upload, show `gist_url` so the user
+can manage/delete it; `delivery_status: gist_only` is not a completed support
+submission. Deleting a Gist cannot retract copies or forks. Retries reuse a verified
+Gist rather than uploading a duplicate, and uncertain upload/publication outcomes
+must never be blindly retried. There is no automatic login or scope upgrade.
+
+Default: public **GitHub Discussions** in `RedHatProductSecurity/ai-guardian`,
+**Bug Reports** (`bug-reports`) preselected and **Q&A** (`q-a`) the only alternative.
+Sanitization is not a confidentiality guarantee. Preparation stays local; only
+the user may inspect protected contents. Successful publication returns
+`discussion_url`; direct the user there, not to a separate support contact.
+Empty/missing destinations use GitHub; explicit local/S3/GCS/email destinations
+remain available. Only the prepared log uses a marked size-bounded excerpt from
+the last 12 hours; View and Send never apply different size crops. Complete files
+that exceed the final GitHub limit require fewer selected files or a separate
+private channel, not hidden truncation. Headless public approval is not supported.
+Unsupported binary or still-oversized edited/imported files remain local for manual delivery;
+uncertain publication outcomes must not be blindly retried. See
+[Support bundles](SUPPORT.md) for authentication, consent, limits, and migration.
 
 ### CLI Alternative
 
 The same prepare/send workflow is available via the CLI for direct use without an AI agent:
 
+If the agent CLI or MCP is broken, run `ai-guardian support send --prepare`
+from your own terminal. It requires neither MCP nor a running daemon and does
+not auto-start the daemon. The native final public-consent dialog still applies;
+see [the standalone support recipe](SUPPORT.md#if-your-agent-cli-or-mcp-is-unavailable).
+
 ```bash
 ai-guardian support prepare                    # Prepare bundle, show file summary
 ai-guardian support send                       # Send last prepared bundle (with confirmation)
-ai-guardian support send --prepare --yes       # One-shot: prepare + send (for CI)
+ai-guardian support send --prepare --yes       # Legacy exports only; never skips public approval
 ai-guardian support status                     # Show destination, auth, pending bundles
 ai-guardian support prepare --output ./bundle  # Save to specific directory
 ai-guardian support prepare --no-log           # Exclude log file

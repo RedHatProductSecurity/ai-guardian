@@ -22,7 +22,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional, Tuple
+from typing import Any, Dict, Iterator, Literal, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -904,26 +904,38 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
     # ─── Support Bundle Tools ─────────────────────────────────────
 
     @server.tool()
-    def prepare_support_bundle() -> Dict[str, Any]:
-        """Prepare a sanitized support bundle for review. Creates a protected temp directory with sanitized copies of config, violations, metrics, doctor results, system info, and log. IMPORTANT: After calling this, you MUST (1) show the temp_path so the user can review and delete unwanted files, (2) present the file list with redaction counts, and (3) wait for the user to confirm before calling send_support_bundle. Only the user can access the temp directory — do not try to read or delete files in it."""
+    def prepare_support_bundle(
+        title: str = "",
+        description: str = "",
+        category: Optional[Literal["bug-reports", "q-a"]] = None,
+    ) -> Dict[str, Any]:
+        """Prepare sanitized diagnostics locally; never publish during preparation. Title starts blank unless supplied; proposals may be completed during native review. Show temp_path, file names, redaction counts and log truncation notices; only the user may read or remove protected files. Files are alphabetical with doctor.json first. Logs and violations cover the last 12 hours. All included violation records stay complete, with no count cap; only logs may be truncated. Collected configuration and structured files stay complete and fully viewable through pages; View and Send do not use different size crops. GitHub is the default; the native user may choose a local ZIP with no authentication/upload or public Discussions in RedHatProductSecurity/ai-guardian: Bug Reports (bug-reports, default) or Q&A (q-a), no other categories. Explicit local/S3/GCS/email destinations are preserved, including in the tray. ZIP files are not encrypted; sanitization is not a confidentiality guarantee. Public publication requires trusted native final review of the authenticated account, fixed repository/category and exact content. The agent cannot grant approval."""
         try:
             from ai_guardian.reporting.support_bundle import prepare_bundle
 
-            return prepare_bundle()
-        except Exception as e:
-            logger.error("prepare_support_bundle error: %s", e)
-            return {"status": "error", "message": f"Failed to prepare bundle: {e}"}
+            return prepare_bundle(
+                title=title, description=description, category=category
+            )
+        except Exception:
+            logger.error("Support bundle preparation failed")
+            return {
+                "status": "error",
+                "message": "Failed to prepare support bundle. Check the support context and selected category; only Bug Reports and Q&A are supported.",
+            }
 
     @server.tool()
     def send_support_bundle(bundle_id: str) -> Dict[str, Any]:
-        """Send a previously prepared support bundle to the preconfigured destination. Only call after the user has reviewed the temp directory, deleted any unwanted files, and explicitly approved sending. After sending, tell the user to contact support and give them the bundle_id as their reference number."""
+        """Open reviewed support delivery for the configured destination. GitHub uses a Destination dropdown and Next: Create ZIP only (default; no authentication/upload) or Gist + Discussion, unavailable without GitHub credentials. Selection/Next never grant upload consent. Files are alphabetical with doctor.json first and checked by default only for new lists; saved explicit choices are retained. GitHub requires a title and message; ZIP/legacy review requires a message. At least one selected file is also required. ZIP results give zip_path: nothing sent to support, not encrypted. Public delivery requires separate native user approval of exact files for an unlisted user-owned Gist, then the exact Discussion with its actual link. Unlisted is not private. The authenticated account, fixed repository/category and exact content are verified; agents cannot approve. Show discussion_url after publication and any gist_url for management/deletion, including gist_only partial failure/cancellation. Do not claim nothing was uploaded after Gist creation or blindly retry uncertain uploads/posts. Saved legacy destinations keep their route. Never read protected bundle contents."""
         try:
             from ai_guardian.reporting.support_bundle import send_bundle
 
             return send_bundle(bundle_id)
-        except Exception as e:
-            logger.error("send_support_bundle error: %s", e)
-            return {"status": "error", "message": f"Failed to send bundle: {e}"}
+        except Exception:
+            logger.error("Support bundle send failed")
+            return {
+                "status": "error",
+                "message": "Support delivery did not complete. Check the destination and your GitHub Gists before retrying; retain the local bundle.",
+            }
 
     # ─── Scanning Tools ──────────────────────────────────────────
 

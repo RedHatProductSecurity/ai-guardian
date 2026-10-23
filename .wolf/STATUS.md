@@ -5,9 +5,155 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-20
+> Last updated: 2026-10-23
 
 ---
+
+## ServiceNow BYOG tickets — 2026-10-23
+
+- Created and cross-linked enhancement #2572 and documentation #2573 in
+  `RedHatProductSecurity/ai-guardian`, preserving the user's proposal and draft.
+- #2572 is labelled enhancement/backlog/help wanted. No development is planned
+  until there is contributor interest and access to a suitable test instance.
+- #2573 is documentation-only: BYOG remains potential, unimplemented, untested,
+  unsupported, and unvalidated. No integration or source documentation was changed.
+- Verified both issue bodies and labels. No tests, commits, pushes, or PRs ran;
+  existing local development work and earlier handoffs remain intact.
+
+## About foreground regression — 2026-10-23
+
+- User reported About appearing then immediately minimizing. The existing
+  targeted window's WM_STATE was **Normal**, consistent with dropping behind
+  rather than confirmed iconification; the original compositor timing was not
+  independently captured.
+- Fixed `tray/dialog_placement.py`: build withdrawn, finish layout/set a temporary
+  raising hint, deiconify/lift, then focus/grab after idle. Clearing topmost at
+  200ms also restores normal state/foreground once after the tray handoff. Guard
+  closed-window callbacks and unsupported hints; never loop focus or keep topmost.
+- Six new regressions failed before the fix. **844 related tests now pass**,
+  including the entire five-test About UX contract and tray/plugin unit files.
+  Focused `dialog_placement.py` coverage is **92%**, artifact:
+  `/tmp/opencode/guardian-2567-about-focus.coverage`. Black py310, Ruff, Pylint E,
+  project Mypy (307 files) and whitespace checks pass. Updated docs/changelog,
+  learnings, bug log and local DAF note.
+- **Real mapped KDE Wayland/XWayland check passed:** synthetic window remained
+  Normal, viewable and focused at 75/300/700/1100ms, with topmost off after 200ms.
+  It auto-closed at 1250ms; script:
+  `/tmp/opencode/guardian-2567-about-focus-smoke.py`. This verifies the standalone
+  dialog, not the user's actual tray-click sequence; ask the user to retry About.
+  macOS/other desktops remain manual QA.
+- All work remains local/uncommitted on `2567`; support work is unchanged. No
+  tray/daemon restart, install, browser/profile launch, support upload, saved
+  setting/permission change, commit, push or PR occurred.
+
+## About author refinement — 2026-10-23
+
+- User-confirmed final text: **Author: Dominique Vernier (ITDoVe)**. Never show
+  the full profile URL in the visible author line; keep **https://github.com/itdove**
+  as its click target. Package team attribution is not the requested author name.
+- Shared `daemon/about.py` adds author metadata and formats the compact line even
+  for older daemon responses. Global/per-daemon tray About passes explicit links;
+  `tray/plugins.py` and `tray/dialog_placement.py` use isolated Tk when available,
+  with click/Enter/Space activation only. Native fallback keeps the same text;
+  it cannot provide the Tk clickable control. Web Console About shows the name
+  and linked **(ITDoVe)**, preserving the repository link and existing information.
+- Updated About unit/API regressions, new native-link/Web tests and the complete
+  About UX contract, source docs, changelog, user preference and local DAF note.
+  Seven red regressions verified the final compact-label correction before fixing it.
+- Validation: **842 related tests pass** (838 About/tray/plugins/full About UX,
+  plus four API/multi-client About checks). Black py310, Ruff, Pylint E, project
+  Mypy (307 files) and whitespace checks pass. The later KDE mapped check above
+  verifies foreground handling; actual tray-click/macOS confirmation remains
+  manual QA. Unit/UX callbacks open no live windows or browsers.
+- Still local/uncommitted on branch `2567`; support work below remains intact.
+  No live support submission, browser launch, authentication/configuration change,
+  installation/restart, commit, push or PR occurred.
+
+## Issue #2567 reviewed support Gists + Discussions — 2026-10-23
+
+- Local, uncommitted work remains on managed DAF branch `2567`. Ticket already
+  read; do not reinitialize. Preserve pre-existing `.wolf/anatomy.md` changes.
+- **Newest user approval supersedes inline delivery:** selected sanitized files
+  go into one user-owned unlisted Gist. Native upload consent precedes the POST;
+  a second exact preview shows the actual Gist link in a separate Diagnostics
+  section of the Discussion, without replacing the sanitized user message.
+  Neither approval may come from an agent, CLI `--yes`, or client parameters.
+- **First screen:** read-only Destination dropdown, default **Create ZIP only**,
+  with **Next** and Cancel, not separate destination buttons. Selection alone
+  never advances or authorizes upload. Next opens the chosen review page. The
+  destination-label mapping can grow without adding action buttons.
+- **Newest form correction supersedes default-none:** files are alphabetically
+  sorted (case-insensitive), with doctor.json first and checked by default for new
+  lists. Other files start unchecked; saved choices, including an unchecked Doctor,
+  remain authoritative. Apply ordering to summaries/review lists and Gist files.
+  Remove the generated title from preparation/CLI/MCP/fallbacks. Draft fields may
+  be blank; GitHub review requires a title and message, ZIP/legacy review a message.
+  Whitespace does not count. Require at least one file too, and enforce in callbacks
+  and backend before creating ZIPs or uploading. Entry StringVar and text Modified
+  events keep action/validation state current across typing, paste and clearing.
+- Next is disabled for Gist + Discussion without configured GitHub credentials;
+  switching to ZIP re-enables Next. Backend rejects a forged/direct selection too. Availability
+  uses captured, local `gh auth token --hostname github.com`, not network status
+  or an unsupported `--no-refresh` flag. No automatic login/refresh/scope upgrade.
+  Account discovery validates the pinned credential; known missing OAuth `gist`
+  scope fails before upload. GitHub enforces actual Gist/Discussion permissions.
+- `reporting/github_gist.py` owns sanitized, numbered inert filenames, upload
+  preview, owner/visibility/complete-content verification, and Gist receipts.
+  `github_support.py` keeps canonical account/repository/category checks and
+  exact, expiring, single-use approvals. Public destination remains fixed to
+  `RedHatProductSecurity/ai-guardian`, only `bug-reports` and `q-a`.
+- Unlisted is **not private**. A public Discussion exposes its Gist link.
+  Owners can manage/delete their Gist, but cannot retract copies/forks/caches.
+  Cancellation/failure after upload returns `gist_url` and honest `gist_only` or
+  uncertain status; tray shows Open Gist even on cancellation. Nothing deletes
+  the Gist automatically. Later ZIP/cancellation also preserves its known link.
+- Independent pre-mutation Gist/Discussion journals serialize processes and block
+  duplicates after uncertain outcomes/restarts. Retry verifies/reuses the same
+  Gist and needs fresh final public consent. Changed account/files/remote content
+  or deleted Gist never triggers duplicate uploads or silent inline fallback.
+  Bounded regular-file receipt reads/writes reject links before truncating;
+  separate Gist metadata recovers the URL even if a Discussion receipt is corrupt.
+- **Create ZIP only** remains credential-free/local/not encrypted, with complete
+  checked files, retained archives and click-only Open destination folder.
+  Original bundle/destination/explicit selections remain reusable until expiry.
+  Explicit local/S3/GCS/email routes are unchanged; local export/manual email
+  must not be reported as a completed support submission. No settings rewritten.
+- Global Contact supports stays immediately above About, independent of daemon
+  health. Native dialogs never open a shell; requests restore/raise/focus. File
+  lists check only Doctor by default and require at least one selection plus
+  mandatory fields; saved choices persist.
+  Keep aligned rows, View, bulk controls, counts, message/category/destination,
+  reserved unchecked consent controls, and wrap/horizontal-scroll/paged View.
+- Standalone `ai-guardian support send --prepare` needs no agent/MCP/daemon and
+  never auto-starts the daemon. Only local tray-host diagnostics are collected.
+  CLI config copies use canonical relocated paths, redact sensitive containers,
+  and omit unsafe input; original settings and removed files stay unchanged.
+- Logs/violations cover only the last 12 hours. Every included violation stays
+  complete, without count cap. Only logs may be shortened; structured diagnostics
+  remain complete and fully viewable. View/ZIP/Send have no differing size crop.
+  Gist input limit: 1,000,000 bytes / 100 diagnostics. Discussion body separately
+  limited to 60,000 UTF-8 bytes; files no longer consume it. Oversize fails clearly.
+- Source docs, MCP tool/skill, changelog, defaults/schema/profiles, Web Console
+  and readiness checks match. Generated notebooklm export intentionally untouched.
+- **Validation:** 576 related unit/UX tests pass, including full 43 support UX,
+  89 Gist, 93 modal and 76 GitHub tests. Focused coverage **92%**; Gist/tray/native
+  94%, GitHub 92%, bundle 90%. Artifact:
+  `/tmp/opencode/guardian-2567-form.coverage`. Coverage's global environment lacks
+  pytest-asyncio: exclude Web settings there; all 5 settings cases pass in the
+  complete project `uv run --extra dev python -m pytest` run.
+  Black py310, Ruff, Pylint E, project Mypy (307 files), and whitespace pass.
+  No new project dependencies. Use installed Black executable, project-env Mypy.
+- Hidden real-Tk checks pass for dropdown/Next credential gating and required
+  text, alphabetical/Doctor defaults, bulk selection and action-state changes in
+  five workflows. Script: `/tmp/opencode/guardian-2567-native-form-smoke.py`.
+  No windows mapped or credentials/network/browser used. Earlier unchecked
+  consent/View/ZIP/focus checks passed. Actual mapped desktop/file browser,
+  macOS and explicitly authorized live authentication/publication remain manual QA.
+- No real diagnostic collection/upload, Gist/Discussion/email, permission change,
+  installation/restart, commit/push/PR occurred. Next: user desktop QA/diff review;
+  use external `daf complete` for git publication only when agreed. CI owns
+  unrelated/full/matrix/integration tests. Prior ticket progress (not this update):
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2567#issuecomment-6355528471
 
 ## Issue #2563 release 1.20.0 preparation — 2026-10-20
 

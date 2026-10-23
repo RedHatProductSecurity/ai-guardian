@@ -78,6 +78,7 @@ nav:
       - Configuration Cookbook: COOKBOOK.md
       - Scanner Installation: SCANNER_INSTALLATION.md
       - Troubleshooting: TROUBLESHOOTING.md
+      - Support Bundles: SUPPORT.md
   - Security Features:
       - Overview: security/README.md
       - Secret Scanning: security/SECRET_SCANNING.md

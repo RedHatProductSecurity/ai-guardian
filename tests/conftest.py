@@ -165,3 +165,39 @@ def attack_patterns():
     from tests.fixtures import attack_constants
 
     return attack_constants
+
+
+@pytest.fixture
+def support_github_transport(monkeypatch):
+    """Explicitly opt support tests into synthetic credentials and owned Gists."""
+    from copy import deepcopy
+    from ai_guardian.reporting import github_support as github
+
+    monkeypatch.setattr(github, "credentials_available", lambda: True, raising=False)
+
+    def configure(client):
+        state = {}
+
+        def request(method, gist_id="", *, payload=None):
+            identity = client.discover.return_value
+            if method == "POST":
+                state.update(
+                    id="a" * 32,
+                    html_url=f"https://gist.github.com/{identity['login']}/{'a' * 32}",
+                    owner={
+                        "node_id": identity["account_id"],
+                        "login": identity["login"],
+                        "type": "User",
+                    },
+                    public=False,
+                    description=payload["description"],
+                    files=deepcopy(payload["files"]),
+                    truncated=False,
+                )
+            assert state and (not gist_id or gist_id == state["id"])
+            return deepcopy(state)
+
+        client.gist_request.side_effect = request
+        return state
+
+    return configure
