@@ -13,14 +13,17 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import smtplib
+import stat
 import subprocess
 import tempfile
 import uuid
 import webbrowser
 import zipfile
-from datetime import datetime, timezone
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -30,9 +33,18 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from ai_guardian.reporting.cli_diagnostics import collect_cli_configs
+from ai_guardian.ui.support_review import (
+    MAX_PREVIEW_BYTES,
+    diagnostic_sort_key,
+    is_log_file,
+    truncate_text,
+)
+
 logger = logging.getLogger(__name__)
 
 _active_bundles: Dict[str, Dict[str, Any]] = {}
+CANCELLED_MESSAGE = "Support cancelled. Nothing was sent; prepared files remain local."
 
 
 def _get_support_config() -> Dict:
@@ -43,12 +55,22 @@ def _get_support_config() -> Dict:
     if not config_path.exists():
         config_path = Path.cwd() / ".ai-guardian.json"
     if not config_path.exists():
-        return {}
+        return {
+            "export_destination": "github-discussions",
+            "github_category": "bug-reports",
+        }
     try:
         with open(config_path, "r") as f:
             config = json.load(f)
-        return config.get("support", {})
-    except Exception:
+        support = dict(config.get("support") or {})
+        support["export_destination"] = (
+            support.get("export_destination") or "github-discussions"
+        )
+        return support
+    except (OSError, ValueError, TypeError, AttributeError):
+        logger.warning(
+            "Support configuration could not be loaded; using the default support channel"
+        )
         return {}
 
 
@@ -136,7 +158,7 @@ def _get_system_info() -> Dict:
 
 
 def _get_sanitized_log() -> tuple:
-    """Get sanitized full ai-guardian log. Returns (text, redaction_count)."""
+    """Collect bounded, sanitized records from the last twelve hours only."""
     from ai_guardian.config.utils import get_state_dir
 
     log_path = get_state_dir() / "ai-guardian.log"
@@ -144,16 +166,94 @@ def _get_sanitized_log() -> tuple:
         return "", 0
 
     try:
-        text = log_path.read_text(errors="replace")
+        fd = os.open(
+            log_path,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+        )
+        with os.fdopen(fd, "rb") as stream:
+            attributes = os.fstat(stream.fileno())
+            if not stat.S_ISREG(attributes.st_mode) or attributes.st_nlink > 1:
+                return "", 0
+            truncated = attributes.st_size > MAX_PREVIEW_BYTES
+            if truncated:
+                stream.seek(-MAX_PREVIEW_BYTES, os.SEEK_END)
+            raw = stream.read(MAX_PREVIEW_BYTES)
+        if truncated:
+            # A tail starts inside a record: discard its partial first line,
+            # including partial credentials, then wait for a timestamped record.
+            raw = raw.partition(b"\n")[2]
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=12)
+        recent = []
+        include = False
+        for line in raw.decode("utf-8", errors="replace").splitlines(keepends=True):
+            match = re.match(
+                r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?",
+                line,
+            )
+            if match:
+                try:
+                    timestamp = datetime.fromisoformat(
+                        match.group().replace(",", ".").replace("Z", "+00:00")
+                    ).astimezone(timezone.utc)
+                    include = cutoff <= timestamp <= now
+                except ValueError:
+                    include = False
+            if include:
+                recent.append(line)
+        text = "".join(recent)
+        if not text:
+            return "", 0
 
         from ai_guardian.scanners.sanitizer import sanitize_text
 
         result = sanitize_text(text)
         redactions = result.get("stats", {}).get("total", 0)
-        return result.get("sanitized_text", text), redactions
-    except Exception as e:
-        logger.debug("Log error: %s", e)
+        text = result["sanitized_text"]
+        return (
+            truncate_text(
+                text, "ai-guardian.log", MAX_PREVIEW_BYTES, truncated=truncated
+            )[0],
+            redactions,
+        )
+    except Exception:
+        logger.warning("Recent support log could not be safely collected")
         return "", 0
+
+
+def _get_recent_support_violations() -> List[Dict]:
+    """Read every complete violation in the last twelve hours, with no count cap."""
+    from ai_guardian.config.utils import get_state_dir
+
+    path = get_state_dir() / "violations.jsonl"
+    if not path.exists():
+        return []
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=12)
+    records = []
+    invalid = False
+    fd = os.open(
+        path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    )
+    with os.fdopen(fd, "r", encoding="utf-8") as stream:
+        attributes = os.fstat(stream.fileno())
+        if not stat.S_ISREG(attributes.st_mode) or attributes.st_nlink > 1:
+            raise ValueError("Unsupported violation source")
+        for line in stream:
+            try:
+                entry = json.loads(line)
+                if not isinstance(entry, dict):
+                    raise ValueError("Invalid violation record")
+                timestamp = datetime.fromisoformat(
+                    entry["timestamp"].replace("Z", "+00:00")
+                ).astimezone(timezone.utc)
+                if cutoff <= timestamp <= now:
+                    records.append(entry)
+            except (ValueError, KeyError, TypeError, AttributeError):
+                invalid = True
+    if invalid:
+        logger.warning("Invalid support violation records or timestamps were omitted")
+    return records[::-1]  # Match the logger's newest-first review order.
 
 
 def prepare_bundle(
@@ -161,23 +261,45 @@ def prepare_bundle(
     include_log: bool = True,
     include_violations: bool = True,
     output_path: Optional[str] = None,
+    title: str = "",
+    description: str = "",
+    category: Optional[str] = None,
+    export_destination: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Prepare a sanitized support bundle for user review.
 
     Args:
-        include_log: Include the sanitized ai-guardian.log file.
-        include_violations: Include the sanitized violations.json file.
+        include_log: Include sanitized ai-guardian.log records from the last 12 hours.
+        include_violations: Include complete sanitized violation records from the last 12 hours.
         output_path: If provided, copy bundle files to this directory.
+        export_destination: Internal tray override for a new report; saved settings
+            and previously prepared bundles are not modified.
 
     Returns dict with bundle_id, temp_path, destination, and file list.
     """
     support_config = _get_support_config()
-    destination = support_config.get("export_destination", "")
-    if not destination:
-        from ai_guardian.config.utils import get_state_dir
-
-        destination = str(get_state_dir() / "support-bundles")
+    destination = (
+        export_destination
+        or support_config.get("export_destination")
+        or "github-discussions"
+    )
     ttl = support_config.get("bundle_ttl_minutes", 30)
+
+    context = None
+    context_redactions = 0
+    if destination == "github-discussions":
+        from ai_guardian.reporting.github_support import support_context
+
+        context, context_redactions = support_context(
+            title,
+            description,
+            (
+                category
+                if category is not None
+                else support_config.get("github_category", "bug-reports")
+            ),
+            draft=True,
+        )
 
     bundle_id = f"support-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}"
     temp_dir = Path(tempfile.mkdtemp(prefix="ai-guardian-support-"))
@@ -244,13 +366,13 @@ def prepare_bundle(
     except Exception as e:
         logger.debug("Bundle project config error: %s", e)
 
+    # Individual host CLI settings/hook/MCP copies, never auth stores or chats.
+    files_info.extend(collect_cli_configs(temp_dir))
+
     # 2. Violations (sanitized)
     if include_violations:
         try:
-            from ai_guardian.violations.logger import ViolationLogger
-
-            vl = ViolationLogger()
-            violations = vl.get_recent_violations(limit=100)
+            violations = _get_recent_support_violations()
             sanitized, count = _sanitize_violations(violations)
             (temp_dir / "violations.jsonl").write_text(json.dumps(sanitized, indent=2))
             files_info.append(
@@ -259,14 +381,14 @@ def prepare_bundle(
                     "sanitized": count > 0,
                     "redactions": count,
                     "note": (
-                        f"{count} file paths and content redacted"
+                        f"Last 12 hours; {count} file paths and content redacted"
                         if count
-                        else "No sensitive data found"
+                        else "Last 12 hours; no sensitive data found"
                     ),
                 }
             )
-        except Exception as e:
-            logger.debug("Bundle violations error: %s", e)
+        except Exception:
+            logger.warning("Recent support violations could not be safely collected")
 
     # 3. Metrics (aggregate only)
     try:
@@ -361,19 +483,22 @@ def prepare_bundle(
     except Exception as e:
         logger.debug("Bundle system info error: %s", e)
 
-    # 6. Full log (sanitized)
+    # 6. Recent log (sanitized, last twelve hours, bounded newest records)
     if include_log:
         try:
             log_text, count = _get_sanitized_log()
             if log_text:
-                (temp_dir / "ai-guardian.log").write_text(log_text)
+                (temp_dir / "ai-guardian.log").write_text(log_text, encoding="utf-8")
                 files_info.append(
                     {
                         "name": "ai-guardian.log",
                         "sanitized": count > 0,
                         "redactions": count,
+                        "truncated": log_text.startswith("[Truncated:"),
                         "note": (
-                            f"Full log, {count} items redacted" if count else "Full log"
+                            f"Last 12 hours, {count} items redacted"
+                            if count
+                            else "Last 12 hours"
                         ),
                     }
                 )
@@ -401,39 +526,114 @@ def prepare_bundle(
     except Exception as e:
         logger.debug("Bundle session state error: %s", e)
 
-    # Copy to output_path if requested
+    # Public diagnostics get full text sanitization, including doctor/session
+    # messages and nested config values, before the user sees the artifact.
+    if context is not None:
+        from ai_guardian.reporting.github_support import CONTEXT_FILE, public_text
+
+        for file_info in files_info:
+            file_path = temp_dir / file_info["name"]
+            text, count = public_text(file_path.read_text(encoding="utf-8"))
+            file_path.write_text(text, encoding="utf-8")
+            file_info["redactions"] += count
+            file_info["sanitized"] = file_info["redactions"] > 0
+        (temp_dir / CONTEXT_FILE).write_text(
+            json.dumps(context, indent=2), encoding="utf-8"
+        )
+        files_info.append(
+            {
+                "name": CONTEXT_FILE,
+                "redactions": context_redactions,
+                "sanitized": context_redactions > 0,
+                "note": "Proposed public title, context, and category",
+            }
+        )
+
+    # Only the log may be shortened. Complete configuration/structured files take
+    # priority; reserve public body space by bounding the prepared log, not them.
+    # Keep a small newest log excerpt even when complete files already exceed the
+    # target. Sending will then fail clearly rather than silently cutting files.
+    log_limit = MAX_PREVIEW_BYTES
+    if context is not None:
+        non_log_bytes = sum(
+            (temp_dir / item["name"]).stat().st_size
+            for item in files_info
+            if item["name"] != CONTEXT_FILE and not is_log_file(item["name"])
+        )
+        log_limit = min(log_limit, max(1024, 40_000 - non_log_bytes))
+    for file_info in files_info:
+        path = temp_dir / file_info["name"]
+        if is_log_file(file_info["name"]):
+            text = path.read_text(encoding="utf-8")
+            clipped, truncated = truncate_text(text, file_info["name"], log_limit)
+            if truncated:
+                path.write_text(clipped, encoding="utf-8")
+                file_info["truncated"] = True
+                file_info["original_bytes"] = len(text.encode("utf-8"))
+        if file_info.get("truncated"):
+            file_info["note"] = (
+                file_info.get("note", "") + "; truncated to review/delivery limit"
+            )
+        file_info["size_bytes"] = path.stat().st_size
+
+    files_info.sort(key=lambda item: diagnostic_sort_key(item["name"]))
+
+    # Copy to output_path if requested. The send operation must use the SAME
+    # files the user reviews, not an unrevised original copy.
     actual_output = str(temp_dir)
     if output_path:
-        out = Path(output_path).expanduser()
-        out.mkdir(parents=True, exist_ok=True)
+        out = Path(output_path).expanduser().resolve()
+        out.mkdir(mode=0o700, parents=True, exist_ok=True)
+        (out / ".ai-read-deny").touch()
         for item in temp_dir.iterdir():
             if item.name == ".ai-read-deny":
                 continue
-            shutil.copy2(item, out / item.name)
+            if item.is_dir():
+                shutil.copytree(item, out / item.name, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, out / item.name)
         actual_output = str(out)
 
     _active_bundles[bundle_id] = {
-        "temp_path": str(temp_dir),
+        "temp_path": actual_output,
         "destination": destination,
         "created": datetime.now(timezone.utc).isoformat(),
         "ttl_minutes": ttl,
         "files": files_info,
+        "preserve_directory": bool(output_path),
     }
 
     _persist_bundle_ref(bundle_id, _active_bundles[bundle_id])
 
     result = {
         "bundle_id": bundle_id,
-        "temp_path": str(temp_dir),
+        "temp_path": actual_output,
         "destination": destination,
         "files": files_info,
     }
     if output_path:
         result["output_path"] = actual_output
+        shutil.rmtree(temp_dir)  # only the temporary directory created above
+    if context is not None:
+        from ai_guardian.reporting.github_support import (
+            CATEGORIES,
+            PUBLIC_WARNING,
+            REPOSITORY,
+        )
+
+        result.update(
+            {
+                "repository": REPOSITORY,
+                "category": context["category"],
+                "categories": dict(CATEGORIES),
+                "public_warning": PUBLIC_WARNING,
+                "publication_requires_user_review": True,
+            }
+        )
     return result
 
 
-def _persist_bundle_ref(bundle_id: str, bundle_info: Dict) -> None:
+def _persist_bundle_ref(bundle_id: str, bundle_info: Dict) -> bool:
     """Write last-prepared bundle reference to state dir for cross-process use."""
     try:
         from ai_guardian.config.utils import get_state_dir
@@ -450,12 +650,320 @@ def _persist_bundle_ref(bundle_id: str, bundle_info: Dict) -> None:
                     "created": bundle_info["created"],
                     "ttl_minutes": bundle_info.get("ttl_minutes", 30),
                     "files": bundle_info.get("files", []),
+                    "preserve_directory": bundle_info.get("preserve_directory", False),
+                    "include_files": bundle_info.get("include_files"),
                 },
                 indent=2,
             )
         )
-    except Exception as e:
-        logger.debug("Failed to persist bundle ref: %s", e)
+        return True
+    except Exception:
+        logger.warning("Support review reference could not be saved")
+        return False
+
+
+def _is_local_destination(destination: str) -> bool:
+    # Match legacy transport precedence so the displayed confirmation can
+    # never promise local-only behavior for a destination routed to email.
+    return "@" not in destination and (
+        destination.startswith("~") or Path(destination).is_absolute()
+    )
+
+
+def _review_file_paths(bundle: Dict) -> Dict[str, Path]:
+    """List registered prepared files without reading their contents."""
+    root = Path(bundle["temp_path"])
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("The reviewed directory is unavailable")
+    known = {item["name"] for item in bundle.get("files", [])}
+    files = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise ValueError("Linked files cannot be sent")
+        if path.is_dir():
+            continue
+        name = path.relative_to(root).as_posix()
+        if path.name == ".ai-read-deny" or name in {
+            ".github-submission.json",
+            ".github-gist.json",
+        }:
+            continue
+        if name not in known or not path.is_file() or path.stat().st_nlink > 1:
+            raise ValueError("Unreviewed or unsupported files cannot be sent")
+        files[name] = path
+    return files
+
+
+def _set_file_selection(bundle_id: str, bundle: Dict, include_files) -> None:
+    """Persist inclusion choices; never delete or modify the original files."""
+    known = {item["name"] for item in bundle.get("files", [])}
+    if (
+        not isinstance(include_files, list)
+        or any(not isinstance(name, str) for name in include_files)
+        or len(include_files) != len(set(include_files))
+        or not set(include_files) <= known
+    ):
+        raise ValueError("The file selection could not be validated")
+    _review_file_paths(bundle)
+    selection = list(include_files)
+    if not _persist_bundle_ref(bundle_id, {**bundle, "include_files": selection}):
+        raise ValueError("The file selection could not be saved; nothing was sent")
+    bundle["include_files"] = selection
+
+
+def _review_bundle_selection(
+    bundle_id: str, bundle: Dict, *, zip_path: Optional[Path] = None
+) -> bool:
+    """Review local-only ZIP or legacy delivery without any GitHub authentication."""
+    from ai_guardian.reporting import github_support as github
+
+    available = _review_file_paths(bundle)
+    included = bundle.get("include_files")
+    if included is None:
+        included = [name for name in available if name == "doctor.json"]
+    request = {
+        "mode": "bundle",
+        "request_id": uuid.uuid4().hex,
+        "temp_path": bundle["temp_path"],
+        "destination": (
+            str(zip_path) if zip_path else _final_destination(bundle_id, bundle)
+        ),
+        "local_only": zip_path is not None
+        or _is_local_destination(bundle["destination"]),
+        "zip_export": zip_path is not None,
+        "files": sorted(
+            (item for item in bundle.get("files", []) if item["name"] in available),
+            key=lambda item: diagnostic_sort_key(item["name"]),
+        ),
+        "include_files": included,
+    }
+    reply = github.review_dialog(request)
+    if reply is None:
+        return False
+    if (
+        reply.get("request_id") != request["request_id"]
+        or reply.get("send") is not True
+    ):
+        raise ValueError("Unverified support review")
+    selection = reply.get("include_files")
+    description = reply.get("description", "")
+    if not isinstance(selection, list) or not selection:
+        raise ValueError("No selected files")
+    if (
+        not isinstance(description, str)
+        or len(description.encode("utf-8")) > github.MAX_BODY_BYTES
+    ):
+        raise ValueError("Unsupported support message")
+    message, redactions = github.public_text(description)
+    if not message.strip():
+        raise github.GitHubError("A support message is required.", code="context")
+    _set_file_selection(bundle_id, bundle, selection)
+    if not set(selection).intersection(_review_file_paths(bundle)):
+        raise ValueError("No selected diagnostic files remain")
+    name = "support-message.txt"
+    path = Path(bundle["temp_path"]) / name
+    if path.exists():
+        name = f"support-message-{uuid.uuid4().hex[:8]}.txt"
+        path = path.with_name(name)
+    with path.open("x", encoding="utf-8") as stream:
+        stream.write(message)
+    bundle["files"].append(
+        {
+            "name": name,
+            "redactions": redactions,
+            "sanitized": redactions > 0,
+            "note": "User support message",
+        }
+    )
+    _set_file_selection(bundle_id, bundle, [*selection, name])
+    return True
+
+
+def _send_github_or_zip(bundle_id: str, bundle: Dict) -> Dict[str, Any]:
+    """Offer a local ZIP before attempting authentication or public publication."""
+    from ai_guardian.config.utils import get_state_dir
+    from ai_guardian.reporting import github_support as github
+    from ai_guardian.reporting import github_gist
+
+    public_started = False
+    existing_gist_url = github_gist.recovery_url(bundle)
+    try:
+        request = {
+            "mode": "delivery",
+            "request_id": uuid.uuid4().hex,
+            "destination": f"{github.REPOSITORY_URL}/discussions (public), or a local ZIP with no upload",
+            "github_available": github.credentials_available(),
+            **({"gist_url": existing_gist_url} if existing_gist_url else {}),
+        }
+        reply = github.review_dialog(request)
+        if reply is None:
+            return {
+                "status": "error",
+                "error_code": "cancelled",
+                "message": (
+                    "Support cancelled. No new files were sent; the existing Gist was not deleted."
+                    if existing_gist_url
+                    else CANCELLED_MESSAGE
+                )
+                + github_gist.uploaded_notice(existing_gist_url),
+                **(
+                    {"gist_url": existing_gist_url, "delivery_status": "gist_only"}
+                    if existing_gist_url
+                    else {}
+                ),
+            }
+        if reply.get("request_id") != request["request_id"]:
+            raise ValueError("Unverified delivery choice")
+        if reply.get("delivery") == "discussion":
+            if not request["github_available"]:
+                raise github.GitHubError(
+                    "Gist + Discussion requires authenticated GitHub credentials. Authenticate your own GitHub CLI account and reopen support, or choose Create ZIP only.",
+                    code="authentication",
+                )
+            # Never synthesize the separate identity/content-bound public approval.
+            public_started = True
+            return github.send_discussion(bundle_id, bundle)
+        if reply.get("delivery") != "zip":
+            raise ValueError("Unsupported delivery choice")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", bundle_id):
+            raise ValueError("Unsupported bundle reference")
+        export_dir = (
+            get_state_dir() / "support-exports" / f"{bundle_id}-{uuid.uuid4().hex[:8]}"
+        )
+        zip_path = export_dir / f"{bundle_id}.zip"
+        if not _review_bundle_selection(bundle_id, bundle, zip_path=zip_path):
+            return {
+                "status": "error",
+                "error_code": "cancelled",
+                "message": (
+                    "Support cancelled. No new files were sent; the existing Gist was not deleted."
+                    if existing_gist_url
+                    else CANCELLED_MESSAGE
+                )
+                + github_gist.uploaded_notice(existing_gist_url),
+                **(
+                    {"gist_url": existing_gist_url, "delivery_status": "gist_only"}
+                    if existing_gist_url
+                    else {}
+                ),
+            }
+        with _outgoing_files(bundle) as outgoing:
+            export_dir.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            export_dir.mkdir(mode=0o700)
+            try:
+                (export_dir / ".ai-read-deny").touch()
+                _zip_bundle(outgoing, bundle_id, output_path=zip_path)
+            except (OSError, ValueError):
+                shutil.rmtree(export_dir)  # Only this newly created, private export.
+                raise
+        return {
+            "status": "sent",
+            "delivery_status": "zip_only",
+            "destination": str(zip_path),
+            "zip_path": str(zip_path),
+            "temp_path": bundle["temp_path"],
+            **({"gist_url": existing_gist_url} if existing_gist_url else {}),
+            "message": (
+                f"ZIP created locally: {zip_path}\n"
+                + (
+                    "This ZIP export did not upload files or create a Discussion. Your earlier Gist was not deleted.\n"
+                    if existing_gist_url
+                    else "No files were uploaded or sent to support. No Discussion was created.\n"
+                )
+                + "The ZIP is not encrypted. Review it before forwarding through a support channel you choose.\n"
+                "The prepared bundle remains available to 'ai-guardian support send' until it expires; its configured destination is unchanged."
+            )
+            + github_gist.uploaded_notice(existing_gist_url),
+        }
+    except github.GitHubError as exc:
+        gist_url = exc.gist_url or (
+            github_gist.recovery_url(bundle) if public_started else existing_gist_url
+        )
+        return {
+            "status": "error",
+            "error_code": exc.code,
+            "delivery_status": (
+                "uncertain"
+                if exc.uncertain
+                else "gist_only" if gist_url else "not_published"
+            ),
+            "message": str(exc) + github_gist.uploaded_notice(gist_url),
+            "temp_path": bundle["temp_path"],
+            **({"gist_url": gist_url} if gist_url else {}),
+        }
+    except (OSError, ValueError, TypeError):
+        logger.warning("Support delivery choice or ZIP export could not complete")
+        gist_url = (
+            github_gist.recovery_url(bundle) if public_started else existing_gist_url
+        )
+        return {
+            "status": "error",
+            "error_code": "uncertain" if public_started else "files",
+            "delivery_status": "uncertain" if public_started else "not_sent",
+            "message": (
+                "Support publication outcome is uncertain. Check the repository Discussions before retrying, and check your GitHub Gists; retain the prepared files locally."
+                if public_started
+                else "The support choice or ZIP export could not be completed. No new files were uploaded by this attempt; retain the prepared files locally."
+            )
+            + github_gist.uploaded_notice(gist_url),
+            "temp_path": bundle["temp_path"],
+            **({"gist_url": gist_url} if gist_url else {}),
+        }
+
+
+@contextmanager
+def _outgoing_files(bundle: Dict):
+    """Stage only selected files for legacy transports, preserving originals."""
+    selection = bundle.get("include_files")
+    if selection is None:
+        yield Path(bundle["temp_path"])
+        return
+    known = {item["name"] for item in bundle.get("files", [])}
+    if not isinstance(selection, list) or any(
+        not isinstance(name, str) or name not in known for name in selection
+    ):
+        raise ValueError("The file selection could not be validated")
+    files = _review_file_paths(bundle)
+    selected = {name: path for name, path in files.items() if name in selection}
+    if not selected:
+        raise ValueError("No selected diagnostic files remain")
+    with tempfile.TemporaryDirectory(prefix="ai-guardian-support-selected-") as temp:
+        outgoing = Path(temp)
+        (outgoing / ".ai-read-deny").touch()
+        for name, source in selected.items():
+            target = outgoing / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(
+                source,
+                os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_NONBLOCK", 0),
+            )
+            with os.fdopen(fd, "rb") as stream:
+                attributes = os.fstat(stream.fileno())
+                if not stat.S_ISREG(attributes.st_mode) or attributes.st_nlink > 1:
+                    raise ValueError("Only regular reviewed files can be sent")
+                with target.open("xb") as output:
+                    shutil.copyfileobj(stream, output)
+        yield outgoing
+
+
+def _final_destination(bundle_id: str, bundle: Dict) -> str:
+    """Display the actual final path/recipient without allowing it to be edited."""
+    destination = bundle["destination"]
+    if _is_local_destination(destination):
+        return str(Path(destination).expanduser() / bundle_id)
+    if destination.startswith("s3://"):
+        parts = destination[5:].split("/", 1)
+        prefix = parts[1] if len(parts) > 1 else ""
+        key = f"{prefix}/{bundle_id}".strip("/")
+        return f"s3://{parts[0]}/{key}/"
+    if destination.startswith("gs://"):
+        parts = destination[5:].split("/", 1)
+        prefix = parts[1].strip("/") if len(parts) > 1 else ""
+        key = f"{prefix}/{bundle_id}".strip("/")
+        return f"gs://{parts[0]}/{key}/"
+    return destination
 
 
 def _load_last_bundle() -> Optional[str]:
@@ -476,14 +984,29 @@ def _load_last_bundle() -> Optional[str]:
         bundle_id = ref.get("bundle_id", "")
         temp_path = Path(ref.get("temp_path", ""))
 
-        if not temp_path.exists():
-            return None
-
         created = datetime.fromisoformat(ref["created"])
         age_minutes = (datetime.now(timezone.utc) - created).total_seconds() / 60
         ttl = ref.get("ttl_minutes", 30)
         if age_minutes > ttl:
             return None
+
+        if not temp_path.is_dir():
+            # Older local exports consumed the temp directory but left this
+            # reference pointing at it. Recover only that exact local copy;
+            # never change destinations or reset the original review lifetime.
+            destination = ref.get("destination", "")
+            if (
+                not _is_local_destination(destination)
+                or not bundle_id.startswith("support-")
+                or Path(bundle_id).name != bundle_id
+            ):
+                return None
+            temp_path = Path(destination).expanduser() / bundle_id
+            if not temp_path.is_dir() or temp_path.is_symlink():
+                return None
+            (temp_path / ".ai-read-deny").touch()
+            ref.update(temp_path=str(temp_path), preserve_directory=True)
+            _persist_bundle_ref(bundle_id, ref)
 
         if bundle_id not in _active_bundles:
             _active_bundles[bundle_id] = ref
@@ -514,14 +1037,22 @@ def _load_bundle_from_path(bundle_path: str) -> Optional[str]:
         bundle_id = f"support-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}"
 
     support_config = _get_support_config()
-    destination = support_config.get("export_destination", "")
-    if not destination:
-        from ai_guardian.config.utils import get_state_dir
+    destination = support_config.get("export_destination") or "github-discussions"
 
-        destination = str(get_state_dir() / "support-bundles")
-
+    if destination == "github-discussions":
+        if path.is_symlink():
+            return None
+        (path / ".ai-read-deny").touch()
+        files = [
+            f for f in path.rglob("*") if f.is_file() and f.name != ".ai-read-deny"
+        ]
     files_info = [
-        {"name": f.name, "sanitized": False, "redactions": 0, "note": "pre-existing"}
+        {
+            "name": f.relative_to(path).as_posix(),
+            "sanitized": False,
+            "redactions": 0,
+            "note": "pre-existing",
+        }
         for f in files
     ]
 
@@ -529,23 +1060,26 @@ def _load_bundle_from_path(bundle_path: str) -> Optional[str]:
         "temp_path": str(path),
         "destination": destination,
         "created": datetime.now(timezone.utc).isoformat(),
-        "ttl_minutes": 1440,
+        "ttl_minutes": (
+            support_config.get("bundle_ttl_minutes", 30)
+            if destination == "github-discussions"
+            else 1440
+        ),
         "files": files_info,
+        "preserve_directory": True,
     }
     return bundle_id
 
 
 def _get_bundle_status() -> Dict[str, Any]:
     """Get support bundle configuration and status information."""
+    _load_last_bundle()
     support_config = _get_support_config()
-    destination = support_config.get("export_destination", "")
+    destination = support_config.get("export_destination") or "github-discussions"
 
-    if not destination:
-        from ai_guardian.config.utils import get_state_dir
-
-        destination = str(get_state_dir() / "support-bundles")
-
-    if destination.startswith("s3://"):
+    if destination == "github-discussions":
+        dest_type = "github-discussions"
+    elif destination.startswith("s3://"):
         dest_type = "s3"
     elif destination.startswith("gs://"):
         dest_type = "gcs"
@@ -561,7 +1095,10 @@ def _get_bundle_status() -> Dict[str, Any]:
     email_auth = email_config.get("auth", {})
     email_auth_method = email_auth.get("method", "none")
 
-    if dest_type == "email":
+    if dest_type == "github-discussions":
+        auth_method = "github-cli (verified during review)"
+        auth_configured = False
+    elif dest_type == "email":
         auth_method = email_auth_method
         if email_auth_method == "env":
             username_env = email_auth.get("username_env", "")
@@ -639,44 +1176,119 @@ def send_bundle(bundle_id: str) -> Dict[str, Any]:
             "message": f"Bundle expired ({ttl} min TTL). Prepare a new bundle.",
         }
 
+    if destination == "github-discussions":
+        # Keep artifacts and the publication receipt for the normal lifetime,
+        # including on success, so retries cannot create duplicate Discussions.
+        return _send_github_or_zip(bundle_id, bundle)
     try:
-        if destination.startswith("s3://"):
-            return _send_to_s3(bundle_id, temp_path, destination)
-        elif destination.startswith("gs://"):
-            return _send_to_gcs(bundle_id, temp_path, destination)
-        elif destination.startswith("mailto:") or "@" in destination:
-            return _send_to_email(bundle_id, temp_path, destination)
-        elif destination.startswith("/") or destination.startswith("~"):
-            return _send_to_local(bundle_id, temp_path, destination)
-        elif not destination:
-            return {
-                "status": "error",
-                "message": "No export destination configured. Add 'support.export_destination' to ai-guardian.json.",
-            }
-        else:
-            return {
-                "status": "error",
-                "message": f"Unsupported destination: {destination}",
-            }
-    finally:
+        with _outgoing_files(bundle) as outgoing:
+            if destination.startswith("s3://"):
+                result = _send_to_s3(bundle_id, outgoing, destination)
+            elif destination.startswith("gs://"):
+                result = _send_to_gcs(bundle_id, outgoing, destination)
+            elif destination.startswith("mailto:") or "@" in destination:
+                result = _send_to_email(bundle_id, outgoing, destination)
+            elif _is_local_destination(destination):
+                # Reuse a retained export only if it is still the selected copy.
+                # A narrower selection must not falsely claim to have excluded
+                # files while reusing that same, unchanged destination directory.
+                source = outgoing
+                if Path(
+                    _final_destination(bundle_id, bundle)
+                ).resolve() == temp_path.resolve() and (
+                    bundle.get("include_files") is None
+                    or set(_review_file_paths(bundle)) <= set(bundle["include_files"])
+                ):
+                    source = temp_path
+                result = _send_to_local(bundle_id, source, destination)
+            elif not destination:
+                return {
+                    "status": "error",
+                    "message": "No export destination configured. Add 'support.export_destination' to ai-guardian.json.",
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": "Unsupported support destination. Files remain local.",
+                }
+            if outgoing != temp_path and result.get("status") != "sent":
+                # Selection staging is short-lived; failure guidance must point
+                # to the retained review directory, not the removed staging copy.
+                result = {
+                    **result,
+                    "temp_path": str(temp_path),
+                    "message": result.get("message", "Send failed").replace(
+                        str(outgoing), str(temp_path)
+                    ),
+                }
+    except (OSError, ValueError, TypeError):
+        logger.warning("Selected support files could not be prepared")
+        return {
+            "status": "error",
+            "message": "The selected files could not be prepared. Files remain local.",
+        }
+
+    if _is_local_destination(destination):
+        if result.get("status") == "sent":
+            # Export is not a support submission. Retain a cross-process
+            # reference to the reviewed copy instead of consuming the bundle.
+            if Path(result["destination"]).resolve() != temp_path.resolve():
+                _cleanup_bundle(bundle_id)
+            bundle.update(temp_path=result["destination"], preserve_directory=True)
+            _active_bundles[bundle_id] = bundle
+            _persist_bundle_ref(bundle_id, bundle)
+        return result
+    if (
+        result.get("status") == "sent"
+        and result.get("delivery_status") != "manual_required"
+    ):
         _cleanup_bundle(bundle_id)
+    return result
 
 
 def _send_to_local(bundle_id: str, temp_path: Path, destination: str) -> Dict:
-    """Copy bundle to a local directory."""
+    """Export locally without claiming support delivery or consuming review state."""
     dest = Path(destination).expanduser()
     bundle_dest = dest / bundle_id
-    bundle_dest.mkdir(parents=True, exist_ok=True)
-
-    for item in temp_path.iterdir():
-        if item.name == ".ai-read-deny":
-            continue
-        shutil.copy2(item, bundle_dest / item.name)
+    staging = None
+    try:
+        source = temp_path.resolve()
+        target = bundle_dest.resolve()
+        if target != source:
+            if target.is_relative_to(source) or bundle_dest.exists():
+                return {
+                    "status": "error",
+                    "message": "Local export needs a new directory outside the reviewed bundle. Existing files were not overwritten.",
+                }
+            dest.mkdir(mode=0o700, parents=True, exist_ok=True)
+            staging = Path(tempfile.mkdtemp(prefix=f".{bundle_id}-", dir=dest))
+            (staging / ".ai-read-deny").touch()
+            for item in temp_path.iterdir():
+                if item.name == ".ai-read-deny":
+                    continue
+                if item.is_dir():
+                    shutil.copytree(item, staging / item.name)
+                else:
+                    shutil.copy2(item, staging / item.name)
+            staging.rename(bundle_dest)
+        else:
+            # A second command uses the retained copy itself. In particular,
+            # do not recollect or restore files that the user deleted there.
+            (bundle_dest / ".ai-read-deny").touch()
+    except OSError:
+        if staging is not None and staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+        logger.warning("Local support export failed; reviewed files retained")
+        return {
+            "status": "error",
+            "message": f"Local export failed. Reviewed files remain at: {temp_path}",
+        }
 
     return {
         "status": "sent",
+        "delivery_status": "local_only",
         "destination": str(bundle_dest),
-        "message": f"Bundle copied to {bundle_dest}",
+        "message": f"Bundle exported locally to {bundle_dest}. No files were sent to support. No Discussion was created.",
     }
 
 
@@ -707,10 +1319,14 @@ def _send_to_s3(bundle_id: str, temp_path: Path, destination: str) -> Dict:
 
         s3 = boto3.client("s3", **session_kwargs)
         uploaded = 0
-        for item in temp_path.iterdir():
-            if item.name == ".ai-read-deny":
+        for item in sorted(temp_path.rglob("*")):
+            if item.name == ".ai-read-deny" or not item.is_file():
                 continue
-            s3.upload_file(str(item), bucket, f"{key_prefix}/{item.name}")
+            s3.upload_file(
+                str(item),
+                bucket,
+                f"{key_prefix}/{item.relative_to(temp_path).as_posix()}",
+            )
             uploaded += 1
 
         return {
@@ -823,11 +1439,11 @@ def _send_to_gcs(bundle_id: str, temp_path: Path, destination: str) -> Dict:
 
     try:
         uploaded = 0
-        for item in temp_path.iterdir():
-            if item.name == ".ai-read-deny":
+        for item in sorted(temp_path.rglob("*")):
+            if item.name == ".ai-read-deny" or not item.is_file():
                 continue
 
-            object_name = f"{object_prefix}/{item.name}"
+            object_name = f"{object_prefix}/{item.relative_to(temp_path).as_posix()}"
             url = (
                 f"https://storage.googleapis.com/upload/storage/v1/b/"
                 f"{quote(bucket, safe='')}/o"
@@ -864,18 +1480,37 @@ def _send_to_gcs(bundle_id: str, temp_path: Path, destination: str) -> Dict:
 _SIZE_WARNING_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-def _zip_bundle(temp_path: Path, bundle_id: str) -> Path:
+def _zip_bundle(
+    temp_path: Path, bundle_id: str, *, output_path: Optional[Path] = None
+) -> Path:
     """Zip all bundle files into a single archive.
 
     Returns the path to the created zip file.
     Excludes .ai-read-deny markers.
     """
-    zip_path = temp_path.parent / f"{bundle_id}.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for item in sorted(temp_path.iterdir()):
-            if item.name == ".ai-read-deny":
-                continue
-            zf.write(item, item.name)
+    zip_path = (
+        output_path
+        if output_path is not None
+        else temp_path.parent / f"{bundle_id}.zip"
+    )
+    fd = os.open(
+        zip_path,
+        os.O_WRONLY
+        | os.O_CREAT
+        | getattr(os, "O_NOFOLLOW", 0)
+        | (os.O_EXCL if output_path is not None else 0),
+        0o600,
+    )
+    with os.fdopen(fd, "wb") as stream:
+        attributes = os.fstat(stream.fileno())
+        if not stat.S_ISREG(attributes.st_mode) or attributes.st_nlink > 1:
+            raise ValueError("Unsupported archive target")
+        stream.truncate()
+        with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as zf:
+            for item in sorted(temp_path.rglob("*")):
+                if item.name == ".ai-read-deny" or not item.is_file():
+                    continue
+                zf.write(item, item.relative_to(temp_path).as_posix())
     return zip_path
 
 
@@ -908,16 +1543,17 @@ def _send_to_email(bundle_id: str, temp_path: Path, destination: str) -> Dict:
         try:
             webbrowser.open(mailto_url)
         except Exception:
-            pass  # best-effort
+            logger.warning("Support mail client could not be opened")
 
         return {
             "status": "sent",
+            "delivery_status": "manual_required",
             "destination": f"mailto:{to_addr}",
             "zip_path": str(zip_path),
             "message": (
                 f"No SMTP configured. Bundle zipped to {zip_path}\n"
-                "Your default mail client has been opened. "
-                "Please attach the zip and send."
+                "Complete the email in your mail client: attach the zip and send. "
+                "AI Guardian has not sent an email."
             ),
         }
 
@@ -1020,7 +1656,9 @@ def _cleanup_bundle(bundle_id: str) -> None:
     """Remove temp directory and tracking entry for a bundle."""
     if bundle_id in _active_bundles:
         temp_path = Path(_active_bundles[bundle_id]["temp_path"])
-        if temp_path.exists():
+        if temp_path.exists() and not _active_bundles[bundle_id].get(
+            "preserve_directory", False
+        ):
             shutil.rmtree(temp_path, ignore_errors=True)
         del _active_bundles[bundle_id]
 
@@ -1028,7 +1666,7 @@ def _cleanup_bundle(bundle_id: str) -> None:
 # --- CLI formatters ---
 
 
-def _format_prepare_human(result: Dict[str, Any]) -> str:
+def _format_prepare_human(result: Dict[str, Any], *, sending: bool = False) -> str:
     """Format prepare_bundle result for terminal output."""
     lines = []
     path = result.get("output_path", result["temp_path"])
@@ -1036,18 +1674,68 @@ def _format_prepare_human(result: Dict[str, Any]) -> str:
     lines.append("")
     lines.append("Files:")
     for f in result["files"]:
-        marker = f"⚠️  {f['redactions']} items redacted" if f["redactions"] else "clean"
+        marker = (
+            "omitted — source content not included"
+            if f.get("collection_status") == "omitted"
+            else (
+                f"⚠️  {f['redactions']} items redacted"
+                if f["redactions"]
+                else "no automatic redactions"
+            )
+        )
+        if f.get("truncated"):
+            marker += "; truncated log excerpt"
         lines.append(f"  {f['name']:25s} — {marker}")
     lines.append("")
-    lines.append("Review the files, then run:")
-    lines.append("  ai-guardian support send")
+    lines.append("Preparation is local; nothing has been sent.")
+    lines.append(
+        "Delete any files you do not want to send from this directory before continuing."
+    )
+    lines.append(
+        "Deleted files will not be collected again. Review the remaining files yourself."
+    )
+    lines.append("Sanitization is not a guarantee of confidentiality.")
+    destination = result.get("destination", "")
+    if destination and _is_local_destination(destination):
+        lines.append(f"Destination: local export only — {destination}")
+        lines.append("No files will be sent to support. No Discussion will be created.")
+    lines.append("")
+    if result.get("public_warning"):
+        lines.append(result["public_warning"])
+        lines.append(
+            "Publication requires native user review; --yes cannot approve it."
+        )
+        lines.append(
+            "Categories: Bug Reports (default), Q&A. Preparation has not published anything."
+        )
+        lines.append("")
+    if not sending:
+        lines.append("After reviewing the files, run:")
+        lines.append("  ai-guardian support send")
     return "\n".join(lines)
 
 
 def _format_send_human(result: Dict[str, Any]) -> str:
     """Format send_bundle result for terminal output."""
+    if result.get("delivery_status") == "zip_only":
+        return result["message"]
+    if result.get("delivery_status") == "manual_required":
+        return f"Manual email delivery required:\n{result['message']}"
+    if result.get("delivery_status") == "local_only":
+        return (
+            f"✓ Exported locally: {result['destination']}\n"
+            "No files were sent to support. No Discussion was created.\n"
+            "This reviewed copy remains available to 'ai-guardian support send' "
+            "until the bundle expires; its destination is still local export.\n"
+            "For public support, select GitHub Discussions (public) in "
+            "Console → MCP Settings → Support Bundle Export."
+        )
     if result["status"] == "sent":
-        return f"✓ Sent: {result.get('message', result.get('destination', ''))}"
+        message = result.get("message", result.get("destination", ""))
+        url = result.get("discussion_url")
+        if url and url not in message:
+            message += f"\n{url}"
+        return f"✓ Sent: {message}"
     return f"✗ {result.get('message', 'Send failed')}"
 
 
@@ -1083,6 +1771,9 @@ def support_command(args) -> int:
             include_log=not getattr(args, "no_log", False),
             include_violations=not getattr(args, "no_violations", False),
             output_path=getattr(args, "output", None),
+            title=getattr(args, "title", ""),
+            description=getattr(args, "description", ""),
+            category=getattr(args, "category", None),
         )
         if getattr(args, "json", False):
             print(json.dumps(result, indent=2))
@@ -1096,9 +1787,6 @@ def support_command(args) -> int:
         if getattr(args, "prepare", False):
             result = prepare_bundle()
             bundle_id = result["bundle_id"]
-            if not getattr(args, "json", False):
-                print(_format_prepare_human(result))
-                print()
         elif getattr(args, "bundle", None):
             bundle_id = _load_bundle_from_path(args.bundle)
             if not bundle_id:
@@ -1111,14 +1799,39 @@ def support_command(args) -> int:
             bundle_id = _load_last_bundle()
             if not bundle_id:
                 print(
-                    "Error: No pending bundle found.\n"
+                    "Error: No unexpired prepared bundle found; it may have expired or been removed.\n"
                     "Run 'ai-guardian support prepare' first, or use "
-                    "'ai-guardian support send --prepare'.",
+                    "'ai-guardian support send --prepare'.\n"
+                    "To reuse a retained local export, use "
+                    "'ai-guardian support send --bundle <exported-directory>'.",
                     file=sys.stderr,
                 )
                 return 1
 
-        if not getattr(args, "yes", False):
+        is_public = (
+            _active_bundles.get(bundle_id, {}).get("destination")
+            == "github-discussions"
+        )
+        if not getattr(args, "json", False):
+            summary = dict(_active_bundles[bundle_id])
+            review_path = Path(summary["temp_path"])
+            summary["files"] = [
+                item
+                for item in summary.get("files", [])
+                if (review_path / item["name"]).exists()
+                and (
+                    summary.get("include_files") is None
+                    or item["name"] in summary["include_files"]
+                )
+            ]
+            if is_public:
+                from ai_guardian.reporting.github_support import PUBLIC_WARNING
+
+                summary["public_warning"] = PUBLIC_WARNING
+            print(_format_prepare_human(summary, sending=True))
+            print()
+
+        if not is_public and not getattr(args, "yes", False):
             if not sys.stdin.isatty():
                 print(
                     "Error: Cannot prompt for confirmation in non-interactive mode. "
@@ -1127,7 +1840,12 @@ def support_command(args) -> int:
                 )
                 return 1
             dest = _active_bundles.get(bundle_id, {}).get("destination", "")
-            answer = input(f"Send bundle to {dest}? [y/N] ").strip().lower()
+            prompt = (
+                f"Export bundle locally to {dest}? [y/N] "
+                if _is_local_destination(dest)
+                else f"Send bundle to {dest}? [y/N] "
+            )
+            answer = input(prompt).strip().lower()
             if answer not in ("y", "yes"):
                 print("Cancelled.")
                 return 1

@@ -80,6 +80,37 @@ jobs:
             echo "Profile @${profile}: OK"
           done
 
+      - name: Verify support defaults and explicit legacy destinations
+        run: |
+          ai-guardian support prepare --help
+          ai-guardian support send --help
+          ai-guardian support status --json
+          python - <<'PY'
+          import json
+          import os
+          import tempfile
+          from pathlib import Path
+          from ai_guardian.setup.config import _get_default_config_template
+          from ai_guardian.reporting.github_support import CATEGORIES, DESTINATION
+          from ai_guardian.reporting.support_bundle import _get_support_config, _get_bundle_status
+
+          defaults = _get_default_config_template(permissive=False)["support"]
+          assert defaults["export_destination"] == DESTINATION
+          assert defaults["github_category"] == "bug-reports"
+          assert set(CATEGORIES) == {"bug-reports", "q-a"}
+          with tempfile.TemporaryDirectory() as directory:
+              os.environ["AI_GUARDIAN_CONFIG_DIR"] = directory
+              os.chdir(directory)
+              assert _get_support_config()["export_destination"] == DESTINATION
+              path = Path(directory) / "ai-guardian.json"
+              for saved in ({}, {"support": {}}, {"support": {"export_destination": ""}}):
+                  path.write_text(json.dumps(saved))
+                  assert _get_bundle_status()["destination_type"] == DESTINATION
+              path.write_text(json.dumps({"support": {"export_destination": str(Path(directory) / "exports")}}))
+              assert _get_bundle_status()["destination_type"] == "local"
+          print("Support defaults/legacy compatibility verified; no diagnostics prepared or published")
+          PY
+
       - name: Verify patterns list
         run: |
           ai-guardian patterns list --json | python -c "

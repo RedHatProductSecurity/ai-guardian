@@ -48,8 +48,8 @@ advisory result only; the direct hook remains authoritative.
 
 | Tool | Parameters | Returns | When to Use |
 |------|-----------|---------|-------------|
-| `prepare_support_bundle` | _(none)_ | `{bundle_id, temp_path, destination, files: [{name, sanitized, redactions, note}]}` | When user asks to send info to support — always call this first |
-| `send_support_bundle` | `bundle_id: str` | `{status: "sent"\|"error", destination, message}` | Only after user reviews and approves the prepared bundle |
+| `prepare_support_bundle` | `title?`, `description?`, `category?` (`bug-reports` or `q-a`) | `{bundle_id, temp_path, destination, files: [{name, sanitized, redactions, note, size_bytes, truncated?}]}` | Prepare locally; show summary, log truncation notices and public warning, never read protected contents. Only logs may be shortened; configurations and all included violation records stay complete. Logs/violations cover the last 12 hours; View is fully paged |
+| `send_support_bundle` | `bundle_id: str` (no approval/repository/identity overrides) | `{status: "sent"\|"error", destination, message, delivery_status?, discussion_url?, gist_url?, zip_path?}` | Destination dropdown + Next offers local ZIP (default; zip_only: not encrypted, no upload/authentication) or Gist + Discussion (requires GitHub credentials). Files are alphabetical with doctor.json first/default-checked on new lists; saved selections are retained. GitHub requires title/message; ZIP/legacy review requires a message; both need a selected file. Separate native consent approves exact user-owned unlisted Gist files, then the Discussion with its actual link. Unlisted is not private. ZIP is not support delivery; show zip_path. Show discussion_url on publication and any gist_url on partial failure for management/deletion; never blindly retry uncertain uploads/posts |
 
 ## Special Responses
 

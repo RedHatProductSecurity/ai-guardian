@@ -70,6 +70,7 @@ The historical `ai-guardian tui` command remains as an alias for
 - **IDE Conversations**: IDE transcript inspection
 - **Scan Configure**: False-positive analysis and suppression configuration
 - **Daemon Detail**: Pause, resume, reload, and recent violations
+- **About**: Version/system details and **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**
 
 To correlate an SDK run with a hook-based IDE session, provide the SDK
 `RunContext.run_id` as the hook event's `run_id`. The matching values appear as

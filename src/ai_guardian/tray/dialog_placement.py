@@ -12,6 +12,7 @@ import json
 import logging
 import subprocess
 import sys
+from functools import partial
 from typing import Optional
 
 from ai_guardian.tray.sandbox_dialog import (
@@ -28,18 +29,21 @@ def show_tkinter_message_subprocess(
     message: str,
     *,
     screen_bounds: Optional[ScreenBounds] = None,
+    links: tuple[tuple[str, str], ...] = (),
 ) -> Optional[bool]:
     """Show a simple message dialog in an isolated Tk process.
 
     ``None`` means Tk could not be launched and lets callers retain their
     platform-native fallback.  A boolean result means the dialog process ran
-    successfully; message dialogs only have an OK action, so it is ``True``.
+    successfully; OK closes the dialog, so it is ``True``. Explicit links open
+    only on mouse/keyboard activation and do not dismiss the About information.
     """
     payload = json.dumps(
         {
             "title": title,
             "message": message,
             "screen_bounds": screen_bounds,
+            "links": links,
         },
         ensure_ascii=False,
     )
@@ -48,7 +52,7 @@ def show_tkinter_message_subprocess(
         "from ai_guardian.tray.dialog_placement import _show_tkinter_message; "
         "p=json.loads(sys.argv[1]); "
         "_show_tkinter_message(p['title'], p['message'], "
-        "screen_bounds=p.get('screen_bounds'))"
+        "screen_bounds=p.get('screen_bounds'), links=p.get('links', ()))"
     )
     try:
         result = subprocess.run(
@@ -77,6 +81,7 @@ def _show_tkinter_message(
     message: str,
     *,
     screen_bounds: Optional[ScreenBounds] = None,
+    links: tuple[tuple[str, str], ...] = (),
 ) -> None:
     """Show the child-process implementation of a simple message dialog."""
     import tkinter as tk
@@ -86,9 +91,11 @@ def _show_tkinter_message(
 
     _ensure_tcl_library()
     root = tk.Tk()
+    root.withdraw()  # Map once, after layout and the temporary raising hint are ready.
     root.title(title)
-    root.geometry("560x260")
-    _place_window_on_screen(root, screen_bounds, 560, 260)
+    height = max(260, min(640, 100 + 22 * len(message.splitlines()))) if links else 260
+    root.geometry(f"560x{height}")
+    _place_window_on_screen(root, screen_bounds, 560, height)
     root.minsize(420, 180)
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
@@ -96,9 +103,24 @@ def _show_tkinter_message(
     frame = ttk.Frame(root, padding=16)
     frame.grid(row=0, column=0, sticky="nsew")
     frame.columnconfigure(0, weight=1)
-    ttk.Label(frame, text=message, justify="left", wraplength=510).grid(
-        row=0, column=0, sticky="w", pady=(0, 18)
-    )
+    frame.rowconfigure(0, weight=1)
+    content = ttk.Frame(frame)
+    content.grid(row=0, column=0, sticky="w", pady=(0, 18))
+    content.columnconfigure(0, weight=1)
+
+    def open_link(url, _event=None):
+        import webbrowser
+
+        webbrowser.open(url)
+
+    for row, line in enumerate(message.splitlines() if links else [message]):
+        label = ttk.Label(content, text=line, justify="left", wraplength=510)
+        label.grid(row=row, column=0, sticky="w")
+        url = next((url for anchor, url in links if anchor and anchor in line), None)
+        if url:
+            label.configure(foreground="#2563eb", cursor="hand2", takefocus=True)
+            for event in ("<Button-1>", "<Return>", "<space>"):
+                label.bind(event, partial(open_link, url))
 
     def close() -> None:
         root.destroy()
@@ -106,17 +128,36 @@ def _show_tkinter_message(
     ttk.Button(frame, text="OK", command=close).grid(row=1, column=0, sticky="e")
     root.protocol("WM_DELETE_WINDOW", close)
     root.bind("<Escape>", lambda _event: close())
+
+    def focus():
+        try:
+            if root.winfo_exists():
+                root.deiconify()
+                root.lift()
+                root.focus_force()
+                root.grab_set()
+        except tk.TclError:
+            logger.debug("Message dialog closed or rejected foreground focus")
+
+    def finish_startup():
+        try:
+            if root.winfo_exists():
+                root.attributes("-topmost", False)
+        except tk.TclError:
+            logger.debug("Message dialog raising hint could not be cleared")
+        # Clearing topmost or closing the tray popup can change stacking/focus
+        # on KDE/XWayland. Restore once after that handoff, never continuously.
+        focus()
+
     root.update_idletasks()
-    root.lift()
-    root.focus_force()
     try:
-        root.grab_set()
         root.attributes("-topmost", True)
-        root.after(150, lambda: root.attributes("-topmost", False))
     except tk.TclError:
-        # Some desktop environments reject modal window hints; the dialog is
-        # still usable as an ordinary window in that case.
-        pass
+        logger.debug("Message dialog window manager does not accept a raising hint")
+    root.deiconify()
+    root.lift()
+    root.after_idle(focus)
+    root.after(200, finish_startup)
     root.mainloop()
 
 

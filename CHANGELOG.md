@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **About author attribution:** Show **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**
+  in tray and Web Console About views, without displaying the full profile URL.
+  The tray author line is clickable/keyboard-accessible when Tk is available;
+  native fallback dialogs retain the same compact attribution. Opening About never opens a browser.
+- **Reviewed public support Discussions (#2567):** Fresh configurations select
+  GitHub Discussions in the fixed AI Guardian repository, with Bug Reports
+  preselected and Q&A as the only alternative. CLI and MCP share native final
+  user consent bound to the authenticated account, resolved category, exact
+  sanitized title/body and remaining diagnostics; agents and `--yes` cannot
+  grant upload or public approval. Selected sanitized files go into one user-owned
+  unlisted Gist, followed by a separate exact Discussion preview containing its
+  actual link, not inline diagnostics or a replaced user message. Unlisted is not
+  private; users can manage/delete their Gist, but cannot retract copies/forks.
+  The public choice is disabled without GitHub credentials; ZIP stays available,
+  with no automatic login or scope upgrades. Includes both URL outputs, bounded Gist text delivery,
+  explicit manual-delivery errors, durable duplicate/uncertain-result protection,
+  Web Console settings, and [migration guidance](docs/SUPPORT.md).
+  Standalone `ai-guardian support send --prepare` needs no agent, MCP, or running
+  daemon and never auto-starts the daemon while troubleshooting it.
+  A global **Contact supports** tray action, directly above About, respects the
+  configured destination and opens a restyled native modal instead of a shell. It includes
+  an aligned diagnostic table, View/inclusion controls, Select all / Deselect all,
+  a user message field, restricted category selection, and Cancel/Send actions.
+  Diagnostic files are alphabetical with doctor.json first and checked by default
+  on new lists; saved explicit selections, including deselections, remain available.
+  The generated title is removed. GitHub review requires a title and message;
+  ZIP/legacy review requires a message. Create ZIP / Send also requires at least
+  one file, and empty/whitespace fields cannot advance. Support dialogs are restored,
+  raised and focused on opening rather than left minimized or behind other windows.
+  File View adds a Wrap lines checkbox and an unwrapped horizontal scrollbar,
+  preserving its setting across pages. The final public-consent control stays
+  visible with an explanation of why Publish publicly starts disabled.
+  GitHub retains its separate exact-content public-consent step; results stay
+  visible until closed. Legacy exports include only selected files, and manual
+  email hand-off is not reported as a completed send.
+  Empty/missing destinations use GitHub; explicit CLI/MCP exports and previously
+  prepared bundles retain their destinations. No saved settings are rewritten.
+  The first screen uses a read-only Destination dropdown and **Next** button,
+  defaulting to local ZIP, instead of per-destination action buttons. Selecting
+  an unavailable public route disables Next; switching to ZIP re-enables it.
+  The choice list can grow without adding more destination buttons.
+  With GitHub selected, **Create ZIP only** offers a retained local archive of the
+  selected files and sanitized message, without GitHub authentication, upload,
+  email or Gist. Results distinguish ZIP creation from support delivery and warn
+  that the archive is not encrypted. Public Discussion publication still requires
+  separate final consent; ZIP creation leaves the configured route unchanged.
+  Cancellation/failure after upload reports the existing Gist URL without claiming
+  nothing was uploaded. Verified Gists are reused across retries/process restarts;
+  ambiguous uploads block duplicates, with no silent inline fallback or deletion.
+  The ZIP result includes **Open destination folder** in the native file browser,
+  without opening/extracting the archive or uploading it.
+  Bundles now include individually removable, sanitized CLI settings/hooks/MCP
+  copies (not credential stores or conversations), with explicit temporary-file
+  review/deletion instructions and unchanged originals. Local exports clearly
+  state that no support submission occurred and retain their cross-process
+  reference, fixing a later `support send` incorrectly finding no pending bundle.
+  Only the log is truncated, retaining the newest text from the last 12 hours;
+  violations also include only the last 12 hours, with every included sanitized
+  record complete and no arbitrary newest-100 limit. Collected sanitized
+  configuration and structured files remain complete. View's next/previous pages
+  reach every field of large files, using the same prepared copy as Send/ZIP
+  without a separate size crop. Large
+  complete files fail public size checks clearly rather than being cut to fit;
+  originals remain unchanged. Documents public posting permissions and the need
+  for a separately arranged private channel for confidential diagnostics.
+
+### Fixed
+- **About window foreground focus:** Finish layout before showing the native
+  About dialog, then restore normal visibility/focus after its temporary raising
+  hint is released so it does not flash and drop behind other windows on KDE.
+  Keep it normally stackable after startup and tolerate early closure or rejected
+  window-manager hints.
+
 ## [1.20.0] - 2026-10-20
 
 ### Changed

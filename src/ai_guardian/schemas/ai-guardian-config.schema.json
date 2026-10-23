@@ -2692,8 +2692,14 @@
       "properties": {
         "export_destination": {
           "type": "string",
-          "description": "Destination for support bundles. Local path (e.g., '~/support-bundles'), S3 URI (e.g., 's3://bucket/prefix/'), GCS URI (e.g., 'gs://bucket-name/'), or email (e.g., 'mailto:support@company.com'). Default: XDG state directory (~/.local/state/ai-guardian/support-bundles/). Preconfigured by admin — agent cannot override.",
-          "default": ""
+          "description": "Default: 'github-discussions', offering Create ZIP only (local, not encrypted, no authentication/upload) or public support in the fixed RedHatProductSecurity/ai-guardian repository with native final approval. Preparation stays local. Missing/empty destinations use GitHub. Explicit local paths, S3, GCS, and email remain in effect for tray, CLI and MCP. No saved settings or existing bundle destinations are changed. Agent cannot override the destination.",
+          "default": "github-discussions"
+        },
+        "github_category": {
+          "type": "string",
+          "enum": ["bug-reports", "q-a"],
+          "default": "bug-reports",
+          "description": "Public support Discussion category: Bug Reports (default, non-answerable) or Q&A (must support accepted answers). IDs are resolved and repository membership validated at send time. No other category is supported."
         },
         "auth": {
           "type": "object",

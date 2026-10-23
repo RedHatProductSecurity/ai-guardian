@@ -59,6 +59,9 @@ Each discovered daemon appears as a top-level menu item with its own submenu:
 ─────────────
 Restart
 Quit
+─────────────
+Contact supports
+About
 ```
 
 - **●** Running daemon — full submenu with Statistics, Pause/Resume, Stop/Restart
@@ -68,6 +71,45 @@ Quit
 The MCP Proactive submenu includes `low`, `medium`, `high`, and `paused`.
 Daemon pauses temporarily use the `paused` effective state without changing the
 saved proactive level; hooks continue enforcing security.
+
+**About** shows **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**,
+without displaying the full profile URL, alongside the existing
+version, system, scanner and repository details. With Tk available, click the
+author line or focus it and press Enter/Space to open the profile. Opening or
+closing About does not open a browser. If Tk is unavailable, the native fallback
+still displays the same attribution. Older daemon responses also retain this author attribution.
+The Tk dialog finishes layout before opening and requests foreground focus again
+after the tray-menu handoff, so it stays visible rather than immediately dropping
+behind other windows. The raising hint is temporary, not permanent always-on-top.
+
+**Contact supports**, immediately above **About**, is a global action available
+even with no running daemon. It respects the configured support destination;
+GitHub is the default; its first screen has a **Destination** dropdown with
+**Create ZIP only** (initial selection) or **Gist + Discussion**, followed by
+**Next** to open the selected review page, without rewriting saved export settings.
+The native modal has an aligned file table,
+fully paged View buttons, inclusion checkboxes, Select all / Deselect all, a message
+field, GitHub-only Bug Reports/Q&A selection, and a final destination. The ZIP
+and send reviews list **doctor.json** first and preselect only that file for new
+bundles, with remaining files alphabetically ordered. Saved selections, including
+an unchecked Doctor, are retained. Title starts blank; GitHub requires a title
+and message, and ZIP/legacy reviews require a message. The action also requires
+at least one selected file. Dialogs request
+foreground focus instead of opening minimized. The ZIP
+choice needs no GitHub authentication or upload and includes complete selected
+diagnostics; only the log can be shortened. Logs and violations cover the last
+12 hours, with included violation records kept complete. Cancel, Create ZIP or Send when ready.
+The result stays visible until closed; a created ZIP offers **Open destination
+folder** in the native file browser. View includes a **Wrap lines** toggle and
+a horizontal scrollbar when wrapping is off.
+Next is disabled for the public choice without GitHub credentials. It requires separate
+native consent to upload the exact selected files to your unlisted Gist, then to
+publish the exact Discussion containing its actual link. Unlisted is not private.
+After upload, cancellation or failure shows **Open Gist** for management/deletion
+instead of claiming nothing was uploaded. It never collects remote-daemon
+diagnostics implicitly. See [Support bundles](SUPPORT.md#from-the-system-tray).
+Explicit local CLI/MCP exports do not contact support. Retained reviewed copies
+remain available to a later terminal `support send` within their original lifetime.
 
 Every discovered daemon is exposed in the tray. The menu is rebuilt when the
 discovery result changes, so the number of running containers or other remote

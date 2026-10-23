@@ -396,6 +396,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Violation Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) | JSON audit trail with unified policy decisions |
 | [Compliance Audit Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AUDIT_LOGGING.md) | Sanitized all-decision audit trail for SOC 2, GDPR, and HIPAA |
 | [Sanitize Command](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) | Clean sensitive data from files |
+| [Support bundles](docs/SUPPORT.md) | Tray/standalone CLI with local ZIP-only export or public Bug Reports/Q&A and user-only consent |
 | [Interactive Console](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | NiceGUI browser console for managing configuration visually |
 | [Scanner Management](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Install and manage 8 scanner engines (including built-in toml-patterns) |
 | [Pre-commit Hook](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md) | Scan staged files for secrets before commit |

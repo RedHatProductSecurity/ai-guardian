@@ -1390,6 +1390,42 @@ class TestPrepareSupportBundle:
         assert result["bundle_id"] == "support-20260509-abc123"
         assert len(result["files"]) == 2
         assert result["files"][0]["sanitized"] is True
+        mock_prepare.assert_called_once_with(title="", description="", category=None)
+
+    @patch("ai_guardian.reporting.support_bundle.prepare_bundle")
+    def test_passes_only_proposed_support_context(self, mock_prepare):
+        server = create_server()
+        tool = server._tool_manager._tools["prepare_support_bundle"]
+        assert '"enum": ["bug-reports", "q-a"]' in json.dumps(
+            tool.parameters["properties"]["category"]
+        )
+        tool.fn(
+            title="Usage question",
+            description="How do I configure this?",
+            category="q-a",
+        )
+        mock_prepare.assert_called_once_with(
+            title="Usage question",
+            description="How do I configure this?",
+            category="q-a",
+        )
+
+    @pytest.mark.parametrize(
+        "category", ["polls", "announcements", "general", "D_arbitrary"]
+    )
+    @patch(
+        "ai_guardian.reporting.support_bundle._get_support_config",
+        return_value={"export_destination": "github-discussions"},
+    )
+    def test_direct_client_category_rejected_before_preparation(
+        self, mock_config, category
+    ):
+        server = create_server()
+        result = server._tool_manager._tools["prepare_support_bundle"].fn(
+            category=category
+        )
+        assert result["status"] == "error"
+        assert "only Bug Reports and Q&A" in result["message"]
 
 
 class TestSendSupportBundle:
@@ -1400,7 +1436,8 @@ class TestSendSupportBundle:
         mock_send.return_value = {
             "status": "sent",
             "destination": "~/support-bundles/support-20260509-abc123",
-            "message": "Bundle copied to ~/support-bundles/support-20260509-abc123",
+            "delivery_status": "local_only",
+            "message": "Bundle exported locally. No files were sent to support. No Discussion was created.",
         }
 
         server = create_server()
@@ -1419,6 +1456,69 @@ class TestSendSupportBundle:
         tool = server._tool_manager._tools["send_support_bundle"]
         result = tool.fn(bundle_id="invalid")
         assert result["status"] == "error"
+
+    @patch("ai_guardian.reporting.support_bundle.send_bundle")
+    def test_returns_discussion_url_without_changing_existing_fields(self, mock_send):
+        mock_send.return_value = {
+            "status": "sent",
+            "destination": "github-discussions",
+            "message": "Discussion created",
+            "discussion_url": "https://github.com/RedHatProductSecurity/ai-guardian/discussions/42",
+            "gist_url": "https://gist.github.com/reporter/" + "a" * 32,
+        }
+        server = create_server()
+        result = server._tool_manager._tools["send_support_bundle"].fn(
+            bundle_id="support-test"
+        )
+        assert result == mock_send.return_value
+
+    @patch("ai_guardian.reporting.support_bundle.send_bundle")
+    def test_returns_owned_gist_url_after_cancelled_discussion_without_sent_claim(
+        self, mock_send
+    ):
+        mock_send.return_value = {
+            "status": "error",
+            "error_code": "cancelled",
+            "delivery_status": "gist_only",
+            "destination": "github-discussions",
+            "gist_url": "https://gist.github.com/reporter/" + "a" * 32,
+            "message": "No Discussion was created. Diagnostic Gist already uploaded; open it to manage or delete it.",
+        }
+        server = create_server()
+        result = server._tool_manager._tools["send_support_bundle"].fn(
+            bundle_id="support-test"
+        )
+        assert result == mock_send.return_value
+        assert "discussion_url" not in result
+
+    @pytest.mark.parametrize(
+        "forged",
+        [
+            {"approved": True},
+            {"repository": "other/repo"},
+            {"category_id": "D_polls"},
+            {"username": "maintainer"},
+        ],
+    )
+    @patch("ai_guardian.reporting.support_bundle.send_bundle")
+    def test_client_cannot_supply_authorization_or_destination(self, mock_send, forged):
+        server = create_server()
+        with pytest.raises(TypeError):
+            server._tool_manager._tools["send_support_bundle"].fn(
+                bundle_id="support-test", **forged
+            )
+        mock_send.assert_not_called()
+
+    @patch(
+        "ai_guardian.reporting.support_bundle.send_bundle",
+        side_effect=RuntimeError("synthetic-private-error"),
+    )
+    def test_internal_errors_do_not_disclose_arbitrary_content(self, mock_send, caplog):
+        server = create_server()
+        result = server._tool_manager._tools["send_support_bundle"].fn(
+            bundle_id="support-test"
+        )
+        assert "synthetic-private-error" not in str(result) + caplog.text
 
 
 # ─── Path Validation Tests ───────────────────────────────────

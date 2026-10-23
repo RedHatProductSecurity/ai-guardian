@@ -5,6 +5,9 @@ import socket
 import sys
 
 PROJECT_URL = "https://github.com/RedHatProductSecurity/ai-guardian"
+AUTHOR_NAME = "Dominique Vernier"
+AUTHOR_HANDLE = "ITDoVe"
+AUTHOR_URL = "https://github.com/itdove"
 
 
 def get_about_info() -> dict:
@@ -75,12 +78,15 @@ def get_about_info() -> dict:
         "config_path": config_path,
         "scanners": scanners,
         "url": PROJECT_URL,
+        "author": AUTHOR_NAME,
+        "author_url": AUTHOR_URL,
     }
 
 
 def format_about_text(info: dict) -> str:
     """Format an about info dict into display text."""
     lines = [f"AI Guardian v{info.get('version', 'unknown')}"]
+    lines.append(f"Author: {info.get('author') or AUTHOR_NAME} ({AUTHOR_HANDLE})")
 
     name = info.get("name")
     hostname = info.get("hostname")

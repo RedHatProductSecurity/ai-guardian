@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -28,6 +29,29 @@ from ai_guardian.reporting.support_bundle import (
     _active_bundles,
     _cleanup_bundle,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_diagnostic_collectors():
+    """Bundle unit tests exercise export, not live doctor/OCR/scanner canaries."""
+    doctor = SimpleNamespace(
+        checks=[
+            SimpleNamespace(
+                name="test-health",
+                status=SimpleNamespace(value="pass"),
+                message="Synthetic health result",
+            )
+        ]
+    )
+    smoke = SimpleNamespace(phase1_passed=True, phase2_results=[])
+    with (
+        patch(
+            "ai_guardian.reporting.support_bundle.collect_cli_configs", return_value=[]
+        ),
+        patch("ai_guardian.doctor.Doctor.run_all", return_value=doctor),
+        patch("ai_guardian.smoke_test.SmokeTestRunner.run", return_value=smoke),
+    ):
+        yield
 
 
 class TestSanitizeConfig:
@@ -103,6 +127,28 @@ class TestGetSystemInfo:
 class TestPrepareBundle:
     """Test bundle preparation."""
 
+    @patch("ai_guardian.reporting.support_bundle._get_support_config", return_value={})
+    def test_blank_default_title_is_a_draft_and_file_list_puts_doctor_first(
+        self, mock_config
+    ):
+        result = prepare_bundle(include_log=False, include_violations=False)
+        try:
+            context = json.loads(
+                (Path(result["temp_path"]) / "support-context.json").read_text()
+            )
+            assert context == {
+                "title": "",
+                "description": "",
+                "category": "bug-reports",
+            }
+            names = [item["name"] for item in result["files"]]
+            assert names[0] == "doctor.json"
+            assert names[1:] == sorted(
+                names[1:], key=lambda name: (name.casefold(), name)
+            )
+        finally:
+            _cleanup_bundle(result["bundle_id"])
+
     @patch("ai_guardian.reporting.support_bundle._get_support_config")
     def test_creates_bundle(self, mock_config):
         mock_config.return_value = {
@@ -138,6 +184,46 @@ class TestPrepareBundle:
 
         _cleanup_bundle(result["bundle_id"])
 
+    @pytest.mark.parametrize("destination", ["github-discussions", "local"])
+    def test_prepares_individual_cli_copies_and_respects_user_removal(
+        self, monkeypatch, tmp_path, destination
+    ):
+        from ai_guardian.reporting import cli_diagnostics
+
+        dest = str(tmp_path / "exports") if destination == "local" else destination
+        monkeypatch.setattr(
+            "ai_guardian.reporting.support_bundle._get_support_config",
+            lambda: {"export_destination": dest},
+        )
+        source = tmp_path / "cli-settings.json"
+        source.write_text('{"model":"test-model","api_key":"unissued-test-value"}')
+        monkeypatch.setattr(
+            cli_diagnostics,
+            "_config_sources",
+            lambda: [("test-cli", "user", "settings", source)],
+        )
+        monkeypatch.setattr(
+            "ai_guardian.reporting.support_bundle.collect_cli_configs",
+            cli_diagnostics.collect_cli_configs,
+        )
+        result = prepare_bundle(include_log=False, include_violations=False)
+        root = Path(result["temp_path"])
+        try:
+            name = "cli-test-cli-user-settings.json"
+            assert name in {f["name"] for f in result["files"]}
+            assert "unissued-test-value" not in (root / name).read_text()
+            assert "unissued-test-value" in source.read_text()
+            (root / name).unlink()  # User opts out before sending.
+            if destination == "local":
+                sent = send_bundle(result["bundle_id"])
+                assert not (Path(sent["destination"]) / name).exists()
+            else:
+                from ai_guardian.reporting.github_support import _read_files
+
+                assert name not in _read_files(_active_bundles[result["bundle_id"]])
+        finally:
+            _cleanup_bundle(result["bundle_id"])
+
 
 class TestSendBundle:
     """Test bundle sending."""
@@ -165,22 +251,31 @@ class TestSendBundle:
         assert result["status"] == "sent"
         assert dest.exists()
 
-    @pytest.mark.skipif(
-        sys.platform == "win32", reason="XDG state dir differs on Windows"
-    )
     @patch("ai_guardian.reporting.support_bundle._get_support_config")
-    def test_defaults_to_xdg_state_dir(self, mock_config):
-        """When no export_destination configured, defaults to XDG state dir."""
+    def test_defaults_to_reviewed_github_discussions(self, mock_config):
+        """Unset destinations use GitHub, but preparation cannot grant approval."""
         mock_config.return_value = {}
 
         bundle = prepare_bundle()
-        assert "support-bundles" in bundle["destination"]
-
-        result = send_bundle(bundle["bundle_id"])
-        assert result["status"] == "sent"
+        assert bundle["destination"] == "github-discussions"
+        with (
+            patch(
+                "ai_guardian.reporting.github_support.send_discussion",
+                return_value={"status": "error", "error_code": "cancelled"},
+            ) as sender,
+            patch(
+                "ai_guardian.reporting.github_support.review_dialog",
+                side_effect=lambda request: {
+                    "request_id": request["request_id"],
+                    "delivery": "discussion",
+                },
+            ),
+        ):
+            assert send_bundle(bundle["bundle_id"])["error_code"] == "cancelled"
+            sender.assert_called_once()
 
     @patch("ai_guardian.reporting.support_bundle._get_support_config")
-    def test_cleanup_after_send(self, mock_config, tmp_path):
+    def test_local_export_retains_reviewed_copy(self, mock_config, tmp_path):
         dest = tmp_path / "output"
         mock_config.return_value = {
             "export_destination": str(dest),
@@ -194,7 +289,10 @@ class TestSendBundle:
         send_bundle(bundle_id)
 
         assert not temp_path.exists()
-        assert bundle_id not in _active_bundles
+        assert _active_bundles[bundle_id]["temp_path"] == str(dest / bundle_id)
+        assert _active_bundles[bundle_id]["preserve_directory"] is True
+        _cleanup_bundle(bundle_id)
+        assert (dest / bundle_id).exists()
 
 
 class TestPrepareBundleFlags:
@@ -309,8 +407,8 @@ class TestGetBundleStatus:
     def test_no_destination_defaults(self, mock_config):
         mock_config.return_value = {}
         status = _get_bundle_status()
-        assert status["destination_type"] == "local"
-        assert "support-bundles" in status["destination"]
+        assert status["destination_type"] == "github-discussions"
+        assert status["destination"] == "github-discussions"
 
 
 class TestSupportCommand:

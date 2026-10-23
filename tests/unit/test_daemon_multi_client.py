@@ -965,6 +965,8 @@ class TestGetAbout:
         assert isinstance(result, dict)
         assert "version" in result
         assert "python" in result
+        assert result["author"] == "Dominique Vernier"
+        assert result["author_url"] == "https://github.com/itdove"
 
 
 class TestLaunchInTerminalErrorHandling:

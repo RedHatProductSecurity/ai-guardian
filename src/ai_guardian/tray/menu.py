@@ -203,6 +203,13 @@ def launch_doctor():
     _launch_in_terminal(resolve_cli_cmd("doctor"), keep_open=True)
 
 
+def launch_support():
+    """Open native support review, without a shell or daemon dependency."""
+    from ai_guardian.tray.support import open_support_dialog
+
+    return open_support_dialog()
+
+
 def launch_ide_setup(ide_key, scope="user", project_dir=None):
     """Launch IDE setup in a new terminal window.
 

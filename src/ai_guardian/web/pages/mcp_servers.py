@@ -5,6 +5,12 @@ MCP permission rules have been consolidated into the Permission Rules page.
 
 from nicegui import run, ui
 
+from ai_guardian.reporting.github_support import (
+    CATEGORIES,
+    DESTINATION,
+    PUBLIC_WARNING,
+    REPOSITORY,
+)
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.config_helpers import load_web_config, save_web_config
 
@@ -81,24 +87,51 @@ def create_mcp_servers_page(service, daemon_name: str):
                     ui.label("Support Bundle Export").classes("text-lg font-bold")
                     support = config.get("support", {})
                     dest_val = (
-                        support.get("export_destination", "")
+                        support.get("export_destination") or DESTINATION
                         if isinstance(support, dict)
-                        else ""
+                        else DESTINATION
                     )
                     ttl_val = (
                         support.get("bundle_ttl_minutes", 30)
                         if isinstance(support, dict)
                         else 30
                     )
+                    channel = ui.select(
+                        label="Support channel",
+                        options={
+                            DESTINATION: "GitHub Discussions (public)",
+                            "custom": "Local / S3 / GCS / email",
+                        },
+                        value=DESTINATION if dest_val == DESTINATION else "custom",
+                    ).classes("w-full")
+                    ui.label(
+                        f"GitHub repository: {REPOSITORY}. {PUBLIC_WARNING}"
+                    ).classes("text-xs text-grey-6")
+                    category_val = (
+                        support.get("github_category", "bug-reports")
+                        if isinstance(support, dict)
+                        else "bug-reports"
+                    )
+                    category = ui.select(
+                        label="Discussion category",
+                        options=dict(CATEGORIES),
+                        value=category_val if category_val in CATEGORIES else None,
+                    ).classes("w-96")
+                    category.bind_visibility_from(
+                        channel, "value", backward=lambda value: value == DESTINATION
+                    )
 
                     dest = (
                         ui.input(
                             label="Destination",
-                            value=dest_val,
-                            placeholder="~/support-bundles or s3://bucket/prefix/",
+                            value="" if dest_val == DESTINATION else dest_val,
+                            placeholder="Local path / S3 / GCS / email; empty uses GitHub Discussions",
                         )
                         .props("outlined dense")
                         .classes("w-full")
+                    )
+                    dest.bind_visibility_from(
+                        channel, "value", backward=lambda value: value != DESTINATION
                     )
                     ttl = (
                         ui.input(
@@ -114,7 +147,22 @@ def create_mcp_servers_page(service, daemon_name: str):
                         cfg = await run.io_bound(load_web_config)
                         if "support" not in cfg or not isinstance(cfg["support"], dict):
                             cfg["support"] = {}
-                        cfg["support"]["export_destination"] = dest.value.strip()
+                        if (
+                            channel.value == DESTINATION
+                            and category.value not in CATEGORIES
+                        ):
+                            ui.notify(
+                                "Choose Bug Reports or Q&A; no other support category is allowed",
+                                type="negative",
+                            )
+                            return
+                        cfg["support"]["export_destination"] = (
+                            DESTINATION
+                            if channel.value == DESTINATION
+                            else dest.value.strip()
+                        )
+                        if category.value in CATEGORIES:
+                            cfg["support"]["github_category"] = category.value
                         try:
                             cfg["support"]["bundle_ttl_minutes"] = int(ttl.value)
                         except (ValueError, TypeError):

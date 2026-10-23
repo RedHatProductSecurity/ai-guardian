@@ -134,24 +134,71 @@ When the user asks to send diagnostic info to support:
 
 **Step 1 — Prepare:** Call `prepare_support_bundle()`. This creates sanitized copies in a temp directory.
 
-**Step 2 — Review (required, do not skip):** Show the temp directory path and the file list with redaction counts. Tell the user to review and delete any files they don't want to send — the directory is protected so only the user can access it, not you.
+The default destination is public GitHub Discussions in
+`RedHatProductSecurity/ai-guardian`: Bug Reports (`bug-reports`, default) or Q&A
+(`q-a`) only. Preparation does not publish anything. Warn that the repository is
+public and sanitization is not a guarantee of confidentiality. Empty/missing
+destinations use GitHub; explicitly saved local/S3/GCS/email exports are preserved.
+The tray's Contact supports action respects saved export settings. With GitHub,
+the native user selects Create ZIP only (default) or Gist + Discussion from the
+Destination dropdown, then clicks Next to open its review page. Next is disabled
+for the public selection without GitHub credentials; no login or permission upgrade runs automatically.
+ZIP creation is local, needs no GitHub credentials and performs no upload, email
+or Gist action; it is not encrypted. Logs and violations cover only the last 12
+hours; all included violation records stay complete, without a count cap. Only log copies may have
+marked excerpts, retaining the newest text. Collected configuration/structured
+files stay complete and fully viewable through next/previous pages. View and Send use the same prepared copy without different
+size crops. Public delivery uses separately reviewed, user-owned unlisted Gist
+files, never inline diagnostics. Unlisted is not private: publishing the Gist
+link in the public Discussion exposes it. The user may delete their Gist, but
+cannot retract copies or forks.
+Optional `title`, `description`,
+and `category` describe a proposal, not publication authorization.
+
+**Step 2 — Review (required, do not skip):** Show the temp directory path and the file list with redaction counts and truncation notices. Tell the user to review and delete any files they don't want to send — the directory is protected so only the user can access it, not you.
 
 > "Bundle prepared at: `/tmp/ai-guardian-support-abc123/`
 >
 > Files included:
-> - config.json — no redactions
-> - violations.json — 12 file paths redacted
-> - metrics.json — clean (aggregate stats only)
 > - doctor.json — clean
-> - system-info.json — clean
 > - ai-guardian.log — 5 items redacted
+> - config.json — no redactions
+> - metrics.json — clean (aggregate stats only)
+> - system-info.json — clean
+> - violations.json — 12 file paths redacted
 >
 > Please review the files at that path. Delete any you don't want to send.
 > Let me know when you're ready to send."
 
 **Step 3 — Send:** Only after the user confirms, call `send_support_bundle(bundle_id)`.
 
-**Step 4 — Follow up:** After the bundle is sent, tell the user to contact support and give them the bundle name (the `bundle_id` from step 1, e.g., `support-20260511-abc123`). This is how support locates their diagnostics.
+For GitHub, the backend first offers a Destination dropdown and Next. Diagnostic
+files are alphabetical with doctor.json first, checked by default for new lists;
+all other files start unchecked. Saved selections, including deselections, are
+retained. The title starts blank unless supplied; GitHub review requires a title
+and message, while ZIP/legacy review requires a message. Create ZIP / Send also
+requires at least one selected file. Next is not upload/publication consent. Public delivery
+opens native user-only approval of the authenticated account and exact Gist
+filenames/content before uploading. A second native review shows the exact
+sanitized Discussion message, fixed repository/category, and actual Gist link.
+The user must separately consent to that public publication; an agent cannot
+self-authorize either step. A missing desktop or cancelled review never creates
+a Discussion, but cancelling after upload does not delete the Gist.
+Never read protected contents to help with this flow.
+
+**Step 4 — Follow up:** For `delivery_status: zip_only`, show `zip_path` and explain
+that nothing was uploaded or sent to support, the ZIP is not encrypted, and later
+sharing is the user's separate action. Do not treat local ZIP creation as delivery.
+On GitHub success, show `discussion_url` and `gist_url`, and tell the user
+to continue in that thread. If a Gist was uploaded but the Discussion was not
+published, show `gist_url` for management/deletion and explain the actual
+`gist_only` or uncertain outcome; never claim nothing was uploaded. For legacy destinations, give the `bundle_id` for
+support follow-up. On errors, report the actual status and retained local path.
+If manual attachment is required, no Discussion has been created: explain that
+manual work remains, not that delivery succeeded. Never blindly retry an
+uncertain upload/publication, which may already have created a Gist or Discussion.
+The backend reuses a verified saved Gist on retry; do not upload duplicates or
+silently substitute inline diagnostics.
 
 Do not show file contents in the conversation — only the summary with redaction counts.
 

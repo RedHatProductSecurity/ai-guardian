@@ -2,10 +2,74 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-20
+> Last updated: 2026-10-23
 
 ## User Preferences
 
+- About must show **Author: Dominique Vernier (ITDoVe)**, with the compact
+  **(ITDoVe)** link targeting the user-confirmed **https://github.com/itdove**.
+  Do not display the full profile URL or infer a different author name from the
+  package's team attribution or the profile handle.
+
+- Support submission must have a standalone AI Guardian CLI path because the
+  agent CLI/MCP integration itself may be broken; do not require or auto-start
+  the daemon for `support` commands. Also expose it as a global tray menu entry,
+  available independently of daemon health.
+- Support bundles should include sanitized CLI configurations, and explicitly
+  invite users to delete unwanted prepared files before sending. A tray-prepared
+  or locally exported bundle must still be findable by a subsequent terminal
+  `support send`; explain local export versus actual support submission plainly.
+- Tray support must open a native modal, not a shell: per-file View buttons and
+  include checkboxes, GitHub-only category selection, read-only final destination,
+  and Cancel/Send actions. Keep result details open until the user closes them;
+  preserve the separate exact-publication consent for GitHub.
+- Latest support UX: call the tray action **Contact supports**, immediately above
+  **About**. Provide Your message, Select all / Deselect all, selected-file count,
+  and aligned scrollable file rows rather than uneven embedded text widgets.
+- **Newest support correction (#2567), superseding default-none:** sort files
+  alphabetically (case-insensitive), but keep doctor.json first and checked by
+  default for new lists. All other files start unchecked. Respect saved explicit
+  choices, including an unchecked Doctor; never re-check after user deselection.
+  Remove the generated title. GitHub requires a non-whitespace title and message;
+  ZIP/legacy review requires a message. Require at least one file too before
+  Create ZIP / Send is enabled. Draft preparation may leave fields blank for
+  native user completion; enforce mandatory fields before creating ZIP/upload.
+  Retain explicit reviewed choices when reopening the same bundle. Do not permit
+  message-only ZIP/publication. Contact supports must open normally in front,
+  not minimized; request restore/raise/focus for all support dialog modes.
+- ZIP completion must offer **Open destination folder** in the native file
+  browser. File View needs **Wrap lines** and a horizontal scrollbar when
+  unwrapped. Keep the final public-consent checkbox visible and explain why
+  Publish publicly is disabled; never auto-check consent to enable publication.
+- **Latest destination decision (#2567) supersedes the tray override:** tray,
+  CLI and MCP respect explicit local/S3/GCS/email recipients. Empty/missing
+  destinations default to GitHub. Its native chooser offers **Create ZIP only**
+  or **Gist + Discussion**. The latter requires configured GitHub credentials;
+  explain when none exist, but keep ZIP available.
+  Never automatically initiate login or escalate permissions.
+  **Newest first-screen correction:** use a read-only Destination dropdown and
+  a **Next** button, not individual destination buttons, so more destinations can
+  be added later. Default to local ZIP. Selection alone must not advance; Next
+  opens the chosen review page, never authorizes upload/publication. For missing
+  GitHub credentials, disable Next for that selection but allow switching to ZIP.
+  ZIP creation is local-only, is not encrypted, and never rewrites the saved
+  destination or means support was contacted. Retain the original bundle for
+  a later `support send`; the ZIP itself survives temporary-bundle cleanup.
+- Logs **and violations** cover only the last 12 hours. Include every complete
+  sanitized violation record in that window; do not impose a newest-100 count
+  or byte crop. Only log copies may be truncated. All collected non-log files
+  stay complete and fully viewable through next/previous pages, not a size refusal.
+  View/ZIP/Send must not apply different size crops.
+- The user is concerned that public diagnostic posts will discourage reports.
+  Explain GitHub access/visibility accurately; diagnostics are now opt-in with
+  at least one selected file required. Do not implement
+  a new private destination or permission scheme without agreement. The user
+   has now approved user-owned unlisted Gists instead of inline diagnostics:
+   approve exact upload first, then the exact Discussion with the actual link in
+   a separate Diagnostics section. Preserve the user message. Unlisted is not
+   private; deletion cannot retract copies/forks. After upload, cancellation or
+   failure must show the Gist URL for management/deletion; reuse verified receipts
+   on retry, never silently upload duplicates or fall back to inline content.
 - Dev install must use `uv tool install --editable .` — `uv tool install --force .` copies a snapshot; subsequent source changes are NOT reflected in the binary.
 - When DAF metadata labels a repository issue as JIRA but the user identifies it as GitHub, use the repository-qualified `gh issue view` flow.
 - Pi OpenShell remains unqualified; local v0.1.2 validation must use supported Codex or OpenCode paths instead.
@@ -36,6 +100,164 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **About foreground handoff (#2567):** On the user's KDE Wayland/XWayland
+  desktop, the reported immediate minimization corresponded to a still-Normal
+  About window. Do not infer actual iconification from appearance alone. Its
+  initial focus request preceded safe mapping and clearing topmost did not raise
+  it again. Build withdrawn, finish layout/set a temporary hint, deiconify/lift,
+  then focus/grab after idle and restore once more when clearing the hint at
+  200ms. Guard late callbacks and unsupported hints with TclError handling; no
+  repeating focus loop or permanent topmost. A synthetic mapped window remained
+  Normal/viewable/focused at 75/300/700/1100ms with topmost off after 200ms;
+  actual tray-click handoff still needs the user's confirmation.
+
+- **Support draft/required fields (#2567):** preparation/CLI/MCP default the title
+  to blank and allow an incomplete sanitized draft for native completion. Validate
+  required title/message only on reviewed submission, before ZIP or Gist creation.
+  Distinguish absent/None selection from an explicit saved empty list: preselect
+  only available doctor.json for a new list, never override a saved deselection.
+  Sort case-insensitively with a Doctor-first key across collector/review/Gist
+  lists. Use an Entry StringVar write trace and Text <<Modified>> event (resetting
+  the flag) so typing, paste, and clearing update action state, not just checkbox
+  changes. Real ttk cget("state") may return a Tcl object; assert semantic state
+  with instate([...]) in hidden Tk tests rather than comparing it to a Python str.
+
+- **Gist support/credential gating (#2567):** `gh auth status` does network
+  validation and the installed CLI has no `--no-refresh` flag. Use local,
+  captured `gh auth token --hostname github.com` only for availability, and verify
+  the pinned account via discovery after the public route is chosen. No login,
+  refresh, token output or permission escalation. Classic/OAuth scope headers
+  can reject known missing `gist` access; GitHub enforces the actual operations.
+  Separate upload and Discussion journals prevent duplicate non-idempotent
+  mutations across processes, retain known Gist URLs on partial failure, and
+  must not be included as diagnostics. Check regular files/link counts before
+  truncating receipt updates. Annotate the initially empty nested Gist payload
+  dict before using it in the bounded-content sum so project Mypy can infer it.
+- **Support View/result controls (#2567):** `ui/file_opener.py` prefers editors,
+  so it is wrong for opening the ZIP's containing folder. The isolated stdlib-only
+  child uses click-only os.startfile on Windows, open on macOS, xdg-open on Linux,
+  passing an absolute existing ZIP's parent as one argv element without a shell;
+  suppress launcher output so it cannot corrupt the JSON response. Preserve ZIP
+  and result on startup failure. Reserve preview navigation/consent rows before
+  expanding text. For ScrolledText, put its frame and horizontal scrollbar in a
+  weighted grid; grid_remove/grid toggles the bar without losing placement.
+  Wrap state persists across page renders, and rendering never edits the source.
+- **Support selection/focus (#2567 latest):** None/missing inclusion state means
+  only Doctor is initially checked (new correction), not every file. Start
+  Create ZIP/Send disabled until required text and file selection are complete; update from
+  individual and bulk callbacks, and validate actual remaining diagnostics in the
+  backend before adding the message. Keep saved explicit selections and public
+  consent separate. Build Tk withdrawn, finish layout, deiconify/lift, request
+  focus after idle, and clear the temporary topmost hint; tolerate rejected hints
+  and closed-window callbacks. Mocked activation checks and hidden real-Tk state
+  tests do not establish actual compositor/macOS activation. Update old public
+  test responders to select files explicitly, and give megabyte payload parameters
+  short pytest IDs to avoid enormous failure output.
+- **Project type-check environment:** use `uv run --extra dev python -m mypy`.
+  The standalone global executable has different Requests stubs and reports
+  unrelated errors in untouched skill_discovery/secret_validator; project Mypy
+  passes all 306 files without changing those modules or suppressing checks.
+  Black is installed as a standalone executable, not in the dev extra. Global
+  coverage lacks pytest-asyncio: run the complete related suite (including Web
+  settings) in the project uv environment, and focus global coverage on the
+  synchronous reporting/native/MCP/UX files rather than changing async tests.
+- **Support excerpts (#2567 latest correction):** Never share a truncation budget
+  across configuration/structured files: it invalidates JSON and drops important
+  final fields. Only .log copies may be shortened, preserving collector metadata.
+  Complete non-log files take priority over the remaining public log budget; if
+  complete selected files exceed GitHub limits, fail clearly without shortening
+  them. View uses bounded UTF-8 pages to reach the whole prepared copy, never
+  refuses a complete file for size or shows a smaller excerpt than Send. Final public redaction/preview
+  remain separate. Do not reverse/truncate violation diagnostics as if they were
+  the ai-guardian.log text stream. Original files are unchanged.
+- **Public support privacy (#2567):** GitHub discussions inherit repository
+  visibility; there is no private category/report in a public repository. Normal
+  creation requires a signed-in viewer, not org membership, subject to interaction,
+  announcement-category and API-credential restrictions. Private-repo access is
+  not private per-customer ticket isolation. Redaction does not hide every private
+  hostname, permission rule or infrastructure detail; no silent alternate upload.
+- **ZIP choice and paging (#2567):** Offer local ZIP before constructing a
+  GitHubClient, with native file selection and sanitized message. Stage checked
+  registered files using safe regular-file reads, preserve nested names and full
+  bytes, create a private no-overwrite archive outside temporary staging, and
+  return zip_only without claiming delivery. Public consent remains separate.
+  Reuse the shared bundle review for legacy tray routes. Pager offsets must
+  reflect consumed UTF-8 bytes (not characters); preserve partial codepoints for
+  the next page, validate actual EOF strictly and keep previous-page navigation.
+  Synthetic hidden Tk construction verifies widgets, not mapped visual QA.
+- **Violation window (#2567):** Support must read/filter the canonical audit log
+  by timestamp, not call the newest-100 UI listing before filtering. Stream JSONL,
+  keep all valid records inside inclusive UTC cutoffs, exclude future/undated/
+  malformed records, sanitize copies and leave the source unchanged. Preserve
+  newest-first review ordering without cutting individual records or JSON.
+- **Size-limit fixtures (#2567):** A long repeated no-whitespace string may be
+  sanitized down to a short redaction, so it does not reliably exercise body size.
+  Use benign ordinary prose for real-sanitizer size UX tests; do not mistake the
+  resulting unexpected approval stage for a broken size check.
+- **Tk selection callbacks (#2567 latest):** A bulk/count callback closes over
+  an initially empty choices dict, so Mypy needs `dict[str, tk.BooleanVar]`.
+  Hidden real-Tk construction checks catch Tcl/style errors but do not establish
+  mapped layout, visual quality, desktop activation, authentication or consent.
+- **Support local-export hand-off (#2567 follow-up):** Do not clean up a local
+  export as a completed support submission while leaving its persisted ref at a
+  deleted temp directory. Rebind to the protected retained copy, keep destination
+  and original TTL, and never restore removed files. Recover old exact exports
+  only within their original TTL; explicit `--bundle` can reuse retained files.
+  Legacy `status: sent` denotes transport completion; `delivery_status: local_only`
+  and human **Exported locally** messaging must distinguish it from a ticket.
+  Match confirmation wording to legacy email-routing precedence, including `@`.
+- **Support CLI config copies (#2567 follow-up):** Reuse setup path resolution,
+  not an independent recursive home-directory crawl or CLI/MCP calls. Flat,
+  individually removable JSON diagnostic copies work with legacy transports too.
+  Redact nested credential containers/env/header values before text sanitization,
+  and omit unsafe input without echoing parser errors or raw text. Claude's
+  `.claude.json` contains account/history state: select only its MCP mapping.
+  An explicitly heterogeneous sanitizer dict needs `dict[Any, Any]` so Mypy does
+  not infer every value as a header dictionary from its first assignment.
+
+- **Tray support modal (#2567 follow-up, supersedes terminal launcher):** Use a
+  single-flight background worker and installed isolated Tk child, not Tk inside
+  the tray process or a shell. View only bounded registered prepared files as
+  inert text. Persist validated inclusion choices before sending, stage only
+  checked files for legacy transports, and bind public choices to final consent.
+  Open the chooser before binary/size validation so unwanted files can be
+  excluded. Preserve original configurations and don't claim a narrower local
+  selection overwrote an existing retained export. Failure guidance must point
+  to retained originals, not removed staging. A mailto hand-off prepares a ZIP,
+  not a sent email; retain legacy status but expose manual_required honestly.
+  Keep the action global and collect local tray-host diagnostics only.
+- **Native modal tests/tooling (#2567 follow-up):** Patch notifications where
+  imported in `tray.support`, not just their defining module. HTTP response
+  context managers need MagicMock. Use `functools.partial` for per-row callbacks
+  to avoid strict Mypy's lambda inference failure. Black is installed as its own
+  CLI, not as a module in the uv dev environment. Measure UI coverage explicitly:
+  project coverage defaults omit `ui/*`; use a separate no-config report and
+  name only the directly related modules. No real desktop was exercised.
+
+- **Reviewed support (#2567, latest correction supersedes tray override):**
+  Empty/missing destinations use GitHub, offering local ZIP or Discussion. Tray
+  honors explicit configured recipients, just like CLI/MCP, without changing
+  saved settings or older bundle routes.
+  The standalone recipe is `ai-guardian support send --prepare`, independent of
+  MCP/daemon startup; public posting always retains trusted native final consent.
+- **GitHub Discussions delivery (#2567):** GraphQL `DiscussionCategory` exposes
+  `slug`, repository membership, and `isAnswerable`. Q&A must be answerable;
+  Bug Reports need not be. `createDiscussion` accepts title/body, not a ZIP
+  upload, and `clientMutationId` does not guarantee idempotency. Bound inline
+  delivery and persist pre-mutation intent for duplicate/uncertain outcomes.
+- **Support proposal replacement (#2567):** Local `support-context.json` is a
+  proposal, not an additional diagnostic attachment. Publish only the edited
+  context, while retaining original metadata in the approval fingerprint;
+  otherwise text the user removed can reappear in a duplicate diagnostic block.
+- **Support approval/import isolation (#2567):** Launch the installed native
+  review script by absolute path with isolated Python, and keep that child
+  stdlib-only. Exact-content approval stays private to the backend; no terminal
+  or client-supplied approval is an equivalent trusted-user event.
+- **Bundle test isolation (#2567):** Mock Doctor and SmokeTestRunner collectors
+  in bundle unit tests. Real optional OCR/scanner imports can emit native
+  diagnostics into captured CLI JSON depending on test collection order. Keep
+  deterministic clocks module-local, not on shared `time.monotonic`.
 
 - **Release 1.20 preflight (#2563):** `release.sh` calculates from the latest
   production tag and requires clean main or a release branch; even a dry run

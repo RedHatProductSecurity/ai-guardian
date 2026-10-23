@@ -41,6 +41,11 @@ class TestGetAboutInfo:
         info = get_about_info()
         assert info["url"] == PROJECT_URL
 
+    def test_author_is_dominique_vernier_with_github_profile(self):
+        info = get_about_info()
+        assert info["author"] == "Dominique Vernier"
+        assert info["author_url"] == "https://github.com/itdove"
+
     def test_scanner_entries_have_name_version_and_default(self):
         from ai_guardian.scanners.manager import InstalledScanner
 
@@ -100,6 +105,19 @@ class TestGetAboutInfo:
 
 
 class TestFormatAboutText:
+    def test_author_and_profile_are_shown_even_for_older_daemon_responses(self):
+        text = format_about_text({"version": "1.20.0"})
+        assert "Author: Dominique Vernier (ITDoVe)" in text.splitlines()
+        assert PROJECT_URL in text
+        assert "https://github.com/itdove" not in text
+
+    def test_explicit_author_metadata_is_formatted(self):
+        text = format_about_text(
+            {"author": "Dominique Vernier", "author_url": "https://github.com/itdove"}
+        )
+        assert "Author: Dominique Vernier (ITDoVe)" in text
+        assert "https://github.com/itdove" not in text
+
     def test_contains_version(self):
         info = {
             "version": "1.9.0",
