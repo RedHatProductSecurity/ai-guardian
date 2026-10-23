@@ -174,6 +174,9 @@ try:
 
     HAS_PYSTRAY = True
 except Exception:
+    # Keep the optional module name available for tests and callers that inject
+    # a compatible menu implementation when pystray is not installed.
+    pystray = None
     HAS_PYSTRAY = False
 
 

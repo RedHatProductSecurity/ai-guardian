@@ -25,7 +25,14 @@ def _config_sources() -> list[tuple[str, str, str, Path]]:
     from ai_guardian.setup.hooks import IDESetup
     from ai_guardian.setup.mcp import get_mcp_config_path
 
-    project = Path(get_project_dir()).expanduser().absolute()
+    # The project directory is an intentional user-selected read root; only
+    # allowlisted configuration paths under it are inspected, never executed.
+    project = Path(get_project_dir()).expanduser().resolve()  # lgtm[py/path-injection]
+    if not project.is_dir():
+        logger.warning(
+            "Project directory is unavailable; project CLI diagnostics omitted"
+        )
+        return []
     sources = []
     seen = set()
 
@@ -260,10 +267,16 @@ def collect_cli_configs(output_dir: Path) -> list[dict[str, Any]]:
             text = json.dumps(artifact, indent=2)
             count = 0
             note = "Configuration omitted; review the diagnostic status file"
-        output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        # The directory is private and protected; only sanitized JSON is
+        # written here for the user's explicit review.
+        output_dir.mkdir(
+            mode=0o700, parents=True, exist_ok=True
+        )  # lgtm[py/clear-text-storage-sensitive-data]
         (output_dir / ".ai-read-deny").touch()
         name = f"cli-{agent}-{scope}-{kind}.json"
-        (output_dir / name).write_text(text, encoding="utf-8")
+        (output_dir / name).write_text(
+            text, encoding="utf-8"
+        )  # lgtm[py/clear-text-storage-sensitive-data]
         files.append(
             {
                 "name": name,

@@ -264,6 +264,10 @@ class TestSendBundle:
                 return_value={"status": "error", "error_code": "cancelled"},
             ) as sender,
             patch(
+                "ai_guardian.reporting.github_support.credentials_available",
+                return_value=True,
+            ),
+            patch(
                 "ai_guardian.reporting.github_support.review_dialog",
                 side_effect=lambda request: {
                     "request_id": request["request_id"],
