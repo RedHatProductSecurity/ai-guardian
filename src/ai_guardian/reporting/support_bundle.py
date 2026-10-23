@@ -43,6 +43,13 @@ from ai_guardian.ui.support_review import (
 
 logger = logging.getLogger(__name__)
 
+
+def _write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Write diagnostic text with stable LF newlines on every platform."""
+    with path.open("w", encoding=encoding, newline="") as stream:
+        stream.write(text)  # lgtm[py/clear-text-storage-sensitive-data]
+
+
 _active_bundles: Dict[str, Dict[str, Any]] = {}
 CANCELLED_MESSAGE = "Support cancelled. Nothing was sent; prepared files remain local."
 
@@ -318,7 +325,7 @@ def prepare_bundle(
             with open(config_path, "r") as f:
                 raw_config = json.load(f)
             sanitized, count = _sanitize_config(raw_config)
-            (temp_dir / "ai-guardian.json").write_text(json.dumps(sanitized, indent=2))
+            _write_text(temp_dir / "ai-guardian.json", json.dumps(sanitized, indent=2))
             files_info.append(
                 {
                     "name": "ai-guardian.json",
@@ -345,8 +352,8 @@ def prepare_bundle(
             sanitized, count = _sanitize_config(raw_project)
             bundle_subdir = temp_dir / ".ai-guardian"
             bundle_subdir.mkdir(exist_ok=True)
-            (bundle_subdir / "ai-guardian.json").write_text(
-                json.dumps(sanitized, indent=2)
+            _write_text(
+                bundle_subdir / "ai-guardian.json", json.dumps(sanitized, indent=2)
             )
             files_info.append(
                 {
@@ -374,7 +381,7 @@ def prepare_bundle(
         try:
             violations = _get_recent_support_violations()
             sanitized, count = _sanitize_violations(violations)
-            (temp_dir / "violations.jsonl").write_text(json.dumps(sanitized, indent=2))
+            _write_text(temp_dir / "violations.jsonl", json.dumps(sanitized, indent=2))
             files_info.append(
                 {
                     "name": "violations.jsonl",
@@ -403,7 +410,7 @@ def prepare_bundle(
             "resolved": metrics_report.resolved_count,
             "unresolved": metrics_report.unresolved_count,
         }
-        (temp_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+        _write_text(temp_dir / "metrics.json", json.dumps(metrics, indent=2))
         files_info.append(
             {
                 "name": "metrics.json",
@@ -425,7 +432,7 @@ def prepare_bundle(
             {"name": c.name, "status": c.status.value, "message": c.message}
             for c in doctor_report.checks
         ]
-        (temp_dir / "doctor.json").write_text(json.dumps({"checks": checks}, indent=2))
+        _write_text(temp_dir / "doctor.json", json.dumps({"checks": checks}, indent=2))
         files_info.append(
             {
                 "name": "doctor.json",
@@ -456,7 +463,7 @@ def prepare_bundle(
                 for r in smoke_report.phase2_results
             ],
         }
-        (temp_dir / "smoke-test.json").write_text(json.dumps(smoke_data, indent=2))
+        _write_text(temp_dir / "smoke-test.json", json.dumps(smoke_data, indent=2))
         files_info.append(
             {
                 "name": "smoke-test.json",
@@ -471,7 +478,7 @@ def prepare_bundle(
     # 5. System info
     try:
         info = _get_system_info()
-        (temp_dir / "system-info.json").write_text(json.dumps(info, indent=2))
+        _write_text(temp_dir / "system-info.json", json.dumps(info, indent=2))
         files_info.append(
             {
                 "name": "system-info.json",
@@ -489,8 +496,8 @@ def prepare_bundle(
             log_text, count = _get_sanitized_log()
             if log_text:
                 # This is sanitized content in the private, user-reviewed bundle.
-                (temp_dir / "ai-guardian.log").write_text(
-                    log_text, encoding="utf-8"
+                _write_text(
+                    temp_dir / "ai-guardian.log", log_text
                 )  # lgtm[py/clear-text-storage-sensitive-data]
                 files_info.append(
                     {
@@ -516,7 +523,7 @@ def prepare_bundle(
         state_path = get_state_dir() / STATE_FILENAME
         if state_path.exists():
             raw = json.loads(state_path.read_text(encoding="utf-8"))
-            (temp_dir / STATE_FILENAME).write_text(json.dumps(raw, indent=2))
+            _write_text(temp_dir / STATE_FILENAME, json.dumps(raw, indent=2))
             session_count = len(raw.get("sessions", {}))
             files_info.append(
                 {
@@ -537,16 +544,12 @@ def prepare_bundle(
         for file_info in files_info:
             file_path = temp_dir / file_info["name"]
             text, count = public_text(file_path.read_text(encoding="utf-8"))
-            file_path.write_text(
-                text, encoding="utf-8"
-            )  # lgtm[py/clear-text-storage-sensitive-data]
+            _write_text(file_path, text)  # lgtm[py/clear-text-storage-sensitive-data]
             file_info["redactions"] += count
             file_info["sanitized"] = file_info["redactions"] > 0
-        (
-            temp_dir / CONTEXT_FILE
-        ).write_text(  # lgtm[py/clear-text-storage-sensitive-data]
-            json.dumps(context, indent=2), encoding="utf-8"
-        )
+        _write_text(
+            temp_dir / CONTEXT_FILE, json.dumps(context, indent=2)
+        )  # lgtm[py/clear-text-storage-sensitive-data]
         files_info.append(
             {
                 "name": CONTEXT_FILE,
@@ -574,7 +577,7 @@ def prepare_bundle(
             text = path.read_text(encoding="utf-8")
             clipped, truncated = truncate_text(text, file_info["name"], log_limit)
             if truncated:
-                path.write_text(clipped, encoding="utf-8")
+                _write_text(path, clipped)
                 file_info["truncated"] = True
                 file_info["original_bytes"] = len(text.encode("utf-8"))
         if file_info.get("truncated"):
@@ -648,7 +651,8 @@ def _persist_bundle_ref(bundle_id: str, bundle_info: Dict) -> bool:
         state_dir = get_state_dir()
         state_dir.mkdir(parents=True, exist_ok=True)
         ref_path = state_dir / "last-support-bundle.json"
-        ref_path.write_text(
+        _write_text(
+            ref_path,
             json.dumps(
                 {
                     "bundle_id": bundle_id,
@@ -661,7 +665,7 @@ def _persist_bundle_ref(bundle_id: str, bundle_info: Dict) -> bool:
                     "include_files": bundle_info.get("include_files"),
                 },
                 indent=2,
-            )
+            ),
         )
         return True
     except Exception:

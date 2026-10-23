@@ -1259,13 +1259,13 @@
 
 - `__init__.py` — Audit reports, metrics, SARIF output, and support bundles. (~19 tok)
 - `audit.py` — class: compute (~8769 tok)
-- `cli_diagnostics.py` — Bounded, sanitized host CLI configuration copies for user-reviewed support. (~3166 tok)
+- `cli_diagnostics.py` — Bounded, sanitized host CLI configuration copies for user-reviewed support. (~3221 tok)
 - `github_gist.py` — User-owned diagnostic Gists, with separate native upload consent and receipts. (~3390 tok)
 - `github_support.py` — Public support Discussions with backend-enforced, user-only review. (~10981 tok)
 - `latency.py` — Hook latency tracking — per-hook and per-violation-type timing. (~4197 tok)
 - `metrics.py` — class: compute, read_filtered_violations, format_human, format_json (~4844 tok)
 - `sarif.py` — SARIFFormatter: create_sarif_report, write_sarif_file, create_ssrf_finding (~6029 tok)
-- `support_bundle.py` — URL configuration (~20127 tok)
+- `support_bundle.py` — URL configuration (~20181 tok)
 
 ## src/ai_guardian/scanners/
 

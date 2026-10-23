@@ -18,6 +18,12 @@ MAX_CONFIG_TOTAL_BYTES = 1_000_000
 _FORMATS = {".json", ".jsonc", ".toml", ".yaml", ".yml"}
 
 
+def _write_text(path: Path, text: str) -> None:
+    """Write reviewed diagnostic text with stable LF newlines."""
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        stream.write(text)
+
+
 def _config_sources() -> list[tuple[str, str, str, Path]]:
     """Enumerate known settings/hook/MCP files, including active-project layers."""
     from ai_guardian.config.utils import get_project_dir
@@ -274,8 +280,8 @@ def collect_cli_configs(output_dir: Path) -> list[dict[str, Any]]:
         )  # lgtm[py/clear-text-storage-sensitive-data]
         (output_dir / ".ai-read-deny").touch()
         name = f"cli-{agent}-{scope}-{kind}.json"
-        (output_dir / name).write_text(
-            text, encoding="utf-8"
+        _write_text(
+            output_dir / name, text
         )  # lgtm[py/clear-text-storage-sensitive-data]
         files.append(
             {

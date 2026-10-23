@@ -15,6 +15,12 @@ from ai_guardian.tray import support as tray_support
 from ai_guardian.ui import support_review as review
 
 
+def _write_text(path, text, *, encoding="utf-8"):
+    """Keep synthetic diagnostic files byte-stable on Windows."""
+    with path.open("w", encoding=encoding, newline="") as stream:
+        stream.write(text)
+
+
 @pytest.mark.parametrize(
     "saved", [{}, {"support": {}}, {"support": {"export_destination": ""}}]
 )
@@ -23,7 +29,7 @@ def test_unset_saved_destination_defaults_to_public_categories(
 ):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("ai_guardian.config.utils.get_config_dir", lambda: tmp_path)
-    (tmp_path / "ai-guardian.json").write_text(json.dumps(saved))
+    _write_text(tmp_path / "ai-guardian.json", json.dumps(saved))
     status = bundles._get_bundle_status()
     assert status["destination"] == gh.DESTINATION
     assert status["destination_type"] == "github-discussions"
@@ -89,14 +95,15 @@ def log_source(monkeypatch, tmp_path):
 
 def test_only_last_twelve_hours_and_their_multiline_records_are_collected(log_source):
     path, record, sanitizer = log_source
-    path.write_text(
+    _write_text(
+        path,
         "undated preamble\n"
         + record(13, "old-record")
         + "old traceback\n"
         + record(12, "boundary-record")
         + record(1, "recent private-fragment")
         + "recent traceback\n"
-        + record(-1, "future-record")
+        + record(-1, "future-record"),
     )
     text, count = bundles._get_sanitized_log()
     assert "old-record" not in text and "old traceback" not in text
@@ -109,8 +116,9 @@ def test_only_last_twelve_hours_and_their_multiline_records_are_collected(log_so
 
 def test_log_window_accepts_explicit_timezones_and_fractional_timestamps(log_source):
     path, _, _ = log_source
-    path.write_text(
-        "2026-10-22T05:00:00Z - recent UTC\n2026-10-22 07:30:00,123+02:00 - recent offset\n2026-10-22T02:00:00+00:00 - too old\n"
+    _write_text(
+        path,
+        "2026-10-22T05:00:00Z - recent UTC\n2026-10-22 07:30:00,123+02:00 - recent offset\n2026-10-22T02:00:00+00:00 - too old\n",
     )
     text, _ = bundles._get_sanitized_log()
     assert "recent UTC" in text and "recent offset" in text
@@ -119,7 +127,7 @@ def test_log_window_accepts_explicit_timezones_and_fractional_timestamps(log_sou
 
 def test_old_or_undated_log_is_not_collected(log_source):
     path, record, sanitizer = log_source
-    path.write_text("unattributed content\n" + record(13, "old-record"))
+    _write_text(path, "unattributed content\n" + record(13, "old-record"))
     assert bundles._get_sanitized_log() == ("", 0)
     sanitizer.assert_not_called()
 
@@ -128,8 +136,9 @@ def test_large_log_keeps_recent_tail_without_reading_entire_source(
     log_source, monkeypatch
 ):
     path, record, _ = log_source
-    path.write_text(
-        record(1, "first-record") + "old padding\n" * 1000 + record(0, "latest-record")
+    _write_text(
+        path,
+        record(1, "first-record") + "old padding\n" * 1000 + record(0, "latest-record"),
     )
     original = path.read_bytes()
     monkeypatch.setattr(bundles, "MAX_PREVIEW_BYTES", 256)
@@ -148,7 +157,7 @@ def test_non_log_files_are_never_shortened_even_when_the_viewer_limit_is_exceede
 ):
     path = tmp_path / name
     original = json.dumps({"begin": "BEGIN", "details": "record" * 500, "end": "END"})
-    path.write_text(original, encoding="utf-8")
+    _write_text(path, original)
     assert review.truncate_text(original, name, 256) == (original, False)
     monkeypatch.setattr(review, "MAX_PREVIEW_BYTES", 256)
     parts = []
@@ -173,7 +182,7 @@ def test_prepared_log_excerpt_preserves_utf8_and_view_never_clips_it_again(
     assert truncated is True
     assert len(text.encode("utf-8")) <= 257
     assert "Truncated" in text and "LATEST" in text and "�" not in text
-    (tmp_path / name).write_text(text, encoding="utf-8")
+    _write_text(tmp_path / name, text)
     assert review.read_preview(str(tmp_path), name, [name]).text == text
 
 
@@ -182,7 +191,7 @@ def test_view_does_not_show_a_smaller_excerpt_than_send_for_an_imported_log(
 ):
     name = "imported.log"
     original = "record\n" * 100 + "LATEST\n"
-    (tmp_path / name).write_text(original, encoding="utf-8")
+    _write_text(tmp_path / name, original)
     monkeypatch.setattr(review, "MAX_PREVIEW_BYTES", 256)
     page = review.read_preview(str(tmp_path), name, [name])
     assert page.next_offset is not None
@@ -210,7 +219,8 @@ def collectors(monkeypatch, tmp_path):
     state = tmp_path / "state"
     state.mkdir()
     now = datetime.now(timezone.utc)
-    (state / "violations.jsonl").write_text(
+    _write_text(
+        state / "violations.jsonl",
         "\n".join(
             json.dumps(
                 {
@@ -254,7 +264,7 @@ def test_only_prepared_logs_are_truncated_and_view_matches_sent_content(
         "end": "END-CONFIG",
     }
     source = collectors / "ai-guardian.json"
-    source.write_text(json.dumps(original), encoding="utf-8")
+    _write_text(source, json.dumps(original))
     source_bytes = source.read_bytes()
     monkeypatch.setattr(
         bundles,
@@ -343,7 +353,8 @@ def test_violations_include_all_complete_records_in_last_twelve_hours(
         {"timestamp": 123, "message": "wrong-type"},
     ]
     source = path.parent / "violations.jsonl"
-    source.write_text(
+    _write_text(
+        source,
         "\n".join(json.dumps(record) for record in records) + "\nnot-json\n[]\n",
         encoding="utf-8",
     )
@@ -376,7 +387,8 @@ def test_violation_window_accepts_offsets_fractions_and_empty_sources(log_source
     path, _, _ = log_source
     assert bundles._get_recent_support_violations() == []
     source = path.parent / "violations.jsonl"
-    source.write_text(
+    _write_text(
+        source,
         "\n".join(
             json.dumps(record)
             for record in [
@@ -399,7 +411,7 @@ def test_public_size_budget_only_clips_logs_and_never_configs(
     monkeypatch.setattr(bundles, "_get_support_config", lambda: {})
     original = {"details": "x" * padding, "end": "END-CONFIG"}
     source = collectors / "ai-guardian.json"
-    source.write_text(json.dumps(original), encoding="utf-8")
+    _write_text(source, json.dumps(original))
     monkeypatch.setattr(
         bundles,
         "_get_sanitized_log",
