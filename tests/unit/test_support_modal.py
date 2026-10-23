@@ -1129,9 +1129,9 @@ def test_file_viewer_can_reach_the_end_and_go_back_without_truncating(
     }
     for _ in range(30):
         buttons["Next page"]()
-    assert "END\n" in text.return_value.insert.call_args.args[1]
+    assert "END" in text.return_value.insert.call_args.args[1]
     buttons["Previous page"]()
-    assert "END\n" not in text.return_value.insert.call_args.args[1]
+    assert "END" not in text.return_value.insert.call_args.args[1]
     assert (directory / "keep.txt").read_text(encoding="utf-8") == source
 
 
