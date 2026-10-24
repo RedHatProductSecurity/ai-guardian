@@ -101,6 +101,22 @@
 
 ## Key Learnings
 
+- **Native Windows cache correction (#2568 / PR #2577):** The earlier directory-only
+  isolation is insufficient: PowerShell's `Platform.CacheDirectory` uses .NET
+  `GetFolderPath(LocalApplicationData)` on Windows and ignores child `LOCALAPPDATA`
+  overrides for startup optimization. Share the environment factory between unit
+  tests and the CI-only lifecycle. For test children only, set
+  `DOTNET_MultiCoreJitMinNumCpus=7FFFFFFF`: CoreCLR parses this DWORD as hexadecimal
+  and declines the optional startup profile below that unattainable CPU count.
+  A decimal max-int string can overflow and restore defaults. Keep the selected
+  HOME/USERPROFILE/config/state and complete file snapshots unchanged. Remove
+  case-insensitive inherited aliases before setting child overrides; Windows
+  `os.environ` uppercases keys, so a plain mixed-case dict update can duplicate
+  them. No product startup or security settings need changing. Primary sources:
+  PowerShell `CorePsPlatform.cs`/`ConsoleHost.cs`, dotnet/runtime
+  `multicorejit.cpp`, `clrconfigvalues.h`, and `clrconfig.cpp` (hex parsing and
+  DOTNET-before-COMPlus precedence). New regression assertions must cover inherited
+  values, upper/mixed-case names and an actual child environment/home snapshot.
 - **Windows recovery metadata / PowerShell CI (#2568):** CPython can expose file
   creation time through Windows `lstat().st_ctime_ns` but metadata-change time
   through `fstat()` (python/cpython#157671). Compare before/after handle snapshots

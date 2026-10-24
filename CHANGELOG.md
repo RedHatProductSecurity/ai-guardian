@@ -93,6 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retain unchanged integrations. Preserve file-change checks, isolate PowerShell
   caches from CI preservation snapshots, and avoid the Windows connection-close
   race in the REST authorization regression without changing authorization.
+  Shared test/lifecycle launches also prevent native Windows startup-optimization
+  cache writes that ignore environment cache paths, without excluding home files.
 - **Linux tray dialog lifecycle (#2569):** Keep shared informational dialogs open
   until dismissal instead of replacing them after a 30-second timeout. Treat
   normal window closure as completion, retain missing-provider/startup fallbacks,
