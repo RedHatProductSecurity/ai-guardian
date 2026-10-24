@@ -12,11 +12,39 @@ from ai_guardian.tools.patterns import (
     _HOOK_KEY_PATTERN,
     _strip_bash_heredoc_content,
     is_ai_guardian_cli_command,
+    is_ai_guardian_recovery_command,
     is_host_agent_cli_command,
 )
 
 
 class TestImmutableDenyPatterns:
+    def test_recovery_execution_detection(self):
+        for command in (
+            "python -I -S scripts/ai_guardian_recovery.py --yes",
+            'python "C:\\code\\ai-guardian\\scripts\\ai_guardian_recovery.py"',
+            "bash /code/ai-guardian/uninstall.sh --integrations-only --yes",
+            "pwsh -NoProfile -File C:/code/ai-guardian/uninstall.ps1 -Yes",
+            "bash uninstall.sh --yes",
+            "env TEST=1 python scripts/ai_guardian_recovery.py --yes",
+            "bash -c 'python scripts/ai_guardian_recovery.py --yes'",
+        ):
+            assert is_ai_guardian_recovery_command(
+                command, "/code/ai-guardian"
+            ), command
+
+    def test_recovery_mentions_and_unrelated_uninstallers_are_not_execution(self):
+        assert not is_ai_guardian_recovery_command(
+            "bash /code/other/uninstall.sh --yes", "/code/ai-guardian"
+        )
+        for command in (
+            "echo scripts/ai_guardian_recovery.py",
+            "cat scripts/ai_guardian_recovery.py",
+            "python unrelated.py scripts/ai_guardian_recovery.py",
+            "bash /code/other/uninstall.sh --yes",
+            "grep uninstall.sh README.md",
+        ):
+            assert not is_ai_guardian_recovery_command(command, "/code/other"), command
+
     def test_has_expected_tool_keys(self):
         expected = {"Write", "Edit", "Read", "Bash", "PowerShell"}
         assert set(IMMUTABLE_DENY_PATTERNS.keys()) == expected

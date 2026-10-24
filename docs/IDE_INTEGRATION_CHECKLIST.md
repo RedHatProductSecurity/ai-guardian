@@ -200,6 +200,16 @@ even when the integration also has GUI, plugin, or MCP surfaces.
   verification behavior for the integration.
 - [ ] Preserve unrelated configuration and existing user-owned hooks during
   installation and reconciliation.
+- [ ] Keep `scripts/ai_guardian_recovery.py`'s standalone inventory aligned with
+  setup: selected user/project scopes, relocated homes, current/owned legacy
+  registrations and generated artifacts. Never depend on importing the package.
+- [ ] Verify independent POSIX and native Windows recovery after package-first
+  removal: preview, unique backups with documented access controls, third-party preservation,
+  safe malformed/unwritable handling, partial-failure exit status and idempotency.
+- [ ] Update [the missing-runtime lifecycle matrix](UNINSTALL.md#missing-runtime-lifecycle-matrix)
+  separately from application startup-failure tests. Record live host version,
+  event/platform evidence or explicitly mark it unverified; do not weaken strict
+  denials, automatically remove protections, or expose cleanup as an agent tool.
 - [ ] Add the MCP client registration in `src/ai_guardian/setup/mcp.py` when
   the agent supports the MCP advisor.
 - [ ] For every local/remote or desktop/cloud variant, verify the MCP

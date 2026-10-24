@@ -4,6 +4,8 @@ import json
 from io import StringIO
 from unittest.mock import patch
 
+import pytest
+
 import ai_guardian
 from ai_guardian.tools.policy import ToolPolicyChecker
 from tests.fixtures.mock_mcp_server import create_hook_data
@@ -82,6 +84,42 @@ def test_agent_cli_invocation_is_denied_before_execution():
     assert "pattern:" not in message.lower()
     assert "allowlist" not in message.lower()
     assert "bypass" not in message.lower()
+
+
+@pytest.mark.parametrize("developer_session", [False, True])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python -I -S /code/ai-guardian/scripts/ai_guardian_recovery.py --yes",
+        "bash /code/ai-guardian/uninstall.sh --integrations-only --yes",
+        "pwsh -NoProfile -File C:/code/ai-guardian/uninstall.ps1 -Yes",
+    ],
+)
+def test_standalone_recovery_is_operator_only_even_in_development(
+    command, developer_session
+):
+    """
+    USER EXPERIENCE: Agent-requested integration removal -> immutable denial.
+
+    An orphan is recovered from a separate operator terminal. Neither ordinary
+    permission rules nor trusted development CLI access authorizes an agent to
+    use the standalone lifecycle tool. No cleanup subprocess may start.
+    Manual QA: request these shell actions in a disposable protected project;
+    verify a deny decision and unchanged integration files. Never test against
+    a real user's installed configuration.
+    """
+    result = _run_hook(
+        create_hook_data(tool_name="Bash", tool_input={"command": command}),
+        permissions_enabled=False,
+        developer_session=developer_session,
+    )
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    message = response["systemMessage"]
+    assert "Agent-originated integration cleanup is not permitted." in message
+    assert "before the child process started" in message
+    for unsafe in ("allowlist", "bypass", "--yes", "--integrations-only", "pattern:"):
+        assert unsafe not in message.lower()
 
 
 def test_immutable_cli_guard_remains_active_when_permissions_are_disabled():

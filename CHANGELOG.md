@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Standalone orphaned-integration recovery (#2568):** Shared package-independent
+  Python 3.11+ cleanup for Bash and native PowerShell, with explicit user/project
+  scopes, preview, unique backups with documented access controls, ownership checks,
+  safe partial-failure reporting and idempotency. Covers managed/legacy Pi,
+  Codex/Grok TOML, relocated homes, OpenCode JSONC/V2 MCP and legacy artifacts,
+  and current Copilot/Antigravity hook schemas. Preserves third-party settings
+  and violation history; operator-only recovery remains blocked to agents.
+  Documents per-host missing-runtime qualification gaps and Windows limitations;
+  adds isolated unit/UX and cross-platform CI lifecycle gates.
 - **Potential ServiceNow BYOG integration documentation (#2573):** Describe the
   unimplemented, untested, unsupported, and unvalidated proposal, required adapter
   and security work, and ServiceNow test-environment prerequisite. Link contributor
