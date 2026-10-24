@@ -5,9 +5,32 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-23
+> Last updated: 2026-10-24
 
 ---
+
+## Issue #2573 ServiceNow BYOG documentation — 2026-10-24
+
+- Initialized managed DAF `open` session on existing, initially clean branch
+  `2573`. Read the qualified ticket once; hierarchical context markdown/skills
+  were absent. No temporary-clone sync was needed.
+- Added `docs/POTENTIAL_INTEGRATIONS.md`: ServiceNow BYOG is potential,
+  unimplemented, untested, unsupported, and unvalidated. Describes request/response
+  adaptation, authenticated/protected communication, enforcement validation, and
+  a suitable ServiceNow development/test environment. Includes vendor/repository
+  references and #2572 for contributor interest and future validation.
+- No development is planned without interest and a suitable test environment;
+  the proposal is not an implementation or delivery commitment. Separate index
+  and MkDocs Reference entries keep it outside supported IDE integrations.
+  Updated the changelog; all five issue criteria are checked and DAF notes saved.
+- Local-link/reference/index/YAML-navigation/whitespace checks and
+  `git diff --check` pass. Documentation-only: no code tests, linters or local
+  MkDocs build were required. The vendor URL returned only a JavaScript app shell
+  to the text fetcher; no ServiceNow specification or interoperability validation
+  is claimed.
+- Changes remain local and uncommitted for review and the user's external
+  `daf complete`. No integration code, runtime/configuration change, installation,
+  commit, push, PR or issue closure. Earlier handoffs remain historical/preserved.
 
 ## Issue #2569 Linux tray message lifecycle — 2026-10-23
 

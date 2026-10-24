@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Potential ServiceNow BYOG integration documentation (#2573):** Describe the
+  unimplemented, untested, unsupported, and unvalidated proposal, required adapter
+  and security work, and ServiceNow test-environment prerequisite. Link contributor
+  interest and future validation to #2572 without committing to development.
 - **About author attribution:** Show **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**
   in tray and Web Console About views, without displaying the full profile URL.
   The tray author line is clickable/keyboard-accessible when Tk is available;

@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1226 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1227 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18388 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20652 tok)
-- `CHANGELOG.md` — Change log (~75365 tok)
+- `CHANGELOG.md` — Change log (~75446 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -22,7 +22,7 @@
 - `install.sh` (~8726 tok)
 - `LICENSE` — Project license (~196 tok)
 - `Makefile` — Make build targets (~62 tok)
-- `mkdocs.yml` (~1164 tok)
+- `mkdocs.yml` (~1180 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2597 tok)
 - `README.md` — Project documentation (~10764 tok)
@@ -925,8 +925,9 @@
 - `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~8431 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
+- `POTENTIAL_INTEGRATIONS.md` — Potential Integrations (~507 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
-- `README.md` — Project documentation (~1511 tok)
+- `README.md` — Project documentation (~1573 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
 - `Sandbox.md` — Sandbox CLI (~5751 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)

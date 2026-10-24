@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-23
+> Last updated: 2026-10-24
 
 ## User Preferences
 
@@ -100,6 +100,14 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **ServiceNow BYOG proposals (#2572/#2573):** Keep potential platform
+  integrations in `docs/POTENTIAL_INTEGRATIONS.md`, separate from supported IDE
+  integrations. Existing REST/scanning building blocks are not a validated BYOG
+  connector. No integration development is planned until there is interest and a
+  suitable ServiceNow test environment. The vendor documentation URL returns a
+  JavaScript application shell to a text fetcher; a successful HTTP response is
+  not specification or interoperability validation.
 
 - **Linux tray message lifecycle (#2569):** A message-provider process remains
   alive while the user reads; its runtime is not a startup timeout. Remove
