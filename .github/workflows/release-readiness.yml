@@ -645,6 +645,7 @@ jobs:
 
   smoke-tests:
     name: Smoke Tests
+    # Includes the shared Linux/macOS/native-Windows orphan-recovery gate.
     uses: ./.github/workflows/smoke-tests.yml
 
   scenario-tests:

@@ -9,6 +9,46 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2568 orphaned-integration recovery — 2026-10-24
+
+- Managed DAF `open`, existing initially clean branch `2568`; qualified issue
+  read once, initialization complete. Current work is local/uncommitted. Preserve
+  prior handoffs below and OpenWolf's automatic anatomy/memory updates.
+- Added independent stdlib-only Python 3.11+ `scripts/ai_guardian_recovery.py`,
+  shared by revised Bash and native PowerShell wrappers. Supports explicit user,
+  project and both scopes, exact selected projects (never implicit cwd/crawling),
+  preview, unique backups, ownership checks, partial failure and idempotency.
+  Covers Pi managed/legacy sources, Codex/Grok TOML MCP, relocated homes,
+  OpenCode JSONC/V2 nested MCP/legacy plugin artifacts, Copilot top-level hooks,
+  Antigravity and selected project registrations. Keeps unrelated settings/history.
+- Recognized agent lifecycle invocations are denied even in trusted developer
+  sessions. Existing genuine security denials, strict host settings and surviving
+  launcher startup-failure contracts were not relaxed. Normal POSIX process
+  cleanup now checks an owned launch, not a command substring.
+- Added `docs/UNINSTALL.md`, source documentation/navigation/checklist/changelog,
+  full recovery UX and related regressions, and shared Linux/macOS/native-Windows
+  CI gate through smoke/release readiness. The five-host actual package-first
+  scenario in `tests/lifecycle/orphan_recovery.py` is **CI-only, not run locally**.
+  Windows recovery requires local companion files; backups inherit directory ACLs.
+  Normal Windows package uninstall intentionally has fewer features than POSIX;
+  custom/ambiguous sources and dependency caches remain retained/documented.
+- **Validation: 519 related tests pass, 6 PowerShell-dependent skips**. Complete
+  directly affected CLI-self-protection/recovery/hook-failure UX files pass.
+  Engine coverage **92%**, `/tmp/opencode/guardian-2568-recovery.coverage`.
+  Black py310, Ruff, Pylint E, project/helper Mypy (308 files), Bash syntax,
+  documentation links/navigation, bug-log JSON and whitespace checks pass.
+  MkDocs uses tagged extension values: inspect nav with BaseLoader/compose, not
+  SafeLoader or unsafe Python-tag construction. No local MkDocs build required.
+- DAF progress saved; issue progress and remaining checklist posted at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2568#issuecomment-6386364010.
+  **Next:** code review, then new CI matrix/package-first scenario; exact live
+  host/platform/event outcomes for missing executable/interpreter/module remain
+  explicitly **unverified** in the lifecycle matrix. Do not mark qualification
+  complete, close the issue, or treat configured CI as a completed run.
+- No live user configuration cleanup, installed-package removal, process signal,
+  settings/security-policy change, local container/full-suite/integration run,
+  commit, push or PR. Defer git publication to the user's external DAF workflow.
+
 ## Issue #2573 ServiceNow BYOG documentation — 2026-10-24
 
 - Initialized managed DAF `open` session on existing, initially clean branch

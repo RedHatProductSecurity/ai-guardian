@@ -67,6 +67,7 @@ from ai_guardian.tools.patterns import (
     HOOK_INDICATOR_KEYS,
     _HOOK_KEY_PATTERN,
     is_ai_guardian_cli_command,
+    is_ai_guardian_recovery_command,
     is_host_agent_cli_command,
     _strip_bash_heredoc_content,
 )
@@ -434,10 +435,16 @@ class ToolPolicyChecker:
             return None
 
         command = self._extract_shell_command(tool_input, hook_data)
-        if not command or not is_ai_guardian_cli_command(command):
+        if not command:
             return None
 
-        if self._developer_session_enabled:
+        recovery = is_ai_guardian_recovery_command(
+            command, hook_data.get("cwd") or os.getcwd()
+        )
+        if not recovery and not is_ai_guardian_cli_command(command):
+            return None
+
+        if self._developer_session_enabled and not recovery:
             logger.info(
                 "Trusted developer session: allowing agent-originated AI Guardian CLI"
             )
@@ -454,6 +461,13 @@ class ToolPolicyChecker:
             "This operation was blocked before the child process started.\n"
             "This protection is immutable and cannot be changed through agent permissions."
         )
+        if recovery:
+            error_message = (
+                "AI Guardian Self-Protection\n\n"
+                "Protection: Standalone integration lifecycle tools\n"
+                "Reason: Agent-originated integration cleanup is not permitted.\n\n"
+                "This operation was blocked before the child process started."
+            )
         self.last_deny_action = "block"
         self.last_deny_matched_pattern = reason
         self.last_deny_check_value = "<agent-originated CLI invocation>"

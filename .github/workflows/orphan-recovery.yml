@@ -1,0 +1,40 @@
+name: Orphaned Integration Recovery
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery:
+    name: Standalone recovery (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install current source and focused test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Require native PowerShell on Windows (never WSL)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python -c "import shutil; assert shutil.which('pwsh')"
+      - name: Validate POSIX wrapper syntax
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash -n uninstall.sh
+      - name: Isolated inventory, preservation and UX contracts
+        run: >-
+          python -m pytest tests/unit/test_orphan_recovery.py
+          tests/unit/test_tool_patterns.py
+          tests/ux/test_user_experience_contract_orphan_recovery.py
+          tests/ux/test_user_experience_contract_cli_self_protection.py -v
+      - name: Current five-host setup, package-first removal and standalone recovery
+        run: python tests/lifecycle/orphan_recovery.py

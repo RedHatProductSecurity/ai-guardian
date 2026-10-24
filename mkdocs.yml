@@ -77,6 +77,7 @@ nav:
       - Configuration: CONFIGURATION.md
       - Configuration Cookbook: COOKBOOK.md
       - Scanner Installation: SCANNER_INSTALLATION.md
+      - Uninstall and Orphan Recovery: UNINSTALL.md
       - Troubleshooting: TROUBLESHOOTING.md
       - Support Bundles: SUPPORT.md
   - Security Features:
