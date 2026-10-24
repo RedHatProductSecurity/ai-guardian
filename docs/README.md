@@ -85,6 +85,12 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Multi-Engine Support](MULTI_ENGINE_SUPPORT.md) | Scanner engine options and future plans |
 | [Pattern Server](PATTERN_SERVER.md) | Enterprise pattern server configuration |
 
+## Potential Integrations
+
+| Document | Description |
+|----------|-------------|
+| [ServiceNow BYOG proposal](POTENTIAL_INTEGRATIONS.md) | Potential, unimplemented, untested, unsupported, and unvalidated integration; no development commitment |
+
 ## Container
 
 | Document | Description |
