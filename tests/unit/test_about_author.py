@@ -1,7 +1,10 @@
 """Explicit About links: no live windows, browsers or network requests."""
 
 import json
+import subprocess
 import sys
+from contextlib import redirect_stdout
+from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -89,6 +92,122 @@ def test_author_link_is_transferred_to_the_tk_child_without_a_shell(monkeypatch)
     assert PROFILE_URL not in payload["message"]
     assert "links=p.get('links', ())" in run.call_args.args[0][2]
     assert run.call_args.kwargs.get("shell", False) is False
+
+
+def test_tk_message_has_no_user_reading_deadline(monkeypatch):
+    run = Mock(return_value=subprocess.CompletedProcess([], 0, "", ""))
+    monkeypatch.setattr(dialog_placement.subprocess, "run", run)
+
+    assert dialog_placement.show_tkinter_message_subprocess("About", AUTHOR_LINE)
+
+    assert run.call_args.kwargs["timeout"] is None
+
+
+@pytest.mark.parametrize(
+    ("stdout", "expected", "stage"),
+    [
+        ("", None, "before display"),
+        ("ai-guardian-message-ready\n", False, "after display"),
+    ],
+)
+def test_tk_failure_allows_fallback_only_before_mapping(
+    monkeypatch, caplog, stdout, expected, stage
+):
+    run = Mock(return_value=subprocess.CompletedProcess([], 1, stdout, AUTHOR_LINE))
+    monkeypatch.setattr(dialog_placement.subprocess, "run", run)
+
+    with caplog.at_level("DEBUG", logger=dialog_placement.__name__):
+        assert (
+            dialog_placement.show_tkinter_message_subprocess("About", AUTHOR_LINE)
+            is expected
+        )
+
+    assert stage in caplog.text
+    assert AUTHOR_LINE not in caplog.text
+
+
+def test_tk_launch_error_allows_fallback_without_logging_the_payload(
+    monkeypatch, caplog
+):
+    run = Mock(side_effect=OSError(AUTHOR_LINE))
+    monkeypatch.setattr(dialog_placement.subprocess, "run", run)
+
+    with caplog.at_level("DEBUG", logger=dialog_placement.__name__):
+        assert (
+            dialog_placement.show_tkinter_message_subprocess("About", AUTHOR_LINE)
+            is None
+        )
+
+    assert "OSError" in caplog.text
+    assert AUTHOR_LINE not in caplog.text
+
+
+@pytest.mark.parametrize("stdout", ["", "ai-guardian-message-ready\n"])
+def test_interrupted_tk_wait_never_opens_a_native_replacement(
+    monkeypatch, caplog, stdout
+):
+    monkeypatch.setattr(plugins.platform, "system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display.get_preferred_ui", lambda: "auto")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    run = Mock(
+        side_effect=subprocess.TimeoutExpired(
+            AUTHOR_LINE, 3600, output=stdout, stderr=AUTHOR_LINE
+        )
+    )
+    monkeypatch.setattr(dialog_placement.subprocess, "run", run)
+
+    with caplog.at_level("DEBUG", logger=dialog_placement.__name__):
+        assert plugins.show_dialog("About", AUTHOR_LINE, links=LINKS) is False
+
+    run.assert_called_once()
+    assert "interrupted" in caplog.text
+    assert AUTHOR_LINE not in caplog.text
+
+
+def test_tk_reports_readiness_once_and_only_when_the_completed_root_maps(native_about):
+    root = native_about
+    ready = Mock()
+    dialog_placement._show_tkinter_message("About", AUTHOR_LINE, on_ready=ready)
+    ready.assert_not_called()
+    bindings = {call.args[0]: call.args[1] for call in root.bind.call_args_list}
+    bindings["<Map>"](SimpleNamespace(widget=Mock()))
+    ready.assert_not_called()
+    bindings["<Map>"](SimpleNamespace(widget=root))
+    bindings["<Map>"](SimpleNamespace(widget=root))
+    ready.assert_called_once_with()
+    calls = [call[0] for call in root.mock_calls]
+    assert calls.index("bind") < calls.index("deiconify")
+
+
+def test_tk_child_command_connects_mapping_to_the_captured_readiness_marker(
+    monkeypatch, native_about
+):
+    """Execute the real child command against inert widgets, never a display."""
+    root = native_about
+
+    def mainloop():
+        bindings = {call.args[0]: call.args[1] for call in root.bind.call_args_list}
+        bindings["<Map>"](SimpleNamespace(widget=root))
+        bindings["<Map>"](SimpleNamespace(widget=root))
+
+    root.mainloop.side_effect = mainloop
+    captured = []
+
+    def run(command, **kwargs):
+        output = StringIO()
+        with monkeypatch.context() as child, redirect_stdout(output):
+            child.setattr(sys, "argv", ["-c", command[-1]])
+            exec(command[2], {})
+        captured.append(output.getvalue())
+        return subprocess.CompletedProcess(command, 0, output.getvalue(), "")
+
+    monkeypatch.setattr(dialog_placement.subprocess, "run", run)
+
+    assert dialog_placement.show_tkinter_message_subprocess(
+        "About", AUTHOR_LINE, links=LINKS
+    )
+    assert captured == ["ai-guardian-message-ready\n"]
+    root.title.assert_called_once_with("About")
 
 
 @pytest.mark.parametrize("event", ["<Button-1>", "<Return>", "<space>"])

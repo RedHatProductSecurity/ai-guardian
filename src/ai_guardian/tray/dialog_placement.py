@@ -13,7 +13,7 @@ import logging
 import subprocess
 import sys
 from functools import partial
-from typing import Optional
+from typing import Callable, Optional
 
 from ai_guardian.tray.sandbox_dialog import (
     ScreenBounds,
@@ -22,6 +22,7 @@ from ai_guardian.tray.sandbox_dialog import (
 )
 
 logger = logging.getLogger(__name__)
+_MESSAGE_READY = "ai-guardian-message-ready"
 
 
 def show_tkinter_message_subprocess(
@@ -33,10 +34,10 @@ def show_tkinter_message_subprocess(
 ) -> Optional[bool]:
     """Show a simple message dialog in an isolated Tk process.
 
-    ``None`` means Tk could not be launched and lets callers retain their
-    platform-native fallback.  A boolean result means the dialog process ran
-    successfully; OK closes the dialog, so it is ``True``. Explicit links open
-    only on mouse/keyboard activation and do not dismiss the About information.
+    ``None`` permits native fallback only when Tk failed before display. ``True``
+    means normal completion; ``False`` means an interrupted wait or a failure
+    after display, neither of which should open a replacement window. There is
+    no deadline for reading the message. Explicit links open only on user action.
     """
     payload = json.dumps(
         {
@@ -52,27 +53,41 @@ def show_tkinter_message_subprocess(
         "from ai_guardian.tray.dialog_placement import _show_tkinter_message; "
         "p=json.loads(sys.argv[1]); "
         "_show_tkinter_message(p['title'], p['message'], "
-        "screen_bounds=p.get('screen_bounds'), links=p.get('links', ()))"
+        "screen_bounds=p.get('screen_bounds'), links=p.get('links', ()), "
+        f"on_ready=lambda: print({_MESSAGE_READY!r}, flush=True))"
     )
+    logger.debug("Starting isolated Tkinter message dialog")
     try:
         result = subprocess.run(
             [sys.executable, "-c", child, payload],
             capture_output=True,
             text=True,
-            timeout=3600,
+            timeout=None,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        logger.debug("Tkinter message dialog could not be shown: %s", exc)
+    except subprocess.TimeoutExpired:
+        # A surrounding runner may interrupt its wait. Visibility is unknown;
+        # do not interpret that as permission to open another provider.
+        logger.warning(
+            "Tkinter message dialog wait interrupted; not opening a replacement"
+        )
+        return False
+    except OSError as exc:
+        logger.warning("Tkinter message dialog could not start: %s", type(exc).__name__)
         return None
     if result.returncode != 0:
-        detail = (result.stderr or "").strip()
-        logger.debug(
-            "Tkinter message dialog exited with code %s%s",
+        displayed = _MESSAGE_READY in (result.stdout or "").splitlines()
+        logger.warning(
+            "Tkinter message dialog failed %s with exit code %s",
+            (
+                "after display; not opening a replacement"
+                if displayed
+                else "before display"
+            ),
             result.returncode,
-            f": {detail[:200]}" if detail else "",
         )
-        return None
+        return False if displayed else None
+    logger.debug("Tkinter message dialog dismissed")
     return True
 
 
@@ -82,6 +97,7 @@ def _show_tkinter_message(
     *,
     screen_bounds: Optional[ScreenBounds] = None,
     links: tuple[tuple[str, str], ...] = (),
+    on_ready: Optional[Callable[[], None]] = None,
 ) -> None:
     """Show the child-process implementation of a simple message dialog."""
     import tkinter as tk
@@ -128,6 +144,19 @@ def _show_tkinter_message(
     ttk.Button(frame, text="OK", command=close).grid(row=1, column=0, sticky="e")
     root.protocol("WM_DELETE_WINDOW", close)
     root.bind("<Escape>", lambda _event: close())
+
+    ready_reported = False
+
+    def mapped(event):
+        nonlocal ready_reported
+        if event.widget is root and not ready_reported:
+            ready_reported = True
+            if on_ready is not None:
+                on_ready()
+
+    # Child widgets also emit Map events. Report only the completed root, once,
+    # so a later child-process failure cannot trigger a different toolkit.
+    root.bind("<Map>", mapped, add="+")
 
     def focus():
         try:

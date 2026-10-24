@@ -1,6 +1,7 @@
 """Tests for tray menu plugin loader and command utilities."""
 
 import json
+import subprocess
 from pathlib import Path
 from unittest import mock
 
@@ -1231,6 +1232,73 @@ class TestShowDialog:
                 mock_run.assert_called_once()
                 args = mock_run.call_args[0][0]
                 assert args[0] == "zenity"
+
+    @pytest.mark.parametrize(
+        "providers", [("zenity", "kdialog"), ("kdialog", "zenity")]
+    )
+    @pytest.mark.parametrize("returncode", [0, 1])
+    def test_linux_waits_for_dismissal_without_a_deadline_or_replacement(
+        self, monkeypatch, providers, returncode
+    ):
+        monkeypatch.setattr("ai_guardian.tray.plugins.platform.system", lambda: "Linux")
+        monkeypatch.setattr(
+            "ai_guardian.tray.plugins._linux_dialog_provider_order", lambda: providers
+        )
+        run = mock.Mock(
+            return_value=subprocess.CompletedProcess([], returncode, "", "")
+        )
+        monkeypatch.setattr(subprocess, "run", run)
+
+        assert show_dialog("Title", "Message") is True
+
+        run.assert_called_once()
+        assert run.call_args.args[0][0] == providers[0]
+        assert run.call_args.kwargs["timeout"] is None
+
+    @pytest.mark.parametrize(
+        "providers", [("zenity", "kdialog"), ("kdialog", "zenity")]
+    )
+    @pytest.mark.parametrize("missing", [False, True])
+    def test_linux_still_falls_back_on_missing_or_failed_startup(
+        self, monkeypatch, caplog, providers, missing
+    ):
+        monkeypatch.setattr("ai_guardian.tray.plugins.platform.system", lambda: "Linux")
+        monkeypatch.setattr(
+            "ai_guardian.tray.plugins._linux_dialog_provider_order", lambda: providers
+        )
+        private_text = "Private dialog title and message"
+        failure = (
+            FileNotFoundError(private_text)
+            if missing
+            else subprocess.CompletedProcess([], 1, "", private_text)
+        )
+        run = mock.Mock(
+            side_effect=[failure, subprocess.CompletedProcess([], 0, "", "")]
+        )
+        monkeypatch.setattr(subprocess, "run", run)
+
+        with caplog.at_level("DEBUG", logger="ai_guardian.tray.plugins"):
+            assert show_dialog(private_text, private_text) is True
+
+        assert [call.args[0][0] for call in run.call_args_list] == list(providers)
+        assert providers[0] in caplog.text
+        assert "DISPLAY=" in caplog.text
+        assert private_text not in caplog.text
+
+    def test_linux_interrupted_wait_does_not_try_another_provider(
+        self, monkeypatch, caplog
+    ):
+        monkeypatch.setattr("ai_guardian.tray.plugins.platform.system", lambda: "Linux")
+        private_text = "Private dialog title and message"
+        run = mock.Mock(side_effect=subprocess.TimeoutExpired(private_text, 30))
+        monkeypatch.setattr(subprocess, "run", run)
+
+        with caplog.at_level("DEBUG", logger="ai_guardian.tray.plugins"):
+            assert show_dialog(private_text, private_text) is False
+
+        run.assert_called_once()
+        assert "interrupted" in caplog.text
+        assert private_text not in caplog.text
 
     def test_windows_uses_powershell(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:

@@ -75,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **Linux tray dialog lifecycle (#2569):** Keep shared informational dialogs open
+  until dismissal instead of replacing them after a 30-second timeout. Treat
+  normal window closure as completion, retain missing-provider/startup fallbacks,
+  and never switch toolkits after an isolated Tk message window has displayed.
+  Provider/lifecycle diagnostics no longer include raw dialog output.
 - **About window foreground focus:** Finish layout before showing the native
   About dialog, then restore normal visibility/focus after its temporary raising
   hint is released so it does not flash and drop behind other windows on KDE.

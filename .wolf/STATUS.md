@@ -9,6 +9,38 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2569 Linux tray message lifecycle — 2026-10-23
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2569`, branch
+  `2569`, initially clean. Read the qualified ticket once; hierarchical context
+  markdown/skills absent. No temporary-clone sync needed. Preserve earlier handoffs.
+- Current About uses isolated Tk for its author link, unlike the ticket's older
+  native-only trace. One action dispatches one worker. This environment is a TTY
+  with no DISPLAY/WAYLAND_DISPLAY; zenity/kdialog are installed, but **the original
+  graphical opening/style flash has not been reproduced or assigned a cause**.
+- Fixed verified lifecycle defects in `tray/plugins.py` and
+  `tray/dialog_placement.py`: no Linux/Tk informational reading deadline; ordinary
+  native dismissal ends the action. The Tk child's first completed-root Map event
+  reports readiness, allowing native fallback only before display. Post-display
+  failures/interrupted waits never launch a replacement. Missing/startup failures
+  retain fallback; diagnostics exclude raw message/child output/exception text.
+- Nineteen red regressions verified the old behavior. **1,108 related tests pass**:
+  full About-author, plugin, daemon-tray, proactive and sandbox-tray unit files,
+  plus the entire **12-test About UX contract**. Focused coverage: placement 99%,
+  plugins 73%, combined 76%; `/tmp/opencode/guardian-2569-dialog.coverage`.
+  Black py310, Ruff, Pylint E, project Mypy (307 files) and whitespace checks pass.
+- Updated source docs/changelog and manual QA matrix; recorded the learning and
+  bug. DAF progress note saved; issue progress/remaining checklist posted at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2569#issuecomment-6375656068.
+  **Next:** obtain distro/desktop/X11-or-Wayland/UI/provider/timing and a
+  sanitized screen recording if the flash persists. Manually repeat About/other
+  affected shared messages, dismiss via OK/Escape/titlebar, and leave open beyond
+  30 seconds on affected desktop; qualify GNOME/zenity and KDE/kdialog where
+  available. Do not mark all issue criteria complete before that evidence.
+- No live UI/browser, tray/daemon restart, installation, settings/permissions
+  change, commit, push or PR. Use the user's external DAF completion flow only
+  after review and remaining desktop verification.
+
 ## ServiceNow BYOG tickets — 2026-10-23
 
 - Created and cross-linked enhancement #2572 and documentation #2573 in

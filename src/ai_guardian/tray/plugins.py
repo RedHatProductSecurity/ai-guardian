@@ -1071,6 +1071,7 @@ def show_dialog(
     centered on that display before falling back to AppleScript.
     Explicit (anchor, URL) links use isolated Tk when available; the original
     text remains visible in the native fallback. URLs in text are not auto-opened.
+    Linux message dialogs wait for user dismissal, not a provider lifetime limit.
     """
     import subprocess
 
@@ -1146,14 +1147,26 @@ def show_dialog(
             }
             for provider in _linux_dialog_provider_order():
                 command = commands[provider]
+                logger.debug(
+                    "Starting Linux %s message dialog (%s)",
+                    provider,
+                    _ui_environment_context(),
+                )
                 try:
                     result = subprocess.run(
                         command,
                         capture_output=True,
                         text=True,
-                        timeout=30,
+                        timeout=None,
                     )
-                except (subprocess.TimeoutExpired, OSError) as exc:
+                except subprocess.TimeoutExpired:
+                    logger.warning(
+                        "Linux %s dialog wait interrupted; not opening a replacement (%s)",
+                        provider,
+                        _ui_environment_context(),
+                    )
+                    return False
+                except OSError as exc:
                     logger.warning(
                         "Linux dialog command %s could not start: %s (%s)",
                         command[0],
@@ -1161,8 +1174,24 @@ def show_dialog(
                         _ui_environment_context(),
                     )
                     continue
-                if _subprocess_succeeded(result, f"Linux {command[0]} dialog"):
+                returncode = getattr(result, "returncode", 0)
+                stderr = getattr(result, "stderr", "")
+                has_error = isinstance(stderr, str) and bool(stderr.strip())
+                if (
+                    not isinstance(returncode, int)
+                    or returncode == 0
+                    or (returncode == 1 and not has_error)
+                ):
+                    logger.debug("Linux %s message dialog dismissed", provider)
                     return True
+                # Provider errors may echo the title/message. Keep only status
+                # and desktop context, never raw subprocess output.
+                logger.warning(
+                    "Linux %s message dialog exited unsuccessfully with code %s (%s)",
+                    provider,
+                    returncode,
+                    _ui_environment_context(),
+                )
             logger.warning(
                 "Linux dialog fallback unavailable after trying zenity and kdialog (%s)",
                 _ui_environment_context(),

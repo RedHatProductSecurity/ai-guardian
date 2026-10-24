@@ -82,6 +82,22 @@ The Tk dialog finishes layout before opening and requests foreground focus again
 after the tray-menu handoff, so it stays visible rather than immediately dropping
 behind other windows. The raising hint is temporary, not permanent always-on-top.
 
+On Linux, About and shared informational message dialogs have no reading
+deadline: leaving a window open beyond 30 seconds must not replace it with
+another provider. Normal dismissal (including Escape or the window close
+button) completes the action. Missing providers and startup failures retain
+fallback support; an isolated Tk window that has already mapped is never
+replaced by a native dialog after a later failure. Diagnostics identify the
+provider, exit status and startup/display stage without logging dialog content.
+This does not change the separate response deadlines for security prompts.
+
+For an intermittent opening/style flash, record the distribution, desktop,
+X11/Wayland session, selected UI and actual provider/process, plus the delay and
+a screen recording with sensitive content removed. Compare repeated opens and
+leaving the window open beyond 30 seconds on GNOME/zenity and KDE/kdialog where
+available. A rendering/decorations transition is not by itself evidence of a
+toolkit fallback.
+
 **Contact supports**, immediately above **About**, is a global action available
 even with no running daemon. It respects the configured support destination;
 GitHub is the default; its first screen has a **Destination** dropdown with
