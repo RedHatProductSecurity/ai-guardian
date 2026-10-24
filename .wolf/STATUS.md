@@ -9,6 +9,40 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2568 / PR #2577 CI follow-up — 2026-10-24
+
+- User published the prior implementation as `83610b0` on branch `2568`, PR
+  https://github.com/RedHatProductSecurity/ai-guardian/pull/2577, then reported
+  failed CI. Current follow-up changes are local/uncommitted; DAF initialization
+  and the one qualified ticket lookup were already completed. Preserve earlier
+  handoffs below as history, including their pre-publication state.
+- Inspected failed Tests `40116274118` and Smoke `40116274125`: Windows recovery
+  compared path/handle ctime values with different CPython semantics; PowerShell
+  startup caches polluted preservation snapshots on Linux/macOS. Fixed with
+  separate same-API before/after metadata checks and isolated shell runtime dirs.
+  Regression tests still reject real handle/path changes. CI-only package-first
+  lifecycle snapshots exclude only the separate shell runtime, not selected homes.
+- Windows Python 3.10 REST auth test also had an early-close/unread-body race.
+  Use zero-body missing/incorrect-auth requests; assert exact 401 JSON and no body
+  parsing/hook processing. No production REST/auth behavior was changed.
+- **Validation: 285 distinct related tests pass, no skips** (213 recovery, wrapper,
+  policy and complete affected UX tests; 72 REST unit tests). Verified portable MIT
+  PowerShell 7.6.8 archive SHA-256 and exercised native PowerShell on Linux from
+  `/tmp/opencode/guardian-2568-pwsh.NVTAmUQ8/runtime`. Recovery engine coverage
+  **92%**: `/tmp/opencode/guardian-2568-ci-fixes.coverage`. Dev dependencies omit
+  pytest-cov/coverage; use ephemeral `uv run --with coverage==7.17.0` coverage CLI.
+- Black py310, Ruff, Pylint E, project/helper Mypy (308 files), Bash syntax and
+  whitespace checks pass. Simplification review kept the patch narrow. Updated
+  changelog, cerebrum and bug log. OpenWolf owns anatomy/memory auto-updates.
+- DAF progress note saved; CI diagnosis/local validation and pending checklist:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2568#issuecomment-6387849835.
+- **Next:** publish these local fixes through the user's external DAF workflow,
+  then rerun Tests/Smoke and the Linux/macOS/native-Windows lifecycle matrix.
+  Native Windows/macOS fixes and actual package-first removal are not locally
+  qualified; do not claim CI is green or live host failure behavior is verified.
+- No live integration cleanup, installed-package removal, process signaling,
+  security-policy edits, local lifecycle/container/full-suite runs, commit or push.
+
 ## Issue #2568 orphaned-integration recovery — 2026-10-24
 
 - Managed DAF `open`, existing initially clean branch `2568`; qualified issue

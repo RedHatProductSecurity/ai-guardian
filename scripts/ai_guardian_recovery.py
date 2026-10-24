@@ -556,6 +556,18 @@ def inventory(
     return list(dict.fromkeys(configs)), list(dict.fromkeys(artifacts))
 
 
+def file_version(info: os.stat_result) -> tuple[int, ...]:
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_nlink,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+        info.st_size,
+    )
+
+
 def safe_read(path: Path) -> tuple[bytes, os.stat_result]:
     for part in (path, *path.parents):
         info = part.lstat()
@@ -572,12 +584,13 @@ def safe_read(path: Path) -> tuple[bytes, os.stat_result]:
             raise ValueError("file changed while opening")
         data = stream.read(MAX_FILE_BYTES + 1)
         after = os.fstat(stream.fileno())
-        if (info.st_mtime_ns, info.st_ctime_ns, info.st_size) != (
-            after.st_mtime_ns,
-            after.st_ctime_ns,
-            after.st_size,
-        ):
+        # Windows lstat() can report creation time as ctime, while fstat()
+        # reports change time (python/cpython#157671). Compare like APIs;
+        # do not discard the timestamp or identity checks on Windows.
+        if file_version(opened) != file_version(after):
             raise ValueError("file changed while reading")
+    if file_version(info) != file_version(path.lstat()):
+        raise ValueError("file changed while reading")
     if len(data) > MAX_FILE_BYTES:
         raise ValueError("oversized file retained")
     return data, info

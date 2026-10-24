@@ -1181,16 +1181,30 @@ class TestHookEndpoint:
         paused_otel.assert_called_once()
         process_hook.assert_not_called()
 
-    def test_hook_requires_auth(self, authed_hook_api):
+    @pytest.mark.parametrize("authorization", [None, "Bearer incorrect-test-token"])
+    def test_hook_requires_auth(self, authed_hook_api, authorization):
         api, port, state = authed_hook_api
         url = f"http://127.0.0.1:{port}/api/hook"
-        payload = json.dumps({"hook_event_name": "PreToolUse"}).encode()
-        req = Request(url, data=payload, method="POST")
+        # Authentication is rejected before body parsing. An unused body can
+        # race the server's early close and reset the Windows client socket.
+        req = Request(url, data=b"", method="POST")
         req.add_header("Content-Type", "application/json")
+        if authorization is not None:
+            req.add_header("Authorization", authorization)
 
-        with pytest.raises(HTTPError) as exc_info:
+        with (
+            mock.patch(
+                "ai_guardian.daemon.rest_api._RestHandler._read_body"
+            ) as read_body,
+            mock.patch("ai_guardian.process_hook_data") as process_hook,
+            pytest.raises(HTTPError) as exc_info,
+        ):
             urlopen(req, timeout=5)
-        assert exc_info.value.code == 401
+        with exc_info.value as response:
+            assert response.code == 401
+            assert json.loads(response.read()) == {"error": "Unauthorized"}
+        read_body.assert_not_called()
+        process_hook.assert_not_called()
 
     def test_hook_with_valid_auth(self, authed_hook_api):
         api, port, state = authed_hook_api

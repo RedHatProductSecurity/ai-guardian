@@ -101,6 +101,17 @@
 
 ## Key Learnings
 
+- **Windows recovery metadata / PowerShell CI (#2568):** CPython can expose file
+  creation time through Windows `lstat().st_ctime_ns` but metadata-change time
+  through `fstat()` (python/cpython#157671). Compare before/after handle snapshots
+  and before/after path snapshots separately; do not drop timestamp or identity
+  checks. Native PowerShell writes its own startup/module caches even with
+  `-NoProfile`; isolate those in a separate disposable runtime directory rather
+  than filtering files inside selected configuration homes out of preservation
+  checks. An early HTTP auth rejection with an unread POST body can reset Windows
+  clients; use a zero-body auth regression and assert no parsing/hook processing.
+  Local dev dependencies omit pytest-cov/coverage: use the ephemeral coverage CLI
+  for focused reports, without adding a project dependency.
 - **Standalone orphan recovery (#2568):** Lifecycle recovery must not import
   `ai_guardian` or depend on its pinned executable/interpreter surviving. The
   companion `scripts/ai_guardian_recovery.py` uses Python 3.11+ stdlib TOML parsing;
