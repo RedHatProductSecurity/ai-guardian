@@ -879,6 +879,24 @@ def _script_child_index(tokens: List[str], start: int) -> Optional[int]:
     return None
 
 
+def _script_file_index(tokens: List[str], start: int) -> Optional[int]:
+    """Locate an interpreter's first script argument, not a later data argument."""
+    index = start
+    while index < len(tokens):
+        token = _clean_command_token(tokens[index]).lower()
+        if token in {"-c", "-m", "-command", "-cmd", "/c", "/k"}:
+            return None
+        if token in {"-file", "-f", "--"}:
+            return index + 1 if index + 1 < len(tokens) else None
+        if token in {"-w", "-x", "-o", "-executionpolicy", "-workingdirectory"}:
+            index += 2
+        elif token.startswith("-"):
+            index += 1
+        else:
+            return index
+    return None
+
+
 def _contains_target_cli_in_tokens(
     tokens: List[str],
     target_executables: FrozenSet[str],
@@ -910,6 +928,12 @@ def _contains_target_cli_in_tokens(
         return True
 
     if _is_python_executable(command_token):
+        script_index = _script_file_index(tokens, index + 1)
+        if (
+            script_index is not None
+            and _command_basename(tokens[script_index]) in target_executables
+        ):
+            return True
         for module_index in range(index + 1, len(tokens) - 1):
             option = _clean_command_token(tokens[module_index]).lower()
             if option == "-m" or option == "-m=":
@@ -936,6 +960,9 @@ def _contains_target_cli_in_tokens(
             return _contains_target_cli_in_command_string(
                 tokens[child_index], target_executables, module_prefixes, depth + 1
             )
+        script_index = _script_file_index(tokens, index + 1)
+        if script_index is not None:
+            return _command_basename(tokens[script_index]) in target_executables
         return False
 
     if command in _DIRECT_COMMAND_WRAPPERS:
@@ -1046,6 +1073,31 @@ def is_ai_guardian_cli_command(command: str) -> bool:
         _AI_GUARDIAN_EXECUTABLES,
         module_prefixes=(_AI_GUARDIAN_MODULE_PREFIX,),
     )
+
+
+def is_ai_guardian_recovery_command(
+    command: str, project_dir: Optional[str] = None
+) -> bool:
+    """Recognize standalone lifecycle entrypoints, separate from developer CLI access.
+
+    Generic uninstall filenames are protected only in AI Guardian's repository
+    context or when explicitly path-qualified to it. Mere documentation mentions
+    and unrelated projects' uninstallers are not command execution.
+    """
+    executables = [
+        "ai_guardian_recovery.py",
+        "ai-guardian-uninstall.sh",
+        "ai-guardian-uninstall.ps1",
+    ]
+    context = (project_dir or "").replace("\\", "/").rstrip("/")
+    relative_wrapper = context.rsplit("/", 1)[-1] == "ai-guardian" and re.search(
+        r"(?:^|[\s\"';&|])(?:\.[\\/])?uninstall\.(?:sh|ps1)\b", command
+    )
+    if relative_wrapper or re.search(
+        r"(?i)(?:^|[\\/])ai-guardian[\\/]uninstall\.(?:sh|ps1)\b", command
+    ):
+        executables.extend(("uninstall.sh", "uninstall.ps1"))
+    return _is_target_cli_command(command, executables)
 
 
 def is_host_agent_cli_command(command: str, executables: Iterable[str]) -> bool:

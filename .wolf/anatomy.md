@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1227 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1232 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18388 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20652 tok)
-- `CHANGELOG.md` — Change log (~75446 tok)
+- `CHANGELOG.md` — Change log (~75720 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -22,14 +22,15 @@
 - `install.sh` (~8726 tok)
 - `LICENSE` — Project license (~196 tok)
 - `Makefile` — Make build targets (~62 tok)
-- `mkdocs.yml` (~1180 tok)
+- `mkdocs.yml` (~1195 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2597 tok)
-- `README.md` — Project documentation (~10764 tok)
+- `README.md` — Project documentation (~10799 tok)
 - `RELEASING.md` — Release Management Process (~9382 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
-- `uninstall.sh` (~6611 tok)
+- `uninstall.ps1` (~838 tok)
+- `uninstall.sh` (~2626 tok)
 
 ## .agents/skills/cavecrew/
 
@@ -131,12 +132,13 @@
 - `container-build-validation.yml` — CI: Container Build Validation (~1020 tok)
 - `integration-tests.yml` — CI: Integration Tests (~4031 tok)
 - `lint.yml` — GitHub Actions CI/CD - Lint Workflow (~689 tok)
+- `orphan-recovery.yml` — CI: Orphaned Integration Recovery (~385 tok)
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~11286 tok)
+- `release-readiness.yml` — CI: Release Readiness (~11307 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
-- `smoke-tests.yml` — CI: Smoke Tests (~7082 tok)
+- `smoke-tests.yml` — CI: Smoke Tests (~7113 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
 - `test.yml` — GitHub Actions CI/CD - Test Workflow (~988 tok)
 - `ubuntu-26-compatibility.yml` — CI: Ubuntu 26.04 Compatibility (~1461 tok)
@@ -898,7 +900,7 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~15897 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~15940 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
@@ -912,7 +914,7 @@
 - `GITHUB_COPILOT.md` — GitHub Copilot Integration Guide (~2977 tok)
 - `hook-flow-diagram.mmd` (~1330 tok)
 - `HOOKS.md` — Hook Configuration Guide (~4240 tok)
-- `IDE_INTEGRATION_CHECKLIST.md` — IDE/Agent Integration Checklist (~7676 tok)
+- `IDE_INTEGRATION_CHECKLIST.md` — IDE/Agent Integration Checklist (~7884 tok)
 - `index.md` — 8<-- "README.md" (~5 tok)
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
 - `MCP_SERVER.md` — MCP Security Advisor Server (~5114 tok)
@@ -927,7 +929,7 @@
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `POTENTIAL_INTEGRATIONS.md` — Potential Integrations (~507 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
-- `README.md` — Project documentation (~1573 tok)
+- `README.md` — Project documentation (~1611 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
 - `Sandbox.md` — Sandbox CLI (~5751 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
@@ -939,6 +941,7 @@
 - `TOML_PATTERNS.md` — TOML Pattern Engine (~3798 tok)
 - `TOOL_POLICY.md` — Tool Policy System (~5839 tok)
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7389 tok)
+- `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3651 tok)
 - `VIOLATION_LOGGING.md` — Violation Logging (~3194 tok)
 
 ## docs/api/
@@ -1031,10 +1034,12 @@
 
 ## scripts/
 
+- `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~8833 tok)
 - `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2778 tok)
 - `check_openshell_compatibility.py` — Verify the qualified OpenShell release and protocol contract. (~1717 tok)
 - `check_parser_compat.py` — get_leaktk_url, fetch_url, fetch_pattern_data, extract_schema + 4 more (~3274 tok)
 - `check_scanner_versions.py` — get_latest_version, get_latest_leaktk_pattern_version, get_version_age, compare_versions + 4 more (~4691 tok)
+- `cleanup_integrations.py` — Operator-invoked integration recovery, independent of the installed package. (~7472 tok)
 - `install` (~202 tok)
 - `release.sh` — Fully automated release script for AI Guardian. (~6000 tok)
 - `sync_release_versions.py` — Synchronize AI Guardian's active stable-release references. (~2676 tok)
@@ -1396,8 +1401,8 @@
 - `__init__.py` — Tool policy, patterns, directory rules, and diff provider. (~19 tok)
 - `diff_provider.py` — DiffProviderError: parse_pr_ref, parse_mr_ref, detect_platform, get_merge_base + 8 more (~3283 tok)
 - `directory_rules.py` — URL patterns: 2 routes (~5244 tok)
-- `patterns.py` (~11401 tok)
-- `policy.py` — ToolPolicyChecker: is_shell_tool_name (~35030 tok)
+- `patterns.py` (~12004 tok)
+- `policy.py` — ToolPolicyChecker: is_shell_tool_name (~35194 tok)
 
 ## src/ai_guardian/tray/
 

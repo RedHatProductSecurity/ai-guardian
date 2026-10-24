@@ -558,6 +558,10 @@ jobs:
           "
           rm -rf "$TEST_DIR"
 
+  orphan-recovery:
+    name: Cross-platform orphan recovery
+    uses: ./.github/workflows/orphan-recovery.yml
+
   install-uninstall:
     name: Install/Uninstall Lifecycle
     runs-on: ubuntu-26.04

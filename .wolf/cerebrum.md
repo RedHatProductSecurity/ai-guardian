@@ -101,6 +101,34 @@
 
 ## Key Learnings
 
+- **Windows recovery metadata / PowerShell CI (#2568):** CPython can expose file
+  creation time through Windows `lstat().st_ctime_ns` but metadata-change time
+  through `fstat()` (python/cpython#157671). Compare before/after handle snapshots
+  and before/after path snapshots separately; do not drop timestamp or identity
+  checks. Native PowerShell writes its own startup/module caches even with
+  `-NoProfile`; isolate those in a separate disposable runtime directory rather
+  than filtering files inside selected configuration homes out of preservation
+  checks. An early HTTP auth rejection with an unread POST body can reset Windows
+  clients; use a zero-body auth regression and assert no parsing/hook processing.
+  Local dev dependencies omit pytest-cov/coverage: use the ephemeral coverage CLI
+  for focused reports, without adding a project dependency.
+- **Standalone orphan recovery (#2568):** Lifecycle recovery must not import
+  `ai_guardian` or depend on its pinned executable/interpreter surviving. The
+  companion `scripts/ai_guardian_recovery.py` uses Python 3.11+ stdlib TOML parsing;
+  keep its finite user/project inventory aligned with setup via parity tests.
+  Copilot stores managed events at top level; Codex MCP is TOML, and OpenCode V2
+  uses `mcp.servers`. Verify surgical edits against the complete parsed document,
+  retain ambiguous sources, and never convert ordinary security denials into
+  cleanup. Empty project arguments must not expand to cwd. Native PowerShell
+  `Write-Error` with Stop throws before a later `exit 2`; use explicit stderr for
+  prerequisite diagnostics. Windows backups inherit directory ACLs (0600 is
+  POSIX-only). Use separate missing-runtime evidence, not launcher-import tests,
+  for live-host claims; native Windows and actual host qualification remain CI/QA.
+- **MkDocs navigation checks:** `mkdocs.yml` contains intentional tagged extension
+  formatter names. PyYAML SafeLoader rejects these tags before reaching nav;
+  inspect with `yaml.compose` or BaseLoader without constructing/importing them.
+  This needs no MkDocs build and is not a defect in the existing site config.
+
 - **ServiceNow BYOG proposals (#2572/#2573):** Keep potential platform
   integrations in `docs/POTENTIAL_INTEGRATIONS.md`, separate from supported IDE
   integrations. Existing REST/scanning building blocks are not a validated BYOG

@@ -247,8 +247,21 @@ class TestInstallScriptAgentDetection:
 
 
 @_skip_no_bash
+@pytest.mark.skipif(
+    sys.version_info < (3, 11), reason="Standalone uninstaller requires Python 3.11+"
+)
 class TestUninstallScript:
     """Verify uninstall cleanup honors relocated IDE configuration paths."""
+
+    @pytest.fixture(autouse=True)
+    def isolated_relocation_variables(self, monkeypatch):
+        for name in (
+            "CLAUDE_CONFIG_DIR CURSOR_CONFIG_DIR COPILOT_HOME GROK_HOME CODEX_HOME "
+            "GEMINI_CLI_HOME CLINE_DATA_DIR KIRO_HOME JUNIE_HOME AIDER_DESK_DIR "
+            "AIDER_DESK_HOME_DIR OPENCLAW_STATE_DIR OPENCLAW_HOME OPENCLAW_CONFIG_PATH "
+            "OPENCODE_CONFIG_DIR OPENCODE_CONFIG CRUSH_GLOBAL_CONFIG PI_CODING_AGENT_DIR"
+        ).split():
+            monkeypatch.delenv(name, raising=False)
 
     def test_claude_mcp_cleanup_honors_config_dir(self, tmp_path):
         home = tmp_path / "home"
@@ -257,13 +270,19 @@ class TestUninstallScript:
         opencode_plugins = home / ".config" / "opencode" / "plugins"
         opencode_plugins.mkdir(parents=True)
         opencode_plugin = opencode_plugins / "ai-guardian.ts"
-        opencode_plugin.write_text("// generated plugin\n", encoding="utf-8")
+        opencode_plugin.write_text(
+            "// ai-guardian-generated-version: 1.20.0\n", encoding="utf-8"
+        )
         opencode_bridge_dir = home / ".config" / "opencode" / "ai-guardian"
         opencode_bridge_dir.mkdir(parents=True)
         opencode_bridge = opencode_bridge_dir / "ai-guardian-bridge.ts"
-        opencode_bridge.write_text("// generated bridge\n", encoding="utf-8")
+        opencode_bridge.write_text(
+            "// ai-guardian-generated-version: 1.20.0\n", encoding="utf-8"
+        )
         legacy_bridge = opencode_plugins / "ai-guardian-bridge.ts"
-        legacy_bridge.write_text("// legacy generated bridge\n", encoding="utf-8")
+        legacy_bridge.write_text(
+            "// ai-guardian-generated-version: 1.20.0\n", encoding="utf-8"
+        )
         mcp_config = claude_dir / ".claude.json"
         mcp_config.write_text(
             json.dumps(

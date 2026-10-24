@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Standalone orphaned-integration recovery (#2568):** Shared package-independent
+  Python 3.11+ cleanup for Bash and native PowerShell, with explicit user/project
+  scopes, preview, unique backups with documented access controls, ownership checks,
+  safe partial-failure reporting and idempotency. Covers managed/legacy Pi,
+  Codex/Grok TOML, relocated homes, OpenCode JSONC/V2 MCP and legacy artifacts,
+  and current Copilot/Antigravity hook schemas. Preserves third-party settings
+  and violation history; operator-only recovery remains blocked to agents.
+  Documents per-host missing-runtime qualification gaps and Windows limitations;
+  adds isolated unit/UX and cross-platform CI lifecycle gates.
 - **Potential ServiceNow BYOG integration documentation (#2573):** Describe the
   unimplemented, untested, unsupported, and unvalidated proposal, required adapter
   and security work, and ServiceNow test-environment prerequisite. Link contributor
@@ -79,6 +88,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **Windows standalone recovery (#2568):** Compare path and handle timestamps
+  within their respective APIs so Windows metadata differences do not falsely
+  retain unchanged integrations. Preserve file-change checks, isolate PowerShell
+  caches from CI preservation snapshots, and avoid the Windows connection-close
+  race in the REST authorization regression without changing authorization.
 - **Linux tray dialog lifecycle (#2569):** Keep shared informational dialogs open
   until dismissal instead of replacing them after a 30-second timeout. Treat
   normal window closure as completion, retain missing-provider/startup fallbacks,

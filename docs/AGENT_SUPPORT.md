@@ -55,6 +55,9 @@ upstream distinction.
 
 ## IDE-specific home and configuration paths
 
+For removal and package-first recovery, see [Uninstall and orphan recovery](UNINSTALL.md),
+including the explicitly unverified per-host missing-runtime lifecycle matrix.
+
 AI Guardian resolves user-level setup, MCP registration, verification, audit,
 and supported session paths from the same environment-variable rules. An
 explicit complete-file variable has priority over a home-directory variable;
