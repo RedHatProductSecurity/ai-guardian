@@ -9,6 +9,38 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2568 / PR #2577 second CI follow-up — 2026-10-24
+
+- User published the prior follow-up as `78a8811` on branch `2568`; started clean.
+  Latest Tests `40122958805` and Smoke `40122958830` now fail only three Windows
+  prerequisite-preservation cases: native PowerShell's
+  `AppData/Local/Microsoft/PowerShell/StartupProfileData-NonInteractive` changes.
+  Linux/macOS smoke jobs pass; macOS logs confirm actual five-host package-first
+  registration recovery passed. This does not qualify live host failure behavior.
+- The previous directory-only cache fix missed Windows' .NET known-folder API.
+  Primary PowerShell/CoreCLR source confirms it ignores LOCALAPPDATA for startup
+  profiles. A shared test/lifecycle environment factory now requires hexadecimal
+  `7FFFFFFF` CPUs for only that optional JIT profile, and removes inherited
+  case-insensitive aliases before child overrides. No product/security changes.
+  Selected HOME/USERPROFILE/config/state and complete home snapshots are unchanged;
+  do not add startup-cache exceptions to the snapshots.
+- Added four inherited-value/case-alias regressions and one native child probe;
+  those plus the lifecycle contract failed before correction. **218 related
+  recovery/wrapper/policy/complete-UX tests pass, no skips**, using verified native
+  PowerShell 7.6.8 on Linux. Shared helper import defines functions only; the actual
+  package-removal main remains guarded and was not run locally. Recovery engine
+  unchanged; coverage **92%**, `/tmp/opencode/guardian-2568-ci-second-fixes.coverage`.
+- Black py310, Ruff, Pylint E and project/helper Mypy (308 files) pass. Reviewed
+  simplification by sharing the factory rather than keeping separate settings.
+  Updated changelog, cerebrum and bug log; OpenWolf owns anatomy/memory updates.
+- DAF note saved; latest diagnosis/local validation and pending Windows checklist:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2568#issuecomment-6388656026.
+- **Next:** user publishes these local/uncommitted fixes via the external DAF
+  workflow, then reruns native Windows Tests/Smoke and its actual package-first
+  lifecycle. Do not claim Windows CI is green before that run.
+- No live cleanup, package removal, process signaling, security changes,
+  full-suite/container/integration execution, commit or push.
+
 ## Issue #2568 / PR #2577 CI follow-up — 2026-10-24
 
 - User published the prior implementation as `83610b0` on branch `2568`, PR

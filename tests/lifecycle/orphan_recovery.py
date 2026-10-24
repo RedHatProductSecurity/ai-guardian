@@ -14,6 +14,32 @@ import tempfile
 from pathlib import Path
 
 
+def powershell_environment(environment, runtime):
+    """Isolate shell caches without changing the selected integration home."""
+    runtime.mkdir(exist_ok=True)
+    overrides = {
+        "XDG_CACHE_HOME": str(runtime / "cache"),
+        "LOCALAPPDATA": str(runtime / "localappdata"),
+        "APPDATA": str(runtime / "appdata"),
+        "PSModuleAnalysisCachePath": str(runtime / "ModuleAnalysisCache"),
+        # Windows' startup JIT profile uses a known-folder API, ignoring these
+        # cache overrides. Keep this optional optimization out of test launches
+        # by requiring an unattainable CPU count (CoreCLR parses it as hex).
+        "DOTNET_MultiCoreJitMinNumCpus": "7FFFFFFF",
+    }
+    # Windows environment names are case-insensitive. Do not send two spellings
+    # of the same key, or an inherited value can defeat a child-only override.
+    names = {key.casefold() for key in overrides}
+    return {
+        **{
+            key: value
+            for key, value in environment.items()
+            if key.casefold() not in names
+        },
+        **overrides,
+    }
+
+
 def main():
     if os.environ.get("GITHUB_ACTIONS") != "true" or not os.environ.get("RUNNER_TEMP"):
         raise SystemExit(
@@ -115,17 +141,7 @@ def main():
         runtime = root / "powershell-runtime"
         recovery_env = env.copy()
         if os.name == "nt":
-            runtime.mkdir()
-            # These belong to PowerShell, not AI Guardian. Keep them separate
-            # from every selected home/config/state directory being verified.
-            recovery_env.update(
-                {
-                    "XDG_CACHE_HOME": str(runtime / "cache"),
-                    "LOCALAPPDATA": str(runtime / "localappdata"),
-                    "APPDATA": str(runtime / "appdata"),
-                    "PSModuleAnalysisCachePath": str(runtime / "ModuleAnalysisCache"),
-                }
-            )
+            recovery_env = powershell_environment(env, runtime)
             wrapper = [
                 "pwsh",
                 "-NoProfile",

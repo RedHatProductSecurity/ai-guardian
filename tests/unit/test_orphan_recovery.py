@@ -14,6 +14,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.lifecycle.orphan_recovery import (
+    powershell_environment as recovery_powershell_environment,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "scripts" / "ai_guardian_recovery.py"
 pytestmark = pytest.mark.skipif(
@@ -71,16 +75,62 @@ def snapshot(home):
 
 
 def powershell_environment(tmp_path):
-    """Keep shell-owned caches outside the selected integration/config home."""
-    runtime = tmp_path / "powershell-runtime"
-    runtime.mkdir(exist_ok=True)
-    return {
-        **os.environ,
-        "XDG_CACHE_HOME": str(runtime / "cache"),
-        "LOCALAPPDATA": str(runtime / "localappdata"),
-        "APPDATA": str(runtime / "appdata"),
-        "PSModuleAnalysisCachePath": str(runtime / "ModuleAnalysisCache"),
-    }
+    return recovery_powershell_environment(os.environ, tmp_path / "powershell-runtime")
+
+
+@pytest.mark.parametrize("inherited", [None, "0", "2", "2147483647"])
+def test_powershell_runtime_environment_overrides_startup_optimization(
+    isolated_home, tmp_path, monkeypatch, inherited
+):
+    name = "DOTNET_MultiCoreJitMinNumCpus"
+    if inherited is None:
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.upper(), raising=False)
+    else:
+        monkeypatch.setenv(name, inherited)
+        monkeypatch.setenv(name.upper(), inherited)
+    monkeypatch.setenv("COMPlus_MultiCoreJitMinNumCpus", "0")
+    original = dict(os.environ)
+    environment = powershell_environment(tmp_path)
+
+    # CoreCLR parses this DWORD as hexadecimal. A decimal max-int string can
+    # overflow and silently restore the default two-CPU optimization threshold.
+    assert environment[name] == "7FFFFFFF"
+    assert int(environment[name], 16) == 2**31 - 1
+    assert [key for key in environment if key.casefold() == name.casefold()] == [name]
+    for key in ("HOME", "USERPROFILE", "XDG_CONFIG_HOME", "AI_GUARDIAN_STATE_DIR"):
+        assert environment[key] == original[key]
+    legacy_key = next(
+        key for key in original if key.casefold() == "complus_multicorejitminnumcpus"
+    )
+    assert environment[legacy_key] == "0"
+    assert dict(os.environ) == original
+
+
+@pytest.mark.skipif(
+    shutil.which("pwsh") is None, reason="Native PowerShell unavailable"
+)
+def test_native_powershell_startup_preserves_complete_selected_home(
+    isolated_home, tmp_path
+):
+    write_json(isolated_home / ".claude.json", {"sentinel": "unrelated settings"})
+    before = snapshot(isolated_home)
+    result = subprocess.run(
+        [
+            "pwsh",
+            "-NoProfile",
+            "-Command",
+            "[Console]::Write($env:DOTNET_MultiCoreJitMinNumCpus)",
+        ],
+        env=powershell_environment(tmp_path),
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == "7FFFFFFF"
+    assert snapshot(isolated_home) == before
 
 
 def stat_values(info, **overrides):
@@ -915,6 +965,7 @@ def test_ci_lifecycle_is_explicit_native_and_shared_by_release_and_smoke():
     # Shell caches are isolated, not ignored inside any selected config home.
     assert '"powershell-runtime"' in scenario
     assert '"PSModuleAnalysisCachePath"' in scenario
+    assert '"DOTNET_MultiCoreJitMinNumCpus": "7FFFFFFF"' in scenario
     assert "if p.is_file() and not p.is_relative_to(runtime)" in scenario
 
 
