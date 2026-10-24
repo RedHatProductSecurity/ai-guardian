@@ -5,6 +5,7 @@ semantics. Unit/UX tests are the only required local validation.
 """
 
 import json
+import hashlib
 import os
 import runpy
 import subprocess
@@ -56,8 +57,13 @@ def main():
             }
         )
 
-        def run(command):
-            subprocess.run(command, env=env, cwd=project, check=True)
+        def run(command, environment=None):
+            subprocess.run(
+                command,
+                env=environment if environment is not None else env,
+                cwd=project,
+                check=True,
+            )
 
         for host in ("claude", "cursor", "codex", "opencode", "pi"):
             command = [
@@ -106,7 +112,20 @@ def main():
             ]
         )
 
+        runtime = root / "powershell-runtime"
+        recovery_env = env.copy()
         if os.name == "nt":
+            runtime.mkdir()
+            # These belong to PowerShell, not AI Guardian. Keep them separate
+            # from every selected home/config/state directory being verified.
+            recovery_env.update(
+                {
+                    "XDG_CACHE_HOME": str(runtime / "cache"),
+                    "LOCALAPPDATA": str(runtime / "localappdata"),
+                    "APPDATA": str(runtime / "appdata"),
+                    "PSModuleAnalysisCachePath": str(runtime / "ModuleAnalysisCache"),
+                }
+            )
             wrapper = [
                 "pwsh",
                 "-NoProfile",
@@ -137,15 +156,15 @@ def main():
 
         def snapshot():
             return {
-                p.relative_to(root): p.read_bytes()
+                p.relative_to(root): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in root.rglob("*")
-                if p.is_file()
+                if p.is_file() and not p.is_relative_to(runtime)
             }
 
         before = snapshot()
-        run([*wrapper, dry])
+        run([*wrapper, dry], recovery_env)
         assert snapshot() == before, "Preview mutated the disposable installation"
-        run([*wrapper, yes])
+        run([*wrapper, yes], recovery_env)
         assert json.loads(mixed.read_text())["mcpServers"] == {
             "other": {"command": "third-party-sentinel"}
         }
@@ -176,7 +195,7 @@ def main():
         ):
             assert not path.exists(), path
         after = snapshot()
-        run([*wrapper, yes])
+        run([*wrapper, yes], recovery_env)
         assert snapshot() == after, "Repeated recovery was not a no-op"
         print(
             "Five-host package-first registration recovery: PASS (live host behavior untested)"

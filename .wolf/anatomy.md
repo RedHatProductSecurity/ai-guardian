@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18388 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20652 tok)
-- `CHANGELOG.md` — Change log (~75622 tok)
+- `CHANGELOG.md` — Change log (~75720 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -1034,7 +1034,7 @@
 
 ## scripts/
 
-- `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~8702 tok)
+- `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~8833 tok)
 - `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2778 tok)
 - `check_openshell_compatibility.py` — Verify the qualified OpenShell release and protocol contract. (~1717 tok)
 - `check_parser_compat.py` — get_leaktk_url, fetch_url, fetch_pattern_data, extract_schema + 4 more (~3274 tok)

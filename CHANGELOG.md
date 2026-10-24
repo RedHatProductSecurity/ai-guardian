@@ -88,6 +88,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **Windows standalone recovery (#2568):** Compare path and handle timestamps
+  within their respective APIs so Windows metadata differences do not falsely
+  retain unchanged integrations. Preserve file-change checks, isolate PowerShell
+  caches from CI preservation snapshots, and avoid the Windows connection-close
+  race in the REST authorization regression without changing authorization.
 - **Linux tray dialog lifecycle (#2569):** Keep shared informational dialogs open
   until dismissal instead of replacing them after a 30-second timeout. Treat
   normal window closure as completion, retain missing-provider/startup fallbacks,

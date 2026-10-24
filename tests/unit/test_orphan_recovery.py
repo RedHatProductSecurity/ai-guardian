@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -67,6 +68,100 @@ def hook(command="/removed/venv/bin/ai-guardian"):
 
 def snapshot(home):
     return {p.relative_to(home): p.read_bytes() for p in home.rglob("*") if p.is_file()}
+
+
+def powershell_environment(tmp_path):
+    """Keep shell-owned caches outside the selected integration/config home."""
+    runtime = tmp_path / "powershell-runtime"
+    runtime.mkdir(exist_ok=True)
+    return {
+        **os.environ,
+        "XDG_CACHE_HOME": str(runtime / "cache"),
+        "LOCALAPPDATA": str(runtime / "localappdata"),
+        "APPDATA": str(runtime / "appdata"),
+        "PSModuleAnalysisCachePath": str(runtime / "ModuleAnalysisCache"),
+    }
+
+
+def stat_values(info, **overrides):
+    """Model Windows' distinct path/handle timestamps without a Windows host."""
+    values = {
+        name: getattr(info, name)
+        for name in (
+            "st_dev",
+            "st_ino",
+            "st_mode",
+            "st_size",
+            "st_nlink",
+            "st_mtime_ns",
+            "st_ctime_ns",
+        )
+    }
+    return SimpleNamespace(**{**values, **overrides})
+
+
+def test_safe_read_compares_handle_timestamps_with_handle_timestamps(
+    engine, tmp_path, monkeypatch
+):
+    path = write_json(tmp_path / "settings.json", {"hooks": {"PreToolUse": [hook()]}})
+    original = path.read_bytes()
+    real_fstat = os.fstat
+
+    def windows_handle_stat(fd):
+        info = real_fstat(fd)
+        # CPython on Windows can expose creation time through lstat(), but
+        # metadata change time through fstat() (python/cpython#157671).
+        return stat_values(info, st_ctime_ns=info.st_ctime_ns + 10_000_000)
+
+    monkeypatch.setattr(os, "fstat", windows_handle_stat)
+    data, info = engine["safe_read"](path)
+    assert data == original
+    assert info.st_mode == path.lstat().st_mode
+
+
+@pytest.mark.parametrize("field", ["st_mtime_ns", "st_ctime_ns", "st_size"])
+def test_safe_read_still_rejects_handle_changes_during_read(
+    engine, tmp_path, monkeypatch, field
+):
+    path = write_json(tmp_path / "settings.json", {"x": 1})
+    original = path.read_bytes()
+    real_fstat = os.fstat
+    calls = 0
+
+    def changed_handle_stat(fd):
+        nonlocal calls
+        calls += 1
+        info = real_fstat(fd)
+        return stat_values(info, **{field: getattr(info, field) + (calls - 1)})
+
+    monkeypatch.setattr(os, "fstat", changed_handle_stat)
+    with pytest.raises(ValueError, match="changed while reading"):
+        engine["safe_read"](path)
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("field", ["st_ino", "st_ctime_ns"])
+def test_safe_read_rejects_path_changes_while_handle_is_stable(
+    engine, tmp_path, monkeypatch, field
+):
+    path = write_json(tmp_path / "settings.json", {"x": 1})
+    original = path.read_bytes()
+    real_lstat = Path.lstat
+    calls = 0
+
+    def changed_path_stat(selected):
+        nonlocal calls
+        info = real_lstat(selected)
+        if selected == path:
+            calls += 1
+            if calls == 3:
+                return stat_values(info, **{field: getattr(info, field) + 1})
+        return info
+
+    monkeypatch.setattr(Path, "lstat", changed_path_stat)
+    with pytest.raises(ValueError, match="changed while reading"):
+        engine["safe_read"](path)
+    assert path.read_bytes() == original
 
 
 @pytest.mark.parametrize("missing", ["executable", "interpreter", "module"])
@@ -399,7 +494,7 @@ def test_native_powershell_recovery(isolated_home, tmp_path):
         capture_output=True,
         text=True,
         cwd=tmp_path,
-        env=os.environ.copy(),
+        env=powershell_environment(tmp_path),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -426,14 +521,20 @@ def test_native_powershell_prerequisite_errors_are_nonmutating_exit_two(
     original = snapshot(isolated_home)
     result = subprocess.run(
         ["pwsh", "-NoProfile", "-File", str(ROOT / "uninstall.ps1"), *arguments],
-        env=os.environ.copy(),
+        env=powershell_environment(tmp_path),
         cwd=tmp_path,
         capture_output=True,
         text=True,
         check=False,
     )
     assert result.returncode == 2, result.stdout + result.stderr
-    assert snapshot(isolated_home) == original
+    after = snapshot(isolated_home)
+    changed_paths = {
+        path
+        for path in original.keys() | after.keys()
+        if original.get(path) != after.get(path)
+    }
+    assert not changed_paths
     assert config.exists()
 
 
@@ -748,15 +849,24 @@ def test_native_powershell_preview_project_scope_and_idempotency(
         "-Python",
         sys.executable,
     ]
+    environment = powershell_environment(tmp_path)
     before = config.read_bytes()
     preview = subprocess.run(
-        [*command, "-DryRun"], capture_output=True, text=True, check=False
+        [*command, "-DryRun"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert preview.returncode == 0, preview.stdout + preview.stderr
     assert config.read_bytes() == before
     for _ in range(2):
         result = subprocess.run(
-            [*command, "-Yes"], capture_output=True, text=True, check=False
+            [*command, "-Yes"],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         assert result.returncode == 0, result.stdout + result.stderr
     assert "ai-guardian" not in config.read_text()
@@ -802,6 +912,10 @@ def test_ci_lifecycle_is_explicit_native_and_shared_by_release_and_smoke():
         if isinstance(node, ast.List)
     )
     assert '"claude", "cursor", "codex", "opencode", "pi"' in scenario
+    # Shell caches are isolated, not ignored inside any selected config home.
+    assert '"powershell-runtime"' in scenario
+    assert '"PSModuleAnalysisCachePath"' in scenario
+    assert "if p.is_file() and not p.is_relative_to(runtime)" in scenario
 
 
 def test_lifecycle_matrix_accounts_for_every_supported_host():
