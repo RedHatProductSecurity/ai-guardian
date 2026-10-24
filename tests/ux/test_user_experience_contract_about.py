@@ -12,17 +12,26 @@ Manual desktop verification:
    must not launch a browser. Closing About must not open the profile either.
 4. Without Tk, the native About fallback still shows the same compact attribution.
    The full author-profile URL must not appear in the visible About text.
-5. Web Console → About shows Author: Dominique Vernier (ITDoVe) in the Project
+5. Reopen About and shared informational modals several times. Each action must
+   map only one completed window. Leave each open beyond 30 seconds: it must not
+   disappear or change providers. OK, Escape and title-bar Close must not open a
+   replacement. Check GNOME/zenity and KDE/kdialog on X11/Wayland where available.
+6. With an unavailable/failing startup provider, expect a usable fallback. If a
+   Tk dialog fails after mapping, expect a diagnostic, never another toolkit.
+   Record distro/version, preferred UI, provider/process, time to transition and
+   a redacted screen recording if an immediate appearance flash remains.
+7. Web Console → About shows Author: Dominique Vernier (ITDoVe) in the Project
    card, opening https://github.com/itdove in a new tab only when selected.
 """
 
+import subprocess
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-from ai_guardian.tray import dialog_placement, menu_builder
+from ai_guardian.tray import dialog_placement, menu_builder, plugins
 
 
 @pytest.mark.parametrize("remote", [False, True])
@@ -79,6 +88,81 @@ def test_about_shows_author_and_profile_without_automatically_opening_it(
     assert dialog.call_args.kwargs["links"] == (
         ("(ITDoVe)", "https://github.com/itdove"),
     )
+    browser.assert_not_called()
+
+
+@pytest.mark.parametrize("provider", ["zenity", "kdialog"])
+@pytest.mark.parametrize("returncode", [0, 1])
+def test_linux_message_reopening_and_dismissal_never_cascade_to_another_provider(
+    monkeypatch, provider, returncode
+):
+    """USER EXPERIENCE: Read as long as needed, close/reopen → one modal per action.
+
+    A process remains alive while the user reads. Neither a reading deadline nor
+    the ordinary window-close exit code may turn dismissal into a second dialog.
+    """
+    monkeypatch.setattr(plugins.platform, "system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display.get_preferred_ui", lambda: "auto")
+    other = "kdialog" if provider == "zenity" else "zenity"
+    monkeypatch.setattr(
+        plugins, "_linux_dialog_provider_order", lambda: (provider, other)
+    )
+    run = Mock(return_value=subprocess.CompletedProcess([], returncode, "", ""))
+    monkeypatch.setattr(subprocess, "run", run)
+
+    for _ in range(3):
+        assert plugins.show_dialog("Information", "Synthetic message")
+
+    assert run.call_count == 3
+    for call in run.call_args_list:
+        assert call.args[0][0] == provider
+        assert call.kwargs["timeout"] is None
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "expected", "launches"),
+    [
+        (0, "ai-guardian-message-ready\n", True, 1),
+        (1, "", True, 2),
+        (1, "ai-guardian-message-ready\n", False, 1),
+    ],
+)
+def test_about_uses_native_fallback_only_if_tk_never_displayed(
+    monkeypatch, returncode, stdout, expected, launches
+):
+    """USER EXPERIENCE: A displayed About is never replaced by another toolkit.
+
+    Startup failure retains the original native fallback. A failure after the
+    window mapped is reported, not presented as a reason to open a second modal.
+    """
+    monkeypatch.setattr(plugins.platform, "system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display.get_preferred_ui", lambda: "auto")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    monkeypatch.setattr(
+        plugins, "_linux_dialog_provider_order", lambda: ("zenity", "kdialog")
+    )
+    run = Mock(
+        side_effect=[
+            subprocess.CompletedProcess([], returncode, stdout, "Synthetic failure"),
+            subprocess.CompletedProcess([], 0, "", ""),
+        ]
+    )
+    monkeypatch.setattr(subprocess, "run", run)
+    browser = Mock()
+    monkeypatch.setattr("webbrowser.open", browser)
+
+    assert (
+        plugins.show_dialog(
+            "About AI Guardian",
+            "Author: Dominique Vernier (ITDoVe)",
+            links=(("(ITDoVe)", "https://github.com/itdove"),),
+        )
+        is expected
+    )
+
+    assert run.call_count == launches
+    if launches == 2:
+        assert run.call_args.args[0][0] == "zenity"
     browser.assert_not_called()
 
 

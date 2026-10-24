@@ -101,6 +101,18 @@
 
 ## Key Learnings
 
+- **Linux tray message lifecycle (#2569):** A message-provider process remains
+  alive while the user reads; its runtime is not a startup timeout. Remove
+  reading deadlines for shared Linux/Tk messages, and treat native exit 1 with
+  empty stderr as ordinary dismissal rather than launching another provider.
+  The isolated Tk child reports its completed root's first Map event with a
+  captured readiness marker: only failures before mapping permit native fallback;
+  later failure/interrupted waits are terminal. Log provider/stage/exit status,
+  not raw child output or exception text that can echo the message. Current About
+  uses Tk for its author link; the older ticket's native-only trace predates that
+  change. Mocked lifecycle tests in a TTY do not prove the original desktop
+  rendering/decorations flash is resolved; obtain actual desktop details/recording.
+
 - **About foreground handoff (#2567):** On the user's KDE Wayland/XWayland
   desktop, the reported immediate minimization corresponded to a still-Normal
   About window. Do not infer actual iconification from appearance alone. Its
