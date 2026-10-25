@@ -5,9 +5,40 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-24
+> Last updated: 2026-10-25 (UTC)
 
 ---
+
+## Issue #2568 / PR #2577 third CI follow-up — 2026-10-25 UTC
+
+- User published prior fixes as `aa209b3` on branch `2568`; started clean. Latest
+  **Tests `40143187399` is green across the full matrix**, as are all other
+  workflows except Smoke `40143187400`. Smoke's Linux/macOS jobs pass; Windows
+  isolated contracts pass and now reach the actual package-first lifecycle.
+- Windows preview after CI package removal retains four MCP entries because
+  recovery omitted setup's `pythonw.exe -m ai_guardian` launch. OpenCode embeds
+  that whole string in command-array element zero. The same gap silently retained
+  Windows hooks. Added real Windows-resolved setup writer regressions for five
+  MCP hosts and substituted-launch parity for ten hook schemas; **22 positive
+  reproductions failed before the fix**.
+- Engine now recognizes windowed Python and only the exact legacy module argv
+  prefix, reusing string parsing to preserve compound/quote rejection. Unknown
+  modules, mixed commands, malformed quoting/types and ambiguous paths remain
+  retained. No broad argv splitting, launcher execution or package dependency.
+  New tests verify preview, third-party fields, exact backups and repeated no-op.
+- **253 related unit/wrapper/policy/complete-UX tests pass, no skips**, including
+  native PowerShell 7.6.8 on Linux. Engine coverage **93%**,
+  `/tmp/opencode/guardian-2568-ci-third-fixes.coverage`. Black py310, Ruff, Pylint E
+  and project/helper Mypy (308 files) pass. Reviewed simplification; only a small
+  ownership-parser change, no setup/runtime refactor. Updated source docs/changelog,
+  cerebrum and bug log; OpenWolf owns anatomy/memory updates.
+- DAF note saved; latest diagnosis and pending Windows lifecycle checklist:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2568#issuecomment-6391481224.
+- **Next:** publish local/uncommitted changes through the user's external DAF
+  workflow, rerun Windows actual package-first Smoke lifecycle. This patch is not
+  yet qualified on native Windows, and live host behavior remains unverified.
+- No local lifecycle/package removal, live cleanup, process signaling, security
+  changes, full-suite/container/integration execution, commit or push.
 
 ## Issue #2568 / PR #2577 second CI follow-up — 2026-10-24
 

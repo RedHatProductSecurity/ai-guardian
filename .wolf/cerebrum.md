@@ -101,6 +101,17 @@
 
 ## Key Learnings
 
+- **Windows setup launch parity (#2568 / PR #2577):** `_resolve_binary_path()`
+  returns a `pythonw.exe -m ai_guardian` string on Windows, not necessarily the
+  console executable. JSON/TOML MCP writers store that string as `command`, and
+  OpenCode historically embeds the whole launch in argv element zero. Recovery
+  must recognize the windowed interpreter and this exact legacy module form,
+  while reusing compound/quote rejection and refusing to split arbitrary argv
+  executable strings. Template-only bare-command parity missed both this MCP
+  failure and silently retained Windows hooks. Exercise real MCP writers with a
+  Windows-resolved launch for Claude/Cursor/Codex/Grok/OpenCode, and run all hook
+  schemas through `_substitute_command`. Assert preview immutability, exact
+  backups, third-party retention, idempotence and unknown-module/compound denial.
 - **Native Windows cache correction (#2568 / PR #2577):** The earlier directory-only
   isolation is insufficient: PowerShell's `Platform.CacheDirectory` uses .NET
   `GetFolderPath(LocalApplicationData)` on Windows and ignores child `LOCALAPPDATA`

@@ -30,6 +30,7 @@ except ImportError:
 GENERATED = "// ai-guardian-generated-version:"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 DROP = object()
+PYTHON_EXECUTABLE = re.compile(r"pythonw?(?:\d+(?:\.\d+)*)?(?:\.exe)?")
 
 
 def basename(value: str) -> str:
@@ -61,10 +62,19 @@ def owned_command(command: Any, args: Any = None) -> bool:
         tokens = [*tokens, *args]
     if not tokens or not all(isinstance(token, str) for token in tokens):
         return False
+    # Windows setup historically embeds its module launch in OpenCode's first
+    # argv element. Recognize only that exact Python/module form, not arbitrary
+    # executable strings with arguments. Reuse string parsing to reject compound
+    # commands and malformed quoting before claiming ownership.
+    module_suffix = " -m ai_guardian"
+    if isinstance(command, list) and tokens[0].endswith(module_suffix):
+        prefix = tokens[0][: -len(module_suffix)]
+        if PYTHON_EXECUTABLE.fullmatch(basename(prefix)):
+            return owned_command(tokens[0], tokens[1:])
     executable = basename(tokens[0])
     if executable in {"ai-guardian", "ai-guardian.exe", "ai-guardian.cmd"}:
         return True
-    if not re.fullmatch(r"python(?:\d+(?:\.\d+)*)?(?:\.exe)?", executable):
+    if not PYTHON_EXECUTABLE.fullmatch(executable):
         return False
     index = 1
     while index < len(tokens) and tokens[index] in {"-I", "-S", "-s", "-E", "-u"}:
