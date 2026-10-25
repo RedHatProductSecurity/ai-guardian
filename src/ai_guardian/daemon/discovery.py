@@ -99,6 +99,8 @@ def should_update_target_name(target, reported_name):
     values. Keep them when a status response only repeats a generated
     container name or hostname.
     """
+    if target.runtime == "ssh":
+        return False  # Saved destination identity also keys Web Console routes.
     normalized = _normalize_container_name(reported_name)
     if not normalized:
         return False
@@ -190,7 +192,7 @@ class DaemonTarget:
     """Represents a discovered AI Guardian daemon instance."""
 
     name: str
-    runtime: str  # transport: "local", "container", "kubernetes", "manual"
+    runtime: str  # transport: "local", "container", "kubernetes", "manual", "ssh"
     runtime_type: Optional[str] = None  # logical runtime, e.g. "openshell"
     status: str = (
         "unknown"  # "running", "paused", "starting", "stopped", "error", "unknown"
@@ -212,6 +214,8 @@ class DaemonTarget:
     error_message: Optional[str] = None
     working_dir: Optional[str] = None
     tls: Optional[dict] = dc_field(default_factory=dict, repr=False)
+    ssh_id: Optional[str] = None
+    ssh_tunnel: Any = dc_field(default=None, repr=False, compare=False)
 
 
 class DaemonDiscovery:
@@ -231,6 +235,23 @@ class DaemonDiscovery:
         self._last_refresh: float = 0.0
         self._pending_done: List[threading.Event] = []
         self._done_lock: Optional[threading.Lock] = None
+        self._ssh_manager = None
+        self._ssh_stopped = False
+
+    @property
+    def ssh_manager(self):
+        # Initialize once, including concurrent discovery/Web enrollment calls.
+        with self._lock:
+            if self._ssh_manager is None:
+                from ai_guardian.daemon.ssh_connections import SSHConnectionManager
+
+                self._ssh_manager = SSHConnectionManager()
+                if self._ssh_stopped:
+                    self._ssh_manager.close()
+            return self._ssh_manager
+
+    def discover_ssh(self):
+        return self.ssh_manager.refresh()
 
     @property
     def targets(self) -> List[DaemonTarget]:
@@ -282,6 +303,7 @@ class DaemonDiscovery:
             tasks["kubernetes"] = self.discover_kubernetes
 
         tasks["manual"] = self.discover_manual
+        tasks["ssh"] = self.discover_ssh
 
         results: List[DaemonTarget] = []
         overall_timeout = 5.0
@@ -1781,6 +1803,11 @@ class DaemonDiscovery:
 
     def stop(self):
         """Stop background discovery and container event streaming."""
+        with self._lock:
+            self._ssh_stopped = True
+            ssh_manager = self._ssh_manager
+        if ssh_manager is not None:
+            ssh_manager.close()
         self._running = False
         if self._refresh_event is not None:
             self._refresh_event.set()

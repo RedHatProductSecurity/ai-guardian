@@ -16,6 +16,10 @@ def create_daemon_picker_page(service):
         ui.label("AI Guardian Web Console").classes("text-3xl font-bold")
         ui.label("Select a daemon to view its dashboard").classes("text-grey-6")
 
+        from ai_guardian.web.components.ssh_connections import create_ssh_connections
+
+        create_ssh_connections(service)
+
         cards = ui.row().classes("gap-4 flex-wrap justify-center")
 
         async def refresh():
@@ -42,5 +46,7 @@ def create_daemon_picker_page(service):
                         s,
                         on_click=lambda _t=t: ui.navigate.to(f"/{_t.name}"),
                     )
+                    if t.runtime == "ssh" and t.error_message:
+                        ui.label(t.error_message).classes("text-warning")
 
         ui.timer(10.0, refresh)

@@ -6,6 +6,7 @@ menu for pause/resume/quit. Gracefully degrades to no-op if pystray
 is not installed.
 """
 
+from dataclasses import replace
 import logging
 import os
 import socket
@@ -553,6 +554,18 @@ class DaemonTray:
         except Exception:
             pass  # intentionally silent — optional dependency
 
+    def _build_ssh_menu_items(self):
+        from ai_guardian.tray.ssh_connections import build_items
+
+        return build_items(self, pystray)
+
+    def _on_add_ssh_daemon(self, _icon=None, _item=None):
+        from ai_guardian.tray.ssh_connections import open_enrollment
+
+        threading.Thread(
+            target=open_enrollment, args=(self,), daemon=True, name="ssh-enrollment"
+        ).start()
+
     def _build_tray_menu(self):
         """Build the native tray menu for the currently discovered targets."""
         menu = pystray.Menu(
@@ -560,10 +573,12 @@ class DaemonTray:
             *self._plugins._build_single_daemon_plugin_items(),
             *self._menu._build_single_daemon_daemon_items(),
             *self._menu._build_multi_daemon_menu_items(),
+            *self._build_ssh_menu_items(),
             pystray.Menu.SEPARATOR,
             *self._menu._build_openshell_middleware_menu_items(),
             *self._menu._build_sandbox_create_menu_items(),
             *self._menu._build_sandbox_start_menu_items(),
+            pystray.MenuItem("Add daemon via SSH", self._on_add_ssh_daemon),
             pystray.Menu.SEPARATOR,
             *self._plugins._build_global_plugin_items(),
             *self._menu._build_ide_setup_menu_items(),
@@ -1170,7 +1185,11 @@ class DaemonTray:
             if t.status not in ("running", "paused"):
                 continue
             if self._multi_client:
-                stats = self._multi_client.get_status(t) or {}
+                stats = (
+                    (t.stats or {})
+                    if t.runtime == "ssh"
+                    else (self._multi_client.get_status(t) or {})
+                )
             else:
                 stats = self._get_stats()
             target_paused = stats.get("paused", False)
@@ -1349,7 +1368,7 @@ class DaemonTray:
             return
         for target in self._targets:
             if (
-                target.runtime in ("container", "kubernetes", "manual")
+                target.runtime in ("container", "kubernetes", "manual", "ssh")
                 and target.status == "running"
                 and target.name not in self._trace_catchup_done
             ):
@@ -1423,13 +1442,19 @@ class DaemonTray:
         failed = set()
         for target in self._targets:
             if (
-                target.runtime in ("container", "kubernetes", "manual")
+                target.runtime in ("container", "kubernetes", "manual", "ssh")
                 and target.status == "running"
             ):
                 tray_host = self._resolve_tray_host(target)
                 try:
-                    local_port = self._get_local_daemon_port()
-                    forwarding_token = self._get_tray_forwarding_token()
+                    local_port = (
+                        0 if target.runtime == "ssh" else self._get_local_daemon_port()
+                    )
+                    forwarding_token = (
+                        None
+                        if target.runtime == "ssh"
+                        else self._get_tray_forwarding_token()
+                    )
                     ok = self._multi_client.register_tray(
                         target, tray_host, local_port, forwarding_token
                     )
@@ -1516,10 +1541,14 @@ class DaemonTray:
         if not self._multi_client:
             return
         for target in self._targets:
-            if target.runtime not in ("container", "kubernetes", "manual"):
+            if target.runtime not in ("container", "kubernetes", "manual", "ssh"):
                 continue
             if target.status != "running":
                 continue
+            if target.runtime == "ssh":
+                # A permission response must stay on the generation that
+                # fetched it, even if SSH reconnects while the dialog is open.
+                target = replace(target)
             try:
                 prompts = self._multi_client.get_pending_prompts(target)
             except Exception as e:
@@ -1536,9 +1565,15 @@ class DaemonTray:
     def _handle_remote_prompt(self, target, prompt_data):
         """Show ask dialog for a remote daemon's pending prompt."""
         prompt_id = prompt_data.get("prompt_id")
-        if not prompt_id or prompt_id in self._in_flight_prompts:
+        prompt_key = prompt_id
+        if target.runtime == "ssh":
+            target = replace(target)
+            if target.ssh_tunnel is None:
+                return
+            prompt_key = (target.name, id(target.ssh_tunnel), prompt_id)
+        if not prompt_id or prompt_key in self._in_flight_prompts:
             return
-        self._in_flight_prompts.add(prompt_id)
+        self._in_flight_prompts.add(prompt_key)
 
         def _show_and_respond():
             try:
@@ -1633,7 +1668,7 @@ class DaemonTray:
             except Exception as e:
                 logger.warning("Failed to handle remote prompt %s: %s", prompt_id, e)
             finally:
-                self._in_flight_prompts.discard(prompt_id)
+                self._in_flight_prompts.discard(prompt_key)
 
         threading.Thread(
             target=_show_and_respond,
@@ -1647,6 +1682,8 @@ class DaemonTray:
         Also updates the target name from the REST API response if
         the daemon reports a configured name.
         """
+        if self._active_target and self._active_target.runtime == "ssh":
+            return self._active_target.stats or {}
         if (
             self._multi_client
             and self._active_target
@@ -1666,10 +1703,12 @@ class DaemonTray:
 
     def _is_single_daemon(self):
         """True when exactly one daemon is discovered (flat layout)."""
-        return len(self._targets) == 1
+        return len(self._targets) == 1 and self._targets[0].runtime != "ssh"
 
     def _get_target_stats(self, target):
         """Get live stats dict for a specific daemon target."""
+        if target.runtime == "ssh":
+            return target.stats or {}
         if self._multi_client and target.runtime != "local":
             return self._multi_client.get_status(target) or {}
         return self._get_stats()

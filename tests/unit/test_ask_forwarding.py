@@ -59,15 +59,15 @@ class TestPendingPromptLifecycle:
             {"violation_type": "secret_detected"}, "block", 300
         )
         assert isinstance(pending, PendingPrompt)
-        assert pending.prompt_id == "prompt-1"
+        assert pending.prompt_id == f"prompt-{daemon_state._prompt_instance}-1"
         assert pending.result is None
         assert not pending.decision_event.is_set()
 
     def test_queue_increments_counter(self, daemon_state):
         p1 = daemon_state.queue_prompt({}, "block", 300)
         p2 = daemon_state.queue_prompt({}, "block", 300)
-        assert p1.prompt_id == "prompt-1"
-        assert p2.prompt_id == "prompt-2"
+        assert p1.prompt_id == f"prompt-{daemon_state._prompt_instance}-1"
+        assert p2.prompt_id == f"prompt-{daemon_state._prompt_instance}-2"
 
     def test_resolve_sets_result_and_fires_event(self, daemon_state):
         pending = daemon_state.queue_prompt({}, "block", 300)
@@ -285,12 +285,12 @@ class TestRestEndpoints:
         assert daemon_state._registered_tray["port"] == 8080
 
     def test_pending_prompts_endpoint(self, daemon_state):
-        daemon_state.queue_prompt({"type": "secret"}, "block", 300)
-        daemon_state.queue_prompt({"type": "pii"}, "warn", 300)
+        first = daemon_state.queue_prompt({"type": "secret"}, "block", 300)
+        second = daemon_state.queue_prompt({"type": "pii"}, "warn", 300)
         prompts = daemon_state.get_pending_prompts()
         assert len(prompts) == 2
-        assert prompts[0]["prompt_id"] == "prompt-1"
-        assert prompts[1]["prompt_id"] == "prompt-2"
+        assert prompts[0]["prompt_id"] == first.prompt_id
+        assert prompts[1]["prompt_id"] == second.prompt_id
 
     def test_prompt_decision_endpoint(self, daemon_state):
         pending = daemon_state.queue_prompt({}, "block", 300)

@@ -1561,6 +1561,23 @@ class _RestHandler(BaseHTTPRequestHandler):
 
     def _handle_register_tray(self, body):
         """Handle POST /api/register-tray — tray registers for ask forwarding."""
+        if "poll_only" in body:
+            if body["poll_only"] is not True or set(body) != {"poll_only"}:
+                self._send_error(
+                    400,
+                    "poll_only registration must be true and contain no callback address or credential",
+                )
+                return
+            self.server.daemon_state.register_tray("127.0.0.1", 0, poll_only=True)
+            self._send_json(
+                {
+                    "status": "registered",
+                    "host": "127.0.0.1",
+                    "port": 0,
+                    "poll_only": True,
+                }
+            )
+            return
         host = body.get("host")
         port = body.get("port")
         if not host or port is None:
@@ -1756,7 +1773,7 @@ class _RestHandler(BaseHTTPRequestHandler):
             from ai_guardian.daemon.multi_client import _is_loopback_host
 
             tray = self.server.daemon_state._registered_tray
-            if not tray:
+            if not tray or tray.get("poll_only", False):
                 return
             host = tray["host"]
             port = tray["port"]

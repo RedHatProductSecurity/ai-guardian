@@ -101,6 +101,25 @@
 
 ## Key Learnings
 
+- **SSH connection boundaries (#2552):** Pair a user-entered OpenSSH alias only
+  after explicit local Web Console confirmation; probe metadata is private
+  protocol data, never diagnostic text. Reuse `rest_transport` CA/SAN/validity
+  verification plus a paired leaf pin on each actual request socket. A local
+  forwarded port or process liveness check cannot establish remote identity.
+  Save credentials/trust outside exported config, with owner-only POSIX files
+  or whole-record current-user Windows DPAPI. Do not patch global `os.name` in
+  Linux Windows-path tests: patch the module's platform flag/DPAPI seam instead.
+- **SSH shutdown and remote prompts (#2552):** Track probe Popen handles and
+  readiness/enrollment tunnels before publishing targets. Invalidate before
+  termination, interrupt the transport before waiting for its request lock, and
+  refuse authentication/persistence after cancellation. Snapshot the SSH target
+  before prompt fetch/display; decisions stay on that generation. A forward can
+  survive a daemon restart, so prompt IDs also need a per-instance nonce, not a
+  resettable counter alone. Poll-only registration never sends a workstation
+  callback address/credential. Mock a tray menu's locally imported dialog before
+  building its callbacks, not just before invoking them. Live VM and native
+  desktop qualification remain separate from mocked SSH/loopback TLS tests.
+
 - **TLS CI parity and log isolation (#2551 / PR #2578):** Include `rest_tls`
   defaults and byte-identical comment metadata in all four built-in profiles,
   not just setup/example output. Validate raw TLS objects against the schema

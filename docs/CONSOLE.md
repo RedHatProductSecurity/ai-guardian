@@ -56,6 +56,9 @@ The historical `ai-guardian tui` command remains as an alias for
 ## Pages
 
 - **Security Dashboard**: Multi-daemon status and feature navigation
+- **Daemon picker / SSH connections**: Pair an authorized SSH host, confirm its
+  daemon TLS identity, view reconnect/offline state, and remove saved pairings
+  (loopback-bound Console only; [SSH workflow](MULTI_DAEMON_TRAY.md#add-daemon-via-ssh))
 - **Global Settings**: Effective security configuration and search
 - **Violations**: Filterable violation records by daemon and type
 - **Violation Logging**: Violation retention and output settings

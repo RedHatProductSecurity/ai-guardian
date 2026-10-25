@@ -13,7 +13,7 @@ from ai_guardian.daemon.multi_client import MultiDaemonClient
 
 logger = logging.getLogger(__name__)
 
-_NON_RUNNING_TARGET_STATES = {"error", "stopped", "starting"}
+_NON_RUNNING_TARGET_STATES = {"error", "stopped", "starting", "offline"}
 
 
 class DaemonService:
@@ -23,6 +23,28 @@ class DaemonService:
         self._discovery = DaemonDiscovery()
         self._client = MultiDaemonClient()
         self._targets: List[DaemonTarget] = []
+        self.allow_ssh_pairing = False
+
+    def _ssh_manager(self):
+        if not self.allow_ssh_pairing:
+            from ai_guardian.daemon.ssh_storage import SSHConnectionError
+
+            raise SSHConnectionError(
+                "SSH pairing is available only in a loopback-bound Web Console."
+            )
+        return self._discovery.ssh_manager
+
+    def prepare_ssh_connection(self, host):
+        return self._ssh_manager().prepare(host)
+
+    def enroll_ssh_connection(self, pairing):
+        self._ssh_manager().enroll(pairing)
+
+    def remove_ssh_connection(self, profile_id):
+        self._ssh_manager().remove(profile_id)
+
+    def close(self):
+        self._discovery.stop()
 
     def refresh_targets(self) -> List[DaemonTarget]:
         self._targets = self._discovery.discover_all()

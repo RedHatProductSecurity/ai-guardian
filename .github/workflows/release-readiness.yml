@@ -448,6 +448,10 @@ jobs:
           pip install pytest
           python -m pytest tests/unit/test_daemon_tls.py tests/unit/test_daemon_tls_config.py tests/ux/test_user_experience_contract_daemon_tls.py -q
 
+      - name: Verify SSH pairing, protected storage and polling-only REST contracts
+        run: |
+          python -m pytest tests/unit/test_ssh_storage.py tests/unit/test_ssh_tunnel.py tests/unit/test_ssh_connections.py tests/ux/test_user_experience_contract_ssh_daemons.py -q
+
       - name: Create config
         run: |
           export XDG_CONFIG_HOME=$(mktemp -d)

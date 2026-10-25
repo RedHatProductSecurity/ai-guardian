@@ -75,6 +75,8 @@ class WebConsole:
             logger.debug("Failed to load saved theme: %s", e)
 
     def run(self, host: str = "127.0.0.1", port: int = 0, show: bool = True):
+        self._service.allow_ssh_pairing = host == "127.0.0.1"
+        app.on_shutdown(self._service.close)
         if host != "127.0.0.1":
             logger.warning("Web console binding to %s — exposed on network.", host)
 

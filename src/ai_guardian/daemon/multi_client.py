@@ -584,6 +584,16 @@ class MultiDaemonClient:
 
     def register_tray(self, target, tray_host, tray_port, tray_auth_token=None):
         """Register this tray with a remote daemon for ask dialog forwarding."""
+        if target.runtime == "ssh":
+            from ai_guardian.daemon.ssh_tunnel import POLLING_ERROR
+
+            result = self._rest_request(
+                target, "POST", "/api/register-tray", {"poll_only": True}
+            )
+            if not result or result.get("poll_only") is not True:
+                target.error_message = POLLING_ERROR
+                return False
+            return True
         result = self._rest_request(
             target,
             "POST",
@@ -1452,6 +1462,20 @@ class MultiDaemonClient:
         timeout: float = REQUEST_TIMEOUT,
     ) -> Optional[dict]:
         """Send HTTP request to daemon REST API."""
+        if target.runtime == "ssh":
+            from ai_guardian.daemon.ssh_storage import SSHConnectionError
+            from ai_guardian.daemon.ssh_tunnel import OFFLINE_ERROR
+
+            try:
+                if target.ssh_tunnel is None:
+                    raise SSHConnectionError(OFFLINE_ERROR)
+                result = target.ssh_tunnel.request(method, path, body, timeout=timeout)
+                target.error_message = None
+                return result
+            except (SSHConnectionError, DaemonConnectionError) as exc:
+                target.status = "offline"
+                target.error_message = str(exc)
+                return None
         if target.url:
             base = target.url.rstrip("/")
         elif target.port:

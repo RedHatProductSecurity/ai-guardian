@@ -296,6 +296,94 @@ prevents discovery and token reads from crossing user boundaries in shared
 namespaces. The ownership selector is added to `label_selector` and cannot be
 removed by setting a broader base selector.
 
+### Add daemon via SSH
+
+For an SSH-only VM (including a known AWS instance), choose **Add daemon via SSH**
+in the tray. The local Web Console opens its daemon picker with SSH connection
+controls. No `tray-targets.json` editing or separately maintained tunnel is needed.
+
+**Prerequisites:** a system OpenSSH client, an existing host-key-verified SSH
+destination and agent/key authentication, and a POSIX remote host with `python3`
+and a running loopback HTTPS AI Guardian daemon. Provision its certificate and
+local trust as described [below](#native-https-and-explicit-certificate-trust).
+This does not install/start the remote daemon or provision SSH keys. Unknown or
+changed SSH host keys are never accepted automatically; verify them independently
+using your ordinary SSH client before pairing. Password/keyboard-interactive
+authentication is not offered by this non-interactive workflow.
+
+1. Enter the known alias or `user@host`. Port, identity-file, jump-host and agent
+   settings come from your existing SSH configuration; options/commands/URLs are
+   not accepted in the host field. Use an alias for IPv6 literals or custom ports.
+2. Review **Verify SSH daemon identity**: the SSH destination, remote daemon name,
+   actual runtime port, expected TLS SAN identity and certificate SHA-256 pin.
+   Certificate trust and the authorized daemon credential are retrieved only over
+   authenticated, host-key-verified SSH as that user, without sudo. The fixed
+   read-only Python probe cannot execute commands from remote metadata.
+3. Check **I confirm this SSH destination and daemon certificate identity**, then
+   choose **Trust and add daemon**. Cancel saves nothing. HTTPS verification and
+   authenticated status must succeed before saving. SSH private keys/passwords
+   are never read into or stored by AI Guardian; the daemon token is never shown.
+4. The target appears as `ssh-<destination>` with cached state and asynchronous
+   Pause/Resume controls. Open **Web Console** for other REST-backed controls.
+   **Manage SSH connection...** returns to the picker for removal.
+
+The owned OpenSSH process adds an explicit `127.0.0.1` local forward to the remote
+loopback listener. SSH and TLS identities are verified independently: the local
+TCP address/port never becomes the expected remote TLS identity. CA, SAN,
+validity and the paired leaf pin are checked on the actual request connection
+before HTTP headers or credentials. Readiness uses an unauthenticated health
+request. Failed/occupied ports and dead/removed generations cannot select a
+plaintext or unverified fallback. Only processes created for these connections
+are stopped; unrelated listeners are never killed. Existing SSH configuration
+is trusted local configuration; forwarding conflicts in it can prevent startup.
+
+No public inbound REST port or VM-to-workstation inbound connection is needed.
+Polling-only tray registration keeps remote permission prompts and decisions on
+tray-initiated authenticated requests. This registration requires the #2552
+daemon implementation; older HTTPS daemons can provide status/control but show
+an explicit upgrade warning for permission prompts. Callback-only live trace
+push is not available over this connection. Existing trace retrieval/catch-up
+uses tray-initiated REST instead; no reverse SSH forward is created. Interactive
+Terminal, remote CLI install/upgrade, and CLI daemon stop/restart are not exposed
+by the SSH tray submenu. Use ordinary authorized administration for those tasks.
+
+Permission responses stay bound to the tunnel generation that fetched them.
+Prompt IDs also contain a daemon-instance nonce, so a dialog left open across a
+daemon restart cannot approve a different invocation after a counter resets.
+
+Disconnected targets stay visible **offline** and retry with bounded timeouts
+and exponential backoff (2 seconds up to 60 seconds). New runtime ports can be
+detected on reconnect; changed certificate trust, TLS identity or daemon tokens
+are never adopted silently. Independently verify a renewal/rotation, then remove
+and explicitly pair again. Restarting the tray reconnects saved destinations.
+Tray/Web Console shutdown and saved-target removal clean up their owned tunnels;
+another running local client observes removal on its next refresh, and every
+authenticated request also checks that its saved pairing still exists unchanged.
+Removing a connection never stops the remote daemon.
+
+Pairings live under the local **state directory** at
+`ssh-connections/<destination-id>.json`, separate from `ai-guardian.json` and
+`tray-targets.json`. POSIX directories/files are owner-only (`0700`/`0600`) with
+ownership and parent-path checks. Windows encrypts/authenticates the entire
+record with current-user DPAPI; copying it to another account does not provision
+trust or credentials. Temporary CA material is public certificate data, with the
+immutable paired pin still enforced. SSH storage is not collected by support
+bundles; do not attach pairing records to issues. Enrollment/removal is available
+only in a loopback-bound Web Console, not an exposed-network Console. Tray and
+Console each own their own tunnels if both query a saved target concurrently.
+
+Custom `AI_GUARDIAN_CONFIG_DIR`, `AI_GUARDIAN_HOME`, `AI_GUARDIAN_STATE_DIR` and XDG
+paths must be available in the remote SSH environment. A stopped daemon, missing
+metadata, non-loopback listener, insecure material or legacy HTTP-only daemon
+fails with an actionable message; port 63152 is never assumed. This connects to
+user-identified hosts only: it does not enumerate AWS instances or use AWS APIs.
+
+Unit/UX tests exercise synthetic TLS endpoints and mocked SSH processes. Live
+private-VM enrollment, reconnect/prompt delivery and native Windows/macOS desktop
+qualification remain a release/manual-validation gate, not a claim established
+by those tests. See the manual checklist in
+`tests/ux/test_user_experience_contract_ssh_daemons.py`.
+
 ### Manual Targets
 
 Create `~/.config/ai-guardian/tray-targets.json`:
@@ -372,7 +460,7 @@ Manual remote targets have their own explicitly provisioned trust:
 ```
 
 The URL is the TCP connection address; `server_name` supplies both SNI and the
-expected certificate identity. This supports a future SSH-managed tunnel without
+expected certificate identity. SSH-managed connections reuse this transport without
 requiring a localhost certificate. The same target can use a direct HTTPS address
 with the same trusted identity. Empty `server_name` verifies the URL hostname/IP.
 The optional `certificate_sha256` is the independently verified SHA-256 **leaf
@@ -440,8 +528,9 @@ commands, run by the operator, not an agent:
    ssh -N -L 127.0.0.1:64443:127.0.0.1:63152 vm
    ```
    Provision the existing daemon token privately and configure the manual target
-   above. Refresh/restart the tray to reload target trust. SSH enrollment, key
-   management and automatic tunnel lifecycle are **not** implemented by this phase.
+   above. Refresh/restart the tray to reload manual target trust. Alternatively,
+   use [Add daemon via SSH](#add-daemon-via-ssh) to enroll and manage the tunnel.
+   SSH key provisioning/management remains outside AI Guardian.
 
 #### Validation failures, renewal and restart
 
