@@ -2449,10 +2449,12 @@
                 "server_name": {"type": "string", "default": "", "description": "Expected certificate SAN identity and TLS SNI, independent of the TCP address. Empty verifies the connection hostname/IP."},
                 "certificate_sha256": {"type": "string", "default": "", "pattern": "^(?:[0-9a-fA-F]{64}|(?:[0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2})?$", "description": "Optional independently verified SHA-256 leaf-certificate fingerprint, additional to CA/expiry/hostname verification. Never automatically replaced on renewal."}
               },
+              "patternProperties": {"^_comment": {"type": "string"}},
               "additionalProperties": false
             }
           },
           "allOf": [{"if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]}, "then": {"required": ["cert_file", "key_file"], "properties": {"cert_file": {"minLength": 1}, "key_file": {"minLength": 1}}}}],
+          "patternProperties": {"^_comment": {"type": "string"}},
           "additionalProperties": false
         },
         "tray": {

@@ -155,6 +155,14 @@ class TestLoadProfile:
             standard, sort_keys=True
         )
 
+    @pytest.mark.parametrize("profile_name", BUILT_IN_PROFILES)
+    def test_builtin_tls_defaults_match_setup(self, profile_name):
+        """Every profile advertises opt-in HTTPS with identical empty trust defaults."""
+        from ai_guardian.setup import _get_default_config_template
+
+        expected = _get_default_config_template()["daemon"]["rest_tls"]
+        assert load_profile(f"@{profile_name}")["daemon"].get("rest_tls") == expected
+
     def test_load_custom_profile(self, tmp_path):
         profiles_dir = tmp_path / "auto_config" / "profiles"
         profiles_dir.mkdir(parents=True, exist_ok=True)

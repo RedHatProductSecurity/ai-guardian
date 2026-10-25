@@ -13,6 +13,7 @@ Manual verification:
 """
 
 import json
+import logging
 from unittest import mock
 
 import pytest
@@ -23,7 +24,10 @@ from tests.fixtures.daemon_tls import client_config, make_identity, serve_endpoi
 
 
 @pytest.fixture(autouse=True)
-def isolated_configuration():
+def isolated_configuration(caplog):
+    # CLI tests can leave logging globally suppressed. caplog restores both the
+    # selected level and the prior global disable threshold after each test.
+    caplog.set_level(logging.WARNING, logger="ai_guardian")
     with mock.patch(
         "ai_guardian.config.loaders._load_config_file", return_value=({}, None)
     ):
@@ -50,6 +54,7 @@ def isolated_configuration():
             "Daemon TLS certificate has expired or is not yet valid; renew the certificate or check the system clock. No daemon credentials were sent.",
         ),
     ],
+    ids=["unpaired", "identity", "pin", "expired"],
 )
 def test_user_sees_actionable_trust_failure_without_credentials_or_automatic_pairing(
     tmp_path, caplog, failure, expected
