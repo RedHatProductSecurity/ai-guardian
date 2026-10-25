@@ -9,6 +9,64 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2552 SSH-managed HTTPS connections — local implementation ready, 2026-10-25
+
+- User said **go** after initialization. Reused branch `2552`; verified #2551
+  merged through PR #2578 with successful CI and available locally at
+  `29f033f9`. Prior prerequisite/initialization entries below are historical.
+- Added `daemon/ssh_probe.py`, `ssh_storage.py`, `ssh_tunnel.py` and
+  `ssh_connections.py`: fixed read-only POSIX/Python probe, actual runtime port,
+  strict existing OpenSSH host-key/agent configuration, owned loopback forwards,
+  explicit TLS identity/CA/validity/leaf-pin verification on each request socket,
+  capped reconnect backoff and bounded owned-process cleanup/cancellation.
+  No HTTP downgrade, automatic identity replacement, sudo or SSH key storage.
+- Tray **Add daemon via SSH** opens local-only Web Console pairing with an
+  unchecked, explicit certificate/destination confirmation. Private POSIX files
+  or whole-record current-user Windows DPAPI persist credentials/trust outside
+  exported config. Removal invalidates saved generations without stopping the VM.
+  New tray controls run off the GUI thread and reuse cached version monitoring.
+- Poll-only `/api/register-tray` adds no inbound callback/workstation credential;
+  prompts/decisions use initiated authenticated HTTPS. Snapshot SSH generations
+  and per-daemon-instance prompt IDs prevent stale dialogs approving replacement
+  connections/invocations. Updated old exact ID assertions and full UX contracts.
+- Source docs/README/changelog and release-readiness SSH checks updated. No new
+  dependency, CLI command, schema setting, AWS inventory or generated docs export.
+- **Validation: 1,411 related unit/UX tests pass, one Windows-only DPAPI test skips
+  on Linux.** Complete SSH/TLS/session-pause UX files pass. Focused SSH
+  manager/storage/tunnel/tray coverage is **89%**, data at
+  `/tmp/opencode/guardian-2552.coverage` (Web excluded by project coverage config).
+  Black py310, Ruff, Pylint E, project-environment Mypy (314 files), workflow YAML,
+  bug-log JSON and whitespace checks pass. Reviewed simplification and recorded
+  security/fixture/tooling discoveries; OpenWolf owns anatomy/memory bookkeeping.
+- DAF note saved. Progress/pending qualification:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2552#issuecomment-6402235207.
+- **Next:** review/publish through external DAF completion, qualify CI, then use
+  an explicitly authorized disposable VM for enrollment/cancel, restart/reconnect,
+  occupied-port loss/recovery, remote decisions, rotation and removal. Native
+  Windows DPAPI/client and macOS desktop qualification remain pending; do not
+  claim all acceptance criteria or live VM behavior are qualified by unit tests.
+- All implementation changes remain local/uncommitted. No live SSH connection,
+  real remote credential retrieval, installed-daemon restart/security config
+  change, full/integration/container suite, commit, push or PR creation occurred.
+
+## Issue #2552 session initialization — 2026-10-25
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2552`; confirmed existing branch `2552`
+  and initially clean worktree. Read the qualified GitHub ticket exactly once.
+- Discovered config directory `/home/itdove/.config/devaiflow`; hierarchical
+  context markdown and additional hierarchical skills are absent. Loaded relevant
+  DAF/OpenWolf skills and project handoff/protocol. No temp-clone sync applies.
+- User requested initialization only. Preserve the earlier decision to pause
+  implementation until prerequisite #2551 is reviewed/merged and qualified.
+  Its current upstream issue/PR status was not rechecked during initialization.
+- **Next:** verify that prerequisite, then plan secure SSH enrollment/probing,
+  verified loopback tunnel lifecycle, protected persistence and tray integration,
+  followed by related unit/complete UX contracts, documentation and quality checks.
+- No code changes, tests, live SSH/credential retrieval, runtime/configuration
+  changes, tracker updates, commits, pushes or PRs. Only this handoff was updated;
+  OpenWolf owns automatic anatomy/memory bookkeeping. Earlier entries are history.
+
 ## Issue #2551 / PR #2578 CI follow-up — 2026-10-25
 
 - User published the implementation as `23a05033` on existing branch `2551`;

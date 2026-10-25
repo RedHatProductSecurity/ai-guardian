@@ -3487,6 +3487,8 @@ class TrayMenuBuilder:
         """
         items = []
         for i in range(len(self._tray._targets)):
+            if self._tray._targets[i].runtime == "ssh":
+                continue  # SSH uses cached status and asynchronous controls.
             idx = i
 
             def make_label(_item, slot=idx):

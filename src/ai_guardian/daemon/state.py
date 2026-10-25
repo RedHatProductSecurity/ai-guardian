@@ -15,6 +15,7 @@ import stat
 import tempfile
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -149,6 +150,7 @@ class DaemonState:
         self._pending_prompts = {}  # prompt_id -> PendingPrompt
         self._pending_prompts_lock = threading.Lock()
         self._prompt_counter = 0
+        self._prompt_instance = uuid.uuid4().hex
 
         # Pushed traces from container SDK (#1951)
         self._pushed_traces = {}  # filename -> trace_doc dict
@@ -508,7 +510,7 @@ class DaemonState:
 
     # --- Tray registration & prompt queue (#1342) ---
 
-    def register_tray(self, host, port, auth_token=None):
+    def register_tray(self, host, port, auth_token=None, *, poll_only=False):
         """Register a host tray for ask dialog forwarding."""
         with self._lock:
             self._registered_tray = {
@@ -516,6 +518,7 @@ class DaemonState:
                 "port": int(port),
                 "auth_token": auth_token,
                 "registered_at": time.monotonic(),
+                "poll_only": poll_only,
             }
         logger.info("Tray registered: %s:%s", host, port)
 
@@ -571,7 +574,9 @@ class DaemonState:
         """
         with self._pending_prompts_lock:
             self._prompt_counter += 1
-            prompt_id = f"prompt-{self._prompt_counter}"
+            # A live SSH forward can survive a daemon restart. An old dialog
+            # must never approve a new process's counter-reused invocation.
+            prompt_id = f"prompt-{self._prompt_instance}-{self._prompt_counter}"
             pending = PendingPrompt(
                 prompt_id=prompt_id,
                 violation=violation_dict,

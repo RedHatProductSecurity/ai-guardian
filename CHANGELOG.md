@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SSH-managed remote daemons (#2552):** Add a known SSH host/alias from the tray
+  or local Web Console, explicitly confirm its daemon TLS identity, and reconnect
+  automatically through owned loopback-only OpenSSH forwarding. Uses existing SSH
+  configuration/agent and strict host-key checks; detects the actual runtime port,
+  verifies HTTPS identity before sending daemon credentials, and never silently
+  replaces trust or downgrades to HTTP. Pairings use private POSIX storage or
+  current-user Windows DPAPI, separate from exported configuration. Includes
+  asynchronous controls, offline/backoff states, cleanup, polling-only remote
+  permission prompts, unit/UX contracts and release-readiness checks. No new
+  dependencies, SSH key provisioning, AWS inventory or public REST ports.
 - **Native daemon REST HTTPS and explicit trust (#2551):** Opt-in TLS 1.2+ listener,
   CA/SAN/validity verification, separate TCP address and expected TLS identity,
   and optional independently provisioned SHA-256 leaf pins checked before HTTP
