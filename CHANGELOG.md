@@ -98,6 +98,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **Daemon TLS configuration consistency (#2551):** Include matching opt-in HTTPS
+  defaults in every built-in profile and accept documentation comments in the
+  TLS schema without accepting unknown settings. Isolate TLS UX log capture from
+  earlier CLI tests' logging suppression.
 - **Windows standalone recovery (#2568):** Compare path and handle timestamps
   within their respective APIs so Windows metadata differences do not falsely
   retain unchanged integrations. Preserve file-change checks, isolate PowerShell

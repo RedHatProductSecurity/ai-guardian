@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18388 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20898 tok)
-- `CHANGELOG.md` — Change log (~75991 tok)
+- `CHANGELOG.md` — Change log (~76062 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -906,7 +906,7 @@
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
 - `AUDIT_LOGGING.md` — Compliance Audit Logging (~1442 tok)
 - `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4050 tok)
-- `CONFIGURATION.md` — Configuration Guide (~7149 tok)
+- `CONFIGURATION.md` — Configuration Guide (~7189 tok)
 - `CONSOLE.md` — AI Guardian Console Guide (~1209 tok)
 - `COOKBOOK.md` — Configuration Cookbook (~15503 tok)
 - `DEVELOPER_GUIDE.md` — Developer Guide (~3796 tok)
@@ -1335,7 +1335,7 @@
 
 ## src/ai_guardian/schemas/
 
-- `ai-guardian-config.schema.json` — Declares in (~39518 tok)
+- `ai-guardian-config.schema.json` — Declares in (~39557 tok)
 - `aiguardignore.schema.json` (~556 tok)
 - `policy-decision.schema.json` (~584 tok)
 - `scenario.schema.json` — Declares to (~1315 tok)
@@ -1386,10 +1386,10 @@
 
 ## src/ai_guardian/templates/profiles/
 
-- `minimal.json` (~4382 tok)
-- `moderator.json` (~4736 tok)
-- `standard.json` (~5122 tok)
-- `strict.json` (~4332 tok)
+- `minimal.json` (~4492 tok)
+- `moderator.json` (~4846 tok)
+- `standard.json` (~5232 tok)
+- `strict.json` (~4442 tok)
 
 ## src/ai_guardian/templates/tray-plugins/
 

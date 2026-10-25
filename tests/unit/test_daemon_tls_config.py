@@ -32,12 +32,16 @@ def test_schema_setup_and_example_have_identical_tls_defaults():
         (ROOT / "src/ai_guardian/schemas/ai-guardian-config.schema.json").read_text()
     )
     tls_schema = schema["definitions"]["daemon"]["properties"]["rest_tls"]
-    example = clean_comments(
-        json.loads((ROOT / "ai-guardian-example.json").read_text())["daemon"][
-            "rest_tls"
-        ]
-    )
-    default = clean_comments(_get_default_config_template()["daemon"]["rest_tls"])
+    # Validate the actual documented configurations, including comment metadata.
+    # Stripping comments first would hide invalid setup/example output.
+    setup_tls = _get_default_config_template()["daemon"]["rest_tls"]
+    example_tls = json.loads((ROOT / "ai-guardian-example.json").read_text())["daemon"][
+        "rest_tls"
+    ]
+    jsonschema.validate(setup_tls, tls_schema)
+    jsonschema.validate(example_tls, tls_schema)
+    example = clean_comments(example_tls)
+    default = clean_comments(setup_tls)
     assert (
         default
         == example
@@ -55,6 +59,9 @@ def test_schema_setup_and_example_have_identical_tls_defaults():
         assert tls_schema["properties"]["client"]["properties"][key]["default"] == value
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({"enabled": True}, tls_schema)
+    for invalid in ({"unknown": True}, {"client": {"unknown": True}}):
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(invalid, tls_schema)
 
 
 def test_setup_create_config_output_contains_disabled_tls_defaults():

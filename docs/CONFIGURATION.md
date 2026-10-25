@@ -62,6 +62,9 @@ callers use `client.ca_file`, `client.server_name` and the optional additional
 system trust and the connection hostname/IP. Certificate SAN/expiry/chain
 verification is always required; a pin never replaces it.
 
+All built-in profiles include these same disabled TLS defaults; selecting a
+security profile does not provision certificates, enroll trust, or enable HTTPS.
+
 These are global-only settings, exposed under **Global Settings → Daemon REST
 HTTPS**. Paths refer to the selected daemon's host, not the browser/Console host.
 The form stores paths, never key contents. Saving does not restart the listener:

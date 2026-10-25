@@ -9,6 +9,35 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2551 / PR #2578 CI follow-up — 2026-10-25
+
+- User published the implementation as `23a05033` on existing branch `2551`;
+  started this follow-up with a clean worktree. Inspected Tests run `40204480454`.
+- Linux reported seven deterministic failures; Windows 3.10/3.14 reported six
+  (one POSIX-only contract skipped). Standard profile omitted TLS defaults, and
+  earlier sanitize CLI tests left global logging suppressed before the TLS UX
+  contracts. A focused reproducer plus four new parity cases failed 11 tests.
+- Synchronized TLS defaults/comments across all four profiles. Raw profile
+  validation exposed a related schema bug: `_comment` metadata was rejected.
+  Permit string `_comment*` metadata only; unknown TLS settings still fail.
+  Tests now validate raw setup/example TLS configs and every built-in profile.
+- The complete TLS UX file explicitly establishes pytest-managed WARNING capture
+  and restores prior logging state; retained exact-message/privacy/deny assertions.
+  No production TLS/authentication changes, broad logging reset or relaxed checks.
+- **609 directly related unit/UX tests pass**, including full schema/setup/profile,
+  TLS and sanitizer files in reproducing order. Black py310, Ruff, Pylint E,
+  project Mypy (308 files) and whitespace checks pass. No full/integration suite.
+- **Separate native Windows gap:** Python 3.13 job `121202426797` timed out in
+  `tests/unit/test_orphan_recovery.py:587` waiting for pwsh in the missing-Python
+  prerequisite case. Other Windows jobs passed that area. Local pwsh is absent;
+  the three focused cases skip. No speculative timeout/source workaround.
+- **Next:** publish these local/uncommitted fixes through the external DAF flow,
+  rerun CI, and verify the separate Windows subprocess stall does not recur.
+  Original live private-VM qualification remains pending; #2552 stays paused.
+- Updated source docs/changelog, memory and bug log. No live configuration changes,
+  restarts, SSH, credential retrieval, commits, pushes, PR creation or CI reruns.
+  OpenWolf owns automatic anatomy/memory bookkeeping; previous handoffs are history.
+
 ## Issue #2551 native HTTPS/trust — local implementation ready for review, 2026-10-25
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2551`, existing

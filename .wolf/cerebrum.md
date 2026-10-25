@@ -101,6 +101,18 @@
 
 ## Key Learnings
 
+- **TLS CI parity and log isolation (#2551 / PR #2578):** Include `rest_tls`
+  defaults and byte-identical comment metadata in all four built-in profiles,
+  not just setup/example output. Validate raw TLS objects against the schema
+  before stripping comments: listener and client objects allow only string
+  `_comment*` metadata in addition to their known settings, not arbitrary keys.
+  `test_sanitizer.py::TestSanitizeCommand::test_file_not_found` alone reproduces
+  the full-suite TLS UX failures by leaving `logging.disable(CRITICAL)` active.
+  Use `caplog.set_level(WARNING, logger="ai_guardian")` in that UX module's
+  fixture; pytest enables capture and restores the previous global disable
+  threshold during teardown. Do not drop exact-message/privacy assertions or
+  change production TLS behavior to accommodate test-order state.
+
 - **Daemon REST TLS foundation (#2551; prerequisite for #2552):** Reuse
   `daemon/rest_transport.py`: `TLSOptions` carries `ca_file`, `server_name` and
   an optional additional `certificate_sha256` leaf pin. The URL is only the TCP
