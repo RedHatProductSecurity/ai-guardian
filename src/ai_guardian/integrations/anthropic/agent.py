@@ -1157,7 +1157,13 @@ class GuardedAgent:
         Falls back to ``AI_GUARDIAN_TRACE_ENDPOINT`` for direct-mode SDK
         (no local daemon) to push traces to a remote tray daemon.
         """
+        from ai_guardian.daemon.rest_transport import (
+            DaemonConnectionError,
+            local_daemon_request,
+        )
+
         pushed_local = False
+        local_https = False
         try:
             from ai_guardian.daemon import get_pid_path
 
@@ -1166,26 +1172,24 @@ class GuardedAgent:
                 pid_info = json.loads(pid_path.read_text())
                 rest_port = pid_info.get("rest_port")
                 if rest_port:
-                    auth_token = pid_info.get("auth_token")
-                    payload = json.dumps(
-                        {"filename": filename, "trace_doc": trace_doc},
-                        default=str,
-                    ).encode("utf-8")
-
-                    from urllib.request import Request, urlopen
-
-                    req = Request(
-                        f"http://127.0.0.1:{rest_port}/api/traces",
-                        data=payload,
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
+                    local_https = pid_info.get("rest_scheme", "http") == "https"
+                    body = json.loads(
+                        json.dumps(
+                            {"filename": filename, "trace_doc": trace_doc}, default=str
+                        )
                     )
-                    if auth_token:
-                        req.add_header("Authorization", f"Bearer {auth_token}")
-                    urlopen(req, timeout=3)
+                    with local_daemon_request(
+                        "/api/traces", data=body, timeout=3, pid_info=pid_info
+                    ):
+                        pass  # intentionally silent — response body is not needed
                     pushed_local = True
-        except Exception as exc:
-            logger.debug("Failed to push trace to local daemon: %s", exc)
+        except DaemonConnectionError as exc:
+            logger.warning("%s", exc)
+            return  # An HTTPS trust failure must not select another transport.
+        except Exception:
+            logger.debug("Failed to push trace to local daemon")
+            if local_https:
+                return  # Never downgrade after any failure of an HTTPS attempt.
 
         if not pushed_local:
             GuardedAgent._push_trace_to_remote(filename, trace_doc)
@@ -1212,7 +1216,9 @@ class GuardedAgent:
                 default=str,
             ).encode("utf-8")
 
-            from urllib.request import Request, urlopen
+            from urllib.request import Request
+            from ai_guardian.daemon.client import _remote_tls_options
+            from ai_guardian.daemon.rest_transport import open_daemon_request
 
             parsed = urlparse(endpoint if "://" in endpoint else f"//{endpoint}")
             host = parsed.hostname or ""
@@ -1224,7 +1230,9 @@ class GuardedAgent:
             if scheme not in ("http", "https") or (
                 scheme == "http" and not is_loopback
             ):
-                logger.warning("Refusing insecure trace endpoint: %s", endpoint)
+                logger.warning(
+                    "Refusing insecure trace endpoint; configure HTTPS for remote connections"
+                )
                 return
             netloc = parsed.netloc or parsed.path
             url = f"{scheme}://{netloc}/api/traces/remote"
@@ -1239,9 +1247,15 @@ class GuardedAgent:
             ) or os.environ.get("AI_GUARDIAN_AUTH_TOKEN")
             if auth_token:
                 req.add_header("Authorization", f"Bearer {auth_token}")
-            urlopen(req, timeout=5)
+            with open_daemon_request(req, timeout=5, tls=_remote_tls_options()):
+                pass  # intentionally silent — response body is not needed
         except Exception as exc:
-            logger.debug("Failed to push trace to remote endpoint: %s", exc)
+            from ai_guardian.daemon.rest_transport import DaemonConnectionError
+
+            if isinstance(exc, DaemonConnectionError):
+                logger.warning("%s", exc)
+                return
+            logger.debug("Failed to push trace to remote endpoint")
 
     @classmethod
     def _sanitize_trace(

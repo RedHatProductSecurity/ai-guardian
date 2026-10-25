@@ -1123,6 +1123,18 @@
     "idle_timeout_minutes": 0,
     "client_timeout_seconds": 2.0,
     "rest_port": 63152,
+    "rest_tls": {
+      "_comment": "Optional HTTPS; never changes rest_host or replaces daemon-token authentication. Provision certificates and explicit client trust before enabling. Invalid TLS prevents REST startup; restart required after certificate or listener changes. See docs/MULTI_DAEMON_TRAY.md.",
+      "enabled": false,
+      "cert_file": "",
+      "key_file": "",
+      "client": {
+        "_comment": "Local REST client trust. Empty ca_file uses system CAs; use an independently verified CA bundle or self-signed server certificate for private deployments. server_name is the expected SAN identity, not necessarily the TCP host. An optional SHA-256 leaf pin supplements, never replaces, CA/expiry/hostname validation. Never auto-replace a pin.",
+        "ca_file": "",
+        "server_name": "",
+        "certificate_sha256": ""
+      }
+    },
     "tray": {
       "enabled": true,
       "auto_install": true,

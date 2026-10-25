@@ -101,6 +101,30 @@
 
 ## Key Learnings
 
+- **Daemon REST TLS foundation (#2551; prerequisite for #2552):** Reuse
+  `daemon/rest_transport.py`: `TLSOptions` carries `ca_file`, `server_name` and
+  an optional additional `certificate_sha256` leaf pin. The URL is only the TCP
+  address; TLS SNI/SAN verification uses the explicit identity. CA, validity and
+  hostname checks remain mandatory even with a pin. Compare pins in the actual
+  connection's `connect()` before HTTP headers/body, not in a separate preflight
+  connection. Never learn trust from discovery, follow redirects, or use proxy
+  transports. TLS failures are terminal for trace transport selection as well.
+  `daemon.rest_tls` configures the listener; its `client` subobject is explicit
+  local REST trust. Manual targets carry their own `tls` object. PID metadata
+  adds only `rest_scheme`; missing means legacy HTTP, never a discovered trust
+  anchor. Listener/certificate reload requires restart; clients load trust anew.
+- **TLS/config test boundaries (#2551):** The daemon schema is under
+  `schema["definitions"]["daemon"]`, not the root properties reference. Mock
+  daemon states need `get_pause_status()` returning JSON data. Own explicit SSL
+  context attributes in HTTPS subclasses: the stdlib private `_context` field
+  is absent from type stubs. NiceGUI cards are not disableable containers; disable
+  individual controls, with a backend scope guard. Token reuse/empty-file fixtures
+  must create owner-only files. Host-resolution tests must stub token provisioning:
+  patching `os.path.exists` globally also changes `Path.exists` on Python 3.14,
+  otherwise falsely claiming a missing token exists. Do not weaken material
+  checks to accommodate these mocks. New token files use exclusive 0600 temporary
+  creation and atomic replacement, and preserve pre-existing collision files.
+
 - **Windows setup launch parity (#2568 / PR #2577):** `_resolve_binary_path()`
   returns a `pythonw.exe -m ai_guardian` string on Windows, not necessarily the
   console executable. JSON/TOML MCP writers store that string as `command`, and

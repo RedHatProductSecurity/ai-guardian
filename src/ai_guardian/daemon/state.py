@@ -1655,6 +1655,7 @@ class DaemonState:
             "daemon/path_env.py",
             "daemon/protocol.py",
             "daemon/rest_api.py",
+            "daemon/rest_transport.py",
             "daemon/server.py",
             "daemon/state.py",
             "daemon/trace_sync.py",

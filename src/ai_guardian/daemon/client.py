@@ -18,6 +18,11 @@ from typing import Optional, Tuple
 from urllib.parse import urlparse
 
 from ai_guardian.daemon import get_pid_path, get_socket_path, is_pid_alive
+from ai_guardian.daemon.rest_transport import (
+    DaemonConnectionError,
+    TLSOptions,
+    open_daemon_request,
+)
 from ai_guardian.daemon.protocol import (
     decode_message,
     encode_message,
@@ -60,14 +65,13 @@ def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
         parsed = urlparse(url)
         host = parsed.hostname or "127.0.0.1"
         port = parsed.port
-    except ValueError as exc:
-        logger.warning("Invalid daemon URL: %s (%s)", url, exc)
+    except ValueError:
+        logger.warning("Invalid daemon URL; check the endpoint and port")
         return None
 
     if parsed.scheme not in ("http", "https"):
         logger.warning(
-            "Unsupported daemon URL scheme: %s (use http:// locally or https:// remotely)",
-            parsed.scheme,
+            "Unsupported daemon URL scheme; use http:// locally or https:// remotely"
         )
         return None
 
@@ -77,7 +81,7 @@ def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
         is_loopback = host.lower() in {"localhost", "localhost.localdomain"}
     if parsed.scheme == "http" and not is_loopback:
         logger.warning(
-            "Refusing insecure HTTP daemon URL for non-loopback host: %s", host
+            "Refusing insecure HTTP daemon URL for non-loopback host; configure HTTPS"
         )
         return None
     from ai_guardian.daemon import DEFAULT_REST_PORT
@@ -109,10 +113,11 @@ def _send_remote(path, data, timeout=5.0):
         return None
 
     scheme, host, port, auth_token = remote
-    url = f"{scheme}://{host}:{port}{path}"
+    address = f"[{host}]" if ":" in host else host
+    url = f"{scheme}://{address}:{port}{path}"
 
     try:
-        from urllib.request import Request, urlopen
+        from urllib.request import Request
 
         payload = json.dumps(data).encode("utf-8")
         req = Request(url, data=payload, method="POST")
@@ -120,11 +125,26 @@ def _send_remote(path, data, timeout=5.0):
         if auth_token:
             req.add_header("Authorization", f"Bearer {auth_token}")
 
-        with urlopen(req, timeout=timeout) as resp:
+        with open_daemon_request(
+            req, timeout=timeout, tls=_remote_tls_options()
+        ) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-        logger.debug("Remote daemon request to %s failed: %s", path, e)
+    except DaemonConnectionError as exc:
+        logger.warning("%s", exc)
         return None
+    except Exception:
+        logger.debug("Remote daemon request failed")
+        return None
+
+
+def _remote_tls_options() -> TLSOptions:
+    return TLSOptions.from_config(
+        {
+            "ca_file": os.environ.get("AI_GUARDIAN_DAEMON_CA_FILE", ""),
+            "server_name": os.environ.get("AI_GUARDIAN_DAEMON_SERVER_NAME", ""),
+            "certificate_sha256": os.environ.get("AI_GUARDIAN_DAEMON_CERT_SHA256", ""),
+        }
+    )
 
 
 def _is_daemon_running_remote():
@@ -138,15 +158,19 @@ def _is_daemon_running_remote():
         return False
 
     scheme, host, port, _token = remote
-    url = f"{scheme}://{host}:{port}/api/health"
+    address = f"[{host}]" if ":" in host else host
+    url = f"{scheme}://{address}:{port}/api/health"
 
     try:
-        from urllib.request import Request, urlopen
+        from urllib.request import Request
 
         req = Request(url, method="GET")
-        with urlopen(req, timeout=2.0) as resp:
+        with open_daemon_request(req, timeout=2.0, tls=_remote_tls_options()) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             return data.get("status") == "ok"
+    except DaemonConnectionError as exc:
+        logger.warning("%s", exc)
+        return False
     except Exception:
         return False
 

@@ -2434,6 +2434,27 @@
           "default": "127.0.0.1",
           "description": "REST API bind address. Default 127.0.0.1 (localhost only). Auto-detects Docker/Podman/Kubernetes containers and defaults to 0.0.0.0. Can also be set via AI_GUARDIAN_REST_HOST env var. Resolution order: config > env var > container detection > 127.0.0.1."
         },
+        "rest_tls": {
+          "type": "object",
+          "description": "Opt-in native HTTPS. Does not change the bind address or replace daemon authentication. Certificate and listener changes require a daemon restart; reload leaves the live listener unchanged.",
+          "properties": {
+            "enabled": {"type": "boolean", "default": false, "description": "Serve HTTPS instead of HTTP. Invalid TLS configuration prevents REST startup; never falls back to plaintext."},
+            "cert_file": {"type": "string", "default": "", "description": "PEM leaf certificate followed by intermediate certificates. Must be currently valid and match key_file."},
+            "key_file": {"type": "string", "default": "", "description": "Unencrypted PEM private key, accessible only to the daemon account (0600 on POSIX; restricted ACL on Windows). Never put key contents in configuration."},
+            "client": {
+              "type": "object",
+              "description": "Explicit trust for local REST callers connecting to this daemon over loopback. Provision trust independently; never copy trust from discovery. Manual remote targets use their own tls object in tray-targets.json.",
+              "properties": {
+                "ca_file": {"type": "string", "default": "", "description": "Independently verified PEM CA bundle (or verified self-signed server certificate). Empty uses system trust. Must not be writable by other users."},
+                "server_name": {"type": "string", "default": "", "description": "Expected certificate SAN identity and TLS SNI, independent of the TCP address. Empty verifies the connection hostname/IP."},
+                "certificate_sha256": {"type": "string", "default": "", "pattern": "^(?:[0-9a-fA-F]{64}|(?:[0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2})?$", "description": "Optional independently verified SHA-256 leaf-certificate fingerprint, additional to CA/expiry/hostname verification. Never automatically replaced on renewal."}
+              },
+              "additionalProperties": false
+            }
+          },
+          "allOf": [{"if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]}, "then": {"required": ["cert_file", "key_file"], "properties": {"cert_file": {"minLength": 1}, "key_file": {"minLength": 1}}}}],
+          "additionalProperties": false
+        },
         "tray": {
           "type": "object",
           "description": "System tray icon settings. Disable on headless servers without a display.",

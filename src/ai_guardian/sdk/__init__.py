@@ -345,21 +345,17 @@ class _DirectSession(GuardSession):
             if not rest_port:
                 return
 
-            from urllib.request import Request, urlopen
+            from ai_guardian.daemon.rest_transport import local_daemon_request
 
-            payload = _json.dumps({"project_dir": cwd}).encode("utf-8")
-            req = Request(
-                f"http://127.0.0.1:{rest_port}/api/register-project",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            auth_token = pid_info.get("auth_token")
-            if auth_token:
-                req.add_header("Authorization", f"Bearer {auth_token}")
-            urlopen(req, timeout=2)
+            with local_daemon_request(
+                "/api/register-project",
+                data={"project_dir": cwd},
+                timeout=2,
+                pid_info=pid_info,
+            ):
+                pass  # intentionally silent — registration only needs acknowledgement
         except Exception:
-            logger.debug("Failed to register project with daemon", exc_info=True)
+            logger.debug("Failed to register project with daemon")
 
     def _log_scan_results(
         self,

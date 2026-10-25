@@ -443,6 +443,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install .
 
+      - name: Verify native daemon HTTPS and explicit trust contracts
+        run: |
+          pip install pytest
+          python -m pytest tests/unit/test_daemon_tls.py tests/unit/test_daemon_tls_config.py tests/ux/test_user_experience_contract_daemon_tls.py -q
+
       - name: Create config
         run: |
           export XDG_CONFIG_HOME=$(mktemp -d)

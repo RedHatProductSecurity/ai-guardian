@@ -1446,7 +1446,12 @@ class TestRestApiHostResolution:
             def start(self):
                 return captured["port"]
 
-        with mock.patch("ai_guardian.daemon.rest_api.DaemonRestAPI", FakeAPI):
+        with (
+            mock.patch("ai_guardian.daemon.rest_api.DaemonRestAPI", FakeAPI),
+            mock.patch.object(
+                server, "_ensure_auth_token", return_value="unit-only-token"
+            ),
+        ):
             server._start_rest_api()
         return captured.get("host")
 

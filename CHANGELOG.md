@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Native daemon REST HTTPS and explicit trust (#2551):** Opt-in TLS 1.2+ listener,
+  CA/SAN/validity verification, separate TCP address and expected TLS identity,
+  and optional independently provisioned SHA-256 leaf pins checked before HTTP
+  credentials are sent. Keeps HTTP defaults, bind addresses, tokens, REST fields
+  and SDK APIs; rejects invalid TLS without plaintext fallback or downgrade.
+  Shared local/remote REST clients refuse redirects and environment proxies.
+  Includes global Web Console controls, private-VM provisioning/pairing and
+  restart/renewal guidance, unit/UX contracts and release-readiness coverage.
+  Adds **cryptography >=43.0.0** for certificate lifecycle validation (dual
+  Apache-2.0/BSD-3-Clause license verified upstream).
 - **Standalone orphaned-integration recovery (#2568):** Shared package-independent
   Python 3.11+ cleanup for Bash and native PowerShell, with explicit user/project
   scopes, preview, unique backups with documented access controls, ownership checks,

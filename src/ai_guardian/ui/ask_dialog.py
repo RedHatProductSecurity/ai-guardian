@@ -303,7 +303,7 @@ def _show_via_daemon(
     Returns None if the daemon is not running or the request fails.
     """
     import json
-    from urllib.request import Request, urlopen
+    from ai_guardian.daemon.rest_transport import local_daemon_request
     from urllib.error import URLError
 
     try:
@@ -326,41 +326,33 @@ def _show_via_daemon(
     except (json.JSONDecodeError, OSError, ValueError):
         return None
 
-    body = json.dumps(
-        {
-            "mode": "ask",
-            "violation": {
-                "violation_type": violation.violation_type,
-                "summary": violation.summary,
-                "matched_text": violation.matched_text,
-                "config_section": violation.config_section,
-                "error_message": violation.error_message,
-                "matched_pattern": violation.matched_pattern,
-                "file_path": violation.file_path,
-                "line_number": violation.line_number,
-                "start_column": violation.start_column,
-                "project_path": violation.project_path,
-                "session_id": violation.session_id,
-                "tool_name": violation.tool_name,
-                "hook_event": violation.hook_event,
-                "finding_index": violation.finding_index,
-                "total_findings": violation.total_findings,
-            },
-            "fallback": fallback_action,
-            "timeout": timeout_seconds,
-        }
-    ).encode("utf-8")
-
-    url = f"http://127.0.0.1:{rest_port}/api/prompt"
-    req = Request(url, data=body, method="POST")
-    req.add_header("Content-Type", "application/json")
-
-    auth_token = pid_info.get("auth_token")
-    if auth_token:
-        req.add_header("Authorization", f"Bearer {auth_token}")
+    body = {
+        "mode": "ask",
+        "violation": {
+            "violation_type": violation.violation_type,
+            "summary": violation.summary,
+            "matched_text": violation.matched_text,
+            "config_section": violation.config_section,
+            "error_message": violation.error_message,
+            "matched_pattern": violation.matched_pattern,
+            "file_path": violation.file_path,
+            "line_number": violation.line_number,
+            "start_column": violation.start_column,
+            "project_path": violation.project_path,
+            "session_id": violation.session_id,
+            "tool_name": violation.tool_name,
+            "hook_event": violation.hook_event,
+            "finding_index": violation.finding_index,
+            "total_findings": violation.total_findings,
+        },
+        "fallback": fallback_action,
+        "timeout": timeout_seconds,
+    }
 
     try:
-        with urlopen(req, timeout=timeout_seconds + 10) as resp:
+        with local_daemon_request(
+            "/api/prompt", data=body, timeout=timeout_seconds + 10, pid_info=pid_info
+        ) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         decision_str = data.get("decision", "block")
         try:
@@ -377,8 +369,8 @@ def _show_via_daemon(
             ignore_scanner_types=data.get("ignore_scanner_types"),
             config_path=data.get("config_path"),
         )
-    except (URLError, OSError, json.JSONDecodeError, ValueError) as e:
-        logger.debug("Daemon prompt request failed: %s", e)
+    except (URLError, OSError, json.JSONDecodeError, ValueError):
+        logger.debug("Daemon prompt request failed")
         return None
 
 

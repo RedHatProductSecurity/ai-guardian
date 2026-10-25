@@ -211,6 +211,7 @@ class DaemonTarget:
     last_seen: float = 0.0
     error_message: Optional[str] = None
     working_dir: Optional[str] = None
+    tls: Optional[dict] = dc_field(default_factory=dict, repr=False)
 
 
 class DaemonDiscovery:
@@ -327,13 +328,31 @@ class DaemonDiscovery:
             return None
 
         name = "local"
+        config_data = {}
         try:
             config_data = json.loads(config_path.read_text(encoding="utf-8"))
-            cfg_name = config_data.get("daemon", {}).get("name")
+            if not isinstance(config_data, dict):
+                raise ValueError("Invalid local configuration object")
+            daemon_settings = config_data.get("daemon", {})
+            cfg_name = (
+                daemon_settings.get("name")
+                if isinstance(daemon_settings, dict)
+                else None
+            )
             if cfg_name:
                 name = cfg_name
-        except (json.JSONDecodeError, OSError) as e:
-            logger.debug("Failed to read config: %s", e)
+        except (ValueError, OSError):
+            config_data = {}
+            logger.warning(
+                "Could not read local daemon configuration; explicit TLS trust may be unavailable"
+            )
+
+        daemon_settings = config_data.get("daemon", {})
+        configured_token = (
+            daemon_settings.get("auth_token")
+            if isinstance(daemon_settings, dict)
+            else None
+        )
 
         local_auth_token = None
         try:
@@ -352,7 +371,7 @@ class DaemonDiscovery:
             runtime="local",
             socket_path=str(get_socket_path()),
             config_exists=True,
-            auth_token=local_auth_token,
+            auth_token=configured_token or local_auth_token,
         )
 
         local_pid = 0
@@ -363,6 +382,18 @@ class DaemonDiscovery:
                 rest_port = pid_info.get("rest_port", 0)
                 if rest_port:
                     target.port = rest_port
+                    if pid_info.get("rest_scheme", "http") == "https":
+                        target.url = f"https://127.0.0.1:{rest_port}"
+                        tls_settings = (
+                            daemon_settings.get("rest_tls")
+                            if isinstance(daemon_settings, dict)
+                            else None
+                        )
+                        target.tls = (
+                            tls_settings.get("client", {})
+                            if isinstance(tls_settings, dict)
+                            else None
+                        )
 
                 pid_name = pid_info.get("name")
                 if pid_name:
@@ -383,7 +414,14 @@ class DaemonDiscovery:
         if is_daemon_running():
             paused = False
             if target.port:
-                api_data = self._probe_daemon(target.port)
+                if target.url and target.url.startswith("https://"):
+                    from ai_guardian.daemon.multi_client import MultiDaemonClient
+
+                    api_data = MultiDaemonClient._rest_request(
+                        target, "GET", "/api/health"
+                    )
+                else:
+                    api_data = self._probe_daemon(target.port)
                 if api_data is not None:
                     paused = api_data.get("paused", False)
                 else:
@@ -1175,7 +1213,14 @@ class DaemonDiscovery:
                 except ValueError:
                     pass  # intentionally silent — daemon comm best-effort
             health_url = health_url or f"http://{host}:{port}/api/health"
-            with urlopen(health_url, timeout=timeout) as resp:
+            if health_url.startswith("https://"):
+                from urllib.request import Request
+                from ai_guardian.daemon.rest_transport import open_daemon_request
+
+                response = open_daemon_request(Request(health_url), timeout=timeout)
+            else:
+                response = urlopen(health_url, timeout=timeout)
+            with response as resp:
                 return json_mod.loads(resp.read().decode("utf-8"))
         except Exception:
             return None
@@ -1570,11 +1615,52 @@ class DaemonDiscovery:
         if not targets_path.exists():
             return []
 
+        from ai_guardian.daemon.rest_transport import _material_file
+
+        storage_error = "Daemon target trust file has unsafe ownership or permissions; restrict it to the owning account before connecting."
         try:
+            _material_file(str(targets_path))
             data = json.loads(targets_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
             logger.debug("Failed to load tray targets: %s", e)
             return []
+        except ValueError:
+            logger.warning("%s", storage_error)
+            return [
+                DaemonTarget(
+                    name="manual",
+                    runtime="manual",
+                    status="error",
+                    error_message=storage_error,
+                )
+            ]
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("daemons", []), list)
+            or not all(isinstance(entry, dict) for entry in data.get("daemons", []))
+        ):
+            logger.warning(
+                "Invalid daemon target configuration; expected a daemons list"
+            )
+            return []
+
+        # Trust and token provisioning is an operator action, not discovery.
+        # Never use credentials or pins from a file another user can substitute.
+        try:
+            _material_file(
+                str(targets_path),
+                private=any(entry.get("token") for entry in data.get("daemons", [])),
+            )
+        except (OSError, ValueError):
+            logger.warning("%s", storage_error)
+            return [
+                DaemonTarget(
+                    name="manual",
+                    runtime="manual",
+                    status="error",
+                    error_message=storage_error,
+                )
+            ]
 
         targets = []
         for entry in data.get("daemons", []):
@@ -1587,9 +1673,20 @@ class DaemonDiscovery:
             if url:
                 from urllib.parse import urlparse
 
-                parsed = urlparse(url)
-                host = parsed.hostname or host
-                port = parsed.port or 0
+                try:
+                    parsed = urlparse(url)
+                    host = parsed.hostname or host
+                    port = parsed.port or 0
+                except (ValueError, TypeError, AttributeError):
+                    targets.append(
+                        DaemonTarget(
+                            name=name,
+                            runtime="manual",
+                            status="error",
+                            error_message="Invalid daemon REST URL; check the configured endpoint.",
+                        )
+                    )
+                    continue
 
             target = DaemonTarget(
                 name=name,
@@ -1599,6 +1696,7 @@ class DaemonDiscovery:
                 port=port,
                 url=url,
                 auth_token=token,
+                tls=entry.get("tls", {}),
             )
             targets.append(target)
 

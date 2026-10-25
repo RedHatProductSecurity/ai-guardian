@@ -609,6 +609,7 @@ class TestGetPackageMaxMtime:
             ("__init__.py", True),
             ("hook_context.py", True),
             ("daemon/server.py", True),
+            ("daemon/rest_transport.py", True),
             ("daemon/client.py", False),
             ("daemon/discovery.py", False),
             ("daemon/auto_setup.py", False),
