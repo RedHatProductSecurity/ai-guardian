@@ -150,7 +150,7 @@ class TestHealthCheckRouting:
 
 
 class TestRestTransportSecurity:
-    @mock.patch("ai_guardian.daemon.multi_client.urlopen")
+    @mock.patch("ai_guardian.daemon.multi_client.open_daemon_request")
     def test_rejects_http_for_non_loopback_target(self, mock_urlopen):
         client = MultiDaemonClient()
         target = DaemonTarget(
@@ -160,7 +160,7 @@ class TestRestTransportSecurity:
         mock_urlopen.assert_not_called()
 
     @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=True)
-    @mock.patch("ai_guardian.daemon.multi_client.urlopen")
+    @mock.patch("ai_guardian.daemon.multi_client.open_daemon_request")
     def test_allows_http_for_loopback_target(self, mock_urlopen, mock_reachable):
         mock_urlopen.return_value.__enter__.return_value.read.return_value = b"{}"
         client = MultiDaemonClient()
@@ -170,7 +170,7 @@ class TestRestTransportSecurity:
         assert client._rest_request(target, "GET", "/api/status") == {}
         assert mock_urlopen.call_args[0][0].full_url.startswith("http://127.0.0.1")
 
-    @mock.patch("ai_guardian.daemon.multi_client.build_opener")
+    @mock.patch("ai_guardian.daemon.rest_transport.build_opener")
     @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=True)
     def test_openshell_service_bypasses_host_proxy(self, mock_reachable, build_opener):
         response = build_opener.return_value.open.return_value
@@ -543,7 +543,7 @@ class TestKubernetesRouting:
 
 class TestRestRequest:
     @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=True)
-    @mock.patch("ai_guardian.daemon.multi_client.urlopen")
+    @mock.patch("ai_guardian.daemon.multi_client.open_daemon_request")
     def test_successful_get(self, mock_urlopen, _mock_tcp):
         response_data = {"request_count": 100}
         mock_resp = mock.MagicMock()
@@ -564,7 +564,7 @@ class TestRestRequest:
         assert result is None
 
     @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=True)
-    @mock.patch("ai_guardian.daemon.multi_client.urlopen")
+    @mock.patch("ai_guardian.daemon.multi_client.open_daemon_request")
     def test_auth_token_in_url_target(self, mock_urlopen, _mock_tcp):
         mock_resp = mock.MagicMock()
         mock_resp.read.return_value = b"{}"
@@ -624,7 +624,7 @@ class TestRestRequestReachabilityCheck:
     """Tests for REST request socket pre-check (issue #711)."""
 
     @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=False)
-    @mock.patch("ai_guardian.daemon.multi_client.urlopen")
+    @mock.patch("ai_guardian.daemon.multi_client.open_daemon_request")
     def test_skips_request_on_unreachable_host(self, mock_urlopen, mock_reachable):
         target = DaemonTarget(
             name="remote",
@@ -637,7 +637,7 @@ class TestRestRequestReachabilityCheck:
         mock_urlopen.assert_not_called()
 
     @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=True)
-    @mock.patch("ai_guardian.daemon.multi_client.urlopen")
+    @mock.patch("ai_guardian.daemon.multi_client.open_daemon_request")
     def test_proceeds_on_reachable_host(self, mock_urlopen, mock_reachable):
         mock_resp = mock.MagicMock()
         mock_resp.read.return_value = b'{"status": "running"}'

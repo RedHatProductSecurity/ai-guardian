@@ -3,7 +3,7 @@ Lightweight REST API for daemon tray-to-daemon communication.
 
 Provides HTTP endpoints for status queries and control actions,
 enabling cross-network communication with container and remote daemons.
-Uses only stdlib http.server — no additional dependencies.
+Uses stdlib http.server and optional native TLS.
 """
 
 import json
@@ -11,10 +11,14 @@ import logging
 import math
 import os
 import socketserver
+import ssl
+import sys
 import threading
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any, Optional
+
+from ai_guardian.daemon.rest_transport import create_server_context
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,17 @@ class _ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
     instance_name: Optional[str]
     auth_token: Optional[str]
 
+    def get_request(self):
+        connection, address = super().get_request()
+        connection.settimeout(5.0)
+        return connection, address
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (ssl.SSLError, ConnectionError, TimeoutError)):
+            logger.debug("REST connection closed during transport processing")
+            return
+        super().handle_error(request, client_address)
+
 
 class _RestHandler(BaseHTTPRequestHandler):
     """HTTP request handler for daemon REST API."""
@@ -50,7 +65,8 @@ class _RestHandler(BaseHTTPRequestHandler):
     server: _ThreadedHTTPServer
 
     def log_message(self, format, *args):
-        logger.debug(format, *args)
+        # HTTP request lines and parser errors can echo caller-supplied tokens.
+        logger.debug("Daemon REST request processed")
 
     def do_GET(self):
         if self.path == "/api/health":
@@ -1845,7 +1861,9 @@ class _RestHandler(BaseHTTPRequestHandler):
 class DaemonRestAPI:
     """Minimal REST API for tray-to-daemon communication."""
 
-    def __init__(self, state, host="127.0.0.1", port=0, name=None, auth_token=None):
+    def __init__(
+        self, state, host="127.0.0.1", port=0, name=None, auth_token=None, tls=None
+    ):
         """Initialize REST API server.
 
         Args:
@@ -1854,19 +1872,34 @@ class DaemonRestAPI:
             port: Port to bind (0 for OS-assigned)
             name: Human-friendly name for this daemon
             auth_token: Optional bearer token for POST endpoint authentication
+            tls: Optional daemon.rest_tls configuration; HTTP when omitted
         """
         self._state = state
         self._host = host
         self._port = port
         self._name = name
         self._auth_token = auth_token
+        self._tls = {} if tls is None else tls
+        self.scheme = "http"
         self._server = None
         self._thread = None
 
     def start(self) -> int:
         """Start HTTP server in background thread. Returns bound port."""
 
-        self._server = _ThreadedHTTPServer((self._host, self._port), _RestHandler)
+        context = create_server_context(self._tls)
+        self.scheme = "https" if context is not None else "http"
+        server = _ThreadedHTTPServer((self._host, self._port), _RestHandler)
+        try:
+            if context is not None:
+                # Deferred handshakes run in request workers, not the accept loop.
+                server.socket = context.wrap_socket(
+                    server.socket, server_side=True, do_handshake_on_connect=False
+                )
+        except (OSError, ValueError):
+            server.server_close()
+            raise
+        self._server = server
         self._server.daemon_state = self._state
         self._server.instance_name = self._name
         self._server.auth_token = self._auth_token
@@ -1879,13 +1912,16 @@ class DaemonRestAPI:
         )
         self._thread.start()
 
-        logger.info("REST API listening on %s:%d", self._host, actual_port)
+        logger.info(
+            "REST API listening via %s on %s:%d", self.scheme, self._host, actual_port
+        )
         return actual_port
 
     def stop(self):
         """Stop HTTP server."""
         if self._server:
             self._server.shutdown()
+            self._server.server_close()
             self._server = None
         if self._thread:
             self._thread.join(timeout=3)

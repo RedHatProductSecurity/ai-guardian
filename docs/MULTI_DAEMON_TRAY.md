@@ -318,6 +318,164 @@ Use `--no-discover` to skip auto-discovery and only load manual targets:
 ai-guardian tray start --no-discover
 ```
 
+### Native HTTPS and explicit certificate trust
+
+Native HTTPS is opt-in (`daemon.rest_tls`, available in 1.21). Existing localhost
+HTTP configurations need no changes. TLS does **not** change `rest_host`, publish
+ports, open a firewall, enable mTLS, or replace the daemon's bearer token. Container
+bind-address defaults also remain unchanged. Set an explicit loopback bind address
+when the daemon must only be reachable through an administrative tunnel.
+
+```json
+{
+  "daemon": {
+    "rest_host": "127.0.0.1",
+    "rest_port": 63152,
+    "rest_tls": {
+      "enabled": true,
+      "cert_file": "/private/guardian/server-chain.pem",
+      "key_file": "/private/guardian/server-key.pem",
+      "client": {
+        "ca_file": "/private/guardian/trusted-ca.pem",
+        "server_name": "daemon.vm.internal",
+        "certificate_sha256": ""
+      }
+    }
+  }
+}
+```
+
+The certificate file starts with the server leaf, followed by intermediates. The
+key must be an unencrypted matching PEM key: unattended startup never prompts for
+a password. Use a certificate with an appropriate DNS/IP **subject alternative
+name** (SAN) and server-auth usage; a Common Name alone is not sufficient.
+`client` configures local REST callers (SDK project registration, ask requests,
+trace submission and Console health checks), not the server's client-auth policy.
+These callers connect to loopback but verify `server_name`, not `127.0.0.1`.
+For public/enterprise CA certificates, an empty `ca_file` uses system trust.
+
+Manual remote targets have their own explicitly provisioned trust:
+
+```json
+{
+  "daemons": [{
+    "name": "private-vm",
+    "url": "https://127.0.0.1:64443",
+    "token": "provision-the-existing-daemon-token-privately",
+    "tls": {
+      "ca_file": "/private/trusted-vm-ca.pem",
+      "server_name": "daemon.vm.internal",
+      "certificate_sha256": ""
+    }
+  }]
+}
+```
+
+The URL is the TCP connection address; `server_name` supplies both SNI and the
+expected certificate identity. This supports a future SSH-managed tunnel without
+requiring a localhost certificate. The same target can use a direct HTTPS address
+with the same trusted identity. Empty `server_name` verifies the URL hostname/IP.
+The optional `certificate_sha256` is the independently verified SHA-256 **leaf
+certificate** fingerprint (64 hex digits, with optional colons). It is an extra
+constraint: CA trust, validity, hostname and server-auth verification still apply.
+Discovery cannot approve trust, enroll certificates or replace an existing pin.
+
+#### Private VM provisioning and pairing (no public inbound REST)
+
+Use an existing organizational PKI where available. Otherwise, issue a server
+certificate from a private CA maintained by the administrator. Example OpenSSL
+commands, run by the operator, not an agent:
+
+1. On the VM, create a private directory and a server key/CSR. The identity need
+   not resolve in public DNS:
+   ```bash
+   umask 077
+   mkdir -p "$HOME/.config/ai-guardian/tls"
+   cd "$HOME/.config/ai-guardian/tls"
+   openssl req -new -newkey rsa:3072 -noenc -keyout server-key.pem -out server.csr -subj /CN=daemon.vm.internal
+   ```
+2. Send the CSR over an independently authenticated administrative channel to
+   the private-CA administrator. Keep the CA private key off the VM and clients.
+   On the administrator's offline workstation, if no CA exists:
+   ```bash
+   umask 077
+   openssl req -x509 -newkey rsa:3072 -noenc -keyout ca-key.pem -out ca.pem -days 365 -subj /CN=Guardian-private-CA -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign
+   ```
+   Create `server.ext` containing:
+   ```ini
+   basicConstraints=critical,CA:FALSE
+   keyUsage=critical,digitalSignature,keyEncipherment
+   extendedKeyUsage=serverAuth
+   subjectAltName=DNS:daemon.vm.internal
+   subjectKeyIdentifier=hash
+   authorityKeyIdentifier=keyid,issuer
+   ```
+   Issue the certificate and return only the server certificate and public CA:
+   ```bash
+   openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-chain.pem -days 90 -sha256 -extfile server.ext
+   ```
+3. **Before saving trust**, compare the CA's SHA-256 fingerprint using a trusted
+   console or SSH session with an already independently verified SSH host key,
+   not an unauthenticated REST connection or discovery result:
+   ```bash
+   openssl x509 -in ca.pem -noout -fingerprint -sha256
+   openssl x509 -in server-chain.pem -noout -fingerprint -sha256
+   ```
+   Provision the verified CA on the VM (for local REST callers) and tray/client
+   host. Optionally record the separately verified server fingerprint as the
+   additional leaf pin. An independently verified self-signed server certificate
+   can instead be the dedicated `ca_file`; never trust one just because it was
+   discovered. Copy no private keys to clients.
+4. Configure the VM as above with its own absolute paths, explicit loopback
+   `rest_host`, and matching local `client` trust. Keep private keys and the
+   token-bearing `tray-targets.json` owner-only (`0600`, private parent directory
+   on POSIX). Trust/certificate files must not be writable by other users; runtime
+   checks reject unsafe POSIX file ownership/modes. On Windows, administrators
+   must restrict file and parent-directory ACLs to the owning account (and needed
+   system administrators); POSIX mode checks are not an ACL validator.
+5. Restart the daemon through the ordinary operator workflow. No public inbound
+   REST port is necessary. For a manual connectivity check, the operator may use
+   an already verified SSH connection:
+   ```bash
+   ssh -N -L 127.0.0.1:64443:127.0.0.1:63152 vm
+   ```
+   Provision the existing daemon token privately and configure the manual target
+   above. Refresh/restart the tray to reload target trust. SSH enrollment, key
+   management and automatic tunnel lifecycle are **not** implemented by this phase.
+
+#### Validation failures, renewal and restart
+
+TLS 1.2 or newer and certificate verification are mandatory. Verification and any
+pin comparison complete on the actual request connection **before** HTTP headers,
+tokens or request bodies are transmitted. Daemon REST requests ignore environment
+proxies and refuse redirects (including HTTPS-to-HTTP), so credentials are not
+forwarded to another destination. HTTPS failures never retry over HTTP.
+
+Invalid, missing, expired, not-yet-valid or mismatched server material prevents
+REST startup; it never creates a plaintext listener. The local IPC daemon can
+remain available, but REST-dependent features report an unavailable listener.
+Startup warns for a leaf expiring within 30 days. Validity is checked at startup;
+clients revalidate the live certificate on every new request, including after it
+expires. Errors distinguish CA validation, identity/validity and changed-pin
+failures, without including tokens, key contents or raw crypto/parser errors.
+
+Certificate files are loaded at startup. Config reload does **not** change the
+live listener, certificate or transport; explicit daemon restart is required.
+Renew ahead of expiry, install the matching certificate/key securely, and restart.
+For CA rotation, independently verify the replacement CA before updating trust;
+an overlap bundle can ease planned rotation. If pinning, independently verify the
+new leaf fingerprint and explicitly update each saved pin, then refresh the tray.
+Changed pins fail closed; no observed certificate can silently replace them.
+Replacing files without restart leaves the original certificate in service.
+
+Hook/SDK remote-daemon clients use `AI_GUARDIAN_DAEMON_URL` and the existing
+`AI_GUARDIAN_AUTH_TOKEN`, plus optional `AI_GUARDIAN_DAEMON_CA_FILE`,
+`AI_GUARDIAN_DAEMON_SERVER_NAME` and `AI_GUARDIAN_DAEMON_CERT_SHA256`. Remote trace
+submission uses the same three trust variables with its existing trace endpoint
+and token variables. Trust options on an HTTP URL are rejected. Prefer the token
+environment variable over embedding a token in the legacy daemon URL; do not
+paste tokens or private keys into logs, support diagnostics or chat.
+
 ## REST API
 
 Each daemon exposes a REST API for tray communication:

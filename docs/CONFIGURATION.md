@@ -52,6 +52,30 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`.
 
+### Daemon REST TLS
+
+`daemon.rest_tls` enables optional native HTTPS without changing existing bind
+addresses, localhost HTTP defaults, REST fields or daemon-token authentication.
+Configure `enabled` (default `false`), `cert_file` and `key_file`; local REST
+callers use `client.ca_file`, `client.server_name` and the optional additional
+`client.certificate_sha256` leaf pin (all empty by default). Empty CA/name use
+system trust and the connection hostname/IP. Certificate SAN/expiry/chain
+verification is always required; a pin never replaces it.
+
+These are global-only settings, exposed under **Global Settings → Daemon REST
+HTTPS**. Paths refer to the selected daemon's host, not the browser/Console host.
+The form stores paths, never key contents. Saving does not restart the listener:
+certificate/key/listener changes require an explicit daemon restart. Invalid TLS
+prevents REST startup rather than selecting HTTP. Existing local IPC remains
+independent of this listener.
+
+Manual targets store equivalent client-only `tls` trust in `tray-targets.json`.
+Remote hook/SDK clients accept `AI_GUARDIAN_DAEMON_CA_FILE`,
+`AI_GUARDIAN_DAEMON_SERVER_NAME`, and `AI_GUARDIAN_DAEMON_CERT_SHA256` alongside
+their existing URL/token settings. See [native HTTPS, private-VM provisioning,
+pairing and rotation](MULTI_DAEMON_TRAY.md#native-https-and-explicit-certificate-trust)
+for all fields, file protection, tunnel identity and certificate lifecycle.
+
 For `support`, defaults select `export_destination: "github-discussions"`
 and `github_category: "bug-reports"`; only `"q-a"` is an alternative category.
 Preparation is local and public publication requires native user-only approval.

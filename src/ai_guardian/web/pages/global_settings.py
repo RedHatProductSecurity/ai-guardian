@@ -376,6 +376,99 @@ def _set_feature_action(section, action_value):
     save_web_config(config)
 
 
+def _set_rest_tls_config(config, tls_config):
+    """Validate form structure without reading paths on the Console host.
+
+    The selected daemon validates its own certificate files at restart.
+    """
+    from ai_guardian.daemon.rest_transport import DaemonConnectionError, TLSOptions
+
+    if not isinstance(tls_config.get("enabled"), bool) or not all(
+        isinstance(tls_config.get(key), str) for key in ("cert_file", "key_file")
+    ):
+        raise DaemonConnectionError(
+            "Check the HTTPS certificate and private-key paths."
+        )
+    if tls_config["enabled"] and not all(
+        tls_config[key].strip() for key in ("cert_file", "key_file")
+    ):
+        raise DaemonConnectionError("HTTPS requires certificate and private-key paths.")
+    TLSOptions.from_config(tls_config.get("client", {}))
+    config.setdefault("daemon", {})["rest_tls"] = tls_config
+    return config
+
+
+def _create_rest_tls_settings(global_config, *, editable):
+    tls = global_config.get("daemon", {}).get("rest_tls", {})
+    client = tls.get("client", {})
+    with ui.card().classes("w-full"):
+        ui.label("Daemon REST HTTPS").classes("text-lg font-bold")
+        ui.label(
+            "Certificate and listener changes require a daemon restart. Reload does not change the live listener. "
+            "HTTPS does not change the bind address or replace daemon-token authentication."
+        ).classes("text-xs text-grey-6")
+        enabled = ui.switch("Enable native HTTPS", value=tls.get("enabled", False))
+        cert = ui.input(
+            "Certificate chain PEM path (on daemon host)",
+            value=tls.get("cert_file", ""),
+        ).classes("w-full")
+        key = ui.input(
+            "Private-key PEM path (on daemon host)", value=tls.get("key_file", "")
+        ).classes("w-full")
+        ui.label(
+            "Local REST client trust: provision an independently verified CA/certificate first. "
+            "Never paste private keys or tokens here. Remote manual targets have separate TLS trust in tray-targets.json."
+        ).classes("text-xs text-grey-6")
+        ca = ui.input(
+            "Trusted CA PEM path (empty: system trust)", value=client.get("ca_file", "")
+        ).classes("w-full")
+        name = ui.input(
+            "Expected server SAN identity / SNI", value=client.get("server_name", "")
+        ).classes("w-full")
+        pin = ui.input(
+            "Optional independently verified SHA-256 leaf pin",
+            value=client.get("certificate_sha256", ""),
+        ).classes("w-full")
+
+        async def save_tls():
+            from ai_guardian.daemon.rest_transport import DaemonConnectionError
+
+            if not editable:
+                return
+            cfg = await run.io_bound(load_web_config_global)
+            try:
+                _set_rest_tls_config(
+                    cfg,
+                    {
+                        "enabled": enabled.value,
+                        "cert_file": cert.value,
+                        "key_file": key.value,
+                        "client": {
+                            "ca_file": ca.value,
+                            "server_name": name.value,
+                            "certificate_sha256": pin.value,
+                        },
+                    },
+                )
+            except DaemonConnectionError as exc:
+                ui.notify(str(exc), type="negative")
+                return
+            saved = await run.io_bound(save_web_config, cfg, scope="global")
+            if saved:
+                ui.notify(
+                    "HTTPS settings saved; restart the daemon to apply listener and certificate changes.",
+                    type="positive",
+                )
+            else:
+                ui.notify("HTTPS settings could not be saved.", type="negative")
+
+        save = ui.button("Save HTTPS settings", on_click=save_tls)
+        if not editable:
+            for control in (enabled, cert, key, ca, name, pin, save):
+                control.disable()
+            ui.label("HTTPS settings are global-only; select Global scope to edit.")
+
+
 def create_global_settings_page(service, daemon_name: str):
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/settings")
     create_header(daemon_name, drawer=sidebar)
@@ -414,6 +507,10 @@ def create_global_settings_page(service, daemon_name: str):
                         scope_label,
                         color="green" if scope_label == "Global" else "blue",
                     ).classes("text-xs")
+
+                _create_rest_tls_settings(
+                    global_config, editable=scope_label == "Global"
+                )
 
                 # --- Configuration & CLI Protection ---
                 with ui.card().classes("w-full"):

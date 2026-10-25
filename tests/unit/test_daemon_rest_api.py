@@ -1010,6 +1010,7 @@ class TestAuthTokenGeneration:
 
         token_path = tmp_path / "daemon.token"
         token_path.write_text("existing-token-xyz")
+        token_path.chmod(0o600)
 
         with mock.patch(
             "ai_guardian.daemon.get_auth_token_path",
@@ -1024,6 +1025,7 @@ class TestAuthTokenGeneration:
 
         token_path = tmp_path / "daemon.token"
         token_path.write_text("")
+        token_path.chmod(0o600)
 
         with mock.patch(
             "ai_guardian.daemon.get_auth_token_path",

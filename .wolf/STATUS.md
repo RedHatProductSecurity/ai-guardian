@@ -9,6 +9,61 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2551 native HTTPS/trust — local implementation ready for review, 2026-10-25
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2551`, existing
+  branch `2551`. Initial worktree contained the #2552 handoff below; preserved it
+  and earlier history. No hierarchical context markdown/skills or temp-clone sync.
+- Added `daemon/rest_transport.py`: explicit CA/SAN/validity verification, TLS
+  identity separate from TCP host/port, and optional additional SHA-256 leaf pins
+  checked on the actual request connection before HTTP headers/body. No learned
+  trust, redirects, proxies or HTTPS-to-HTTP fallback. Reuse this for #2552.
+- Opt-in `daemon.rest_tls` listener leaves existing binds/HTTP defaults and token
+  auth unchanged. Startup validates current certificate chain/matching private key
+  before binding; warns within 30 days of expiry. Restart, not config reload,
+  replaces the live listener/identity. PID adds `rest_scheme`, legacy default HTTP.
+  Explicit local REST trust is `rest_tls.client`; manual targets carry `tls`.
+- Routed local SDK registration, ask prompts, traces and local HTTPS discovery
+  through verified transport. Remote hook/trace clients use the three documented
+  trust environment variables. TLS failures never select trace fallback. Tokens
+  are atomically created owner-only; unsafe material/token/trust files are rejected
+  on POSIX. Windows requires operator-managed restricted ACLs; not locally tested.
+- Synchronized schema, setup/default output, example, global-only Web controls,
+  dashboard errors, source docs/README/changelog and release-readiness TLS gate.
+  Added cryptography >=43.0.0 for certificate lifecycle checks; upstream dual
+  Apache-2.0/BSD-3-Clause license verified. No new CLI commands/endpoints/SDK APIs.
+- **Validation: 1,572 related unit/UX tests pass, no skips**, including complete
+  TLS and session-pause UX files. Transport coverage **92%** at
+  `/tmp/opencode/guardian-2551-tls.coverage`. Black py310, Ruff, Pylint E, project
+  Mypy (308 files), JSON/YAML gate checks, bug-log JSON and whitespace checks pass.
+  Reviewed simplification; recorded fixture/type/permission discoveries in memory.
+- **Next:** review and publish through the user's external DAF workflow, then CI
+  across supported Python/native platforms and actual private-VM pairing/renewal
+  using the documented independently verified administrative channel. Loopback
+  tests establish transport behavior, not live SSH/VM or native desktop validation.
+  Keep #2552 paused until this prerequisite is reviewed/merged and qualified.
+- No live configuration changes, installed daemon restart, SSH/credential
+  retrieval, full-suite/container/integration runs, commit, push or PR. OpenWolf
+  owns automatic anatomy/memory bookkeeping. Earlier handoffs remain historical.
+
+## Issue #2552 SSH-managed remote daemons — paused for prerequisite, 2026-10-25
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2552` on existing clean branch `2552`.
+  Read the qualified issue once; hierarchical context markdown/skills were absent.
+- Confirmed prerequisite #2551 is **OPEN** and missing from this checkout:
+  `daemon/rest_api.py` starts an HTTP-only listener; `DaemonTarget` has no TLS
+  trust/identity metadata; clients do not separate the remote TLS identity from
+  the TCP connection address. Existing HTTPS URL support is not that foundation.
+- **User chose a separate prerequisite session.** Pause #2552; complete and merge
+  #2551 first, then resume SSH enrollment/tunnel work against its tested TLS/trust
+  interfaces. Do not substitute plaintext or disabled certificate verification.
+- DAF blocker note saved using the explicit session name; automatic active-session
+  note lookup failed while the backend session ID was `pending-capture`.
+- No implementation changes, tests, live SSH/credential retrieval, runtime or
+  configuration changes, commits, pushes, or PRs. Only this handoff was updated;
+  OpenWolf owns automatic anatomy/memory bookkeeping. Earlier handoffs are history.
+
 ## Issue #2568 / PR #2577 third CI follow-up — 2026-10-25 UTC
 
 - User published prior fixes as `aa209b3` on branch `2568`; started clean. Latest

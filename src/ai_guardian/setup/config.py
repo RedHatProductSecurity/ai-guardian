@@ -448,6 +448,13 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
         "daemon": {
             "idle_timeout_minutes": 0,
             "client_timeout_seconds": 2.0,
+            "rest_tls": {
+                "_comment": "Optional HTTPS; preserves bind address and authentication. Provision certificates and independently verified client trust first. Restart required after changes.",
+                "enabled": False,
+                "cert_file": "",
+                "key_file": "",
+                "client": {"ca_file": "", "server_name": "", "certificate_sha256": ""},
+            },
             "tray": {
                 "enabled": True,
                 "auto_install": True,

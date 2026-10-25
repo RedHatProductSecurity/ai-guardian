@@ -6,7 +6,6 @@ Kubernetes (REST + kubectl exec), and manual (REST) targets.
 """
 
 import json
-import ipaddress
 import logging
 import os
 import platform
@@ -15,30 +14,21 @@ import shutil
 import subprocess
 import sys
 from typing import Any, Dict, List, Optional
-from urllib.request import ProxyHandler, Request, build_opener, urlopen
+from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.daemon.rest_api import REST_AUTH_HEADER
+from ai_guardian.daemon.rest_transport import (
+    DaemonConnectionError,
+    TLSOptions,
+    open_daemon_request,
+    _is_loopback_host,
+)
 
 logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 5.0
-
-
-def _is_loopback_host(host: str) -> bool:
-    """Return whether host is local or a container host-gateway alias."""
-    normalized = (host or "").lower().rstrip(".")
-    if normalized == "openshell.localhost" or normalized.endswith(
-        ".openshell.localhost"
-    ):
-        return True
-    if normalized in {"host.docker.internal", "host.containers.internal"}:
-        return True
-    try:
-        return ipaddress.ip_address(normalized).is_loopback
-    except ValueError:
-        return normalized in {"localhost", "localhost.localdomain"}
 
 
 # macOS terminals that support Terminal.app-style "do script" AppleScript.
@@ -1465,19 +1455,26 @@ class MultiDaemonClient:
         if target.url:
             base = target.url.rstrip("/")
         elif target.port:
-            base = f"http://{target.host}:{target.port}"
+            address = f"[{target.host}]" if ":" in target.host else target.host
+            base = f"http://{address}:{target.port}"
         else:
             return None
 
         from urllib.parse import urlparse
 
-        parsed = urlparse(base)
-        check_host = parsed.hostname or target.host
-        check_port = parsed.port or target.port
-        if parsed.scheme == "http" and check_host and not _is_loopback_host(check_host):
-            logger.warning(
-                "Refusing insecure HTTP request to non-loopback target %s", check_host
+        try:
+            parsed = urlparse(base)
+            check_host = parsed.hostname or target.host
+            check_port = parsed.port or target.port
+        except ValueError:
+            target.error_message = (
+                "Invalid daemon REST URL; check the configured endpoint."
             )
+            logger.warning("%s", target.error_message)
+            return None
+        if parsed.scheme == "http" and check_host and not _is_loopback_host(check_host):
+            target.error_message = "Refusing insecure HTTP request to a non-loopback daemon; configure HTTPS."
+            logger.warning("%s", target.error_message)
             return None
         if (
             check_host
@@ -1505,13 +1502,20 @@ class MultiDaemonClient:
             req.add_header(REST_AUTH_HEADER, target.auth_token)
 
         try:
-            if check_host.lower().endswith(".openshell.localhost"):
-                opener = build_opener(ProxyHandler({}))
-                response = opener.open(req, timeout=timeout)
-            else:
-                response = urlopen(req, timeout=timeout)
+            response = open_daemon_request(
+                req, timeout=timeout, tls=TLSOptions.from_config(target.tls)
+            )
             with response as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                result = json.loads(resp.read().decode("utf-8"))
+                if target.status == "error" and target.error_message:
+                    target.status = "unknown"
+                target.error_message = None
+                return result
+        except DaemonConnectionError as exc:
+            target.error_message = str(exc)
+            target.status = "error"
+            logger.warning("%s", exc)
+            return None
         except URLError as e:
             if hasattr(e, "code") and e.code == 401 and not target.auth_token:
                 logger.warning(
@@ -1521,10 +1525,12 @@ class MultiDaemonClient:
                     target.name,
                 )
             else:
-                logger.debug("REST request failed (%s %s): %s", method, url, e)
+                logger.debug("Daemon REST request failed with an HTTP error")
             return None
-        except (OSError, json.JSONDecodeError, ValueError) as e:
-            logger.debug("REST request failed (%s %s): %s", method, url, e)
+        except (OSError, json.JSONDecodeError, ValueError):
+            logger.debug(
+                "Daemon REST request failed; check endpoint and response format"
+            )
             return None
 
     # --- Container transport ---

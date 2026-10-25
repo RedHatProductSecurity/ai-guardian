@@ -77,3 +77,5 @@ def daemon_card(target, stats: dict, on_click=None):
                 ui.label(f"v{version}").classes("text-xs text-grey-7")
         else:
             ui.label("Unable to connect").classes("text-sm text-red")
+        if getattr(target, "error_message", None):
+            ui.label(target.error_message).classes("text-xs text-red whitespace-normal")

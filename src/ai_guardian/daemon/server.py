@@ -1011,6 +1011,7 @@ class DaemonServer:
             pid_info["port"] = self._tcp_port
         if self._rest_port:
             pid_info["rest_port"] = self._rest_port
+            pid_info["rest_scheme"] = getattr(self, "_rest_scheme", "http")
         if hasattr(self, "_name") and self._name:
             pid_info["name"] = self._name
         if self.state._source_mtime:
@@ -1042,11 +1043,19 @@ class DaemonServer:
             daemon_cfg = {}
             try:
                 cfg, _err = _load_config_file()
+                if _err:
+                    logger.error(
+                        "REST API not started: daemon configuration could not be loaded"
+                    )
+                    return
                 if cfg:
                     full_cfg = cfg
                     daemon_cfg = cfg.get("daemon", {})
             except Exception:
-                pass  # intentionally silent — optional dependency
+                logger.error(
+                    "REST API not started: daemon configuration could not be loaded"
+                )
+                return
 
             import socket as socket_mod
 
@@ -1080,6 +1089,15 @@ class DaemonServer:
             if not auth_token:
                 auth_token = self._ensure_auth_token()
 
+            from ai_guardian.daemon.rest_transport import (
+                DaemonConnectionError,
+                TLS_CONFIG_ERROR,
+            )
+
+            tls_config = daemon_cfg.get("rest_tls", {})
+            if not isinstance(tls_config, dict):
+                raise DaemonConnectionError(TLS_CONFIG_ERROR)
+
             for port in range(cfg_port, cfg_port + 10):
                 try:
                     self._rest_api = DaemonRestAPI(
@@ -1088,8 +1106,12 @@ class DaemonServer:
                         port=port,
                         name=self._name,
                         auth_token=auth_token,
+                        tls=tls_config,
                     )
                     self._rest_port = self._rest_api.start()
+                    self._rest_scheme = (
+                        "https" if tls_config.get("enabled", False) is True else "http"
+                    )
                     if port != cfg_port:
                         logger.warning(
                             f"REST API port {cfg_port} in use, bound to {port} instead"
@@ -1106,7 +1128,16 @@ class DaemonServer:
                 "REST features (cache status, violations, web console) will be unavailable"
             )
         except Exception as e:
-            logger.warning(f"REST API failed to start: {e}")
+            from ai_guardian.daemon.rest_transport import DaemonConnectionError
+
+            self._rest_api = None
+            self._rest_port = 0
+            if isinstance(e, DaemonConnectionError):
+                logger.error("%s", e)
+            else:
+                logger.error(
+                    "REST API failed to start; check daemon listener configuration"
+                )
 
     def _acquire_pid_lock(self):
         """Atomically create a lock file to prevent concurrent daemon starts.
@@ -1267,20 +1298,42 @@ class DaemonServer:
         import secrets
 
         from ai_guardian.daemon import get_auth_token_path
+        from ai_guardian.daemon.rest_transport import (
+            _material_file,
+            DaemonConnectionError,
+        )
 
         token_path = get_auth_token_path()
         if token_path.exists():
             try:
-                token = token_path.read_text(encoding="utf-8").strip()
+                token = (
+                    _material_file(str(token_path), private=True)
+                    .read_text(encoding="utf-8")
+                    .strip()
+                )
                 if token:
                     return token
-            except OSError:
-                pass
+            except (OSError, ValueError):
+                raise DaemonConnectionError(
+                    "Daemon authentication token is unavailable or has unsafe permissions. REST listener was not started."
+                ) from None
 
         token = secrets.token_urlsafe(32)
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(token, encoding="utf-8")
-        os.chmod(str(token_path), 0o600)
+        token_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        temporary = token_path.with_name(
+            f".{token_path.name}.{secrets.token_hex(8)}.tmp"
+        )
+        created = False
+        try:
+            descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            created = True
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                _material_file(str(temporary), private=True)
+                handle.write(token)
+            os.replace(temporary, token_path)
+        finally:
+            if created:
+                temporary.unlink(missing_ok=True)
         logger.info("Generated REST API auth token: %s", token_path)
         return token
 
