@@ -1,7 +1,6 @@
 """Isolated standalone recovery tests; never inspect the operator's IDE homes."""
 
 import json
-import copy
 import itertools
 import ast
 import os
@@ -11,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 
@@ -258,6 +258,11 @@ def test_package_first_removal_with_isolated_stdlib_python(
         '"C:\\removed path\\ai-guardian.exe" --ide cursor',
         '"C:\\removed path\\python.exe" -m ai_guardian --ide cline',
         "/removed/python -I -m ai_guardian_hook_runtime",
+        r"C:\removed\PYTHONW.EXE -m ai_guardian --ide claude",
+        r'"C:\removed path\pythonw.exe" -m ai_guardian --ide cursor',
+        [r"C:\removed\pythonw.exe", "-m", "ai_guardian", "mcp-server"],
+        [r"C:\removed\pythonw.exe -m ai_guardian", "mcp-server"],
+        [r'"C:\removed path\pythonw.exe" -m ai_guardian', "mcp-server"],
     ],
 )
 def test_owned_commands_do_not_require_runtime(engine, command):
@@ -275,6 +280,16 @@ def test_owned_commands_do_not_require_runtime(engine, command):
         "ai-guardian; other-check",
         "python -m ai_guardian_other",
         "python other.py ai-guardian",
+        "pythonw.exe -m another_module",
+        ["pythonw.exe -m ai_guardian_other", "mcp-server"],
+        ["echo pythonw.exe -m ai_guardian", "mcp-server"],
+        ["pythonw.exe -m ai_guardian && other -m ai_guardian", "mcp-server"],
+        ["pythonw.exe -m ai_guardian; other -m ai_guardian", "mcp-server"],
+        ["pythonw.exe", "other.py", "ai_guardian"],
+        ["ai-guardian -m ai_guardian", "mcp-server"],
+        ['"C:\\not closed\\pythonw.exe -m ai_guardian', "mcp-server"],
+        ["pythonw.exe -m ai_guardian", 123],
+        [r"C:\unquoted path\pythonw.exe -m ai_guardian", "mcp-server"],
     ],
 )
 def test_ambiguous_or_unrelated_commands_are_not_owned(engine, command):
@@ -603,22 +618,87 @@ def test_native_powershell_prerequisite_errors_are_nonmutating_exit_two(
         "crush",
     ],
 )
-def test_current_setup_hook_schemas_round_trip(engine, host):
+@pytest.mark.parametrize(
+    "launch",
+    ["ai-guardian", r"C:\removed\Python\pythonw.exe -m ai_guardian"],
+    ids=["bare", "windows-pythonw"],
+)
+def test_current_setup_hook_schemas_round_trip(engine, host, launch):
     from ai_guardian.setup.hooks import IDESetup
+    from ai_guardian.setup.utils import _substitute_command
 
     setup = IDESetup()
-    template = copy.deepcopy(setup.IDE_CONFIGS[host]["hooks"])
+    template = _substitute_command(setup.IDE_CONFIGS[host]["hooks"], launch, host)
     base = {"unrelated": {"empty": [], "setting": False}}
     if host == "copilot":
         config = {**base, **template}  # Copilot setup writes top-level event arrays.
     else:
         config, _ = setup.merge_hooks(base, template, host)
-    assert "ai-guardian" in json.dumps(config)
+    assert any(name in json.dumps(config) for name in ("ai-guardian", "ai_guardian"))
     cleaned, problems = engine["clean_json"](json.dumps(config), host, set())
     assert problems == []
     result = json.loads(cleaned)
     assert result["unrelated"] == {"empty": [], "setting": False}
     assert "ai-guardian" not in cleaned
+    assert "ai_guardian" not in cleaned
+
+
+@pytest.mark.parametrize("host", ["claude", "cursor", "codex", "grok", "opencode"])
+def test_current_windows_mcp_setup_round_trips_without_runtime(
+    engine, isolated_home, monkeypatch, host
+):
+    import tomllib
+
+    from ai_guardian.setup import mcp, utils
+
+    with (
+        mock.patch.object(utils.platform, "system", return_value="Windows"),
+        mock.patch.object(
+            utils.shutil, "which", return_value=r"C:\removed\Python\pythonw.EXE"
+        ),
+    ):
+        launch = utils._resolve_binary_path()
+    assert launch == r"C:\removed\Python\pythonw.EXE -m ai_guardian"
+    monkeypatch.setattr(mcp, "_resolve_binary_path", lambda: launch)
+    monkeypatch.setattr(mcp, "_register_mcp_identity", lambda _: True)
+    path = mcp.get_mcp_config_path(host)
+    assert path is not None and path.is_relative_to(isolated_home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    key = mcp._MCP_IDE_CONFIGS[host]["config_key"]
+    original = {"unrelated": False, key: {"other": {"command": "third-party"}}}
+    if path.suffix == ".toml":
+        path.write_text(
+            f'unrelated = false\n[{key}.other]\ncommand = "third-party"\n',
+            encoding="utf-8",
+        )
+    else:
+        write_json(path, original)
+
+    # Exercise the real registration writers, not a hand-built approximation.
+    # Every path is disposable; identity registration is explicitly isolated.
+    mcp._install_mcp_config(SimpleNamespace(), host)
+    generated = path.read_bytes()
+    parsed = (
+        tomllib.loads(generated.decode())
+        if path.suffix == ".toml"
+        else engine["load_json"](generated.decode())
+    )
+    assert "ai-guardian" in parsed[key]
+    before = snapshot(isolated_home)
+    assert engine["main"](["--dry-run"]) == 0
+    assert snapshot(isolated_home) == before
+    assert engine["main"](["--yes"]) == 0
+    remaining = (
+        tomllib.loads(path.read_text(encoding="utf-8"))
+        if path.suffix == ".toml"
+        else engine["load_json"](path.read_text(encoding="utf-8"))
+    )
+    assert remaining == original
+    backups = list(path.parent.glob("*.bak"))
+    assert len(backups) == 1 and backups[0].read_bytes() == generated
+    after = snapshot(isolated_home)
+    assert engine["main"](["--yes"]) == 0
+    assert snapshot(isolated_home) == after
 
 
 @pytest.mark.parametrize("relocated", [False, True])

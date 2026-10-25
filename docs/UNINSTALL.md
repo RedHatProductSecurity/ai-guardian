@@ -127,6 +127,11 @@ retained rather than guessed at. Inline TOML MCP definitions currently require
 operator review. A nonzero result names every known retained/failed path without
 printing configuration values or raw parser exceptions.
 
+Windows setup's `pythonw.exe -m ai_guardian` launches are included, as are
+historical OpenCode entries embedding that module launch in the first command-array
+element. This does not authorize cleanup of other Python modules, compound
+commands or malformed quoting; unrecognized entries are retained for review.
+
 Every edited or removed integration file gets an exact, unique sibling
 `*.ai-guardian-backup-<id>.bak`; existing backups are never overwritten.
 Backup files use POSIX mode `0600`; Windows files inherit their parent directory's

@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18388 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20652 tok)
-- `CHANGELOG.md` — Change log (~75761 tok)
+- `CHANGELOG.md` — Change log (~75801 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -941,7 +941,7 @@
 - `TOML_PATTERNS.md` — TOML Pattern Engine (~3798 tok)
 - `TOOL_POLICY.md` — Tool Policy System (~5839 tok)
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7389 tok)
-- `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3651 tok)
+- `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3729 tok)
 - `VIOLATION_LOGGING.md` — Violation Logging (~3194 tok)
 
 ## docs/api/
@@ -1034,7 +1034,7 @@
 
 ## scripts/
 
-- `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~8833 tok)
+- `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~9012 tok)
 - `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2778 tok)
 - `check_openshell_compatibility.py` — Verify the qualified OpenShell release and protocol contract. (~1717 tok)
 - `check_parser_compat.py` — get_leaktk_url, fetch_url, fetch_pattern_data, extract_schema + 4 more (~3274 tok)

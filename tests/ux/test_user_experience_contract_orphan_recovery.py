@@ -70,6 +70,63 @@ def test_success_explains_backup_restart_and_preserved_history(recovery, capsys)
     }
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        r"C:\removed\Python\pythonw.EXE -m ai_guardian",
+        [r"C:\removed\Python\pythonw.EXE -m ai_guardian", "mcp-server"],
+    ],
+)
+def test_windows_module_launch_recovery_needs_no_surviving_runtime(
+    recovery, capsys, command
+):
+    """USER EXPERIENCE: Owned Windows module launches recover, not falsely retain."""
+    main, config = recovery
+    data = json.loads(config.read_text())
+    data["mcpServers"]["ai-guardian"] = {"command": command}
+    config.write_text(json.dumps(data), encoding="utf-8")
+    original = config.read_bytes()
+
+    assert main(["--dry-run"]) == 0
+    assert config.read_bytes() == original
+    capsys.readouterr()
+    assert main(["--yes"]) == 0
+    captured = capsys.readouterr()
+    assert "Integration cleanup complete." in captured.out
+    assert "Retained/failed:" not in captured.err
+    assert json.loads(config.read_text())["mcpServers"] == {
+        "other": {"command": "other"}
+    }
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pythonw.exe -m unrelated_module",
+        ["pythonw.exe -m ai_guardian_other", "mcp-server"],
+        ["pythonw.exe -m ai_guardian && other -m ai_guardian", "mcp-server"],
+    ],
+)
+def test_ambiguous_windows_module_entry_is_retained_not_guessed(
+    recovery, capsys, command
+):
+    """USER EXPERIENCE: A matching entry name alone never authorizes deletion."""
+    main, config = recovery
+    data = json.loads(config.read_text())
+    data["mcpServers"]["ai-guardian"] = {"command": command}
+    config.write_text(json.dumps(data), encoding="utf-8")
+    original = config.read_bytes()
+
+    assert main(["--yes"]) == 1
+    captured = capsys.readouterr()
+    assert "unrecognized ai-guardian MCP entry retained" in captured.err
+    assert (
+        "Integration cleanup incomplete; review retained/failed paths." in captured.out
+    )
+    assert config.read_bytes() == original
+    assert not list(config.parent.glob("*.bak"))
+
+
 def test_malformed_input_is_retained_and_incomplete_not_success(recovery, capsys):
     """USER EXPERIENCE: Partial failure identifies a path, never its private contents."""
     main, config = recovery
