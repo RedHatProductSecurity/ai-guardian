@@ -777,15 +777,17 @@ def _setup_hooks_json_output(
         if not dry_run:
             config_dir = get_config_dir()
             config_path = config_dir / "ai-guardian.json"
-            if config_path.exists() and not force:
+            from ai_guardian.setup.config import _write_default_config
+            from ai_guardian.storage import StorageError
+
+            try:
+                created = _write_default_config(ag_config, force=force)
+            except (OSError, StorageError) as e:
+                print(json.dumps({"success": False, "error": str(e)}, indent=2))
+                return False
+            if not created:
                 result["config_preserved"] = True
                 result["config_path"] = str(config_path)
-            else:
-                config_dir.mkdir(parents=True, exist_ok=True)
-                with open(config_path, "w", encoding="utf-8") as f:
-                    json.dump(ag_config, f, indent=2)
-                    f.write("\n")
-            get_cache_dir().mkdir(parents=True, exist_ok=True)
 
     # Auto-detect IDE if not specified. JSON mode is always non-interactive,
     # so it configures every pending integration and reports each result.

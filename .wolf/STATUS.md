@@ -9,6 +9,72 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2584 private storage / REST diagnostics — locally validated, 2026-10-26
+
+- User authorized implementation with **go**. Continued existing branch `2584`;
+  preserved initialization and OpenWolf-owned anatomy changes. Ticket was already
+  read exactly once; no temporary-clone sync or new branch was needed.
+- New `storage.py` creates each missing directory component as `0700`, validates
+  configured/resolved ancestry, and privately/atomically publishes configuration
+  without clobbering intervening files. Human and JSON setup share that writer.
+  Fixed early package logging and migration too: they create state before the
+  Unix socket/token code. Existing XDG/shared directory modes stay unchanged.
+- Token storage retains `_material_file` checks and adds linked-file/app-leaf,
+  ownership and exact ancestor/mode diagnostics. Private token/PID temporaries use
+  exclusive `0600` creation and owned-file-only cleanup; collisions are preserved.
+  No weakened validation, automatic chmod, new dependency or configuration key.
+- PID/IPC/CLI status separates working IPC from available/unavailable/disabled
+  REST, with credential-free startup reasons and defensive legacy PID fallback.
+  SSH probe/pairing distinguishes missing configuration, unsafe metadata and a
+  live process without REST, without echoing remote errors or credential material.
+- **926 related unit/UX tests pass** on Linux/Python 3.14 (850 together plus 76
+  proactive/setup caller regressions), including complete
+  storage, TLS, SSH and IDE-setup UX files. Fresh child processes test package
+  import/setup/token/REST startup under umasks `0000`, `0002`, `0022`, `0077`.
+  Storage helper coverage **93%**, setup writer **97%**, SSH tunnel **90%**;
+  selected combined **92%**, `/tmp/opencode/guardian-2584.coverage`.
+- DAF progress notes saved; implementation checklist and remaining qualification:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2584#issuecomment-6426511999.
+- Black py310, Ruff, Pylint E, Mypy (319 source files), bug-log JSON and whitespace
+  checks pass. Simplification reviewed. Fixed two preview-test assumptions about
+  autouse fixture directories; final run validates the final source. One unrelated
+  GLib deprecation warning remains. Source docs/changelog and learnings are updated.
+- **Next:** review/publish through the external DAF workflow, qualify CI across
+  supported platforms/Python, then verify setup/startup and HTTPS enrollment on an
+  authorized disposable/reporter VM. Existing `.local` / `.local/state` `0775`
+  ancestors require administrator review, not silent application repair. Missing
+  configuration remains an independent prerequisite. Live SSH and native Windows
+  ACL/macOS qualification are not established by these isolated tests.
+- All changes remain local/uncommitted. No installed daemon restart, real remote
+  credential retrieval, live SSH, runtime/security configuration change, full-suite,
+  integration/container run, commit, push, PR or issue closure. OpenWolf owns
+  automatic anatomy/memory bookkeeping; earlier sections remain historical.
+
+## Issue #2584 session initialization — 2026-10-26
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2584`; confirmed existing branch `2584`
+  and initially clean worktree. Read the qualified GitHub ticket exactly once,
+  including the reporter's clarification about writable ancestors.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  markdown and hierarchical skills are absent. Loaded DAF workflow/Git/OpenWolf
+  guidance and read the project protocol, handoff and learning constraints.
+  The project release skill is unrelated; no temp-clone sync applies.
+- User requested initialization only; implementation has not started. Next:
+  trace setup/state/token creation, provision new application storage with explicit
+  secure permissions under supported POSIX umasks, and preserve fail-closed
+  ownership, symlink and ancestor checks without altering existing shared paths.
+- Also distinguish IPC liveness from REST availability, provide credential-free
+  SSH diagnostics for missing configuration versus unsafe/unavailable metadata,
+  and add isolated related unit/complete UX coverage for fresh setup/startup,
+  unsafe storage, token publication/cleanup and visible failure states.
+- The reporter's `.local`, `.local/state` and application state directory are
+  all `0775`; fixing only the leaf cannot satisfy ancestor validation. Missing
+  configuration is an independent precondition, not proof of this permission bug.
+- No code changes, tests, tracker updates, credential access, live SSH, runtime
+  or configuration changes, commits, pushes or PRs. Only this handoff was updated;
+  OpenWolf owns automatic anatomy/memory bookkeeping. Earlier entries are history.
+
 ## Issue #2580 / PR #2583 CI follow-up — local fixes validated, 2026-10-26
 
 - User reported CI failure. Branch `2580` was clean and synchronized at

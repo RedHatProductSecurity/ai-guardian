@@ -384,7 +384,18 @@ def test_close_only_owned_process_escalates_once(tmp_path, sample):
     sys.platform == "win32", reason="The remote probe targets POSIX SSH hosts"
 )
 @pytest.mark.parametrize(
-    "state", ["running", "stopped", "legacy", "wrong_owner_material"]
+    "state",
+    [
+        "running",
+        "stopped",
+        "legacy",
+        "wrong_owner_material",
+        "missing_config",
+        "unsafe_ancestor",
+        "config_link",
+        "rest_unavailable",
+        "malformed",
+    ],
 )
 def test_fixed_remote_probe_reads_actual_runtime_metadata(tmp_path, sample, state):
     pairing, _, identity = sample
@@ -425,6 +436,19 @@ def test_fixed_remote_probe_reads_actual_runtime_metadata(tmp_path, sample, stat
     token.chmod(0o644 if state == "wrong_owner_material" else 0o600)
     if state == "stopped":
         (runtime / "daemon.pid").unlink()
+    elif state == "missing_config":
+        config_file.unlink()
+    elif state == "unsafe_ancestor":
+        config.chmod(0o775)
+    elif state == "config_link":
+        config_file.rename(config / "actual.json")
+        config_file.symlink_to(config / "actual.json")
+    elif state == "rest_unavailable":
+        (runtime / "daemon.pid").write_text(
+            json.dumps({"pid": os.getpid(), "rest_status": "unavailable"})
+        )
+    elif state == "malformed":
+        config_file.write_text("invalid-json-with-unit-sensitive-token")
     env = {
         **os.environ,
         "AI_GUARDIAN_CONFIG_DIR": str(config),
@@ -449,6 +473,11 @@ def test_fixed_remote_probe_reads_actual_runtime_metadata(tmp_path, sample, stat
             "status": {
                 "stopped": "stopped",
                 "legacy": "https_required",
-                "wrong_owner_material": "unavailable",
+                "wrong_owner_material": "unsafe_metadata",
+                "missing_config": "missing_config",
+                "unsafe_ancestor": "unsafe_metadata",
+                "config_link": "unsafe_metadata",
+                "rest_unavailable": "rest_unavailable",
+                "malformed": "unavailable",
             }[state]
         }

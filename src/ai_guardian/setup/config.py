@@ -5,8 +5,26 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from ai_guardian.config.utils import get_cache_dir, get_config_dir
+from ai_guardian.config.utils import get_cache_dir, get_config_dir, get_state_dir
 from ai_guardian.setup.utils import _strip_deprecated_config_keys
+from ai_guardian.storage import (
+    check_storage_directory,
+    make_private_directory,
+    write_private_text,
+)
+
+
+def _write_default_config(config: Dict, *, force: bool = False) -> bool:
+    """Shared human/JSON setup writer; never repair existing unsafe storage."""
+    for directory in (get_config_dir(), get_state_dir(), get_cache_dir()):
+        check_storage_directory(directory, missing_ok=True)
+        make_private_directory(directory)
+        check_storage_directory(directory)
+    return write_private_text(
+        get_config_dir() / "ai-guardian.json",
+        json.dumps(config, indent=2) + "\n",
+        overwrite=force,
+    )
 
 
 def create_default_config(
@@ -51,24 +69,13 @@ def create_default_config(
         if json_output:
             return True, json.dumps(config, indent=2)
 
-        # Check if config already exists
-        if config_path.exists() and not dry_run:
-            if not force:
-                return True, f"✓ Config already exists, preserving: {config_path}"
-
         if dry_run:
             message = f"[DRY RUN] Would create {config_path}:\n\n"
             message += json.dumps(config, indent=2)
             return True, message
 
-        # Ensure directory exists
-        config_dir.mkdir(parents=True, exist_ok=True)
-        get_cache_dir().mkdir(parents=True, exist_ok=True)
-
-        # Write config
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-            f.write("\n")
+        if not _write_default_config(config, force=force):
+            return True, f"✓ Config already exists, preserving: {config_path}"
 
         if profile:
             message = f"✓ Created config from profile '{profile}': {config_path}\n"

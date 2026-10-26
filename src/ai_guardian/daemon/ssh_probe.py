@@ -8,19 +8,24 @@ No remote package import is needed (including uv tool installations).
 PROBE_SCRIPT = r"""
 import json, os, pathlib, stat
 
+class UnsafeMetadata(ValueError):
+    pass
+
 def read(path, private=False, owner=False):
     path = pathlib.Path(path).expanduser()
+    if path.is_symlink():
+        raise UnsafeMetadata()
     for parent in set(path.absolute().parents) | set(path.resolve().parents):
         info = parent.stat()
-        if info.st_uid not in {0, os.getuid()} or (info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX):
-            raise ValueError()
-    fd = os.open(str(path), os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
+        if parent.lstat().st_uid not in {0, os.getuid()} or info.st_uid not in {0, os.getuid()} or (info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX):
+            raise UnsafeMetadata()
+    fd = os.open(str(path), os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0))
     try:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_uid not in ({os.getuid()} if owner else {0, os.getuid()}):
-            raise ValueError()
+            raise UnsafeMetadata()
         if info.st_mode & (0o077 if private else 0o022):
-            raise ValueError()
+            raise UnsafeMetadata()
         with os.fdopen(fd, 'r', encoding='utf-8') as stream:
             fd = None
             value = stream.read(131073)
@@ -37,11 +42,13 @@ def probe():
     state_dir = pathlib.Path(os.environ.get('AI_GUARDIAN_STATE_DIR') or pathlib.Path(os.environ.get('XDG_STATE_HOME', home / '.local/state')) / 'ai-guardian').expanduser()
     config_path = config_dir / 'ai-guardian.json'
     pid_path = state_dir / 'daemon.pid'
-    if not config_path.exists():
-        return {'status': 'unavailable'}
-    if not pid_path.exists():
-        return {'status': 'stopped'}
+    if config_dir.is_symlink() or state_dir.is_symlink():
+        raise UnsafeMetadata()
+    if not config_path.exists() and not config_path.is_symlink():
+        return {'status': 'missing_config'}
     config = json.loads(read(config_path, owner=True)).get('daemon', {})
+    if not pid_path.exists() and not pid_path.is_symlink():
+        return {'status': 'stopped'}
     pid = json.loads(read(pid_path, owner=True))
     number = pid.get('pid')
     if type(number) is not int or number < 2:
@@ -50,6 +57,8 @@ def probe():
         os.kill(number, 0)
     except ProcessLookupError:
         return {'status': 'stopped'}
+    if pid.get('rest_status') in {'unavailable', 'disabled'} or not pid.get('rest_port'):
+        return {'status': 'rest_unavailable'}
     if pid.get('rest_scheme', 'http') != 'https':
         return {'status': 'https_required'}
     tls = config.get('rest_tls', {})
@@ -70,6 +79,8 @@ def probe():
 
 try:
     result = probe()
+except UnsafeMetadata:
+    result = {'status': 'unsafe_metadata'}
 except (OSError, ValueError, TypeError, KeyError, AttributeError):
     result = {'status': 'unavailable'}
 print(json.dumps(result))

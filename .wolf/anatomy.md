@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1243 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1244 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20954 tok)
-- `CHANGELOG.md` — Change log (~76626 tok)
+- `CHANGELOG.md` — Change log (~76768 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -920,7 +920,7 @@
 - `MCP_SERVER.md` — MCP Security Advisor Server (~5114 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
 - `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~3880 tok)
-- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~13604 tok)
+- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~14124 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
@@ -1054,14 +1054,14 @@
 
 ## src/ai_guardian/
 
-- `__init__.py` — Declares and (~1866 tok)
+- `__init__.py` — Declares and (~1879 tok)
 - `__main__.py` — main (~70 tok)
 - `agent_config_protection.py` — Canonical inventory and matching for supported agent configuration paths. (~5980 tok)
 - `aiguardignore.py` — "]          # all scanners (~3645 tok)
 - `allowlist_utils.py` — extract_pattern_string, is_allowlist_pattern_valid, validate_allowlist_patterns, filter_valid_patterns + 2 more (~1175 tok)
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
-- `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12854 tok)
+- `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~13133 tok)
 - `cli.py` — main (~31000 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
@@ -1087,6 +1087,7 @@
 - `session_state.py` — SessionStateManager: derive_session_key, should_inject_security, mark_security_injected, mark_security_reinject + 2 more (~2396 tok)
 - `skill_discovery.py` — _YamlModule: safe_load, discover_skills (~8552 tok)
 - `smoke_test.py` — SmokeTestOutcome: has_mismatches, exit_code, run, run_phase1 + 1 more (~8936 tok)
+- `storage.py` — Private application storage creation and credential-free precondition errors. (~1329 tok)
 - `theme.py` — Unified visual theme for AI Guardian's native and web UI. (~3390 tok)
 - `update_checker.py` — Version update checking and self-upgrade for ai-guardian. (~3680 tok)
 
@@ -1098,7 +1099,7 @@
 - `loaders.py` — URL configuration (~9849 tok)
 - `manager.py` — URL configuration (~2298 tok)
 - `target_config.py` — Load and merge allowlists from a target project directory. (~2700 tok)
-- `utils.py` — URL configuration (~9919 tok)
+- `utils.py` — URL configuration (~9937 tok)
 - `writer.py` — Safe config file writer with file locking for allowlist pattern management. (~7319 tok)
 
 ## src/ai_guardian/daemon/
@@ -1114,11 +1115,11 @@
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 14 more (~2027 tok)
 - `rest_api.py` — _ThreadedHTTPServer: get_request, handle_error, log_message, do_GET + 1 more (~21403 tok)
 - `rest_transport.py` — Verified daemon REST transport. Trust is explicit, never learned by discovery. (~4429 tok)
-- `server.py` — URL configuration (~14931 tok)
+- `server.py` — URL configuration (~15458 tok)
 - `ssh_connections.py` — Tray/Web-owned SSH connection workers. Discovery itself never waits on SSH. (~2268 tok)
-- `ssh_probe.py` — Fixed, read-only POSIX/Python 3 probe sent over authenticated SSH stdin. (~944 tok)
+- `ssh_probe.py` — Fixed, read-only POSIX/Python 3 probe sent over authenticated SSH stdin. (~1101 tok)
 - `ssh_storage.py` — Owner-only SSH pairing storage, separate from exported daemon configuration. (~1930 tok)
-- `ssh_tunnel.py` — Bounded system-OpenSSH probing and owned loopback HTTPS tunnels. (~4407 tok)
+- `ssh_tunnel.py` — Bounded system-OpenSSH probing and owned loopback HTTPS tunnels. (~4662 tok)
 - `state.py` — URL configuration (~22018 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
@@ -1361,8 +1362,8 @@
 
 ## src/ai_guardian/setup/
 
-- `__init__.py` — setup_hooks (~10880 tok)
-- `config.py` — Default configuration creation for ai-guardian. (~7495 tok)
+- `__init__.py` — setup_hooks (~10896 tok)
+- `config.py` — Default configuration creation for ai-guardian. (~7581 tok)
 - `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~48647 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)

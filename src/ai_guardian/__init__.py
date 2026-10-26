@@ -33,10 +33,11 @@ logging.setLogRecordFactory(_record_factory)
 
 # Set up file handler with rotation
 from ai_guardian.config.utils import get_state_dir, migrate_state_files
+from ai_guardian.storage import make_private_directory
 
 migrate_state_files()
 _log_file = get_state_dir() / "ai-guardian.log"
-_log_file.parent.mkdir(parents=True, exist_ok=True)
+make_private_directory(_log_file.parent)
 
 _file_handler = RotatingFileHandler(
     _log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"  # 5 MB

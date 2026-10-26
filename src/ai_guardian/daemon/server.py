@@ -32,6 +32,12 @@ from ai_guardian.daemon.protocol import (
 )
 from ai_guardian.daemon.state import DaemonState
 from ai_guardian.constants import HookEvent
+from ai_guardian.storage import (
+    StorageError,
+    check_storage_directory,
+    check_storage_file,
+    make_private_directory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +205,7 @@ class DaemonServer:
         self._stop_lock = threading.Lock()
         self._rest_api = None
         self._rest_port = 0
+        self._rest_error = ""
         self._tcp_port = 0
         self.state = DaemonState(idle_timeout=idle_timeout)
 
@@ -249,6 +256,8 @@ class DaemonServer:
             print(
                 f"ai-guardian daemon started (pid {os.getpid()}, {sock_info}{name_info})"
             )
+            if self._enable_rest_api and not self._rest_port:
+                print(f"IPC: running; REST API: unavailable — {self._rest_error}")
             print("Use 'ai-guardian tray' to start the system tray client")
 
             self._ready_event.set()
@@ -359,7 +368,7 @@ class DaemonServer:
     def _setup_unix_socket(self):
         """Create Unix domain socket."""
         sock_path = get_socket_path()
-        sock_path.parent.mkdir(parents=True, exist_ok=True)
+        make_private_directory(sock_path.parent)
 
         # Never unlink a socket that still answers. This protects a running
         # daemon when its PID file was removed or corrupted during shutdown
@@ -442,6 +451,7 @@ class DaemonServer:
                 return
             elif msg_type == "status":
                 stats = self.state.get_stats()
+                stats.update(self._rest_status_fields())
                 status_data = request.get("data") or {}
                 if isinstance(status_data, dict) and status_data.get("project_dir"):
                     stats["middleware_pause"] = self.state.get_pause_status(
@@ -1002,15 +1012,29 @@ class DaemonServer:
         logger.info(f"Received signal {signum}, shutting down...")
         self.stop()
 
+    def _rest_status_fields(self):
+        """Expose listener readiness separately from a responsive IPC server."""
+        if self._rest_port:
+            status = "available"
+        elif self._enable_rest_api or self._rest_error:
+            status = "unavailable"
+        else:
+            status = "disabled"
+        return {
+            "rest_status": status,
+            "rest_error": self._rest_error,
+            "rest_port": self._rest_port,
+        }
+
     def _write_pid_file(self):
         """Write PID file with process info."""
         pid_path = get_pid_path()
-        pid_path.parent.mkdir(parents=True, exist_ok=True)
+        make_private_directory(pid_path.parent)
         pid_info: Dict[str, Any] = {"pid": os.getpid()}
+        pid_info.update(self._rest_status_fields())
         if self._use_tcp and self._tcp_port:
             pid_info["port"] = self._tcp_port
         if self._rest_port:
-            pid_info["rest_port"] = self._rest_port
             pid_info["rest_scheme"] = getattr(self, "_rest_scheme", "http")
         if hasattr(self, "_name") and self._name:
             pid_info["name"] = self._name
@@ -1025,15 +1049,20 @@ class DaemonServer:
         # Replace atomically so an interrupted write cannot leave a partially
         # written PID file for the tray or the next daemon start to consume.
         temp_path = pid_path.with_name(f".{pid_path.name}.{os.getpid()}.tmp")
+        created = False
         try:
-            temp_path.write_text(json.dumps(pid_info))
-            os.chmod(str(temp_path), 0o600)
+            descriptor = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            created = True
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(pid_info, handle)
             os.replace(str(temp_path), str(pid_path))
         finally:
-            temp_path.unlink(missing_ok=True)
+            if created:
+                temp_path.unlink(missing_ok=True)
 
     def _start_rest_api(self):
         """Start the REST API server for tray/remote queries."""
+        self._rest_error = ""
         try:
             from ai_guardian.daemon.rest_api import DaemonRestAPI
             from ai_guardian.daemon import DEFAULT_REST_PORT
@@ -1044,17 +1073,19 @@ class DaemonServer:
             try:
                 cfg, _err = _load_config_file()
                 if _err:
-                    logger.error(
+                    self._rest_error = (
                         "REST API not started: daemon configuration could not be loaded"
                     )
+                    logger.error("%s", self._rest_error)
                     return
                 if cfg:
                     full_cfg = cfg
                     daemon_cfg = cfg.get("daemon", {})
             except Exception:
-                logger.error(
+                self._rest_error = (
                     "REST API not started: daemon configuration could not be loaded"
                 )
+                logger.error("%s", self._rest_error)
                 return
 
             import socket as socket_mod
@@ -1123,21 +1154,23 @@ class DaemonServer:
                     logger.debug(f"REST API port {port} in use, trying next")
                     self._rest_api = None
 
-            logger.warning(
+            self._rest_error = (
                 f"REST API failed to bind on ports {cfg_port}-{cfg_port + 9}; "
                 "REST features (cache status, violations, web console) will be unavailable"
             )
+            logger.warning("%s", self._rest_error)
         except Exception as e:
             from ai_guardian.daemon.rest_transport import DaemonConnectionError
 
             self._rest_api = None
             self._rest_port = 0
             if isinstance(e, DaemonConnectionError):
-                logger.error("%s", e)
+                self._rest_error = str(e)
             else:
-                logger.error(
+                self._rest_error = (
                     "REST API failed to start; check daemon listener configuration"
                 )
+            logger.error("%s", self._rest_error)
 
     def _acquire_pid_lock(self):
         """Atomically create a lock file to prevent concurrent daemon starts.
@@ -1148,6 +1181,7 @@ class DaemonServer:
         multiple daemons to start simultaneously in containers.
         """
         pid_path = get_pid_path()
+        make_private_directory(pid_path.parent)
         lock_path = str(pid_path) + ".lock"
         try:
             fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -1304,8 +1338,12 @@ class DaemonServer:
         )
 
         token_path = get_auth_token_path()
-        if token_path.exists():
-            try:
+        try:
+            check_storage_directory(token_path.parent, missing_ok=True)
+            make_private_directory(token_path.parent)
+            check_storage_directory(token_path.parent)
+            if token_path.exists() or token_path.is_symlink():
+                check_storage_file(token_path, private=True)
                 token = (
                     _material_file(str(token_path), private=True)
                     .read_text(encoding="utf-8")
@@ -1313,27 +1351,35 @@ class DaemonServer:
                 )
                 if token:
                     return token
-            except (OSError, ValueError):
-                raise DaemonConnectionError(
-                    "Daemon authentication token is unavailable or has unsafe permissions. REST listener was not started."
-                ) from None
 
-        token = secrets.token_urlsafe(32)
-        token_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        temporary = token_path.with_name(
-            f".{token_path.name}.{secrets.token_hex(8)}.tmp"
-        )
-        created = False
-        try:
-            descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            created = True
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                _material_file(str(temporary), private=True)
-                handle.write(token)
-            os.replace(temporary, token_path)
-        finally:
-            if created:
-                temporary.unlink(missing_ok=True)
+            token = secrets.token_urlsafe(32)
+            temporary = token_path.with_name(
+                f".{token_path.name}.{secrets.token_hex(8)}.tmp"
+            )
+            created = False
+            try:
+                descriptor = os.open(
+                    temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+                )
+                created = True
+                with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                    _material_file(str(temporary), private=True)
+                    handle.write(token)
+                os.replace(temporary, token_path)
+            finally:
+                if created:
+                    temporary.unlink(missing_ok=True)
+        except FileExistsError:
+            raise  # Preserve a pre-existing temporary collision, including its contents.
+        except (OSError, ValueError) as e:
+            detail = (
+                e
+                if isinstance(e, StorageError)
+                else StorageError(token_path, "token could not be read or published")
+            )
+            raise DaemonConnectionError(
+                f"{detail}. REST listener was not started."
+            ) from None
         logger.info("Generated REST API auth token: %s", token_path)
         return token
 
