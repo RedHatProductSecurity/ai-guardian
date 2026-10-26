@@ -122,6 +122,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **Windows CI prerequisite checks:** Isolate every UI path in proactive prompt
+  precedence tests and cover Windows' first eligible provider explicitly. Native
+  PowerShell recovery now resolves only an executable before checking Python,
+  avoiding module discovery/imports when the interpreter is missing; keeps exit
+  code 2 and the non-mutating prerequisite error.
 - **Daemon TLS configuration consistency (#2551):** Include matching opt-in HTTPS
   defaults in every built-in profile and accept documentation comments in the
   TLS schema without accepting unknown settings. Isolate TLS UX log capture from

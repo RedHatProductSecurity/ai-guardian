@@ -9,7 +9,34 @@ budget_tokens: 1000
 
 ---
 
-## Issue #2580 SSH modal follow-up — local changes validated, 2026-10-26
+## Issue #2580 / PR #2583 CI follow-up — local fixes validated, 2026-10-26
+
+- User reported CI failure. Branch `2580` was clean and synchronized at
+  `b61d289c20b7afbd20840ec516c315e57985d23c`; prior SSH work is now committed
+  upstream, superseding the local/uncommitted notes below. Failed Tests run
+  `40376715481`: Windows 3.10/3.13 hung in `test_prompt_uses_native_first`;
+  Windows 3.14 hit the recurring missing-Python PowerShell prerequisite timeout.
+- Fixed proactive tests: six explicit OS/tray-mode cases mock all providers.
+  Windows correctly skips native action/snooze and starts mocked Tk. Replaced
+  whole-module-cache GUI patches with per-entry monkeypatches after reversed
+  order exposed stale browser-opener mocks. No production modal policy changed.
+- `uninstall.ps1` resolves only Python executables via `GetCommands` before
+  invocation, avoiding missing-command module discovery. Preserves exit 2,
+  error wording, version checks and no-mutation behavior. Regression proves a
+  synthetic module is never imported; valid absolute/PATH-name cases work.
+- **358 related unit/UX tests pass**, including complete IDE setup/modal/orphan
+  UX files and all eight native PowerShell cases. Black py310, Ruff, Pylint E,
+  Mypy (318 source files) and whitespace checks pass. Simplification reviewed.
+  Portable PowerShell 7.6.9 (MIT, official SHA-256 verified) is isolated at
+  `/tmp/opencode/guardian-pwsh-7.6.9/runtime`; no dependency/config changes.
+- **Next:** publish local changes through external DAF workflow and verify fresh
+  Windows CI. Linux PowerShell validation cannot qualify the hosted Windows
+  runner or actual desktop UX. Do not close #2580's desktop qualification gate.
+  No commits/pushes, issue closure, installed-tray restart, live SSH, support
+  upload, full-suite/integration/container runs or runtime configuration changes.
+  OpenWolf owns automatic anatomy/memory bookkeeping. Earlier sections are history.
+
+## Issue #2580 SSH modal follow-up — earlier validation, 2026-10-26
 
 - User found Add daemon via SSH still opening NiceGUI/Web Console and clarified
   Native → Tkinter → NiceGUI, one reusable dispatcher, and durable contributor

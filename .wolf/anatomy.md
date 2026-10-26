@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20954 tok)
-- `CHANGELOG.md` — Change log (~76534 tok)
+- `CHANGELOG.md` — Change log (~76626 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -29,7 +29,7 @@
 - `RELEASING.md` — Release Management Process (~9382 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
-- `uninstall.ps1` (~838 tok)
+- `uninstall.ps1` — Declares and (~994 tok)
 - `uninstall.sh` (~2626 tok)
 
 ## .agents/skills/cavecrew/

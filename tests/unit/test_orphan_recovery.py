@@ -541,9 +541,16 @@ def test_bash_integration_only_never_stops_processes_or_uninstalls(
 @pytest.mark.skipif(
     shutil.which("pwsh") is None, reason="Native PowerShell unavailable"
 )
-def test_native_powershell_recovery(isolated_home, tmp_path):
+@pytest.mark.parametrize(
+    "use_path_lookup", [False, True], ids=["absolute-path", "path-name"]
+)
+def test_native_powershell_recovery(isolated_home, tmp_path, use_path_lookup):
     config = write_json(
         isolated_home / ".claude.json", {"mcpServers": {"ai-guardian": hook()}}
+    )
+    environment = powershell_environment(tmp_path)
+    environment["PATH"] = (
+        str(Path(sys.executable).parent) + os.pathsep + environment.get("PATH", "")
     )
     result = subprocess.run(
         [
@@ -554,12 +561,12 @@ def test_native_powershell_recovery(isolated_home, tmp_path):
             "-IntegrationsOnly",
             "-Yes",
             "-Python",
-            sys.executable,
+            Path(sys.executable).name if use_path_lookup else sys.executable,
         ],
         capture_output=True,
         text=True,
         cwd=tmp_path,
-        env=powershell_environment(tmp_path),
+        env=environment,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -601,6 +608,65 @@ def test_native_powershell_prerequisite_errors_are_nonmutating_exit_two(
     }
     assert not changed_paths
     assert config.exists()
+
+
+@pytest.mark.skipif(
+    shutil.which("pwsh") is None, reason="Native PowerShell unavailable"
+)
+def test_missing_powershell_interpreter_does_not_autoload_modules(
+    isolated_home, tmp_path
+):
+    """A missing Python executable must not trigger PowerShell module discovery."""
+    write_json(isolated_home / ".claude.json", {"mcpServers": {"ai-guardian": hook()}})
+    original = snapshot(isolated_home)
+    modules = tmp_path / "modules"
+    module = modules / "RecoveryInterpreterProbe"
+    module.mkdir(parents=True)
+    (module / "RecoveryInterpreterProbe.psd1").write_text(
+        "@{ RootModule = 'RecoveryInterpreterProbe.psm1'; ModuleVersion = '1.0.0'; "
+        "FunctionsToExport = @('missing-independent-python'); "
+        "CmdletsToExport = @(); AliasesToExport = @() }",
+        encoding="utf-8",
+    )
+    (module / "RecoveryInterpreterProbe.psm1").write_text(
+        "[IO.File]::WriteAllText($env:RECOVERY_AUTOLOAD_MARKER, 'module imported')\n"
+        "function missing-independent-python { $global:LASTEXITCODE = 1 }\n"
+        "Export-ModuleMember -Function missing-independent-python\n",
+        encoding="utf-8",
+    )
+    marker = tmp_path / "unexpected-module-import"
+    # Windows environment names are case-insensitive; replace all spellings and
+    # keep module discovery within this disposable fixture, not the user's paths.
+    environment = {
+        key: value
+        for key, value in powershell_environment(tmp_path).items()
+        if key.casefold() != "psmodulepath"
+    }
+    environment["PSModulePath"] = str(modules)
+    environment["RECOVERY_AUTOLOAD_MARKER"] = str(marker)
+    result = subprocess.run(
+        [
+            "pwsh",
+            "-NoProfile",
+            "-File",
+            str(ROOT / "uninstall.ps1"),
+            "-IntegrationsOnly",
+            "-Python",
+            "missing-independent-python",
+        ],
+        env=environment,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert (
+        "An independent Python 3.11+ interpreter is required; no changes made"
+        in result.stderr
+    )
+    assert not marker.exists(), "Missing Python lookup imported an unrelated module"
+    assert snapshot(isolated_home) == original
 
 
 @pytest.mark.parametrize(

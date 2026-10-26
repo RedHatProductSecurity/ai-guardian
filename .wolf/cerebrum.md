@@ -107,6 +107,26 @@
 
 ## Key Learnings
 
+- **Windows CI / modal test isolation (#2580, PR #2583):** The native action
+  prompt is eligible on Linux/macOS, not Windows. Mocking only native while
+  requesting auto UI lets Windows enter a real Tk mainloop. Cover platform and
+  tray/non-tray combinations and mock every reachable renderer. For fake GUI
+  modules, use `monkeypatch.setitem(sys.modules, ...)`, not a whole-dictionary
+  `patch.dict`: restoring the latter removes lazily imported modules but leaves
+  package attributes pointing at stale objects, so later dotted mocks can miss
+  the actual browser opener. Reversed related-test order exposed this leak.
+- **PowerShell missing-interpreter discovery (#2583):** Executing a nonexistent
+  bare Python name can enter module discovery. Exact-name `Get-Command` still
+  imports matching modules with `-CommandType Application` or `-ListImported`;
+  a locally scoped autoload preference did not prevent this in the probe.
+  `$ExecutionContext.InvokeCommand.GetCommands(name, Application, false)` enumerates
+  only executables without module imports. Take its first PATH result, invoke the
+  resolved `.Path`, and keep the existing version/error/non-mutation contract.
+  A synthetic manifest/module marker proves absence of imports; test both absolute
+  interpreter paths and names on PATH. Portable PowerShell under `/tmp/opencode`
+  can run these isolated unit tests on Linux, but does not qualify Windows. Its
+  official `hashes.sha256` asset uses UTF-16; decode the BOM before verification.
+
 - **Reusable simple-form flows / SSH follow-up (#2580):** `ui/forms.py` binds
   renderers to the existing `run_modal` dispatcher; it does not introduce another
   order. Latch visibility after a completed child step so later startup failures
