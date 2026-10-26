@@ -385,9 +385,12 @@ def _handle_daemon_command(args):
 
             pid_path = get_pid_path()
             pid = "unknown"
+            pid_info = {}
             try:
-                pid_info = json.loads(pid_path.read_text())
-                pid = pid_info.get("pid", "unknown")
+                metadata = json.loads(pid_path.read_text())
+                if isinstance(metadata, dict):
+                    pid_info = metadata
+                    pid = pid_info.get("pid", "unknown")
             except Exception:
                 pass  # intentionally silent — best-effort operation
 
@@ -410,6 +413,24 @@ def _handle_daemon_command(args):
                 config_str = "loaded"
 
             print(f"ai-guardian daemon: running (pid {pid}){paused}")
+            print("IPC: running")
+            rest_status = stats.get(
+                "rest_status", pid_info.get("rest_status", "unknown")
+            )
+            rest_port = stats.get("rest_port", pid_info.get("rest_port", 0))
+            if rest_status == "available" or (rest_status == "unknown" and rest_port):
+                print(f"REST API: available (port {rest_port})")
+            elif rest_status == "disabled":
+                print("REST API: disabled")
+            else:
+                print(
+                    "REST API: unavailable"
+                    if rest_status == "unavailable"
+                    else "REST API: unknown (older daemon)"
+                )
+                rest_error = stats.get("rest_error", pid_info.get("rest_error", ""))
+                if rest_error:
+                    print(f"REST startup: {rest_error}")
             print(f"Uptime: {uptime_str}")
             print(f"Hooks processed: {req_count} ({blocked} blocked)")
             print(f"Config: {config_str}")

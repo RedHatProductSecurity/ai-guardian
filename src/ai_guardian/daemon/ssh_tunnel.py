@@ -33,6 +33,9 @@ SSH_MISSING = (
     "System OpenSSH is unavailable; install an SSH client before adding this daemon."
 )
 METADATA_ERROR = "Remote daemon metadata is unavailable or invalid; check the installation and the SSH user's configuration and state directories."
+MISSING_CONFIG_ERROR = "Remote AI Guardian configuration is missing. Complete setup as the SSH user before pairing."
+UNSAFE_METADATA_ERROR = "Remote daemon storage has unsafe ownership, permissions, or symbolic links. Check the SSH user's configuration/state files and their ancestor directories; no credentials were returned."
+REST_UNAVAILABLE_ERROR = "The remote daemon process is running, but its REST listener is unavailable. Run daemon status as the SSH user to see the startup precondition."
 STOPPED_ERROR = (
     "The remote daemon is stopped. Start it as the SSH user, then reconnect."
 )
@@ -125,6 +128,14 @@ class SSHPairing:
                 raise SSHConnectionError(STOPPED_ERROR)
             if status == "https_required":
                 raise SSHConnectionError(HTTPS_REQUIRED)
+            if status in {"missing_config", "unsafe_metadata", "rest_unavailable"}:
+                raise SSHConnectionError(
+                    {
+                        "missing_config": MISSING_CONFIG_ERROR,
+                        "unsafe_metadata": UNSAFE_METADATA_ERROR,
+                        "rest_unavailable": REST_UNAVAILABLE_ERROR,
+                    }[status]
+                )
             if (
                 status != "ok"
                 or type(value.get("version")) is not int

@@ -65,6 +65,18 @@ def pairing(tmp_path):
             "unavailable",
             "Remote daemon metadata is unavailable or invalid; check the installation and the SSH user's configuration and state directories.",
         ),
+        (
+            "missing_config",
+            "Remote AI Guardian configuration is missing. Complete setup as the SSH user before pairing.",
+        ),
+        (
+            "unsafe_metadata",
+            "Remote daemon storage has unsafe ownership, permissions, or symbolic links. Check the SSH user's configuration/state files and their ancestor directories; no credentials were returned.",
+        ),
+        (
+            "rest_unavailable",
+            "The remote daemon process is running, but its REST listener is unavailable. Run daemon status as the SSH user to see the startup precondition.",
+        ),
     ],
 )
 def test_user_sees_specific_remote_state_without_plaintext_downgrade(status, message):

@@ -122,6 +122,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **Secure setup/startup storage (#2584):** Create missing POSIX application
+  directories/parents as `0700` and configuration/token files as `0600`, including
+  JSON setup and early logging initialization. Preserve fail-closed credential
+  checks and existing shared-directory modes; report unsafe storage paths rather
+  than silently repairing them. Distinguish IPC liveness from REST readiness in
+  status/PID metadata and missing configuration, unsafe metadata, or unavailable
+  REST during SSH pairing. Adds isolated umask, publication/cleanup and UX coverage.
 - **Windows CI prerequisite checks:** Isolate every UI path in proactive prompt
   precedence tests and cover Windows' first eligible provider explicitly. Native
   PowerShell recovery now resolves only an executable before checking Python,

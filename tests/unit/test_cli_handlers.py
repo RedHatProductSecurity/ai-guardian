@@ -499,6 +499,67 @@ class TestGlobalPauseResumeCommands:
 
 
 class TestDaemonStatusCommand:
+    @pytest.mark.parametrize(
+        "content", ["[]", "null", '"unit-metadata"', "invalid-json"]
+    )
+    def test_status_tolerates_malformed_pid_metadata(
+        self, tmp_path, monkeypatch, capsys, content
+    ):
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        (tmp_path / "daemon.pid").write_text(content)
+        args = mock.MagicMock(daemon_command="status")
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_status_request",
+                return_value={"request_count": 1},
+            ),
+            mock.patch("ai_guardian.cli_handlers._get_client_timeout", return_value=2),
+        ):
+            assert _handle_daemon_command(args) == 0
+        output = capsys.readouterr().out
+        assert "REST API: unknown (older daemon)" in output
+        assert "unit-metadata" not in output
+
+    @pytest.mark.parametrize(
+        "metadata,expected",
+        [
+            ({"rest_port": 45678}, "REST API: available (port 45678)"),
+            (
+                {
+                    "rest_status": "unavailable",
+                    "rest_error": "Listener configuration unavailable",
+                },
+                "REST API: unavailable",
+            ),
+        ],
+    )
+    def test_status_uses_pid_readiness_for_older_ipc_responses(
+        self, tmp_path, monkeypatch, capsys, metadata, expected
+    ):
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        (tmp_path / "daemon.pid").write_text(
+            json.dumps({"pid": os.getpid(), **metadata})
+        )
+        args = mock.MagicMock(daemon_command="status")
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_status_request",
+                return_value={"request_count": 1},
+            ),
+            mock.patch("ai_guardian.cli_handlers._get_client_timeout", return_value=2),
+        ):
+            assert _handle_daemon_command(args) == 0
+        output = capsys.readouterr().out
+        assert expected in output
+        if metadata.get("rest_error"):
+            assert "REST startup: Listener configuration unavailable" in output
+
     def test_status_lists_stable_hook_sessions_and_pause_state(
         self, tmp_path, monkeypatch, capsys
     ):

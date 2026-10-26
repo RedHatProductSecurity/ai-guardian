@@ -380,9 +380,41 @@ Console each own their own tunnels if both query a saved target concurrently.
 
 Custom `AI_GUARDIAN_CONFIG_DIR`, `AI_GUARDIAN_HOME`, `AI_GUARDIAN_STATE_DIR` and XDG
 paths must be available in the remote SSH environment. A stopped daemon, missing
-metadata, non-loopback listener, insecure material or legacy HTTP-only daemon
-fails with an actionable message; port 63152 is never assumed. This connects to
+configuration, unsafe storage, unavailable metadata, a running process without a
+REST listener, non-loopback listener or legacy HTTP-only daemon fails with a
+distinct credential-free message; port 63152 is never assumed. This connects to
 user-identified hosts only: it does not enumerate AWS instances or use AWS APIs.
+
+#### POSIX storage preconditions
+
+Setup (including JSON mode) and startup create missing application directories
+and their missing parents with explicit `0700` permissions. Generated configuration
+and authentication tokens use `0600` files from creation, including temporary
+files. An ordinary group-writable umask such as `0002` cannot make newly created
+storage fail its own credential checks. Setup publishes configuration atomically;
+without an explicit overwrite request it preserves an intervening creator's file.
+
+Existing directories are **not** silently chmodded. Credential storage rejects
+untrusted ownership, linked application directories/files, and group/other-writable
+ancestors (with the existing exception for trusted sticky system temporary
+ancestors). A secure application leaf is insufficient if, for example, `.local`
+or `.local/state` remains `0775`. Setup reports the offending path and precondition
+without writing configuration. Review existing storage with its administrator;
+do not assume running setup repairs shared directories. Missing configuration is
+an independent setup problem, not proof of a permission failure.
+
+`ai-guardian daemon status` distinguishes **IPC: running** from **REST API:
+available**, **unavailable**, or **disabled**. An unavailable listener includes its
+credential-free startup reason, including the offending storage path/mode when
+known. PID metadata and IPC status expose additive `rest_status` and `rest_error`
+fields; legacy daemons lacking readiness information are shown as unknown rather
+than presumed healthy. IPC can continue serving hooks when REST startup fails;
+this does not mean tray/HTTPS enrollment is ready. SSH pairing separately reports
+missing configuration, unsafe metadata, and a live process without REST. It does
+not echo remote exception text, tokens, certificates, or key contents.
+
+These mode checks apply to POSIX. Windows retains administrator-managed ACLs;
+POSIX unit tests do not qualify Windows access control.
 
 Unit/UX tests exercise synthetic TLS endpoints and mocked SSH processes. Live
 private-VM enrollment, reconnect/prompt delivery and native Windows/macOS desktop

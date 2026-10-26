@@ -195,7 +195,7 @@ def test_exposed_existing_token_prevents_listener_start(caplog):
         server._start_rest_api()
     listener.assert_not_called()
     assert (
-        "Daemon authentication token is unavailable or has unsafe permissions. REST listener was not started."
+        f"Application storage {str(token_path)!r}: unsafe file permissions (mode 0644). REST listener was not started."
         in caplog.text
     )
     assert token_path.read_text() == "unit-sensitive-token"

@@ -107,6 +107,21 @@
 
 ## Key Learnings
 
+- **POSIX storage creation precedes daemon startup (#2584):** Package import
+  initializes logging and may migrate state before `_setup_unix_socket` runs.
+  Fix creation there too; `mkdir(mode=0o700, parents=True)` does not restrict
+  intermediate parents or repair an existing `0775` directory. Create each
+  missing component explicitly, but keep creation separate from credential-path
+  validation so an existing unsafe ancestor can produce truthful IPC-only status.
+  Never chmod existing XDG/shared parents. Human and JSON setup had independent
+  writers; route both through the same private atomic publisher. Test umasks in
+  subprocesses **before importing the package**, with disposable HOME/config/state
+  paths. Do not mock a nonexistent IDE discovery method: setup's current seam is
+  `_discover_unconfigured_ides`. PID status fallback must tolerate valid non-object
+  JSON, and exclusive temporary PID/token publication must preserve collision files.
+  Preview non-mutation tests must snapshot the initial fixture state: the shared
+  autouse fixture already creates `auto_config`, `auto_state` and `auto_cache`.
+
 - **Windows CI / modal test isolation (#2580, PR #2583):** The native action
   prompt is eligible on Linux/macOS, not Windows. Mocking only native while
   requesting auto UI lets Windows enter a real Tk mainloop. Cover platform and

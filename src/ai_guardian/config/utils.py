@@ -714,7 +714,9 @@ def migrate_state_files() -> None:
 
         if old_path.exists() and not new_path.exists():
             try:
-                state_dir.mkdir(parents=True, exist_ok=True)
+                from ai_guardian.storage import make_private_directory
+
+                make_private_directory(state_dir)
                 shutil.copy2(str(old_path), str(new_path))
                 logger.info(f"Migrated {filename} from {config_dir} to {state_dir}")
             except OSError as e:
