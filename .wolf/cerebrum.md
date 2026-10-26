@@ -6,6 +6,12 @@
 
 ## User Preferences
 
+- New modal entry points must reuse a shared dispatcher, never repeat the
+  Native → Tkinter → NiceGUI cascade locally. Keep the implementation checklist
+  in `AGENTS.md` and the reusable recipe in `docs/MODAL_PROVIDERS.md` so future
+  modals follow it. The tray's Add daemon via SSH must not jump straight to the
+  Web Console; implement its complete native interaction first.
+
 - About must show **Author: Dominique Vernier (ITDoVe)**, with the compact
   **(ITDoVe)** link targeting the user-confirmed **https://github.com/itdove**.
   Do not display the full profile URL or infer a different author name from the
@@ -100,6 +106,19 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **Reusable simple-form flows / SSH follow-up (#2580):** `ui/forms.py` binds
+  renderers to the existing `run_modal` dispatcher; it does not introduce another
+  order. Latch visibility after a completed child step so later startup failures
+  cannot restart host input elsewhere. `NativeForm` pins zenity/kdialog after the
+  first result; Cocoa/WinForms scripts distinguish startup failure from later
+  failure with an envelope separate from user field values. Their UTF-8 stdin
+  transport must not change locale decoding for existing native commands. Kdialog
+  uses `--ok-label` for input/checklist buttons, not `--yes-label`; escape backend
+  metadata for Qt's rich-text auto-detection. Only display-safe identity text goes
+  to renderers; keep pairing credentials in the tray-owned manager. Management
+  remains an explicit Web Console page. Mocked contracts and JXA syntax checks do
+  not qualify actual macOS/Windows/GNOME/KDE desktop behavior.
 
 - **Modal policy and lifecycle (#2580):** `ui/display.py:ui_provider_order`
   selects Native → Tkinter → NiceGUI only among complete implementations;

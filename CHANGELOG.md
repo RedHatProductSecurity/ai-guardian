@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   log review. Isolate proactive tray toolkits and retain native user-only support
   consent. Includes the platform/capability matrix, unit/UX contracts and manual
   desktop verification checklist; visual/platform qualification remains pending.
+  Tray **Add daemon via SSH** now uses a reusable form-flow adapter over that
+  dispatcher instead of launching the Web Console: complete native input/trust
+  controls first, then isolated Tk and NiceGUI on startup failure only. Retains
+  unchecked identity consent and one provider across all steps. Contributor
+  instructions and a modal implementation recipe require this shared policy for
+  future modals; native desktop qualification remains pending.
 - **SSH-managed remote daemons (#2552):** Add a known SSH host/alias from the tray
   or local Web Console, explicitly confirm its daemon TLS identity, and reconnect
   automatically through owned loopback-only OpenSSH forwarding. Uses existing SSH

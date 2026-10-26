@@ -184,14 +184,23 @@ def run_modal_subprocess(
     return result
 
 
-def run_native_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+def run_native_command(
+    command: list[str], *, input_text: str | None = None
+) -> subprocess.CompletedProcess[str]:
     """Recognize only known native initialization failures, never arbitrary exits.
 
     Native command-line toolkits do not expose reliable map events. An unknown
     error could follow display, so it is terminal, even if stderr is nonempty.
     """
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=None)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8" if input_text is not None else None,
+            input=input_text,
+            timeout=None,
+        )
     except OSError as exc:
         raise UIUnavailable("Native executable could not start") from exc
     error = getattr(result, "stderr", "")

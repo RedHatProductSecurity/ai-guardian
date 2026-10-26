@@ -53,19 +53,41 @@ def test_ssh_label_keeps_existing_version_monitoring_without_network():
 
 def test_add_ssh_dispatches_a_worker_not_a_terminal():
     tray = DaemonTray.__new__(DaemonTray)
-    with mock.patch("ai_guardian.tray.app.threading.Thread") as thread:
+    tray._icon = mock.Mock()
+    bounds = (1920, 0, 1920, 1080)
+    with (
+        mock.patch("ai_guardian.tray.app.threading.Thread") as thread,
+        mock.patch(
+            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
+            return_value=bounds,
+        ) as capture,
+    ):
         tray._on_add_ssh_daemon()
     assert thread.call_args.kwargs["target"] is ssh_connections.open_enrollment
+    assert thread.call_args.kwargs["kwargs"] == {"screen_bounds": bounds}
+    capture.assert_called_once_with(tray._icon)
     thread.return_value.start.assert_called_once()
 
 
-def test_enrollment_opens_local_web_picker_without_daemon_control():
+def test_enrollment_uses_shared_form_flow_not_web_console():
+    tray = mock.Mock()
+    with (
+        mock.patch("ai_guardian.ui.forms.run_form_flow", return_value=False) as flow,
+        mock.patch("ai_guardian.tray.menu.open_web_console") as open_console,
+    ):
+        ssh_connections.open_enrollment(tray)
+    flow.assert_called_once()
+    open_console.assert_not_called()
+    tray._ensure_web_console_ready.assert_not_called()
+    tray._check_and_autostart_daemon.assert_not_called()
+
+
+def test_manage_saved_connection_still_opens_local_web_picker():
     tray = mock.Mock()
     tray._ensure_web_console_ready.return_value = True
     with mock.patch("ai_guardian.tray.menu.open_web_console") as open_console:
-        ssh_connections.open_enrollment(tray)
+        ssh_connections.open_management(tray)
     open_console.assert_called_once_with()
-    tray._check_and_autostart_daemon.assert_not_called()
 
 
 def test_ssh_control_menu_dispatches_outside_callback_thread():

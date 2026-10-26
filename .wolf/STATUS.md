@@ -9,7 +9,40 @@ budget_tokens: 1000
 
 ---
 
-## Issue #2580 modal policy — local implementation ready for review, 2026-10-26
+## Issue #2580 SSH modal follow-up — local changes validated, 2026-10-26
+
+- User found Add daemon via SSH still opening NiceGUI/Web Console and clarified
+  Native → Tkinter → NiceGUI, one reusable dispatcher, and durable contributor
+  guidance. Continued existing branch `2580`; it was clean at follow-up start.
+- `ui/forms.py:run_form_flow` now binds complete simple-form providers to existing
+  `run_modal`/`ui_provider_order`; no second ordering policy. `ui/native_form.py`
+  implements Cocoa, WinForms and desktop-ordered zenity/kdialog text/checkbox
+  controls. All steps retain one provider; Linux also pins its first native tool.
+- SSH Add uses the adapter and tray-owned manager, keeps credentials server-side,
+  shows full identity and unchecked mandatory trust, and captures monitor bounds
+  before worker dispatch. Shared display-only text lives in `ui/ssh_pairing.py`.
+  Manage SSH connection still opens the existing explicit Web Console page.
+- `AGENTS.md` now requires shared dispatch, complete controls, startup-only retry,
+  isolated toolkit state, privacy and regression tests. Modal docs include the
+  reusable recipe/matrix/manual SSH checks; multi-daemon docs/changelog match.
+- **839 related tests pass** in one final run, including complete affected SSH,
+  modal and sandbox UX files. Form adapter coverage **100%**, native Python helper
+  **96%**, selected combined **94%**; artifact
+  `/tmp/opencode/guardian-2580-ssh-forms.coverage`. Black py310, Ruff, Pylint E,
+  Mypy (318 files), JXA syntax, documentation links, buglog JSON and whitespace
+  pass. Simplification reviewed. DAF note saved; progress posted at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2580#issuecomment-6423560732.
+  GitHub's POST response timed out, but a read-only comments check confirmed the
+  comment exists; no duplicate POST was made.
+- **Next:** review/publish the local follow-up through external DAF workflow,
+  verify fresh CI, then qualify actual macOS, Windows, GNOME/zenity and KDE/kdialog
+  rendering, focus, placement, cancellation/later-step errors and support consent.
+  Native appearance and PowerShell runtime were **not** qualified; no live SSH
+  destination, support upload, runtime/config change, installed-tray restart,
+  full/integration/container run, commit, push, PR or issue closure by this agent.
+  OpenWolf owns automatic anatomy/memory bookkeeping. Earlier sections are history.
+
+## Issue #2580 modal policy — earlier implementation, 2026-10-26
 
 - User authorized implementation with **go** after initialization. Reused branch
   `2580`; preserved its handoff and OpenWolf's automatic anatomy changes. The

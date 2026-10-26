@@ -560,10 +560,16 @@ class DaemonTray:
         return build_items(self, pystray)
 
     def _on_add_ssh_daemon(self, _icon=None, _item=None):
+        from ai_guardian.tray.dialog_placement import _get_tray_screen_bounds
         from ai_guardian.tray.ssh_connections import open_enrollment
 
+        screen_bounds = _get_tray_screen_bounds(_icon or self._icon)
         threading.Thread(
-            target=open_enrollment, args=(self,), daemon=True, name="ssh-enrollment"
+            target=open_enrollment,
+            args=(self,),
+            kwargs={"screen_bounds": screen_bounds},
+            daemon=True,
+            name="ssh-enrollment",
         ).start()
 
     def _build_tray_menu(self):

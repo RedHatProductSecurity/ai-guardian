@@ -30,6 +30,7 @@ before entering the panel, since their withdrawn Tk parent does not map.
 `None`, `False`, Cancel, Escape, title-bar Close, an answered prompt, a timeout,
 or an error of unknown visibility never authorize another provider. A failure
 starting a later snooze step cannot restart the initial prompt in another toolkit.
+The same rule holds across host input, identity review and results in a form flow.
 Modal children have no user-reading deadline.
 
 Native command-line tools do not provide a reliable mapped-window signal. Only
@@ -54,6 +55,7 @@ controls.
 | Ask/security decision: CLI `prompt --mode ask` | T → G; native simple prompts lack full decision/edit controls | T → G | T → G |
 | Tray-forwarded remote ask on macOS 14+ | G in subprocess; existing tray focus-safety Tk suppression remains | As above | As above |
 | Plugin parameter forms: `TrayPromptApp.run` | T → G | T → G | T → G |
+| Simple form flows / tray Add daemon via SSH: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | N desktop-ordered zenity/kdialog input/checklist → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
 | Multi-target plugin selection: `TrayTargetSelectorApp.run` | G only | G only | G only |
 | Working-directory picker: `working_dir.choose_directory` | N AppleScript choose folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms FolderBrowserDialog → isolated T |
 | Browser form's auxiliary file/directory Browse | N AppleScript choose file/folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms OpenFileDialog/FolderBrowserDialog → isolated T |
@@ -96,6 +98,16 @@ controls.
   delivery and retains the bundle; no browser, terminal, agent approval, upload,
   automatic credential upgrade or alternate consent tier is introduced. Selecting
   Next is still not consent. See [Support bundles](SUPPORT.md).
+- **SSH pairing:** the tray's Add action uses the reusable form-flow adapter, not
+  the Web Console. All steps retain one provider, including failures and results.
+  The native Linux tool is likewise pinned after its first dialog. Only the
+  display-safe identity summary reaches renderers; credentials and certificate
+  objects remain in the tray-owned manager's closure. Trust starts unchecked and
+  is required before enrollment. Native Linux checklist buttons can remain
+  enabled while unchecked; submitting that state ends without saving or opening
+  another provider. **Manage SSH connection...** still opens the
+  existing local Web Console's saved-connection management page; its already-open
+  browser controls do not enter a new standalone-modal cascade.
 - **Process ownership:** Tk messages, sandbox dialogs, plugin CLI forms and tray
   proactive dialogs run outside the tray GUI loop. Proactive NiceGUI fallback also
   runs in its own child and opens the actual loopback port only after server startup.
@@ -115,7 +127,8 @@ provider failure independently grants permission or performs a destructive actio
 `ui/display.py:ui_provider_order` defines capability/preference/placement order.
 `ui/modal.py:run_modal` executes it and distinguishes startup unavailability from
 completion. Messages, proactive prompts, ask CLI, parameter forms, directory/path
-pickers, target selection and sandbox forms/reviews/logs use that policy. Progress
+pickers, target selection, reusable simple-form/SSH flows and sandbox
+forms/reviews/logs use that policy. Progress
 uses the same selector with its documented captured-output exception. Native-only
 action/confirmation helpers are implementations called *after* policy selection,
 not independent cascades. Support and embedded Web Console dialogs intentionally
@@ -127,6 +140,53 @@ preferences and cancellation. About, IDE setup, modal and support UX contracts
 cover the user-visible behavior. These checks do **not** establish actual visual
 ordering, compositor focus, browser rendering or consent behavior on a desktop.
 
+## Adding a modal
+
+**Do not write another provider-order or fallback loop.** All standalone modal
+entry points use `ui/modal.py:run_modal`; it consults the one policy in
+`ui/display.py:ui_provider_order`. Individual implementations render content and
+return a result. They do not choose the next toolkit.
+
+For a simple form or multi-step form interaction, use `ui/forms.py:run_form_flow`:
+
+```python
+from ai_guardian.ui.forms import run_form_flow
+
+def interaction(form):
+    values = form("Add connection", "Enter the known destination.", [
+        {"name": "host", "label": "Known host", "required": True},
+    ])
+    if values is None:
+        return None
+    # Subsequent form(...) calls keep this provider; no cross-toolkit restart.
+    return values
+
+result = run_form_flow(interaction, screen_bounds=captured_bounds)
+```
+
+The adapter binds native, isolated Tk and isolated NiceGUI renderers to the shared
+dispatcher. Its native form supports one text field, one checkbox, or a message;
+larger forms need their complete provider implementations and the appropriate
+capability classification. Do not label an incomplete native form as supported.
+Keep work before the first form non-mutating: a pre-display retry can rerun the
+interaction callback. Mutate backend state only after explicit user confirmation.
+
+For other modal families, supply supported renderer callbacks to `run_modal` and
+use the family's capability type and safe no-UI result. Add a capability only
+when its complete implementation exists; do not change the central order.
+Raise `UIUnavailable` only when no interaction has appeared. Track Map/launch
+visibility and preserve it across later steps; cancellation is an ordinary final
+result, never unavailability. Reuse the child framing helpers rather than guessing
+visibility from stderr or nonzero exits.
+
+Capture placement before leaving the tray callback. Keep toolkit state isolated,
+serialize only display-safe values, and retain the separate support-consent and
+active Web Console exceptions. Add unit tests plus the complete affected UX
+contract for precedence, startup-only retry, cancellation/post-display failure,
+explicit preferences/headless and full controls. Update this matrix and record
+real desktop qualification separately from mocked validation. The contributor
+checklist also lives in `AGENTS.md`.
+
 ## Manual desktop verification (not yet qualified by this change)
 
 Run on macOS, native Windows, GNOME/zenity and KDE/kdialog, with X11 and Wayland
@@ -136,7 +196,9 @@ monitor, result and sanitized screenshots/timing for each matrix row.
 
 1. In automatic mode exercise plain and linked messages, actions, setup/profile
    controls, both snooze steps, parameter/target forms, host-path Browse, ask, and
-   sandbox create/upload/delete/policy/progress/log flows. Confirm the first
+   sandbox create/upload/delete/policy/progress/log flows. Test SSH input/identity
+   review against an explicitly authorized disposable host; Cancel must not save,
+   and a later-step failure must not switch toolkits. Confirm the first
    **eligible** toolkit, all controls and complete long text, not merely its theme.
 2. Repeat with each explicit preference and headless. Confirm exclusive behavior
    and the documented target/path/progress/support exceptions; no terminal opens.
