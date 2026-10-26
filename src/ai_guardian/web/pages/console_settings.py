@@ -42,7 +42,7 @@ UI_TOOLKITS = {
 }
 
 UI_TOOLKIT_DESCRIPTIONS = {
-    "auto": "Cascade: tkinter → NiceGUI → headless.",
+    "auto": "Native → Tkinter → NiceGUI, among capable providers; startup failures only.",
     "tkinter": "Native OS popup dialog. Requires Tcl/Tk system library.",
     "nicegui": "Browser-based dialog on a local port.",
     "headless": "No interactive dialogs. Ask actions use their configured fallback (block/warn/log-only).",

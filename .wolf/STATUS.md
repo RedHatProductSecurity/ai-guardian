@@ -5,9 +5,75 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-25 (UTC)
+> Last updated: 2026-10-26 (UTC)
 
 ---
+
+## Issue #2580 modal policy — local implementation ready for review, 2026-10-26
+
+- User authorized implementation with **go** after initialization. Reused branch
+  `2580`; preserved its handoff and OpenWolf's automatic anatomy changes. The
+  qualified ticket was already read once; no repeat lookup or temporary-clone sync.
+- Shared `ui/display.py:ui_provider_order` defines capability-aware Native →
+  Tkinter → NiceGUI order with exclusive preferences/headless behavior. New
+  `ui/modal.py` executes it: only explicit pre-display unavailability advances;
+  cancellation/None/false, interrupted waits and unknown/post-display errors stop.
+- Applied to messages/About, proactive/setup/profile/snooze, ask CLI, plugin
+  parameter forms, working-directory/auxiliary path pickers, target selector and
+  sandbox forms/delete/upload/policy/log review. Full kdialog action menus retain
+  snooze choices; native deletion explains the exact required name. Rich reviews
+  skip native implementations that lose controls/text/errors. Existing support
+  native user-only upload/publication consent and #2569's message protocol remain.
+- Tk maps, opaque file panels, captured browser-startup state and explicit Cocoa
+  startup/late-failure framing prevent a toolkit switch after visibility. Both
+  Cocoa steps preserve placement. Proactive and sandbox browser dialogs use fresh
+  child servers; sandbox complete review payloads cross UTF-8 stdin. Browser
+  Later stays in the active client, not a second server. Progress keeps its
+  documented captured-output fallback; target selection remains NiceGUI-only.
+- `docs/MODAL_PROVIDERS.md` inventories families, platforms, full-control eligibility,
+  placement/preference/host-path/progress/support exceptions and manual desktop
+  steps. Source docs, example/schema descriptions, Web settings and changelog match.
+  No new preference/config key, dependency or terminal/Textual UI was introduced.
+- **Validation: 2,056 distinct related unit/UX/schema tests pass**, including full
+  modal/About/setup/sandbox/support UX files. Focused runner coverage **94%**;
+  shared policy/runner together **88%**, artifact
+  `/tmp/opencode/guardian-2580-modal.coverage`. Black py310, Ruff, Pylint E, project
+  Mypy (315 files), JSON, local docs links/nav, JavaScript syntax and whitespace
+  pass. Reviewed simplification; recorded lifecycle/fixture/type learnings and bugs.
+- **Next:** code review/publication through the external DAF workflow, then fresh
+  CI and actual macOS, native Windows, GNOME/zenity and KDE/kdialog desktop checks:
+  eligible toolkit ordering, complete controls, cancellation/post-map failures,
+  tray focus, secondary-monitor placement and support consent. **These remain
+  unqualified; do not mark the whole issue complete or close it from mocked tests.**
+- DAF progress note saved; completed local work and remaining checklist posted at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2580#issuecomment-6420706375.
+- All changes remain local/uncommitted. No deliberate desktop qualification,
+  support data collection/upload, runtime/security changes, full/integration/container
+  runs, installed-daemon restart, commits, pushes or PRs. OpenWolf owns automatic
+  anatomy/memory bookkeeping. Early test runs stalled on unintended Tk fallback
+  reachability; fixtures now isolate those paths, and inspection found no remaining
+  test-created dialog child. This is not visual QA. Earlier handoffs are historical.
+
+## Issue #2580 session initialization — 2026-10-26
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2580`; confirmed existing branch `2580`
+  and initially clean worktree. Read the qualified GitHub ticket exactly once.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  markdown and hierarchical skills are absent. The discovered project release
+  skill is unrelated. Loaded DAF workflow/OpenWolf and read the project protocol
+  and handoff. This real-workspace development session needs no temp-clone sync.
+- User requested initialization only; implementation has not started. Next:
+  inventory modal capabilities/platform exceptions, define shared provider order
+  and startup-failure outcomes, then address entry points, related unit/complete
+  UX contracts, documentation and manual desktop verification instructions.
+- Preserve Native → Tkinter → NiceGUI among capable providers, complete controls,
+  explicit preferences, safe no-UI outcomes, isolated tray/multi-monitor behavior,
+  no toolkit switch after display (#2569), and native user-only support consent.
+  NiceGUI/Python 3.10+ remain required; do not reintroduce Textual.
+- No code changes, tests, tracker updates, runtime/configuration changes, commits,
+  pushes or PRs. Only this handoff was updated; OpenWolf owns automatic
+  anatomy/memory bookkeeping. Earlier entries are historical, not active tasks.
 
 ## Issue #2552 SSH-managed HTTPS connections — local implementation ready, 2026-10-25
 

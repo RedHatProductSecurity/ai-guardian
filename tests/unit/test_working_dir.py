@@ -150,6 +150,10 @@ class TestChooseDirectory:
     def _enable_directory_picker(self, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
         monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
+        monkeypatch.setattr(
+            "ai_guardian.daemon.working_dir._choose_directory_tkinter_subprocess",
+            mock.Mock(return_value=(False, None)),
+        )
 
     def test_tk_picker_activates_hidden_parent_on_captured_screen(self):
         from ai_guardian.daemon.working_dir import _show_tkinter_directory
@@ -223,9 +227,9 @@ class TestChooseDirectory:
         ):
             result = choose_directory("/Users/dev", screen_bounds=bounds)
 
-        assert result == "/Users/dev/project"
+        assert result is None
         picker.assert_not_called()
-        assert mock_run.call_args.args[0][0] == "osascript"
+        mock_run.assert_not_called()
 
     @mock.patch("ai_guardian.daemon.working_dir.platform.system", return_value="Darwin")
     def test_headless_preference_skips_directory_picker(self, _mock_sys):

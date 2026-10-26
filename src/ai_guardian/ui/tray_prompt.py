@@ -19,10 +19,8 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from ai_guardian.ui.display import (
-    _tkinter_available,
-    get_preferred_ui,
-)
+from ai_guardian.ui.display import get_preferred_ui
+from ai_guardian.ui.modal import _find_free_port, create_tk_root, run_modal
 from ai_guardian.tray.dialog_placement import _place_window_on_screen
 
 logger = logging.getLogger(__name__)
@@ -70,7 +68,7 @@ class _TkinterPromptApp:
         self._ttk = ttk
         self._messagebox = messagebox
 
-        self._root = tk.Tk()
+        self._root = create_tk_root()
 
         if platform.system() == "Darwin":
             try:
@@ -301,45 +299,57 @@ def _resolve(value, extra_vars):
 # -- NiceGUI fallback -------------------------------------------------------
 
 
-def _find_free_port():
-    """Find an available TCP port."""
-    import socket
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def _native_file_picker(pick_directory=False):
-    """Open a platform-native file/directory picker, return selected path or None."""
+    """Auxiliary host-path picker; browser controls cannot return absolute paths.
+
+    A NiceGUI parent deliberately delegates Browse to the local OS/Tk chooser,
+    not a browser upload control. Cancel never reopens another picker.
+    """
+    preferred = get_preferred_ui()
+    return run_modal(
+        "picker",
+        {
+            "native": lambda: _native_file_picker_impl(pick_directory),
+            "tkinter": lambda: _tkinter_file_picker_subprocess(pick_directory),
+        },
+        fallback=None,
+        preferred="auto" if preferred == "nicegui" else preferred,
+    )
+
+
+def _native_file_picker_impl(pick_directory=False):
     import platform
-    import subprocess
+    from ai_guardian.ui.modal import run_native_command, UIUnavailable
 
     system = platform.system()
     try:
         if system == "Darwin":
             kind = "folder" if pick_directory else "file"
             script = f"POSIX path of (choose {kind})"
-            result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+            result = run_native_command(["osascript", "-e", script])
             if result.returncode == 0:
                 return result.stdout.strip()
         elif system == "Linux":
             cmd = ["zenity", "--file-selection"]
             if pick_directory:
                 cmd.append("--directory")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
+            from ai_guardian.tray.plugins import _linux_dialog_provider_order
+
+            commands = {
+                "zenity": cmd,
+                "kdialog": [
+                    "kdialog",
+                    "--getexistingdirectory" if pick_directory else "--getopenfilename",
+                    ".",
+                ],
+            }
+            for provider in _linux_dialog_provider_order():
+                try:
+                    result = run_native_command(commands[provider])
+                except UIUnavailable:
+                    continue
+                return result.stdout.strip() or None if result.returncode == 0 else None
+            raise UIUnavailable("No native path chooser could start")
         elif system == "Windows":
             if pick_directory:
                 ps = (
@@ -353,17 +363,49 @@ def _native_file_picker(pick_directory=False):
                     "$d = New-Object System.Windows.Forms.OpenFileDialog;"
                     "if ($d.ShowDialog() -eq 'OK') { $d.FileName }"
                 )
-            result = subprocess.run(
-                ["powershell", "-Command", ps],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+            result = run_native_command(["powershell", "-NoProfile", "-Command", ps])
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass  # intentionally silent — subprocess may fail
+    except UIUnavailable:
+        raise
     return None
+
+
+def _tkinter_file_picker_subprocess(pick_directory=False):
+    import json
+    import sys
+    from ai_guardian.ui.modal import run_modal_subprocess
+
+    child = (
+        "import json, sys; "
+        "from ai_guardian.ui.tray_prompt import _show_tkinter_file_picker; "
+        "from ai_guardian.ui.modal import run_modal_child; "
+        "run_modal_child(lambda: _show_tkinter_file_picker(json.loads(sys.argv[1])))"
+    )
+    result = run_modal_subprocess(
+        [sys.executable, "-c", child, json.dumps(pick_directory)]
+    )
+    output = (result.stdout or "").strip().splitlines()
+    value = json.loads(output[-1]) if output else None
+    return value if isinstance(value, str) and value else None
+
+
+def _show_tkinter_file_picker(pick_directory=False):
+    from tkinter import filedialog
+    from ai_guardian.ui.modal import mark_modal_displayed
+
+    root = create_tk_root()
+    root.withdraw()
+    try:
+        choose = (
+            filedialog.askdirectory if pick_directory else filedialog.askopenfilename
+        )
+        # The native panel does not map its withdrawn parent. After entering it,
+        # visibility is unknown and a failure cannot authorize another picker.
+        mark_modal_displayed()
+        return choose(parent=root) or None
+    finally:
+        root.destroy()
 
 
 class _NiceGuiPromptApp:
@@ -663,16 +705,16 @@ class TrayPromptApp:
         if preferred == "headless":
             raise RuntimeError("preferred_ui is headless — no interactive UI available")
 
-        if preferred == "tkinter":
-            return _TkinterPromptApp(*args).run()
-        if preferred == "nicegui":
-            return _NiceGuiPromptApp(*args).run()
-        if _tkinter_available():
-            try:
-                return _TkinterPromptApp(*args).run()
-            except Exception:
-                logger.warning("tkinter failed at runtime, falling back")
-        return _NiceGuiPromptApp(*args).run()
+        return run_modal(
+            "form",
+            {
+                "tkinter": lambda: _TkinterPromptApp(*args).run(),
+                "nicegui": lambda: _NiceGuiPromptApp(*args).run(),
+            },
+            fallback=None,
+            screen_bounds=self._screen_bounds,
+            preferred=preferred,
+        )
 
     def _resolve_default(self, value):
         """Resolve {tray.*} variables in a param default value."""

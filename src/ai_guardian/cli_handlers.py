@@ -1142,10 +1142,7 @@ def _handle_prompt_ask(args):
             _map_fallback_to_decision,
             AskResult,
         )
-        from ai_guardian.ui.display import (
-            _tkinter_available,
-            get_preferred_ui,
-        )
+        from ai_guardian.ui.modal import run_modal
     except ImportError as e:
         prompt_logger.error("UI dependencies not available: %s", e)
         return 1
@@ -1180,34 +1177,14 @@ def _handle_prompt_ask(args):
         fallback = getattr(args, "fallback", "block")
         timeout = int(getattr(args, "timeout", 300))
 
-        preferred = get_preferred_ui()
-        result = None
-
-        if preferred == "headless":
-            pass
-        elif preferred == "tkinter":
-            if _tkinter_available():
-                try:
-                    result = _TkinterAskDialog(violation, timeout).run()
-                except Exception as e:
-                    prompt_logger.warning("tkinter ask dialog failed: %s", e)
-        elif preferred == "nicegui":
-            try:
-                result = _NiceGuiAskDialog(violation, timeout).run()
-            except Exception as e:
-                prompt_logger.warning("NiceGUI ask dialog failed: %s", e)
-        else:
-            if _tkinter_available():
-                try:
-                    result = _TkinterAskDialog(violation, timeout).run()
-                except Exception as e:
-                    prompt_logger.warning("tkinter ask dialog failed: %s", e)
-
-            if result is None:
-                try:
-                    result = _NiceGuiAskDialog(violation, timeout).run()
-                except Exception as e:
-                    prompt_logger.warning("NiceGUI ask dialog failed: %s", e)
+        result = run_modal(
+            "form",
+            {
+                "tkinter": lambda: _TkinterAskDialog(violation, timeout).run(),
+                "nicegui": lambda: _NiceGuiAskDialog(violation, timeout).run(),
+            },
+            fallback=None,
+        )
 
         if result is None:
             decision = _map_fallback_to_decision(fallback)

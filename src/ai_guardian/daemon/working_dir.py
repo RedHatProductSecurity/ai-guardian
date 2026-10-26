@@ -116,44 +116,40 @@ def choose_directory(
     Returns:
         Selected directory path, or None if cancelled.
     """
-    system = platform.system()
-    try:
-        from ai_guardian.ui.display import get_preferred_ui
+    from ai_guardian.ui.modal import UIUnavailable, run_modal
 
-        if get_preferred_ui() == "headless":
-            return None
+    def native():
+        system = platform.system()
         if system == "Darwin":
-            return _choose_directory_macos(current, title, screen_bounds=screen_bounds)
-        elif system == "Linux":
+            return _choose_directory_macos(current, title)
+        if system == "Linux":
             return _choose_directory_linux(current, title)
-        elif system == "Windows":
+        if system == "Windows":
             return _choose_directory_windows(current, title)
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
-        logger.debug("Directory picker failed: %s", e)
-    return None
+        raise UIUnavailable("No native directory picker")
+
+    def tkinter():
+        launched, selected = _choose_directory_tkinter_subprocess(
+            current, title, screen_bounds
+        )
+        if not launched:
+            raise UIUnavailable("Tk directory picker unavailable before display")
+        return selected
+
+    # A browser cannot return an absolute host path from its directory chooser.
+    return run_modal(
+        "picker",
+        {"native": native, "tkinter": tkinter},
+        fallback=None,
+        screen_bounds=screen_bounds,
+    )
 
 
 def _choose_directory_macos(
     current: Optional[str] = None,
     title: str = "Choose Working Directory",
-    *,
-    screen_bounds=None,
 ) -> Optional[str]:
-    from ai_guardian.ui.display import _tkinter_available, get_preferred_ui
-
-    if (
-        screen_bounds is not None
-        and get_preferred_ui() in {"auto", "tkinter"}
-        and _tkinter_available()
-    ):
-        launched, chosen = _choose_directory_tkinter_subprocess(
-            current,
-            title,
-            screen_bounds,
-        )
-        if launched:
-            return chosen
-
+    from ai_guardian.ui.modal import run_native_command
     from ai_guardian.daemon.multi_client import _escape_for_applescript
 
     escaped_title = _escape_for_applescript(title)
@@ -163,12 +159,7 @@ def _choose_directory_macos(
         escaped = _escape_for_applescript(current)
         default_clause = f' default location POSIX file "{escaped}"'
     script = f"POSIX path of (choose folder{prompt_clause}{default_clause})"
-    result = subprocess.run(
-        ["osascript", "-e", script],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    result = run_native_command(["osascript", "-e", script])
     if result.returncode != 0:
         return None
     chosen = result.stdout.strip().rstrip("/")
@@ -200,35 +191,23 @@ def _choose_directory_tkinter_subprocess(
     child = (
         "import json, sys; "
         "from ai_guardian.daemon.working_dir import _show_tkinter_directory; "
+        "from ai_guardian.ui.modal import run_modal_child; "
         "p=json.loads(sys.argv[1]); "
-        "v=_show_tkinter_directory(p.get('current'), p['title'], "
-        "p.get('screen_bounds')); "
-        "print(json.dumps(v, ensure_ascii=False))"
+        "run_modal_child(lambda: _show_tkinter_directory(p.get('current'), p['title'], "
+        "p.get('screen_bounds')))"
     )
+    from ai_guardian.ui.modal import UIUnavailable, run_modal_subprocess
+
     try:
-        result = subprocess.run(
-            [sys.executable, "-c", child, payload],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-    except (subprocess.TimeoutExpired, OSError) as exc:
-        logger.debug("Tkinter directory picker could not be shown: %s", exc)
-        return False, None
-    if result.returncode != 0:
-        logger.debug(
-            "Tkinter directory picker exited with code %s: %s",
-            result.returncode,
-            (result.stderr or "").strip()[:200],
-        )
+        result = run_modal_subprocess([sys.executable, "-c", child, payload])
+    except UIUnavailable:
         return False, None
     try:
         output = (result.stdout or "").strip().splitlines()
         chosen = json.loads(output[-1]) if output else None
     except (json.JSONDecodeError, IndexError):
         logger.debug("Tkinter directory picker returned invalid output")
-        return False, None
+        return True, None
     return True, chosen if isinstance(chosen, str) and chosen else None
 
 
@@ -241,7 +220,9 @@ def _show_tkinter_directory(current, title, screen_bounds):
     from ai_guardian.ui.display import _ensure_tcl_library
 
     _ensure_tcl_library()
-    root = tk.Tk()
+    from ai_guardian.ui.modal import create_tk_root
+
+    root = create_tk_root()
     root.title(title)
     root.geometry("1x1")
     _place_window_on_screen(root, screen_bounds, 1, 1)
@@ -275,7 +256,8 @@ def _choose_directory_linux(
     current: Optional[str] = None,
     title: str = "Choose Working Directory",
 ) -> Optional[str]:
-    from ai_guardian.tray.plugins import _find_icon
+    from ai_guardian.tray.plugins import _find_icon, _linux_dialog_provider_order
+    from ai_guardian.ui.modal import UIUnavailable, run_native_command
 
     cmd = [
         "zenity",
@@ -289,11 +271,25 @@ def _choose_directory_linux(
         cmd.extend(["--window-icon", icon_path])
     if current:
         cmd.extend(["--filename", current + "/"])
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    if result.returncode != 0:
-        return None
-    chosen = result.stdout.strip()
-    return chosen or None
+    commands = {
+        "zenity": cmd,
+        "kdialog": [
+            "kdialog",
+            "--title",
+            title,
+            "--getexistingdirectory",
+            current or ".",
+        ],
+    }
+    for provider in _linux_dialog_provider_order():
+        try:
+            result = run_native_command(commands[provider])
+        except UIUnavailable:
+            continue
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip() or None
+    raise UIUnavailable("No Linux directory provider could start")
 
 
 def _choose_directory_windows(
@@ -312,12 +308,9 @@ def _choose_directory_windows(
         "$d.ShowNewFolderButton = $true; "
         "if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath } else { '' }"
     )
-    result = subprocess.run(
-        ["powershell", "-Command", ps],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    from ai_guardian.ui.modal import run_native_command
+
+    result = run_native_command(["powershell", "-NoProfile", "-Command", ps])
     if result.returncode != 0:
         return None
     chosen = result.stdout.strip()

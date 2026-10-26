@@ -35,6 +35,13 @@ class TrayTargetSelectorApp:
         self._targets = targets
 
     def run(self):
+        from ai_guardian.ui.modal import run_modal
+
+        # Only this implementation currently preserves the full multi-target
+        # selection/validation/disconnect contract; see MODAL_PROVIDERS.md.
+        return run_modal("form", {"nicegui": self._run_nicegui}, fallback=None)
+
+    def _run_nicegui(self):
         from nicegui import app, ui
 
         result_holder: dict[str, str | None] = {"value": None}
@@ -87,7 +94,7 @@ class TrayTargetSelectorApp:
                     ui.button("OK", on_click=submit, color="primary")
 
         from ai_guardian.desktop_utils import open_url
-        from ai_guardian.ui.tray_prompt import _find_free_port
+        from ai_guardian.ui.modal import _find_free_port
 
         app.on_disconnect(on_disconnect)
         port = _find_free_port()

@@ -16,8 +16,13 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 
 from ai_guardian.ui.display import (
     _ensure_tcl_library,
-    _tkinter_available,
     get_preferred_ui,
+)
+from ai_guardian.ui.modal import (
+    UIUnavailable,
+    create_tk_root,
+    run_modal,
+    run_modal_subprocess,
 )
 from ai_guardian.tray.dialog_placement import _place_window_on_screen
 
@@ -35,25 +40,6 @@ IDE_SETUP_STATUS_KEY = "ide_setup_status"
 IDE_SETUP_KEY_PREFIX = "ide_setup_"
 
 _PROFILE_NOT_SELECTED = object()
-
-
-def _prompt_environment_context(system: str) -> str:
-    """Return non-sensitive desktop-session context for prompt diagnostics."""
-    display = "set" if os.environ.get("DISPLAY") else "unset"
-    wayland_display = "set" if os.environ.get("WAYLAND_DISPLAY") else "unset"
-    dbus_session = "set" if os.environ.get("DBUS_SESSION_BUS_ADDRESS") else "unset"
-    session_type = os.environ.get("XDG_SESSION_TYPE") or "unknown"
-    desktop = os.environ.get("XDG_CURRENT_DESKTOP") or "unknown"
-    return ", ".join(
-        (
-            f"platform={system}",
-            f"DISPLAY={display}",
-            f"WAYLAND_DISPLAY={wayland_display}",
-            f"DBUS_SESSION_BUS_ADDRESS={dbus_session}",
-            f"XDG_SESSION_TYPE={session_type}",
-            f"XDG_CURRENT_DESKTOP={desktop}",
-        )
-    )
 
 
 def _state_path() -> Path:
@@ -363,8 +349,8 @@ def reset_ide_setup_state(
 class ProactivePromptDialog:
     """Prompt with action, snooze, and dismiss choices.
 
-    The normal UI cascade is Tkinter, NiceGUI, then a log-only fallback.
-    Tray-safe Linux prompts add the desktop-native dialog tier first for
+    The automatic UI cascade is Native, Tkinter, NiceGUI, then no UI.
+    Linux native prompts support
     simple prompts; structured setup prompts stay on a rich UI provider so
     native zenity/kdialog fallbacks cannot silently discard IDE or profile
     choices. ``show`` returns a stable string for ordinary prompts. When IDE
@@ -457,109 +443,46 @@ class ProactivePromptDialog:
         return f"{label} — {description}" if description else label
 
     def show(self, tray_safe: bool = False) -> object:
-        import platform
-
-        system = platform.system()
-        preferred = get_preferred_ui()
         has_structured_choices = bool(self.ide_choices or self._profile_options())
-        if preferred == "auto":
-            tiers = ["tkinter", "nicegui"]
-        elif preferred in {"tkinter", "nicegui"} and has_structured_choices:
-            # Explicit preferences are exclusive. Native Linux dialogs cannot
-            # render structured setup controls, but the selected rich provider
-            # must not silently fall back to another configured toolkit.
-            tiers = [preferred]
-        else:
-            tiers = [preferred]
 
-        # On Linux, prefer a desktop-native prompt when the tray is running
-        # in a graphical session. Native providers only support the simple
-        # action flow; structured setup prompts use one rich provider for both
-        # the setup and snooze steps.
-        native_attempted = False
-        if (
-            tray_safe
-            and system == "Linux"
-            and preferred == "auto"
-            and not has_structured_choices
-        ):
-            native_attempted = True
-            try:
-                result = self._show_native_fallback()
-                if result is not None:
-                    return self._normalize_two_step_result(result)
-            except Exception as exc:
-                logger.warning(
-                    "Native Linux proactive prompt failed; trying the next "
-                    "fallback: %s (%s)",
-                    exc,
-                    _prompt_environment_context(system),
-                )
+        def native():
+            result = self._show_native_fallback()
+            if result is None:
+                raise UIUnavailable("Native prompt could not start")
+            return result
 
-        # pystray owns an NSApplication with accessory activation policy on
-        # modern macOS.  Keep the prompt outside that process by using the
-        # Tkinter subprocess path first.  NiceGUI is deliberately excluded:
-        # starting it in the tray worker can open a browser against the
-        # default web-console port before its page is ready, producing an
-        # Internal Server Error instead of a setup prompt.
-        if tray_safe and system == "Darwin":
-            if preferred == "auto":
-                tiers = ["tkinter", "nicegui"]
-            elif preferred == "nicegui":
-                tiers = ["tkinter"]
-            logger.info(
-                "Using subprocess/native UI for tray prompt on macOS; "
-                "skipping in-process NiceGUI"
+        def tkinter():
+            if tray_safe:
+                return self._show_tkinter_subprocess()
+            return (
+                self._show_ide_choices_tkinter()
+                if has_structured_choices
+                else self._show_tkinter()
             )
 
-        for tier in tiers:
-            try:
-                if tier == "tkinter" and _tkinter_available():
-                    if tray_safe and system in {"Darwin", "Windows"}:
-                        result = self._show_tkinter_subprocess()
-                        if result is not None:
-                            return self._normalize_two_step_result(result)
-                        continue
-                    if self.ide_choices or self._profile_options():
-                        return self._normalize_two_step_result(
-                            self._show_ide_choices_tkinter()
-                        )
-                    return self._normalize_two_step_result(self._show_tkinter())
-                if tier == "nicegui":
-                    if self.ide_choices or self._profile_options():
-                        return self._normalize_two_step_result(
-                            self._show_ide_choices_nicegui()
-                        )
-                    return self._normalize_two_step_result(self._show_nicegui())
-            except Exception as exc:
-                logger.warning(
-                    "Proactive %s prompt unavailable on %s; trying the next "
-                    "fallback: %s (%s)",
-                    tier,
-                    system,
-                    exc,
-                    _prompt_environment_context(system),
-                )
+        def nicegui():
+            if tray_safe:
+                return self._show_ui_subprocess("nicegui")
+            return (
+                self._show_ide_choices_nicegui()
+                if has_structured_choices
+                else self._show_nicegui()
+            )
 
-        if (
-            tray_safe
-            and system in {"Darwin", "Linux"}
-            and preferred != "headless"
-            and not native_attempted
-            and not (system == "Linux" and has_structured_choices)
-        ):
-            try:
-                result = self._show_native_fallback()
-                if result is not None:
-                    return self._normalize_two_step_result(result)
-            except Exception as exc:
-                logger.warning("Native %s proactive prompt failed: %s", system, exc)
-
-        logger.info("%s: %s", self.title, self.message)
-        return self._default_snooze_result() if self.two_step_snooze else "dismiss"
+        return self._normalize_two_step_result(
+            run_modal(
+                "setup" if has_structured_choices else "action",
+                {"native": native, "tkinter": tkinter, "nicegui": nicegui},
+                fallback=(
+                    self._default_snooze_result() if self.two_step_snooze else "dismiss"
+                ),
+                screen_bounds=self.screen_bounds,
+                preferred=get_preferred_ui(),
+            )
+        )
 
     def _show_native_fallback(self) -> Optional[object]:
-        """Show an actionable native fallback when tray UI tiers fail."""
+        """Execute the complete native implementation chosen by modal policy."""
         from ai_guardian.tray.plugins import show_action_dialog
 
         return show_action_dialog(
@@ -575,10 +498,15 @@ class ProactivePromptDialog:
         )
 
     def _show_tkinter_subprocess(self) -> Optional[object]:
-        """Show Tkinter dialog outside tray process (macOS pystray safety)."""
-        import platform
-        import subprocess
+        """Keep Tk outside the tray's event loop on every platform."""
+        return self._show_ui_subprocess("tkinter")
+
+    def _show_ui_subprocess(self, toolkit: str) -> Optional[object]:
+        """Keep each complete proactive flow in one isolated toolkit process."""
         import sys
+
+        if toolkit not in {"tkinter", "nicegui"}:
+            raise ValueError("Unsupported proactive toolkit")
 
         payload = json.dumps(
             {
@@ -596,56 +524,19 @@ class ProactivePromptDialog:
         child = (
             "import json, sys; "
             "from ai_guardian.tray.proactive_prompt import ProactivePromptDialog; "
+            "from ai_guardian.ui.modal import run_modal_child; "
             "p=json.loads(sys.argv[1]); "
             "d=ProactivePromptDialog(p['title'], p['message'], "
             "p['action_label'], p['dismiss_label'], p['snooze_options'], "
             "p.get('ide_choices'), p.get('profile_choices'), "
             "p.get('screen_bounds'), p.get('two_step_snooze', False)); "
-            "value=(d._show_ide_choices_tkinter() if (p.get('ide_choices') "
+            f"run_modal_child(lambda: (d._show_ide_choices_{toolkit}() if (p.get('ide_choices') "
             "or p.get('profile_choices')) "
-            "else d._show_tkinter()); "
-            "print(json.dumps(value) if (p.get('ide_choices') "
-            "or p.get('profile_choices')) else value)"
+            f"else d._show_{toolkit}()))"
         )
-        try:
-            result = subprocess.run(
-                [sys.executable, "-c", child, payload],
-                capture_output=True,
-                text=True,
-                timeout=3600,
-                check=False,
-            )
-            if result.returncode == 0:
-                output = (result.stdout or "").strip().splitlines()
-                if not output:
-                    logger.warning("Tkinter proactive prompt returned no result")
-                    return None
-                value = output[-1]
-                return (
-                    json.loads(value)
-                    if self.ide_choices or self._profile_options()
-                    else value
-                )
-            stderr = (result.stderr or "").strip()
-            detail = f": {stderr}" if stderr else ""
-            logger.warning(
-                "Tkinter proactive prompt exited with code %s%s\nDesktop session: %s",
-                result.returncode,
-                detail,
-                _prompt_environment_context(platform.system()),
-            )
-        except (
-            OSError,
-            IndexError,
-            json.JSONDecodeError,
-            subprocess.TimeoutExpired,
-        ) as exc:
-            logger.warning(
-                "Tkinter proactive prompt failed: %s (%s)",
-                exc,
-                _prompt_environment_context(platform.system()),
-            )
-        return None
+        result = run_modal_subprocess([sys.executable, "-c", child, payload])
+        output = (result.stdout or "").strip().splitlines()
+        return json.loads(output[-1]) if output else None
 
     def _ide_selection_result(
         self,
@@ -691,7 +582,7 @@ class ProactivePromptDialog:
             self._default_snooze_result() if self.two_step_snooze else "dismiss"
         )
         result = {"value": self._ide_selection_result(initial_result)}
-        root = tk.Tk()
+        root = create_tk_root()
         root.title(self.title)
         root.resizable(False, False)
         frame = ttk.Frame(root, padding=16)
@@ -790,11 +681,6 @@ class ProactivePromptDialog:
                 result["value"] = self._ide_selection_result(
                     value, install, never, profile
                 )
-            elif value == "later":
-                result["value"] = self._ide_selection_result(
-                    value,
-                    profile=(None if profile_options else _PROFILE_NOT_SELECTED),
-                )
             else:
                 result["value"] = (
                     self._never_ide_selection()
@@ -872,7 +758,6 @@ class ProactivePromptDialog:
             self._default_snooze_result() if self.two_step_snooze else "dismiss"
         )
         result = {"value": self._ide_selection_result(initial_result)}
-        done = threading.Event()
         controls: Dict[str, Any] = {}
         profile_control = None
         defaults = self._default_ide_selection()
@@ -887,6 +772,9 @@ class ProactivePromptDialog:
                 selected.value = True
 
         def choose(value):
+            if value == "later" and self.two_step_snooze:
+                self._open_nicegui_snooze(choose)
+                return
             if value == "action":
                 profile = (
                     profile_control.value
@@ -902,11 +790,6 @@ class ProactivePromptDialog:
                 result["value"] = self._ide_selection_result(
                     value, install, never, profile
                 )
-            elif value == "later":
-                result["value"] = self._ide_selection_result(
-                    value,
-                    profile=(None if profile_options else _PROFILE_NOT_SELECTED),
-                )
             else:
                 result["value"] = (
                     self._never_ide_selection()
@@ -916,18 +799,7 @@ class ProactivePromptDialog:
                         profile=(None if profile_options else _PROFILE_NOT_SELECTED),
                     )
                 )
-            done.set()
             app.shutdown()
-
-        if self.two_step_snooze:
-            on_disconnect = getattr(app, "on_disconnect", None)
-            if callable(on_disconnect):
-
-                def handle_disconnect():
-                    done.set()
-                    app.shutdown()
-
-                on_disconnect(handle_disconnect)
 
         with ui.card().classes("min-w-[620px]"):
             ui.label(self.title).classes("text-h6")
@@ -985,23 +857,7 @@ class ProactivePromptDialog:
                         ),
                     )
 
-        ui.run(
-            title=self.title,
-            reload=False,
-            show=True,
-            port=0,
-            host="127.0.0.1",
-        )
-        done.wait(timeout=3600)
-        if (
-            self.two_step_snooze
-            and isinstance(result["value"], dict)
-            and result["value"].get("result") == "later"
-        ):
-            result["value"] = self._ide_selection_result(
-                self._show_snooze_nicegui(),
-                profile=(None if profile_options else _PROFILE_NOT_SELECTED),
-            )
+        self._run_nicegui_prompt(self.title)
         return result["value"]
 
     def _show_snooze_tkinter(self) -> str:
@@ -1013,7 +869,7 @@ class ProactivePromptDialog:
         _ensure_tcl_library()
 
         result = {"value": self._default_snooze_result()}
-        root = tk.Tk()
+        root = create_tk_root()
         root.title("Remind me later")
         root.resizable(False, False)
         frame = ttk.Frame(root, padding=16)
@@ -1064,7 +920,7 @@ class ProactivePromptDialog:
                 self._default_snooze_result() if self.two_step_snooze else "dismiss"
             )
         }
-        root = tk.Tk()
+        root = create_tk_root()
         root.title(self.title)
         root.resizable(False, False)
         frame = ttk.Frame(root, padding=16)
@@ -1122,43 +978,30 @@ class ProactivePromptDialog:
             return self._show_snooze_tkinter()
         return result["value"]
 
-    def _show_snooze_nicegui(self) -> str:
-        """Show the second NiceGUI step that selects a snooze duration."""
-        from nicegui import app, ui
+    def _open_nicegui_snooze(self, on_choose) -> None:
+        """Build Later's second step in the active client, without restarting UI."""
+        from nicegui import ui
 
-        result = {"value": self._default_snooze_result()}
-        done = threading.Event()
+        completed = False
 
-        def choose(option):
-            result["value"] = f"snooze_{option}"
-            done.set()
-            app.shutdown()
+        def finish(value):
+            nonlocal completed
+            if not completed:
+                completed = True
+                dialog.close()
+                on_choose(value)
 
-        on_disconnect = getattr(app, "on_disconnect", None)
-        if callable(on_disconnect):
-
-            def handle_disconnect():
-                done.set()
-                app.shutdown()
-
-            on_disconnect(handle_disconnect)
-
-        with ui.card():
+        with ui.dialog() as dialog, ui.card():
             ui.label("Remind me later").classes("text-h6")
             ui.label("When should AI Guardian ask again?")
             with ui.row():
                 for option in self.snooze_options:
-                    ui.button(option, on_click=lambda option=option: choose(option))
-
-        ui.run(
-            title="Remind me later",
-            reload=False,
-            show=True,
-            port=0,
-            host="127.0.0.1",
-        )
-        done.wait(timeout=3600)
-        return result["value"]
+                    ui.button(
+                        option,
+                        on_click=lambda option=option: finish(f"snooze_{option}"),
+                    )
+        dialog.on("hide", lambda: finish(self._default_snooze_result()))
+        dialog.open()
 
     def _show_nicegui(self) -> str:
         from nicegui import app, ui
@@ -1168,22 +1011,13 @@ class ProactivePromptDialog:
                 self._default_snooze_result() if self.two_step_snooze else "dismiss"
             )
         }
-        done = threading.Event()
 
         def choose(value):
+            if value == "later" and self.two_step_snooze:
+                self._open_nicegui_snooze(choose)
+                return
             result["value"] = value
-            done.set()
             app.shutdown()
-
-        if self.two_step_snooze:
-            on_disconnect = getattr(app, "on_disconnect", None)
-            if callable(on_disconnect):
-
-                def handle_disconnect():
-                    done.set()
-                    app.shutdown()
-
-                on_disconnect(handle_disconnect)
 
         with ui.card():
             ui.label(self.title).classes("text-h6")
@@ -1201,14 +1035,12 @@ class ProactivePromptDialog:
                 if self.dismiss_label:
                     ui.button(self.dismiss_label, on_click=lambda: choose("dismiss"))
 
-        ui.run(
-            title=self.title,
-            reload=False,
-            show=True,
-            port=0,
-            host="127.0.0.1",
-        )
-        done.wait(timeout=3600)
-        if self.two_step_snooze and result["value"] == "later":
-            return self._show_snooze_nicegui()
+        self._run_nicegui_prompt(self.title)
         return result["value"]
+
+    @staticmethod
+    def _run_nicegui_prompt(title):
+        """Open the actual loopback page only after its isolated server starts."""
+        from ai_guardian.ui.modal import run_nicegui_modal
+
+        run_nicegui_modal(title)

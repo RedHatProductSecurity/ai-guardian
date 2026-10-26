@@ -101,6 +101,7 @@ nav:
       - Observability / OTEL: OBSERVABILITY.md
   - Console:
       - Web Console: CONSOLE.md
+      - Modal Providers: MODAL_PROVIDERS.md
       - IDE Sessions and Agent Support: AGENT_SUPPORT.md
       - Hooks: HOOKS.md
       - MCP Security Advisor: MCP_SERVER.md

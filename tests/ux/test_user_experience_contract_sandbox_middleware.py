@@ -310,7 +310,7 @@ def test_user_experience_policy_apply_allows_edit_before_replacement():
     ]
 
     with (
-        patch("ai_guardian.ui.display.select_ui_provider", return_value="tkinter"),
+        patch("ai_guardian.ui.modal.ui_provider_order", return_value=("tkinter",)),
         patch(
             "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess",
             return_value={"policy_yaml": preview},

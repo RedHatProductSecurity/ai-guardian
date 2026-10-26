@@ -1141,6 +1141,15 @@ class TestShowDialog:
     def _enable_dialog_provider(self, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
         monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
+        # Failover tests must not launch real desktop/browser children.
+        monkeypatch.setattr(
+            "ai_guardian.tray.dialog_placement.show_tkinter_message_subprocess",
+            mock.Mock(return_value=None),
+        )
+        monkeypatch.setattr(
+            "ai_guardian.tray.dialog_placement.show_nicegui_message_subprocess",
+            mock.Mock(return_value=False),
+        )
 
     def test_headless_does_not_launch_dialog(self, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "headless")
@@ -1171,9 +1180,9 @@ class TestShowDialog:
             assert _linux_dialog_provider_order() == ("zenity", "kdialog")
 
     def test_macos_uses_osascript(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
+        with mock.patch("platform.system", return_value="Darwin"):
             with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
                 result = show_dialog("Test Title", "Hello world")
                 assert result is True
                 mock_run.assert_called_once()
@@ -1183,8 +1192,7 @@ class TestShowDialog:
 
     def test_macos_screen_aware_dialog_uses_clicked_display_context(self):
         bounds = (1920, 37, 2560, 1380)
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
+        with mock.patch("platform.system", return_value="Darwin"):
             with mock.patch(
                 "ai_guardian.tray.dialog_placement.show_tkinter_message_subprocess",
                 return_value=True,
@@ -1201,8 +1209,7 @@ class TestShowDialog:
 
     def test_macos_screen_aware_dialog_skips_tk_when_disabled(self):
         bounds = (1920, 37, 2560, 1380)
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
+        with mock.patch("platform.system", return_value="Darwin"):
             with (
                 mock.patch(
                     "ai_guardian.ui.display.get_preferred_ui", return_value="auto"
@@ -1213,16 +1220,20 @@ class TestShowDialog:
                 mock.patch(
                     "ai_guardian.tray.dialog_placement.show_tkinter_message_subprocess"
                 ) as show_tk,
+                mock.patch(
+                    "ai_guardian.tray.dialog_placement.show_nicegui_message_subprocess",
+                    return_value=True,
+                ) as nicegui,
                 mock.patch("subprocess.run") as mock_run,
             ):
                 assert show_dialog("Test Title", "Hello", screen_bounds=bounds)
 
         show_tk.assert_not_called()
-        assert mock_run.call_args.args[0][0] == "osascript"
+        mock_run.assert_not_called()
+        nicegui.assert_called_once_with("Test Title", "Hello", links=())
 
     def test_linux_uses_zenity(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Linux"
+        with mock.patch("platform.system", return_value="Linux"):
             with mock.patch.dict(
                 "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
             ):
@@ -1270,7 +1281,9 @@ class TestShowDialog:
         failure = (
             FileNotFoundError(private_text)
             if missing
-            else subprocess.CompletedProcess([], 1, "", private_text)
+            else subprocess.CompletedProcess(
+                [], 1, "", "cannot open display: " + private_text
+            )
         )
         run = mock.Mock(
             side_effect=[failure, subprocess.CompletedProcess([], 0, "", "")]
@@ -1297,62 +1310,58 @@ class TestShowDialog:
             assert show_dialog(private_text, private_text) is False
 
         run.assert_called_once()
-        assert "interrupted" in caplog.text
+        assert "not opening a replacement" in caplog.text
         assert private_text not in caplog.text
 
     def test_windows_uses_powershell(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Windows"
+        with mock.patch("platform.system", return_value="Windows"):
             with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
                 result = show_dialog("Test Title", "Hello")
                 assert result is True
                 mock_run.assert_called_once()
                 args = mock_run.call_args[0][0]
                 assert args[0] == "powershell"
-                assert "MessageBox" in args[2]
+                assert "MessageBox" in args[-1]
 
     def test_returns_false_on_unknown_platform(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "FreeBSD"
+        with mock.patch("platform.system", return_value="FreeBSD"):
             assert show_dialog("T", "M") is False
 
     def test_returns_false_on_error(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
+        with mock.patch("platform.system", return_value="Darwin"):
             with mock.patch("subprocess.run", side_effect=FileNotFoundError):
                 assert show_dialog("T", "M") is False
 
     def test_returns_false_on_nonzero_exit(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
+        with mock.patch("platform.system", return_value="Darwin"):
             with mock.patch("subprocess.run") as mock_run:
                 mock_run.return_value.returncode = 1
+                mock_run.return_value.stderr = "unknown native error"
                 assert show_dialog("T", "M") is False
 
     def test_escapes_quotes_in_message(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
+        with mock.patch("platform.system", return_value="Darwin"):
             with mock.patch("subprocess.run") as mock_run:
                 show_dialog("Title", 'He said "hello"')
                 script = mock_run.call_args[0][0][2]
                 assert '\\"' in script
 
     def test_macos_includes_icon_when_found(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
+        with mock.patch("platform.system", return_value="Darwin"):
             with mock.patch(
                 "ai_guardian.tray.plugins._find_icon",
                 return_value="/path/to/icon.icns",
             ):
                 with mock.patch("subprocess.run") as mock_run:
+                    mock_run.return_value.returncode = 0
                     result = show_dialog("Title", "Hello")
                     assert result is True
                     script = mock_run.call_args[0][0][2]
                     assert "icon" in script.lower()
 
     def test_multiline_message_on_macos(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
+        with mock.patch("platform.system", return_value="Darwin"):
             with mock.patch("subprocess.run") as mock_run:
                 show_dialog("Title", "line1\nline2\nline3")
                 script = mock_run.call_args[0][0][2]
@@ -1530,7 +1539,7 @@ class TestShowActionDialog:
                 "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
             ):
                 failed = mock.Mock(returncode=2, stderr="cannot open display")
-                succeeded = mock.Mock(returncode=0, stdout="")
+                succeeded = mock.Mock(returncode=0, stdout="action")
                 with mock.patch(
                     "subprocess.run", side_effect=[failed, succeeded]
                 ) as mock_run:
@@ -1621,14 +1630,13 @@ class TestShowActionDialog:
         assert "placeWindowOnTargetScreen" in script
         assert '"screen_bounds": [1920, 37, 2560, 1380]' in script
 
-    def test_macos_returns_none_on_nonzero_exit(self):
+    def test_macos_unknown_nonzero_exit_cannot_authorize_another_prompt(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
             with mock.patch("subprocess.run") as mock_run:
                 mock_run.return_value.returncode = 1
-                assert (
-                    show_action_dialog("Title", "Message", "Continue", "Cancel") is None
-                )
+                with pytest.raises(RuntimeError):
+                    show_action_dialog("Title", "Message", "Continue", "Cancel")
                 mock_run.assert_called_once()
 
     def test_macos_structured_prompt_uses_checkbox_accessory_and_snooze_popup(self):

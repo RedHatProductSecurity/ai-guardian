@@ -23,6 +23,7 @@ from ai_guardian.tray.proactive_prompt import (
     ProactivePromptDialog,
     ProactivePromptState,
 )
+from ai_guardian.ui.modal import UIUnavailable
 
 
 def test_doctor_lists_complete_hook_inventory_without_false_failures():
@@ -879,20 +880,20 @@ def test_linux_health_and_prompt_fallbacks_remain_visible_and_actionable():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
         patch.object(prompt, "_show_native_fallback", return_value=None) as native,
         patch.object(
-            prompt, "_show_tkinter", side_effect=RuntimeError("Tk failed")
+            prompt,
+            "_show_tkinter_subprocess",
+            side_effect=UIUnavailable("Tk initialization failed"),
         ) as tkinter,
-        patch.object(prompt, "_show_nicegui", return_value="action") as browser,
+        patch.object(prompt, "_show_ui_subprocess", return_value="action") as browser,
     ):
         assert prompt.show(tray_safe=True) == "action"
 
     native.assert_called_once_with()
     tkinter.assert_called_once_with()
-    browser.assert_called_once_with()
+    browser.assert_called_once_with("nicegui")
 
 
 def test_linux_structured_setup_prompt_keeps_one_rich_provider_for_snooze():
@@ -935,10 +936,8 @@ def test_linux_structured_setup_prompt_keeps_one_rich_provider_for_snooze():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
-        patch.object(prompt, "_show_ide_choices_tkinter", return_value=result) as rich,
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
+        patch.object(prompt, "_show_tkinter_subprocess", return_value=result) as rich,
         patch.object(prompt, "_show_native_fallback") as native,
     ):
         assert prompt.show(tray_safe=True) == result
