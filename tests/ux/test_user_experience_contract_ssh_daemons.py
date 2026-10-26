@@ -2,9 +2,11 @@
 
 Manual qualification (requires an explicitly authorized disposable POSIX VM):
 1. Configure a loopback HTTPS daemon and verify its SSH host key independently.
-2. Select Add daemon via SSH in the tray; enter the existing SSH alias.
+2. Select Add daemon via SSH in the tray; enter the existing SSH alias. Auto uses
+   Native → Tkinter → NiceGUI through the shared dispatcher, not the Web Console.
 3. Check the destination, SAN identity and fingerprint; Cancel must save nothing.
 4. Repeat, explicitly confirm trust, then restart the tray: it reconnects.
+   Cancel/Close or a later-step failure must never open a different toolkit.
 5. Drop SSH connectivity, occupy the old local port, and restore connectivity:
    offline/backoff is visible; no unrelated listener receives daemon credentials.
 6. Trigger a remote ask prompt and decide in the tray without inbound callbacks.
@@ -115,8 +117,7 @@ def test_offline_and_identity_change_messages_are_explicit():
 def test_pairing_only_prepares_until_user_confirms_and_no_secret_is_displayed(
     tmp_path, pairing
 ):
-    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
-    from ai_guardian.web.components.ssh_connections import pairing_summary, TRUST_LABEL
+    from ai_guardian.ui.ssh_pairing import pairing_summary, TRUST_LABEL
     from ai_guardian.daemon.ssh_connections import SSHConnectionManager
 
     manager = SSHConnectionManager(SSHStore(tmp_path / "connections"))
@@ -134,6 +135,51 @@ def test_pairing_only_prepares_until_user_confirms_and_no_secret_is_displayed(
     assert pairing.profile.token not in summary
     assert "PRIVATE KEY" not in summary
     manager.close()
+
+
+def test_tray_ssh_pairing_uses_native_first_without_opening_console(
+    monkeypatch, pairing
+):
+    """USER EXPERIENCE: Add via SSH → desktop input, full identity, unchecked trust.
+
+    Only explicit Trust and add daemon saves the private server-side draft.
+    Canceling identity review ends the flow without Tk/browser replacement.
+    """
+    from ai_guardian.tray.ssh_connections import open_enrollment
+    from ai_guardian.ui.ssh_pairing import TRUST_LABEL
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    tray = mock.Mock()
+    tray._discovery.ssh_manager.prepare.return_value = pairing
+    with (
+        mock.patch("ai_guardian.ui.forms.NativeForm") as native,
+        mock.patch(
+            "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+        ) as tk,
+        mock.patch("ai_guardian.tray.sandbox_dialog._show_nicegui_form") as browser,
+        mock.patch("ai_guardian.tray.menu.open_web_console") as console,
+    ):
+        native.return_value.side_effect = [{"host": "known-alias"}, None]
+        open_enrollment(tray)
+    review = native.return_value.call_args
+    assert review.args[0] == "Verify SSH daemon identity"
+    assert review.args[2] == [
+        {
+            "name": "trust",
+            "label": TRUST_LABEL,
+            "type": "bool",
+            "default": False,
+            "required": True,
+        }
+    ]
+    assert pairing.profile.certificate_sha256 in review.args[1]
+    assert pairing.profile.token not in str(native.return_value.call_args_list)
+    tray._discovery.ssh_manager.enroll.assert_not_called()
+    tk.assert_not_called()
+    browser.assert_not_called()
+    console.assert_not_called()
 
 
 def test_authenticated_poll_only_registration_needs_no_callback_or_workstation_token(

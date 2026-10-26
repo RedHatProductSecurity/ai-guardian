@@ -10,7 +10,59 @@ def _worker(callback):
     return action
 
 
-def open_enrollment(tray):
+def open_enrollment(tray, *, screen_bounds=None):
+    from ai_guardian.daemon.rest_transport import DaemonConnectionError
+    from ai_guardian.daemon.ssh_storage import SSHConnectionError
+    from ai_guardian.ui.forms import run_form_flow
+    from ai_guardian.ui.ssh_pairing import (
+        PAIRED_MESSAGE,
+        PAIRING_MESSAGE,
+        TRUST_LABEL,
+        pairing_summary,
+    )
+
+    def enroll(form):
+        values = form(
+            "Add daemon via SSH",
+            PAIRING_MESSAGE,
+            [{"name": "host", "label": "Known SSH host or alias", "required": True}],
+            submit_label="Connect",
+        )
+        if not values or not isinstance(values.get("host"), str):
+            return
+        host = values["host"].strip()
+        if not host:
+            return
+        try:
+            manager = tray._discovery.ssh_manager
+            pairing = manager.prepare(host)
+            consent = form(
+                "Verify SSH daemon identity",
+                pairing_summary(pairing),
+                [
+                    {
+                        "name": "trust",
+                        "label": TRUST_LABEL,
+                        "type": "bool",
+                        "default": False,
+                        "required": True,
+                    }
+                ],
+                submit_label="Trust and add daemon",
+            )
+            if not consent or consent.get("trust") is not True:
+                return
+            manager.enroll(pairing)
+            tray._refresh_event.set()
+            form("Add daemon via SSH", PAIRED_MESSAGE, [], submit_label="Close")
+        except (SSHConnectionError, DaemonConnectionError) as exc:
+            form("Add daemon via SSH", str(exc), [], submit_label="Close")
+
+    return run_form_flow(enroll, screen_bounds=screen_bounds)
+
+
+def open_management(tray):
+    """Keep the explicit management picker separate from modal enrollment."""
     from ai_guardian.tray import menu
     from ai_guardian.tray.plugins import show_dialog
 
@@ -81,7 +133,7 @@ def build_items(tray, pystray):
                     pystray.MenuItem("Web Console", _worker(console)),
                     pystray.MenuItem(
                         "Manage SSH connection...",
-                        _worker(lambda: open_enrollment(tray)),
+                        _worker(lambda: open_management(tray)),
                     ),
                 ),
             )

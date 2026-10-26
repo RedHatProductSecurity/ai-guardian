@@ -301,8 +301,11 @@ removed by setting a broader base selector.
 ### Add daemon via SSH
 
 For an SSH-only VM (including a known AWS instance), choose **Add daemon via SSH**
-in the tray. The local Web Console opens its daemon picker with SSH connection
-controls. No `tray-targets.json` editing or separately maintained tunnel is needed.
+in the tray. The shared modal dispatcher tries **Native → Tkinter → NiceGUI**,
+respecting explicit preferences and advancing only after proven pre-display
+startup failure. It never switches toolkit after host input or cancellation.
+No Web Console, `tray-targets.json` editing or separately maintained tunnel is
+needed. The local Web Console retains its existing pairing controls too.
 
 **Prerequisites:** a system OpenSSH client, an existing host-key-verified SSH
 destination and agent/key authentication, and a POSIX remote host with `python3`
@@ -370,8 +373,9 @@ ownership and parent-path checks. Windows encrypts/authenticates the entire
 record with current-user DPAPI; copying it to another account does not provision
 trust or credentials. Temporary CA material is public certificate data, with the
 immutable paired pin still enforced. SSH storage is not collected by support
-bundles; do not attach pairing records to issues. Enrollment/removal is available
-only in a loopback-bound Web Console, not an exposed-network Console. Tray and
+bundles; do not attach pairing records to issues. Tray enrollment uses the desktop
+modal flow. Web enrollment/removal is available only in a loopback-bound Web
+Console, not an exposed-network Console. Tray and
 Console each own their own tunnels if both query a saved target concurrently.
 
 Custom `AI_GUARDIAN_CONFIG_DIR`, `AI_GUARDIAN_HOME`, `AI_GUARDIAN_STATE_DIR` and XDG

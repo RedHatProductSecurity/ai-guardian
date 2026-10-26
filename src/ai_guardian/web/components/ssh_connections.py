@@ -4,22 +4,13 @@ from nicegui import run, ui
 
 from ai_guardian.daemon.rest_transport import DaemonConnectionError
 from ai_guardian.daemon.ssh_storage import SSHConnectionError
+from ai_guardian.ui.ssh_pairing import (
+    PAIRED_MESSAGE,
+    PAIRING_MESSAGE,
+    TRUST_LABEL,
+    pairing_summary,
+)
 from ai_guardian.web.client_state import is_client_deleted
-
-PAIRING_MESSAGE = "Only pair a host you are authorized to manage. OpenSSH uses your existing configuration and agent. Unknown or changed host keys are not accepted automatically."
-TRUST_LABEL = "I confirm this SSH destination and daemon certificate identity"
-
-
-def pairing_summary(pairing):
-    profile = pairing.profile
-    return (
-        f"SSH destination: {profile.destination}\nDaemon: {pairing.daemon_name}\n"
-        f"Remote loopback port: {pairing.port}\nTLS server identity: {profile.server_name}\n"
-        f"Certificate SHA-256: {profile.certificate_sha256}\n\n"
-        "Certificate trust and the authorized daemon credential came through host-key-verified SSH. "
-        "Only the daemon credential and certificate trust are saved; no SSH private key or password is stored. "
-        "Changed identities require a new, explicit pairing."
-    )
 
 
 def create_ssh_connections(service):
@@ -67,9 +58,7 @@ def create_ssh_connections(service):
                         cancel_button.disable()
                         try:
                             await run.io_bound(service.enroll_ssh_connection, draft)
-                            feedback.set_text(
-                                "SSH daemon paired. The connection is saved and reconnects automatically."
-                            )
+                            feedback.set_text(PAIRED_MESSAGE)
                         except (SSHConnectionError, DaemonConnectionError) as exc:
                             feedback.set_text(str(exc))
                         finally:

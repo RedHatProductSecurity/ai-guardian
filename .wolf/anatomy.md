@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1240 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1243 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -11,9 +11,9 @@
 - `.gitleaks.toml` — Test files for secret redaction - contain intentional fake secrets for testing (~333 tok)
 - `.readthedocs.yaml` (~55 tok)
 - `.release-config.json` (~147 tok)
-- `AGENTS.md` — Agent Instructions for AI Guardian (~18388 tok)
+- `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~20954 tok)
-- `CHANGELOG.md` — Change log (~76420 tok)
+- `CHANGELOG.md` — Change log (~76534 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -919,8 +919,8 @@
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
 - `MCP_SERVER.md` — MCP Security Advisor Server (~5114 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
-- `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~2968 tok)
-- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~13537 tok)
+- `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~3880 tok)
+- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~13604 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
@@ -1414,7 +1414,7 @@
 
 - `__init__.py` — System tray UI and daemon client. (~12 tok)
 - `animation.py` — Declares TrayIconManager (~1492 tok)
-- `app.py` — URL configuration (~19136 tok)
+- `app.py` — URL configuration (~19204 tok)
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~2594 tok)
 - `health.py` — URL configuration (~16971 tok)
 - `icons.py` — URL configuration (~1302 tok)
@@ -1427,7 +1427,7 @@
 - `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21792 tok)
 - `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~11405 tok)
 - `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24133 tok)
-- `ssh_connections.py` — SSH tray menus use cached state; every action runs outside the GUI thread. (~901 tok)
+- `ssh_connections.py` — SSH tray menus use cached state; every action runs outside the GUI thread. (~1444 tok)
 - `support.py` — Nonblocking tray support workflow; every native window owns a child process. (~1699 tok)
 
 ## src/ai_guardian/tui/
@@ -1515,13 +1515,16 @@
 - `ask_dialog_tk.py` — Tkinter implementation of the ask dialog. (~9551 tok)
 - `ask_dialog.py` — Interactive ask dialog for the 'ask' action mode. (~6193 tok)
 - `clipboard.py` — Platform clipboard helpers shared by interactive UI components. (~595 tok)
-- `display.py` — Shared display tier detection for prompt and tray dialogs. (~1372 tok)
+- `display.py` — Shared display tier detection for prompt and tray dialogs. (~1389 tok)
 - `file_opener.py` — Open a file in the user's preferred editor at a specific line. (~517 tok)
+- `forms.py` — Reusable form flows; ordering and fallback belong exclusively to run_modal. (~476 tok)
 - `hook_simulator.py` — Shared hook simulator data and result parsing for the web console. (~1098 tok)
 - `ignore_file_editor.py` — Shared logic for the 'Ignore File...' flow. (~690 tok)
-- `modal.py` — Runtime modal lifecycle: only proven pre-display failure permits fallback. (~2052 tok)
+- `modal.py` — Runtime modal lifecycle: only proven pre-display failure permits fallback. (~2107 tok)
+- `native_form.py` — Complete single-field native forms, isolated from the tray's GUI state. (~4100 tok)
 - `pattern_editor.py` — Pattern editor for the ask dialog's "Allow Always" flow. (~3252 tok)
 - `source_annotator.py` — Source code annotation insertion for inline suppression. (~2292 tok)
+- `ssh_pairing.py` — Display-only SSH identity text shared by desktop forms and the Web Console. (~298 tok)
 - `support_review.py` — Native, user-only support review. No network listener or auto-approve option. (~8968 tok)
 - `tray_prompt.py` — _TkinterPromptApp: run (~7464 tok)
 - `tray_target_selector.py` — NiceGUI target selector for multi-target tray plugin commands. (~1062 tok)

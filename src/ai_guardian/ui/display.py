@@ -62,7 +62,8 @@ def ui_provider_order(
     """Return eligible tiers, not a guarantee that a provider can start.
 
     Native supports messages, confirmations and pickers on all desktop platforms,
-    actions on Linux/macOS, and complete setup controls only on macOS (Cocoa).
+    single-field forms on all desktops, actions on Linux/macOS, and complete
+    setup controls only on macOS (Cocoa).
     AppleScript cannot place a message/panel on a specified monitor. Rich forms,
     linked messages and streams skip native rather than losing controls.
     Callers intersect these tiers with their actual implementations. See
@@ -76,6 +77,7 @@ def ui_provider_order(
         "simple",
         "confirmation",
         "picker",
+        "basic_form",
     }
     native |= dialog_type == "action" and system in {"Darwin", "Linux"}
     native |= dialog_type == "setup" and system == "Darwin"

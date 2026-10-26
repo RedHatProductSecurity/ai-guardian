@@ -1221,6 +1221,37 @@ non-interactive fallback.
 **Rule**: New configurable console features must be added to the Web Console
 pages and covered by the corresponding web/UX tests.
 
+### Creating or Changing a Modal
+
+**IMPORTANT**: Modal entry points MUST use the shared dispatcher
+`src/ai_guardian/ui/modal.py:run_modal`. Do not implement provider ordering or
+fallback loops in individual modals. `ui/display.py:ui_provider_order` is the
+single source of truth for **Native → Tkinter → NiceGUI**, explicit toolkit
+preferences, headless behavior, capabilities, and placement eligibility.
+
+- Prefer the reusable form-flow adapter in `ui/forms.py` for simple forms and
+  multi-step form interactions. Define content/fields, not another cascade. Keep
+  work before the first form non-mutating: startup retry may rerun the callback.
+- Implement the complete interaction in each eligible provider. Do not drop
+  checkboxes, identity details, validation, long text, or other controls to make
+  a native implementation eligible. Document any unsupported provider.
+- Only proven **pre-display** startup failure may raise `UIUnavailable` and
+  advance the dispatcher. Cancel, Escape, Close, completion, timeouts, unknown
+  errors, and post-display failures are terminal. Multi-step flows must retain
+  their selected provider after the first window appears.
+- Keep Tk out of the tray process. Capture monitor bounds in the tray callback
+  before dispatching its worker; pass them to isolated UI children. Do not start
+  a competing NiceGUI server inside the tray or an active browser callback.
+- Keep private protocol/credential objects out of serialized form payloads,
+  command lines, browser values, and diagnostics. Send only display-safe data.
+- Add related unit tests and a complete affected `tests/ux/` contract covering
+  order, startup-only fallback, cancellation, preferences/headless, and full
+  controls. Update the matrix/manual checklist in `docs/MODAL_PROVIDERS.md`.
+
+Support's native user-only consent and already-open Web Console controls are
+documented exceptions, not permission to bypass the dispatcher for new tray
+modals. See [Modal implementation guide](docs/MODAL_PROVIDERS.md#adding-a-modal).
+
 ---
 
 ## Common Tasks
