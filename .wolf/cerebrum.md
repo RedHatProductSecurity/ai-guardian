@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-24
+> Last updated: 2026-10-26
 
 ## User Preferences
 
@@ -100,6 +100,29 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **Modal policy and lifecycle (#2580):** `ui/display.py:ui_provider_order`
+  selects Native → Tkinter → NiceGUI only among complete implementations;
+  explicit preferences are exclusive. `ui/modal.py:run_modal` retries only
+  explicit pre-display unavailability. None/false, cancellation, unknown errors
+  and post-display failures are terminal. Native command stderr alone is not
+  startup proof. Keep support's native user-only consent outside this cascade.
+- **Visibility and browser ownership (#2580):** A withdrawn Tk parent never
+  maps when its owned file panel opens: latch possible visibility before entering
+  that panel. Capture the lifecycle in the browser-startup closure, since callback
+  context can differ, and latch before requesting a tab. Cocoa's own startup
+  status must become terminal before makeKeyAndOrderFront/runModal, including
+  failures in Later. Isolate each tray sandbox/proactive browser server in a fresh
+  child. Full reviews/logs can exceed argv limits; stdin with explicit UTF-8 pipes
+  preserves complete content. Build NiceGUI's second snooze dialog directly in
+  the active client's event handler, not through another ui.run/server restart.
+- **Modal regression isolation (#2580):** When adding fallback tiers, replace
+  every reachable desktop/browser implementation in tests; mocking only the
+  former first provider can open real Tk panels and hang. Patch shared policy
+  selection rather than old module-local imports. Pass subprocess input explicitly
+  rather than expanding a string-typed kwargs dict that breaks Mypy's overload
+  resolution. Unit/UX mocks and JavaScript syntax checks do not qualify actual
+  native appearance, focus, monitor placement or support publication consent.
 
 - **SSH connection boundaries (#2552):** Pair a user-entered OpenSSH alias only
   after explicit local Web Console confirmation; probe metadata is private

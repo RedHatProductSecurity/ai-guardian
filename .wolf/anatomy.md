@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1238 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1240 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -12,8 +12,8 @@
 - `.readthedocs.yaml` (~55 tok)
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18388 tok)
-- `ai-guardian-example.json` — ', '**/examples/**')", (~20898 tok)
-- `CHANGELOG.md` — Change log (~76261 tok)
+- `ai-guardian-example.json` — ', '**/examples/**')", (~20954 tok)
+- `CHANGELOG.md` — Change log (~76420 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -22,7 +22,7 @@
 - `install.sh` (~8726 tok)
 - `LICENSE` — Project license (~196 tok)
 - `Makefile` — Make build targets (~62 tok)
-- `mkdocs.yml` (~1195 tok)
+- `mkdocs.yml` (~1208 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2605 tok)
 - `README.md` — Project documentation (~10802 tok)
@@ -907,7 +907,7 @@
 - `AUDIT_LOGGING.md` — Compliance Audit Logging (~1442 tok)
 - `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4050 tok)
 - `CONFIGURATION.md` — Configuration Guide (~7189 tok)
-- `CONSOLE.md` — AI Guardian Console Guide (~1271 tok)
+- `CONSOLE.md` — AI Guardian Console Guide (~1368 tok)
 - `COOKBOOK.md` — Configuration Cookbook (~15503 tok)
 - `DEVELOPER_GUIDE.md` — Developer Guide (~3796 tok)
 - `documentation.md` — 8<-- "docs/README.md" (~6 tok)
@@ -919,7 +919,8 @@
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
 - `MCP_SERVER.md` — MCP Security Advisor Server (~5114 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
-- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~13502 tok)
+- `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~2968 tok)
+- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~13537 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
@@ -929,7 +930,7 @@
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `POTENTIAL_INTEGRATIONS.md` — Potential Integrations (~507 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
-- `README.md` — Project documentation (~1611 tok)
+- `README.md` — Project documentation (~1644 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
 - `Sandbox.md` — Sandbox CLI (~5751 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
@@ -1060,7 +1061,7 @@
 - `allowlist_utils.py` — extract_pattern_string, is_allowlist_pattern_valid, validate_allowlist_patterns, filter_valid_patterns + 2 more (~1175 tok)
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~5596 tok)
-- `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~13119 tok)
+- `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~12854 tok)
 - `cli.py` — main (~31000 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5254 tok)
@@ -1122,7 +1123,7 @@
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
 - `violation_rescan.py` — Rescan a file at a violation location to retrieve matched text. (~3372 tok)
-- `working_dir.py` — URL configuration (~2771 tok)
+- `working_dir.py` — URL configuration (~2780 tok)
 
 ## src/ai_guardian/hook_adapters/
 
@@ -1339,7 +1340,7 @@
 
 ## src/ai_guardian/schemas/
 
-- `ai-guardian-config.schema.json` — Declares in (~39557 tok)
+- `ai-guardian-config.schema.json` — Declares in (~39603 tok)
 - `aiguardignore.schema.json` (~556 tok)
 - `policy-decision.schema.json` (~584 tok)
 - `scenario.schema.json` — Declares to (~1315 tok)
@@ -1414,7 +1415,7 @@
 - `__init__.py` — System tray UI and daemon client. (~12 tok)
 - `animation.py` — Declares TrayIconManager (~1492 tok)
 - `app.py` — URL configuration (~19136 tok)
-- `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1908 tok)
+- `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~2594 tok)
 - `health.py` — URL configuration (~16971 tok)
 - `icons.py` — URL configuration (~1302 tok)
 - `menu_builder.py` — _SandboxOutput: append, action (~46715 tok)
@@ -1423,9 +1424,9 @@
 - `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2297 tok)
 - `openshell_middleware.py` — OpenShell middleware readiness checks used by the system tray. (~5878 tok)
 - `plugin_runner.py` — Declares TrayPluginMenuBuilder (~8890 tok)
-- `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21928 tok)
-- `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~13275 tok)
-- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~25156 tok)
+- `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21792 tok)
+- `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~11405 tok)
+- `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24133 tok)
 - `ssh_connections.py` — SSH tray menus use cached state; every action runs outside the GUI thread. (~901 tok)
 - `support.py` — Nonblocking tray support workflow; every native window owns a child process. (~1699 tok)
 
@@ -1511,18 +1512,19 @@
 ## src/ai_guardian/ui/
 
 - `__init__.py` — Shared UI helpers used by the NiceGUI console and tray dialogs. (~20 tok)
-- `ask_dialog_tk.py` — Tkinter implementation of the ask dialog. (~9532 tok)
+- `ask_dialog_tk.py` — Tkinter implementation of the ask dialog. (~9551 tok)
 - `ask_dialog.py` — Interactive ask dialog for the 'ask' action mode. (~6193 tok)
 - `clipboard.py` — Platform clipboard helpers shared by interactive UI components. (~595 tok)
-- `display.py` — Shared display tier detection for prompt and tray dialogs. (~1321 tok)
+- `display.py` — Shared display tier detection for prompt and tray dialogs. (~1372 tok)
 - `file_opener.py` — Open a file in the user's preferred editor at a specific line. (~517 tok)
 - `hook_simulator.py` — Shared hook simulator data and result parsing for the web console. (~1098 tok)
 - `ignore_file_editor.py` — Shared logic for the 'Ignore File...' flow. (~690 tok)
+- `modal.py` — Runtime modal lifecycle: only proven pre-display failure permits fallback. (~2052 tok)
 - `pattern_editor.py` — Pattern editor for the ask dialog's "Allow Always" flow. (~3252 tok)
 - `source_annotator.py` — Source code annotation insertion for inline suppression. (~2292 tok)
 - `support_review.py` — Native, user-only support review. No network listener or auto-approve option. (~8968 tok)
-- `tray_prompt.py` — _TkinterPromptApp: run (~6952 tok)
-- `tray_target_selector.py` — NiceGUI target selector for multi-target tray plugin commands. (~974 tok)
+- `tray_prompt.py` — _TkinterPromptApp: run (~7464 tok)
+- `tray_target_selector.py` — NiceGUI target selector for multi-target tray plugin commands. (~1062 tok)
 
 ## src/ai_guardian/utils/
 

@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Capability-aware modal policy (#2580):** Share Native → Tkinter → NiceGUI
+  ordering across eligible dialog implementations, with exclusive explicit
+  preferences and fallback only on proven pre-display startup failure. Preserve
+  cancellation and the no-toolkit-switch-after-display contract; retain complete
+  setup choices, upload/policy reviews, destructive confirmations and uncropped
+  log review. Isolate proactive tray toolkits and retain native user-only support
+  consent. Includes the platform/capability matrix, unit/UX contracts and manual
+  desktop verification checklist; visual/platform qualification remains pending.
 - **SSH-managed remote daemons (#2552):** Add a known SSH host/alias from the tray
   or local Web Console, explicitly confirm its daemon TLS identity, and reconnect
   automatically through owned loopback-only OpenSSH forwarding. Uses existing SSH

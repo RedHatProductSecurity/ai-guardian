@@ -76,8 +76,10 @@ saved proactive level; hooks continue enforcing security.
 without displaying the full profile URL, alongside the existing
 version, system, scanner and repository details. With Tk available, click the
 author line or focus it and press Enter/Space to open the profile. Opening or
-closing About does not open a browser. If Tk is unavailable, the native fallback
-still displays the same attribution. Older daemon responses also retain this author attribution.
+closing About does not open the profile. If Tk is unavailable, the browser UI
+keeps the same clickable attribution; the profile still opens only on selection.
+Older daemon responses also retain this author attribution. See the
+[provider/capability matrix](MODAL_PROVIDERS.md) for all modal families and exceptions.
 The Tk dialog finishes layout before opening and requests foreground focus again
 after the tray-menu handoff, so it stays visible rather than immediately dropping
 behind other windows. The raising hint is temporary, not permanent always-on-top.
@@ -87,7 +89,7 @@ deadline: leaving a window open beyond 30 seconds must not replace it with
 another provider. Normal dismissal (including Escape or the window close
 button) completes the action. Missing providers and startup failures retain
 fallback support; an isolated Tk window that has already mapped is never
-replaced by a native dialog after a later failure. Diagnostics identify the
+replaced by another toolkit after a later failure. Diagnostics identify the
 provider, exit status and startup/display stage without logging dialog content.
 This does not change the separate response deadlines for security prompts.
 

@@ -10,7 +10,7 @@ Manual desktop verification:
 3. With Tk available, the author line is a keyboard-focusable link. Clicking it,
    or focusing it and pressing Enter/Space, opens the profile; opening About alone
    must not launch a browser. Closing About must not open the profile either.
-4. Without Tk, the native About fallback still shows the same compact attribution.
+4. Without Tk, the browser About fallback keeps the same compact, clickable attribution.
    The full author-profile URL must not appear in the visible About text.
 5. Reopen About and shared informational modals several times. Each action must
    map only one completed window. Leave each open beyond 30 seconds: it must not
@@ -127,12 +127,12 @@ def test_linux_message_reopening_and_dismissal_never_cascade_to_another_provider
         (1, "ai-guardian-message-ready\n", False, 1),
     ],
 )
-def test_about_uses_native_fallback_only_if_tk_never_displayed(
+def test_about_uses_browser_fallback_only_if_tk_never_displayed(
     monkeypatch, returncode, stdout, expected, launches
 ):
     """USER EXPERIENCE: A displayed About is never replaced by another toolkit.
 
-    Startup failure retains the original native fallback. A failure after the
+    Startup failure retains a complete browser fallback. A failure after the
     window mapped is reported, not presented as a reason to open a second modal.
     """
     monkeypatch.setattr(plugins.platform, "system", lambda: "Linux")
@@ -162,7 +162,7 @@ def test_about_uses_native_fallback_only_if_tk_never_displayed(
 
     assert run.call_count == launches
     if launches == 2:
-        assert run.call_args.args[0][0] == "zenity"
+        assert "_show_nicegui_message" in run.call_args.args[0][2]
     browser.assert_not_called()
 
 

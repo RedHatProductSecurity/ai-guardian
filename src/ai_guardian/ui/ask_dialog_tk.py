@@ -114,7 +114,9 @@ class _TkinterAskDialog:
 
         _ensure_tcl_library()
 
-        root = tk.Tk()
+        from ai_guardian.ui.modal import create_tk_root
+
+        root = create_tk_root()
 
         if platform.system() == "Darwin":
             try:

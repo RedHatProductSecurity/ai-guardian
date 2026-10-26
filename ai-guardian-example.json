@@ -1056,7 +1056,7 @@
   "_comment_console": "Console settings",
   "console": {
     "preferred_ui": "auto",
-    "_comment_preferred_ui": "Preferred UI toolkit for dialogs. Options: auto, tkinter, nicegui, headless. Legacy textual values use nicegui. Env var override: AI_GUARDIAN_PREFERRED_UI",
+    "_comment_preferred_ui": "Dialogs: auto prefers Native → Tkinter → NiceGUI among complete implementations; only pre-display failures advance. tkinter/nicegui are exclusive; headless opens no UI. Host-path, progress, placement and native user-only support-review exceptions: docs/MODAL_PROVIDERS.md. Legacy textual values use nicegui. Env var override: AI_GUARDIAN_PREFERRED_UI",
     "editor_theme": "monokai",
     "_comment_editor_theme": "Color theme for the JSON config editor. Options: monokai, vscode_dark, dracula, github_light",
     "web": {

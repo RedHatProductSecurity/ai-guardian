@@ -6,6 +6,8 @@ from unittest import mock
 
 import pytest
 
+from ai_guardian.ui.modal import UIUnavailable
+
 
 class TestHandleTrayPrompt:
     """Tests for _handle_prompt_params CLI handler."""
@@ -291,9 +293,7 @@ class TestTrayPromptProviders:
     def test_cascade_prefers_tkinter(self):
         from ai_guardian.ui.tray_prompt import TrayPromptApp, _TkinterPromptApp
 
-        with mock.patch(
-            "ai_guardian.ui.tray_prompt._tkinter_available", return_value=True
-        ):
+        with mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True):
             with mock.patch.object(
                 _TkinterPromptApp, "run", return_value="echo ok"
             ) as mock_run:
@@ -304,7 +304,7 @@ class TestTrayPromptProviders:
         from ai_guardian.ui.tray_prompt import TrayPromptApp, _NiceGuiPromptApp
 
         with mock.patch(
-            "ai_guardian.ui.tray_prompt._tkinter_available", return_value=False
+            "ai_guardian.ui.display._tkinter_available", return_value=False
         ):
             with mock.patch.object(
                 _NiceGuiPromptApp, "run", return_value="echo ng"
@@ -319,11 +319,11 @@ class TestTrayPromptProviders:
             _TkinterPromptApp,
         )
 
-        with mock.patch(
-            "ai_guardian.ui.tray_prompt._tkinter_available", return_value=True
-        ):
+        with mock.patch("ai_guardian.ui.display._tkinter_available", return_value=True):
             with mock.patch.object(
-                _TkinterPromptApp, "run", side_effect=Exception("TclError")
+                _TkinterPromptApp,
+                "run",
+                side_effect=UIUnavailable("Tk initialization failed"),
             ):
                 with mock.patch.object(
                     _NiceGuiPromptApp, "run", return_value="echo ng"
@@ -340,6 +340,11 @@ class TestTrayPromptProviders:
 
 class TestNativeFilePicker:
     """Tests for _native_file_picker (platform-native dialogs)."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_picker(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+        monkeypatch.setenv("XDG_CURRENT_DESKTOP", "GNOME")
 
     def test_returns_path_on_macos(self):
         from ai_guardian.ui.tray_prompt import _native_file_picker

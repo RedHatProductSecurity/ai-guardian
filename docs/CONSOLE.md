@@ -100,6 +100,12 @@ The preferred dialog setting supports `auto`, `tkinter`, `nicegui`, and
 configuration compatibility. The environment override is
 `AI_GUARDIAN_PREFERRED_UI`.
 
+Automatic dialogs prefer **Native → Tkinter → NiceGUI** among implementations
+that preserve the entire interaction. Explicit toolkit choices are exclusive;
+only proven startup unavailability can advance an automatic flow. See the
+[modal provider matrix](MODAL_PROVIDERS.md) for capability, placement, host-path,
+progress and user-only support-consent exceptions and desktop verification.
+
 ## System Tray
 
 The tray's **Web Console** menu item opens the browser console for the selected

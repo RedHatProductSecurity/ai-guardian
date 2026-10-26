@@ -15,6 +15,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
+from ai_guardian.ui.modal import (
+    create_tk_root,
+    run_modal,
+    run_modal_subprocess,
+    run_nicegui_modal,
+    UIUnavailable,
+)
+
 logger = logging.getLogger(__name__)
 
 ScreenBounds = Tuple[int, int, int, int]
@@ -702,7 +710,7 @@ def _show_tkinter_form(
     dynamic_defaults: Dict[str, str] = {}
     result: Dict[str, Any] = {}
 
-    root = tk.Tk()
+    root = create_tk_root()
     root.title(title)
     root.geometry("760x680")
     _place_window_on_screen(root, screen_bounds, 760, 680)
@@ -1050,31 +1058,13 @@ def _show_tkinter_form_subprocess(
     child = (
         "import json, sys; "
         "from ai_guardian.tray.sandbox_dialog import _show_tkinter_form; "
+        "from ai_guardian.ui.modal import run_modal_child; "
         "p=json.loads(sys.argv[1]); "
-        "v=_show_tkinter_form(p['title'], p['message'], p['fields'], "
+        "run_modal_child(lambda: _show_tkinter_form(p['title'], p['message'], p['fields'], "
         "screen_bounds=p.get('screen_bounds'), "
-        "submit_label=p.get('submit_label', 'Continue')); "
-        "print(json.dumps(v, ensure_ascii=False) if v is not None else '')"
+        "submit_label=p.get('submit_label', 'Continue')))"
     )
-    try:
-        process = subprocess.run(
-            [sys.executable, "-c", child, payload],
-            capture_output=True,
-            text=True,
-            timeout=3600,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        logger.warning("Sandbox form could not be shown: %s", exc)
-        return None
-    if process.returncode != 0:
-        detail = (process.stderr or "").strip()
-        logger.warning(
-            "Sandbox form exited with code %s%s",
-            process.returncode,
-            f": {detail[:200]}" if detail else "",
-        )
-        return None
+    process = run_modal_subprocess([sys.executable, "-c", child, payload])
     output = (process.stdout or "").strip().splitlines()
     if not output:
         return None
@@ -1107,7 +1097,7 @@ def _show_tkinter_progress(
     updates: queue.Queue[Dict[str, Any]] = queue.Queue()
     log_parts: list[str] = []
     completed = False
-    root = tk.Tk()
+    root = create_tk_root()
     root.title(title)
     root.geometry("760x480")
     _place_window_on_screen(root, screen_bounds, 760, 480)
@@ -1293,7 +1283,7 @@ def _show_tkinter_log(
     from ai_guardian.ui.display import _ensure_tcl_library
 
     _ensure_tcl_library()
-    root = tk.Tk()
+    root = create_tk_root()
     root.title(title)
     root.geometry("760x480")
     _place_window_on_screen(root, screen_bounds, 760, 480)
@@ -1385,7 +1375,7 @@ def _show_tkinter_confirmation(
     from ai_guardian.ui.display import _ensure_tcl_library
 
     _ensure_tcl_library()
-    root = tk.Tk()
+    root = create_tk_root()
     root.title(title)
     root.geometry("560x250")
     _place_window_on_screen(root, screen_bounds, 560, 250)
@@ -1469,31 +1459,13 @@ def _show_tkinter_confirmation_subprocess(
     child = (
         "import json, sys; "
         "from ai_guardian.tray.sandbox_dialog import _show_tkinter_confirmation; "
+        "from ai_guardian.ui.modal import run_modal_child; "
         "p=json.loads(sys.argv[1]); "
-        "v=_show_tkinter_confirmation(p['title'], p['message'], p['expected_name'], "
-        "screen_bounds=p.get('screen_bounds')); "
-        "print('1' if v else '0')"
+        "run_modal_child(lambda: _show_tkinter_confirmation(p['title'], p['message'], p['expected_name'], "
+        "screen_bounds=p.get('screen_bounds')))"
     )
-    try:
-        process = subprocess.run(
-            [sys.executable, "-c", child, payload],
-            capture_output=True,
-            text=True,
-            timeout=3600,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        logger.warning("Sandbox confirmation could not be shown: %s", exc)
-        return False
-    if process.returncode != 0:
-        detail = (process.stderr or "").strip()
-        logger.warning(
-            "Sandbox confirmation exited with code %s%s",
-            process.returncode,
-            f": {detail[:200]}" if detail else "",
-        )
-        return False
-    return (process.stdout or "").strip().splitlines()[-1:] == ["1"]
+    process = run_modal_subprocess([sys.executable, "-c", child, payload])
+    return (process.stdout or "").strip().splitlines()[-1:] == ["true"]
 
 
 def _copy_sandbox_log(log_text: str, clipboard_owner=None) -> str:
@@ -1545,29 +1517,12 @@ def _show_tkinter_log_subprocess(
     child = (
         "import json, sys; "
         "from ai_guardian.tray.sandbox_dialog import _show_tkinter_log; "
+        "from ai_guardian.ui.modal import run_modal_child; "
         "p=json.loads(sys.argv[1]); "
-        "_show_tkinter_log(p['title'], p['message'], p['log'], "
-        "screen_bounds=p.get('screen_bounds'))"
+        "run_modal_child(lambda: _show_tkinter_log(p['title'], p['message'], p['log'], "
+        "screen_bounds=p.get('screen_bounds')))"
     )
-    try:
-        process = subprocess.run(
-            [sys.executable, "-c", child, payload],
-            capture_output=True,
-            text=True,
-            timeout=3600,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        logger.warning("Sandbox log dialog could not be shown: %s", exc)
-        return False
-    if process.returncode != 0:
-        detail = (process.stderr or "").strip()
-        logger.warning(
-            "Sandbox log dialog exited with code %s%s",
-            process.returncode,
-            f": {detail[:200]}" if detail else "",
-        )
-        return False
+    run_modal_subprocess([sys.executable, "-c", child, payload])
     return True
 
 
@@ -1662,16 +1617,51 @@ def _form_label(field: Dict[str, Any]) -> str:
     return f"{label} *" if field.get("required") else label
 
 
-def _find_free_port() -> int:
-    """Return an available loopback port for a temporary browser dialog."""
-    import socket
+def _run_sandbox_browser(kind: str, payload: Dict[str, Any]) -> Any:
+    """Give each tray interaction a fresh server, outside the tray's app state.
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+    Stdin keeps complete policies/logs out of argv limits and process listings.
+    The callback is fixed locally, not selected by serialized form input.
+    """
+    if kind not in {"form", "confirmation", "log"}:
+        raise ValueError("Unsupported sandbox browser dialog")
+    child = (
+        "import json, sys; "
+        f"from ai_guardian.tray.sandbox_dialog import _render_nicegui_{kind}; "
+        "from ai_guardian.ui.modal import run_modal_child; "
+        "p=json.load(sys.stdin); "
+        f"run_modal_child(lambda: _render_nicegui_{kind}(**p))"
+    )
+    process = run_modal_subprocess(
+        [sys.executable, "-c", child],
+        input_text=json.dumps(payload, ensure_ascii=False),
+    )
+    output = (process.stdout or "").strip().splitlines()
+    return json.loads(output[-1]) if output else None
 
 
 def _show_nicegui_form(
+    title: str,
+    message: str,
+    fields: Iterable[Dict[str, Any]],
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+    submit_label: str = "Continue",
+) -> Optional[Dict[str, Any]]:
+    result = _run_sandbox_browser(
+        "form",
+        {
+            "title": title,
+            "message": message,
+            "fields": tuple(fields),
+            "screen_bounds": screen_bounds,
+            "submit_label": submit_label,
+        },
+    )
+    return result if isinstance(result, dict) else None
+
+
+def _render_nicegui_form(
     title: str,
     message: str,
     fields: Iterable[Dict[str, Any]],
@@ -1807,19 +1797,7 @@ def _show_nicegui_form(
                 ui.button("Cancel", on_click=close).props("flat")
                 ui.button(submit_label, on_click=submit, color="primary")
 
-    port = _find_free_port()
-    from ai_guardian.desktop_utils import open_url
-
-    url = f"http://127.0.0.1:{port}"
-    app.on_startup(lambda: open_url(url))
-    ui.run(
-        host="127.0.0.1",
-        port=port,
-        title=title,
-        dark=True,
-        show=False,
-        reload=False,
-    )
+    run_nicegui_modal(title, dark=True)
     return result_holder["value"]
 
 
@@ -1831,6 +1809,10 @@ def _show_native_confirmation(
     expected_text: Optional[str] = None,
 ) -> Optional[bool]:
     """Show a native confirmation, returning ``None`` if no provider starts."""
+    from ai_guardian.ui.modal import run_native_command
+
+    if expected_text is not None:
+        message = f"{message}\n\nType {expected_text} to confirm:"
     system = platform.system()
     try:
         if system == "Darwin":
@@ -1850,12 +1832,7 @@ def _show_native_confirmation(
                 f'{answer} buttons {buttons} default button "{escaped_confirm}"'
                 f' cancel button "Cancel"'
             )
-            result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+            result = run_native_command(["osascript", "-e", script])
             if result.returncode != 0:
                 return False
             output = (result.stdout or "").strip()
@@ -1870,6 +1847,8 @@ def _show_native_confirmation(
             return returned == expected_text
 
         if system == "Linux":
+            from ai_guardian.tray.plugins import _linux_dialog_provider_order
+
             commands = []
             if expected_text is None:
                 commands = [
@@ -1888,7 +1867,7 @@ def _show_native_confirmation(
                     ["kdialog", "--title", title, "--yesno", message],
                 ]
             else:
-                prompt = f"{message}\n\nType {expected_text} to confirm:"
+                prompt = message
                 commands = [
                     [
                         "zenity",
@@ -1904,15 +1883,12 @@ def _show_native_confirmation(
                     ],
                     ["kdialog", "--title", title, "--inputbox", prompt, ""],
                 ]
-            for command in commands:
+            by_provider = {command[0]: command for command in commands}
+            for provider in _linux_dialog_provider_order():
+                command = by_provider[provider]
                 try:
-                    result = subprocess.run(
-                        command,
-                        capture_output=True,
-                        text=True,
-                        timeout=120,
-                    )
-                except (FileNotFoundError, OSError):
+                    result = run_native_command(command)
+                except UIUnavailable:
                     continue
                 if result.returncode != 0:
                     return False
@@ -1936,19 +1912,16 @@ def _show_native_confirmation(
                     f"$r=[Microsoft.VisualBasic.Interaction]::InputBox('{escaped_message}',"
                     f"'{escaped_title}',''); Write-Output $r"
                 )
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", script],
-                capture_output=True,
-                text=True,
-                timeout=120,
+            result = run_native_command(
+                ["powershell", "-NoProfile", "-Command", script]
             )
             if result.returncode != 0:
-                return None
+                return False
             if expected_text is None:
                 return (result.stdout or "").strip().casefold() == "yes"
             return (result.stdout or "").strip() == expected_text
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
-        logger.debug("Native sandbox confirmation unavailable: %s", exc)
+    except UIUnavailable:
+        logger.debug("Native sandbox confirmation unavailable before display")
         return None
     return None
 
@@ -1959,6 +1932,30 @@ def _show_nicegui_confirmation(
     confirm_label: str,
     *,
     expected_text: Optional[str] = None,
+    error_lines: Iterable[str] = (),
+) -> bool:
+    return (
+        _run_sandbox_browser(
+            "confirmation",
+            {
+                "title": title,
+                "message": message,
+                "confirm_label": confirm_label,
+                "expected_text": expected_text,
+                "error_lines": tuple(error_lines),
+            },
+        )
+        is True
+    )
+
+
+def _render_nicegui_confirmation(
+    title: str,
+    message: str,
+    confirm_label: str,
+    *,
+    expected_text: Optional[str] = None,
+    error_lines: Iterable[str] = (),
 ) -> bool:
     """Show an actionable confirmation in a browser using NiceGUI."""
     from nicegui import app, ui
@@ -1988,6 +1985,8 @@ def _show_nicegui_confirmation(
         ):
             ui.label(title).classes("text-xl font-bold")
             ui.label(message).classes("whitespace-pre-wrap")
+            for line in error_lines:
+                ui.label(str(line)).classes("text-red-600 whitespace-pre-wrap")
             if expected_text is not None:
                 expected_input["widget"] = ui.input(
                     label=f"Type {expected_text} to confirm"
@@ -1996,14 +1995,7 @@ def _show_nicegui_confirmation(
                 ui.button("Cancel", on_click=close).props("flat")
                 ui.button(confirm_label, on_click=confirm, color="primary")
 
-    port = _find_free_port()
-    from ai_guardian.desktop_utils import open_url
-
-    url = f"http://127.0.0.1:{port}"
-    app.on_startup(lambda: open_url(url))
-    ui.run(
-        host="127.0.0.1", port=port, title=title, dark=True, show=False, reload=False
-    )
+    run_nicegui_modal(title, dark=True)
     return bool(result_holder["value"])
 
 
@@ -2048,51 +2040,51 @@ def show_sandbox_log(
     screen_bounds: Optional[ScreenBounds] = None,
 ) -> bool:
     """Show captured sandbox output in a modal log dialog."""
-    try:
-        from ai_guardian.ui.display import select_ui_provider
-
-        provider = select_ui_provider("stream", screen_bounds=screen_bounds)
-        if provider == "tkinter":
-            if screen_bounds is None:
-                shown = _show_tkinter_log_subprocess(title, message, log_text)
-            else:
-                shown = _show_tkinter_log_subprocess(
-                    title,
-                    message,
-                    log_text,
-                    screen_bounds=screen_bounds,
-                )
-            if shown:
-                return True
-    except Exception as exc:
-        logger.warning("Sandbox log dialog unavailable: %s", exc)
-
-    try:
-        from ai_guardian.ui.display import select_ui_provider
-
-        if select_ui_provider("stream", screen_bounds=screen_bounds) == "headless":
-            logger.warning("Sandbox log unavailable: no interactive UI provider")
-            return False
-    except Exception:
-        return False
-
-    # Keep a useful fallback for systems without Tk or when the child process
-    # cannot initialize a display.  Native simple dialogs may truncate very
-    # long output, so retain the beginning and end of the captured log.
-    from ai_guardian.tray.plugins import show_dialog
-
-    text = str(log_text or "(no output)")
-    if len(text) > 6000:
-        text = text[:3000] + "\n... output truncated ...\n" + text[-3000:]
-    if screen_bounds is None:
-        return bool(show_dialog(title, f"{message}\n\n{text}"))
-    return bool(
-        show_dialog(
-            title,
-            f"{message}\n\n{text}",
-            screen_bounds=screen_bounds,
-        )
+    options = {"screen_bounds": screen_bounds} if screen_bounds is not None else {}
+    return run_modal(
+        "stream",
+        {
+            "tkinter": lambda: _show_tkinter_log_subprocess(
+                title, message, log_text, **options
+            ),
+            "nicegui": lambda: _show_nicegui_log(title, message, log_text),
+        },
+        fallback=False,
+        screen_bounds=screen_bounds,
     )
+
+
+def _show_nicegui_log(title: str, message: str, log_text: str) -> bool:
+    return (
+        _run_sandbox_browser(
+            "log",
+            {
+                "title": title,
+                "message": message,
+                "log_text": log_text,
+            },
+        )
+        is True
+    )
+
+
+def _render_nicegui_log(title: str, message: str, log_text: str) -> bool:
+    """Complete, scrollable output with user-initiated copy; never a cropped message."""
+    from nicegui import app, ui
+
+    @ui.page("/")
+    def page():
+        with ui.card().classes("mx-auto mt-8 w-11/12"):
+            ui.label(title).classes("text-xl font-bold")
+            ui.label(message).classes("whitespace-pre-wrap")
+            ui.textarea(value=log_text).props("readonly").classes("w-full").style(
+                "height: 65vh; font-family: monospace"
+            )
+            ui.button("Copy", on_click=lambda: ui.clipboard.write(log_text))
+            ui.button("Close", on_click=app.shutdown)
+
+    run_nicegui_modal(title)
+    return True
 
 
 def show_sandbox_confirmation(
@@ -2102,45 +2094,35 @@ def show_sandbox_confirmation(
     screen_bounds: Optional[ScreenBounds] = None,
 ) -> bool:
     """Confirm permanent deletion without exposing tray GUI toolkit state."""
-    try:
-        from ai_guardian.ui.display import select_ui_provider
+    title = "Delete AI Guardian sandbox"
+    message = (
+        f"Permanently delete sandbox '{name}' ({runtime})?\n\n"
+        "The runtime sandbox will be removed. Saved host configuration snapshots are kept."
+    )
+    options = {"screen_bounds": screen_bounds} if screen_bounds is not None else {}
 
-        message = (
-            f"Permanently delete sandbox '{name}' ({runtime})?\n\n"
-            "The runtime sandbox will be removed. Saved host configuration "
-            "snapshots are kept."
+    def native():
+        result = _show_native_confirmation(
+            title, message, "Delete sandbox", expected_text=name
         )
-        provider = select_ui_provider("action", screen_bounds=screen_bounds)
-        if provider == "tkinter":
-            if screen_bounds is None:
-                return _show_tkinter_confirmation_subprocess(
-                    "Delete AI Guardian sandbox", message, name
-                )
-            return _show_tkinter_confirmation_subprocess(
-                "Delete AI Guardian sandbox",
-                message,
-                name,
-                screen_bounds=screen_bounds,
-            )
-        if provider == "native":
-            result = _show_native_confirmation(
-                "Delete AI Guardian sandbox",
-                message,
-                "Delete sandbox",
-                expected_text=name,
-            )
-            return bool(result) if result is not None else False
-        if provider == "nicegui":
-            return _show_nicegui_confirmation(
-                "Delete AI Guardian sandbox",
-                message,
-                "Delete sandbox",
-                expected_text=name,
-            )
-        return False
-    except Exception as exc:
-        logger.warning("Sandbox confirmation unavailable: %s", exc)
-        return False
+        if result is None:
+            raise UIUnavailable("Native confirmation could not start")
+        return result
+
+    return run_modal(
+        "confirmation",
+        {
+            "native": native,
+            "tkinter": lambda: _show_tkinter_confirmation_subprocess(
+                title, message, name, **options
+            ),
+            "nicegui": lambda: _show_nicegui_confirmation(
+                title, message, "Delete sandbox", expected_text=name
+            ),
+        },
+        fallback=False,
+        screen_bounds=screen_bounds,
+    )
 
 
 def _show_tkinter_upload_confirmation(
@@ -2158,7 +2140,7 @@ def _show_tkinter_upload_confirmation(
     from ai_guardian.ui.display import _ensure_tcl_library
 
     _ensure_tcl_library()
-    root = tk.Tk()
+    root = create_tk_root()
     root.title(title)
     root.geometry("720x360")
     _place_window_on_screen(root, screen_bounds, 720, 360)
@@ -2269,31 +2251,15 @@ def _show_tkinter_upload_confirmation_subprocess(
         "import json, sys; "
         "from ai_guardian.tray.sandbox_dialog import "
         "_show_tkinter_upload_confirmation; "
+        "from ai_guardian.ui.modal import run_modal_child; "
         "p=json.loads(sys.argv[1]); "
-        "v=_show_tkinter_upload_confirmation(p['title'], p['message'], "
+        "run_modal_child(lambda: _show_tkinter_upload_confirmation(p['title'], p['message'], "
         "error_lines=p.get('error_lines', ()), "
         "confirm_label=p.get('confirm_label', 'Continue upload'), "
-        "screen_bounds=p.get('screen_bounds')); "
-        "print('1' if v else '0')"
+        "screen_bounds=p.get('screen_bounds')))"
     )
-    try:
-        process = subprocess.run(
-            [sys.executable, "-c", child, payload],
-            capture_output=True,
-            text=True,
-            timeout=3600,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        logger.warning("Sandbox upload confirmation could not be shown: %s", exc)
-        return False
-    if process.returncode != 0:
-        logger.warning(
-            "Sandbox upload confirmation exited with code %s",
-            process.returncode,
-        )
-        return False
-    return (process.stdout or "").strip().splitlines()[-1:] == ["1"]
+    process = run_modal_subprocess([sys.executable, "-c", child, payload])
+    return (process.stdout or "").strip().splitlines()[-1:] == ["true"]
 
 
 def show_sandbox_upload_confirmation(
@@ -2303,33 +2269,13 @@ def show_sandbox_upload_confirmation(
     screen_bounds: Optional[ScreenBounds] = None,
 ) -> bool:
     """Confirm an OpenShell repository upload before transfer begins."""
-    try:
-        from ai_guardian.ui.display import select_ui_provider
-
-        title = "Confirm OpenShell repository upload"
-        provider = select_ui_provider("action", screen_bounds=screen_bounds)
-        if provider == "tkinter":
-            if screen_bounds is None:
-                return _show_tkinter_upload_confirmation_subprocess(
-                    title,
-                    message,
-                    error_lines=error_lines,
-                )
-            return _show_tkinter_upload_confirmation_subprocess(
-                title,
-                message,
-                error_lines=error_lines,
-                screen_bounds=screen_bounds,
-            )
-        if provider == "native":
-            result = _show_native_confirmation(title, message, "Continue upload")
-            return bool(result) if result is not None else False
-        if provider == "nicegui":
-            return _show_nicegui_confirmation(title, message, "Continue upload")
-        return False
-    except Exception as exc:
-        logger.warning("Sandbox upload confirmation unavailable: %s", exc)
-        return False
+    return _show_sandbox_review(
+        "Confirm OpenShell repository upload",
+        message,
+        "Continue upload",
+        error_lines=tuple(error_lines),
+        screen_bounds=screen_bounds,
+    )
 
 
 def show_sandbox_policy_confirmation(
@@ -2338,35 +2284,39 @@ def show_sandbox_policy_confirmation(
     screen_bounds: Optional[ScreenBounds] = None,
 ) -> bool:
     """Review a complete OpenShell policy and confirm its replacement."""
-    try:
-        from ai_guardian.ui.display import select_ui_provider
+    return _show_sandbox_review(
+        "Apply OpenShell policy",
+        message,
+        "Replace policy",
+        screen_bounds=screen_bounds,
+    )
 
-        title = "Apply OpenShell policy"
-        # Policy previews can contain the entire merged YAML document, so use a
-        # rich dialog with scrollable content instead of a compact native prompt.
-        provider = select_ui_provider("form", screen_bounds=screen_bounds)
-        if provider == "tkinter":
-            if screen_bounds is None:
-                return _show_tkinter_upload_confirmation_subprocess(
-                    title,
-                    message,
-                    confirm_label="Replace policy",
-                )
-            return _show_tkinter_upload_confirmation_subprocess(
-                title,
-                message,
-                confirm_label="Replace policy",
-                screen_bounds=screen_bounds,
-            )
-        if provider == "native":
-            result = _show_native_confirmation(title, message, "Replace policy")
-            return bool(result) if result is not None else False
-        if provider == "nicegui":
-            return _show_nicegui_confirmation(title, message, "Replace policy")
-        return False
-    except Exception as exc:
-        logger.warning("OpenShell policy confirmation unavailable: %s", exc)
-        return False
+
+def _show_sandbox_review(
+    title, message, confirm_label, *, error_lines=(), screen_bounds=None
+) -> bool:
+    # Full repository summaries, colored errors and merged policies require a
+    # scrollable review, not a native compact message/yes-no dialog.
+    options: Dict[str, Any] = {}
+    if screen_bounds is not None:
+        options["screen_bounds"] = screen_bounds
+    if confirm_label != "Continue upload":
+        options["confirm_label"] = confirm_label
+    else:
+        options["error_lines"] = error_lines
+    return run_modal(
+        "form",
+        {
+            "tkinter": lambda: _show_tkinter_upload_confirmation_subprocess(
+                title, message, **options
+            ),
+            "nicegui": lambda: _show_nicegui_confirmation(
+                title, message, confirm_label, error_lines=error_lines
+            ),
+        },
+        fallback=False,
+        screen_bounds=screen_bounds,
+    )
 
 
 def show_sandbox_form(
@@ -2378,61 +2328,28 @@ def show_sandbox_form(
     submit_label: str = "Continue",
 ) -> Optional[Dict[str, Any]]:
     """Show a sandbox form using the configured provider cascade."""
-    try:
-        from ai_guardian.ui.display import select_ui_provider
-
-        field_list = list(fields)
-        provider = select_ui_provider("form", screen_bounds=screen_bounds)
-        if provider == "nicegui":
-            if submit_label == "Continue":
-                return _show_nicegui_form(
-                    title,
-                    message,
-                    field_list,
-                    screen_bounds=screen_bounds,
-                )
-            return _show_nicegui_form(
+    field_list = list(fields)
+    options: Dict[str, Any] = {}
+    if screen_bounds is not None:
+        options["screen_bounds"] = screen_bounds
+    if submit_label != "Continue":
+        options["submit_label"] = submit_label
+    return run_modal(
+        "form",
+        {
+            "tkinter": lambda: _show_tkinter_form_subprocess(
+                title, message, field_list, **options
+            ),
+            "nicegui": lambda: _show_nicegui_form(
                 title,
                 message,
                 field_list,
-                screen_bounds=screen_bounds,
-                submit_label=submit_label,
-            )
-        if provider == "headless":
-            logger.warning("Sandbox form unavailable: preferred UI is headless")
-            return None
-        if provider != "tkinter":
-            logger.warning(
-                "Sandbox form unavailable: unsupported provider %s", provider
-            )
-            return None
-        # pystray owns the process' native event loop.  Creating and destroying
-        # Tk widgets in the tray callback thread can terminate the tray on
-        # some Linux/GTK combinations, so keep the form in a short-lived child
-        # process on every platform.
-        if screen_bounds is None:
-            if submit_label == "Continue":
-                return _show_tkinter_form_subprocess(title, message, field_list)
-            return _show_tkinter_form_subprocess(
-                title, message, field_list, submit_label=submit_label
-            )
-        if submit_label == "Continue":
-            return _show_tkinter_form_subprocess(
-                title,
-                message,
-                field_list,
-                screen_bounds=screen_bounds,
-            )
-        return _show_tkinter_form_subprocess(
-            title,
-            message,
-            field_list,
-            screen_bounds=screen_bounds,
-            submit_label=submit_label,
-        )
-    except Exception as exc:
-        logger.warning("Sandbox form unavailable: %s", exc)
-        return None
+                **{**options, "screen_bounds": screen_bounds},
+            ),
+        },
+        fallback=None,
+        screen_bounds=screen_bounds,
+    )
 
 
 __all__ = [

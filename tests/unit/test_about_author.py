@@ -44,7 +44,7 @@ def test_about_links_use_an_isolated_tk_dialog_when_available(monkeypatch, syste
 
 
 @pytest.mark.parametrize("tk_available", [False, True])
-def test_unavailable_tk_keeps_the_native_about_message_and_compact_attribution(
+def test_unavailable_tk_keeps_clickable_about_in_the_browser_tier(
     monkeypatch, tk_available
 ):
     monkeypatch.setattr(plugins.platform, "system", lambda: "Linux")
@@ -63,8 +63,10 @@ def test_unavailable_tk_keeps_the_native_about_message_and_compact_attribution(
     browser = Mock()
     monkeypatch.setattr("webbrowser.open", browser)
     assert plugins.show_dialog("About AI Guardian", AUTHOR_LINE, links=LINKS)
-    assert AUTHOR_LINE in run.call_args.args[0]
-    assert PROFILE_URL not in run.call_args.args[0]
+    payload = json.loads(run.call_args.args[0][-1])
+    assert payload["message"] == AUTHOR_LINE
+    assert payload["links"] == [["(ITDoVe)", PROFILE_URL]]
+    assert "_show_nicegui_message" in run.call_args.args[0][2]
     assert show.called is tk_available
     browser.assert_not_called()
 

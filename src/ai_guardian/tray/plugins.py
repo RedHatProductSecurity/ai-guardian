@@ -1038,7 +1038,7 @@ def _show_linux_snooze_dialog(options: Tuple[str, ...], provider: str) -> str:
             command,
             capture_output=True,
             text=True,
-            timeout=3600,
+            timeout=None,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         logger.warning(
@@ -1063,48 +1063,43 @@ def show_dialog(
     screen_bounds=None,
     links: Iterable[Tuple[str, str]] = (),
 ) -> bool:
-    """Show a modal dialog box. Returns True on success.
+    """Show one complete message; only pre-display unavailability permits retry."""
+    from ai_guardian.ui.modal import UIUnavailable, run_modal
+    from ai_guardian.tray.dialog_placement import (
+        show_tkinter_message_subprocess,
+        show_nicegui_message_subprocess,
+    )
 
-    Uses platform-native dialogs: AppleScript on macOS, zenity/kdialog
-    on Linux, PowerShell on Windows. When a tray click supplied explicit
-    macOS display bounds, use an isolated Tk dialog so the window can be
-    centered on that display before falling back to AppleScript.
-    Explicit (anchor, URL) links use isolated Tk when available; the original
-    text remains visible in the native fallback. URLs in text are not auto-opened.
-    Linux message dialogs wait for user dismissal, not a provider lifetime limit.
-    """
-    import subprocess
+    links = tuple(links)
 
-    from ai_guardian.ui.display import get_preferred_ui
+    def tkinter():
+        options = {"screen_bounds": screen_bounds}
+        if links:
+            options["links"] = links
+        shown = show_tkinter_message_subprocess(title, message, **options)
+        if shown is None:
+            raise UIUnavailable("Tk message unavailable before display")
+        return shown
 
-    if get_preferred_ui() == "headless":
-        logger.debug("Skipping tray dialog in headless UI mode")
-        return False
+    return run_modal(
+        "form" if links else "simple",
+        {
+            "native": lambda: _show_native_message(title, message),
+            "tkinter": tkinter,
+            "nicegui": lambda: show_nicegui_message_subprocess(
+                title, message, links=links
+            ),
+        },
+        fallback=False,
+        screen_bounds=screen_bounds,
+    )
+
+
+def _show_native_message(title: str, message: str) -> bool:
+    from ai_guardian.ui.modal import UIUnavailable, run_native_command
 
     system = platform.system()
-    links = tuple(links)
     try:
-        if links or (system == "Darwin" and screen_bounds is not None):
-            from ai_guardian.ui.display import _tkinter_available
-
-            if get_preferred_ui() in {"auto", "tkinter"} and _tkinter_available():
-                from ai_guardian.tray.dialog_placement import (
-                    show_tkinter_message_subprocess,
-                )
-
-                if links:
-                    shown = show_tkinter_message_subprocess(
-                        title,
-                        message,
-                        screen_bounds=screen_bounds,
-                        links=links,
-                    )
-                else:
-                    shown = show_tkinter_message_subprocess(
-                        title, message, screen_bounds=screen_bounds
-                    )
-                if shown is not None:
-                    return shown
         if system == "Darwin":
             from ai_guardian.daemon.multi_client import _escape_for_applescript
 
@@ -1122,12 +1117,9 @@ def show_dialog(
                 f'display dialog "{msg}" with title "{ttl}" '
                 f'buttons {{"OK"}} default button "OK"{icon_clause}'
             )
-            result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            result = run_native_command(["osascript", "-e", script])
+            # AppleScript cancellation (-128) is an ordinary completed dialog.
+            return result.returncode == 0 or "(-128)" in (result.stderr or "")
         elif system == "Linux":
             icon_args = []
             png_path = _find_icon("ai-guardian-320.png")
@@ -1153,24 +1145,11 @@ def show_dialog(
                     _ui_environment_context(),
                 )
                 try:
-                    result = subprocess.run(
-                        command,
-                        capture_output=True,
-                        text=True,
-                        timeout=None,
-                    )
-                except subprocess.TimeoutExpired:
+                    result = run_native_command(command)
+                except UIUnavailable:
                     logger.warning(
-                        "Linux %s dialog wait interrupted; not opening a replacement (%s)",
-                        provider,
-                        _ui_environment_context(),
-                    )
-                    return False
-                except OSError as exc:
-                    logger.warning(
-                        "Linux dialog command %s could not start: %s (%s)",
+                        "Linux dialog command %s unavailable before display (%s)",
                         command[0],
-                        type(exc).__name__,
                         _ui_environment_context(),
                     )
                     continue
@@ -1192,11 +1171,12 @@ def show_dialog(
                     returncode,
                     _ui_environment_context(),
                 )
+                return False
             logger.warning(
                 "Linux dialog fallback unavailable after trying zenity and kdialog (%s)",
                 _ui_environment_context(),
             )
-            return False
+            raise UIUnavailable("No Linux native message provider could start")
         elif system == "Windows":
             ttl = title.replace("'", "''")
             msg = message.replace("'", "''")
@@ -1204,23 +1184,12 @@ def show_dialog(
                 "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; "
                 f"[System.Windows.Forms.MessageBox]::Show('{msg}', '{ttl}', 'OK', 'Information')"
             )
-            result = subprocess.run(
-                ["powershell", "-Command", ps],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            result = run_native_command(["powershell", "-NoProfile", "-Command", ps])
         else:
-            return False
-        return _subprocess_succeeded(result, f"{system} dialog")
-    except (subprocess.TimeoutExpired, OSError) as exc:
-        logger.warning(
-            "%s dialog could not be shown: %s (%s)",
-            system,
-            type(exc).__name__,
-            _ui_environment_context(),
-        )
-        return False
+            raise UIUnavailable("No native message implementation")
+        return result.returncode == 0
+    except UIUnavailable:
+        raise
 
 
 def _linux_action_result(
@@ -1280,7 +1249,7 @@ def _show_linux_action_dialog(
     two_step_snooze: bool = False,
 ) -> Optional[object]:
     """Show a simple actionable prompt using zenity or kdialog on Linux."""
-    import subprocess
+    from ai_guardian.ui.modal import UIUnavailable, run_native_command
 
     options = tuple(str(option) for option in snooze_options if option)
     later_labels = {f"Later ({option})": f"snooze_{option}" for option in options}
@@ -1323,30 +1292,28 @@ def _show_linux_action_dialog(
                 "kdialog",
                 "--title",
                 title,
-                "--yesno",
+                "--menu",
                 message,
-                "--yes-label",
+                "action",
                 action_label,
-                "--no-label",
-                dismiss_label or "Cancel",
             ]
+            + [
+                value
+                for label, value_key in later_labels.items()
+                for value in (value_key, label)
+            ]
+            + (["dismiss", dismiss_label] if dismiss_label else [])
         ),
     }
 
     for provider in _linux_dialog_provider_order():
         command = commands[provider]
         try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=3600,
-            )
-        except (subprocess.TimeoutExpired, OSError) as exc:
+            result = run_native_command(command)
+        except UIUnavailable:
             logger.warning(
-                "Linux proactive prompt command %s could not start: %s (%s)",
+                "Linux proactive prompt command %s unavailable before display (%s)",
                 command[0],
-                type(exc).__name__,
                 _ui_environment_context(),
             )
             continue
@@ -1379,27 +1346,34 @@ def _show_linux_action_dialog(
                     dismiss_label,
                 )
             return _linux_action_result(
-                later_labels.get(stdout, "action"),
+                (
+                    (
+                        stdout
+                        if stdout in {"action", *later_labels.values()}
+                        else "dismiss"
+                    )
+                    if provider == "kdialog"
+                    else later_labels.get(stdout, "action")
+                ),
                 ide_choices,
                 profile_choices,
                 dismiss_label,
             )
         if returncode == 1 and not stderr:
             return _linux_action_result(
-                "snooze_1h" if two_step_snooze and options else "dismiss",
+                f"snooze_{options[0]}" if two_step_snooze and options else "dismiss",
                 ide_choices,
                 profile_choices,
                 dismiss_label,
             )
 
-        detail = f": {stderr[:200].replace(chr(10), ' ')}" if stderr else ""
         logger.warning(
-            "Linux proactive prompt command %s failed with exit code %s%s (%s)",
+            "Linux proactive prompt command %s ended with exit code %s (%s)",
             command[0],
             returncode,
-            detail,
             _ui_environment_context(),
         )
+        return "dismiss"
 
     logger.warning(
         "Linux native proactive prompt unavailable after trying zenity and kdialog (%s)",
@@ -1421,8 +1395,8 @@ def show_action_dialog(
 ) -> Optional[object]:
     """Show an actionable native prompt on macOS or Linux.
 
-    This is the last-resort UI for prompts invoked from a tray. macOS uses
-    native Cocoa controls. Linux uses a question dialog from zenity or
+    Modal policy selects this native implementation first when eligible. macOS
+    uses Cocoa controls. Linux uses a question dialog or complete menu from
     kdialog for simple actions. Structured Linux prompts return ``None``
     because those providers cannot render the required install/profile
     controls; the caller must keep the entire flow on a rich UI provider.
@@ -1546,7 +1520,7 @@ def _show_native_cocoa_choice_dialog(
     two_step_snooze: bool = False,
 ) -> Optional[object]:
     """Show the structured prompt with native Cocoa controls on macOS."""
-    import subprocess
+    from ai_guardian.ui.modal import UIUnavailable, run_native_command
 
     ide_choices = tuple(ide_choices)
     profile_choices = tuple(profile_choices)
@@ -1567,6 +1541,9 @@ def _show_native_cocoa_choice_dialog(
     # This is intentionally self-contained: the tray can invoke it through
     # the system-provided JXA runtime without adding a PyObjC dependency.
     script = r"""
+(function () {
+var interactionStarted = false;
+try {
 ObjC.import("Cocoa");
 ObjC.import("AppKit");
 
@@ -1660,6 +1637,12 @@ function selectedSnooze() {
     payload.snooze_options.forEach(function(option) {
         delayAlert.addButtonWithTitle(String(option));
     });
+    interactionStarted = true;
+    var delayWindow = delayAlert.window;
+    if (delayWindow) {
+        placeWindowOnTargetScreen(delayWindow);
+        delayWindow.makeKeyAndOrderFront(null);
+    }
     var response = Number(delayAlert.runModal);
     var index = response - 1000;
     if (index < 0 || index >= payload.snooze_options.length) {
@@ -1797,8 +1780,10 @@ function showDialog() {
     if (alertWindow) {
         alertWindow.setLevel(3);
         placeWindowOnTargetScreen(alertWindow);
+        interactionStarted = true;
         alertWindow.makeKeyAndOrderFront(null);
     }
+    interactionStarted = true;
     var response = Number(alert.runModal);
     var firstButton = 1000;
     var secondButton = 1001;
@@ -1871,35 +1856,30 @@ function showDialog() {
     return result;
 }
 
-JSON.stringify(showDialog());
+return JSON.stringify(showDialog());
+} catch (error) {
+    // Never emit payloads/exception text. A later-step failure is terminal.
+    return JSON.stringify({modal_status: interactionStarted ? "failed" : "unavailable"});
+}
+})();
 """.replace("PAYLOAD", payload_script)
 
     try:
-        result = subprocess.run(
-            ["osascript", "-l", "JavaScript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=3600,
-        )
-        if not _subprocess_succeeded(result, "macOS Cocoa choice dialog"):
-            logger.warning(
-                "macOS Cocoa choice dialog failed: %s",
-                (result.stderr or "").strip(),
-            )
-            return None
+        result = run_native_command(["osascript", "-l", "JavaScript", "-e", script])
+        if result.returncode != 0:
+            raise RuntimeError("Native Cocoa choice ended without a result")
         output = (result.stdout or "").strip().splitlines()
         if not output:
             logger.warning("macOS Cocoa choice dialog returned no result")
-            return None
+            return "dismiss"
         value = json.loads(output[-1])
-        return value if isinstance(value, dict) else None
-    except (
-        json.JSONDecodeError,
-        subprocess.TimeoutExpired,
-        OSError,
-        FileNotFoundError,
-    ) as exc:
-        logger.warning("macOS Cocoa choice dialog could not be shown: %s", exc)
+        if isinstance(value, dict) and value.get("modal_status") == "unavailable":
+            raise UIUnavailable("Cocoa unavailable before display")
+        if isinstance(value, dict) and value.get("modal_status") == "failed":
+            raise RuntimeError("Cocoa interaction ended after display")
+        return value if isinstance(value, dict) else "dismiss"
+    except UIUnavailable:
+        logger.warning("macOS Cocoa choice dialog unavailable before display")
         return None
 
 

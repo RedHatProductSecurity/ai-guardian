@@ -1,7 +1,7 @@
 """Shared display tier detection for prompt and tray dialogs.
 
-Complex-dialog cascade: tkinter -> NiceGUI (browser) -> headless.
-Simple/actionable tray dialogs may use the platform-native provider first.
+Automatic cascade: native -> tkinter -> NiceGUI, among capable providers.
+Explicit toolkit preferences are exclusive; headless never opens a dialog.
 
 ``AI_GUARDIAN_NO_TKINTER=1`` skips tkinter even when it is installed.
 """
@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import platform
-from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +35,8 @@ def get_preferred_ui() -> str:
                 val = "nicegui"
             if val in VALID_PREFERRED_UI:
                 return val
-    except Exception:
-        pass  # intentionally silent — optional config
+    except (OSError, ValueError, TypeError, AttributeError):
+        logger.warning("Unable to read preferred dialog UI; using automatic selection")
 
     return "auto"
 
@@ -54,54 +53,55 @@ def _tkinter_available() -> bool:
         return False
 
 
-def select_ui_provider(
+def ui_provider_order(
     dialog_type: str = "simple",
     *,
     screen_bounds=None,
-) -> str:
-    """Select the first usable provider for a tray dialog.
+    preferred=None,
+) -> tuple[str, ...]:
+    """Return eligible tiers, not a guarantee that a provider can start.
 
-    NiceGUI is a required dependency, so selecting it does not perform an
-    availability probe. A missing installation is an installation error that
-    doctor reports rather than a reason to reintroduce a terminal UI.
+    Native supports messages, confirmations and pickers on all desktop platforms,
+    actions on Linux/macOS, and complete setup controls only on macOS (Cocoa).
+    AppleScript cannot place a message/panel on a specified monitor. Rich forms,
+    linked messages and streams skip native rather than losing controls.
+    Callers intersect these tiers with their actual implementations. See
+    docs/MODAL_PROVIDERS.md for the complete inventory and exceptions.
     """
-    preferred = get_preferred_ui()
+    preferred = preferred or get_preferred_ui()
     system = platform.system()
-    native_available = system in {"Darwin", "Linux", "Windows"}
-    candidates: Tuple[str, ...]
-
     if preferred == "headless":
-        return "headless"
+        return ()
+    native = system in {"Darwin", "Linux", "Windows"} and dialog_type in {
+        "simple",
+        "confirmation",
+        "picker",
+    }
+    native |= dialog_type == "action" and system in {"Darwin", "Linux"}
+    native |= dialog_type == "setup" and system == "Darwin"
+    if (
+        system == "Darwin"
+        and screen_bounds is not None
+        and dialog_type in {"simple", "confirmation", "picker"}
+    ):
+        native = False
+    candidates = (
+        ("native", "tkinter", "nicegui") if preferred == "auto" else (preferred,)
+    )
+    return tuple(
+        provider
+        for provider in candidates
+        if (provider == "native" and native)
+        or (provider == "tkinter" and _tkinter_available())
+        or provider == "nicegui"
+    )
 
-    if preferred == "tkinter":
-        candidates = ("tkinter", "native", "nicegui")
-        if dialog_type not in {"simple", "action"}:
-            candidates = ("tkinter", "nicegui")
-    elif preferred == "nicegui":
-        candidates = ("nicegui", "native")
-        if dialog_type not in {"simple", "action"}:
-            candidates = ("nicegui",)
-    elif dialog_type in {"simple", "action"}:
-        if system == "Darwin" and screen_bounds is None:
-            candidates = ("native", "tkinter", "nicegui")
-        elif system == "Darwin":
-            candidates = ("tkinter", "native", "nicegui")
-        elif dialog_type == "action":
-            candidates = ("tkinter", "nicegui")
-        else:
-            candidates = ("native", "tkinter", "nicegui")
-    else:
-        candidates = ("tkinter", "nicegui")
 
-    for provider in candidates:
-        if provider == "native" and native_available:
-            return provider
-        if provider == "tkinter" and _tkinter_available():
-            return provider
-        if provider == "nicegui":
-            return provider
-
-    return "headless"
+def select_ui_provider(dialog_type: str = "simple", *, screen_bounds=None) -> str:
+    """Return the first eligible tier; execution must use the modal runner."""
+    return next(
+        iter(ui_provider_order(dialog_type, screen_bounds=screen_bounds)), "headless"
+    )
 
 
 def is_interactive_available() -> bool:

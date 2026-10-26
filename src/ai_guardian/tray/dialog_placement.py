@@ -190,6 +190,67 @@ def _show_tkinter_message(
     root.mainloop()
 
 
+def show_nicegui_message_subprocess(title, message, *, links=()) -> bool:
+    """Keep the browser server outside the tray's GUI process."""
+    from ai_guardian.ui.modal import run_modal_subprocess
+
+    child = (
+        "import json, sys; "
+        "from ai_guardian.tray.dialog_placement import _show_nicegui_message; "
+        "from ai_guardian.ui.modal import run_modal_child; "
+        "p=json.loads(sys.argv[1]); "
+        "run_modal_child(lambda: _show_nicegui_message(**p))"
+    )
+    result = run_modal_subprocess(
+        [
+            sys.executable,
+            "-c",
+            child,
+            json.dumps({"title": title, "message": message, "links": links}),
+        ]
+    )
+    return result.returncode == 0
+
+
+def _show_nicegui_message(title, message, *, links=()) -> bool:
+    """Preserve complete text and user-activated links in the browser tier."""
+    from nicegui import app, ui
+    from ai_guardian.ui.modal import run_nicegui_modal
+
+    def close():
+        ui.run_javascript("window.close()")
+        ui.timer(0.1, app.shutdown, once=True)
+
+    @ui.page("/")
+    def page():
+        with ui.card().classes("mx-auto mt-8 max-w-3xl"):
+            ui.label(title).classes("text-xl font-bold")
+            for line in message.splitlines():
+                if not any(anchor and anchor in line for anchor, _url in links):
+                    ui.label(line).classes("whitespace-pre-wrap")
+                    continue
+                with ui.row().classes("gap-0 items-baseline"):
+                    remaining = line
+                    while remaining:
+                        matches = [
+                            (remaining.index(anchor), anchor, url)
+                            for anchor, url in links
+                            if anchor and anchor in remaining
+                        ]
+                        if not matches:
+                            ui.label(remaining).classes("whitespace-pre-wrap")
+                            break
+                        index, anchor, url = min(matches, key=lambda item: item[0])
+                        if index:
+                            ui.label(remaining[:index]).classes("whitespace-pre-wrap")
+                        ui.link(anchor, url, new_tab=True)
+                        remaining = remaining[index + len(anchor) :]
+            ui.button("OK", on_click=close)
+
+    run_nicegui_modal(title)
+    return True
+
+
 __all__ = [
     "ScreenBounds",
     "_get_tray_screen_bounds",

@@ -19,6 +19,7 @@ from ai_guardian.tray.proactive_prompt import (
     sync_ide_setup_state,
 )
 from ai_guardian.tray.health import TrayHealthMonitor
+from ai_guardian.ui.modal import UIUnavailable
 
 
 def test_prompt_state_records_and_expires_snooze(tmp_path: Path):
@@ -205,16 +206,14 @@ def test_reset_ide_setup_clears_one_ide_history_and_exclusion(tmp_path):
     assert saved["ide_setup_status"]["integrations"]["claude"]["excluded"] is False
 
 
-def test_prompt_uses_tkinter_first():
+def test_prompt_uses_native_first():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
-        patch.object(dialog, "_show_tkinter", return_value="action") as show,
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
+        patch.object(dialog, "_show_native_fallback", return_value="action") as show,
     ):
         assert dialog.show() == "action"
     show.assert_called_once_with()
@@ -234,7 +233,7 @@ def test_structured_prompt_does_not_fallback_from_explicit_tkinter():
             return_value="tkinter",
         ),
         patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available",
+            "ai_guardian.ui.display._tkinter_available",
             return_value=False,
         ),
         patch.object(
@@ -260,7 +259,7 @@ def test_structured_prompt_does_not_fallback_from_explicit_nicegui():
             return_value="nicegui",
         ),
         patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available",
+            "ai_guardian.ui.display._tkinter_available",
             return_value=True,
         ),
         patch.object(
@@ -285,9 +284,8 @@ def test_tray_prompt_uses_tkinter_subprocess():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
+        patch.object(dialog, "_show_native_fallback", return_value=None),
         patch.object(dialog, "_show_tkinter_subprocess", return_value="action") as show,
     ):
         assert dialog.show(tray_safe=True) == "action"
@@ -301,9 +299,7 @@ def test_windows_tray_prompt_uses_tkinter_subprocess():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
         patch.object(dialog, "_show_tkinter_subprocess", return_value="action") as show,
         patch.object(dialog, "_show_tkinter") as in_process,
     ):
@@ -313,25 +309,25 @@ def test_windows_tray_prompt_uses_tkinter_subprocess():
     in_process.assert_not_called()
 
 
-def test_linux_tray_prompt_uses_in_process_tkinter():
+def test_linux_tray_prompt_isolates_tkinter_after_native_startup_failure():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (
         patch("platform.system", return_value="Linux"),
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
-        patch.object(dialog, "_show_tkinter", return_value="action") as tkinter,
-        patch.object(dialog, "_show_tkinter_subprocess") as subprocess_tkinter,
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
+        patch.object(dialog, "_show_tkinter") as tkinter,
+        patch.object(
+            dialog, "_show_tkinter_subprocess", return_value="action"
+        ) as subprocess_tkinter,
         patch.object(dialog, "_show_native_fallback", return_value=None) as native,
     ):
         assert dialog.show(tray_safe=True) == "action"
 
     native.assert_called_once_with()
-    tkinter.assert_called_once_with()
-    subprocess_tkinter.assert_not_called()
+    tkinter.assert_not_called()
+    subprocess_tkinter.assert_called_once_with()
 
 
 def test_tray_prompt_uses_native_fallback_on_macos_when_foreground_ui_unavailable():
@@ -341,9 +337,7 @@ def test_tray_prompt_uses_native_fallback_on_macos_when_foreground_ui_unavailabl
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=False),
         patch.object(
             dialog, "_show_native_fallback", return_value="action"
         ) as fallback,
@@ -362,9 +356,7 @@ def test_linux_tray_prompt_uses_native_fallback_when_ui_tiers_fail():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=False),
         patch.object(
             dialog, "_show_native_fallback", return_value="action"
         ) as fallback,
@@ -398,11 +390,9 @@ def test_linux_structured_tray_prompt_keeps_rich_ui_for_all_steps():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
         patch.object(
-            dialog, "_show_ide_choices_tkinter", return_value=expected
+            dialog, "_show_tkinter_subprocess", return_value=expected
         ) as tkinter,
         patch.object(dialog, "_show_native_fallback") as native,
     ):
@@ -419,9 +409,8 @@ def test_tray_prompt_uses_tkinter_subprocess_before_nicegui_on_macos():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
+        patch.object(dialog, "_show_native_fallback", return_value=None),
         patch.object(
             dialog, "_show_tkinter_subprocess", return_value="action"
         ) as tkinter,
@@ -433,12 +422,12 @@ def test_tray_prompt_uses_tkinter_subprocess_before_nicegui_on_macos():
     nicegui.assert_not_called()
 
 
-def test_tkinter_subprocess_failure_returns_none_for_fallback():
+def test_tkinter_subprocess_unknown_failure_is_terminal():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     failed = SimpleNamespace(returncode=1, stdout="", stderr="Tk failed")
 
-    with patch("subprocess.run", return_value=failed):
-        assert dialog._show_tkinter_subprocess() is None
+    with patch("subprocess.run", return_value=failed), pytest.raises(RuntimeError):
+        dialog._show_tkinter_subprocess()
 
 
 def test_tkinter_subprocess_payload_includes_tray_screen_bounds():
@@ -449,7 +438,7 @@ def test_tkinter_subprocess_payload_includes_tray_screen_bounds():
         "Skip",
         screen_bounds=(1920, 37, 2560, 1380),
     )
-    completed = SimpleNamespace(returncode=0, stdout="action\n", stderr="")
+    completed = SimpleNamespace(returncode=0, stdout='"action"\n', stderr="")
 
     with patch("subprocess.run", return_value=completed) as run:
         assert dialog._show_tkinter_subprocess() == "action"
@@ -467,7 +456,7 @@ def test_tkinter_subprocess_payload_includes_two_step_snooze():
         snooze_options=("1h", "6h", "1d", "1w"),
         two_step_snooze=True,
     )
-    completed = SimpleNamespace(returncode=0, stdout="snooze_6h\n", stderr="")
+    completed = SimpleNamespace(returncode=0, stdout='"snooze_6h"\n', stderr="")
 
     with patch("subprocess.run", return_value=completed) as run:
         assert dialog._show_tkinter_subprocess() == "snooze_6h"
@@ -476,7 +465,7 @@ def test_tkinter_subprocess_payload_includes_two_step_snooze():
     assert payload["two_step_snooze"] is True
 
 
-def test_tkinter_subprocess_failure_falls_back_to_native_macos_prompt():
+def test_native_macos_prompt_precedes_tkinter_subprocess():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     failed = SimpleNamespace(returncode=1, stdout="", stderr="Tk failed")
     with (
@@ -484,9 +473,7 @@ def test_tkinter_subprocess_failure_falls_back_to_native_macos_prompt():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
         patch("subprocess.run", return_value=failed) as subprocess_run,
         patch.object(
             dialog, "_show_native_fallback", return_value="action"
@@ -494,11 +481,11 @@ def test_tkinter_subprocess_failure_falls_back_to_native_macos_prompt():
     ):
         assert dialog.show(tray_safe=True) == "action"
 
-    subprocess_run.assert_called_once()
+    subprocess_run.assert_not_called()
     fallback.assert_called_once_with()
 
 
-def test_tkinter_subprocess_failure_logs_complete_diagnostic(caplog):
+def test_tkinter_subprocess_failure_does_not_disclose_child_output(caplog):
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     diagnostic = "Traceback (most recent call last):\n" + ("diagnostic detail\n" * 100)
     failed = SimpleNamespace(returncode=1, stdout="", stderr=diagnostic)
@@ -507,9 +494,10 @@ def test_tkinter_subprocess_failure_logs_complete_diagnostic(caplog):
         caplog.at_level("WARNING", logger="ai_guardian.tray.proactive_prompt"),
         patch("subprocess.run", return_value=failed),
     ):
-        assert dialog._show_tkinter_subprocess() is None
+        with pytest.raises(RuntimeError):
+            dialog._show_tkinter_subprocess()
 
-    assert diagnostic in caplog.text
+    assert diagnostic not in caplog.text
 
 
 def test_prompt_falls_back_to_headless_when_ui_unavailable():
@@ -518,9 +506,9 @@ def test_prompt_falls_back_to_headless_when_ui_unavailable():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=False),
+        patch.object(dialog, "_show_native_fallback", return_value=None),
+        patch.object(dialog, "_show_nicegui", side_effect=UIUnavailable()),
     ):
         assert dialog.show() == "dismiss"
 
@@ -671,6 +659,13 @@ def test_nicegui_two_step_later_opens_delay_selection():
         def row(self):
             return FakeContext()
 
+        def dialog(self):
+            context = FakeContext()
+            context.on = MagicMock()
+            context.open = MagicMock()
+            context.close = MagicMock()
+            return context
+
         def button(self, label, on_click):
             self.buttons.append((label, on_click))
             return MagicMock()
@@ -680,9 +675,15 @@ def test_nicegui_two_step_later_opens_delay_selection():
             for label, callback in self.buttons:
                 if label == "Later":
                     callback()
+                    next(
+                        callback for label, callback in self.buttons if label == "1d"
+                    )()
                     return
 
     class FakeApp:
+        def on_startup(self, callback):
+            self.startup = callback
+
         def on_disconnect(self, callback):
             self.disconnect = callback
 
@@ -700,20 +701,18 @@ def test_nicegui_two_step_later_opens_delay_selection():
         snooze_options=("1h", "6h", "1d", "1w"),
         two_step_snooze=True,
     )
-    with (
-        patch.dict(sys.modules, {"nicegui": nicegui}),
-        patch.object(
-            dialog, "_show_snooze_nicegui", return_value="snooze_1d"
-        ) as snooze,
-    ):
+    with patch.dict(sys.modules, {"nicegui": nicegui}):
         assert dialog._show_nicegui() == "snooze_1d"
 
     assert [label for label, _callback in nicegui.ui.buttons] == [
         "Set Up Now",
         "Later",
         "Don't Ask Again",
+        "1h",
+        "6h",
+        "1d",
+        "1w",
     ]
-    snooze.assert_called_once_with()
 
 
 def test_two_step_prompt_falls_back_to_one_hour_when_ui_unavailable():
@@ -729,9 +728,9 @@ def test_two_step_prompt_falls_back_to_one_hour_when_ui_unavailable():
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
-        patch(
-            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
-        ),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=False),
+        patch.object(dialog, "_show_native_fallback", return_value=None),
+        patch.object(dialog, "_show_nicegui", side_effect=UIUnavailable()),
     ):
         assert dialog.show() == "snooze_1h"
 
