@@ -35,6 +35,15 @@ if (-not (Test-Path -LiteralPath $engine -PathType Leaf)) {
     exit 2
 }
 try {
+    # Resolve only executables: invoking a missing bare command starts PowerShell
+    # module discovery, which can stall on Windows or import an unrelated module.
+    # Unlike Get-Command with an exact name, GetCommands only searches the
+    # requested command type and does not auto-import modules on a miss.
+    $pythonCommands = @($ExecutionContext.InvokeCommand.GetCommands(
+        $Python, [System.Management.Automation.CommandTypes]::Application, $false
+    ))
+    if ($pythonCommands.Count -eq 0) { throw 'Python executable not found' }
+    $Python = $pythonCommands[0].Path
     & $Python -I -S -c 'import sys; sys.exit(sys.version_info < (3, 11))'
     if ($LASTEXITCODE -ne 0) { throw 'Python version check failed' }
 } catch {

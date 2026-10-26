@@ -206,17 +206,32 @@ def test_reset_ide_setup_clears_one_ide_history_and_exclusion(tmp_path):
     assert saved["ide_setup_status"]["integrations"]["claude"]["excluded"] is False
 
 
-def test_prompt_uses_native_first():
+@pytest.mark.parametrize("system", ["Darwin", "Linux", "Windows"])
+@pytest.mark.parametrize("tray_safe", [False, True])
+def test_prompt_uses_first_capable_provider_without_opening_real_ui(system, tray_safe):
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (
+        patch("platform.system", return_value=system),
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
         patch("ai_guardian.ui.display._tkinter_available", return_value=True),
-        patch.object(dialog, "_show_native_fallback", return_value="action") as show,
+        patch.object(dialog, "_show_native_fallback", return_value="action") as native,
+        patch.object(dialog, "_show_tkinter", return_value="action") as tkinter,
+        patch.object(
+            dialog, "_show_tkinter_subprocess", return_value="action"
+        ) as isolated_tkinter,
+        patch.object(dialog, "_show_nicegui") as nicegui,
+        patch.object(dialog, "_show_ui_subprocess") as isolated_nicegui,
     ):
-        assert dialog.show() == "action"
-    show.assert_called_once_with()
+        assert dialog.show(tray_safe=tray_safe) == "action"
+    # Windows has no complete native action/snooze prompt; its first eligible
+    # provider is Tk. Never leave that path connected to the runner's desktop.
+    assert native.call_count == int(system != "Windows")
+    assert tkinter.call_count == int(system == "Windows" and not tray_safe)
+    assert isolated_tkinter.call_count == int(system == "Windows" and tray_safe)
+    nicegui.assert_not_called()
+    isolated_nicegui.assert_not_called()
 
 
 def test_structured_prompt_does_not_fallback_from_explicit_tkinter():
@@ -513,7 +528,7 @@ def test_prompt_falls_back_to_headless_when_ui_unavailable():
         assert dialog.show() == "dismiss"
 
 
-def test_tkinter_two_step_later_opens_delay_selection():
+def test_tkinter_two_step_later_opens_delay_selection(monkeypatch):
     class FakeRoot:
         next_action = "later"
 
@@ -602,6 +617,8 @@ def test_tkinter_two_step_later_opens_delay_selection():
     ttk.Label = FakeLabel
     ttk.Button = FakeButton
     tkinter.ttk = ttk
+    monkeypatch.setitem(sys.modules, "tkinter", tkinter)
+    monkeypatch.setitem(sys.modules, "tkinter.ttk", ttk)
 
     dialog = ProactivePromptDialog(
         "Set Up AI Guardian",
@@ -612,7 +629,6 @@ def test_tkinter_two_step_later_opens_delay_selection():
         two_step_snooze=True,
     )
     with (
-        patch.dict(sys.modules, {"tkinter": tkinter, "tkinter.ttk": ttk}),
         patch("ai_guardian.tray.proactive_prompt._ensure_tcl_library"),
         patch("ai_guardian.tray.proactive_prompt._place_window_on_screen"),
         patch.object(
@@ -625,7 +641,6 @@ def test_tkinter_two_step_later_opens_delay_selection():
 
     FakeRoot.next_action = "close"
     with (
-        patch.dict(sys.modules, {"tkinter": tkinter, "tkinter.ttk": ttk}),
         patch("ai_guardian.tray.proactive_prompt._ensure_tcl_library"),
         patch("ai_guardian.tray.proactive_prompt._place_window_on_screen"),
         patch.object(dialog, "_show_snooze_tkinter") as snooze,
@@ -635,7 +650,7 @@ def test_tkinter_two_step_later_opens_delay_selection():
     snooze.assert_not_called()
 
 
-def test_nicegui_two_step_later_opens_delay_selection():
+def test_nicegui_two_step_later_opens_delay_selection(monkeypatch):
     class FakeContext:
         def __enter__(self):
             return self
@@ -701,8 +716,10 @@ def test_nicegui_two_step_later_opens_delay_selection():
         snooze_options=("1h", "6h", "1d", "1w"),
         two_step_snooze=True,
     )
-    with patch.dict(sys.modules, {"nicegui": nicegui}):
-        assert dialog._show_nicegui() == "snooze_1d"
+    # Replace only this module entry. Restoring all of sys.modules after lazy
+    # imports leaves stale package attributes that later UI mocks can patch.
+    monkeypatch.setitem(sys.modules, "nicegui", nicegui)
+    assert dialog._show_nicegui() == "snooze_1d"
 
     assert [label for label, _callback in nicegui.ui.buttons] == [
         "Set Up Now",
