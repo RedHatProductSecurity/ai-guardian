@@ -159,7 +159,8 @@ names, checksums, complete structured content and size limits, sanitizes again, 
 creates a new protected review directory. It never extracts a remote archive or
 accepts remote destinations, publication context, file selections or consent.
 Project configuration reads, for both local and daemon preparation, reject linked
-files/directories and hard links and validate the canonical source directory.
+files/directories and hard links and validate normalized absolute directory
+containment without resolving untrusted paths before validation.
 Unsafe project files are omitted, never followed to collect unrelated content;
 daemon provenance records the omission. Accepted structured copies stay complete.
 The **tray user's configured destination** and the same per-file View/selection,

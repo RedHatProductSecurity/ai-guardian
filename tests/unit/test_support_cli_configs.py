@@ -38,19 +38,19 @@ def write(path, text):
     return path
 
 
-def test_read_config_refuses_canonical_path_outside_selected_directory(
+def test_read_config_refuses_normalized_path_outside_selected_directory(
     monkeypatch, tmp_path
 ):
     source = write(tmp_path / "project" / "settings.json", '{"model":"source"}')
     outside = write(
         tmp_path / "project-unrelated" / "private.json", '{"marker":"unrelated"}'
     )
-    resolve = Path.resolve
+    abspath = os.path.abspath
 
-    def changed_path(path, *args, **kwargs):
-        return outside if path == source else resolve(path, *args, **kwargs)
+    def changed_path(path):
+        return str(outside) if Path(path) == source else abspath(path)
 
-    monkeypatch.setattr(Path, "resolve", changed_path)
+    monkeypatch.setattr(configs.os.path, "abspath", changed_path)
     open_file = Mock(
         side_effect=AssertionError("Unsafe paths must be rejected before open")
     )
@@ -60,6 +60,38 @@ def test_read_config_refuses_canonical_path_outside_selected_directory(
         configs._read_config(source, 1024)
 
     open_file.assert_not_called()
+
+
+@pytest.mark.parametrize("limit", [None, 1024])
+def test_read_config_does_not_resolve_request_controlled_paths(
+    monkeypatch, tmp_path, limit
+):
+    source = write(tmp_path / "project" / "settings.json", '{"model":"source"}')
+    resolve = Path.resolve
+
+    def reject_source_resolution(path, *args, **kwargs):
+        if path in (source, source.parent):
+            raise AssertionError("Source validation must not resolve untrusted paths")
+        return resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", reject_source_resolution)
+    assert configs._read_config(source, limit) == source.read_bytes()
+
+
+def test_read_config_rejects_link_before_collapsing_parent_traversal(tmp_path):
+    project = tmp_path / "project"
+    write(project / "settings.json", '{"model":"local"}')
+    outside = tmp_path / "outside" / "child"
+    outside.mkdir(parents=True)
+    write(outside.parent / "settings.json", '{"marker":"unrelated"}')
+    linked = project / "linked"
+    try:
+        linked.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("This filesystem cannot create symbolic links")
+
+    with pytest.raises(ValueError, match="Linked configuration omitted"):
+        configs._read_config(linked / ".." / "settings.json", 1024)
 
 
 def test_read_config_can_preserve_a_complete_local_configuration(tmp_path):
