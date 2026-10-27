@@ -465,6 +465,10 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "tray": {
                 "enabled": True,
                 "auto_install": True,
+                "ssh_alias_discovery": {
+                    "enabled": False,
+                    "alias_prefix": "ai-guardian-",
+                },
                 "_comment_terminal_app": "Preferred terminal for tray menu actions. macOS: app name (iTerm, Warp, alacritty). Linux: binary (alacritty, kitty). Windows: exe (wt). Omit for auto-detect.",
             },
         },

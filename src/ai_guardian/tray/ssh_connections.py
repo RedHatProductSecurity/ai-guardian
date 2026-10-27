@@ -10,7 +10,7 @@ def _worker(callback):
     return action
 
 
-def open_enrollment(tray, *, screen_bounds=None):
+def open_enrollment(tray, *, screen_bounds=None, alias=None):
     from ai_guardian.daemon.rest_transport import DaemonConnectionError
     from ai_guardian.daemon.ssh_storage import SSHConnectionError
     from ai_guardian.ui.forms import run_form_flow
@@ -22,20 +22,32 @@ def open_enrollment(tray, *, screen_bounds=None):
     )
 
     def enroll(form):
-        values = form(
-            "Add daemon via SSH",
-            PAIRING_MESSAGE,
-            [{"name": "host", "label": "Known SSH host or alias", "required": True}],
-            submit_label="Connect",
-        )
-        if not values or not isinstance(values.get("host"), str):
-            return
-        host = values["host"].strip()
-        if not host:
-            return
+        host = alias
+        if host is None:
+            values = form(
+                "Add daemon via SSH",
+                PAIRING_MESSAGE,
+                [
+                    {
+                        "name": "host",
+                        "label": "Known SSH host or alias",
+                        "required": True,
+                    }
+                ],
+                submit_label="Connect",
+            )
+            if not values or not isinstance(values.get("host"), str):
+                return
+            host = values["host"].strip()
+            if not host:
+                return
         try:
             manager = tray._discovery.ssh_manager
-            pairing = manager.prepare(host)
+            pairing = (
+                manager.prepare(host)
+                if alias is None
+                else manager.prepare_discovered(alias)
+            )
             consent = form(
                 "Verify SSH daemon identity",
                 pairing_summary(pairing),
@@ -138,4 +150,51 @@ def build_items(tray, pystray):
                 ),
             )
         )
-    return items
+    return [*items, *build_candidate_items(tray, pystray)]
+
+
+def build_candidate_items(tray, pystray):
+    """A pending-enrollment indicator, with no network/disk work in callbacks."""
+    from ai_guardian.daemon.ssh_storage import SSHConnectionError
+    from ai_guardian.tray.plugins import show_dialog
+
+    state = getattr(getattr(tray, "_discovery", None), "ssh_alias_discovery", {})
+    if not isinstance(state, dict) or not state.get("enabled"):
+        return []
+    children = []
+    for alias in state["aliases"]:
+
+        def review(icon=None, item=None, alias=alias):
+            # The tray callback captures monitor bounds before launching its worker.
+            tray._on_add_ssh_daemon(icon, item, alias=alias)
+
+        def dismiss(alias=alias):
+            try:
+                tray._discovery.ssh_manager.dismiss_alias(alias)
+                tray._refresh_event.set()
+            except SSHConnectionError as exc:
+                show_dialog("SSH alias discovery", str(exc))
+
+        children.append(
+            pystray.MenuItem(
+                alias,
+                pystray.Menu(
+                    pystray.MenuItem("Review discovered daemon", review),
+                    pystray.MenuItem("Dismiss alias", _worker(dismiss)),
+                ),
+            )
+        )
+    if state["notices"]:
+        notices = "\n".join(state["notices"])
+        children.append(
+            pystray.MenuItem(
+                "SSH alias discovery notice",
+                _worker(lambda: show_dialog("SSH alias discovery", notices)),
+            )
+        )
+    label = f"SSH aliases available to pair ({len(state['aliases'])})"
+    return [
+        pystray.MenuItem(
+            label, pystray.Menu(*children) if children else None, enabled=bool(children)
+        )
+    ]

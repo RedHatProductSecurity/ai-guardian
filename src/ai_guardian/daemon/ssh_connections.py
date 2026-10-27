@@ -6,6 +6,7 @@ import time
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.daemon.rest_transport import DaemonConnectionError
+from ai_guardian.daemon.ssh_config import DEFAULT_SETTINGS, load_settings, scan_aliases
 from ai_guardian.daemon.ssh_storage import SSHConnectionError, SSHStore
 from ai_guardian.daemon.ssh_tunnel import (
     IDENTITY_CHANGED,
@@ -16,6 +17,7 @@ from ai_guardian.daemon.ssh_tunnel import (
 )
 
 logger = logging.getLogger(__name__)
+CANDIDATE_ERROR = "This SSH alias is no longer available to pair. Refresh discovery, or use Add daemon via SSH for an explicitly chosen destination."
 
 
 class _Connection:
@@ -49,7 +51,82 @@ class SSHConnectionManager:
         self._probes = {}
         self._enrolling = set()
         self._lock = threading.RLock()
+        self._alias_lock = threading.Lock()
+        self._alias_discovery: dict = {**DEFAULT_SETTINGS, "aliases": (), "notices": ()}
         self._closed = False
+
+    @property
+    def alias_discovery(self):
+        """Cached display-safe data; tray menu building must not touch disk."""
+        return dict(self._alias_discovery)
+
+    def refresh_aliases(self, *, wait=False):
+        """Local opt-in scan only. Saved profiles keep their independent workers."""
+        from ai_guardian.daemon.ssh_storage import STORAGE_ERROR
+
+        # Discovery refreshes are single-flight even if a filesystem is slow.
+        # An explicit review waits for fresh state rather than probing stale data.
+        if not self._alias_lock.acquire(blocking=wait):
+            return self.alias_discovery
+        try:
+            closed_at_start = self._closed
+            if closed_at_start:
+                return self.alias_discovery
+            settings = load_settings()
+            aliases: tuple[str, ...] = ()
+            notices: tuple[str, ...] = ()
+            result = (
+                scan_aliases(prefix=settings["alias_prefix"])
+                if settings["enabled"]
+                else None
+            )
+            with self._lock:
+                if result is not None:
+                    notices = result.notices
+                    try:
+                        paired = {
+                            p.destination.rsplit("@", 1)[-1].casefold()
+                            for p in self.store.load()
+                        }
+                        aliases = tuple(
+                            alias
+                            for alias in result.aliases
+                            if alias.casefold() not in paired
+                            and not self.store.is_dismissed(alias)
+                        )
+                    except SSHConnectionError:
+                        notices = (*notices, STORAGE_ERROR)
+                if self._closed:
+                    aliases = ()
+                self._alias_discovery = {
+                    **settings,
+                    "aliases": aliases,
+                    "notices": notices,
+                }
+                return dict(self._alias_discovery)
+        finally:
+            self._alias_lock.release()
+
+    def prepare_discovered(self, alias):
+        # A stale browser/menu action is not authority to probe a new destination.
+        state = self.refresh_aliases(wait=True)
+        if alias not in state["aliases"]:
+            raise SSHConnectionError(CANDIDATE_ERROR)
+        return self.prepare(alias)
+
+    def dismiss_alias(self, alias):
+        with self._lock:
+            if alias not in self._alias_discovery["aliases"]:
+                raise SSHConnectionError(CANDIDATE_ERROR)
+            self.store.dismiss(alias)
+            self._alias_discovery = {
+                **self._alias_discovery,
+                "aliases": tuple(
+                    value
+                    for value in self._alias_discovery["aliases"]
+                    if value != alias
+                ),
+            }
 
     def prepare(self, host, *, cancelled=None):
         """Probe only a user-entered destination; never save or trust it here."""
@@ -98,6 +175,10 @@ class SSHConnectionManager:
 
     def remove(self, profile_id):
         with self._lock:
+            profile = next((p for p in self.store.load() if p.id == profile_id), None)
+            if profile is not None:
+                # Record the user's removal before deleting trust (crash-safe order).
+                self.store.dismiss(profile.destination)
             self.store.remove(profile_id)
             connection = self._connections.pop(profile_id, None)
             if connection is not None:
@@ -201,6 +282,7 @@ class SSHConnectionManager:
     def close(self):
         with self._lock:
             self._closed = True
+            self._alias_discovery = {**self._alias_discovery, "aliases": ()}
             for connection in self._connections.values():
                 self._close_connection(connection)
             for tunnel in self._enrolling:

@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1244 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1245 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -12,8 +12,8 @@
 - `.readthedocs.yaml` (~55 tok)
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
-- `ai-guardian-example.json` — ', '**/examples/**')", (~20954 tok)
-- `CHANGELOG.md` — Change log (~76768 tok)
+- `ai-guardian-example.json` — ', '**/examples/**')", (~21062 tok)
+- `CHANGELOG.md` — Change log (~76950 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -25,7 +25,7 @@
 - `mkdocs.yml` (~1208 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2605 tok)
-- `README.md` — Project documentation (~10802 tok)
+- `README.md` — Project documentation (~10806 tok)
 - `RELEASING.md` — Release Management Process (~9382 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
@@ -136,7 +136,7 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~11463 tok)
+- `release-readiness.yml` — CI: Release Readiness (~11514 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~7113 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -906,7 +906,7 @@
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
 - `AUDIT_LOGGING.md` — Compliance Audit Logging (~1442 tok)
 - `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4050 tok)
-- `CONFIGURATION.md` — Configuration Guide (~7189 tok)
+- `CONFIGURATION.md` — Configuration Guide (~7371 tok)
 - `CONSOLE.md` — AI Guardian Console Guide (~1368 tok)
 - `COOKBOOK.md` — Configuration Cookbook (~15503 tok)
 - `DEVELOPER_GUIDE.md` — Developer Guide (~3796 tok)
@@ -919,8 +919,8 @@
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
 - `MCP_SERVER.md` — MCP Security Advisor Server (~5114 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
-- `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~3880 tok)
-- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~14124 tok)
+- `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~4008 tok)
+- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~15466 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
@@ -1109,16 +1109,17 @@
 - `auto_setup.py` — First-run auto-setup for tray shortcut, autostart, and tray launch. (~1717 tok)
 - `client.py` — URL configuration (~6433 tok)
 - `desktop.py` — Desktop shortcut and autostart integration for the ai-guardian tray. (~4266 tok)
-- `discovery.py` — class: is_container_id, should_use_container_api_name, should_update_target_name, ssh_manager + 5 more (~20499 tok)
+- `discovery.py` — class: is_container_id, should_use_container_api_name, should_update_target_name, ssh_manager + 6 more (~20654 tok)
 - `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 6 more (~17383 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 14 more (~2027 tok)
 - `rest_api.py` — _ThreadedHTTPServer: get_request, handle_error, log_message, do_GET + 1 more (~21403 tok)
 - `rest_transport.py` — Verified daemon REST transport. Trust is explicit, never learned by discovery. (~4429 tok)
 - `server.py` — URL configuration (~15458 tok)
-- `ssh_connections.py` — Tray/Web-owned SSH connection workers. Discovery itself never waits on SSH. (~2268 tok)
+- `ssh_config.py` — Bounded, declarative user OpenSSH alias enumeration. Never invokes SSH. (~2601 tok)
+- `ssh_connections.py` — Tray/Web-owned SSH connection workers. Discovery itself never waits on SSH. (~3302 tok)
 - `ssh_probe.py` — Fixed, read-only POSIX/Python 3 probe sent over authenticated SSH stdin. (~1101 tok)
-- `ssh_storage.py` — Owner-only SSH pairing storage, separate from exported daemon configuration. (~1930 tok)
+- `ssh_storage.py` — Owner-only SSH pairing storage, separate from exported daemon configuration. (~2363 tok)
 - `ssh_tunnel.py` — Bounded system-OpenSSH probing and owned loopback HTTPS tunnels. (~4662 tok)
 - `state.py` — URL configuration (~22018 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
@@ -1341,7 +1342,7 @@
 
 ## src/ai_guardian/schemas/
 
-- `ai-guardian-config.schema.json` — Declares in (~39603 tok)
+- `ai-guardian-config.schema.json` — Declares in (~39868 tok)
 - `aiguardignore.schema.json` (~556 tok)
 - `policy-decision.schema.json` (~584 tok)
 - `scenario.schema.json` — Declares to (~1315 tok)
@@ -1363,7 +1364,7 @@
 ## src/ai_guardian/setup/
 
 - `__init__.py` — setup_hooks (~10896 tok)
-- `config.py` — Default configuration creation for ai-guardian. (~7581 tok)
+- `config.py` — Default configuration creation for ai-guardian. (~7624 tok)
 - `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~48647 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
@@ -1392,10 +1393,10 @@
 
 ## src/ai_guardian/templates/profiles/
 
-- `minimal.json` (~4492 tok)
-- `moderator.json` (~4846 tok)
-- `standard.json` (~5232 tok)
-- `strict.json` (~4442 tok)
+- `minimal.json` (~4516 tok)
+- `moderator.json` (~4869 tok)
+- `standard.json` (~5256 tok)
+- `strict.json` (~4465 tok)
 
 ## src/ai_guardian/templates/tray-plugins/
 
@@ -1415,7 +1416,7 @@
 
 - `__init__.py` — System tray UI and daemon client. (~12 tok)
 - `animation.py` — Declares TrayIconManager (~1492 tok)
-- `app.py` — URL configuration (~19204 tok)
+- `app.py` — URL configuration (~19234 tok)
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~2594 tok)
 - `health.py` — URL configuration (~16971 tok)
 - `icons.py` — URL configuration (~1302 tok)
@@ -1428,7 +1429,7 @@
 - `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~21792 tok)
 - `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~11405 tok)
 - `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24133 tok)
-- `ssh_connections.py` — SSH tray menus use cached state; every action runs outside the GUI thread. (~1444 tok)
+- `ssh_connections.py` — SSH tray menus use cached state; every action runs outside the GUI thread. (~2048 tok)
 - `support.py` — Nonblocking tray support workflow; every native window owns a child process. (~1699 tok)
 
 ## src/ai_guardian/tui/

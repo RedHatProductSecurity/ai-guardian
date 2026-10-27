@@ -385,6 +385,91 @@ REST listener, non-loopback listener or legacy HTTP-only daemon fails with a
 distinct credential-free message; port 63152 is never assumed. This connects to
 user-identified hosts only: it does not enumerate AWS instances or use AWS APIs.
 
+#### Discover SSH aliases
+
+Discovery is **off by default**, independent of saved SSH connections. Open the
+**loopback Web Console → daemon picker → SSH daemon connections**, turn on
+**Discover SSH aliases**, optionally edit the prefix, then **Save SSH discovery
+settings**. This explicit opt-in applies to the workstation, not the selected
+remote daemon or a project. Alternatively, set the following in the local user
+`ai-guardian.json`:
+
+```json
+{"daemon": {"tray": {"ssh_alias_discovery": {
+  "enabled": true,
+  "alias_prefix": "ai-guardian-"
+}}}}
+```
+
+The case-insensitive prefix is a literal filter, not a required naming convention.
+Leave it empty to list **all concrete existing aliases**, with no renaming. A
+prefix such as `ai-guardian-` is useful when the same config includes unrelated
+hosts. Discovery reads **`~/.ssh/config`**; the system OpenSSH client on Windows
+uses **`%USERPROFILE%\.ssh\config`**. Windows' system-wide equivalent is
+`%PROGRAMDATA%\ssh\ssh_config` (`/etc/ssh/ssh_config` on POSIX); system-wide files
+are not enumerated. Windows alternate SSH clients/config locations are not
+searched. Actual connections still delegate users, ports, keys, jump hosts and
+connection predicates to the system OpenSSH client.
+
+At tray startup and each background refresh, **SSH aliases available to pair (N)**
+appears as a pending-enrollment menu, separate from saved/connected targets. Each
+alias offers **Review discovered daemon** and **Dismiss alias**. The loopback Web
+Console picker refreshes the equivalent list automatically. Changing either the
+SSH config or these discovery settings takes effect on the next refresh, without
+restarting the daemon. Scanning does not block the tray/browser UI.
+
+**Review discovered daemon** probes only that user-chosen alias, then opens the
+complete **Verify SSH daemon identity** step directly—no separate Add action or
+manual host-entry form. The tray uses the shared native-first modal dispatcher;
+the already-open Web Console uses its existing browser review. Both retain full
+destination/port/SAN/fingerprint details and explicit, initially unchecked consent.
+Cancel saves nothing. Finding a name alone does **not** establish that AI Guardian
+is installed or running there. No background probes are performed, no SSH command
+or predicate is executed during enumeration, no key contents are read, no SSH
+config is modified, and no cloud inventory is queried.
+
+Only confirmed, SSH-verified, HTTPS-verified **and authenticated** enrollment saves
+a pairing. Existing dynamic-port tunnels, backoff, restart recovery and polling-only
+tray registration then apply unchanged. Refreshes do not open trust dialogs,
+replace saved credentials/certificates, or create candidate connection workers.
+Offline hosts, absent SSH clients and unconfigured/stopped daemons report the
+existing credential-free errors only when reviewed; other candidates remain usable.
+
+**Parser limits and conditional configuration:**
+
+- Only declared concrete `Host` names are listed. Comments, quoted names,
+  `Host=...`, multiple names and case-insensitive duplicates are handled. Wildcard
+  and negated patterns are never expanded into destinations. Host names must fit
+  the existing safe SSH destination syntax; unsupported names remain available
+  through independently configured supported aliases.
+- Unconditional `Include` directives support regular **`config` or `*.conf` files
+  below the user's `.ssh` directory**, including literal subdirectories and
+  basename globs such as `Include config.d/*.conf`. Relative paths are relative
+  to `.ssh`, not the including file. Put this directive **before the first `Host`
+  or `Match`** and use `.conf` filenames for fragments. Included text shares scope;
+  an included `Host`/`Match` can make later Include directives conditional too.
+- Includes inside `Host` or `Match` scopes are skipped. Match conditions (including
+  `exec`, `localnetwork`, `canonical` and `final`) are never evaluated. A later
+  explicit `Host` declaration starts a new host scope and can be listed; it is
+  not proof that its effective settings will work. This is an alias inventory,
+  not an OpenSSH configuration evaluator.
+- Include cycles, links, external paths, parent traversal, recursive/directory
+  globs, environment/percent expansion and key-file paths are unsupported and
+  skipped. Limits: 8 nested file levels including the root, 64 files and Include
+  patterns, 256 aliases, 256 KiB per file / 1 MiB total, and 4,096 directory entries
+  per basename glob. Incomplete/unsupported scans show a credential-free notice;
+  valid partial results remain available. Use a small dedicated Include file or
+  explicit **Add daemon via SSH** for unsupported constructs.
+
+Dismissal persists across refreshes/restarts as a private, hostname-digest marker
+in the existing SSH state directory; it never edits SSH configuration or trust.
+**Removing a saved connection also dismisses its alias**, so discovery cannot
+recreate it or repeatedly offer enrollment. Changing/removing the SSH config never
+deletes saved pairings. Dismissed aliases can still be paired deliberately through
+**Add daemon via SSH**; there is no automatic reset of dismissal state. Turning
+discovery off hides candidates but leaves saved connections/tunnels unchanged.
+Removal closes only client-owned tunnels and never stops the remote daemon.
+
 #### POSIX storage preconditions
 
 Setup (including JSON mode) and startup create missing application directories

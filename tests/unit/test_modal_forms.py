@@ -144,6 +144,38 @@ def test_ssh_error_is_shown_in_the_selected_provider_without_replacement(forms):
     forms.browser.assert_not_called()
 
 
+def test_discovered_review_falls_back_only_before_first_display(forms, tmp_path):
+    pairing = make_pairing(tmp_path)[0]
+    tray = Mock()
+    tray._discovery.ssh_manager.prepare_discovered.return_value = pairing
+    forms.native.side_effect = UIUnavailable()
+    forms.tk.return_value = None  # User cancels the first visible identity review.
+    ssh_connections.open_enrollment(tray, alias="existing-vm")
+    assert forms.tk.call_args.args[0] == "Verify SSH daemon identity"
+    tray._discovery.ssh_manager.enroll.assert_not_called()
+    forms.browser.assert_not_called()
+
+
+@pytest.mark.parametrize("preference", ["auto", "tkinter", "nicegui", "headless"])
+def test_discovered_review_respects_preferences_and_does_not_probe_headless(
+    forms, tmp_path, monkeypatch, preference
+):
+    pairing = make_pairing(tmp_path)[0]
+    tray = Mock()
+    tray._discovery.ssh_manager.prepare_discovered.return_value = pairing
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", preference)
+    forms.native.return_value = None
+    forms.tk.return_value = None
+    forms.browser.return_value = None
+    ssh_connections.open_enrollment(tray, alias="existing-vm")
+    if preference == "headless":
+        tray._discovery.ssh_manager.prepare_discovered.assert_not_called()
+    assert forms.native.call_count == int(preference == "auto")
+    assert forms.tk.call_count == int(preference == "tkinter")
+    assert forms.browser.call_count == int(preference == "nicegui")
+    tray._discovery.ssh_manager.enroll.assert_not_called()
+
+
 @pytest.mark.parametrize("provider", ["native", "tk", "browser"])
 def test_unknown_provider_error_is_terminal(forms, monkeypatch, provider):
     from ai_guardian.ui.forms import run_form_flow

@@ -415,3 +415,216 @@ def test_poll_only_registration_requires_explicit_capability_ack(reply, accepted
     request.assert_called_once_with(
         target, "POST", "/api/register-tray", {"poll_only": True}
     )
+
+
+@pytest.fixture
+def alias_config(context, tmp_path, monkeypatch):
+    from ai_guardian.daemon import ssh_config
+
+    path = tmp_path / ".ssh" / "config"
+    path.parent.mkdir()
+    path.write_text("Host existing-vm ai-guardian-new\n")
+    monkeypatch.setattr(ssh_config, "user_ssh_config", lambda: path)
+    monkeypatch.setattr(
+        "ai_guardian.daemon.ssh_connections.load_settings",
+        lambda: {"enabled": True, "alias_prefix": ""},
+    )
+    return path
+
+
+def test_alias_scan_is_local_and_candidates_are_not_daemon_targets(
+    context, alias_config
+):
+    manager, _ = context
+    discovery = DaemonDiscovery()
+    discovery._ssh_manager = manager
+    with (
+        mock.patch("ai_guardian.daemon.ssh_connections.probe_destination") as probe,
+        mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel") as tunnel,
+        mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker,
+    ):
+        for _ in range(3):
+            assert discovery.discover_ssh() == []
+    assert discovery.ssh_alias_discovery["aliases"] == (
+        "ai-guardian-new",
+        "existing-vm",
+    )
+    assert manager.store.load() == []
+    probe.assert_not_called()
+    tunnel.assert_not_called()
+    worker.assert_not_called()
+
+
+def test_discovery_off_never_reads_ssh_config_or_changes_saved_workers(context):
+    manager, pairing = context
+    manager.store.create(pairing.profile)
+    with (
+        mock.patch(
+            "ai_guardian.daemon.ssh_connections.load_settings",
+            return_value={"enabled": False, "alias_prefix": ""},
+        ),
+        mock.patch("ai_guardian.daemon.ssh_connections.scan_aliases") as scan,
+        mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker,
+    ):
+        manager.refresh()
+        assert not manager.refresh_aliases()["aliases"]
+        manager.refresh()
+    scan.assert_not_called()
+    worker.return_value.start.assert_called_once()
+    assert manager.store.load() == [pairing.profile]
+
+
+def test_config_edits_hide_paired_aliases_without_replacing_trust(
+    context, alias_config
+):
+    manager, pairing = context
+    alias = pairing.profile.destination.rsplit("@", 1)[-1]
+    manager.store.create(pairing.profile)
+    record = manager.store.path / f"{pairing.profile.id}.json"
+    before = record.read_bytes()
+    alias_config.write_text(
+        f"Host {alias.upper()} first\n HostName changed.example\n User different\n"
+    )
+    assert manager.refresh_aliases()["aliases"] == ("first",)
+    alias_config.write_text("Host second\n")
+    assert manager.refresh_aliases()["aliases"] == ("second",)
+    alias_config.unlink()
+    assert manager.refresh_aliases()["aliases"] == ()
+    assert manager.alias_discovery["notices"]
+    assert record.read_bytes() == before
+    assert manager.store.load() == [pairing.profile]
+
+
+def test_only_explicit_review_probes_and_stale_actions_fail_closed(
+    context, alias_config
+):
+    from ai_guardian.daemon.ssh_connections import CANDIDATE_ERROR
+
+    manager, pairing = context
+    manager.refresh_aliases()
+    with mock.patch.object(manager, "prepare", return_value=pairing) as probe:
+        assert manager.prepare_discovered("existing-vm") is pairing
+        probe.assert_called_once_with("existing-vm")
+        alias_config.write_text("Host replacement\n")
+        with pytest.raises(SSHConnectionError, match=CANDIDATE_ERROR):
+            manager.prepare_discovered("existing-vm")
+        assert probe.call_count == 1
+    assert manager.store.load() == []
+
+
+def test_dismissal_persists_restart_without_enrollment_or_remote_cleanup(
+    context, alias_config
+):
+    manager, _ = context
+    manager.refresh_aliases()
+    with mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel") as tunnel:
+        manager.dismiss_alias("existing-vm")
+        manager.refresh_aliases()
+        restarted = SSHConnectionManager(SSHStore(manager.store.path))
+        try:
+            assert restarted.refresh_aliases()["aliases"] == ("ai-guardian-new",)
+            assert restarted.store.load() == []
+        finally:
+            restarted.close()
+    tunnel.assert_not_called()
+
+
+def test_removal_dismisses_alias_before_deleting_trust_and_cannot_recreate_it(
+    context, alias_config
+):
+    manager, pairing = context
+    alias_config.write_text(f"Host {pairing.profile.destination.rsplit('@', 1)[-1]}\n")
+    manager.store.create(pairing.profile)
+    manager.remove(pairing.profile.id)
+    with mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker:
+        assert manager.refresh() == []
+        assert manager.refresh_aliases()["aliases"] == ()
+    worker.assert_not_called()
+    assert manager.store.is_dismissed(pairing.profile.destination)
+
+
+def test_candidate_state_does_not_turn_storage_failures_into_trust(
+    context, alias_config
+):
+    manager, _ = context
+    with mock.patch.object(
+        manager.store, "load", side_effect=SSHConnectionError(STORAGE_ERROR)
+    ):
+        state = manager.refresh_aliases()
+    assert not state["aliases"]
+    assert STORAGE_ERROR in state["notices"]
+
+
+def test_overlapping_background_alias_refresh_uses_cached_snapshot_not_another_scan(
+    context, alias_config
+):
+    manager, _ = context
+    snapshot = manager.refresh_aliases()
+    with (
+        manager._alias_lock,
+        mock.patch("ai_guardian.daemon.ssh_connections.scan_aliases") as scan,
+    ):
+        assert manager.refresh_aliases() == snapshot
+    scan.assert_not_called()
+    manager.close()
+    assert manager.refresh_aliases()["aliases"] == ()
+
+
+def test_discovered_confirmation_reuses_authentication_persistence_and_single_worker(
+    context, alias_config
+):
+    manager, original = context
+    pairing = replace(
+        original, profile=replace(original.profile, destination="existing-vm")
+    )
+    with (
+        mock.patch(
+            "ai_guardian.daemon.ssh_connections.probe_destination", return_value=pairing
+        ),
+        mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel") as tunnel,
+        mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker,
+    ):
+        draft = manager.prepare_discovered("existing-vm")
+        assert manager.store.load() == []
+        manager.enroll(draft)  # Called only by the explicit confirmation action.
+        tunnel.return_value.request.assert_called_once_with("GET", "/api/stats")
+        assert manager.store.load() == [pairing.profile]
+        for _ in range(3):
+            assert len(manager.refresh()) == 1
+            assert manager.refresh_aliases()["aliases"] == ("ai-guardian-new",)
+        worker.return_value.start.assert_called_once()
+    manager.close()
+    restarted = SSHConnectionManager(manager.store)
+    with mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker:
+        try:
+            assert len(restarted.refresh()) == 1
+            assert len(restarted.refresh()) == 1
+            worker.return_value.start.assert_called_once()
+        finally:
+            restarted.close()
+
+
+def test_failed_dismissal_does_not_delete_trust_or_stop_saved_worker(context):
+    manager, pairing = context
+    manager.store.create(pairing.profile)
+    with mock.patch.object(
+        manager.store, "dismiss", side_effect=SSHConnectionError(STORAGE_ERROR)
+    ):
+        with pytest.raises(SSHConnectionError):
+            manager.remove(pairing.profile.id)
+    assert manager.store.load() == [pairing.profile]
+
+
+def test_shutdown_during_alias_scan_never_publishes_candidates(context, alias_config):
+    from ai_guardian.daemon.ssh_config import AliasScan
+
+    manager, _ = context
+
+    def scan(**kwargs):
+        manager.close()
+        return AliasScan(("existing-vm",))
+
+    with mock.patch(
+        "ai_guardian.daemon.ssh_connections.scan_aliases", side_effect=scan
+    ):
+        assert manager.refresh_aliases()["aliases"] == ()

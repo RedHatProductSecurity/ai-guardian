@@ -55,7 +55,7 @@ controls.
 | Ask/security decision: CLI `prompt --mode ask` | T → G; native simple prompts lack full decision/edit controls | T → G | T → G |
 | Tray-forwarded remote ask on macOS 14+ | G in subprocess; existing tray focus-safety Tk suppression remains | As above | As above |
 | Plugin parameter forms: `TrayPromptApp.run` | T → G | T → G | T → G |
-| Simple form flows / tray Add daemon via SSH: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | N desktop-ordered zenity/kdialog input/checklist → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
+| Simple form flows / tray Add daemon via SSH and discovered-alias review: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | N desktop-ordered zenity/kdialog input/checklist → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
 | Multi-target plugin selection: `TrayTargetSelectorApp.run` | G only | G only | G only |
 | Working-directory picker: `working_dir.choose_directory` | N AppleScript choose folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms FolderBrowserDialog → isolated T |
 | Browser form's auxiliary file/directory Browse | N AppleScript choose file/folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms OpenFileDialog/FolderBrowserDialog → isolated T |
@@ -108,6 +108,12 @@ controls.
   another provider. **Manage SSH connection...** still opens the
   existing local Web Console's saved-connection management page; its already-open
   browser controls do not enter a new standalone-modal cascade.
+  **Review discovered daemon** enters this same flow directly at the complete
+  identity review, skipping host input only. Discovery never opens a modal itself.
+  The first native startup failure can still fall back, but cancellation/unchecked
+  consent and any later displayed-step failure remain terminal. Verify the direct
+  route on each supported desktop as well as manual Add; see the full SSH UX
+  contract for opt-in, cancellation, dismissal/restart and identity-change checks.
 - **Process ownership:** Tk messages, sandbox dialogs, plugin CLI forms and tray
   proactive dialogs run outside the tray GUI loop. Proactive NiceGUI fallback also
   runs in its own child and opens the actual loopback port only after server startup.

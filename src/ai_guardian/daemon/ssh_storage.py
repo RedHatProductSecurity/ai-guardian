@@ -185,3 +185,40 @@ class SSHStore:
             path.unlink()
         except (OSError, ValueError):
             raise SSHConnectionError(STORAGE_ERROR) from None
+
+    def _dismissal_path(self, host):
+        # Case-insensitive OpenSSH hostname, ignoring an explicit user override.
+        alias = destination(host).rsplit("@", 1)[-1].casefold()
+        digest = hashlib.sha256(alias.encode()).hexdigest()
+        return self.path / f".dismissed-{digest}"
+
+    def is_dismissed(self, host):
+        try:
+            if not self._directory():
+                return False
+            path = self._dismissal_path(host)
+            if not path.exists() and not path.is_symlink():
+                return False
+            if path.is_symlink():
+                raise SSHConnectionError(STORAGE_ERROR)
+            _material_file(str(path), private=True)
+            if path.stat().st_size != 0:
+                raise SSHConnectionError(STORAGE_ERROR)
+            return True
+        except (OSError, ValueError):
+            raise SSHConnectionError(STORAGE_ERROR) from None
+
+    def dismiss(self, host):
+        """Persist only a hostname digest; never changes a saved trust record."""
+        try:
+            self._directory(create=True)
+            path = self._dismissal_path(host)
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except FileExistsError:
+                if not self.is_dismissed(host):
+                    raise SSHConnectionError(STORAGE_ERROR) from None
+            else:
+                os.close(fd)
+        except (OSError, ValueError):
+            raise SSHConnectionError(STORAGE_ERROR) from None
