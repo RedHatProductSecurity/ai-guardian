@@ -237,6 +237,7 @@ class DaemonDiscovery:
         self._done_lock: Optional[threading.Lock] = None
         self._ssh_manager = None
         self._ssh_stopped = False
+        self.allow_ssh_alias_discovery = True
 
     @property
     def ssh_manager(self):
@@ -251,7 +252,22 @@ class DaemonDiscovery:
             return self._ssh_manager
 
     def discover_ssh(self):
-        return self.ssh_manager.refresh()
+        manager = self.ssh_manager
+        targets = manager.refresh()
+        if self.allow_ssh_alias_discovery:
+            manager.refresh_aliases()
+        return targets
+
+    @property
+    def ssh_alias_discovery(self):
+        """Candidates are not daemon targets and never enter tray registration."""
+        with self._lock:
+            manager = self._ssh_manager
+        return (
+            manager.alias_discovery
+            if manager is not None
+            else {"enabled": False, "aliases": (), "notices": ()}
+        )
 
     @property
     def targets(self) -> List[DaemonTarget]:

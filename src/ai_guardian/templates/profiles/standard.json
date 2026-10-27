@@ -357,6 +357,7 @@
     "tray": {
       "enabled": true,
       "auto_install": true,
+      "ssh_alias_discovery": {"enabled": false, "alias_prefix": "ai-guardian-"},
       "_comment_terminal_app": "Preferred terminal for tray menu actions. macOS: app name (iTerm, Warp, alacritty). Linux: binary (alacritty, kitty). Windows: exe (wt). Omit for auto-detect."
     }
   },

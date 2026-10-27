@@ -79,6 +79,17 @@ their existing URL/token settings. See [native HTTPS, private-VM provisioning,
 pairing and rotation](MULTI_DAEMON_TRAY.md#native-https-and-explicit-certificate-trust)
 for all fields, file protection, tunnel identity and certificate lifecycle.
 
+### SSH alias discovery
+
+`daemon.tray.ssh_alias_discovery` is workstation-global and off by default in setup,
+the example and every built-in profile. Set `enabled: true` once to offer local SSH
+aliases at tray startup/refresh and in the loopback Web Console picker. The optional
+`alias_prefix` defaults to `"ai-guardian-"`; `""` discovers concrete existing aliases
+without renaming. Save these settings in **SSH daemon connections** on the picker,
+not a remote daemon/project settings page. Discovery never probes hosts or grants
+trust; review and explicit identity confirmation remain mandatory. See
+[SSH config locations, bounded Includes, Match behavior and persistent dismissal](MULTI_DAEMON_TRAY.md#discover-ssh-aliases).
+
 For `support`, defaults select `export_destination: "github-discussions"`
 and `github_category: "bug-reports"`; only `"q-a"` is an alternative category.
 Preparation is local and public publication requires native user-only approval.

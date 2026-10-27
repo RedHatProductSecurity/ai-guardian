@@ -349,7 +349,8 @@
     },
     "tray": {
       "enabled": true,
-      "auto_install": true
+      "auto_install": true,
+      "ssh_alias_discovery": {"enabled": false, "alias_prefix": "ai-guardian-"}
     }
   },
   "_comment_on_scan_error": "Global behavior when a scanner or hook process encounters an error. 'allow' (default, fail-open): log warning, allow operation. 'block' (fail-closed): block operation if scanning or hook processing fails. For strict compliance environments. (NEW in v1.7.0, Issue #461; process failures in #2434)",

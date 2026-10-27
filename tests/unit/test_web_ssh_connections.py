@@ -19,10 +19,20 @@ def form(tmp_path):
     pairing = make_pairing(tmp_path)[0]
     service = mock.Mock(allow_ssh_pairing=True)
     service.prepare_ssh_connection.return_value = pairing
+    service.prepare_discovered_ssh_connection.return_value = pairing
     service.refresh_targets.return_value = []
+    service.get_ssh_alias_discovery.return_value = {
+        "enabled": False,
+        "alias_prefix": "ai-guardian-",
+        "aliases": (),
+        "notices": (),
+    }
     widgets = {}
     callbacks = {}
     ui = mock.MagicMock()
+    # NiceGUI's fluent props/context-manager methods return the same dialog.
+    ui.dialog.return_value.props.return_value = ui.dialog.return_value
+    ui.dialog.return_value.__enter__.return_value = ui.dialog.return_value
 
     def button(label, **kwargs):
         widget = mock.MagicMock()
@@ -113,6 +123,9 @@ async def test_removal_needs_fresh_single_use_confirmation(form):
     form.service.refresh_targets.return_value = [target]
     await form.ui.timer.call_args.args[1]()
     await form.callbacks["Remove..."]()
+    form.ui.label.assert_any_call(
+        "This removes the saved credential and trust, closes owned tunnels, and dismisses this alias from discovery. The remote daemon is not stopped."
+    )
     form.service.remove_ssh_connection.assert_not_called()
     form.callbacks["Cancel"]()
     await form.callbacks["Remove connection"]()
@@ -121,6 +134,9 @@ async def test_removal_needs_fresh_single_use_confirmation(form):
     await form.callbacks["Remove connection"]()
     await form.callbacks["Remove connection"]()
     form.service.remove_ssh_connection.assert_called_once_with(target.ssh_id)
+    form.ui.label.return_value.classes.return_value.set_text.assert_any_call(
+        "Saved SSH connection removed and alias dismissed. The remote daemon was not stopped."
+    )
 
 
 def test_nonlocal_web_console_has_no_enrollment_surface():
@@ -138,12 +154,172 @@ def test_service_enforces_local_only_even_for_direct_calls():
         service.prepare_ssh_connection,
         service.enroll_ssh_connection,
         service.remove_ssh_connection,
+        service.prepare_discovered_ssh_connection,
+        service.dismiss_ssh_alias,
     ):
         with pytest.raises(SSHConnectionError, match="loopback-bound"):
             operation("untrusted")
+    with pytest.raises(SSHConnectionError, match="loopback-bound"):
+        service.get_ssh_alias_discovery()
+    with pytest.raises(SSHConnectionError, match="loopback-bound"):
+        service.save_ssh_alias_settings(True, "")
     service._discovery.ssh_manager.prepare.assert_not_called()
     service.allow_ssh_pairing = True
     service.prepare_ssh_connection("alias")
     service._discovery.ssh_manager.prepare.assert_called_once_with("alias")
     service.close()
     service._discovery.stop.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_automatic_candidate_list_has_direct_review_without_host_entry(form):
+    form.service.get_ssh_alias_discovery.return_value = {
+        "enabled": True,
+        "alias_prefix": "",
+        "aliases": ("existing-vm",),
+        "notices": (),
+    }
+    await form.ui.timer.call_args.args[1]()
+    form.service.prepare_discovered_ssh_connection.assert_not_called()
+    form.ui.label.assert_any_call("SSH aliases available to pair (1)")
+    await form.callbacks["Review discovered daemon"]()
+    form.service.prepare_discovered_ssh_connection.assert_called_once_with(
+        "existing-vm"
+    )
+    form.service.prepare_ssh_connection.assert_not_called()
+    form.service.enroll_ssh_connection.assert_not_called()
+    # Refresh and repeated action do not open another identity prompt.
+    await form.ui.timer.call_args.args[1]()
+    await form.callbacks["Review discovered daemon"]()
+    assert form.service.prepare_discovered_ssh_connection.call_count == 1
+    assert form.ui.checkbox.call_args.kwargs["value"] is False
+    form.ui.element.assert_called_once_with("div")
+    assert form.ui.element.return_value.__enter__.call_count == 1
+    form.callbacks["Cancel"]()
+    form.ui.checkbox.return_value.value = True
+    await form.callbacks["Trust and add daemon"]()
+    form.service.enroll_ssh_connection.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_candidate_dismissal_and_settings_are_explicit_local_actions(form):
+    form.service.get_ssh_alias_discovery.return_value = {
+        "enabled": True,
+        "alias_prefix": "",
+        "aliases": ("existing-vm",),
+        "notices": (),
+    }
+    await form.ui.timer.call_args.args[1]()
+    await form.callbacks["Dismiss alias"]()
+    form.service.dismiss_ssh_alias.assert_called_once_with("existing-vm")
+    form.service.prepare_discovered_ssh_connection.assert_not_called()
+    form.service.save_ssh_alias_settings.assert_not_called()
+    await form.callbacks["Save SSH discovery settings"]()
+    form.service.save_ssh_alias_settings.assert_called_once()
+
+
+def test_settings_write_is_workstation_global_preserves_other_values(tmp_path):
+    import json
+
+    service = DaemonService()
+    service.allow_ssh_pairing = True
+    path = tmp_path / "ai-guardian.json"
+    path.write_text(
+        json.dumps(
+            {"unrelated": "preserve", "daemon": {"rest_tls": {"enabled": False}}}
+        )
+    )
+    with mock.patch("ai_guardian.config.utils.get_config_dir", return_value=tmp_path):
+        service.save_ssh_alias_settings(True, "")
+    result = json.loads(path.read_text())
+    assert result["daemon"]["tray"]["ssh_alias_discovery"] == {
+        "enabled": True,
+        "alias_prefix": "",
+    }
+    assert result["daemon"]["rest_tls"] == {"enabled": False}
+    assert result["unrelated"] == "preserve"
+    service.close()
+
+
+@pytest.mark.parametrize(
+    "enabled,prefix", [("true", ""), (True, "*"), (True, "a\n"), (True, "x" * 254)]
+)
+def test_invalid_settings_never_write(enabled, prefix):
+    service = DaemonService()
+    service.allow_ssh_pairing = True
+    with (
+        mock.patch("ai_guardian.config.writer._atomic_config_update") as write,
+        pytest.raises(SSHConnectionError, match="literal SSH alias prefix"),
+    ):
+        service.save_ssh_alias_settings(enabled, prefix)
+    write.assert_not_called()
+    service.close()
+
+
+@pytest.mark.parametrize("contents", ["{invalid", "[]", "null"])
+def test_settings_never_replace_malformed_existing_configuration(tmp_path, contents):
+    service = DaemonService()
+    service.allow_ssh_pairing = True
+    path = tmp_path / "ai-guardian.json"
+    path.write_text(contents)
+    with (
+        mock.patch("ai_guardian.config.utils.get_config_dir", return_value=tmp_path),
+        pytest.raises(SSHConnectionError, match="not saved"),
+    ):
+        service.save_ssh_alias_settings(True, "")
+    assert path.read_text() == contents
+    service.close()
+
+
+def test_network_console_refresh_disables_alias_enumeration_before_discovery():
+    service = DaemonService()
+    service._discovery = mock.Mock()
+    service.refresh_targets()
+    assert service._discovery.allow_ssh_alias_discovery is False
+    service.close()
+
+
+def test_candidate_reader_is_cached_not_a_duplicate_scan():
+    service = DaemonService()
+    service.allow_ssh_pairing = True
+    service._discovery = mock.Mock()
+    manager = service._discovery.ssh_manager
+    manager.alias_discovery = {
+        "enabled": True,
+        "aliases": ("existing-vm",),
+        "notices": (),
+    }
+    assert service.get_ssh_alias_discovery() == manager.alias_discovery
+    manager.refresh_aliases.assert_not_called()
+    service.close()
+
+
+@pytest.mark.asyncio
+async def test_discovered_web_confirmation_is_explicit_and_single_use(form):
+    form.service.get_ssh_alias_discovery.return_value = {
+        "enabled": True,
+        "alias_prefix": "",
+        "aliases": ("existing-vm",),
+        "notices": (),
+    }
+    await form.ui.timer.call_args.args[1]()
+    await form.callbacks["Review discovered daemon"]()
+    await form.callbacks["Trust and add daemon"]()
+    form.service.enroll_ssh_connection.assert_not_called()
+    form.ui.checkbox.return_value.value = True
+    await form.callbacks["Trust and add daemon"]()
+    await form.callbacks["Trust and add daemon"]()
+    form.service.enroll_ssh_connection.assert_called_once_with(form.pairing)
+    form.service.prepare_ssh_connection.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_late_hide_from_old_review_does_not_unlock_new_review(form):
+    await form.callbacks["Add daemon via SSH"]()
+    old_finish = form.ui.dialog.return_value.props.return_value.on.call_args.args[1]
+    form.callbacks["Cancel"]()
+    await form.callbacks["Add daemon via SSH"]()
+    old_finish()
+    await form.callbacks["Add daemon via SSH"]()
+    assert form.service.prepare_ssh_connection.call_count == 2
+    form.service.enroll_ssh_connection.assert_not_called()

@@ -165,3 +165,32 @@ def test_native_dpapi_integrity():
     assert _dpapi(encrypted, decrypt=True) == data
     with pytest.raises(SSHConnectionError):
         _dpapi(encrypted[:-1] + bytes([encrypted[-1] ^ 1]), decrypt=True)
+
+
+def test_dismissal_is_private_idempotent_case_insensitive_and_separate_from_trust(
+    tmp_path, pairing
+):
+    store = SSHStore(tmp_path / "connections")
+    assert not store.is_dismissed("alias")
+    store.create(pairing.profile)
+    original = (store.path / f"{pairing.profile.id}.json").read_bytes()
+    store.dismiss("user@ALIAS")
+    store.dismiss("alias")
+    assert SSHStore(store.path).is_dismissed("Alias")
+    assert len(list(store.path.glob(".dismissed-*"))) == 1
+    marker = next(store.path.glob(".dismissed-*"))
+    assert marker.read_bytes() == b""
+    if os.name != "nt":
+        assert marker.stat().st_mode & 0o777 == 0o600
+    assert (store.path / f"{pairing.profile.id}.json").read_bytes() == original
+    assert store.load() == [pairing.profile]
+
+
+def test_dismissal_never_overwrites_existing_marker_content(tmp_path):
+    store = SSHStore(tmp_path / "connections")
+    store.dismiss("alias")
+    marker = next(store.path.glob(".dismissed-*"))
+    marker.write_bytes(b"preserve")
+    with pytest.raises(SSHConnectionError, match=STORAGE_ERROR):
+        store.dismiss("alias")
+    assert marker.read_bytes() == b"preserve"

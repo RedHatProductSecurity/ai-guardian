@@ -161,3 +161,56 @@ def test_unsupported_prompt_registration_warning_survives_stats_refresh():
         items[0].action[0].action()
         thread.call_args.kwargs["target"]()
     assert POLLING_ERROR in dialog.call_args.args[1]
+
+
+def test_candidate_menu_is_cached_and_direct_review_dispatches_existing_modal():
+    discovery = SimpleNamespace(
+        ssh_alias_discovery={
+            "enabled": True,
+            "aliases": ("existing-vm",),
+            "notices": (),
+        },
+        ssh_manager=mock.Mock(),
+    )
+    tray = SimpleNamespace(
+        _discovery=discovery, _on_add_ssh_daemon=mock.Mock(), _refresh_event=mock.Mock()
+    )
+    pystray = SimpleNamespace(
+        Menu=lambda *items: list(items),
+        MenuItem=lambda text, action, **kwargs: SimpleNamespace(
+            text=text, action=action
+        ),
+    )
+    entry = ssh_connections.build_candidate_items(tray, pystray)[0]
+    assert entry.text == "SSH aliases available to pair (1)"
+    assert entry.action[0].text == "existing-vm"
+    review = entry.action[0].action[0]
+    assert review.text == "Review discovered daemon"
+    review.action("icon", "item")
+    tray._on_add_ssh_daemon.assert_called_once_with("icon", "item", alias="existing-vm")
+    discovery.ssh_manager.prepare.assert_not_called()
+    discovery.ssh_manager.refresh_aliases.assert_not_called()
+    with mock.patch("ai_guardian.tray.ssh_connections.threading.Thread") as thread:
+        entry.action[0].action[1].action()
+        discovery.ssh_manager.dismiss_alias.assert_not_called()
+        thread.call_args.kwargs["target"]()
+    discovery.ssh_manager.dismiss_alias.assert_called_once_with("existing-vm")
+
+
+def test_candidate_review_captures_placement_then_starts_worker():
+    tray = DaemonTray.__new__(DaemonTray)
+    tray._icon = mock.Mock()
+    with (
+        mock.patch("ai_guardian.tray.app.threading.Thread") as thread,
+        mock.patch(
+            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
+            return_value=(0, 0, 1920, 1080),
+        ),
+    ):
+        tray._on_add_ssh_daemon(alias="existing-vm")
+    assert thread.call_args.kwargs["target"] is ssh_connections.open_enrollment
+    assert thread.call_args.kwargs["kwargs"] == {
+        "screen_bounds": (0, 0, 1920, 1080),
+        "alias": "existing-vm",
+    }
+    thread.return_value.start.assert_called_once()

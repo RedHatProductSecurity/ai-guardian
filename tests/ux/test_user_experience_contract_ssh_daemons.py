@@ -12,7 +12,17 @@ Manual qualification (requires an explicitly authorized disposable POSIX VM):
 6. Trigger a remote ask prompt and decide in the tray without inbound callbacks.
 7. Change the daemon certificate: saved trust must not change automatically.
 8. Remove the saved target; only owned tunnels/credentials disappear, not the VM
-   daemon. Repeat native Windows-client/DPAPI and macOS UI qualification separately.
+    daemon. Repeat native Windows-client/DPAPI and macOS UI qualification separately.
+9. In the loopback Web Console picker, opt into Discover SSH aliases and save.
+   With an empty prefix, existing concrete aliases require no renaming. Restart
+   the tray / refresh: SSH aliases available to pair shows a count, not targets.
+10. Review discovered daemon opens full identity review directly, with no host
+    entry. Cancel saves nothing. Refresh never opens unsolicited trust dialogs.
+11. Edit the synthetic user SSH config; added aliases appear on refresh. Dismiss
+    an alias or remove a paired daemon and restart: it is not re-offered. Explicit
+    manual Add remains available. Missing config does not erase saved pairings.
+12. Verify unsupported/conditional includes show a safe notice without executing
+    Match exec, contacting hosts, opening private keys or changing SSH config.
 
 Automated tests use synthetic certificates, explicit storage and mock SSH only;
 they never load the user's configuration or contact a live SSH destination.
@@ -270,3 +280,115 @@ def test_poll_only_cannot_smuggle_callback_configuration(body):
         "poll_only registration must be true and contain no callback address or credential",
     )
     handler.server.daemon_state.register_tray.assert_not_called()
+
+
+@pytest.mark.parametrize("consent", [None, {"trust": False}, {"trust": True}])
+def test_discovered_alias_review_skips_host_entry_but_keeps_full_native_confirmation(
+    monkeypatch, pairing, consent
+):
+    """USER EXPERIENCE: click a discovered alias → same complete trust boundary.
+
+    Discovery itself opens nothing. The user-chosen review probes this alias only.
+    Cancel/unchecked consent is terminal and never saves or launches another UI.
+    """
+    from ai_guardian.tray.ssh_connections import open_enrollment
+    from ai_guardian.ui.ssh_pairing import TRUST_LABEL
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    tray = mock.Mock()
+    tray._discovery.ssh_manager.prepare_discovered.return_value = pairing
+    with (
+        mock.patch("ai_guardian.ui.forms.NativeForm") as native,
+        mock.patch(
+            "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+        ) as tk,
+        mock.patch("ai_guardian.tray.sandbox_dialog._show_nicegui_form") as browser,
+    ):
+        native.return_value.side_effect = [consent, {}]
+        open_enrollment(tray, alias="existing-vm", screen_bounds=(0, 0, 1920, 1080))
+    first = native.return_value.call_args_list[0]
+    assert first.args[0] == "Verify SSH daemon identity"
+    assert first.args[2] == [
+        {
+            "name": "trust",
+            "label": TRUST_LABEL,
+            "type": "bool",
+            "default": False,
+            "required": True,
+        }
+    ]
+    summary = first.args[1]
+    assert pairing.profile.destination in summary
+    assert pairing.profile.server_name in summary
+    assert pairing.profile.certificate_sha256 in summary
+    assert pairing.profile.token not in str(native.return_value.call_args_list)
+    assert pairing.profile.ca_pem not in str(native.return_value.call_args_list)
+    tray._discovery.ssh_manager.prepare_discovered.assert_called_once_with(
+        "existing-vm"
+    )
+    tray._discovery.ssh_manager.prepare.assert_not_called()
+    if consent and consent.get("trust") is True:
+        tray._discovery.ssh_manager.enroll.assert_called_once_with(pairing)
+        tray._refresh_event.set.assert_called_once()
+    else:
+        tray._discovery.ssh_manager.enroll.assert_not_called()
+    tk.assert_not_called()
+    browser.assert_not_called()
+
+
+def test_discovery_opt_in_dismissal_and_removal_do_not_imply_trust(
+    tmp_path, monkeypatch, pairing
+):
+    """USER EXPERIENCE: local candidates are separate, durable dismissal is respected.
+
+    No scanner calls OpenSSH, no alias becomes a target/credential automatically,
+    and enabling discovery cannot replace saved trust. Restart preserves removal.
+    """
+    from ai_guardian.daemon import ssh_config
+    from ai_guardian.daemon.discovery import DaemonDiscovery
+    from ai_guardian.daemon.ssh_connections import SSHConnectionManager
+
+    config = tmp_path / ".ssh" / "config"
+    config.parent.mkdir()
+    alias = pairing.profile.destination.rsplit("@", 1)[-1]
+    config.write_text(f"Host {alias} other-vm\n")
+    before = config.read_bytes()
+    monkeypatch.setattr(ssh_config, "user_ssh_config", lambda: config)
+    settings = {"enabled": False, "alias_prefix": ""}
+    monkeypatch.setattr(
+        "ai_guardian.daemon.ssh_connections.load_settings", lambda: dict(settings)
+    )
+    manager = SSHConnectionManager(SSHStore(tmp_path / "connections"))
+    discovery = DaemonDiscovery()
+    discovery._ssh_manager = manager
+    with (
+        mock.patch("ai_guardian.daemon.ssh_connections.probe_destination") as probe,
+        mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel") as tunnel,
+        mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker,
+    ):
+        try:
+            assert discovery.discover_ssh() == []
+            assert not discovery.ssh_alias_discovery["aliases"]
+            settings["enabled"] = True
+            assert discovery.discover_ssh() == []
+            assert set(discovery.ssh_alias_discovery["aliases"]) == {alias, "other-vm"}
+            assert manager.store.load() == []
+            manager.dismiss_alias("other-vm")
+            manager.store.create(pairing.profile)  # Already independently paired.
+            assert len(discovery.discover_ssh()) == 1
+            assert not discovery.ssh_alias_discovery["aliases"]
+            manager.remove(pairing.profile.id)
+        finally:
+            manager.close()
+        restarted = SSHConnectionManager(manager.store)
+        try:
+            assert restarted.refresh_aliases()["aliases"] == ()
+            assert restarted.refresh() == []
+        finally:
+            restarted.close()
+    assert worker.call_count == 1  # Only the deliberately saved profile.
+    probe.assert_not_called()
+    tunnel.assert_not_called()
+    assert config.read_bytes() == before

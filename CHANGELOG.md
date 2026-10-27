@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Opt-in local SSH alias discovery (#2587):** Offer concrete user OpenSSH aliases
+  automatically at tray startup/refresh and in the loopback Web Console, with an
+  optional literal prefix, bounded unconditional Includes, pending-enrollment
+  indicator and direct full identity review. Enumeration never probes hosts or
+  executes config predicates; SSH/TLS verification and unchecked explicit trust
+  confirmation remain mandatory. Persistent dismissal/removal prevents re-offering
+  aliases; saved trust, owned tunnels, dynamic ports and reconnect remain unchanged.
+  Includes synchronized settings/schema/setup/profiles, isolated parser/manager/
+  tray/Web/UX contracts, source documentation and release-readiness coverage.
 - **Capability-aware modal policy (#2580):** Share Native → Tkinter → NiceGUI
   ordering across eligible dialog implementations, with exclusive explicit
   preferences and fallback only on proven pre-display startup failure. Preserve

@@ -9,6 +9,75 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2587 SSH alias discovery — locally validated, 2026-10-27
+
+- User authorized implementation with **go**. Continued existing branch `2587`,
+  preserving the initialization handoff and OpenWolf-owned anatomy updates. The
+  qualified ticket was already read once; no temp-clone sync or new branch.
+- Added `daemon/ssh_config.py`: default-off workstation-global opt-in, optional
+  literal prefix (empty includes existing aliases), concrete Host enumeration,
+  bounded unconditional local config/`.conf` Includes, cycle/link/nonregular-file
+  rejection and explicit Match/conditional limitations. No SSH/config predicate
+  execution, IdentityFile reads, SSH config writes or cloud inventory access.
+- Manager publishes separate cached candidates, not daemon targets; scans are
+  single-flight. Tray pending count/direct review and loopback Web candidates
+  reuse existing probe/full identity review, unchecked consent and enrollment.
+  Tray retains shared native-first form dispatch and captured monitor placement.
+  Browser dialogs use stable parents and per-review ownership across timer refresh.
+- Private hostname-digest dismissal markers survive restart. Removal records a
+  dismissal before deleting trust/closing owned tunnels; no remote stop. Missing
+  config/edited aliases do not rewrite pairings. Manual Add remains deliberate
+  recovery for dismissed aliases. Existing SSH/TLS authentication, dynamic ports,
+  backoff, polling-only registration and one worker per saved destination remain.
+- Synchronized schema/setup/example/all profiles, local picker settings, source
+  docs/modal matrix/README/changelog and release-readiness coverage. Narrow local
+  settings writes preserve unrelated config and reject malformed existing data.
+- **1,025 related tests pass; one native-Windows DPAPI test skips on Linux.**
+  Includes complete SSH/modal UX files, transport, manager/storage/tray/Web callers,
+  discovery, schema/profile parity and related setup tests. Focused SSH coverage
+  **91%**: parser 95%, manager 94%, storage 84%, tray 88%; artifact
+  `/tmp/opencode/guardian-2587.coverage` (Web is omitted by project coverage policy).
+- Black py310, Ruff, Pylint E, Mypy (320 source files), JSON/YAML/readiness paths
+  and whitespace checks pass. Simplification reviewed. Fixed collection inference,
+  concurrent shutdown narrowing and one new mock context-manager assertion;
+  recorded lifecycle/parser learnings and iteration details in cerebrum/buglog.
+- DAF notes saved; progress and pending checklist:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2587#issuecomment-6433069481.
+- **Next:** review/publish via external DAF workflow, qualify fresh CI and actual
+  macOS/Windows/GNOME/KDE desktop behavior, then explicitly authorized disposable-VM
+  enrollment/cancel/restart/reconnect/offline/identity-change/removal. Windows
+  OpenSSH/DPAPI and actual native rendering remain unverified locally; do not mark
+  all qualification complete or close the issue from mocked contracts alone.
+- Changes remain local/uncommitted. No live SSH, real credential retrieval,
+  installed-daemon/tray restart, runtime/security configuration change, full-suite,
+  integration/container run, commit, push, PR or issue closure. OpenWolf owns
+  automatic anatomy/memory bookkeeping. Earlier entries are historical.
+
+## Issue #2587 session initialization — 2026-10-26
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2587`; confirmed the active repository,
+  existing branch `2587` and initially clean worktree. Read the qualified GitHub
+  ticket exactly once. No temporary-clone sync applies.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  markdown and skills are absent. Loaded DAF workflow/Git/OpenWolf guidance and
+  read the project protocol, handoff and learning constraints. The project release
+  skill is unrelated. Leave native conversation titles under DAF management.
+- User requested initialization only; implementation has not started. Next:
+  inspect existing SSH discovery/manager/UI seams, define a bounded local-only
+  concrete-alias parser and dismissal semantics, then add opt-in asynchronous
+  tray/local-Web discovery and direct review using existing enrollment/tunnels.
+- Preserve explicit unchecked trust confirmation, independent SSH/TLS checks,
+  cancellation, protected credentials and removal; enumeration must never execute
+  SSH predicates or contact destinations. Reuse the shared modal dispatcher.
+- Plan isolated parser/manager/tray/Web tests and the complete SSH UX contract,
+  then documentation/changelog and synchronized configuration/readiness surfaces
+  if adding settings. Run related tests only; leave full/platform/live qualification
+  to CI and explicitly authorized manual checks.
+- No code changes, tests, tracker updates, live SSH/credential access, runtime or
+  configuration changes, commits, pushes or PRs. Only this handoff was updated;
+  OpenWolf owns automatic anatomy/memory bookkeeping. Earlier entries are history.
+
 ## Issue #2584 / PR #2586 CI follow-up — local test fix, 2026-10-27
 
 - User reported CI failure. Existing branch `2584` is synchronized at

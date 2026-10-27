@@ -24,17 +24,34 @@ def create_ssh_connections(service):
             "Known SSH host or alias", placeholder="user@vm.example.internal"
         ).classes("w-full")
         feedback = ui.label("").classes("whitespace-pre-wrap")
+        reviewing = None
+        # Timer refreshes replace candidate/saved rows, not an active review.
+        dialog_area = ui.element("div")
 
-        async def prepare():
+        async def prepare(*, alias=None):
+            nonlocal reviewing
+            if reviewing or is_client_deleted(client):
+                return
+            review_token = object()
+            reviewing = review_token
             add.disable()
             feedback.set_text("Connecting to SSH daemon...")
+            displayed = False
             try:
-                pairing = await run.io_bound(service.prepare_ssh_connection, host.value)
+                if alias is None:
+                    pairing = await run.io_bound(
+                        service.prepare_ssh_connection, host.value
+                    )
+                else:
+                    pairing = await run.io_bound(
+                        service.prepare_discovered_ssh_connection, alias
+                    )
                 if is_client_deleted(client):
                     return
                 feedback.set_text("")
                 pending = [pairing]  # Server-side, single-use confirmation state.
                 with (
+                    dialog_area,
                     ui.dialog().props("persistent") as dialog,
                     ui.card().classes("max-w-3xl"),
                 ):
@@ -42,8 +59,15 @@ def create_ssh_connections(service):
                     ui.label(pairing_summary(pairing)).classes("whitespace-pre-wrap")
                     consent = ui.checkbox(TRUST_LABEL, value=False)
 
-                    def cancel():
+                    def finish():
+                        nonlocal reviewing
                         pending.clear()
+                        if reviewing is review_token:
+                            reviewing = None
+                            add.enable()
+
+                    def cancel():
+                        finish()
                         dialog.close()
 
                     async def enroll():
@@ -62,25 +86,97 @@ def create_ssh_connections(service):
                         except (SSHConnectionError, DaemonConnectionError) as exc:
                             feedback.set_text(str(exc))
                         finally:
+                            finish()
                             dialog.close()
 
                     trust = ui.button(
                         "Trust and add daemon", on_click=enroll
                     ).bind_enabled_from(consent, "value")
                     cancel_button = ui.button("Cancel", on_click=cancel)
+                dialog.on("hide", finish)
+                client.on_disconnect(cancel)
+                displayed = True
                 dialog.open()
             except (SSHConnectionError, DaemonConnectionError) as exc:
                 feedback.set_text(str(exc))
             finally:
-                add.enable()
+                if not displayed:
+                    reviewing = None
+                    add.enable()
 
         add = ui.button("Add daemon via SSH", on_click=prepare)
+        ui.label(
+            "Discover SSH aliases locally at startup and refresh. No hosts are contacted until you choose Review discovered daemon; discovery never grants trust."
+        )
+        discovery_enabled = ui.switch("Discover SSH aliases", value=False)
+        alias_prefix = ui.input(
+            "Optional alias prefix (empty lists all concrete aliases)",
+            value="ai-guardian-",
+        ).classes("w-full")
+        settings_loaded = False
+
+        async def save_settings():
+            settings_button.disable()
+            try:
+                await run.io_bound(
+                    service.save_ssh_alias_settings,
+                    discovery_enabled.value,
+                    alias_prefix.value,
+                )
+                feedback.set_text(
+                    "SSH alias discovery settings saved. Candidates refresh automatically; saved trust is unchanged."
+                )
+                await update_saved()
+            except SSHConnectionError as exc:
+                feedback.set_text(str(exc))
+            finally:
+                settings_button.enable()
+
+        settings_button = ui.button(
+            "Save SSH discovery settings", on_click=save_settings
+        )
+        candidates = ui.column().classes("w-full")
         saved = ui.column().classes("w-full")
 
         async def update_saved():
+            nonlocal settings_loaded
             if is_client_deleted(client):
                 return
             targets = await run.io_bound(service.refresh_targets)
+            state = await run.io_bound(service.get_ssh_alias_discovery)
+            if is_client_deleted(client):
+                return
+            if not settings_loaded:
+                discovery_enabled.set_value(state["enabled"])
+                alias_prefix.set_value(state["alias_prefix"])
+                settings_loaded = True
+            candidates.clear()
+            with candidates:
+                if state["enabled"]:
+                    ui.label(
+                        f"SSH aliases available to pair ({len(state['aliases'])})"
+                    ).classes("text-lg")
+                    for notice in state["notices"]:
+                        ui.label(notice).classes("text-warning")
+                    for alias in state["aliases"]:
+                        with ui.row().classes("items-center"):
+                            ui.label(alias)
+
+                            async def review(alias=alias):
+                                await prepare(alias=alias)
+
+                            async def dismiss(alias=alias):
+                                try:
+                                    await run.io_bound(service.dismiss_ssh_alias, alias)
+                                    feedback.set_text(
+                                        "SSH alias dismissed. It will not be offered again; manual pairing remains available."
+                                    )
+                                    await update_saved()
+                                except SSHConnectionError as exc:
+                                    feedback.set_text(str(exc))
+
+                            ui.button("Review discovered daemon", on_click=review)
+                            ui.button("Dismiss alias", on_click=dismiss)
             saved.clear()
             with saved:
                 for target in targets:
@@ -91,10 +187,10 @@ def create_ssh_connections(service):
 
                         async def remove(target=target):
                             pending = [target.ssh_id]
-                            with ui.dialog() as dialog, ui.card():
+                            with dialog_area, ui.dialog() as dialog, ui.card():
                                 ui.label(f"Remove saved SSH connection {target.name}?")
                                 ui.label(
-                                    "This removes the saved credential and trust and closes owned tunnels. The remote daemon is not stopped."
+                                    "This removes the saved credential and trust, closes owned tunnels, and dismisses this alias from discovery. The remote daemon is not stopped."
                                 )
 
                                 async def confirm():
@@ -107,7 +203,7 @@ def create_ssh_connections(service):
                                             service.remove_ssh_connection, profile_id
                                         )
                                         feedback.set_text(
-                                            "Saved SSH connection removed. The remote daemon was not stopped."
+                                            "Saved SSH connection removed and alias dismissed. The remote daemon was not stopped."
                                         )
                                     except SSHConnectionError as exc:
                                         feedback.set_text(str(exc))

@@ -107,6 +107,19 @@
 
 ## Key Learnings
 
+- **SSH alias inventory boundaries (#2587):** Use a deliberately bounded local
+  parser, not `ssh -G` or a library that evaluates config predicates. Process
+  unconditional Include files as an inline stream; a Host/Match in a fragment
+  changes later scope. `glob.iglob` still materializes directory entries, so bound
+  `os.scandir` explicitly as well as file, byte, depth, pattern and alias counts.
+  Keep candidates out of DaemonTarget/registration and persist hostname-digest
+  dismissals separately from pairing credentials. Local picker settings must not
+  inherit a remote daemon/project route or replace malformed unrelated config.
+  Timer-refreshed NiceGUI candidate rows must not own identity dialogs; use a
+  stable container and review-token ownership so old hide events cannot release
+  a newer review. `preferred_ui` supports auto/tkinter/nicegui/headless, not a
+  separately saved native preference; auto supplies native-first ordering.
+
 - **POSIX storage creation precedes daemon startup (#2584):** Package import
   initializes logging and may migrate state before `_setup_unix_socket` runs.
   Fix creation there too; `mkdir(mode=0o700, parents=True)` does not restrict

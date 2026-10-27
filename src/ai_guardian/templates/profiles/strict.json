@@ -276,7 +276,8 @@
       }
     },
     "tray": {
-      "enabled": true
+      "enabled": true,
+      "ssh_alias_discovery": {"enabled": false, "alias_prefix": "ai-guardian-"}
     }
   },
   "_comment_on_scan_error": "Global behavior when a scanner or hook process encounters an error. Strict profile: fail-closed (block on error).",

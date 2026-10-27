@@ -1144,6 +1144,8 @@
       "discovery_interval_seconds": 15,
       "discover_containers": true,
       "discover_kubernetes": false,
+      "_comment_ssh_alias_discovery": "Workstation-global opt-in: enumerate local user SSH config at startup/refresh, without contacting hosts. Empty alias_prefix includes all concrete aliases. Review still requires explicit SSH/TLS identity confirmation; dismissed/removed aliases stay dismissed.",
+      "ssh_alias_discovery": {"enabled": false, "alias_prefix": "ai-guardian-"},
       "kubernetes": {
         "namespace": "ai-sdlc",
         "label_selector": "app=ai-guardian",

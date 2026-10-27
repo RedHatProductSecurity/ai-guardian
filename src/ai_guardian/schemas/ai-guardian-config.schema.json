@@ -2493,6 +2493,15 @@
               "default": false,
               "description": "Enable Kubernetes pod daemon discovery. Requires kubectl and appropriate cluster access."
             },
+            "ssh_alias_discovery": {
+              "type": "object",
+              "description": "Workstation-global opt-in local user SSH config enumeration at startup/refresh. Never probes or trusts destinations automatically. Conditional Includes are skipped; bounded config/*.conf Includes below the user .ssh directory are supported.",
+              "properties": {
+                "enabled": {"type": "boolean", "default": false, "description": "Offer concrete SSH aliases for explicit review in the tray and loopback Web Console. Off leaves existing saved SSH connections unchanged."},
+                "alias_prefix": {"type": "string", "default": "ai-guardian-", "maxLength": 253, "pattern": "^[A-Za-z0-9_.-]*$", "description": "Optional case-insensitive literal prefix. Empty discovers all concrete aliases without renaming existing hosts."}
+              },
+              "additionalProperties": false
+            },
             "kubernetes": {
               "type": "object",
               "description": "Kubernetes discovery settings.",
