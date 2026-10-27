@@ -117,6 +117,21 @@
 
 ## Key Learnings
 
+- **Support path checks / CodeQL (#2597, PR #2600):** The local project-config
+  branch must use the same unlinked-regular-file reader as source collection.
+  Resolve the selected config directory and file, then check canonical containment
+  with a trailing directory separator (reject sibling-prefix matches). Upstream
+  Python CodeQL currently models string `startswith` guards, not
+  `Path.is_relative_to`; consume the checked canonical string for the eventual
+  open rather than leaving a parallel unchecked Path flow. Keep local files
+  complete with an explicit optional byte limit; remote/CLI/import callers still
+  supply their bounds. Do not impose the remote transfer limit on local support.
+- **Coverage environment, verified recovery:** `uv run --extra dev --with coverage
+  python -m coverage ...` runs the complete related suite with pytest-asyncio
+  without changing project dependencies/lockfiles. Coverage is Apache-2.0.
+  The global coverage command still lacks the project's async plugin; do not
+  weaken/skip async tests to make that mismatched environment appear green.
+
 - **SSH support connection timing (#2597 reporter follow-up):** The connection
   manager retains the same target object while replacing `ssh_tunnel` on initial
   connect and reconnect. A menu-render-time copy can retain None/a closed tunnel

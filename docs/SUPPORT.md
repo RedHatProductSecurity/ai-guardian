@@ -158,6 +158,10 @@ including its TLS verification or enrolled SSH tunnel. The desktop validates fil
 names, checksums, complete structured content and size limits, sanitizes again, and
 creates a new protected review directory. It never extracts a remote archive or
 accepts remote destinations, publication context, file selections or consent.
+Project configuration reads, for both local and daemon preparation, reject linked
+files/directories and hard links and validate the canonical source directory.
+Unsafe project files are omitted, never followed to collect unrelated content;
+daemon provenance records the omission. Accepted structured copies stay complete.
 The **tray user's configured destination** and the same per-file View/selection,
 ZIP-only and separate native Gist-upload/Discussion-publication approvals apply.
 Sanitization is not a guarantee of confidentiality: review these files yourself.

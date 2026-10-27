@@ -110,14 +110,20 @@ def _config_sources() -> list[tuple[str, str, str, Path]]:
     return sources
 
 
-def _read_config(path: Path, limit: int) -> bytes:
-    """Read only a bounded regular file, without following links."""
+def _read_config(path: Path, limit: int | None) -> bytes:
+    """Read an unlinked regular file, with an optional collection byte limit."""
     if any(parent.is_symlink() for parent in (path, *path.parents)):
         raise ValueError("Linked configuration omitted")
+    # The trailing separator excludes sibling directories sharing this prefix.
+    root = os.path.join(str(path.parent.resolve(strict=True)), "")
+    canonical = str(path.resolve(strict=True))
+    if not canonical.startswith(root):
+        raise ValueError("Configuration escapes its source directory")
+    path = Path(canonical)
     attributes = path.stat()
     if not stat.S_ISREG(attributes.st_mode) or attributes.st_nlink > 1:
         raise ValueError("Unsupported configuration file omitted")
-    if attributes.st_size > limit:
+    if limit is not None and attributes.st_size > limit:
         raise ValueError("Configuration exceeds the diagnostic size limit")
     fd = os.open(
         path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
@@ -126,8 +132,8 @@ def _read_config(path: Path, limit: int) -> bytes:
         attributes = os.fstat(stream.fileno())
         if not stat.S_ISREG(attributes.st_mode) or attributes.st_nlink > 1:
             raise ValueError("Unsupported configuration file omitted")
-        raw = stream.read(limit + 1)
-    if len(raw) > limit:
+        raw = stream.read() if limit is None else stream.read(limit + 1)
+    if limit is not None and len(raw) > limit:
         raise ValueError("Configuration exceeds the diagnostic size limit")
     return raw
 

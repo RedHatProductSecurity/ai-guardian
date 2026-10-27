@@ -9,6 +9,35 @@ budget_tokens: 1000
 
 ---
 
+## PR #2600 CodeQL gate follow-up — 2026-10-27
+
+- User requested reading PR comments after the QL gate failed. Current managed
+  branch `2597` tracks `origin/2597` at `611e9969`; PR #2600 is open. The initial
+  implementation was published externally, superseding the older local-only
+  deployment notes below. Worktree was clean before this follow-up.
+- Read PR comments/checks, inline security review, alert #323 and its SARIF flow.
+  Python analysis succeeded but the finding gate failed: HTTP project cwd reaches
+  the local project-config `open` at `reporting/support_bundle.py:393`.
+- Test-first reproduced local collection of file/directory symlinks and hard
+  links. Both local and daemon project reads now share `_read_config`, rejecting
+  linked/nonregular sources and validating canonical directory containment before
+  opening. Use a separator-aware canonical string prefix: upstream CodeQL models
+  `startswith`, not `Path.is_relative_to`. No alert suppression/dismissal.
+- Local reads explicitly allow complete files without remote transfer limits;
+  daemon/CLI/import calls remain bounded. Tests cover sibling-prefix escape,
+  linked-file omission/provenance, custom local filenames and complete >4 MiB
+  local configs. Docs/changelog updated; simplification reviewed.
+- **Validation:** **594 related tests pass** (552 support/source/unit/complete UX,
+  plus 42 tray/MCP support caller tests). Focused coverage **92%** (reader 96%,
+  bundles 92%), `/tmp/opencode/guardian-2600-path-read.coverage`. Black py310,
+  Ruff, Pylint E, project Mypy (323 files) and whitespace pass. Initial global
+  coverage lacked pytest-asyncio; reran successfully in project dev environment
+  with ephemeral Apache-2.0 coverage. No dependency or lockfile changes.
+- Follow-up remains local/uncommitted. No commit/push, CI rerun, alert dismissal,
+  live remote collection, diagnostic upload, runtime restart or settings changes.
+  **Next:** publish through managed DAF workflow, then verify a fresh CodeQL gate
+  on the new commit. Live remote/native qualification remains pending below.
+
 ## Issue #2597 implementation and SSH reporter follow-up — 2026-10-27
 
 - User authorized implementation with **go** after initialization. Continued

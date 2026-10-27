@@ -38,6 +38,35 @@ def write(path, text):
     return path
 
 
+def test_read_config_refuses_canonical_path_outside_selected_directory(
+    monkeypatch, tmp_path
+):
+    source = write(tmp_path / "project" / "settings.json", '{"model":"source"}')
+    outside = write(
+        tmp_path / "project-unrelated" / "private.json", '{"marker":"unrelated"}'
+    )
+    resolve = Path.resolve
+
+    def changed_path(path, *args, **kwargs):
+        return outside if path == source else resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", changed_path)
+    open_file = Mock(
+        side_effect=AssertionError("Unsafe paths must be rejected before open")
+    )
+    monkeypatch.setattr(configs.os, "open", open_file)
+
+    with pytest.raises(ValueError, match="escapes its source directory"):
+        configs._read_config(source, 1024)
+
+    open_file.assert_not_called()
+
+
+def test_read_config_can_preserve_a_complete_local_configuration(tmp_path):
+    source = write(tmp_path / "settings.json", '{"model":"complete"}')
+    assert configs._read_config(source, None) == source.read_bytes()
+
+
 def test_discovers_cli_settings_hooks_mcp_and_project_overlays(
     isolated_cli_homes, tmp_path
 ):

@@ -385,13 +385,13 @@ def prepare_bundle(
         for index, project_path in enumerate(project_paths):
             if not project_path or not project_path.exists():
                 continue
-            if _collection_only:
-                from ai_guardian.reporting.cli_diagnostics import _read_config
+            from ai_guardian.reporting.cli_diagnostics import _read_config
 
-                raw_project = json.loads(_read_config(project_path, 4 * 1024 * 1024))
-            else:
-                with open(project_path, "r") as f:
-                    raw_project = json.load(f)
+            # Both entry points require a regular, unlinked source confined to
+            # its config directory. Local preparation keeps the complete file;
+            # the source-daemon transfer limit must not crop local diagnostics.
+            limit = 4 * 1024 * 1024 if _collection_only else None
+            raw_project = json.loads(_read_config(project_path, limit))
             sanitized, count = _sanitize_config(raw_project)
             name = (
                 f"projects/project-{index + 1:03d}.json"

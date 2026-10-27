@@ -172,6 +172,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **Support project-config path validation (#2597 / PR #2600):** Route local and
+  daemon project diagnostic reads through the shared regular-file reader, reject
+  file/directory symlinks and hard links, and validate canonical path containment
+  before opening. Preserve complete local configurations, including explicit
+  filenames and files larger than remote transfer limits. Addresses CodeQL alert
+  #323 without suppressing or dismissing the finding.
 - **Secure setup/startup storage (#2584):** Create missing POSIX application
   directories/parents as `0700` and configuration/token files as `0600`, including
   JSON setup and early logging initialization. Preserve fail-closed credential
