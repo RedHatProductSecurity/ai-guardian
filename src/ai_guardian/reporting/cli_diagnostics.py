@@ -114,12 +114,14 @@ def _read_config(path: Path, limit: int | None) -> bytes:
     """Read an unlinked regular file, with an optional collection byte limit."""
     if any(parent.is_symlink() for parent in (path, *path.parents)):
         raise ValueError("Linked configuration omitted")
-    # The trailing separator excludes sibling directories sharing this prefix.
-    root = os.path.join(str(path.parent.resolve(strict=True)), "")
-    canonical = str(path.resolve(strict=True))
-    if not canonical.startswith(root):
+    # Reject links before lexical normalization can collapse a linked ".." path.
+    # abspath does not dereference untrusted paths; a trailing separator also
+    # excludes sibling directories sharing this prefix.
+    root = os.path.join(os.path.abspath(path.parent), "")
+    absolute = os.path.abspath(path)
+    if not absolute.startswith(root):
         raise ValueError("Configuration escapes its source directory")
-    path = Path(canonical)
+    path = Path(absolute)
     attributes = path.stat()
     if not stat.S_ISREG(attributes.st_mode) or attributes.st_nlink > 1:
         raise ValueError("Unsupported configuration file omitted")

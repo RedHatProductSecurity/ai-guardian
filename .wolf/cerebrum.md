@@ -119,13 +119,18 @@
 
 - **Support path checks / CodeQL (#2597, PR #2600):** The local project-config
   branch must use the same unlinked-regular-file reader as source collection.
-  Resolve the selected config directory and file, then check canonical containment
-  with a trailing directory separator (reject sibling-prefix matches). Upstream
-  Python CodeQL currently models string `startswith` guards, not
-  `Path.is_relative_to`; consume the checked canonical string for the eventual
+  Reject links in the original path/ancestors before lexical normalization can
+  hide a linked `..` component. Use pure lexical `os.path.abspath`, then check
+  directory containment with a trailing separator (reject sibling-prefix matches).
+  Do NOT resolve untrusted file/parent paths while computing this guard:
+  `Path.resolve` dereferences the filesystem and CodeQL flags those pre-validation
+  calls too (#324/#325), even when the eventual open is correctly guarded (#323
+  fixed). Upstream Python CodeQL models string `startswith` guards, not
+  `Path.is_relative_to`; consume the checked absolute string for the eventual
   open rather than leaving a parallel unchecked Path flow. Keep local files
   complete with an explicit optional byte limit; remote/CLI/import callers still
-  supply their bounds. Do not impose the remote transfer limit on local support.
+  supply their bounds. All unit/lint passes do not establish a green CodeQL gate;
+  get the latest annotations/SARIF and verify the newly published commit.
 - **Coverage environment, verified recovery:** `uv run --extra dev --with coverage
   python -m coverage ...` runs the complete related suite with pytest-asyncio
   without changing project dependencies/lockfiles. Coverage is Apache-2.0.

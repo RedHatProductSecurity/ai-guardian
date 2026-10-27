@@ -9,6 +9,33 @@ budget_tokens: 1000
 
 ---
 
+## PR #2600 repeated CodeQL failure — 2026-10-27
+
+- User reported **CDCI failed again**. The previous fix was published externally
+  as `4c625156`; local `2597`/`origin/2597` match it and were clean. This supersedes
+  the previous follow-up's uncommitted state below.
+- Latest check `122509415215` fails only CodeQL; actual test/lint jobs succeed.
+  Read new PR annotations and SARIF analysis `2040663120`: original #323 is fixed,
+  but #324/#325 flag `cli_diagnostics.py:118-119`, the two pre-validation
+  `Path.resolve()` calls used to compute the root/candidate. Resolve is itself a
+  filesystem-access sink, so guarding the later open was insufficient.
+- Replaced both with purely lexical `os.path.abspath`. Retain the same
+  separator-aware checked absolute string, reject original path/ancestor links
+  before normalization can hide linked `..` components, and keep regular-file,
+  hardlink/fd checks, complete local files and bounded source reads unchanged.
+- Test-first regressions prohibit source resolution for bounded/unbounded reads;
+  cover normalized sibling-prefix escape and linked parent traversal. Updated
+  docs/changelog and corrected the earlier learning. Simplification reviewed.
+- **Validation:** **597 related tests pass** (555 complete support/source/unit/UX
+  plus 42 tray/MCP support callers). Reader 96%, bundles 92%, combined **92%**;
+  `/tmp/opencode/guardian-2600-prevalidation.coverage`. Black py310, Ruff, Pylint E,
+  project Mypy (323 files), buglog JSON/unique IDs and whitespace pass.
+- Latest fix remains local/uncommitted. No commit/push/CI rerun, alert dismissal,
+  diagnostic collection/upload, live UI, restart or settings changes. The CodeQL
+  CLI is absent locally: **do not claim the hosted gate passed**. Next: managed
+  publication, then fresh CodeQL validation on that new commit. Earlier live
+  remote/native qualification is still pending.
+
 ## PR #2600 CodeQL gate follow-up — 2026-10-27
 
 - User requested reading PR comments after the QL gate failed. Current managed
