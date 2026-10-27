@@ -9,6 +9,25 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2592 Windows CI fix — 2026-10-27
+
+- Implementation was published externally as PR #2596, branch `2592`, commit
+  `d835928210bcf8fb8b8d974f831c1733c2fdb1c4`; checkout was clean before this fix.
+  The implementation section below describes the earlier pre-publication state.
+- Inspected CI run `40553898922`: Windows Python 3.10/3.13/3.14 each fail only
+  three `test_ssh_commands.py` cwd assertions; Linux Python 3.10–3.14 passes.
+  The test expects POSIX separators for a native workstation `Path` on Windows.
+- Added explicit POSIX/Windows pure-path inputs, reproduced the three Windows
+  failures on Linux, then fixed local assertions to use the mocked home value.
+  VM paths remain POSIX; SSH commands must exclude native and normalized local
+  home strings. Production behavior and all security checks are unchanged.
+- Validation: **112 related tests pass**, including complete SSH UX contracts;
+  Black py310, Ruff, Pylint E and Mypy (321 source files) pass. Bug and learning
+  recorded. No full-suite/integration/container tests run locally.
+- Fix is local/uncommitted; no push, workflow rerun or PR/issue update performed.
+  Next: publish through the managed workflow and rerun Windows CI. The separate
+  live VM/native desktop qualification from the implementation remains pending.
+
 ## Issue #2592 implementation and reporter follow-up — 2026-10-27
 
 - User authorized implementation with **go**; all changes remain local/uncommitted

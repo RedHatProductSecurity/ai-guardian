@@ -2,6 +2,7 @@
 
 import shlex
 import threading
+from pathlib import PurePosixPath, PureWindowsPath
 from unittest import mock
 
 import pytest
@@ -63,18 +64,22 @@ def test_shell_available_without_cli_metadata_and_forces_remote_tty(commands):
 
 
 @pytest.mark.parametrize("saved", [None, "", "/vm/explicit project"])
+@pytest.mark.parametrize(
+    "workstation_home",
+    [PurePosixPath("/workstation/home"), PureWindowsPath("C:/Users/workstation")],
+    ids=["posix-home", "windows-home"],
+)
 def test_discovery_never_uses_workstation_home_as_ssh_working_directory(
-    tmp_path, commands, saved
+    tmp_path, commands, saved, workstation_home
 ):
     import json
-    from pathlib import Path
 
     from ai_guardian.daemon.discovery import DaemonTarget
     from ai_guardian.daemon.multi_client import MultiDaemonClient
     from tests.fixtures.ssh_tray import make_tray
 
     target = DaemonTarget(
-        "ssh-vm", "ssh", ssh_commands=commands, working_dir="/workstation/home"
+        "ssh-vm", "ssh", ssh_commands=commands, working_dir=str(workstation_home)
     )
     local = DaemonTarget("local", "local")
     if saved is not None:
@@ -84,11 +89,11 @@ def test_discovery_never_uses_workstation_home_as_ssh_working_directory(
         mock.patch(
             "ai_guardian.daemon.working_dir.get_state_dir", return_value=tmp_path
         ),
-        mock.patch("pathlib.Path.home", return_value=Path("/workstation/home")),
+        mock.patch("pathlib.Path.home", return_value=workstation_home),
     ):
         tray._menu._apply_working_dirs()
         tray._menu._apply_working_dirs()  # repeated discovery must preserve remote home
-    assert local.working_dir == "/workstation/home"
+    assert local.working_dir == str(workstation_home)
     assert target.working_dir == (saved or None)
     with (
         mock.patch("shutil.which", return_value="ssh"),
@@ -98,7 +103,8 @@ def test_discovery_never_uses_workstation_home_as_ssh_working_directory(
     ):
         assert MultiDaemonClient().open_shell(target)
     command = launch.call_args.args[0][-1]
-    assert "/workstation/home" not in command
+    assert str(workstation_home) not in command
+    assert workstation_home.as_posix() not in command
     assert ("cd " in command) is bool(saved)
     if saved:
         assert shlex.quote(saved) in command

@@ -111,6 +111,16 @@
 
 ## Key Learnings
 
+- **Windows SSH cwd regression test (#2592 / PR #2596):** Workstation paths use
+  native separators; `str(Path("/workstation/home"))` is not a POSIX string on
+  Windows. Keep remote VM expectations POSIX, but compare local defaults against
+  the mocked home value. Parametrize that value with `PurePosixPath` and
+  `PureWindowsPath` so Linux runs reproduce Windows-style assertions without
+  changing global `os.name` or constructing unsupported concrete Windows paths.
+  Check both native and slash-normalized workstation-home strings are absent
+  from SSH commands. All three Windows CI versions failed this test-only mistake;
+  the production directory isolation did not need changes.
+
 - **SSH menu compatibility and working directories (#2592):** A healthy remote
   daemon from main does not publish new feature-branch stats or PID fields.
   Asking the user to upgrade main cannot add them. Read missing MCP state from
