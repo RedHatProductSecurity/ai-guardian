@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Per-daemon Contact Support (#2597):** Add source-bound diagnostics actions for
+  local/container/Kubernetes/manual HTTPS/SSH/OpenShell daemons in flat and nested
+  tray menus. Keep the independently available local tray-host action. Collect
+  sanitized source-runtime diagnostics through authenticated, bounded background
+  jobs; validate complete files and protected desktop staging, retain sanitized
+  provenance/explicit omissions, and never substitute desktop diagnostics on
+  failure. Capture SSH's current verified tunnel on click, avoiding false offline
+  failures after initial connection/reconnect without migrating in-flight work.
+  Desktop destination settings, per-file review, ZIP-only export and
+  separate native Gist/Discussion consent remain authoritative. Includes isolated
+  unit/UX contracts, API release-readiness coverage and source/modal documentation.
 - **SSH tray menu parity (#2592):** Reuse standard daemon menus for SSH VMs,
   including flat/nested layouts, Console/Violations/Metrics navigation, cached
   Statistics/Status, Terminal, Maintenance and target-scoped MCP state/controls.

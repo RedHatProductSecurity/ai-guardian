@@ -64,6 +64,14 @@ class DaemonConnectionError(ValueError):
     """An actionable error containing no raw URLs, credentials or crypto errors."""
 
 
+class DaemonHTTPError(DaemonConnectionError):
+    """A credential-free HTTP status, without the remote response body or URL."""
+
+    def __init__(self, status: int):
+        super().__init__("The daemon did not accept the request.")
+        self.status = status
+
+
 def _is_loopback_host(host: str) -> bool:
     """Local addresses and existing container gateway transports (compatibility)."""
     normalized = (host or "").lower().rstrip(".")

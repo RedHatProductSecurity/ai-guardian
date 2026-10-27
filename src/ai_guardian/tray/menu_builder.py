@@ -128,6 +128,41 @@ class TrayMenuBuilder:
 
         return target_action(self._tray, target, callback)
 
+    def _support_menu_item(self, target, *, flat=False, visible=None):
+        """Bind the displayed source; capture its current SSH generation on click."""
+        from copy import copy, deepcopy
+
+        selected = copy(target)
+        selected.tls = deepcopy(target.tls)
+        client = self._tray._multi_client
+
+        def launch(_icon, _item):
+            clicked = copy(selected)
+            if selected.runtime == "ssh":
+                # Discovery keeps this saved target object across connects and
+                # reconnects. Its render-time tunnel may be absent/already closed
+                # even while status polling succeeds on the new verified tunnel.
+                # Bind that generation now, never after the worker has started or
+                # by looking up a replacement target with the same display name.
+                clicked.ssh_tunnel = (
+                    target.ssh_tunnel
+                    if target.ssh_id == selected.ssh_id
+                    and any(item is target for item in self._tray._targets)
+                    else None
+                )
+            return tray_menu.launch_support(target=clicked, client=client)
+
+        options = {"visible": visible} if visible is not None else {}
+        return pystray.MenuItem(
+            (
+                f"Contact supports — {selected.name} (daemon)"
+                if flat
+                else "Contact supports"
+            ),
+            launch,
+            **options,
+        )
+
     def _open_ssh_panel(self, target, panel=None):
         from ai_guardian.daemon.ssh_storage import SSHConnectionError
 
@@ -3503,6 +3538,15 @@ class TrayMenuBuilder:
                 self._mk_change_working_dir(0),
                 visible=_single_vis,
             ),
+            *(
+                [
+                    self._support_menu_item(
+                        self._tray._targets[0], flat=True, visible=_single_vis
+                    )
+                ]
+                if self._tray._targets
+                else []
+            ),
         ]
 
     def _build_single_daemon_pause_menu_item(
@@ -4192,6 +4236,7 @@ class TrayMenuBuilder:
                         ),
                     ),
                     pystray.Menu.SEPARATOR,
+                    self._support_menu_item(target, flat=len(self._tray._targets) == 1),
                     pystray.MenuItem(
                         self._daemon_about_label(target),
                         self._on_daemon_about(target),

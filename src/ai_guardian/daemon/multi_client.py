@@ -13,14 +13,16 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from typing import Any, Dict, List, Optional
 from urllib.request import Request, urlopen
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.daemon.rest_api import REST_AUTH_HEADER
 from ai_guardian.daemon.rest_transport import (
     DaemonConnectionError,
+    DaemonHTTPError,
     TLSOptions,
     open_daemon_request,
     _is_loopback_host,
@@ -1423,16 +1425,59 @@ class MultiDaemonClient:
             trace_dirs = resolve_trace_dirs()
         return read_trace_detail(trace_dirs, filename)
 
-    def export_support(self, target: DaemonTarget) -> Optional[str]:
-        """Export support bundle."""
-        cmd = ["ai-guardian", "support", "prepare"]
-        if target.runtime == "local":
-            return self._local_exec(cmd)
-        if target.runtime == "container":
-            return self._container_exec(target, cmd)
-        if target.runtime == "kubernetes":
-            return self._kubectl_exec(target, cmd)
-        return None
+    def export_support(self, target: DaemonTarget) -> dict:
+        """Collect from this exact daemon; never execute/fall back on the tray host."""
+        import re
+        from ai_guardian.reporting.remote_support import SupportCollectionError
+
+        deadline = time.monotonic() + 110
+        try:
+            result = self._rest_request(
+                target, "POST", "/api/support-bundles", {}, raise_errors=True
+            )
+            job_id = result.get("job_id") if isinstance(result, dict) else None
+            if not isinstance(job_id, str) or not re.fullmatch(r"[a-f0-9]{32}", job_id):
+                raise SupportCollectionError(
+                    "The daemon could not start support collection; it may be busy. Nothing was sent."
+                )
+            while time.monotonic() < deadline:
+                result = self._rest_request(
+                    target, "GET", f"/api/support-bundles/{job_id}", raise_errors=True
+                )
+                if not isinstance(result, dict) or result.get("job_id") != job_id:
+                    raise SupportCollectionError(
+                        "The daemon returned an invalid or expired support job. Nothing was sent."
+                    )
+                if result.get("status") == "ready":
+                    from ai_guardian.reporting.remote_support import (
+                        validate_diagnostics,
+                    )
+
+                    payload = result.get("diagnostics", {})
+                    validate_diagnostics(payload)
+                    return payload
+                if result.get("status") != "preparing":
+                    raise SupportCollectionError(
+                        "Source support collection failed, timed out or exceeded its limits. No tray-host diagnostics were substituted. Nothing was sent."
+                    )
+                time.sleep(0.25)
+        except DaemonHTTPError as exc:
+            if exc.status in {404, 405, 501}:
+                message = "This daemon does not support remote diagnostics. Upgrade the source daemon. Nothing was sent."
+            elif exc.status in {401, 403}:
+                message = (
+                    "Authentication failed for the selected daemon. Nothing was sent."
+                )
+            else:
+                message = "The selected daemon could not provide support diagnostics. Nothing was sent."
+            raise SupportCollectionError(message) from None
+        except DaemonConnectionError:
+            raise SupportCollectionError(
+                "The selected daemon is offline, timed out or failed transport verification. Nothing was sent."
+            ) from None
+        raise SupportCollectionError(
+            "Support collection timed out on the selected daemon. Nothing was sent."
+        )
 
     # --- Local transport ---
 
@@ -1535,6 +1580,8 @@ class MultiDaemonClient:
         path: str,
         body: Optional[dict] = None,
         timeout: float = REQUEST_TIMEOUT,
+        *,
+        raise_errors: bool = False,
     ) -> Optional[dict]:
         """Send HTTP request to daemon REST API."""
         if target.runtime == "ssh":
@@ -1544,12 +1591,23 @@ class MultiDaemonClient:
             try:
                 if target.ssh_tunnel is None:
                     raise SSHConnectionError(OFFLINE_ERROR)
-                result = target.ssh_tunnel.request(method, path, body, timeout=timeout)
+                options = {"raise_http_errors": True} if raise_errors else {}
+                result = target.ssh_tunnel.request(
+                    method, path, body, timeout=timeout, **options
+                )
                 target.error_message = None
                 return result
+            except DaemonHTTPError:
+                if raise_errors:
+                    raise
+                return None
             except (SSHConnectionError, DaemonConnectionError) as exc:
                 target.status = "offline"
                 target.error_message = str(exc)
+                if raise_errors:
+                    raise DaemonConnectionError(
+                        "Daemon transport unavailable"
+                    ) from None
                 return None
         if target.url:
             base = target.url.rstrip("/")
@@ -1557,6 +1615,8 @@ class MultiDaemonClient:
             address = f"[{target.host}]" if ":" in target.host else target.host
             base = f"http://{address}:{target.port}"
         else:
+            if raise_errors:
+                raise DaemonConnectionError("Daemon endpoint unavailable")
             return None
 
         from urllib.parse import urlparse
@@ -1570,10 +1630,14 @@ class MultiDaemonClient:
                 "Invalid daemon REST URL; check the configured endpoint."
             )
             logger.warning("%s", target.error_message)
+            if raise_errors:
+                raise DaemonConnectionError("Invalid daemon endpoint") from None
             return None
         if parsed.scheme == "http" and check_host and not _is_loopback_host(check_host):
             target.error_message = "Refusing insecure HTTP request to a non-loopback daemon; configure HTTPS."
             logger.warning("%s", target.error_message)
+            if raise_errors:
+                raise DaemonConnectionError("Insecure daemon endpoint")
             return None
         if (
             check_host
@@ -1585,6 +1649,8 @@ class MultiDaemonClient:
                 check_host,
                 check_port,
             )
+            if raise_errors:
+                raise DaemonConnectionError("Daemon is unreachable")
             return None
 
         url = f"{base}{path}"
@@ -1605,7 +1671,30 @@ class MultiDaemonClient:
                 req, timeout=timeout, tls=TLSOptions.from_config(target.tls)
             )
             with response as resp:
-                result = json.loads(resp.read().decode("utf-8"))
+                if raise_errors:
+                    from ai_guardian.reporting.remote_support import MAX_WIRE_BYTES
+
+                    if int(resp.headers.get("Content-Length", 0)) > MAX_WIRE_BYTES:
+                        raise DaemonConnectionError(
+                            "Daemon response exceeds the transfer limit"
+                        )
+                    deadline = time.monotonic() + timeout
+                    chunks = bytearray()
+                    while True:
+                        if time.monotonic() >= deadline:
+                            raise DaemonConnectionError("Daemon response timed out")
+                        chunk = resp.read1(min(65536, MAX_WIRE_BYTES + 1 - len(chunks)))
+                        if not chunk:
+                            break
+                        chunks.extend(chunk)
+                        if len(chunks) > MAX_WIRE_BYTES:
+                            raise DaemonConnectionError(
+                                "Daemon response exceeds the transfer limit"
+                            )
+                    raw = bytes(chunks)
+                else:
+                    raw = resp.read()
+                result = json.loads(raw.decode("utf-8"))
                 if target.status == "error" and target.error_message:
                     target.status = "unknown"
                 target.error_message = None
@@ -1614,8 +1703,15 @@ class MultiDaemonClient:
             target.error_message = str(exc)
             target.status = "error"
             logger.warning("%s", exc)
+            if raise_errors:
+                raise
             return None
         except URLError as e:
+            if raise_errors:
+                if isinstance(e, HTTPError):
+                    e.close()
+                    raise DaemonHTTPError(e.code) from None
+                raise DaemonConnectionError("Daemon connection failed") from None
             if hasattr(e, "code") and e.code == 401 and not target.auth_token:
                 logger.warning(
                     "REST request to %s returned 401 but no auth token available. "
@@ -1630,6 +1726,10 @@ class MultiDaemonClient:
             logger.debug(
                 "Daemon REST request failed; check endpoint and response format"
             )
+            if raise_errors:
+                raise DaemonConnectionError(
+                    "Daemon response unavailable or malformed"
+                ) from None
             return None
 
     # --- Container transport ---

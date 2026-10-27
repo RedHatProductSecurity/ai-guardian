@@ -46,6 +46,7 @@ class _ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
     daemon_state: Any
     instance_name: Optional[str]
     auth_token: Optional[str]
+    support_jobs: Any
 
     def get_request(self):
         connection, address = super().get_request()
@@ -92,6 +93,11 @@ class _RestHandler(BaseHTTPRequestHandler):
             self._send_json(self._get_stats())
         elif path == "/api/about":
             self._send_json(self._get_about())
+        elif path.startswith("/api/support-bundles/"):
+            if not getattr(self.server, "auth_token", None):
+                self._send_error(401, "Support collection requires authentication")
+                return
+            self._send_json(self.server.support_jobs.get(path.rsplit("/", 1)[-1]))
         elif path == "/api/tray-plugins":
             self._send_json(self._get_tray_plugins_enhanced())
         elif path == "/api/tray-plugin-templates":
@@ -196,7 +202,20 @@ class _RestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._check_auth():
             return
-        if self.path == "/api/pause":
+        if self.path == "/api/support-bundles":
+            # Unlike legacy optional-auth endpoints, diagnostics always require
+            # a configured token, including on a loopback listener.
+            if not getattr(self.server, "auth_token", None):
+                self._send_error(401, "Support collection requires authentication")
+                return
+            body = self._read_body(max_size=1024)
+            if body is None:
+                return
+            if body != {}:
+                self._send_error(400, "Support collection accepts only an empty object")
+                return
+            self._send_json(self.server.support_jobs.start())
+        elif self.path == "/api/pause":
             body = self._read_body()
             if body is None:
                 return
@@ -1920,6 +1939,9 @@ class DaemonRestAPI:
         self._server.daemon_state = self._state
         self._server.instance_name = self._name
         self._server.auth_token = self._auth_token
+        from ai_guardian.daemon.support import SupportJobs
+
+        self._server.support_jobs = SupportJobs(self._state, self._name)
         actual_port = self._server.server_address[1]
 
         self._thread = threading.Thread(
@@ -1937,6 +1959,7 @@ class DaemonRestAPI:
     def stop(self):
         """Stop HTTP server."""
         if self._server:
+            self._server.support_jobs.close()
             self._server.shutdown()
             self._server.server_close()
             self._server = None

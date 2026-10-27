@@ -77,7 +77,8 @@ use `support prepare` followed later by `support send`, as below.
 
 ## From the system tray
 
-Choose **Contact supports**, directly above **About** in the top-level tray menu.
+Choose **Contact supports — local tray host**, directly above **About** in the
+top-level tray menu, for diagnostics from the desktop running the tray.
 It honors the configured support destination and opens a native modal, not a
 shell or terminal. Empty/missing destinations use **GitHub Discussions**; that
 route uses a **Destination** dropdown and **Next** button rather than separate
@@ -127,15 +128,65 @@ There is no second send step for completed public submission. The ZIP result
 instead states that nothing was sent and prints the archive path. Explicit local,
 bucket, and email destinations retain their existing delivery flow.
 
-The entry remains available with no running daemon or MCP connection, in both
-single- and multi-daemon layouts. It prepares **local tray-host diagnostics**;
-it does not collect diagnostics from connected container/Kubernetes daemons.
-Use the support command in the relevant remote environment for those diagnostics.
+The local-host entry remains available with no running daemon or MCP connection,
+in both single- and multi-daemon layouts, and never starts a daemon.
+
+### Diagnostics from a selected daemon
+
+Choose **Contact supports** inside that daemon's submenu. With a single daemon,
+the flat menu instead labels this **Contact supports — name (daemon)**, separately
+from the local tray-host action. Local daemons, containers, Kubernetes, manual
+HTTPS connections, enrolled SSH daemons and existing OpenShell connections use
+their established authenticated transport. This is not a bulk collector or target
+picker; refreshing/reordering discovery cannot redirect an already selected action.
+For SSH, clicking captures the current verified connection of that same saved
+daemon, including after its initial connect or a reconnect. A stale menu never
+reuses an absent/closed tunnel; later reconnects do not move an in-flight collection
+to a different connection. Removed/replaced saved identities are not substituted.
+
+Preparation runs in the selected daemon's own installation and runtime, using its
+configuration/state roots, working directory and daemon-observed project configs.
+No desktop, shell window or publication credential is needed on that host. The
+desktop shows the **Source** during preparation and throughout review and results.
+View **daemon-source.json** for sanitized provenance, source version/roots/project
+paths and explicit unavailable diagnostics. Missing source files are never replaced
+by workstation files. CLI diagnostic copies use the source environment's known
+integration paths, not the tray user's CLI settings.
+
+Sanitized copies leave the source only over the existing authenticated connection,
+including its TLS verification or enrolled SSH tunnel. The desktop validates file
+names, checksums, complete structured content and size limits, sanitizes again, and
+creates a new protected review directory. It never extracts a remote archive or
+accepts remote destinations, publication context, file selections or consent.
+The **tray user's configured destination** and the same per-file View/selection,
+ZIP-only and separate native Gist-upload/Discussion-publication approvals apply.
+Sanitization is not a guarantee of confidentiality: review these files yourself.
+
+Collection requests run off the tray/UI thread. Each source permits one collector
+at a time, with a 90-second collection timeout and short, bounded polling requests
+(110-second desktop deadline). Up to four results are retained for five minutes.
+Transfers allow at most 256 files, 4 MiB per file, 5 MiB of complete diagnostic text
+and an 8 MiB wire response. Larger collections fail safely rather than silently
+cropping configuration or violation records. Existing last-12-hours log/violation
+rules and explicitly marked log excerpts remain unchanged. Source collection
+omissions are recorded even when the remaining files can be reviewed.
+
+An offline target, failed authentication/TLS verification, timeout, failed
+collection or older daemon without this API produces source-specific feedback.
+Nothing is published and there is no local-host fallback. Upgrade an unsupported
+source daemon before retrying its action; the independent local-host action is
+still available for desktop troubleshooting.
+
+The collection-only API is `POST /api/support-bundles` with an empty JSON object,
+followed by `GET /api/support-bundles/<opaque-job-id>`. Both require the daemon's
+configured authentication, even on loopback. It accepts no paths, commands,
+delivery destinations or approvals. Existing API fields keep their semantics.
 
 Opening the menu item is not publication approval. GitHub still requires the
 native exact-content review and final public consent, never a hidden `--yes` or
 terminal prompt. With no usable
-desktop/Tk, a notification gives the standalone command and nothing is sent;
+desktop/Tk, a notification explains the unavailable review and nothing is sent
+(the local-host action also gives the standalone command);
 the tray does not silently fall back to opening a shell. See the
 desktop/authentication prerequisites below.
 

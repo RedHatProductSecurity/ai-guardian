@@ -4,6 +4,8 @@ import logging
 import os
 import threading
 import uuid
+from copy import copy, deepcopy
+from functools import partial
 from pathlib import Path
 
 from ai_guardian.reporting import github_support as github
@@ -19,6 +21,7 @@ def _show_result(result: dict, info: dict) -> None:
     path = info.get("temp_path", "")
     request = {
         "mode": "result",
+        "source": info.get("source", "Local tray host"),
         "request_id": uuid.uuid4().hex,
         "message": bundles._format_send_human(result),
         "temp_path": path if path and Path(path).is_dir() else "",
@@ -50,19 +53,43 @@ def _show_result(result: dict, info: dict) -> None:
             message = "Support did not complete. Check the destination before retrying and retain any local diagnostics."
         if result.get("gist_url"):
             message += f" Diagnostic Gist already uploaded: {result['gist_url']}. Open it to manage or delete it."
+        if info.get("source") and info["source"] != "Local tray host":
+            message = f"{info['source']}: {message}"
         show_notification("AI Guardian Support", message)
 
 
-def run_support_flow(*, destination: str | None = None) -> dict:
-    """Prepare local diagnostics, review choices, then send only on native consent."""
+def run_support_flow(
+    *, destination: str | None = None, target=None, client=None
+) -> dict:
+    """Prepare source diagnostics, review on this desktop, never infer consent."""
+    from ai_guardian.reporting.remote_support import (
+        SupportCollectionError,
+        import_diagnostics,
+        source_label,
+    )
+
     info = {}
     started_send = False
     try:
-        prepared = (
-            bundles.prepare_bundle()
-            if destination is None
-            else bundles.prepare_bundle(export_destination=destination)
-        )
+        if target is None:
+            prepared = (
+                bundles.prepare_bundle()
+                if destination is None
+                else bundles.prepare_bundle(export_destination=destination)
+            )
+        else:
+            source = source_label(target.name, target.runtime_type or target.runtime)
+            info = {"source": source}
+            show_notification(
+                "AI Guardian Support",
+                f"Preparing diagnostics from {source}. Nothing will be sent without review.",
+            )
+            if client is None:
+                raise SupportCollectionError(
+                    "The selected daemon connection is unavailable. Nothing was sent."
+                )
+            payload = client.export_support(target)
+            prepared = import_diagnostics(payload, source)
         bundle_id = prepared["bundle_id"]
         info = bundles._active_bundles[bundle_id]
         if info["destination"] != github.DESTINATION:
@@ -77,6 +104,13 @@ def run_support_flow(*, destination: str | None = None) -> dict:
         started_send = True
         result = bundles.send_bundle(bundle_id)
         info = bundles._active_bundles.get(bundle_id, info)
+    except SupportCollectionError as exc:
+        result = {
+            "status": "error",
+            "error_code": "collection",
+            "message": str(exc),
+            "delivery_status": "not_sent",
+        }
     except github.GitHubError as exc:
         result = {"status": "error", "error_code": exc.code, "message": str(exc)}
     except Exception:
@@ -106,18 +140,29 @@ def run_support_flow(*, destination: str | None = None) -> dict:
     return result
 
 
-def _worker() -> None:
+def _worker(target=None, client=None) -> None:
     try:
-        run_support_flow()
+        if target is None:
+            run_support_flow()
+        else:
+            run_support_flow(target=target, client=client)
     finally:
         _review_lock.release()
 
 
-def open_support_dialog() -> bool:
+def open_support_dialog(*, target=None, client=None) -> bool:
     """Open one support workflow without blocking the tray or opening a shell."""
     from ai_guardian.ui.display import get_preferred_ui
 
     if get_preferred_ui() == "headless" or os.environ.get("AI_GUARDIAN_NO_TKINTER"):
+        if target is not None:
+            from ai_guardian.reporting.remote_support import source_label
+
+            show_notification(
+                "AI Guardian Support",
+                f"Support for {source_label(target.name, target.runtime_type or target.runtime)} needs a native desktop. Nothing was sent; no tray-host diagnostics were substituted.",
+            )
+            return False
         show_notification(
             "AI Guardian Support",
             "The support dialog needs a native desktop. Run 'ai-guardian support send --prepare' in your own terminal for the standalone workflow. Nothing was sent.",
@@ -127,7 +172,13 @@ def open_support_dialog() -> bool:
         show_notification("AI Guardian Support", "Support review is already open.")
         return False
     try:
-        threading.Thread(target=_worker, name="support-review", daemon=True).start()
+        if target is None:
+            worker = _worker
+        else:
+            selected = copy(target)
+            selected.tls = deepcopy(target.tls)
+            worker = partial(_worker, selected, client)
+        threading.Thread(target=worker, name="support-review", daemon=True).start()
     except RuntimeError:
         _review_lock.release()
         logger.warning("Tray support worker could not start")

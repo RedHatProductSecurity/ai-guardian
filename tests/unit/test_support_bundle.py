@@ -32,7 +32,7 @@ from ai_guardian.reporting.support_bundle import (
 
 
 @pytest.fixture(autouse=True)
-def _isolate_diagnostic_collectors():
+def _isolate_diagnostic_collectors(monkeypatch):
     """Bundle unit tests exercise export, not live doctor/OCR/scanner canaries."""
     doctor = SimpleNamespace(
         checks=[
@@ -44,14 +44,19 @@ def _isolate_diagnostic_collectors():
         ]
     )
     smoke = SimpleNamespace(phase1_passed=True, phase2_results=[])
-    with (
-        patch(
-            "ai_guardian.reporting.support_bundle.collect_cli_configs", return_value=[]
-        ),
-        patch("ai_guardian.doctor.Doctor.run_all", return_value=doctor),
-        patch("ai_guardian.smoke_test.SmokeTestRunner.run", return_value=smoke),
-    ):
-        yield
+    # Share pytest's restoration stack with tests that temporarily opt back into
+    # a real collector. Mixing a patch() context with their monkeypatch teardown
+    # can otherwise restore this fixture's mock after the context has exited.
+    monkeypatch.setattr(
+        "ai_guardian.reporting.support_bundle.collect_cli_configs",
+        MagicMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "ai_guardian.doctor.Doctor.run_all", MagicMock(return_value=doctor)
+    )
+    monkeypatch.setattr(
+        "ai_guardian.smoke_test.SmokeTestRunner.run", MagicMock(return_value=smoke)
+    )
 
 
 class TestSanitizeConfig:
@@ -84,6 +89,25 @@ class TestSanitizeConfig:
         sanitized, count = _sanitize_config(config)
         assert sanitized["secret_scanning"]["enabled"] is True
         assert count == 0
+
+    def test_nested_credentials_are_removed_without_redacting_scanner_settings(self):
+        raw = {
+            "secret_scanning": {"enabled": True},
+            "daemon": {
+                "auth_token": ["synthetic-private-value"],
+                "client_secret": {"value": "synthetic-private-value"},
+            },
+        }
+        sanitized, count = _sanitize_config(raw)
+        assert sanitized == {
+            "secret_scanning": {"enabled": True},
+            "daemon": {
+                "auth_token": "[REDACTED]",
+                "client_secret": "[REDACTED]",
+            },
+        }
+        assert count == 2
+        assert _sanitize_config(sanitized) == (sanitized, 0)
 
 
 class TestSanitizeViolations:

@@ -106,10 +106,35 @@ def _sanitize_config(config: Dict) -> tuple:
                 if key.startswith("_comment"):
                     del obj[key]
                     continue
-                if any(s in key.lower() for s in sensitive_keys):
+                if obj[key] in ("[REDACTED]", "", None):
+                    continue
+                if key.lower() in {
+                    "auth",
+                    "credentials",
+                    "headers",
+                    "http_headers",
+                    "env",
+                    "environment",
+                    "auth_token",
+                    "token",
+                    "api_key",
+                    "password",
+                    "secret",
+                    "client_secret",
+                    "private_key",
+                    "authorization",
+                    "cookie",
+                } or key.lower().endswith(
+                    ("_token", "_secret", "_password", "_api_key")
+                ):
+                    obj[key] = "[REDACTED]"
+                    redactions += 1
+                elif any(s in key.lower() for s in sensitive_keys):
                     if isinstance(obj[key], str) and obj[key]:
                         obj[key] = "[REDACTED]"
                         redactions += 1
+                    else:
+                        _redact(obj[key], f"{path}.{key}")
                 else:
                     _redact(obj[key], f"{path}.{key}")
         elif isinstance(obj, list):
@@ -272,6 +297,8 @@ def prepare_bundle(
     description: str = "",
     category: Optional[str] = None,
     export_destination: Optional[str] = None,
+    _collection_only: bool = False,
+    _project_config_paths: Optional[List[Path]] = None,
 ) -> Dict[str, Any]:
     """Prepare a sanitized support bundle for user review.
 
@@ -284,7 +311,7 @@ def prepare_bundle(
 
     Returns dict with bundle_id, temp_path, destination, and file list.
     """
-    support_config = _get_support_config()
+    support_config = {} if _collection_only else _get_support_config()
     destination = (
         export_destination
         or support_config.get("export_destination")
@@ -294,7 +321,7 @@ def prepare_bundle(
 
     context = None
     context_redactions = 0
-    if destination == "github-discussions":
+    if destination == "github-discussions" and not _collection_only:
         from ai_guardian.reporting.github_support import support_context
 
         context, context_redactions = support_context(
@@ -322,8 +349,13 @@ def prepare_bundle(
 
         config_path = get_config_dir() / "ai-guardian.json"
         if config_path.exists():
-            with open(config_path, "r") as f:
-                raw_config = json.load(f)
+            if _collection_only:
+                from ai_guardian.reporting.cli_diagnostics import _read_config
+
+                raw_config = json.loads(_read_config(config_path, 4 * 1024 * 1024))
+            else:
+                with open(config_path, "r") as f:
+                    raw_config = json.load(f)
             sanitized, count = _sanitize_config(raw_config)
             _write_text(temp_dir / "ai-guardian.json", json.dumps(sanitized, indent=2))
             files_info.append(
@@ -345,19 +377,33 @@ def prepare_bundle(
     try:
         from ai_guardian.config.utils import get_project_config_path
 
-        project_path = get_project_config_path()
-        if project_path and project_path.exists():
-            with open(project_path, "r") as f:
-                raw_project = json.load(f)
+        project_paths = (
+            _project_config_paths
+            if _project_config_paths is not None
+            else [get_project_config_path()]
+        )
+        for index, project_path in enumerate(project_paths):
+            if not project_path or not project_path.exists():
+                continue
+            if _collection_only:
+                from ai_guardian.reporting.cli_diagnostics import _read_config
+
+                raw_project = json.loads(_read_config(project_path, 4 * 1024 * 1024))
+            else:
+                with open(project_path, "r") as f:
+                    raw_project = json.load(f)
             sanitized, count = _sanitize_config(raw_project)
-            bundle_subdir = temp_dir / ".ai-guardian"
-            bundle_subdir.mkdir(exist_ok=True)
-            _write_text(
-                bundle_subdir / "ai-guardian.json", json.dumps(sanitized, indent=2)
+            name = (
+                f"projects/project-{index + 1:03d}.json"
+                if _project_config_paths is not None
+                else ".ai-guardian/ai-guardian.json"
             )
+            bundle_subdir = (temp_dir / name).parent
+            bundle_subdir.mkdir(exist_ok=True)
+            _write_text(temp_dir / name, json.dumps(sanitized, indent=2))
             files_info.append(
                 {
-                    "name": ".ai-guardian/ai-guardian.json",
+                    "name": name,
                     "sanitized": count > 0,
                     "redactions": count,
                     "note": (
@@ -522,7 +568,12 @@ def prepare_bundle(
 
         state_path = get_state_dir() / STATE_FILENAME
         if state_path.exists():
-            raw = json.loads(state_path.read_text(encoding="utf-8"))
+            if _collection_only:
+                from ai_guardian.reporting.cli_diagnostics import _read_config
+
+                raw = json.loads(_read_config(state_path, 4 * 1024 * 1024))
+            else:
+                raw = json.loads(state_path.read_text(encoding="utf-8"))
             _write_text(temp_dir / STATE_FILENAME, json.dumps(raw, indent=2))
             session_count = len(raw.get("sessions", {}))
             files_info.append(
@@ -538,7 +589,7 @@ def prepare_bundle(
 
     # Public diagnostics get full text sanitization, including doctor/session
     # messages and nested config values, before the user sees the artifact.
-    if context is not None:
+    if context is not None or _collection_only:
         from ai_guardian.reporting.github_support import CONTEXT_FILE, public_text
 
         for file_info in files_info:
@@ -547,17 +598,18 @@ def prepare_bundle(
             _write_text(file_path, text)  # lgtm[py/clear-text-storage-sensitive-data]
             file_info["redactions"] += count
             file_info["sanitized"] = file_info["redactions"] > 0
-        _write_text(
-            temp_dir / CONTEXT_FILE, json.dumps(context, indent=2)
-        )  # lgtm[py/clear-text-storage-sensitive-data]
-        files_info.append(
-            {
-                "name": CONTEXT_FILE,
-                "redactions": context_redactions,
-                "sanitized": context_redactions > 0,
-                "note": "Proposed public title, context, and category",
-            }
-        )
+        if context is not None:
+            _write_text(
+                temp_dir / CONTEXT_FILE, json.dumps(context, indent=2)
+            )  # lgtm[py/clear-text-storage-sensitive-data]
+            files_info.append(
+                {
+                    "name": CONTEXT_FILE,
+                    "redactions": context_redactions,
+                    "sanitized": context_redactions > 0,
+                    "note": "Proposed public title, context, and category",
+                }
+            )
 
     # Only the log may be shortened. Complete configuration/structured files take
     # priority; reserve public body space by bounding the prepared log, not them.
@@ -587,6 +639,11 @@ def prepare_bundle(
         file_info["size_bytes"] = path.stat().st_size
 
     files_info.sort(key=lambda item: diagnostic_sort_key(item["name"]))
+
+    if _collection_only:
+        # No destination, delivery context, publication credentials or saved
+        # workstation review reference belongs to a daemon collection job.
+        return {"temp_path": str(temp_dir), "files": files_info}
 
     # Copy to output_path if requested. The send operation must use the SAME
     # files the user reviews, not an unrevised original copy.
@@ -663,6 +720,7 @@ def _persist_bundle_ref(bundle_id: str, bundle_info: Dict) -> bool:
                     "files": bundle_info.get("files", []),
                     "preserve_directory": bundle_info.get("preserve_directory", False),
                     "include_files": bundle_info.get("include_files"),
+                    "source": bundle_info.get("source", "Local tray host"),
                 },
                 indent=2,
             ),
@@ -747,6 +805,7 @@ def _review_bundle_selection(
             key=lambda item: diagnostic_sort_key(item["name"]),
         ),
         "include_files": included,
+        "source": bundle.get("source", "Local tray host"),
     }
     reply = github.review_dialog(request)
     if reply is None:
@@ -804,6 +863,7 @@ def _send_github_or_zip(bundle_id: str, bundle: Dict) -> Dict[str, Any]:
             "request_id": uuid.uuid4().hex,
             "destination": f"{github.REPOSITORY_URL}/discussions (public), or a local ZIP with no upload",
             "github_available": github.credentials_available(),
+            "source": bundle.get("source", "Local tray host"),
             **({"gist_url": existing_gist_url} if existing_gist_url else {}),
         }
         reply = github.review_dialog(request)

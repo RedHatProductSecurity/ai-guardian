@@ -469,11 +469,14 @@ class TestContainerRouting:
         assert "exec" in cmd
         assert "abc123def456abc123" in cmd
 
-    @mock.patch("subprocess.run")
-    def test_support_via_container_exec(self, mock_run):
-        mock_run.return_value = mock.MagicMock(
-            returncode=0, stdout="bundle ready", stderr=""
-        )
+    @mock.patch.object(MultiDaemonClient, "_rest_request")
+    def test_support_via_container_rest(self, request):
+        from tests.fixtures.support_remote import diagnostics
+
+        request.side_effect = [
+            {"job_id": "a" * 32, "status": "preparing"},
+            {"job_id": "a" * 32, "status": "ready", "diagnostics": diagnostics()},
+        ]
         client = MultiDaemonClient()
         target = DaemonTarget(
             name="test",
@@ -482,9 +485,9 @@ class TestContainerRouting:
             container_engine="docker",
         )
         result = client.export_support(target)
-        assert result == "bundle ready"
-        cmd = mock_run.call_args[0][0]
-        assert cmd[0] == "docker"
+        assert result == diagnostics()
+        assert all(call.args[0] is target for call in request.call_args_list)
+        assert request.call_args_list[0].args[1:3] == ("POST", "/api/support-bundles")
 
     @mock.patch("subprocess.Popen")
     @mock.patch("platform.system", return_value="Linux")

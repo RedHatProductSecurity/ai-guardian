@@ -609,7 +609,8 @@ class DaemonTray:
             pystray.MenuItem("Quit", self._on_quit),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
-                "Contact supports", lambda _, __: tray_menu.launch_support()
+                "Contact supports — local tray host",
+                lambda _, __: tray_menu.launch_support(),
             ),
             pystray.MenuItem(
                 tray_menu.about_label,
