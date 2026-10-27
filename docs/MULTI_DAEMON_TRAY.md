@@ -537,6 +537,142 @@ ports, open a firewall, enable mTLS, or replace the daemon's bearer token. Conta
 bind-address defaults also remain unchanged. Set an explicit loopback bind address
 when the daemon must only be reachable through an administrative tunnel.
 
+#### Test HTTPS on your own PC
+
+**Prerequisites:** Linux, OpenSSL **3.x** (`openssl version`), `curl`, and an
+AI Guardian build with native daemon TLS (1.21 or newer). Your local daemon and
+Web Console should already be running. This test needs no second machine, public
+DNS, firewall changes or system-wide certificate installation.
+
+This enables HTTPS for the **daemon REST API**, normally
+`https://127.0.0.1:63152`. It does **not** enable HTTPS for the Web Console
+webpage; keep using the Console's existing browser URL. Keep the REST listener
+bound to `127.0.0.1` (`daemon.rest_host`); enabling HTTPS does not change its bind
+address. For remote or production setups, use the
+[private-VM/private-CA guidance](#private-vm-provisioning-and-pairing-no-public-inbound-rest)
+below instead.
+
+Run the following commands yourself in a **normal terminal**, not through an AI
+agent. Keep that terminal open for step 4, which uses the same `TLS_DIR` variable.
+No scanning or protection settings need to change.
+
+##### 1. Generate a local test certificate
+
+Create a fresh private directory so existing certificates and keys are not
+overwritten:
+
+```bash
+umask 077
+mkdir -p "$HOME/.config/ai-guardian"
+TLS_DIR=$(mktemp -d "$HOME/.config/ai-guardian/tls-local.XXXXXX")
+
+openssl req -x509 -newkey rsa:3072 -noenc -sha256 -days 90 \
+  -keyout "$TLS_DIR/server-key.pem" \
+  -out "$TLS_DIR/server-cert.pem" \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+  -addext "basicConstraints=critical,CA:FALSE" \
+  -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+  -addext "extendedKeyUsage=serverAuth" \
+  -addext "subjectKeyIdentifier=hash" \
+  -addext "authorityKeyIdentifier=keyid:always"
+
+printf 'Certificate directory: %s\n' "$TLS_DIR"
+```
+
+The new directory is owner-only (`0700`), and `umask 077` makes the new key and
+certificate files owner-only (`0600`). Existing parent-directory permissions are
+not changed. The unattended daemon needs an **unencrypted** private key, so keep
+it private and never paste its contents into the Console or chat. The certificate
+expires after **90 days**; it contains both the `localhost` DNS SAN and the
+`127.0.0.1` IP SAN, not just a Common Name.
+
+##### 2. Fill in the Web Console fields
+
+Select the **local daemon**, use **Global** scope, then open
+**Global Settings → Daemon REST HTTPS**. For example, if the command printed
+`/home/alex/.config/ai-guardian/tls-local.A1b2C3`, enter:
+
+| Field | Value |
+|-------|-------|
+| Enable native HTTPS | On |
+| Certificate chain PEM path (on daemon host) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
+| Private-key PEM path (on daemon host) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-key.pem` |
+| Trusted CA PEM path (empty: system trust) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
+| Expected server SAN identity / SNI | `localhost` |
+| Optional independently verified SHA-256 leaf pin | Leave empty for this initial local test |
+
+Replace the example directory with **your exact printed directory**, including
+your username and random suffix. Use full absolute paths, not the literal
+`$TLS_DIR` variable or file contents; these fields do not expand shell variables.
+
+The **Trusted CA PEM path** explicitly trusts the self-signed public certificate
+you just generated. This is sufficient for this local test; no separate CA or
+system trust-store installation is needed. Do not leave this field empty for the
+self-signed recipe or trust an arbitrary discovered certificate. Certificate
+validity and identity verification remain mandatory. Local REST clients verify
+`localhost` even when connecting to `127.0.0.1`.
+
+##### 3. Save and restart
+
+Click **Save HTTPS settings**, then run in your terminal:
+
+```bash
+ai-guardian daemon restart
+```
+
+Reload alone does **not** replace the live listener or certificate. After the
+restart, refresh the Console and tray so they pick up the HTTPS listener and
+saved trust. The Console webpage itself keeps its existing URL/scheme.
+
+##### 4. Verify HTTPS and expected results
+
+In the **same terminal** as step 1:
+
+```bash
+curl --noproxy '*' --fail --show-error \
+  --cacert "$TLS_DIR/server-cert.pem" \
+  https://127.0.0.1:63152/api/health
+```
+
+Expected: JSON containing `"status": "ok"`. `curl` explicitly trusts your public
+certificate and verifies the URL's `127.0.0.1` IP SAN. In a new terminal, replace
+`$TLS_DIR/server-cert.pem` with the full printed certificate path, in quotes.
+If your REST port differs, replace `63152` in these URLs with the actual port
+(including the assigned port if configured as `0`).
+
+Also check that authentication is still required:
+
+```bash
+curl --noproxy '*' --show-error \
+  --cacert "$TLS_DIR/server-cert.pem" \
+  --output /dev/null --write-out 'HTTP %{http_code}\n' \
+  https://127.0.0.1:63152/api/status
+```
+
+Expected: **HTTP 401** without daemon-token authentication. HTTPS does not
+replace that authentication. `/api/health` checks transport/connectivity only;
+success does not establish authenticated SDK/tray integration.
+
+- Without `--cacert`, this freshly generated, untrusted self-signed certificate
+  should fail certificate verification.
+- Plain `http://127.0.0.1:63152/api/health` should no longer succeed on this TLS
+  listener; a reset/closed connection rather than JSON is expected.
+
+If something fails:
+
+| Symptom | What to check |
+|---------|---------------|
+| Self-signed certificate / unknown CA | Use the generated `server-cert.pem` for both the Console's trusted CA field and `curl --cacert`. Keep certificate verification enabled. |
+| Server identity / SAN mismatch | The Console identity is `localhost`; the `curl` URL uses `127.0.0.1`. The certificate must contain both SANs as generated above. |
+| Missing file, permission error, or unavailable REST listener | Check full paths on the daemon host and access by its user. The key must be owner-only; certificates/trust files and their parent directories must not be writable by other users. Review unsafe existing parents rather than making them broadly writable. Invalid TLS material prevents REST startup, not a fallback to HTTP. |
+| Expired or not-yet-valid certificate | Check the system clock. Generate replacement material before the 90-day expiry, update the paths, restart, then refresh the Console/tray. Startup warns within 30 days of expiry. |
+
+See [validation, renewal and restart](#validation-failures-renewal-and-restart)
+for more detail.
+
+#### Listener and client configuration
+
 ```json
 {
   "daemon": {

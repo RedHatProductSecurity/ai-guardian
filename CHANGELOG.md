@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Single-PC HTTPS quickstart (#2582):** Document four steps to test native
+  daemon REST HTTPS on Linux with OpenSSL 3.x, explicit local certificate trust,
+  private key storage, restart and verification checks. Link directly from the
+  configuration reference and distinguish REST HTTPS from the Console webpage;
+  preserve the advanced private-VM/CA/SSH guidance.
 - **Opt-in local SSH alias discovery (#2587):** Offer concrete user OpenSSH aliases
   automatically at tray startup/refresh and in the loopback Web Console, with an
   optional literal prefix, bounded unconditional Includes, pending-enrollment
