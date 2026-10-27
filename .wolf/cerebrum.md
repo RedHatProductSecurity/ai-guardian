@@ -6,6 +6,12 @@
 
 ## User Preferences
 
+- **Per-daemon support (#2597):** Keep an independently available local tray-host
+  action and add source-bound Contact supports actions for each connected daemon.
+  Remote diagnostics use the source environment, while destination choice,
+  per-file review, ZIP export and both public consent stages stay on the desktop.
+  This supersedes the earlier local-only tray-support scope, not its safety rules.
+
 - Tray target ordering: keep local daemons first, then sort all other displayed
   daemon names alphabetically ignoring case. An empty SSH alias `(0)` indicator
   should disappear; retain discovery warnings and the always-available settings.
@@ -110,6 +116,33 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **SSH support connection timing (#2597 reporter follow-up):** The connection
+  manager retains the same target object while replacing `ssh_tunnel` on initial
+  connect and reconnect. A menu-render-time copy can retain None/a closed tunnel
+  while the current status poll displays a filled circle. Bind the displayed
+  saved identity at render, capture its current verified tunnel at click, and then
+  freeze that generation before worker dispatch. Require the original object and
+  saved ID still to match; never substitute a replacement by display name. Cover
+  offline-to-connected, reconnect, reordering, removal and in-flight reconnect.
+- **Collection subprocess import roots (#2597):** Isolated Python omits user-site
+  dependencies needed by editable/user installs. Anchor the package to `__file__`
+  and restore only the running interpreter's enabled user-site path. Do not use an
+  unrestricted `importlib.metadata.distribution()` search: project .dist-info can
+  select an attacker-controlled dependency directory. Exercise the bootstrap with
+  actual isolated Python, hostile cwd/metadata, enabled and disabled user sites.
+- **Nested test patch teardown (#2597):** A fixture's `patch()` context and a
+  test's `monkeypatch` of the same collector can unwind in the wrong order,
+  leaving the fixture mock installed for later tests. Use the shared monkeypatch
+  restoration stack for both. Run the real-collector source-isolation regression
+  after the fixture tests as well as alone; isolated success misses this leak.
+- **Remote support wire boundary (#2597):** Transfer only sanitized complete text
+  with narrow inert file names, hashes, strict metadata and byte/file-count limits;
+  do not extract source archives or accept destination/context/consent objects.
+  Validate before desktop writes, re-sanitize into a new protected directory and
+  bound JSON pretty-print expansion too. Record source omissions/provenance and
+  running/collector versions. Fail large collections rather than crop structured
+  data. Headless sources never need the desktop's publication credentials.
 
 - **Windows SSH cwd regression test (#2592 / PR #2596):** Workstation paths use
   native separators; `str(Path("/workstation/home"))` is not a POSIX string on

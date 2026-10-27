@@ -775,6 +775,7 @@ def send_discussion(bundle_id: str, bundle: dict) -> dict[str, Any]:
         client.check_gist_permission()
         request = {
             "mode": "edit",
+            "source": bundle.get("source", "Local tray host"),
             "request_id": uuid.uuid4().hex,
             "account": identity["login"],
             "repository": REPOSITORY,

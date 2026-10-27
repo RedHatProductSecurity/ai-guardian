@@ -453,6 +453,10 @@ jobs:
           pip install pytest-asyncio
           python -m pytest tests/unit/test_ssh_config.py tests/unit/test_ssh_alias_discovery_config.py tests/unit/test_ssh_discovery_settings.py tests/unit/test_ssh_storage.py tests/unit/test_ssh_tunnel.py tests/unit/test_ssh_probe.py tests/unit/test_ssh_connections.py tests/unit/test_ssh_commands.py tests/unit/test_ssh_tray.py tests/unit/test_ssh_menu_parity.py tests/unit/test_ssh_plugins.py tests/unit/test_web_ssh_connections.py tests/ux/test_user_experience_contract_ssh_daemons.py -q
 
+      - name: Verify authenticated per-daemon support collection and desktop consent
+        run: |
+          python -m pytest tests/unit/test_daemon_support.py tests/unit/test_remote_support.py tests/unit/test_tray_support.py tests/ux/test_user_experience_contract_support.py -q
+
       - name: Create config
         run: |
           export XDG_CONFIG_HOME=$(mktemp -d)

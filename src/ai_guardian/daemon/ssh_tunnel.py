@@ -351,7 +351,16 @@ class SSHTunnel:
             self.close()
             raise SSHConnectionError(SSH_ERROR) from None
 
-    def request(self, method, path, body=None, *, timeout=5.0, authenticated=True):
+    def request(
+        self,
+        method,
+        path,
+        body=None,
+        *,
+        timeout=5.0,
+        authenticated=True,
+        raise_http_errors=False,
+    ):
         with self._lock:
             if not self.active or (
                 self.saved and not self.store.contains(self.profile)
@@ -393,6 +402,10 @@ class SSHTunnel:
                     return result
             except HTTPError as exc:
                 exc.close()
+                if raise_http_errors:
+                    from ai_guardian.daemon.rest_transport import DaemonHTTPError
+
+                    raise DaemonHTTPError(exc.code) from None
                 raise SSHConnectionError(
                     DAEMON_AUTH_ERROR if exc.code in {401, 403} else REQUEST_ERROR
                 ) from None

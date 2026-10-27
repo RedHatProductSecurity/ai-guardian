@@ -9,6 +9,80 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2597 implementation and SSH reporter follow-up — 2026-10-27
+
+- User authorized implementation with **go** after initialization. Continued
+  managed branch `2597`; ticket was already read exactly once. Changes remain
+  local/uncommitted. No new branch, commit, push, PR, live remote access,
+  diagnostic upload or installed-runtime/security-configuration change.
+- Added source-bound support actions in flat/nested local/container/Kubernetes/
+  manual HTTPS/enrolled SSH/OpenShell menus, retaining the independent global
+  **Contact supports — local tray host** action without requiring a daemon.
+  New authenticated collection-only jobs run in the source installation/context;
+  bounded retrieval validates inert complete files into protected desktop staging.
+  Source provenance/omissions are explicit; no workstation diagnostic fallback.
+- Desktop destination authority, per-file View/selection, ZIP-only semantics and
+  separate native user-only Gist/Discussion approvals remain unchanged. Updated
+  support/modal docs, Unreleased changelog and API release-readiness coverage.
+  Simplification reviewed; no new dependencies or generated docs export.
+- Reporter saw false **offline** despite a filled SSH status circle. Reproduced:
+  support had frozen None/an old tunnel at menu rendering while polling used the
+  new generation. Now capture the current verified tunnel for the original saved
+  object/ID at click, then freeze it for the worker; never migrate on later
+  reconnect or substitute a removed/replaced identity. Unit/UX regressions cover
+  initial connect/reconnect/reordering/removal and in-flight replacement.
+- Reporter asked whether the VM needs upgrading: **yes, to a build containing
+  #2597, followed by a daemon restart**. These uncommitted changes cannot be
+  obtained by upgrading to the current published release/main alone. A healthy
+  status poll is not API capability. An actual tunnel HTTP-404 regression proves
+  older daemons report unsupported collection rather than being marked offline.
+- Also fixed collector import-root isolation against project .dist-info and an
+  existing collector-test fixture teardown leak. Bugs/iterations/learnings recorded.
+- **Validation:** **1,682 related tests pass together**, including complete support,
+  SSH, TLS and modal UX contracts plus directly affected unit/menu callers.
+  Focused new-module coverage **94%** (source jobs 95%, wire/import 94%; 79 tests),
+  data `/tmp/opencode/guardian-2597.coverage`. Black py310, Ruff, Pylint E, project
+  Mypy (323 source files), readiness YAML/paths, buglog JSON/IDs and whitespace
+  pass. No full-suite/integration/container scenarios; GTK/Pillow deprecations only.
+- DAF note saved; implementation/qualification checklist posted at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2597#issuecomment-6452015942.
+- **Next:** user restarts the workstation tray for the click-time fix and retests;
+  publish via managed DAF workflow, install the new API on the VM and restart its
+  daemon. Actual remote runtimes/native focus/placement/consent are not agent-
+  verified; do not claim live acceptance complete. No issue closure. OpenWolf owns
+  automatic anatomy/memory updates; initialization and earlier entries are history.
+
+## Issue #2597 session initialization — 2026-10-27
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2597`; confirmed the active repository,
+  existing branch `2597` and initially clean worktree. Read the qualified GitHub
+  ticket exactly once. This real-workspace session needs no temporary-clone sync.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  markdown and hierarchical skills are absent. Loaded DAF workflow/Git/OpenWolf
+  guidance, project protocol, handoff and relevant support learning constraints.
+  The project release skill is unrelated; leave conversation titles DAF-managed.
+- User requested initialization only; implementation has not started. Next:
+  audit support collection/review, existing authenticated transport and normal/SSH
+  tray-menu seams. Plan source-local collection, bounded authenticated retrieval,
+  validated protected staging and immutable sanitized source provenance before
+  connecting per-daemon actions to the desktop review flow.
+- Cover local/container/Kubernetes/manual HTTPS/enrolled SSH/OpenShell targets,
+  flat/nested menus and refresh/reordering/removal. Retain an unambiguous global
+  tray-host action without requiring or starting a daemon. No remote failure may
+  silently fall back to workstation diagnostics or expose connection credentials.
+- Preserve complete structured/configuration files, last-12-hours logs/violations,
+  explicit omissions/excerpts, local destination authority, per-file review, ZIP
+  semantics and separate native user-only Gist/Discussion consent. Keep transport
+  work off the GUI thread and use shared modal dispatch for changed interactions.
+- Plan isolated related unit tests and the complete support UX contract, including
+  unsafe/oversized responses, older/offline daemons, source isolation and consent;
+  update support docs/changelog and readiness/modal contracts as applicable.
+- No code changes, tests, tracker updates, support collection/upload, live remote
+  access, runtime/configuration changes, commits, pushes or PRs. Only this handoff
+  was updated; OpenWolf owns automatic anatomy/memory bookkeeping. Earlier entries
+  are historical, not the active task.
+
 ## Issue #2592 Windows CI fix — 2026-10-27
 
 - Implementation was published externally as PR #2596, branch `2592`, commit

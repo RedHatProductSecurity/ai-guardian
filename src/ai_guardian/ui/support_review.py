@@ -429,6 +429,19 @@ def show_review(request: dict) -> dict | None:
         text="Support result" if mode == "result" else "Contact supports",
         style="Support.Heading.TLabel",
     ).pack(anchor="w", pady=(0, 8))
+    ttk.Label(
+        frame,
+        text=f"Source: {request.get('source', 'Local tray host')}",
+        wraplength=860,
+        style="Support.TLabel",
+    ).pack(anchor="w", pady=(0, 6))
+    if request.get("source", "Local tray host") != "Local tray host":
+        ttk.Label(
+            frame,
+            text="Source-only diagnostics. View daemon-source.json for collection omissions; no tray-host diagnostics were substituted.",
+            wraplength=860,
+            style="Support.TLabel",
+        ).pack(anchor="w", pady=(0, 6))
     if mode in ("edit", "upload", "approve"):
         ttk.Label(
             frame,

@@ -1,7 +1,7 @@
 """Public support UX contracts. Never read personal config or publish live data.
 
 Manual desktop verification:
-0. Choose Contact supports immediately above About, including with no running daemon.
+0. Choose Contact supports — local tray host immediately above About, including with no running daemon.
    It opens a native modal, never a shell; it must not auto-submit.
    When GitHub is the configured/default destination, the first screen has a
    read-only Destination dropdown: Create ZIP only (default), Gist + Discussion.
@@ -54,6 +54,21 @@ Manual desktop verification:
    reviewed copy, not report "No pending bundle" or restore deleted files.
 Headless, authentication/category failures, changed files, and uncertain results
 must never silently publish or switch destinations.
+
+8. With two remote daemons, choose Contact supports in one daemon's submenu.
+   With one daemon, use Contact supports — <name> (daemon), not the local-host action.
+   Check Source during preparation, destination selection, file review, upload,
+   publication and result. Reorder/refresh/remove targets while preparing: never
+   switch source. View daemon-source.json for sanitized provenance and omissions.
+   Repeat for local, container, Kubernetes, manual HTTPS, SSH and OpenShell targets.
+   No remote desktop or publication login is needed. Offline/older/authentication/
+   oversized/failed collections name the selected source and never substitute
+   workstation files. Cancel and ZIP-only must never upload. Separate native Gist
+   and public Discussion consent remains mandatory on the workstation.
+   Build the menu before SSH connects, then wait for its filled status circle and
+   choose Contact supports. Repeat after a disconnect/reconnect: preparation must
+   use the current verified connection, not claim offline because of an old menu.
+   Once clicked, another reconnect must not move the operation to another tunnel.
 """
 
 import json
@@ -65,6 +80,7 @@ import pytest
 
 from ai_guardian.reporting import github_support as gh
 from ai_guardian.reporting import support_bundle as bundles
+from tests.fixtures.support_remote import diagnostics
 
 
 @pytest.fixture
@@ -106,6 +122,248 @@ def support(monkeypatch, tmp_path, support_github_transport):
     support_github_transport(client)
     monkeypatch.setattr(gh, "GitHubClient", lambda: client)
     return root, bundle, client
+
+
+@pytest.mark.parametrize("before_connect", [False, True])
+def test_healthy_ssh_support_uses_click_time_connection_not_stale_menu(
+    support, monkeypatch, before_connect
+):
+    """USER EXPERIENCE: a connected VM does not appear offline due to menu age."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.daemon.multi_client import MultiDaemonClient
+    from ai_guardian.daemon.ssh_storage import SSHConnectionError
+    from ai_guardian.tray import menu, support as tray_support
+    from tests.fixtures.ssh_tray import build, find, make_tray
+
+    _, _, publisher = support
+    monkeypatch.setattr(bundles, "_active_bundles", {})
+    monkeypatch.setattr(
+        bundles,
+        "prepare_bundle",
+        Mock(side_effect=AssertionError("No workstation collection")),
+    )
+    monkeypatch.setattr(tray_support, "show_notification", Mock())
+    stale = Mock()
+    stale.request.side_effect = SSHConnectionError("old tunnel is closed")
+    target = DaemonTarget(
+        "Chosen VM",
+        "ssh",
+        ssh_id="saved-vm",
+        ssh_tunnel=None if before_connect else stale,
+        status="offline" if before_connect else "running",
+    )
+    tray = make_tray([target])
+    tray._multi_client = MultiDaemonClient()
+    action = find(build(tray), "Contact supports — Chosen VM (daemon)")
+    live = Mock()
+    later = Mock()
+    target.ssh_tunnel = live
+    target.status = "running"
+    target.stats = {"version": "1.21.0", "paused": False}
+
+    def request(method, path, body=None, **kwargs):
+        if method == "POST":
+            target.ssh_tunnel = later
+            target.name = "renamed during preparation"
+            return {"job_id": "a" * 32, "status": "preparing"}
+        assert path == "/api/support-bundles/" + "a" * 32
+        return {"job_id": "a" * 32, "status": "ready", "diagnostics": diagnostics()}
+
+    live.request.side_effect = request
+
+    def review(request):
+        assert request["mode"] == "delivery"
+        assert request["source"] == "Chosen VM (ssh)"
+        return None  # Cancelling review must still do no upload/publication.
+
+    monkeypatch.setattr(gh, "review_dialog", review)
+    monkeypatch.setattr(
+        menu,
+        "launch_support",
+        lambda *, target, client: tray_support.run_support_flow(
+            target=target, client=client
+        ),
+    )
+
+    result = action.action(None, None)
+
+    assert result["error_code"] == "cancelled"
+    assert live.request.call_count == 2
+    stale.request.assert_not_called()
+    later.request.assert_not_called()
+    publisher.create.assert_not_called()
+    publisher.gist_request.assert_not_called()
+    for bundle_id in list(bundles._active_bundles):
+        bundles._cleanup_bundle(bundle_id)
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_selected_daemon_zip_or_cancel_never_collects_local_or_contacts_support(
+    support, monkeypatch, cancel
+):
+    """USER EXPERIENCE: selected VM stays the source; ZIP/Cancel is not delivery."""
+    import zipfile
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.tray import support as tray_support
+
+    _, _, publisher = support
+    monkeypatch.setattr(bundles, "_active_bundles", {})
+    monkeypatch.setattr(
+        bundles,
+        "prepare_bundle",
+        Mock(side_effect=AssertionError("Never collect tray-host diagnostics")),
+    )
+    monkeypatch.setattr(tray_support, "show_notification", Mock())
+    monkeypatch.setattr(tray_support, "_show_result", Mock())
+    source = DaemonTarget(
+        "Chosen VM", "ssh", auth_token="synthetic-target-auth", ssh_tunnel=Mock()
+    )
+    collector = Mock()
+
+    def collect(target):
+        assert target is source
+        target.name = "changed after collection"
+        return diagnostics("SOURCE ONLY")
+
+    collector.export_support.side_effect = collect
+    stages = []
+
+    def review(request):
+        stages.append(request["mode"])
+        assert request["source"] == "Chosen VM (ssh)"
+        assert "synthetic-target-auth" not in json.dumps(request)
+        if request["mode"] == "delivery":
+            return (
+                None
+                if cancel
+                else {"request_id": request["request_id"], "delivery": "zip"}
+            )
+        assert request["mode"] == "bundle"
+        assert request["include_files"] == ["doctor.json"]
+        return {
+            "request_id": request["request_id"],
+            "send": True,
+            "include_files": ["doctor.json", "daemon-source.json"],
+            "description": "Remote collection for review only",
+        }
+
+    monkeypatch.setattr(gh, "review_dialog", review)
+    result = tray_support.run_support_flow(target=source, client=collector)
+    publisher.discover.assert_not_called()
+    publisher.create.assert_not_called()
+    publisher.gist_request.assert_not_called()
+    if cancel:
+        assert result["error_code"] == "cancelled"
+        assert stages == ["delivery"]
+    else:
+        assert result["delivery_status"] == "zip_only"
+        assert stages == ["delivery", "bundle"]
+        with zipfile.ZipFile(result["zip_path"]) as archive:
+            names = archive.namelist()
+            provenance = next(
+                name for name in names if name.endswith("daemon-source.json")
+            )
+            assert (
+                json.loads(archive.read(provenance))["selected_source"]
+                == "Chosen VM (ssh)"
+            )
+            assert (
+                "SOURCE ONLY"
+                in archive.read(
+                    next(name for name in names if name.endswith("doctor.json"))
+                ).decode()
+            )
+    for bundle_id in list(bundles._active_bundles):
+        bundles._cleanup_bundle(bundle_id)
+
+
+@pytest.mark.parametrize("cancel_stage", ["upload", "approve"])
+def test_remote_data_cannot_authorize_either_public_delivery_stage(
+    support, monkeypatch, cancel_stage
+):
+    """USER EXPERIENCE: remote diagnostics still need two separate native consents."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.tray import support as tray_support
+
+    _, _, publisher = support
+    monkeypatch.setattr(bundles, "_active_bundles", {})
+    monkeypatch.setattr(tray_support, "show_notification", Mock())
+    monkeypatch.setattr(tray_support, "_show_result", Mock())
+    stages = []
+
+    def review(request):
+        stages.append(request["mode"])
+        assert request["source"] == "Kubernetes pod (kubernetes)"
+        if request["mode"] == "delivery":
+            return {"request_id": request["request_id"], "delivery": "discussion"}
+        if request["mode"] == "edit":
+            return {
+                "request_id": request["request_id"],
+                "title": "Source daemon issue",
+                "description": "Remote context",
+                "category": "bug-reports",
+                "include_files": ["doctor.json", "daemon-source.json"],
+            }
+        return (
+            None
+            if request["mode"] == cancel_stage
+            else {"request_id": request["request_id"], "approved": True}
+        )
+
+    monkeypatch.setattr(gh, "review_dialog", review)
+    result = tray_support.run_support_flow(
+        target=DaemonTarget("Kubernetes pod", "kubernetes"),
+        client=Mock(export_support=Mock(return_value=diagnostics())),
+    )
+    assert result["error_code"] == "cancelled"
+    publisher.create.assert_not_called()
+    posts = [
+        call for call in publisher.gist_request.call_args_list if call.args[0] == "POST"
+    ]
+    assert len(posts) == (1 if cancel_stage == "approve" else 0)
+    assert bool(result.get("gist_url")) is (cancel_stage == "approve")
+    assert stages == (
+        ["delivery", "edit", "upload", "approve"]
+        if cancel_stage == "approve"
+        else ["delivery", "edit", "upload"]
+    )
+    for bundle_id in list(bundles._active_bundles):
+        bundles._cleanup_bundle(bundle_id)
+
+
+def test_failed_daemon_collection_reports_source_without_local_fallback(
+    support, monkeypatch
+):
+    """USER EXPERIENCE: authentication failure is not a local diagnostic bundle."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.reporting.remote_support import SupportCollectionError
+    from ai_guardian.tray import support as tray_support
+
+    _, _, publisher = support
+    prepare = Mock(side_effect=AssertionError("No workstation fallback"))
+    monkeypatch.setattr(bundles, "prepare_bundle", prepare)
+    monkeypatch.setattr(tray_support, "show_notification", Mock())
+    result_dialog = Mock()
+    monkeypatch.setattr(tray_support, "_show_result", result_dialog)
+    collector = Mock(
+        export_support=Mock(
+            side_effect=SupportCollectionError(
+                "Authentication failed for the selected daemon. Nothing was sent."
+            )
+        )
+    )
+    result = tray_support.run_support_flow(
+        target=DaemonTarget("Manual remote", "manual"), client=collector
+    )
+    assert result["delivery_status"] == "not_sent"
+    assert (
+        result["message"]
+        == "Authentication failed for the selected daemon. Nothing was sent."
+    )
+    assert result_dialog.call_args.args[1]["source"] == "Manual remote (manual)"
+    prepare.assert_not_called()
+    publisher.create.assert_not_called()
+    publisher.gist_request.assert_not_called()
 
 
 @pytest.mark.parametrize("category", ["bug-reports", "q-a"])

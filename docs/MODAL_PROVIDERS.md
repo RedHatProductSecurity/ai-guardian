@@ -99,7 +99,10 @@ controls.
   exact-content upload/publication approvals. `headless` or unavailable Tk refuses
   delivery and retains the bundle; no browser, terminal, agent approval, upload,
   automatic credential upgrade or alternate consent tier is introduced. Selecting
-  Next is still not consent. See [Support bundles](SUPPORT.md).
+  Next is still not consent. Per-daemon preparation runs on the source, but every
+  review/consent window remains on the tray user's desktop. All review stages show
+  the captured source; remote metadata cannot select delivery or grant approval.
+  The local tray-host action stays independent. See [Support bundles](SUPPORT.md).
 - **SSH pairing:** the tray's Add action uses the reusable form-flow adapter, not
   the Web Console. All steps retain one provider, including failures and results.
   The native Linux tool is likewise pinned after its first dialog. Only the
@@ -242,7 +245,12 @@ monitor, result and sanitized screenshots/timing for each matrix row.
    of large policies, upload errors and logs, then cancel: no mutation occurs.
    Check log scrolling/copy and progress/Connect behavior separately.
 7. Support: use local ZIP review only; check per-file View, full paging, required
-   fields, saved selection, native consent controls and safe no-desktop refusal.
+    fields, saved selection, native consent controls and safe no-desktop refusal.
+    Exercise the distinct local tray-host and per-daemon actions in flat/nested
+    layouts (including SSH). During preparation, refresh/reorder/remove a target:
+    the Source must not change. Check source provenance/omissions, source-only
+    diagnostics and credential-free offline/older-daemon feedback. No remote
+    desktop opens, and failures never collect desktop files as a substitute.
    Mock/cancel public upload and publication reviews; do not publish diagnostics as
     part of UI verification. Live publication requires separate operator consent.
 8. SSH discovery settings: with discovery off, zero matches and no enrolled

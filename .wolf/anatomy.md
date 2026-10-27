@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1246 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1248 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21062 tok)
-- `CHANGELOG.md` — Change log (~77534 tok)
+- `CHANGELOG.md` — Change log (~77754 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -136,7 +136,7 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~11562 tok)
+- `release-readiness.yml` — CI: Release Readiness (~11643 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~7113 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -919,7 +919,7 @@
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
 - `MCP_SERVER.md` — MCP Security Advisor Server (~5114 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
-- `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~4764 tok)
+- `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~4930 tok)
 - `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~19341 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
@@ -938,7 +938,7 @@
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
 - `SDK.md` — AI Guardian SDK (~21559 tok)
 - `SECURITY_DESIGN.md` — Security Design (~3877 tok)
-- `SUPPORT.md` — Support bundles and public GitHub Discussions (~7155 tok)
+- `SUPPORT.md` — Support bundles and public GitHub Discussions (~8008 tok)
 - `TOML_PATTERNS.md` — TOML Pattern Engine (~3798 tok)
 - `TOOL_POLICY.md` — Tool Policy System (~5839 tok)
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7389 tok)
@@ -1110,19 +1110,20 @@
 - `client.py` — URL configuration (~6433 tok)
 - `desktop.py` — Desktop shortcut and autostart integration for the ai-guardian tray. (~4266 tok)
 - `discovery.py` — class: is_container_id, should_use_container_api_name, should_update_target_name, ssh_manager + 6 more (~20675 tok)
-- `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~18316 tok)
+- `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~19709 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 14 more (~2027 tok)
-- `rest_api.py` — _ThreadedHTTPServer: get_request, handle_error, log_message, do_GET + 1 more (~21403 tok)
-- `rest_transport.py` — Verified daemon REST transport. Trust is explicit, never learned by discovery. (~4429 tok)
+- `rest_api.py` — _ThreadedHTTPServer: get_request, handle_error, log_message, do_GET + 1 more (~21739 tok)
+- `rest_transport.py` — Verified daemon REST transport. Trust is explicit, never learned by discovery. (~4504 tok)
 - `server.py` — URL configuration (~15624 tok)
 - `ssh_commands.py` — Explicit user actions over the saved, host-key-verified SSH destination. (~1256 tok)
 - `ssh_config.py` — Bounded, declarative user OpenSSH alias enumeration. Never invokes SSH. (~3132 tok)
 - `ssh_connections.py` — Tray/Web-owned SSH connection workers. Discovery itself never waits on SSH. (~3859 tok)
 - `ssh_probe.py` — Fixed, read-only POSIX/Python 3 probe sent over authenticated SSH stdin. (~1524 tok)
 - `ssh_storage.py` — Owner-only SSH pairing storage, separate from exported daemon configuration. (~2363 tok)
-- `ssh_tunnel.py` — Bounded system-OpenSSH probing and owned loopback HTTPS tunnels. (~4724 tok)
+- `ssh_tunnel.py` — Bounded system-OpenSSH probing and owned loopback HTTPS tunnels. (~4804 tok)
 - `state.py` — URL configuration (~22151 tok)
+- `support.py` — Bounded, authenticated-API collection jobs; never review or publish remotely. (~1936 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
 - `violation_rescan.py` — Rescan a file at a violation location to retrieve matched text. (~3372 tok)
@@ -1276,11 +1277,12 @@
 - `audit.py` — class: compute (~8769 tok)
 - `cli_diagnostics.py` — Bounded, sanitized host CLI configuration copies for user-reviewed support. (~3221 tok)
 - `github_gist.py` — User-owned diagnostic Gists, with separate native upload consent and receipts. (~3390 tok)
-- `github_support.py` — Public support Discussions with backend-enforced, user-only review. (~10981 tok)
+- `github_support.py` — Public support Discussions with backend-enforced, user-only review. (~10999 tok)
 - `latency.py` — Hook latency tracking — per-hook and per-violation-type timing. (~4197 tok)
 - `metrics.py` — class: compute, read_filtered_violations, format_human, format_json (~4844 tok)
+- `remote_support.py` — Collection-only wire format and protected desktop import of daemon diagnostics. (~3813 tok)
 - `sarif.py` — SARIFFormatter: create_sarif_report, write_sarif_file, create_ssrf_finding (~6029 tok)
-- `support_bundle.py` — URL configuration (~20181 tok)
+- `support_bundle.py` — prepare_bundle (~20918 tok)
 
 ## src/ai_guardian/scanners/
 
@@ -1417,12 +1419,12 @@
 
 - `__init__.py` — System tray UI and daemon client. (~12 tok)
 - `animation.py` — Declares TrayIconManager (~1492 tok)
-- `app.py` — URL configuration (~20057 tok)
+- `app.py` — URL configuration (~20067 tok)
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~2594 tok)
 - `health.py` — URL configuration (~17205 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — _SandboxOutput: append, action (~49010 tok)
-- `menu.py` — URL configuration (~3192 tok)
+- `menu_builder.py` — _SandboxOutput: append, launch, action (~49537 tok)
+- `menu.py` — URL configuration (~3225 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
 - `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2297 tok)
 - `openshell_middleware.py` — OpenShell middleware readiness checks used by the system tray. (~5878 tok)
@@ -1431,7 +1433,7 @@
 - `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~11405 tok)
 - `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~24133 tok)
 - `ssh_connections.py` — SSH tray menus use cached state; every action runs outside the GUI thread. (~2663 tok)
-- `support.py` — Nonblocking tray support workflow; every native window owns a child process. (~1699 tok)
+- `support.py` — Nonblocking tray support workflow; every native window owns a child process. (~2285 tok)
 
 ## src/ai_guardian/tui/
 
@@ -1528,7 +1530,7 @@
 - `pattern_editor.py` — Pattern editor for the ask dialog's "Allow Always" flow. (~3252 tok)
 - `source_annotator.py` — Source code annotation insertion for inline suppression. (~2292 tok)
 - `ssh_pairing.py` — Display-only SSH identity text shared by desktop forms and the Web Console. (~298 tok)
-- `support_review.py` — Native, user-only support review. No network listener or auto-approve option. (~8968 tok)
+- `support_review.py` — Native, user-only support review. No network listener or auto-approve option. (~9122 tok)
 - `tray_prompt.py` — _TkinterPromptApp: run (~7464 tok)
 - `tray_target_selector.py` — NiceGUI target selector for multi-target tray plugin commands. (~1062 tok)
 

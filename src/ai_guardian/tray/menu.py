@@ -208,11 +208,13 @@ def launch_doctor():
     _launch_in_terminal(resolve_cli_cmd("doctor"), keep_open=True)
 
 
-def launch_support():
+def launch_support(*, target=None, client=None):
     """Open native support review, without a shell or daemon dependency."""
     from ai_guardian.tray.support import open_support_dialog
 
-    return open_support_dialog()
+    if target is None:
+        return open_support_dialog()
+    return open_support_dialog(target=target, client=client)
 
 
 def launch_ide_setup(ide_key, scope="user", project_dir=None):
