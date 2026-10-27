@@ -9,6 +9,42 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2582 single-PC HTTPS quickstart — locally validated, 2026-10-27
+
+- User authorized implementation with **go** after initialization. Continued
+  managed DAF `open` session `RedHatProductSecurity-ai-guardian-2582` on existing
+  branch `2582`; preserved the initialization handoff and OpenWolf-owned updates.
+  Qualified ticket was already read once. No temp-clone sync or new branch.
+- Added four-step **Test HTTPS on your own PC** before advanced configuration in
+  `docs/MULTI_DAEMON_TRAY.md`, a direct link from `docs/CONFIGURATION.md` and an
+  Unreleased changelog entry. Exact Console labels and absolute-path examples;
+  loopback-only exposure, private keys, explicit trust/SAN validation, tokens,
+  REST versus Console-page HTTPS, restart, expiry and troubleshooting are clear.
+  Existing listener/target examples and all advanced VM/CA/SSH/lifecycle content
+  remain unchanged; generated `docs/notebooklm-export.md` was not edited.
+- Validated exact documented generation/curl blocks on Linux, OpenSSL 3.5.8,
+  curl 8.18.0, Python 3.14.7 and AI Guardian 1.21.0-dev. Used a disposable HOME
+  and actual native `DaemonRestAPI` on an ephemeral loopback port, stopped after
+  validation. Checked 0700/0600 modes, 90-day validity, SANs/extensions, repeat
+  generation without overwrites, trusted health, actual client localhost identity,
+  unauthenticated 401, untrusted-certificate and plaintext rejection, wrong SAN
+  rejection and unsafe-key startup rejection. All checks passed.
+- Harness: `/tmp/opencode/guardian-2582-validate.py`; private disposable artifacts:
+  `/tmp/opencode/guardian-2582-08vuynzt`. All shell blocks pass Bash syntax checks;
+  new links resolve, preservation/scope checks and whitespace checks pass.
+  Console labels/save/restart behavior were inspected in source, not a graphical
+  walkthrough. No installed daemon/Console/tray restart or configuration change.
+- DAF note saved; all seven acceptance criteria and validation scope posted at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2582#issuecomment-6441947570.
+  A shell quoting error occurred before the first comment command executed;
+  body-file publication succeeded once. Recorded the tooling/memory insertion
+  corrections in buglog and the successful recipe learning in cerebrum.
+- **Next:** user review and external DAF completion. All changes remain local and
+  uncommitted. Documentation-only: no code tests, linters or local MkDocs build
+  required. No live credentials accessed, security settings changed, commits,
+  pushes, PRs or issue closure. OpenWolf owns automatic anatomy/memory bookkeeping;
+  earlier entries are historical, not the active task.
+
 ## Issue #2587 SSH alias discovery — locally validated, 2026-10-27
 
 - User authorized implementation with **go**. Continued existing branch `2587`,

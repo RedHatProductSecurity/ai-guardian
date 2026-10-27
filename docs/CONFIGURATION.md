@@ -54,6 +54,12 @@ A project-level config that merges on top of the global config. Discovered via g
 
 ### Daemon REST TLS
 
+**Trying HTTPS on a single Linux PC?** Start with
+[Test HTTPS on your own PC](MULTI_DAEMON_TRAY.md#test-https-on-your-own-pc):
+four steps for the local daemon REST API, without VMs, SSH, private-CA
+administration or system-wide certificate installation. This does not change
+the Web Console webpage to HTTPS.
+
 `daemon.rest_tls` enables optional native HTTPS without changing existing bind
 addresses, localhost HTTP defaults, REST fields or daemon-token authentication.
 Configure `enabled` (default `false`), `cert_file` and `key_file`; local REST

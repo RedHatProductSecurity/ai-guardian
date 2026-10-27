@@ -226,6 +226,15 @@
   threshold during teardown. Do not drop exact-message/privacy assertions or
   change production TLS behavior to accommodate test-order state.
 
+- **Single-PC HTTPS recipe validation (#2582):** OpenSSL 3.5.8's self-signed
+  `CA:FALSE` server certificate works as explicit dedicated trust for both curl
+  and `TLSOptions` on Python 3.14. Keep both localhost DNS/127.0.0.1 IP SANs,
+  server-auth usage and SKI/AKI extensions in the documented recipe. Extract its
+  shell blocks for validation in a disposable HOME against the real native REST
+  listener on an ephemeral loopback port; never restart/reconfigure the installed
+  daemon just to validate documentation. Console fields require absolute paths,
+  not shell-variable expansion. Fresh private mktemp directories avoid overwrites.
+
 - **Daemon REST TLS foundation (#2551; prerequisite for #2552):** Reuse
   `daemon/rest_transport.py`: `TLSOptions` carries `ca_file`, `server_name` and
   an optional additional `certificate_sha256` leaf pin. The URL is only the TCP
