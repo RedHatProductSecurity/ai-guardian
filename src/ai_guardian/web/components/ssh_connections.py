@@ -113,16 +113,18 @@ def create_ssh_connections(service):
             "Optional alias prefix (empty lists all concrete aliases)",
             value="ai-guardian-",
         ).classes("w-full")
-        settings_loaded = False
+        loaded_settings = None
 
         async def save_settings():
+            nonlocal loaded_settings
             settings_button.disable()
+            requested_settings = (discovery_enabled.value, alias_prefix.value)
             try:
                 await run.io_bound(
                     service.save_ssh_alias_settings,
-                    discovery_enabled.value,
-                    alias_prefix.value,
+                    *requested_settings,
                 )
+                loaded_settings = requested_settings
                 feedback.set_text(
                     "SSH alias discovery settings saved. Candidates refresh automatically; saved trust is unchanged."
                 )
@@ -139,17 +141,21 @@ def create_ssh_connections(service):
         saved = ui.column().classes("w-full")
 
         async def update_saved():
-            nonlocal settings_loaded
+            nonlocal loaded_settings
             if is_client_deleted(client):
                 return
             targets = await run.io_bound(service.refresh_targets)
             state = await run.io_bound(service.get_ssh_alias_discovery)
             if is_client_deleted(client):
                 return
-            if not settings_loaded:
+            # Follow saved tray changes, but never replace unsaved browser edits.
+            if loaded_settings is None or loaded_settings == (
+                discovery_enabled.value,
+                alias_prefix.value,
+            ):
                 discovery_enabled.set_value(state["enabled"])
                 alias_prefix.set_value(state["alias_prefix"])
-                settings_loaded = True
+                loaded_settings = (state["enabled"], state["alias_prefix"])
             candidates.clear()
             with candidates:
                 if state["enabled"]:

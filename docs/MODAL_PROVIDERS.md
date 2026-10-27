@@ -56,6 +56,7 @@ controls.
 | Tray-forwarded remote ask on macOS 14+ | G in subprocess; existing tray focus-safety Tk suppression remains | As above | As above |
 | Plugin parameter forms: `TrayPromptApp.run` | T → G | T → G | T → G |
 | Simple form flows / tray Add daemon via SSH and discovered-alias review: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | N desktop-ordered zenity/kdialog input/checklist → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
+| Tray Discover SSH aliases... settings: `run_form_flow` | N JXA/Cocoa two-step checkbox/prefix → isolated T → G | N desktop-ordered zenity/kdialog two-step checklist/prefix → isolated T → G | N PowerShell WinForms two-step checkbox/prefix → isolated T → G |
 | Multi-target plugin selection: `TrayTargetSelectorApp.run` | G only | G only | G only |
 | Working-directory picker: `working_dir.choose_directory` | N AppleScript choose folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms FolderBrowserDialog → isolated T |
 | Browser form's auxiliary file/directory Browse | N AppleScript choose file/folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms OpenFileDialog/FolderBrowserDialog → isolated T |
@@ -113,7 +114,18 @@ controls.
   The first native startup failure can still fall back, but cancellation/unchecked
   consent and any later displayed-step failure remain terminal. Verify the direct
   route on each supported desktop as well as manual Add; see the full SSH UX
-  contract for opt-in, cancellation, dismissal/restart and identity-change checks.
+   contract for opt-in, cancellation, dismissal/restart and identity-change checks.
+- **SSH discovery settings:** **Discover SSH aliases...** is always available in
+  the workstation tray, including discovery-off/zero-candidate/no-pairing states.
+  Reuse `run_form_flow` for the complete two-step interaction: current enable
+  checkbox and **Continue**, then current optional literal prefix and **Save**.
+  All providers retain both controls, explanations, validation feedback and
+  cancellation. Continue is non-mutating; Cancel/Close before Save changes nothing.
+  Errors/retries/results stay in the selected provider, including after saving.
+  Only display-safe settings reach renderers; configuration I/O runs in the tray
+  worker, using the same workstation-global writer as the Web Console. Saving
+  requests discovery refresh, not pairing, probing, certificate trust or removal.
+  Existing candidate Review/Dismiss actions and saved connections stay unchanged.
 - **Process ownership:** Tk messages, sandbox dialogs, plugin CLI forms and tray
   proactive dialogs run outside the tray GUI loop. Proactive NiceGUI fallback also
   runs in its own child and opens the actual loopback port only after server startup.
@@ -225,7 +237,17 @@ monitor, result and sanitized screenshots/timing for each matrix row.
 7. Support: use local ZIP review only; check per-file View, full paging, required
    fields, saved selection, native consent controls and safe no-desktop refusal.
    Mock/cancel public upload and publication reviews; do not publish diagnostics as
-   part of UI verification. Live publication requires separate operator consent.
+    part of UI verification. Live publication requires separate operator consent.
+8. SSH discovery settings: with discovery off, zero matches and no enrolled
+   daemons, find **Discover SSH aliases...** next to **Add daemon via SSH**.
+   Check both current values, cancel/close either step, and confirm no persistence.
+   Save a custom `guardian-` prefix, then an empty prefix; reject wildcard/invalid
+   input with feedback without switching toolkit. Confirm candidates refresh
+   without restarting, reopen/restart to check persistence, and compare with the
+   local Web Console (untouched controls update; unsaved edits remain). Disable
+   discovery: candidates disappear but the settings entry and existing paired
+   workers/tunnels remain. No Save may contact a host or grant trust. Repeat the
+   preference/startup/cancel/later-step-failure checks above for this flow.
 
 Do not check off desktop qualification using selector mocks or merely installed
 native executables. Keep any untested platform/scenario explicitly pending.

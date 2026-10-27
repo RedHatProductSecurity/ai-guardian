@@ -54,49 +54,10 @@ class DaemonService:
 
     def save_ssh_alias_settings(self, enabled, alias_prefix):
         """Always workstation-global: never route local discovery to a remote/project."""
-        import json
-        import re
-        from ai_guardian.config.utils import get_config_dir
-        from ai_guardian.config.writer import _atomic_config_update, _ensure_section
-        from ai_guardian.daemon.ssh_storage import SSHConnectionError
+        from ai_guardian.daemon.ssh_config import save_settings
 
         self._ssh_manager()  # Enforce the loopback boundary even on direct calls.
-        if (
-            type(enabled) is not bool
-            or not isinstance(alias_prefix, str)
-            or not re.fullmatch(r"[A-Za-z0-9_.-]{0,253}", alias_prefix)
-        ):
-            raise SSHConnectionError(
-                "Use a literal SSH alias prefix (letters, numbers, dots, underscores or hyphens), or leave it empty for all concrete aliases."
-            )
-
-        path = get_config_dir() / "ai-guardian.json"
-
-        def update(config):
-            # The shared updater can recover malformed configs for other callers;
-            # this narrow settings form must never discard unrelated configuration.
-            try:
-                if path.exists():
-                    with path.open(encoding="utf-8") as stream:
-                        if not isinstance(json.load(stream), dict):
-                            raise ValueError
-                if not isinstance(config, dict):
-                    raise ValueError
-            except (OSError, ValueError):
-                raise SSHConnectionError(
-                    "Could not read local configuration; SSH discovery settings were not saved."
-                ) from None
-            tray = _ensure_section(_ensure_section(config, "daemon"), "tray")
-            tray["ssh_alias_discovery"] = {
-                "enabled": enabled,
-                "alias_prefix": alias_prefix,
-            }
-            return False, "Updated local SSH alias discovery settings"
-
-        if not _atomic_config_update(path, update):
-            raise SSHConnectionError(
-                "Could not save local SSH alias discovery settings. Check configuration access and read-only state."
-            )
+        save_settings(enabled, alias_prefix)
 
     def close(self):
         self._discovery.stop()

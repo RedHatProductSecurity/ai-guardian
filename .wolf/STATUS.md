@@ -9,6 +9,69 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2591 tray SSH discovery settings — locally validated, 2026-10-27
+
+- User authorized implementation with **go** after initialization. Continued
+  existing branch `2591`, preserving the initialization handoff and OpenWolf-owned
+  updates. The qualified ticket was already read once; no clone sync/new branch.
+- Added always-available **Discover SSH aliases...** beside manual pairing, with
+  captured-monitor worker dispatch and the existing `run_form_flow` dispatcher.
+  All native/Tk/NiceGUI providers retain the complete two-step enable/Continue and
+  optional-prefix/Save interaction, current values, feedback and cancellation.
+  Only explicit Save mutates; validation/retries/results keep the chosen provider.
+- Extracted the existing Web writer into `daemon/ssh_config.py:save_settings`;
+  both entry points share global validation/persistence, preserving Web loopback
+  gating and unrelated configuration. No new settings store/config key/dependency.
+  Saved custom/empty prefixes request normal discovery refresh, not SSH/probing,
+  trust, worker replacement or tunnel closure. Existing Review/Dismiss remains.
+- Untouched open Web controls follow external settings saves; snapshots preserve
+  browser drafts and edits made during an in-flight save. Two regressions proved
+  the previous permanently loaded controls stayed stale. Recorded the fix and
+  staged implementation/test iterations in cerebrum/buglog.
+- **821 related tests pass; one Windows-only DPAPI test skips on Linux.** Includes
+  complete SSH/modal UX files, forms, discovery/storage/tunnel/manager/tray/Web,
+  daemon service/tray and directly affected menu callers. Focused SSH settings/
+  parser and tray-flow coverage is **94%** (95%/92%); including broader tray app,
+  combined **77%**. Artifact: `/tmp/opencode/guardian-2591.coverage`.
+- Black py310, Ruff, Pylint E and Mypy (320 source files) pass. Source docs/modal
+  matrix/manual checklist/changelog and SSH release-readiness gate are updated;
+  YAML/all nine SSH test paths and whitespace checks pass. Simplification reviewed.
+- DAF progress note saved; implementation checklist and remaining qualification:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2591#issuecomment-6446186160.
+- **Next:** user review/external DAF publication, fresh CI and actual macOS,
+  Windows, GNOME/zenity and KDE/kdialog desktop qualification. Mocked providers do
+  not establish native visual/focus/placement behavior. No live SSH/credential
+  access, installed-daemon/tray restart, runtime/security configuration change,
+  full-suite/integration/container run, commit, push, PR or issue closure.
+  All implementation changes remain local/uncommitted. OpenWolf owns automatic
+  anatomy/memory bookkeeping; initialization and earlier entries are history.
+
+## Issue #2591 session initialization — 2026-10-27
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2591`; confirmed the active repository,
+  existing branch `2591` and initially clean worktree. Read the qualified GitHub
+  ticket exactly once. This real-workspace development session needs no clone sync.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  markdown and hierarchical skills are absent. Loaded DAF workflow/Git/OpenWolf
+  guidance, the project protocol, handoff and relevant learning constraints.
+  Project OpenWolf is loaded; release is unrelated. Leave titles DAF-managed.
+- User requested initialization only; implementation has not started. Next:
+  inspect tray SSH controls, Web discovery settings and the shared form adapter;
+  add an always-available **Discover SSH aliases...** settings entry using the
+  existing workstation-global validation/persistence and cached discovery refresh.
+- Preserve default-off/default-prefix behavior, custom/empty prefixes, complete
+  controls, Native → Tkinter → NiceGUI dispatch, startup-only fallback and terminal
+  cancellation. Keep configuration I/O/scans off the GUI thread. Saving must not
+  probe hosts, run SSH, grant trust, remove pairings or close existing tunnels.
+- Plan isolated related unit tests and the complete affected SSH UX contract for
+  availability, current values, Save/Cancel/Close, validation, persistence/refresh,
+  provider lifecycle and connection preservation; update multi-daemon/modal docs
+  and Unreleased changelog. Run related tests and required linters after code work.
+- No code changes, tests, tracker updates, live SSH/credential access, runtime or
+  configuration changes, commits, pushes or PRs. Only this handoff was updated;
+  OpenWolf owns automatic anatomy/memory bookkeeping. Earlier entries are history.
+
 ## Issue #2582 single-PC HTTPS quickstart — locally validated, 2026-10-27
 
 - User authorized implementation with **go** after initialization. Continued

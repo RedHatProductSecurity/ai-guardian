@@ -575,6 +575,19 @@ class DaemonTray:
             name="ssh-enrollment",
         ).start()
 
+    def _on_discover_ssh_aliases(self, _icon=None, _item=None):
+        from ai_guardian.tray.dialog_placement import _get_tray_screen_bounds
+        from ai_guardian.tray.ssh_connections import open_discovery_settings
+
+        screen_bounds = _get_tray_screen_bounds(_icon or self._icon)
+        threading.Thread(
+            target=open_discovery_settings,
+            args=(self,),
+            kwargs={"screen_bounds": screen_bounds},
+            daemon=True,
+            name="ssh-discovery-settings",
+        ).start()
+
     def _build_tray_menu(self):
         """Build the native tray menu for the currently discovered targets."""
         menu = pystray.Menu(
@@ -588,6 +601,7 @@ class DaemonTray:
             *self._menu._build_sandbox_create_menu_items(),
             *self._menu._build_sandbox_start_menu_items(),
             pystray.MenuItem("Add daemon via SSH", self._on_add_ssh_daemon),
+            pystray.MenuItem("Discover SSH aliases...", self._on_discover_ssh_aliases),
             pystray.Menu.SEPARATOR,
             *self._plugins._build_global_plugin_items(),
             *self._menu._build_ide_setup_menu_items(),

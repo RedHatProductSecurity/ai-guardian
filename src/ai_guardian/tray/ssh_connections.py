@@ -10,6 +10,74 @@ def _worker(callback):
     return action
 
 
+def open_discovery_settings(tray, *, screen_bounds=None):
+    """Complete native-capable settings flow; called only from a tray worker."""
+    from ai_guardian.daemon.ssh_config import load_settings, save_settings
+    from ai_guardian.daemon.ssh_storage import SSHConnectionError
+    from ai_guardian.ui.forms import run_form_flow
+
+    def settings(form):
+        current = load_settings()
+        values = form(
+            "Discover SSH aliases",
+            "Discovery lists local SSH aliases at startup and refresh. It does not contact hosts or grant trust. "
+            "Connecting and trusting a daemon still requires explicit identity review.\n\n"
+            "Choose whether discovery is enabled, then continue to the optional prefix. "
+            "Nothing is saved until Save; Cancel or Close leaves settings unchanged.",
+            [
+                {
+                    "name": "enabled",
+                    "label": "Enable SSH alias discovery",
+                    "type": "bool",
+                    "default": current["enabled"],
+                }
+            ],
+            submit_label="Continue",
+        )
+        if not values or type(values.get("enabled")) is not bool:
+            return
+        enabled = values["enabled"]
+        prefix = current["alias_prefix"]
+        message = (
+            f"SSH alias discovery: {'enabled' if enabled else 'disabled'}.\n\n"
+            "Use an optional literal prefix, for example guardian-. Leave it empty to list all supported concrete aliases without renaming them.\n\n"
+            "Save updates both workstation settings, not a selected remote daemon or project. "
+            "Saved pairings and existing connections are unchanged. Cancel or Close saves nothing."
+        )
+        error = ""
+        while True:
+            values = form(
+                "Discover SSH aliases",
+                message + error,
+                [
+                    {
+                        "name": "alias_prefix",
+                        "label": "Optional alias prefix (empty lists all supported concrete aliases)",
+                        "default": prefix,
+                    }
+                ],
+                submit_label="Save",
+            )
+            if values is None or not isinstance(values.get("alias_prefix"), str):
+                return
+            prefix = values["alias_prefix"]
+            try:
+                save_settings(enabled, prefix)
+            except SSHConnectionError as exc:
+                error = "\n\n" + str(exc)
+                continue
+            tray._refresh_event.set()
+            form(
+                "Discover SSH aliases",
+                "SSH alias discovery settings saved. Candidates refresh automatically; saved trust is unchanged.",
+                [],
+                submit_label="Close",
+            )
+            return
+
+    return run_form_flow(settings, screen_bounds=screen_bounds)
+
+
 def open_enrollment(tray, *, screen_bounds=None, alias=None):
     from ai_guardian.daemon.rest_transport import DaemonConnectionError
     from ai_guardian.daemon.ssh_storage import SSHConnectionError

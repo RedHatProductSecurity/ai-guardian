@@ -387,11 +387,32 @@ user-identified hosts only: it does not enumerate AWS instances or use AWS APIs.
 
 #### Discover SSH aliases
 
-Discovery is **off by default**, independent of saved SSH connections. Open the
-**loopback Web Console → daemon picker → SSH daemon connections**, turn on
-**Discover SSH aliases**, optionally edit the prefix, then **Save SSH discovery
-settings**. This explicit opt-in applies to the workstation, not the selected
-remote daemon or a project. Alternatively, set the following in the local user
+Discovery is **off by default**, independent of saved SSH connections. Choose
+**Discover SSH aliases...** directly in the workstation tray, next to **Add daemon
+via SSH**. This settings entry is always available—even with discovery disabled,
+zero matching aliases, or no enrolled daemons. **Add daemon via SSH** remains the
+separate pairing action, not the discovery settings form.
+
+1. Check or uncheck **Enable SSH alias discovery**, reflecting the current saved
+   value, then choose **Continue**. This step does not save anything.
+2. Edit **Optional alias prefix (empty lists all supported concrete aliases)**,
+   reflecting the saved prefix, then **Save**. Use a literal prefix such as
+   `guardian-`, or leave it empty to include existing supported aliases without
+   renaming. Invalid prefixes show feedback and can be corrected in the same flow.
+
+**Cancel**, Escape or title-bar **Close** before Save leaves both settings
+unchanged. The complete two-step form uses the shared **Native → Tkinter →
+NiceGUI** dispatcher; only pre-display startup failure permits fallback, never
+cancellation or a later-step error. Configuration reads/writes and enumeration
+run outside the tray GUI thread. Saving does not contact hosts, execute SSH or
+grant trust; connection and identity verification remain explicit separate steps.
+
+The **loopback Web Console → daemon picker → SSH daemon connections** retains
+the equivalent **Discover SSH aliases**, prefix and **Save SSH discovery settings**
+controls. Both entry points share workstation-global validation and persistence,
+not the selected remote daemon or a project. Untouched Web Console fields follow
+saved tray changes on refresh; unsaved browser edits are not overwritten. Settings
+survive tray restarts. Alternatively, set the following in the local user
 `ai-guardian.json`:
 
 ```json
@@ -416,7 +437,8 @@ appears as a pending-enrollment menu, separate from saved/connected targets. Eac
 alias offers **Review discovered daemon** and **Dismiss alias**. The loopback Web
 Console picker refreshes the equivalent list automatically. Changing either the
 SSH config or these discovery settings takes effect on the next refresh, without
-restarting the daemon. Scanning does not block the tray/browser UI.
+restarting the daemon or tray. Saving from the tray requests that refresh; scanning
+does not block the tray/browser UI.
 
 **Review discovered daemon** probes only that user-chosen alias, then opens the
 complete **Verify SSH daemon identity** step directly—no separate Add action or

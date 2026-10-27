@@ -3,6 +3,8 @@
 from types import SimpleNamespace
 from unittest import mock
 
+import pytest
+
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.tray.app import DaemonTray
 from ai_guardian.tray import ssh_connections
@@ -213,4 +215,86 @@ def test_candidate_review_captures_placement_then_starts_worker():
         "screen_bounds": (0, 0, 1920, 1080),
         "alias": "existing-vm",
     }
+    thread.return_value.start.assert_called_once()
+
+
+@pytest.mark.parametrize("enabled,aliases", [(False, ()), (True, ()), (True, ("vm",))])
+def test_discovery_settings_entry_is_global_and_building_it_never_reads_config(
+    monkeypatch, enabled, aliases
+):
+    from ai_guardian.tray import app
+
+    class Menu(list):
+        SEPARATOR = object()
+
+        def __init__(self, *items):
+            super().__init__(items)
+
+    def item(text, action, **kwargs):
+        return SimpleNamespace(
+            text=text, action=action, enabled=kwargs.get("enabled", True)
+        )
+
+    monkeypatch.setattr(app, "pystray", SimpleNamespace(Menu=Menu, MenuItem=item))
+    tray = DaemonTray(lambda: {}, lambda: None, lambda minutes: None)
+    tray._targets = []  # No local or enrolled remote daemon is required.
+    tray._discovery = SimpleNamespace(
+        ssh_alias_discovery={
+            "enabled": enabled,
+            "aliases": aliases,
+            "notices": (),
+        }
+    )
+    for method in (
+        "_build_single_daemon_menu_items",
+        "_build_single_daemon_daemon_items",
+        "_build_multi_daemon_menu_items",
+        "_build_openshell_middleware_menu_items",
+        "_build_sandbox_create_menu_items",
+        "_build_sandbox_start_menu_items",
+        "_build_ide_setup_menu_items",
+    ):
+        monkeypatch.setattr(tray._menu, method, lambda: [])
+    monkeypatch.setattr(tray._plugins, "_build_single_daemon_plugin_items", lambda: [])
+    monkeypatch.setattr(tray._plugins, "_build_global_plugin_items", lambda: [])
+    with (
+        mock.patch("ai_guardian.daemon.ssh_config.load_settings") as read,
+        mock.patch("ai_guardian.daemon.ssh_config.scan_aliases") as scan,
+    ):
+        entries = tray._build_tray_menu()
+    settings = [
+        entry
+        for entry in entries
+        if getattr(entry, "text", "") == "Discover SSH aliases..."
+    ]
+    assert len(settings) == 1
+    assert settings[0].enabled is True
+    assert settings[0].action == tray._on_discover_ssh_aliases
+    labels = [getattr(entry, "text", "") for entry in entries]
+    assert (
+        labels.index("Discover SSH aliases...")
+        == labels.index("Add daemon via SSH") + 1
+    )
+    read.assert_not_called()
+    scan.assert_not_called()
+
+
+def test_discovery_settings_captures_monitor_then_dispatches_worker():
+    tray = DaemonTray.__new__(DaemonTray)
+    tray._icon = mock.Mock()
+    bounds = (1920, 0, 1920, 1080)
+    with (
+        mock.patch("ai_guardian.tray.app.threading.Thread") as thread,
+        mock.patch(
+            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
+            return_value=bounds,
+        ) as capture,
+        mock.patch("ai_guardian.daemon.ssh_config.load_settings") as read,
+    ):
+        tray._on_discover_ssh_aliases()
+    capture.assert_called_once_with(tray._icon)
+    read.assert_not_called()
+    assert thread.call_args.kwargs["target"] is ssh_connections.open_discovery_settings
+    assert thread.call_args.kwargs["kwargs"] == {"screen_bounds": bounds}
+    assert thread.call_args.kwargs["args"] == (tray,)
     thread.return_value.start.assert_called_once()
