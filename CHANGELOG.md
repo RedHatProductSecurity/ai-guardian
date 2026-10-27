@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Tray SSH alias discovery settings (#2591):** Add an always-available
+  **Discover SSH aliases...** entry next to pairing, with native-first enable and
+  optional-prefix steps, validation, Save/Cancel and automatic candidate refresh.
+  Reuse the Web Console's workstation-global settings writer; untouched browser
+  fields follow saved changes without discarding edits. Default opt-in/prefix,
+  explicit identity review, saved pairings and existing tunnels remain unchanged.
 - **Single-PC HTTPS quickstart (#2582):** Document four steps to test native
   daemon REST HTTPS on Linux with OpenSSL 3.x, explicit local certificate trust,
   private key storage, restart and verification checks. Link directly from the

@@ -13,9 +13,16 @@ Manual qualification (requires an explicitly authorized disposable POSIX VM):
 7. Change the daemon certificate: saved trust must not change automatically.
 8. Remove the saved target; only owned tunnels/credentials disappear, not the VM
     daemon. Repeat native Windows-client/DPAPI and macOS UI qualification separately.
-9. In the loopback Web Console picker, opt into Discover SSH aliases and save.
-   With an empty prefix, existing concrete aliases require no renaming. Restart
-   the tray / refresh: SSH aliases available to pair shows a count, not targets.
+9. With discovery off and no enrolled daemons, choose Discover SSH aliases... next
+   to Add daemon via SSH in the tray. Check the current enable value, Continue,
+   edit the optional literal prefix, then Save. Cancel/Close at either step must
+   save nothing. Try an invalid prefix and correct it without changing toolkit.
+   A custom guardian- prefix or an empty prefix requires no alias renaming. The
+   next refresh, without a restart, shows SSH aliases available to pair as a count,
+   not targets. Restart and reopen: values persist. The local Web Console picker
+   reads/writes the same settings; its untouched fields follow tray changes while
+   unsaved browser edits are retained. Discovery off/zero matches hides candidates,
+   never the tray settings entry; existing pairings/tunnels remain usable.
 10. Review discovered daemon opens full identity review directly, with no host
     entry. Cancel saves nothing. Refresh never opens unsolicited trust dialogs.
 11. Edit the synthetic user SSH config; added aliases appear on refresh. Dismiss
@@ -23,6 +30,11 @@ Manual qualification (requires an explicitly authorized disposable POSIX VM):
     manual Add remains available. Missing config does not erase saved pairings.
 12. Verify unsupported/conditional includes show a safe notice without executing
     Match exec, contacting hosts, opening private keys or changing SSH config.
+13. Repeat discovery settings with auto, tkinter, nicegui and headless preferences.
+    Missing native/Tk startup may advance before display only. Cancel, Escape,
+    title-bar Close or a later-step failure must not reopen in another provider;
+    headless opens nothing and saves nothing. Saving never contacts a host or
+    grants trust. Qualify macOS, Windows, GNOME/zenity and KDE/kdialog separately.
 
 Automated tests use synthetic certificates, explicit storage and mock SSH only;
 they never load the user's configuration or contact a live SSH destination.
@@ -392,3 +404,263 @@ def test_discovery_opt_in_dismissal_and_removal_do_not_imply_trust(
     probe.assert_not_called()
     tunnel.assert_not_called()
     assert config.read_bytes() == before
+
+
+@pytest.fixture
+def discovery_settings_ui(tmp_path, monkeypatch):
+    """Explicit disposable workstation settings and mocks for every reachable UI."""
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    monkeypatch.setattr("ai_guardian.config.utils.get_config_dir", lambda: tmp_path)
+    with (
+        mock.patch("ai_guardian.ui.forms.NativeForm") as native,
+        mock.patch(
+            "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+        ) as tk,
+        mock.patch("ai_guardian.tray.sandbox_dialog._show_nicegui_form") as browser,
+    ):
+        yield SimpleNamespace(
+            native=native.return_value,
+            tk=tk,
+            browser=browser,
+            path=tmp_path / "ai-guardian.json",
+        )
+
+
+@pytest.mark.parametrize(
+    "preference,provider",
+    [("auto", "native"), ("tkinter", "tk"), ("nicegui", "browser")],
+)
+def test_discovery_settings_preserve_complete_controls_in_each_provider(
+    discovery_settings_ui, monkeypatch, preference, provider
+):
+    """USER EXPERIENCE: a native-first two-step form, not Web Console navigation.
+
+    Continue changes nothing. Save validates/persists both settings; empty prefix
+    is a deliberate value. Connecting and trusting remain separate reviewed acts.
+    """
+    from ai_guardian.daemon.ssh_config import load_settings
+    from ai_guardian.tray.ssh_connections import open_discovery_settings
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", preference)
+    renderer = getattr(discovery_settings_ui, provider)
+    renderer.side_effect = [{"enabled": True}, {"alias_prefix": ""}, None]
+    tray = mock.Mock()
+    bounds = (1920, 0, 1920, 1080)
+    with mock.patch("ai_guardian.tray.menu.open_web_console") as console:
+        open_discovery_settings(tray, screen_bounds=bounds)
+    first, second, result = renderer.call_args_list
+    assert first.args[0] == "Discover SSH aliases"
+    assert (
+        "Connecting and trusting a daemon still requires explicit identity review."
+        in first.args[1]
+    )
+    assert first.args[2] == [
+        {
+            "name": "enabled",
+            "label": "Enable SSH alias discovery",
+            "type": "bool",
+            "default": False,
+        }
+    ]
+    assert first.kwargs["submit_label"] == "Continue"
+    assert second.args[2] == [
+        {
+            "name": "alias_prefix",
+            "label": "Optional alias prefix (empty lists all supported concrete aliases)",
+            "default": "ai-guardian-",
+        }
+    ]
+    assert second.kwargs["submit_label"] == "Save"
+    assert result.args[1] == (
+        "SSH alias discovery settings saved. Candidates refresh automatically; saved trust is unchanged."
+    )
+    assert result.kwargs["submit_label"] == "Close"
+    assert load_settings() == {"enabled": True, "alias_prefix": ""}
+    if provider != "native":
+        assert all(
+            call.kwargs["screen_bounds"] == bounds for call in renderer.call_args_list
+        )
+    for other in {"native", "tk", "browser"} - {provider}:
+        getattr(discovery_settings_ui, other).assert_not_called()
+    tray._refresh_event.set.assert_called_once()
+    assert not tray._discovery.mock_calls
+    console.assert_not_called()
+
+
+@pytest.mark.parametrize("responses", [[None], [{"enabled": True}, None]])
+@pytest.mark.parametrize(
+    "preference,provider",
+    [("auto", "native"), ("tkinter", "tk"), ("nicegui", "browser")],
+)
+def test_discovery_settings_cancel_close_is_terminal_and_nonmutating(
+    discovery_settings_ui, monkeypatch, responses, preference, provider
+):
+    """USER EXPERIENCE: Cancel/Close on either step → no settings, no replacement."""
+    from ai_guardian.tray.ssh_connections import open_discovery_settings
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", preference)
+    getattr(discovery_settings_ui, provider).side_effect = responses
+    tray = mock.Mock()
+    open_discovery_settings(tray)
+    assert not discovery_settings_ui.path.exists()
+    tray._refresh_event.set.assert_not_called()
+    assert not tray._discovery.mock_calls
+    for other in {"native", "tk", "browser"} - {provider}:
+        getattr(discovery_settings_ui, other).assert_not_called()
+
+
+def test_discovery_settings_startup_fallback_keeps_all_controls(discovery_settings_ui):
+    """USER EXPERIENCE: only proven startup failure advances Native → Tk → browser."""
+    from ai_guardian.tray.ssh_connections import open_discovery_settings
+    from ai_guardian.ui.modal import UIUnavailable
+
+    discovery_settings_ui.native.side_effect = UIUnavailable()
+    discovery_settings_ui.tk.side_effect = UIUnavailable()
+    discovery_settings_ui.browser.side_effect = [
+        {"enabled": True},
+        {"alias_prefix": "guardian-"},
+        None,
+    ]
+    tray = mock.Mock()
+    open_discovery_settings(tray)
+    discovery_settings_ui.native.assert_called_once()
+    discovery_settings_ui.tk.assert_called_once()
+    first = discovery_settings_ui.browser.call_args_list[0]
+    assert first.args == discovery_settings_ui.native.call_args.args
+    assert first.args == discovery_settings_ui.tk.call_args.args
+    assert json.loads(discovery_settings_ui.path.read_text())["daemon"]["tray"][
+        "ssh_alias_discovery"
+    ] == {
+        "enabled": True,
+        "alias_prefix": "guardian-",
+    }
+    tray._refresh_event.set.assert_called_once()
+
+
+@pytest.mark.parametrize("after_save", [False, True])
+@pytest.mark.parametrize("error", ["startup", "unknown"])
+def test_discovery_settings_later_failure_never_restarts_or_resaves(
+    discovery_settings_ui, after_save, error
+):
+    from ai_guardian.tray.ssh_connections import open_discovery_settings
+    from ai_guardian.ui.modal import UIUnavailable
+
+    responses = [{"enabled": True}]
+    if after_save:
+        responses.append({"alias_prefix": "guardian-"})
+    responses.append(UIUnavailable() if error == "startup" else RuntimeError())
+    discovery_settings_ui.native.side_effect = responses
+    tray = mock.Mock()
+    open_discovery_settings(tray)
+    assert discovery_settings_ui.path.exists() is after_save
+    assert tray._refresh_event.set.call_count == int(after_save)
+    discovery_settings_ui.tk.assert_not_called()
+    discovery_settings_ui.browser.assert_not_called()
+
+
+def test_discovery_settings_headless_never_loads_or_saves(
+    discovery_settings_ui, monkeypatch
+):
+    from ai_guardian.tray.ssh_connections import open_discovery_settings
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "headless")
+    with mock.patch("ai_guardian.daemon.ssh_config.load_settings") as read:
+        open_discovery_settings(mock.Mock())
+    read.assert_not_called()
+    assert not discovery_settings_ui.path.exists()
+    for provider in ("native", "tk", "browser"):
+        getattr(discovery_settings_ui, provider).assert_not_called()
+
+
+def test_discovery_settings_validation_is_actionable_without_partial_save(
+    discovery_settings_ui,
+):
+    from ai_guardian.tray.ssh_connections import open_discovery_settings
+
+    discovery_settings_ui.native.side_effect = [
+        {"enabled": True},
+        {"alias_prefix": "*"},
+        None,
+    ]
+    tray = mock.Mock()
+    open_discovery_settings(tray)
+    retry = discovery_settings_ui.native.call_args
+    assert retry.args[1].endswith(
+        "Use a literal SSH alias prefix (letters, numbers, dots, underscores or hyphens), or leave it empty for all concrete aliases."
+    )
+    assert retry.args[2][0]["default"] == "*"
+    assert not discovery_settings_ui.path.exists()
+    tray._refresh_event.set.assert_not_called()
+    discovery_settings_ui.tk.assert_not_called()
+    discovery_settings_ui.browser.assert_not_called()
+
+
+def test_saved_discovery_settings_refresh_and_restart_preserve_existing_connections(
+    discovery_settings_ui, tmp_path, monkeypatch, pairing
+):
+    """USER EXPERIENCE: change prefix/disable → fresh candidates, same paired worker.
+
+    Save never probes, executes SSH or grants trust. Disabling is not removal;
+    saved identity bytes, owned tunnel and worker generation remain untouched.
+    """
+    from ai_guardian.daemon import ssh_config
+    from ai_guardian.daemon.discovery import DaemonDiscovery
+    from ai_guardian.daemon.ssh_connections import SSHConnectionManager
+    from ai_guardian.tray.ssh_connections import open_discovery_settings
+
+    config = tmp_path / ".ssh" / "config"
+    config.parent.mkdir()
+    config.write_text("Host guardian-new existing-vm\n")
+    monkeypatch.setattr(ssh_config, "user_ssh_config", lambda: config)
+    store = SSHStore(tmp_path / "connections")
+    store.create(pairing.profile)  # Independently reviewed, existing pairing.
+    record = store.path / f"{pairing.profile.id}.json"
+    original = record.read_bytes()
+    manager = SSHConnectionManager(store)
+    discovery = DaemonDiscovery()
+    discovery._ssh_manager = manager
+    tray = SimpleNamespace(_discovery=discovery, _refresh_event=mock.Mock())
+    with (
+        mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker,
+        mock.patch("ai_guardian.daemon.ssh_connections.probe_destination") as probe,
+        mock.patch("subprocess.Popen") as process,
+    ):
+        try:
+            target = discovery.discover_ssh()[0]
+            target.ssh_tunnel = tunnel = mock.Mock()
+            connection = manager._connections[pairing.profile.id]
+            for enabled, prefix, expected in (
+                (True, "guardian-", ("guardian-new",)),
+                (True, "", ("existing-vm", "guardian-new")),
+                (False, "", ()),
+            ):
+                discovery_settings_ui.native.side_effect = [
+                    {"enabled": enabled},
+                    {"alias_prefix": prefix},
+                    None,
+                ]
+                open_discovery_settings(tray)
+                assert discovery.discover_ssh() == [target]
+                assert discovery.ssh_alias_discovery["aliases"] == expected
+                assert manager._connections[pairing.profile.id] is connection
+                assert target.ssh_tunnel is tunnel
+                assert record.read_bytes() == original
+                assert store.load() == [pairing.profile]
+                tunnel.close.assert_not_called()
+            worker.return_value.start.assert_called_once()
+            probe.assert_not_called()
+            process.assert_not_called()
+            restarted = SSHConnectionManager(SSHStore(store.path))
+            try:
+                assert restarted.refresh_aliases() == {
+                    "enabled": False,
+                    "alias_prefix": "",
+                    "aliases": (),
+                    "notices": (),
+                }
+            finally:
+                restarted.close()
+        finally:
+            manager.close()

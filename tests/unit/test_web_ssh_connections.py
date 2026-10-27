@@ -41,11 +41,23 @@ def form(tmp_path):
         callbacks[label] = kwargs.get("on_click")
         return widget
 
+    def input_field(label, **kwargs):
+        widget = mock.MagicMock()
+        widget.classes.return_value = widget
+        widget.value = kwargs.get("value", pairing.profile.destination)
+        widget.set_value.side_effect = lambda value: setattr(widget, "value", value)
+        widgets[label] = widget
+        return widget
+
     async def io_bound(callback, *args):
         return callback(*args)
 
     ui.button.side_effect = button
-    ui.input.return_value.classes.return_value.value = pairing.profile.destination
+    ui.input.side_effect = input_field
+    ui.switch.return_value.value = False
+    ui.switch.return_value.set_value.side_effect = lambda value: setattr(
+        ui.switch.return_value, "value", value
+    )
     ui.checkbox.return_value.value = False
     with (
         mock.patch.object(component, "ui", ui),
@@ -323,3 +335,114 @@ async def test_late_hide_from_old_review_does_not_unlock_new_review(form):
     await form.callbacks["Add daemon via SSH"]()
     assert form.service.prepare_ssh_connection.call_count == 2
     form.service.enroll_ssh_connection.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_clean_web_settings_follow_changes_saved_from_tray(form):
+    refresh = form.ui.timer.call_args.args[1]
+    await refresh()
+    form.service.get_ssh_alias_discovery.return_value.update(
+        enabled=True, alias_prefix="guardian-"
+    )
+    await refresh()
+    assert form.ui.switch.return_value.value is True
+    prefix = form.widgets["Optional alias prefix (empty lists all concrete aliases)"]
+    assert prefix.value == "guardian-"
+    form.service.save_ssh_alias_settings.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_settings_refresh_does_not_overwrite_unsaved_web_edits(form):
+    refresh = form.ui.timer.call_args.args[1]
+    await refresh()
+    prefix = form.widgets["Optional alias prefix (empty lists all concrete aliases)"]
+    prefix.value = "draft-"
+    form.service.get_ssh_alias_discovery.return_value.update(
+        enabled=True, alias_prefix="guardian-"
+    )
+    await refresh()
+    assert form.ui.switch.return_value.value is False
+    assert prefix.value == "draft-"
+
+    def save(enabled, alias_prefix):
+        form.service.get_ssh_alias_discovery.return_value.update(
+            enabled=enabled, alias_prefix=alias_prefix
+        )
+
+    form.service.save_ssh_alias_settings.side_effect = save
+    await form.callbacks["Save SSH discovery settings"]()
+    form.service.save_ssh_alias_settings.assert_called_once_with(False, "draft-")
+    form.service.get_ssh_alias_discovery.return_value.update(
+        enabled=True, alias_prefix=""
+    )
+    await refresh()
+    assert form.ui.switch.return_value.value is True
+    assert prefix.value == ""
+
+
+@pytest.mark.asyncio
+async def test_failed_web_save_keeps_draft_when_tray_settings_refresh(form):
+    refresh = form.ui.timer.call_args.args[1]
+    await refresh()
+    prefix = form.widgets["Optional alias prefix (empty lists all concrete aliases)"]
+    prefix.value = "draft-"
+    form.service.save_ssh_alias_settings.side_effect = SSHConnectionError(
+        "Could not save local SSH alias discovery settings."
+    )
+    await form.callbacks["Save SSH discovery settings"]()
+    form.service.get_ssh_alias_discovery.return_value.update(
+        enabled=True, alias_prefix="guardian-"
+    )
+    await refresh()
+    assert form.ui.switch.return_value.value is False
+    assert prefix.value == "draft-"
+    form.widgets["Save SSH discovery settings"].enable.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_web_edits_during_save_remain_unsaved_not_replaced_by_refresh(form):
+    await form.ui.timer.call_args.args[1]()
+    prefix = form.widgets["Optional alias prefix (empty lists all concrete aliases)"]
+    prefix.value = "save-this-"
+
+    def save(enabled, alias_prefix):
+        prefix.value = "newer-edit-"
+        form.service.get_ssh_alias_discovery.return_value.update(
+            enabled=enabled, alias_prefix=alias_prefix
+        )
+
+    form.service.save_ssh_alias_settings.side_effect = save
+    await form.callbacks["Save SSH discovery settings"]()
+    form.service.save_ssh_alias_settings.assert_called_once_with(False, "save-this-")
+    assert prefix.value == "newer-edit-"
+
+
+def test_tray_and_web_console_reopen_the_same_saved_workstation_values(tmp_path):
+    from ai_guardian.daemon.ssh_config import load_settings
+    from ai_guardian.tray.ssh_connections import open_discovery_settings
+
+    service = DaemonService()
+    service.allow_ssh_pairing = True
+    service._discovery = mock.Mock()
+    renderer = mock.Mock(
+        side_effect=[{"enabled": True}, {"alias_prefix": "guardian-"}, None]
+    )
+    with (
+        mock.patch("ai_guardian.config.utils.get_config_dir", return_value=tmp_path),
+        mock.patch(
+            "ai_guardian.ui.forms.run_form_flow",
+            side_effect=lambda interaction, **_kwargs: interaction(renderer),
+        ),
+    ):
+        open_discovery_settings(mock.Mock())
+        assert load_settings() == {"enabled": True, "alias_prefix": "guardian-"}
+        service.save_ssh_alias_settings(False, "")
+        renderer.reset_mock(side_effect=True)
+        renderer.side_effect = [{"enabled": False}, None]
+        open_discovery_settings(mock.Mock())
+        assert renderer.call_args_list[0].args[2][0]["default"] is False
+        assert renderer.call_args_list[1].args[2][0]["default"] == ""
+        assert load_settings() == {"enabled": False, "alias_prefix": ""}
+    service._discovery.ssh_manager.prepare.assert_not_called()
+    service._discovery.ssh_manager.enroll.assert_not_called()
+    service.close()

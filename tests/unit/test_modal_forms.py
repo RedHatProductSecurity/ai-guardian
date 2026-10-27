@@ -432,3 +432,31 @@ def test_linux_metadata_is_literal_not_markup(monkeypatch):
     text = command.call_args.args[0][-1]
     assert "&lt;b&gt;untrusted&lt;/b&gt;" in text
     assert "<b>untrusted</b>" not in text
+
+
+@pytest.mark.parametrize("provider", ["zenity", "kdialog"])
+@pytest.mark.parametrize("kind", ["bool", "text"])
+def test_native_optional_discovery_controls_accept_disabled_and_empty_prefix(
+    monkeypatch, provider, kind
+):
+    from ai_guardian.ui.native_form import NativeForm
+
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    field = {
+        "name": "enabled" if kind == "bool" else "alias_prefix",
+        "type": kind,
+        "default": False if kind == "bool" else "",
+    }
+    with (
+        patch(
+            "ai_guardian.tray.plugins._linux_dialog_provider_order",
+            return_value=(provider,),
+        ),
+        patch(
+            "ai_guardian.ui.native_form.run_native_command",
+            return_value=subprocess.CompletedProcess([], 0, "\n", ""),
+        ),
+    ):
+        assert NativeForm()("Discover SSH aliases", "Settings", [field]) == {
+            field["name"]: False if kind == "bool" else "",
+        }

@@ -107,6 +107,17 @@
 
 ## Key Learnings
 
+- **Tray SSH discovery settings (#2591):** Keep the narrow workstation-global
+  writer in `daemon/ssh_config.py`; Web service entry points still enforce the
+  loopback boundary before delegating. `run_form_flow` can retain full native
+  support without a new renderer by using an optional enable checkbox/Continue,
+  then optional prefix/Save; do not mark the checkbox required or reject an empty
+  prefix. No mutation before Save, no manager/probe access in settings, and only
+  signal the existing refresh event afterward. An open Web settings panel must
+  follow external saves only while its fields equal its last displayed/saved
+  snapshot; capture submitted values before awaiting I/O so edits during Save
+  remain unsaved. A one-time `settings_loaded` flag leaves those controls stale.
+
 - **SSH alias inventory boundaries (#2587):** Use a deliberately bounded local
   parser, not `ssh -G` or a library that evaluates config predicates. Process
   unconditional Include files as an inline stream; a Host/Match in a fragment
