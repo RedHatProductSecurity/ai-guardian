@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-26
+> Last updated: 2026-10-27
 
 ## User Preferences
 
@@ -121,6 +121,10 @@
   JSON, and exclusive temporary PID/token publication must preserve collision files.
   Preview non-mutation tests must snapshot the initial fixture state: the shared
   autouse fixture already creates `auto_config`, `auto_state` and `auto_cache`.
+  PR #2586 repeated the known sanitizer logging-order failure in both storage
+  error cases: explicitly call `caplog.set_level(ERROR, logger="ai_guardian")`
+  before asserting logs. Validate with sanitizer first, not just the storage file
+  alone; keep exact-message/privacy checks and production logging unchanged.
 
 - **Windows CI / modal test isolation (#2580, PR #2583):** The native action
   prompt is eligible on Linux/macOS, not Windows. Mocking only native while
