@@ -1488,6 +1488,13 @@ class DaemonState:
                     time.time() - self._last_project_config_reload_at
                 )
 
+            mcp_config = (self._config or {}).get("mcp_server", {})
+            if not isinstance(mcp_config, dict):
+                mcp_config = {}
+            proactive_level = mcp_config.get("proactive_level", "low")
+            if proactive_level not in ("low", "medium", "high", "paused"):
+                proactive_level = "low"
+
             return {
                 "version": self._get_version(),
                 "uptime_seconds": uptime,
@@ -1518,6 +1525,8 @@ class DaemonState:
                 "host_agent_cli_protection_enabled": self._host_agent_cli_protection_enabled(),
                 "host_agent_cli_protection_scope": "global-only",
                 "mcp_installed": self._mcp_installed,
+                "mcp_proactive_level": proactive_level,
+                "mcp_enabled": mcp_config.get("enabled", True) is True,
                 "paused_dirs": self._get_paused_dirs_locked(),
                 "active_sessions": self._get_active_sessions_locked(),
                 "active_project_dirs": sorted(

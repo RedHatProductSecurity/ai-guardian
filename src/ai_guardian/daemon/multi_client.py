@@ -241,6 +241,8 @@ class MultiDaemonClient:
         if target.runtime == "local":
             return self._local_pause(target, minutes)
         result = self._rest_request(target, "POST", "/api/pause", {"minutes": minutes})
+        if target.runtime == "ssh":
+            return self._scoped_acknowledged(result, "paused")
         return result is not None
 
     def send_resume(self, target: DaemonTarget) -> bool:
@@ -248,6 +250,8 @@ class MultiDaemonClient:
         if target.runtime == "local":
             return self._local_resume(target)
         result = self._rest_request(target, "POST", "/api/resume")
+        if target.runtime == "ssh":
+            return self._scoped_acknowledged(result, "resumed")
         return result is not None
 
     def send_pause_dir(
@@ -338,6 +342,10 @@ class MultiDaemonClient:
 
     def check_pip_available(self, target: DaemonTarget) -> bool:
         """Check whether pip is available on the target."""
+        if target.runtime == "ssh":
+            return self._ssh_run(
+                target, ["-m", "pip", "--version"], timeout=10, python=True
+            )[0]
         try:
             if target.runtime == "local":
                 result = subprocess.run(
@@ -402,6 +410,14 @@ class MultiDaemonClient:
                 output = result.stdout + result.stderr
                 return (result.returncode == 0, output)
 
+            if target.runtime == "ssh":
+                args = ["-m", "pip", "install"]
+                if not version:
+                    args.append("--upgrade")
+                return self._ssh_run(
+                    target, args + [pkg_spec], timeout=timeout, python=True
+                )
+
             # Remote targets (container/kubernetes)
             cmd = ["pip", "install"]
             if not version:
@@ -422,14 +438,49 @@ class MultiDaemonClient:
     def _send_daemon_command(self, target: DaemonTarget, command: str) -> bool:
         """Send a daemon subcommand via exec to a remote target."""
         cmd = ["ai-guardian", "daemon", command]
+        if target.runtime == "ssh":
+            return self._ssh_run(target, cmd)[0]
         if target.runtime == "container":
             return self._container_exec(target, cmd) is not None
         if target.runtime == "kubernetes":
             return self._kubectl_exec(target, cmd) is not None
         return False
 
+    @staticmethod
+    def _ssh_run(target, args, *, timeout=60, python=False):
+        from ai_guardian.daemon.ssh_commands import CLI_UNAVAILABLE
+        from ai_guardian.daemon.ssh_storage import SSHConnectionError
+
+        try:
+            if target.ssh_commands is None:
+                raise SSHConnectionError(CLI_UNAVAILABLE)
+            success, output = target.ssh_commands.run(
+                args, timeout=timeout, python=python
+            )
+            if not success:
+                target.error_message = (
+                    output or "Remote command failed. Check the VM in Terminal."
+                )
+            return success, output
+        except SSHConnectionError as exc:
+            target.error_message = str(exc)
+            return False, str(exc)
+
+    def send_reload(self, target: DaemonTarget) -> bool:
+        """Reload only the selected daemon and require its acknowledgement."""
+        if target.runtime == "local":
+            from ai_guardian.daemon.client import send_reload_config
+
+            return send_reload_config()
+        result = self._rest_request(target, "POST", "/api/reload")
+        return self._scoped_acknowledged(result, "config_reloaded")
+
     def open_console(self, target: DaemonTarget, panel: Optional[str] = None):
         """Open console for the target daemon."""
+        if target.runtime == "ssh":
+            from ai_guardian.tray.menu import open_web_console, PANEL_TO_WEB_PATH
+
+            return open_web_console(target.name, PANEL_TO_WEB_PATH.get(panel or "", ""))
         cmd = ["ai-guardian", "console"]
         if panel:
             cmd.extend(["--panel", panel])
@@ -443,6 +494,18 @@ class MultiDaemonClient:
 
     def open_shell(self, target: DaemonTarget):
         """Open an interactive shell for the target daemon."""
+        if target.runtime == "ssh":
+            from ai_guardian.daemon.ssh_commands import CLI_UNAVAILABLE
+            from ai_guardian.daemon.ssh_storage import SSHConnectionError
+
+            if target.ssh_commands is None:
+                raise SSHConnectionError(CLI_UNAVAILABLE)
+            return _launch_in_terminal(
+                target.ssh_commands.command(interactive=True, cwd=target.working_dir),
+                # A failed SSH login must leave its diagnostic readable. The
+                # launcher waits for dismissal; it never opens a local shell.
+                keep_open=True,
+            )
         if target.runtime == "local":
             self._local_shell(cwd=getattr(target, "working_dir", None))
         elif target.runtime == "container":
@@ -453,6 +516,18 @@ class MultiDaemonClient:
     def open_doctor(self, target: DaemonTarget):
         """Open doctor for the target daemon in a new terminal."""
         cmd = ["ai-guardian", "doctor"]
+        if target.runtime == "ssh":
+            from ai_guardian.daemon.ssh_commands import CLI_UNAVAILABLE
+            from ai_guardian.daemon.ssh_storage import SSHConnectionError
+
+            if target.ssh_commands is None:
+                raise SSHConnectionError(CLI_UNAVAILABLE)
+            return _launch_in_terminal(
+                target.ssh_commands.command(
+                    cmd, interactive=True, cwd=target.working_dir
+                ),
+                keep_open=True,
+            )
         if target.runtime == "local":
             from ai_guardian.daemon import get_executable_command
 

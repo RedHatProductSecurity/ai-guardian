@@ -1,6 +1,42 @@
 """SSH tray menus use cached state; every action runs outside the GUI thread."""
 
 import threading
+from copy import copy
+
+
+def target_action(tray, target, callback):
+    """Capture the selected connection generation before leaving the GUI thread."""
+
+    def action(icon=None, _item=None):
+        from ai_guardian.tray.dialog_placement import _get_tray_screen_bounds
+        from ai_guardian.tray.plugins import show_dialog
+
+        bounds = _get_tray_screen_bounds(icon)
+        selected = copy(target)
+
+        def run():
+            from ai_guardian.daemon.ssh_storage import SSHConnectionError
+            from ai_guardian.daemon.rest_transport import DaemonConnectionError
+
+            try:
+                if not any(item is target for item in tray._targets):
+                    raise SSHConnectionError(
+                        "This SSH connection was removed. Refresh the tray and select a saved connection."
+                    )
+                result = callback(selected)
+                if result is False:
+                    raise SSHConnectionError(
+                        selected.error_message
+                        or "The VM did not confirm the action. Check its connection and daemon version; no workstation action was requested."
+                    )
+            except (SSHConnectionError, DaemonConnectionError, OSError) as exc:
+                show_dialog(target.name, str(exc), screen_bounds=bounds)
+            finally:
+                tray._refresh_event.set()
+
+        threading.Thread(target=run, daemon=True, name="ssh-tray-action").start()
+
+    return action
 
 
 def _worker(callback):
@@ -156,69 +192,8 @@ def open_management(tray):
 
 
 def build_items(tray, pystray):
-    from ai_guardian.daemon.ssh_tunnel import POLLING_ERROR
-    from ai_guardian.tray import menu
-    from ai_guardian.tray.plugins import show_dialog
-
-    items = []
-    for target in tray._targets:
-        if target.runtime != "ssh":
-            continue
-
-        def control(minutes, target=target):
-            if tray._multi_client:
-                if minutes:
-                    tray._multi_client.send_pause(target, minutes)
-                else:
-                    tray._multi_client.send_resume(target)
-                tray._refresh_event.set()
-
-        def status(target=target):
-            message = target.error_message or f"{target.name}: {target.status}"
-            if (
-                target.name in getattr(tray, "_ask_forwarding_failed", set())
-                and POLLING_ERROR not in message
-            ):
-                message += "\n" + POLLING_ERROR
-            show_dialog("SSH daemon", message)
-
-        def console(target=target):
-            if tray._ensure_web_console_ready():
-                menu.open_web_console(target.name)
-
-        items.append(
-            pystray.MenuItem(
-                lambda _item, target=target: tray._menu._version_annotated_label(
-                    target
-                ),
-                pystray.Menu(
-                    pystray.MenuItem("Status", _worker(status)),
-                    pystray.MenuItem(
-                        "Pause...",
-                        pystray.Menu(
-                            pystray.MenuItem(
-                                "5 minutes", _worker(lambda control=control: control(5))
-                            ),
-                            pystray.MenuItem(
-                                "30 minutes",
-                                _worker(lambda control=control: control(30)),
-                            ),
-                            pystray.MenuItem(
-                                "Resume", _worker(lambda control=control: control(0))
-                            ),
-                        ),
-                        enabled=lambda _item, target=target: target.status
-                        in {"running", "paused"},
-                    ),
-                    pystray.MenuItem("Web Console", _worker(console)),
-                    pystray.MenuItem(
-                        "Manage SSH connection...",
-                        _worker(lambda: open_management(tray)),
-                    ),
-                ),
-            )
-        )
-    return [*items, *build_candidate_items(tray, pystray)]
+    """SSH daemon entries now come from the shared per-daemon menu builder."""
+    return build_candidate_items(tray, pystray)
 
 
 def build_candidate_items(tray, pystray):
@@ -260,7 +235,13 @@ def build_candidate_items(tray, pystray):
                 _worker(lambda: show_dialog("SSH alias discovery", notices)),
             )
         )
-    label = f"SSH aliases available to pair ({len(state['aliases'])})"
+    if not children:
+        return []
+    label = (
+        f"SSH aliases available to pair ({len(state['aliases'])})"
+        if state["aliases"]
+        else "SSH alias discovery notice"
+    )
     return [
         pystray.MenuItem(
             label, pystray.Menu(*children) if children else None, enabled=bool(children)

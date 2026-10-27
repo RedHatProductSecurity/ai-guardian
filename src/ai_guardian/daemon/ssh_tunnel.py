@@ -114,6 +114,7 @@ class SSHPairing:
     host: str
     port: int
     daemon_name: str
+    cli: dict | None = field(default=None, repr=False, compare=False)
 
     @classmethod
     def from_metadata(cls, host, value):
@@ -193,7 +194,11 @@ class SSHPairing:
                 }
             )
             remote_host = "127.0.0.1" if value["host"] == "localhost" else value["host"]
-            return cls(profile, remote_host, port, name)
+            from ai_guardian.daemon.ssh_commands import validate_cli_context
+
+            return cls(
+                profile, remote_host, port, name, validate_cli_context(value.get("cli"))
+            )
         except SSHConnectionError:
             raise
         except (

@@ -35,27 +35,39 @@ If not set, defaults to `hostname`. For containers, the priority is:
 
 ## Tray Menu Structure
 
-Each discovered daemon appears as a top-level menu item with its own submenu:
+With multiple daemons, each has a submenu; one daemon uses the same applicable
+entries in a flat layout. This includes SSH-managed VMs:
+
+Local daemons are always first. All other daemons are sorted alphabetically by
+their displayed name, ignoring case, across SSH/container/Kubernetes/manual
+transports. Discovery refresh preserves that ordering and the selected target.
 
 ```
 ● local                         >
-  Statistics                    >
-  Console
-  Violations
-  Metrics
-  Mode: auto                    >
-  MCP Proactive: low            >
+  Status                        >
   Pause...                      >
-  Resume
-  Stop daemon
-  Restart daemon
-○ my-container (container)      >
+  Terminal
   Console
   Violations
-  Metrics
-  Mode: auto                    >
+  Metrics & Audit
+  Statistics                    >
   MCP Proactive: low            >
-  Start daemon
+  Working Dir: ~
+  Maintenance                   >
+  About
+● ssh-my-vm                     >
+  Status                        >
+  Pause...                      >
+  Terminal
+  Console
+  Violations
+  Metrics & Audit
+  Statistics                    >
+  MCP Proactive: low            >
+  Working Dir: ~
+  Maintenance                   >
+  About
+  Manage SSH connection...
 ─────────────
 Restart
 Quit
@@ -65,7 +77,8 @@ About
 ```
 
 - **●** Running daemon — full submenu with Statistics, Pause/Resume, Stop/Restart
-- **○** Stopped daemon — limited submenu with Console, Mode, Start daemon
+- **○** Offline SSH daemon — cached diagnostics, Terminal and management remain;
+  REST-dependent actions are unavailable and **Start daemon** is offered.
 - **⚠●** Running daemon with stale code detected — shows orange dot; local daemons show a **Restart daemon (stale code)** item; remote/container/Kubernetes daemons show a **Rebuild image** hint instead
 
 The MCP Proactive submenu includes `low`, `medium`, `high`, and `paused`.
@@ -328,8 +341,9 @@ authentication is not offered by this non-interactive workflow.
    choose **Trust and add daemon**. Cancel saves nothing. HTTPS verification and
    authenticated status must succeed before saving. SSH private keys/passwords
    are never read into or stored by AI Guardian; the daemon token is never shown.
-4. The target appears as `ssh-<destination>` with cached state and asynchronous
-   Pause/Resume controls. Open **Web Console** for other REST-backed controls.
+4. The target appears as `ssh-<destination>` with cached state and the standard
+   **Console**, **Violations**, **Metrics & Audit**, **Statistics**, **Terminal**,
+   **Maintenance** and applicable **MCP** controls. Actions run in background workers.
    **Manage SSH connection...** returns to the picker for removal.
 
 The owned OpenSSH process adds an explicit `127.0.0.1` local forward to the remote
@@ -348,9 +362,63 @@ tray-initiated authenticated requests. This registration requires the #2552
 daemon implementation; older HTTPS daemons can provide status/control but show
 an explicit upgrade warning for permission prompts. Callback-only live trace
 push is not available over this connection. Existing trace retrieval/catch-up
-uses tray-initiated REST instead; no reverse SSH forward is created. Interactive
-Terminal, remote CLI install/upgrade, and CLI daemon stop/restart are not exposed
-by the SSH tray submenu. Use ordinary authorized administration for those tasks.
+uses tray-initiated REST instead; no reverse SSH forward is created.
+
+#### SSH menu/action parity audit
+
+SSH targets share the normal per-daemon menu construction and ordering, rather
+than a reduced transport-specific submenu. The following are intentional details
+and runtime differences:
+
+| Entry | SSH behavior and limitations |
+|---|---|
+| Status / Statistics | Selected VM's cached counters, pause scopes, version and connection/prompt warnings; menu rendering never starts SSH or requests REST. Offline targets do not present unavailable counters as live data. |
+| Console / Violations / Metrics & Audit | Open the workstation-hosted Console at the selected saved VM's route, never a browser/server on the VM or the workstation daemon's data. REST-backed navigation is disabled while offline. |
+| Pause... | Same global durations, individual sessions and all-sessions-in-directory groups. Requests stay on the selected connection; missing scope support or failed acknowledgement is reported, never broadened. |
+| Terminal | A workstation terminal runs system OpenSSH to the saved destination, retaining host-key checks and alias/jump-host settings. The terminal stays open after SSH exits so login/connection errors remain readable until dismissal. No local shell/container fallback; an unavailable terminal reports failure. |
+| Maintenance | The VM's daemon-scoped plugins, with bundled defaults while remote definitions are unavailable. Stop/Restart/Reload and scanner installation run as the SSH user on that VM. Bundled **View Doctor** opens its workstation Console health page; remote CLI diagnostics are also supported by the SSH transport. Nonzero exit/timeout is not reported as success. |
+| MCP | Installation/enabled state and configured proactive level come from the VM, not workstation settings. If older/main daemons omit the new stats fields, the connection worker reads the existing authenticated `GET /api/config?scope=global` endpoint. Supported level changes write only that VM's global configuration through authenticated REST, which reloads it. A daemon-wide pause changes the displayed effective level, not the saved choice. Only absent/invalid capabilities show unavailable controls; installation remains VM-side setup, not workstation setup. |
+| Working Dir | An optional absolute **VM** directory for Terminal and target plugin commands, entered through the shared native-first form dispatcher. No saved selection or an empty value means remote home; the workstation home is never sent as a default `cd`. Explicit VM paths display literally, not shortened against the workstation's home. This is not a workstation folder picker or a project/configuration-scope change. Cancel saves nothing. |
+| Start daemon | Uses the same SSH user, interpreter and configuration/state paths as the last authenticated daemon. Available after stopping it in this tray session; it does not provision a new daemon. |
+| Match Tray Version | Available under the normal version-mismatch rules when pip exists in that VM installation. Runs that installation's Python/pip and reports restart failure separately. UV/pipx-managed or externally managed installations without pip require their original installer, accessible through Terminal. A development tray version is not an installable release. Global tray self-upgrade remains a separate workstation action. |
+| About | Fetches the selected VM's information; an unavailable remote response is explicitly identified, not replaced with unlabeled workstation information. |
+| Manage SSH connection... | Retained in both flat and multi-daemon layouts. Removal discards saved pairing/owned tunnels, never stops the VM daemon. |
+| Container/Kubernetes/OpenShell controls | Container creation, pod operations, sandbox Connect/Manage and image-rebuild hints do not apply to SSH VMs and are not copied. Version/connection warnings still apply. |
+
+The private PID metadata now publishes the daemon's actual Python interpreter
+and configuration/state directories. The fixed read-only SSH probe retrieves
+that context without executing it. For existing Linux daemons from main without
+these new fields, the same probe uses the same-user running daemon's procfs
+arguments and executable identity to prove its interpreter. It preserves a venv
+interpreter link rather than resolving it to the base Python, and reads neither
+process environments nor unrelated processes. It does not execute a guessed
+`ai-guardian` from PATH. Only after verified TLS and authenticated
+status does the tray enable its use for explicit CLI actions; arbitrary virtualenv
+paths work even when `ai-guardian` is absent from non-interactive PATH. These
+paths contain no daemon token and are not substituted with workstation paths.
+Context is retained **in memory** across a daemon stop/network outage, but not
+across tray restart. If the tray starts while the VM daemon is stopped, or
+the running installation cannot be proven (including older non-Linux daemons
+without this metadata), CLI actions explain that context is unavailable. Start
+the daemon through Terminal and reconnect; newer daemons publish portable PID
+metadata. Updating package files alone does not replace a running process. MCP
+on current main does **not** require an upgrade to this feature branch: its
+existing configuration endpoint supplies the missing menu state. Do not
+interpret missing MCP capability fields as proof that MCP is not installed.
+
+Remote plugin command maps marked `run_on_target` resolve against the VM's
+reported POSIX platform, not the desktop's platform. Existing bundled bare
+`ai-guardian` Maintenance commands are also SSH-bound, including older bundles
+without that flag. Workstation browser actions open locally without invoking a
+remote shell. Other workstation-command plugins, remote global-scope plugins
+and multi-target actions inside a VM-scoped menu are intentionally unavailable;
+use a workstation/global plugin for local actions and explicit target execution
+for VM commands. No unsupported command falls back to workstation execution.
+
+Menu callbacks retain the displayed VM and its clicked tunnel generation across
+discovery reordering/reconnection. Removal or identity change invalidates remote
+commands. All network/process work runs outside menu-building and GUI callbacks.
+No additional manually maintained tunnel, root installation or sudo is needed.
 
 Permission responses stay bound to the tunnel generation that fetched them.
 Prompt IDs also contain a daemon-instance nonce, so a dialog left open across a
@@ -433,7 +501,10 @@ searched. Actual connections still delegate users, ports, keys, jump hosts and
 connection predicates to the system OpenSSH client.
 
 At tray startup and each background refresh, **SSH aliases available to pair (N)**
-appears as a pending-enrollment menu, separate from saved/connected targets. Each
+appears as a pending-enrollment menu only when aliases are available, separate
+from saved/connected targets. With zero aliases it disappears, not a greyed `(0)`
+entry; discovery warnings remain accessible as **SSH alias discovery notice**.
+The **Discover SSH aliases...** settings entry remains available in either case. Each
 alias offers **Review discovered daemon** and **Dismiss alias**. The loopback Web
 Console picker refreshes the equivalent list automatically. Changing either the
 SSH config or these discovery settings takes effect on the next refresh, without
@@ -854,7 +925,7 @@ Each daemon exposes a REST API for tray communication:
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
 | `/api/status` | GET | Daemon status (name, version, paused, middleware_pause, menu_tags, config_source, config_read_only) |
-| `/api/stats` | GET | Full stats, including active stable-ID hook sessions (`active_sessions`) |
+| `/api/stats` | GET | Full stats, including active stable-ID hook sessions (`active_sessions`), remote MCP installation/enabled state and configured proactive level (`mcp_installed`, `mcp_enabled`, `mcp_proactive_level`) |
 | `/api/middleware/status` | GET | Effective daemon pause for OpenShell middleware; accepts optional `project_dir` |
 | `/api/pause` | POST | Pause scanning (`{"minutes": 15}`) |
 | `/api/resume` | POST | Resume scanning |
@@ -909,14 +980,18 @@ The REST port is configurable via `daemon.rest_port` (default 63152, 0 = OS-assi
 
 Each daemon's submenu routes actions to the correct transport:
 
-| Action | Local | Container | Kubernetes |
-|--------|-------|-----------|------------|
-| Statistics | Unix socket | REST API | REST API |
-| Console | New terminal | `podman exec -it` | `kubectl exec -it` |
-| Pause/Resume | Unix socket | REST API | REST API |
-| Start/Stop/Restart | Subprocess | `podman exec` | `kubectl exec` |
+| Action | Local | Container | Kubernetes | SSH VM |
+|--------|-------|-----------|------------|--------|
+| Statistics | Unix socket | REST API | REST API | Background-polled HTTPS cache |
+| Console | Workstation Console | Workstation Console | Workstation Console | Workstation Console scoped to VM |
+| Terminal | Local shell | `podman exec -it` | `kubectl exec -it` | Saved OpenSSH destination |
+| Pause/Resume | Unix socket | REST API | REST API | Authenticated managed HTTPS tunnel |
+| Start/Stop/Restart | Subprocess | `podman exec` | `kubectl exec` | SSH user's actual installation/context |
 
-> **In-progress guard**: Restart actions are protected against double-clicks. Once a restart is triggered, the menu item is disabled and the tray polls the daemon until it responds again (up to 10 seconds) before re-enabling the item.
+> **In-progress guard**: Local/container restart actions retain their existing
+> double-click guard and status polling. SSH CLI actions report their actual exit
+> status; the connection worker independently discovers daemon stop/start and
+> reconnects with backoff, without reading the workstation PID file.
 
 ## CLI Reference
 

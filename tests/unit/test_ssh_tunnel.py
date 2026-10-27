@@ -387,6 +387,14 @@ def test_close_only_owned_process_escalates_once(tmp_path, sample):
     "state",
     [
         "running",
+        "running_with_cli",
+        pytest.param(
+            "running_with_legacy_cli",
+            marks=pytest.mark.skipif(
+                sys.platform != "linux",
+                reason="Legacy interpreter proof uses Linux procfs",
+            ),
+        ),
         "stopped",
         "legacy",
         "wrong_owner_material",
@@ -397,7 +405,9 @@ def test_close_only_owned_process_escalates_once(tmp_path, sample):
         "malformed",
     ],
 )
-def test_fixed_remote_probe_reads_actual_runtime_metadata(tmp_path, sample, state):
+def test_fixed_remote_probe_reads_actual_runtime_metadata(
+    tmp_path, sample, state, request
+):
     pairing, _, identity = sample
     config = tmp_path / "config"
     runtime = tmp_path / "state"
@@ -421,13 +431,45 @@ def test_fixed_remote_probe_reads_actual_runtime_metadata(tmp_path, sample, stat
             }
         )
     )
+    daemon_pid = os.getpid()
+    if state == "running_with_legacy_cli":
+        interpreter = tmp_path / "actual venv" / "bin" / "python"
+        interpreter.parent.mkdir(parents=True)
+        interpreter.symlink_to(sys.executable)
+        (tmp_path / "ai_guardian.py").write_text("import time\ntime.sleep(30)\n")
+        process = subprocess.Popen(
+            [str(interpreter), "-m", "ai_guardian", "daemon", "start"],
+            cwd=tmp_path,
+            env={**os.environ, "PYTHONPATH": str(tmp_path)},
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        def cleanup():
+            process.terminate()
+            process.wait(timeout=5)
+
+        request.addfinalizer(cleanup)
+        daemon_pid = process.pid
     (runtime / "daemon.pid").write_text(
         json.dumps(
             {
-                "pid": os.getpid(),
+                "pid": daemon_pid,
                 "rest_port": 45678,
                 "name": "test",
                 **({} if state == "legacy" else {"rest_scheme": "https"}),
+                **(
+                    {
+                        "cli": {
+                            "python": "/vm/custom venv/bin/python",
+                            "config_dir": str(config),
+                            "state_dir": str(runtime),
+                            "system": "linux",
+                        }
+                    }
+                    if state == "running_with_cli"
+                    else {}
+                ),
             }
         )
     )
@@ -465,9 +507,24 @@ def test_fixed_remote_probe_reads_actual_runtime_metadata(tmp_path, sample, stat
     assert result.returncode == 0
     assert result.stderr == ""
     data = json.loads(result.stdout)
-    if state == "running":
+    if state in ("running", "running_with_cli", "running_with_legacy_cli"):
         assert data["port"] == 45678
         assert data["token"] == pairing.profile.token
+        context = SSHPairing.from_metadata("alias", data).cli
+        assert context == (
+            {
+                "python": (
+                    str(interpreter)
+                    if state == "running_with_legacy_cli"
+                    else "/vm/custom venv/bin/python"
+                ),
+                "config_dir": str(config),
+                "state_dir": str(runtime),
+                "system": "linux",
+            }
+            if state in ("running_with_cli", "running_with_legacy_cli")
+            else None
+        )
     else:
         assert data == {
             "status": {

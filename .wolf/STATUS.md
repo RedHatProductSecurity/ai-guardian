@@ -9,6 +9,85 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2592 implementation and reporter follow-up — 2026-10-27
+
+- User authorized implementation with **go**; all changes remain local/uncommitted
+  on existing managed branch `2592`. Original ticket was read once; no clone sync,
+  commit, push, PR or installed-runtime/configuration changes by the agent.
+- SSH now shares applicable flat/nested per-daemon menus: status/statistics,
+  Console/Violations/Metrics, Terminal, Maintenance, scoped pauses, remote MCP,
+  About/working directory/upgrade and retained connection management. Cached menu
+  rendering stays nonblocking; callbacks retain target/tunnel identity across
+  refresh/reordering/removal. Remote CLI uses verified SSH, actual interpreter and
+  config/state paths, never workstation fallback. Host-key/TLS/prompt protections
+  and managed dynamic-port reconnect are retained.
+- Reporter corrections: local daemons first, remaining names alphabetic ignoring
+  case; hide empty alias `(0)` but retain warnings/settings; keep terminal errors
+  open. Remote main lacks new metadata despite a healthy MCP Doctor result, so
+  use its existing authenticated **global** config API for missing MCP state and
+  read-only same-user Linux procfs proof for its actual venv interpreter. The
+  earlier main-upgrade advice was incomplete and was corrected explicitly.
+- Reporter then identified Terminal's erroneous workstation-home `cd`. Fixed
+  discovery to apply only explicitly saved SSH directories or remote home, also
+  clearing inherited defaults on refresh. Preserve explicit selections, empty
+  resets, local behavior and literal remote path labels. New discovery-aware
+  regressions reproduced this before the fix and pass afterward.
+- Source parity audit, modal matrix/manual steps, changelog and 13-file SSH
+  release-readiness gate are updated. Simplification reviewed; new regressions
+  include real scoped HTTPS and isolated actual procfs/venv behavior, never live
+  VM access. No new project dependency; temporary coverage tool is Apache-2.0.
+- **Validation complete:** **1,975 related tests pass**, including complete
+  SSH/modal/About/session-pause/MCP-pause UX files and related daemon server,
+  state/discovery/tray/client/plugins/working-dir/storage/TLS/Web unit files.
+  Coverage: **86.5%** added executable lines, **93.1%** SSH command/connection/
+  tunnel core, **70.8%** all selected modules including unchanged code. Artifacts:
+  `/tmp/opencode/guardian-2592.coverage` and its `.json` report. Embedded probe is
+  exercised by actual isolated Python/procfs tests, not line coverage of its string.
+  Black py310, Ruff, Pylint E, Mypy (321 source files), JSON/YAML/readiness paths
+  and whitespace checks pass. No full-suite/integration/container scenarios run.
+- DAF progress note saved; local validation/remaining qualification checklist:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2592#issuecomment-6449289798.
+- **Next:** have user
+  restart the workstation tray to load source changes, then confirm actual local
+  plus current-main VM menus/MCP/Terminal/Maintenance/reconnect/removal. Native
+  macOS/Windows/GNOME/KDE, VM actions and user-reported health state are not
+  agent-verified. Do not claim all acceptance/manual qualification complete.
+  OpenWolf owns automatic anatomy/memory bookkeeping; earlier sections are history.
+
+## Issue #2592 session initialization — 2026-10-27
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2592`; confirmed the active repository,
+  existing branch `2592` and initially clean worktree. Read the qualified GitHub
+  ticket exactly once. This real-workspace development session needs no clone sync.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  markdown and hierarchical skills are absent. Loaded DAF workflow/Git/OpenWolf
+  guidance, the project protocol, handoff and relevant learning constraints.
+  Project OpenWolf is loaded; release is unrelated. Leave titles DAF-managed.
+- User requested initialization only; implementation has not started. Next:
+  audit the complete local/container per-daemon menu against SSH, beginning with
+  `tray/menu_builder.py`, `tray/ssh_connections.py` and `daemon/multi_client.py`.
+  Record applicable parity, intentional runtime differences and explicit unavailable
+  states before sharing menu construction and adding transport-aware handlers.
+- Cover selected-VM Console/Violations/Metrics navigation, cached status/statistics,
+  terminal, lifecycle/reload/diagnostics/scanner maintenance, plugin routing, MCP
+  scope, working directory/About/upgrade and retained SSH management/removal.
+  Resolve remote executable/virtualenv context; never fall back to workstation
+  execution or present unsupported actions as successful.
+- Preserve verified SSH destinations/host keys, explicit TLS trust, authenticated
+  managed tunnels, dynamic REST ports, generation-safe callbacks and reconnection.
+  Keep network/process work off the GUI/menu-building thread, tolerate older-daemon
+  fields and offline targets, and reuse shared dispatch for any new modal.
+- Plan isolated related unit tests and complete affected UX contracts for labels,
+  single/multi layouts, target isolation, plugin routing, capability/offline states,
+  refresh/reordering/removal/reconnect and existing local/container behavior.
+  Update `docs/MULTI_DAEMON_TRAY.md` and Unreleased changelog, run related tests and
+  required linters after implementation, and retain actual local-plus-VM manual
+  qualification as a separate explicitly authorized check.
+- No code changes, tests, tracker updates, live SSH/credential access, runtime or
+  configuration changes, commits, pushes or PRs. Only this handoff was updated;
+  OpenWolf owns automatic anatomy/memory bookkeeping. Earlier entries are history.
+
 ## Issue #2591 tray SSH discovery settings — locally validated, 2026-10-27
 
 - User authorized implementation with **go** after initialization. Continued

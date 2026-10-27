@@ -1031,6 +1031,18 @@ class DaemonServer:
         pid_path = get_pid_path()
         make_private_directory(pid_path.parent)
         pid_info: Dict[str, Any] = {"pid": os.getpid()}
+        # Preserve the actual installation, including arbitrary virtualenvs. This
+        # is private SSH protocol metadata, not a workstation executable path.
+        from ai_guardian.config.utils import get_config_dir, get_state_dir
+        from ai_guardian.daemon import get_executable_command
+        import platform
+
+        pid_info["cli"] = {
+            "python": get_executable_command()[0],
+            "config_dir": str(get_config_dir().absolute()),
+            "state_dir": str(get_state_dir().absolute()),
+            "system": platform.system().lower(),
+        }
         pid_info.update(self._rest_status_fields())
         if self._use_tcp and self._tcp_port:
             pid_info["port"] = self._tcp_port

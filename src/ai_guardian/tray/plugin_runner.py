@@ -43,6 +43,8 @@ class TrayPluginMenuBuilder:
         self._last_plugins_hash = {}
         self._global_plugins = []
         self._daemon_global_plugins = {}
+        self._ssh_plugins = {}
+        self._bound_plugins = {}
 
     @staticmethod
     def _capture_tray_screen_bounds(icon=None):
@@ -65,6 +67,15 @@ class TrayPluginMenuBuilder:
         seen_global_names = set()
         reachable_slots = set()
         for i, target in enumerate(self._tray._targets):
+            if target.runtime == "ssh" and id(target) not in self._ssh_plugins:
+                from ai_guardian.tray.plugins import _load_bundled_plugins
+
+                # Background-only fallback for offline/older daemons. These are
+                # our standard definitions; execution is still SSH-bound.
+                self._ssh_plugins[id(target)] = (
+                    target,
+                    [p for p in _load_bundled_plugins() if p.scope != "global"],
+                )
             is_reachable = target.status in ("running", "paused")
             if not is_reachable and target.runtime != "local":
                 continue
@@ -90,6 +101,8 @@ class TrayPluginMenuBuilder:
                     daemon_tags = self._get_daemon_menu_tags(target)
                     tag_hash = json_mod.dumps(daemon_tags, sort_keys=True)
                     combined_hash = data_hash + tag_hash
+                    if target.runtime == "ssh":
+                        combined_hash += str(id(target))
                     if self._last_plugins_hash.get(i) != combined_hash:
                         from ai_guardian.tray.plugins import (
                             dict_to_plugins,
@@ -102,12 +115,36 @@ class TrayPluginMenuBuilder:
                             daemon_only,
                             daemon_tags,
                         )
+                        if target.runtime == "ssh":
+                            self._ssh_plugins[id(target)] = (
+                                target,
+                                self._daemon_plugins[i],
+                            )
+                        else:
+                            self._bound_plugins[id(target)] = (
+                                target,
+                                self._daemon_plugins[i],
+                            )
                         self._last_plugins_hash[i] = combined_hash
-                        self._daemon_global_plugins[i] = [
-                            p for p in plugins if p.scope == "global"
-                        ]
+                        self._daemon_global_plugins[i] = (
+                            [p for p in plugins if p.scope == "global"]
+                            if target.runtime != "ssh"
+                            else []
+                        )
             except Exception:
-                pass  # intentionally silent — best-effort operation
+                logger.warning(
+                    "Could not refresh target plugin definitions", exc_info=True
+                )
+        self._ssh_plugins = {
+            key: value
+            for key, value in self._ssh_plugins.items()
+            if any(t is value[0] for t in self._tray._targets)
+        }
+        self._bound_plugins = {
+            key: value
+            for key, value in self._bound_plugins.items()
+            if any(t is value[0] for t in self._tray._targets)
+        }
         for i in reachable_slots:
             for p in self._daemon_global_plugins.get(i, []):
                 if p.dedup_key not in seen_global_names:
@@ -121,6 +158,8 @@ class TrayPluginMenuBuilder:
 
     def _get_daemon_menu_tags(self, target):
         """Get menu_tags for a daemon target."""
+        if target.runtime == "ssh":
+            return (target.stats or {}).get("menu_tags", [])
         if target.runtime == "local":
             from ai_guardian.daemon import get_local_menu_tags
 
@@ -156,8 +195,18 @@ class TrayPluginMenuBuilder:
             substitute_target_vars,
         )
 
-        resolved_cmd = resolve_command(plugin_item_dict["command"])
+        resolved_cmd = tray_plugins.resolve_target_command(
+            plugin_item_dict["command"],
+            target,
+            plugin_item_dict.get("run_on_target", False),
+        )
         if resolved_cmd is None:
+            if target is not None and target.runtime == "ssh":
+                tray_plugins.show_dialog(
+                    plugin_item_dict.get("label") or "AI Guardian",
+                    "This plugin has no command for the VM's operating system. Update its platform commands on the VM.",
+                    **_screen_bounds_kwargs(screen_bounds),
+                )
             return
 
         resolved_cmd = substitute_target_vars(resolved_cmd, target)
@@ -578,6 +627,29 @@ class TrayPluginMenuBuilder:
                 each plugin's visibility. When None, plugins are always
                 visible if they exist.
         """
+        if not isinstance(daemon_slot, int):
+            if daemon_slot.runtime == "ssh":
+                get_plugins = lambda: self._ssh_plugins.get(
+                    id(daemon_slot), (None, [])
+                )[1]
+            else:
+                index = next(
+                    (i for i, t in enumerate(self._tray._targets) if t is daemon_slot),
+                    -1,
+                )
+                self._bound_plugins.setdefault(
+                    id(daemon_slot), (daemon_slot, self._get_daemon_plugins(index))
+                )
+                get_plugins = lambda: self._bound_plugins.get(
+                    id(daemon_slot), (None, [])
+                )[1]
+            return self._build_plugin_slots(
+                get_plugins,
+                lambda: daemon_slot,
+                self._MAX_PLUGIN_SLOTS,
+                self._MAX_ITEMS_PER_PLUGIN,
+                visibility_guard,
+            )
         get_plugins = lambda: self._get_daemon_plugins(daemon_slot)
         get_target = lambda: (
             self._tray._targets[daemon_slot]
@@ -667,6 +739,7 @@ class TrayPluginMenuBuilder:
             depth: Current nesting depth (0 = direct plugin children).
         """
         slots = []
+        presented = {}
 
         for i_idx in range(max_items):
             i_slot = i_idx
@@ -674,6 +747,9 @@ class TrayPluginMenuBuilder:
             def _cmd_label(_item, ix=i_slot):
                 items_list = get_items_fn()
                 if ix < len(items_list):
+                    target = get_target_fn()
+                    if target is not None:
+                        presented[ix] = (items_list[ix], target)
                     return items_list[ix].label
                 return ""
 
@@ -686,17 +762,66 @@ class TrayPluginMenuBuilder:
                     return False
                 from ai_guardian.tray.plugins import resolve_command
 
-                return resolve_command(item.command) is not None
+                target = get_target_fn()
+                return (
+                    target is not None and target.runtime == "ssh"
+                ) or resolve_command(item.command) is not None
 
             def _cmd_action(ix=i_slot):
                 def action(icon, __):
                     items_list = get_items_fn()
-                    if ix >= len(items_list):
-                        return
-                    item = items_list[ix]
-                    if item.items:
-                        return
                     target = get_target_fn()
+                    if target is not None and ix in presented:
+                        item, target = presented[ix]
+                    else:
+                        if ix >= len(items_list):
+                            return
+                        item = items_list[ix]
+                        if item.items:
+                            return
+                    if target is not None and target.runtime == "ssh":
+                        from ai_guardian.tray.ssh_connections import target_action
+
+                        screen_bounds = self._capture_tray_screen_bounds(icon)
+
+                        def dispatch(selected):
+                            if item.target in ("all", "containers", "select"):
+                                from ai_guardian.daemon.ssh_storage import (
+                                    SSHConnectionError,
+                                )
+
+                                raise SSHConnectionError(
+                                    "Multi-target plugins are unavailable in a VM-scoped menu. Use an explicitly scoped global action instead."
+                                )
+                            if item.params:
+                                self._execute_plugin_command_with_params(
+                                    tray_plugins._item_to_dict(item),
+                                    target=selected,
+                                    screen_bounds=screen_bounds,
+                                )
+                            else:
+                                cmd = tray_plugins.resolve_target_command(
+                                    item.command, selected, item.run_on_target
+                                )
+                                if cmd:
+                                    tray_plugins.execute_plugin_command(
+                                        cmd,
+                                        item.type,
+                                        target=selected,
+                                        run_on_target=item.run_on_target,
+                                        label=item.label,
+                                        **_screen_bounds_kwargs(screen_bounds),
+                                    )
+                                else:
+                                    from ai_guardian.daemon.ssh_storage import (
+                                        SSHConnectionError,
+                                    )
+
+                                    raise SSHConnectionError(
+                                        "This plugin has no command for the VM's operating system. Update its platform commands on the VM."
+                                    )
+
+                        return target_action(self._tray, target, dispatch)(icon, __)
                     screen_bounds = self._capture_tray_screen_bounds(icon)
 
                     if item.target in ("all", "containers"):
@@ -761,6 +886,11 @@ class TrayPluginMenuBuilder:
                 target = get_target_fn()
                 if target is None:
                     return False
+                if target.runtime == "ssh":
+                    return (
+                        target.ssh_commands is not None
+                        and not target.ssh_commands.cancelled.is_set()
+                    )
                 return target.status in ("running", "paused")
 
             slots.append(

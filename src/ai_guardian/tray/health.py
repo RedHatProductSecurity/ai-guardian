@@ -195,6 +195,8 @@ class TrayHealthMonitor:
         try:
             if self._tray._multi_client:
                 available = self._tray._multi_client.check_pip_available(target)
+            elif target.runtime == "ssh":
+                available = False
             else:
                 import subprocess as _sp
 
@@ -279,6 +281,10 @@ class TrayHealthMonitor:
                 success, output = self._tray._multi_client.run_pip_upgrade(
                     target, tray_version
                 )
+            elif target.runtime == "ssh":
+                output = (
+                    "SSH management is unavailable; no workstation upgrade was run."
+                )
             else:
                 import subprocess as _sp
 
@@ -316,7 +322,13 @@ class TrayHealthMonitor:
                     f"Version sync complete on '{target.name}'. Restarting daemon…",
                 )
                 if self._tray._multi_client:
-                    self._tray._multi_client.send_restart(target)
+                    restarted = self._tray._multi_client.send_restart(target)
+                    if target.runtime == "ssh" and not restarted:
+                        send_notification(
+                            "AI Guardian",
+                            f"Version synced on '{target.name}', but restart was not confirmed. Start the daemon in Terminal and reconnect.",
+                        )
+                        return
                 self._version_mismatch_notified.discard(key)
                 self._daemon_versions.pop(key, None)
                 self._pip_available.pop(key, None)
@@ -347,10 +359,12 @@ class TrayHealthMonitor:
 
     def _mk_upgrade(self, slot):
         """Factory returning a click handler for multi-daemon Upgrade item."""
+        if not isinstance(slot, int) and slot.runtime == "ssh":
+            return self._tray._menu._ssh_action(slot, self._do_upgrade_daemon)
 
         def action(_, __):
-            if slot < len(self._tray._targets):
-                target = self._tray._targets[slot]
+            if not isinstance(slot, int) or slot < len(self._tray._targets):
+                target = self._tray._targets[slot] if isinstance(slot, int) else slot
                 threading.Thread(
                     target=self._do_upgrade_daemon,
                     args=(target,),

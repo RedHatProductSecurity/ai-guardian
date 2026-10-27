@@ -47,6 +47,7 @@ def _daemon_status_symbol(target, has_paused_dirs=False, has_paused_sessions=Fal
         "paused": "☾",
         "starting": "◌",
         "stopped": "⚠",
+        "offline": "○",
         "error": "✗",
         "unknown": "○",
     }.get(target.status, "○")
@@ -87,6 +88,10 @@ def daemon_status_explanation(
                 "Stopped",
                 "Daemon is not running; use Start daemon to launch it.",
             ),
+            "offline": (
+                "Offline",
+                "SSH daemon is unreachable; reconnecting automatically.",
+            ),
             "error": (
                 "Error",
                 "Daemon reported an error; use Restart to retry.",
@@ -97,7 +102,7 @@ def daemon_status_explanation(
             ),
         }
         title, reason = status_details.get(status, status_details["unknown"])
-        if status == "error" and getattr(target, "error_message", None):
+        if status in ("error", "offline") and getattr(target, "error_message", None):
             reason = " ".join(str(target.error_message).split())
             if len(reason) > 160:
                 reason = reason[:157] + "..."
@@ -319,5 +324,6 @@ def open_web_console(daemon_name="", page=""):
         if page:
             path = f"{path}/{page}"
         open_url(f"http://127.0.0.1:{port}{path}")
+        return True
     except (ValueError, OSError):
-        pass
+        return False

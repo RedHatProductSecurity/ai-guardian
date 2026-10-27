@@ -6,7 +6,7 @@ No remote package import is needed (including uv tool installations).
 """
 
 PROBE_SCRIPT = r"""
-import json, os, pathlib, stat
+import json, os, pathlib, stat, sys
 
 class UnsafeMetadata(ValueError):
     pass
@@ -35,6 +35,32 @@ def read(path, private=False, owner=False):
     finally:
         if fd is not None:
             os.close(fd)
+
+def legacy_cli_context(number, config_dir, state_dir):
+    # Main/released daemons predate PID `cli` metadata. Linux procfs can prove
+    # the actual same-user daemon interpreter without running it or guessing
+    # from PATH. Keep argv[0] (the venv link), not the resolved base Python.
+    try:
+        process = pathlib.Path('/proc') / str(number)
+        if process.stat().st_uid != os.getuid():
+            return None
+        command = read(process / 'cmdline', owner=True)
+        if len(command) > 131072:
+            return None
+        argv = command.rstrip('\0').split('\0')
+        python = argv[0]
+        module = argv[1:4] == ['-m', 'ai_guardian', 'daemon']
+        script = len(argv) > 2 and pathlib.Path(argv[1]).name == 'ai-guardian' and argv[2] == 'daemon'
+        if (not (module or script) or not os.path.isabs(python)
+                or not pathlib.Path(python).name.startswith(('python', 'pypy'))
+                or any(ord(c) < 32 or ord(c) == 127 for c in python)
+                or not os.path.samefile(python, str(process / 'exe'))):
+            return None
+        return {'python': python, 'config_dir': str(config_dir),
+                'state_dir': str(state_dir), 'system': sys.platform}
+    except (OSError, ValueError, UnicodeError):
+        # Optional capability: unavailable procfs must not fail HTTPS pairing.
+        return None
 
 def probe():
     home = pathlib.Path.home()
@@ -75,7 +101,8 @@ def probe():
     return {'status': 'ok', 'version': 1, 'host': config.get('rest_host', '127.0.0.1'),
             'port': pid.get('rest_port'), 'name': pid.get('name', 'remote'),
             'server_name': client.get('server_name', ''), 'certificate': certificate,
-            'ca_pem': ca, 'token': token}
+            'ca_pem': ca, 'token': token,
+            'cli': pid.get('cli') or legacy_cli_context(number, config_dir.absolute(), state_dir.absolute())}
 
 try:
     result = probe()

@@ -648,7 +648,7 @@ def filter_plugins_by_tags(
     return result
 
 
-def resolve_command(command: object) -> Optional[str]:
+def resolve_command(command: object, system: Optional[str] = None) -> Optional[str]:
     """Resolve a command spec to a platform-specific string.
 
     Args:
@@ -662,10 +662,18 @@ def resolve_command(command: object) -> Optional[str]:
         return command
     if not isinstance(command, dict):
         return None
-    system = platform.system().lower()
+    system = system or platform.system().lower()
     if system in command:
         return command[system]
     return command.get("default")
+
+
+def resolve_target_command(command, target=None, run_on_target=False):
+    """Browser commands use this desktop; SSH execution uses the VM's platform."""
+    if target is not None and target.runtime == "ssh" and run_on_target:
+        context = target.ssh_commands.cli if target.ssh_commands else None
+        return resolve_command(command, (context or {}).get("system", "default"))
+    return resolve_command(command)
 
 
 PARAM_PREFIX = "tray."
@@ -806,6 +814,16 @@ def wrap_for_target(cmd_parts: list, target, interactive: bool = True) -> list:
     import shutil
 
     runtime = target.runtime if target else "local"
+
+    if runtime == "ssh":
+        from ai_guardian.daemon.ssh_commands import CLI_UNAVAILABLE
+        from ai_guardian.daemon.ssh_storage import SSHConnectionError
+
+        if target.ssh_commands is None:
+            raise SSHConnectionError(CLI_UNAVAILABLE)
+        return target.ssh_commands.command(
+            cmd_parts, interactive=interactive, cwd=target.working_dir
+        )
 
     if runtime == "container":
         engine = target.container_engine or "podman"
@@ -2206,7 +2224,7 @@ def resolve_plugin_ai_guardian(command_str, run_on_target, target):
     is_remote = (
         run_on_target
         and target
-        and getattr(target, "runtime", "local") in ("container", "kubernetes")
+        and getattr(target, "runtime", "local") in ("container", "kubernetes", "ssh")
     )
     if is_remote:
         return command_str
@@ -2256,6 +2274,56 @@ def execute_plugin_command(
 
     from ai_guardian.daemon.multi_client import _launch_in_terminal
 
+    # Older remote bundles did not mark Maintenance CLI actions run_on_target.
+    # A selected SSH daemon must never turn those into workstation mutations.
+    is_ssh = target is not None and target.runtime == "ssh"
+    if is_ssh and not run_on_target:
+        # The bundled Doctor item is workstation navigation, not remote shell
+        # expansion of the workstation's Console port file.
+        if command_str in {
+            "open http://127.0.0.1:$(cat ~/.local/state/ai-guardian/web-console.port)/{name}/health-check",
+            "xdg-open http://127.0.0.1:$(cat ~/.local/state/ai-guardian/web-console.port)/{name}/health-check",
+        }:
+            from ai_guardian.tray.menu import open_web_console
+
+            if open_web_console(target.name, "health-check") is False:
+                show_dialog(
+                    label or "AI Guardian",
+                    "The workstation Console is unavailable. Start it and retry.",
+                )
+            return
+        if not (
+            command_str.strip() == "ai-guardian"
+            or command_str.lstrip().startswith("ai-guardian ")
+        ):
+            # Remote definitions cannot introduce arbitrary workstation commands.
+            # Explicit workstation UI may open a single HTTP(S) URL without a shell.
+            from urllib.parse import urlparse
+
+            try:
+                browser = shlex.split(command_str)
+            except ValueError:
+                browser = []
+            if (
+                len(browser) == 2
+                and browser[0] in {"open", "xdg-open"}
+                and urlparse(browser[1]).scheme in {"http", "https"}
+            ):
+                from ai_guardian.desktop_utils import open_url
+
+                open_url(browser[1])
+                return
+            show_dialog(
+                label or "AI Guardian",
+                "Workstation command plugins are unavailable in an SSH daemon menu. Use a workstation/global plugin for local commands, or configure this VM command to run on its target.",
+            )
+            return
+    if is_ssh and (
+        command_str.strip() == "ai-guardian"
+        or command_str.lstrip().startswith("ai-guardian ")
+    ):
+        run_on_target = True
+
     command_str = substitute_target_vars(command_str, target)
     if target and getattr(target, "working_dir", None):
         command_str = substitute_params(
@@ -2263,6 +2331,35 @@ def execute_plugin_command(
             {"working_dir": target.working_dir},
         )
 
+    if is_ssh and run_on_target:
+        from ai_guardian.daemon.ssh_commands import CLI_UNAVAILABLE
+        from ai_guardian.daemon.ssh_storage import SSHConnectionError
+
+        try:
+            if target.ssh_commands is None:
+                raise SSHConnectionError(CLI_UNAVAILABLE)
+            # Resolve the first CLI invocation before parsing a compound command;
+            # the entire resulting shell expression still runs on the VM.
+            stripped = command_str.lstrip()
+            if stripped == "ai-guardian" or stripped.startswith("ai-guardian "):
+                cli = target.ssh_commands.cli
+                if not cli:
+                    raise SSHConnectionError(CLI_UNAVAILABLE)
+                command_str = (
+                    shlex.join([cli["python"], "-m", "ai_guardian"])
+                    + stripped[len("ai-guardian") :]
+                )
+        except SSHConnectionError as exc:
+            show_dialog(
+                label or "AI Guardian",
+                str(exc),
+                **(
+                    {"screen_bounds": screen_bounds}
+                    if screen_bounds is not None
+                    else {}
+                ),
+            )
+            return
     command_str = resolve_plugin_ai_guardian(command_str, run_on_target, target)
 
     if _needs_shell(command_str):
@@ -2275,16 +2372,27 @@ def execute_plugin_command(
             return
 
     if run_on_target and target:
-        cmd_parts = wrap_for_target(
-            cmd_parts,
-            target,
-            interactive=(item_type == "terminal"),
-        )
+        try:
+            cmd_parts = wrap_for_target(
+                cmd_parts, target, interactive=(item_type == "terminal")
+            )
+        except ValueError as exc:
+            # Includes invalidated SSH generations. Never execute locally.
+            show_dialog(
+                label or "AI Guardian",
+                str(exc),
+                **(
+                    {"screen_bounds": screen_bounds}
+                    if screen_bounds is not None
+                    else {}
+                ),
+            )
+            return
 
     is_remote = (
         run_on_target
         and target
-        and getattr(target, "runtime", "local") in ("container", "kubernetes")
+        and getattr(target, "runtime", "local") in ("container", "kubernetes", "ssh")
     )
     if item_type != "terminal" and not is_remote:
         shell = os.environ.get("SHELL", "/bin/bash")
@@ -2292,7 +2400,11 @@ def execute_plugin_command(
 
     try:
         if item_type == "terminal":
-            _launch_in_terminal(cmd_parts, keep_open=True)
+            if _launch_in_terminal(cmd_parts, keep_open=True) is False and is_ssh:
+                show_dialog(
+                    label or "AI Guardian",
+                    "No terminal could be opened. Install or select a supported workstation terminal and retry.",
+                )
         elif item_type == "notification":
             result = subprocess.run(
                 cmd_parts,
@@ -2300,7 +2412,19 @@ def execute_plugin_command(
                 text=True,
                 timeout=60,
             )
-            send_notification("AI Guardian", result.stdout.strip() or "(no output)")
+            output = result.stdout.strip() or "(no output)"
+            if is_ssh:
+                output = result.stdout.strip() or (
+                    "Command completed."
+                    if result.returncode == 0
+                    else result.stderr.strip() or "Command failed."
+                )
+                output = (
+                    f"{target.name}: "
+                    + ("" if result.returncode == 0 else "Failed: ")
+                    + output
+                )
+            send_notification("AI Guardian", output)
         elif item_type == "clipboard":
             result = subprocess.run(
                 cmd_parts,
@@ -2308,7 +2432,12 @@ def execute_plugin_command(
                 text=True,
                 timeout=60,
             )
-            copy_to_clipboard(result.stdout.strip())
+            if is_ssh and result.returncode:
+                show_dialog(
+                    label or "AI Guardian", result.stderr.strip() or "Command failed."
+                )
+            else:
+                copy_to_clipboard(result.stdout.strip())
         elif item_type == "modal":
             result = subprocess.run(
                 cmd_parts,
@@ -2332,6 +2461,21 @@ def execute_plugin_command(
             else:
                 show_dialog(title, message, screen_bounds=screen_bounds)
         else:
-            subprocess.run(cmd_parts, timeout=60)
-    except Exception:
-        pass
+            result = subprocess.run(cmd_parts, timeout=60)
+            if is_ssh and result.returncode:
+                show_dialog(
+                    label or "AI Guardian",
+                    "Remote command failed. Check the VM in Terminal; no workstation fallback was run.",
+                )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Plugin command failed: %s", type(exc).__name__)
+        if is_ssh:
+            show_dialog(
+                label or "AI Guardian",
+                "Command failed or timed out. No fallback command was run.",
+                **(
+                    {"screen_bounds": screen_bounds}
+                    if screen_bounds is not None
+                    else {}
+                ),
+            )

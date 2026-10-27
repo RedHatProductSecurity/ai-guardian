@@ -59,6 +59,7 @@ controls.
 | Tray Discover SSH aliases... settings: `run_form_flow` | N JXA/Cocoa two-step checkbox/prefix → isolated T → G | N desktop-ordered zenity/kdialog two-step checklist/prefix → isolated T → G | N PowerShell WinForms two-step checkbox/prefix → isolated T → G |
 | Multi-target plugin selection: `TrayTargetSelectorApp.run` | G only | G only | G only |
 | Working-directory picker: `working_dir.choose_directory` | N AppleScript choose folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms FolderBrowserDialog → isolated T |
+| SSH VM working directory: `run_form_flow` | N JXA/Cocoa optional absolute-path input → isolated T → G | N desktop-ordered zenity/kdialog input → isolated T → G | N PowerShell WinForms input → isolated T → G |
 | Browser form's auxiliary file/directory Browse | N AppleScript choose file/folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms OpenFileDialog/FolderBrowserDialog → isolated T |
 | Sandbox create/configuration/policy editor: `show_sandbox_form` | isolated T → G | isolated T → G | isolated T → G |
 | Sandbox deletion (must type exact name): `show_sandbox_confirmation` | N AppleScript text-entry confirmation → isolated T → G | N zenity entry/kdialog inputbox → isolated T → G | N PowerShell VisualBasic InputBox → isolated T → G |
@@ -126,6 +127,12 @@ controls.
   worker, using the same workstation-global writer as the Web Console. Saving
   requests discovery refresh, not pairing, probing, certificate trust or removal.
   Existing candidate Review/Dismiss actions and saved connections stay unchanged.
+- **SSH working directory:** use an optional text field for an absolute VM path,
+  not a workstation directory picker. Native → isolated Tk → NiceGUI dispatch,
+  complete explanation, validation retry and Cancel/Close follow `run_form_flow`.
+  Empty selects remote home. Only Save persists the per-target command directory;
+  it does not change daemon configuration scope. Capture placement before the
+  worker; no SSH/filesystem probing occurs in the form or menu callback.
 - **Process ownership:** Tk messages, sandbox dialogs, plugin CLI forms and tray
   proactive dialogs run outside the tray GUI loop. Proactive NiceGUI fallback also
   runs in its own child and opens the actual loopback port only after server startup.
@@ -247,7 +254,12 @@ monitor, result and sanitized screenshots/timing for each matrix row.
    local Web Console (untouched controls update; unsaved edits remain). Disable
    discovery: candidates disappear but the settings entry and existing paired
    workers/tunnels remain. No Save may contact a host or grant trust. Repeat the
-   preference/startup/cancel/later-step-failure checks above for this flow.
+    preference/startup/cancel/later-step-failure checks above for this flow.
+9. SSH Working Dir: confirm it asks for a VM path instead of browsing workstation
+   folders. Save an absolute path and verify only that VM's commands use it; empty
+   selects remote home. Retry relative/invalid input, Cancel/Close, remove the
+   connection with the form open and test each provider/headless preference. No
+   mutation before Save and no toolkit switch after display or validation.
 
 Do not check off desktop qualification using selector mocks or merely installed
 native executables. Keep any untested platform/scenario explicitly pending.
