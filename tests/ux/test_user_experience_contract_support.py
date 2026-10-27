@@ -124,6 +124,68 @@ def support(monkeypatch, tmp_path, support_github_transport):
     return root, bundle, client
 
 
+@pytest.mark.parametrize("source", ["local", "daemon"])
+def test_linked_project_configuration_is_omitted_before_diagnostic_review(
+    support, monkeypatch, tmp_path, source
+):
+    """USER EXPERIENCE: a linked project config cannot copy an unrelated file."""
+    from types import SimpleNamespace
+    from ai_guardian.config.utils import (
+        clear_project_dir_override,
+        set_project_dir_override,
+    )
+    from ai_guardian.reporting import remote_support
+
+    _, _, publisher = support
+    monkeypatch.setattr(
+        "ai_guardian.doctor.Doctor.run_all", lambda self: SimpleNamespace(checks=[])
+    )
+    monkeypatch.setattr(
+        "ai_guardian.smoke_test.SmokeTestRunner.run",
+        lambda self: SimpleNamespace(phase1_passed=True, phase2_results=[]),
+    )
+    monkeypatch.setattr(bundles, "collect_cli_configs", lambda root: [])
+    project = tmp_path / "selected-project"
+    (project / ".ai-guardian").mkdir(parents=True)
+    outside = tmp_path / "unrelated.json"
+    outside.write_text('{"marker":"UNRELATED CONTENT MUST NOT APPEAR"}')
+    config = project / ".ai-guardian" / "ai-guardian.json"
+    try:
+        config.symlink_to(outside)
+    except OSError:
+        pytest.skip("This filesystem cannot create symbolic links")
+    set_project_dir_override(str(project))
+    try:
+        if source == "daemon":
+            payload = remote_support.collect_diagnostics("Selected VM", [config])
+            copies = {
+                item["name"]: text
+                for item, text in remote_support.validate_diagnostics(payload)
+            }
+            assert "projects/project-001.json" not in copies
+            provenance = json.loads(copies[remote_support.PROVENANCE_FILE])
+            assert (
+                "projects/project-001.json: source project configuration unavailable"
+                in provenance["omissions"]
+            )
+            assert "UNRELATED CONTENT MUST NOT APPEAR" not in "\n".join(copies.values())
+        else:
+            prepared = bundles.prepare_bundle(
+                include_log=False, include_violations=False
+            )
+            try:
+                assert ".ai-guardian/ai-guardian.json" not in {
+                    item["name"] for item in prepared["files"]
+                }
+            finally:
+                bundles._cleanup_bundle(prepared["bundle_id"])
+    finally:
+        clear_project_dir_override()
+    assert outside.read_text() == '{"marker":"UNRELATED CONTENT MUST NOT APPEAR"}'
+    publisher.create.assert_not_called()
+    publisher.gist_request.assert_not_called()
+
+
 @pytest.mark.parametrize("before_connect", [False, True])
 def test_healthy_ssh_support_uses_click_time_connection_not_stale_menu(
     support, monkeypatch, before_connect

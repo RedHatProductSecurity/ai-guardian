@@ -151,6 +151,80 @@ class TestGetSystemInfo:
 class TestPrepareBundle:
     """Test bundle preparation."""
 
+    @pytest.mark.parametrize("link_kind", ["file", "directory", "hardlink"])
+    def test_discovered_project_config_does_not_follow_links(
+        self, monkeypatch, tmp_path, link_kind
+    ):
+        from ai_guardian.config.utils import (
+            clear_project_dir_override,
+            set_project_dir_override,
+        )
+
+        project = tmp_path / "selected-project"
+        project.mkdir()
+        outside = tmp_path / "unrelated"
+        outside.mkdir()
+        original = outside / "ai-guardian.json"
+        original.write_text(
+            json.dumps({"marker": "UNRELATED FILE MUST NOT BE COLLECTED"})
+        )
+        directory = project / ".ai-guardian"
+        try:
+            if link_kind == "directory":
+                directory.symlink_to(outside, target_is_directory=True)
+            else:
+                directory.mkdir()
+                target = directory / "ai-guardian.json"
+                if link_kind == "file":
+                    target.symlink_to(original)
+                else:
+                    os.link(original, target)
+        except OSError:
+            pytest.skip("This filesystem cannot create the requested link")
+        monkeypatch.setattr(
+            "ai_guardian.reporting.support_bundle._get_support_config",
+            lambda: {"export_destination": str(tmp_path / "export")},
+        )
+        set_project_dir_override(str(project))
+        prepared = None
+        try:
+            prepared = prepare_bundle(include_log=False, include_violations=False)
+            names = {item["name"] for item in prepared["files"]}
+            assert ".ai-guardian/ai-guardian.json" not in names
+            assert not (
+                Path(prepared["temp_path"]) / ".ai-guardian/ai-guardian.json"
+            ).exists()
+            assert (
+                json.loads(original.read_text())["marker"]
+                == "UNRELATED FILE MUST NOT BE COLLECTED"
+            )
+        finally:
+            clear_project_dir_override()
+            if prepared is not None:
+                _cleanup_bundle(prepared["bundle_id"])
+
+    def test_explicit_project_config_stays_complete_above_remote_transfer_limit(
+        self, monkeypatch, tmp_path
+    ):
+        config = tmp_path / "custom-project.json"
+        value = {
+            "diagnostic_text": "ordinary configuration text " * 160_000,
+            "last_field": "COMPLETE END",
+        }
+        config.write_text(json.dumps(value))
+        assert config.stat().st_size > 4 * 1024 * 1024
+        monkeypatch.setenv("AI_GUARDIAN_PROJECT_CONFIG", str(config))
+        monkeypatch.setattr(
+            "ai_guardian.reporting.support_bundle._get_support_config",
+            lambda: {"export_destination": str(tmp_path / "export")},
+        )
+        prepared = prepare_bundle(include_log=False, include_violations=False)
+        try:
+            copied = Path(prepared["temp_path"]) / ".ai-guardian/ai-guardian.json"
+            assert json.loads(copied.read_text()) == value
+        finally:
+            _cleanup_bundle(prepared["bundle_id"])
+
     @patch("ai_guardian.reporting.support_bundle._get_support_config", return_value={})
     def test_blank_default_title_is_a_draft_and_file_list_puts_doctor_first(
         self, mock_config

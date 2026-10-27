@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21062 tok)
-- `CHANGELOG.md` — Change log (~77754 tok)
+- `CHANGELOG.md` — Change log (~77868 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -938,7 +938,7 @@
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
 - `SDK.md` — AI Guardian SDK (~21559 tok)
 - `SECURITY_DESIGN.md` — Security Design (~3877 tok)
-- `SUPPORT.md` — Support bundles and public GitHub Discussions (~8008 tok)
+- `SUPPORT.md` — Support bundles and public GitHub Discussions (~8088 tok)
 - `TOML_PATTERNS.md` — TOML Pattern Engine (~3798 tok)
 - `TOOL_POLICY.md` — Tool Policy System (~5839 tok)
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7389 tok)
@@ -1275,14 +1275,14 @@
 
 - `__init__.py` — Audit reports, metrics, SARIF output, and support bundles. (~19 tok)
 - `audit.py` — class: compute (~8769 tok)
-- `cli_diagnostics.py` — Bounded, sanitized host CLI configuration copies for user-reviewed support. (~3221 tok)
+- `cli_diagnostics.py` — Bounded, sanitized host CLI configuration copies for user-reviewed support. (~3343 tok)
 - `github_gist.py` — User-owned diagnostic Gists, with separate native upload consent and receipts. (~3390 tok)
 - `github_support.py` — Public support Discussions with backend-enforced, user-only review. (~10999 tok)
 - `latency.py` — Hook latency tracking — per-hook and per-violation-type timing. (~4197 tok)
 - `metrics.py` — class: compute, read_filtered_violations, format_human, format_json (~4844 tok)
 - `remote_support.py` — Collection-only wire format and protected desktop import of daemon diagnostics. (~3813 tok)
 - `sarif.py` — SARIFFormatter: create_sarif_report, write_sarif_file, create_ssrf_finding (~6029 tok)
-- `support_bundle.py` — prepare_bundle (~20918 tok)
+- `support_bundle.py` — prepare_bundle (~20957 tok)
 
 ## src/ai_guardian/scanners/
 
