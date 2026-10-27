@@ -5,9 +5,32 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-26 (UTC)
+> Last updated: 2026-10-27 (UTC)
 
 ---
+
+## Issue #2584 / PR #2586 CI follow-up — local test fix, 2026-10-27
+
+- User reported CI failure. Existing branch `2584` is synchronized at
+  `feca82bacce1966003497fb072d86df9b7a815bb`; implementation is now committed in
+  PR https://github.com/RedHatProductSecurity/ai-guardian/pull/2586, superseding
+  the earlier local/uncommitted handoff below.
+- Tests run `40407562273` failed the same two storage log assertions on Linux
+  Python 3.10-3.14. Windows tests and other workflows passed. The sanitizer CLI
+  file-not-found test leaves global logging disabled at CRITICAL; REST correctly
+  rejects unsafe storage, but the subsequent storage tests captured no error log.
+- Added `caplog.set_level(logging.ERROR, logger="ai_guardian")` in the affected
+  storage test with pytest-managed restoration. No production code/security
+  behavior or expected message changed; retained all exact-log, no-token, PID and
+  permission-preservation assertions. The three-test reproducer failed before
+  the fix and passes after it.
+- **125 related tests pass** with sanitizer before storage, including complete
+  storage, TLS and SSH UX files. Black py310, Ruff, Pylint E and Mypy (319 source
+  files), bug-log JSON and whitespace checks pass. No full-suite/integration/container run.
+- Next: publish this local test-only follow-up through the external DAF workflow
+  and verify fresh CI. Existing live VM/SSH and native-platform qualification
+  caveats still apply. No commit, push, CI rerun or runtime configuration change
+  performed by this agent. OpenWolf owns automatic anatomy/memory bookkeeping.
 
 ## Issue #2584 private storage / REST diagnostics — locally validated, 2026-10-26
 

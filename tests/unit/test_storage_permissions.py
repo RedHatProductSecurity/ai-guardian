@@ -1,6 +1,7 @@
 """Isolated POSIX setup/startup storage regressions for issue #2584."""
 
 import json
+import logging
 import os
 from pathlib import Path
 import stat
@@ -121,6 +122,9 @@ def test_setup_rejects_unsafe_paths_without_mutating_them(
 def test_unsafe_existing_state_explains_rest_failure_without_publishing_token(
     tmp_path, monkeypatch, caplog, location
 ):
+    # Sanitizer CLI tests can leave logging globally disabled. Let pytest enable
+    # capture for this assertion and restore the previous logging state afterward.
+    caplog.set_level(logging.ERROR, logger="ai_guardian")
     shared = tmp_path / "shared"
     state = shared / "state"
     state.mkdir(parents=True, mode=0o700)
