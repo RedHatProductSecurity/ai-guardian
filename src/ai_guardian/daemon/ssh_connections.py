@@ -214,6 +214,11 @@ class SSHConnectionManager:
             for key, profile in profiles.items():
                 if key not in self._connections:
                     connection = _Connection(profile)
+                    from ai_guardian.daemon.ssh_commands import SSHCommands
+
+                    connection.target.ssh_commands = SSHCommands(
+                        profile, self.store, connection.stop
+                    )
                     self._connections[key] = connection
                     connection.thread = threading.Thread(
                         target=self._run,
@@ -249,7 +254,13 @@ class SSHConnectionManager:
                     stats = tunnel.request("GET", "/api/stats")
                     if connection.stop.is_set():
                         break
+                    stats = self._stats_with_mcp_state(tunnel, stats)
+                    if connection.stop.is_set():
+                        break
                     target.stats = stats
+                    if pairing.cli is not None:
+                        # Publish context only after TLS identity AND daemon auth.
+                        target.ssh_commands.cli = dict(pairing.cli)
                     target.status = (
                         "paused" if stats.get("paused", False) else "running"
                     )
@@ -278,6 +289,36 @@ class SSHConnectionManager:
             if connection.stop.wait(delay):
                 break
             delay = min(delay * 2, 60.0)
+
+    @staticmethod
+    def _stats_with_mcp_state(tunnel, stats):
+        """Older daemons already expose global MCP config, but not new stats.
+
+        Do this in the connection worker using its authenticated generation,
+        never while rendering the menu or via workstation/project settings.
+        A failed optional query must not disconnect an otherwise healthy VM.
+        """
+        levels = ("low", "medium", "high", "paused")
+        if stats.get("mcp_installed") is not True or (
+            stats.get("mcp_proactive_level") in levels
+            and isinstance(stats.get("mcp_enabled"), bool)
+        ):
+            return stats
+        try:
+            config = tunnel.request("GET", "/api/config?scope=global")
+        except (SSHConnectionError, DaemonConnectionError, OSError):
+            logger.debug("SSH daemon MCP configuration is unavailable")
+            return stats
+        if not isinstance(config, dict) or config.get("error") or "features" in config:
+            return stats
+        mcp = config.get("mcp_server", {})
+        if not isinstance(mcp, dict):
+            return stats
+        level = mcp.get("proactive_level", "low")
+        enabled = mcp.get("enabled", True)
+        if level not in levels or not isinstance(enabled, bool):
+            return stats
+        return {**stats, "mcp_proactive_level": level, "mcp_enabled": enabled}
 
     def close(self):
         with self._lock:

@@ -1,4 +1,4 @@
-"""Tray SSH callbacks never wait on network or spawn an interactive shell."""
+"""Tray SSH callbacks dispatch network, terminal and modal work to workers."""
 
 from types import SimpleNamespace
 from unittest import mock
@@ -40,14 +40,7 @@ def test_ssh_label_keeps_existing_version_monitoring_without_network():
         _daemon_versions={}, _version_mismatch_notified=set()
     )
     tray._menu = TrayMenuBuilder(tray)
-    pystray = SimpleNamespace(
-        Menu=lambda *items: list(items),
-        MenuItem=lambda text, action, **kwargs: SimpleNamespace(
-            text=text, action=action
-        ),
-    )
-    entries = ssh_connections.build_items(tray, pystray)
-    assert target.name in entries[0].text(None)
+    assert target.name in tray._menu._version_annotated_label(target)
     assert tray._health._daemon_versions[(target.name, "ssh")] == "1.0.0"
     assert tray._mcp_installed_per_daemon[(target.name, "ssh")] is True
     tray._multi_client.get_status.assert_not_called()
@@ -98,14 +91,17 @@ def test_ssh_control_menu_dispatches_outside_callback_thread():
         _targets=[target], _multi_client=mock.Mock(), _refresh_event=mock.Mock()
     )
 
-    def item(text, action, **kwargs):
-        return SimpleNamespace(text=text, action=action, **kwargs)
-
-    pystray = SimpleNamespace(Menu=lambda *items: list(items), MenuItem=item)
-    entries = ssh_connections.build_items(tray, pystray)
-    pause = next(item for item in entries[0].action if item.text == "Pause...")
-    with mock.patch("ai_guardian.tray.ssh_connections.threading.Thread") as thread:
-        pause.action[0].action()
+    pause = ssh_connections.target_action(
+        tray, target, lambda t: tray._multi_client.send_pause(t, 5)
+    )
+    with (
+        mock.patch("ai_guardian.tray.ssh_connections.threading.Thread") as thread,
+        mock.patch(
+            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
+            return_value=None,
+        ),
+    ):
+        pause()
         tray._multi_client.send_pause.assert_not_called()
         thread.call_args.kwargs["target"]()
     tray._multi_client.send_pause.assert_called_once_with(target, 5)
@@ -148,21 +144,11 @@ def test_unsupported_prompt_registration_warning_survives_stats_refresh():
     from ai_guardian.daemon.ssh_tunnel import POLLING_ERROR
 
     target = DaemonTarget(name="ssh-alias", runtime="ssh", status="running")
-    tray = SimpleNamespace(_targets=[target], _ask_forwarding_failed={target.name})
-    pystray = SimpleNamespace(
-        Menu=lambda *items: list(items),
-        MenuItem=lambda text, action, **kwargs: SimpleNamespace(
-            text=text, action=action
-        ),
-    )
-    with (
-        mock.patch("ai_guardian.tray.ssh_connections.threading.Thread") as thread,
-        mock.patch("ai_guardian.tray.plugins.show_dialog") as dialog,
-    ):
-        items = ssh_connections.build_items(tray, pystray)
-        items[0].action[0].action()
-        thread.call_args.kwargs["target"]()
-    assert POLLING_ERROR in dialog.call_args.args[1]
+    from tests.fixtures.ssh_tray import make_tray
+
+    tray = make_tray([target])
+    tray._ask_forwarding_failed = {target.name}
+    assert POLLING_ERROR in tray._menu._daemon_status_details(target)[4]
 
 
 def test_candidate_menu_is_cached_and_direct_review_dispatches_existing_modal():
@@ -197,6 +183,30 @@ def test_candidate_menu_is_cached_and_direct_review_dispatches_existing_modal():
         discovery.ssh_manager.dismiss_alias.assert_not_called()
         thread.call_args.kwargs["target"]()
     discovery.ssh_manager.dismiss_alias.assert_called_once_with("existing-vm")
+
+
+@pytest.mark.parametrize(
+    "notices", [(), ("A conditional SSH include was not inspected.",)]
+)
+def test_zero_unpaired_aliases_hides_empty_indicator_but_keeps_notices(notices):
+    tray = SimpleNamespace(
+        _discovery=SimpleNamespace(
+            ssh_alias_discovery={"enabled": True, "aliases": (), "notices": notices}
+        )
+    )
+    pystray = SimpleNamespace(
+        Menu=lambda *items: list(items),
+        MenuItem=lambda text, action, **kwargs: SimpleNamespace(
+            text=text, action=action, **kwargs
+        ),
+    )
+    items = ssh_connections.build_candidate_items(tray, pystray)
+    if notices:
+        assert len(items) == 1
+        assert items[0].text == "SSH alias discovery notice"
+        assert items[0].enabled
+    else:
+        assert items == []
 
 
 def test_candidate_review_captures_placement_then_starts_worker():

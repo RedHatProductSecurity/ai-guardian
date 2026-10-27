@@ -34,7 +34,30 @@ Manual qualification (requires an explicitly authorized disposable POSIX VM):
     Missing native/Tk startup may advance before display only. Cancel, Escape,
     title-bar Close or a later-step failure must not reopen in another provider;
     headless opens nothing and saves nothing. Saving never contacts a host or
-    grants trust. Qualify macOS, Windows, GNOME/zenity and KDE/kdialog separately.
+     grants trust. Qualify macOS, Windows, GNOME/zenity and KDE/kdialog separately.
+14. Keep a local daemon and an enrolled VM connected simultaneously. Local is
+    first; other names sort alphabetically ignoring case. Verify the VM's Console,
+    Violations, Metrics & Audit, Statistics, Terminal, Maintenance, MCP and About.
+    CLI/scanner actions must affect only the VM's actual virtualenv installation.
+    Reorder/refresh, stop/start the VM, reconnect and remove it while a menu/dialog
+    is open: callbacks must not move to the workstation or another daemon. Missing
+    old-daemon capabilities and command failures must have explicit explanations.
+    With just the VM, the same applicable items use the flat single-daemon layout.
+    Force an SSH login failure and open Terminal: its actual error must remain
+    readable until dismissal, with no workstation-shell fallback. Upgrade and
+    restart a remote daemon from main: its existing global config API still gives
+    MCP state even without new stats fields. Linux procfs proves an older running
+    daemon's venv interpreter; no guessed PATH installation may be executed.
+15. Select the VM's Working Dir. It is an optional absolute VM path, not a desktop
+    directory picker. Retry a relative path, then Save an absolute path; Cancel,
+    Close and headless save nothing. Repeat native/Tk/NiceGUI and pre-display
+    startup failure; never switch provider after validation or cancellation.
+    With no saved directory, Terminal uses the SSH user's home, never the
+    workstation home. Repeat discovery and reset to empty; explicitly saved VM
+    directories survive, and their labels do not use workstation-home shortening.
+16. Enable alias discovery with zero unpaired aliases. No greyed `(0)` entry is
+    shown; Discover SSH aliases... remains. A discovery warning remains accessible
+    as SSH alias discovery notice without inventing a pairing candidate.
 
 Automated tests use synthetic certificates, explicit storage and mock SSH only;
 they never load the user's configuration or contact a live SSH destination.
@@ -70,6 +93,302 @@ from tests.fixtures.ssh_daemon import make_pairing
 @pytest.fixture
 def pairing(tmp_path):
     return make_pairing(tmp_path)[0]
+
+
+def test_ssh_terminal_keeps_failure_output_readable_without_local_shell(pairing):
+    """USER EXPERIENCE: SSH exits immediately → error stays until dismissed."""
+    import shlex
+    import threading
+
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.daemon.multi_client import MultiDaemonClient
+    from ai_guardian.daemon.ssh_commands import SSHCommands
+    from tests.fixtures.ssh_tray import make_tray
+
+    store = mock.Mock()
+    store.contains.return_value = True
+    target = DaemonTarget(
+        "ssh-vm",
+        "ssh",
+        ssh_commands=SSHCommands(pairing.profile, store, threading.Event()),
+    )
+    with (
+        mock.patch("shutil.which", return_value="ssh"),
+        mock.patch(
+            "ai_guardian.daemon.multi_client._get_configured_terminal",
+            return_value="gnome-terminal",
+        ),
+        mock.patch("platform.system", return_value="Linux"),
+        mock.patch("subprocess.Popen") as launch,
+        mock.patch("ai_guardian.daemon.working_dir.load_working_dirs", return_value={}),
+        mock.patch(
+            "ai_guardian.daemon.working_dir.get_working_dir",
+            return_value="/workstation/home",
+        ) as host_directory,
+    ):
+        make_tray([target])._menu._apply_working_dirs()
+        assert MultiDaemonClient().open_shell(target)
+    host_directory.assert_not_called()
+    command = launch.call_args.args[0]
+    assert command[:5] == ["gnome-terminal", "--maximize", "--", "bash", "-c"]
+    ssh, hold = command[5].split("; echo; ", 1)
+    assert shlex.split(ssh)[0] == "ssh"
+    assert shlex.split(ssh)[-2] == pairing.profile.destination
+    assert "cd " not in ssh
+    assert "/workstation/home" not in ssh
+    assert hold == 'read -rp "Press Enter to close..."'
+    assert pairing.profile.token not in str(command)
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def test_vm_has_standard_menu_labels_and_only_its_cached_data(multi):
+    """USER EXPERIENCE: connected VM → the same applicable flat/nested menu."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from tests.fixtures.ssh_tray import build, find, make_tray, visible
+
+    target = DaemonTarget(
+        "ssh-vm",
+        "ssh",
+        status="running",
+        stats={
+            "request_count": 2592,
+            "mcp_installed": True,
+            "mcp_proactive_level": "medium",
+        },
+    )
+    tray = make_tray(([DaemonTarget("local", "local")] if multi else []) + [target])
+    menu = visible(build(tray))[1].submenu if multi else build(tray)
+    expected = [
+        "Status",
+        "Pause...",
+        "Terminal",
+        "Console",
+        "Violations",
+        "Metrics & Audit",
+        "Statistics",
+        "MCP Proactive: medium",
+        "Maintenance",
+        "Manage SSH connection...",
+    ]
+    labels = [item.label for item in visible(menu)]
+    assert all(label in labels for label in expected)
+    assert "Web Console" not in labels
+    assert find(find(menu, "Statistics").submenu, "Requests: 2,592")
+    tray._multi_client.get_status.assert_not_called()
+
+
+@pytest.mark.parametrize("paused", [False, True])
+def test_main_daemon_with_healthy_mcp_does_not_need_unreleased_stats_fields(paused):
+    """USER EXPERIENCE: Doctor says MCP healthy → tray reads VM-global settings."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.daemon.ssh_connections import SSHConnectionManager
+    from tests.fixtures.ssh_tray import build, find, make_tray
+
+    stats = {"paused": paused, "mcp_installed": True}
+    tunnel = mock.Mock()
+    tunnel.request.return_value = {"mcp_server": {"proactive_level": "medium"}}
+    target = DaemonTarget(
+        "ssh-vm",
+        "ssh",
+        status="paused" if paused else "running",
+        stats=SSHConnectionManager._stats_with_mcp_state(tunnel, stats),
+    )
+    tray = make_tray([target])
+    tray._proactive_level = "high"  # workstation's choice must not leak into VM
+    label = "MCP Proactive: paused" if paused else "MCP Proactive: medium"
+    menu = find(build(tray), label)
+    assert find(menu.submenu, "medium").checked
+    assert find(menu.submenu, "medium").enabled
+    assert target.stats["mcp_proactive_level"] == "medium"
+    tunnel.request.assert_called_once_with("GET", "/api/config?scope=global")
+
+
+@pytest.mark.parametrize(
+    "answer", [None, {"directory": "/vm/project"}, {"directory": ""}]
+)
+def test_vm_directory_form_is_native_first_complete_and_cancel_safe(
+    monkeypatch, answer
+):
+    """USER EXPERIENCE: VM path entry → native-first Save, not host folder selection."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from tests.fixtures.ssh_tray import make_tray
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    target = DaemonTarget("ssh-vm", "ssh", working_dir="/vm/current")
+    tray = make_tray([target])
+    with (
+        mock.patch("ai_guardian.ui.forms.NativeForm") as native,
+        mock.patch(
+            "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+        ) as tk,
+        mock.patch("ai_guardian.tray.sandbox_dialog._show_nicegui_form") as browser,
+        mock.patch("ai_guardian.daemon.working_dir.choose_directory") as local_picker,
+        mock.patch("ai_guardian.daemon.working_dir.set_working_dir") as save,
+    ):
+        native.return_value.return_value = answer
+        tray._menu._pick_working_dir(target, target.working_dir, (0, 0, 1920, 1080))
+    native.assert_called_once_with(screen_bounds=(0, 0, 1920, 1080))
+    fields = native.return_value.call_args.args[2]
+    assert fields == [
+        {
+            "name": "directory",
+            "label": "VM directory (empty uses remote home)",
+            "default": "/vm/current",
+        }
+    ]
+    local_picker.assert_not_called()
+    tk.assert_not_called()
+    browser.assert_not_called()
+    if answer is None:
+        save.assert_not_called()
+        assert target.working_dir == "/vm/current"
+    else:
+        save.assert_called_once_with("ssh-vm", answer["directory"])
+        assert target.working_dir == (answer["directory"] or None)
+
+
+def test_vm_path_validation_never_restarts_in_another_provider(monkeypatch):
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from tests.fixtures.ssh_tray import make_tray
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    target = DaemonTarget("ssh-vm", "ssh")
+    tray = make_tray([target])
+    with (
+        mock.patch("ai_guardian.ui.forms.NativeForm") as native,
+        mock.patch(
+            "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+        ) as tk,
+        mock.patch("ai_guardian.tray.sandbox_dialog._show_nicegui_form") as browser,
+        mock.patch("ai_guardian.daemon.working_dir.set_working_dir") as save,
+    ):
+        native.return_value.side_effect = [{"directory": "relative"}, None]
+        tray._menu._pick_working_dir(target, None)
+    assert native.return_value.call_count == 2
+    assert (
+        "Choose an absolute directory on the VM"
+        in native.return_value.call_args.args[1]
+    )
+    save.assert_not_called()
+    tk.assert_not_called()
+    browser.assert_not_called()
+
+
+def test_removing_vm_while_directory_form_is_open_cannot_save_for_replacement():
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from tests.fixtures.ssh_tray import make_tray
+
+    target = DaemonTarget("ssh-vm", "ssh")
+    tray = make_tray([target])
+
+    def complete(_interaction, **_kwargs):
+        tray._targets = [DaemonTarget("ssh-vm", "ssh")]
+        return "/vm/project"
+
+    with (
+        mock.patch("ai_guardian.ui.forms.run_form_flow", side_effect=complete),
+        mock.patch("ai_guardian.daemon.working_dir.set_working_dir") as save,
+    ):
+        tray._menu._pick_working_dir(target, None)
+    save.assert_not_called()
+    assert tray._targets[0].working_dir is None
+
+
+def test_vm_path_startup_failure_can_fall_back_before_display_only(monkeypatch):
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.ui.modal import UIUnavailable
+    from tests.fixtures.ssh_tray import make_tray
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    target = DaemonTarget("ssh-vm", "ssh")
+    with (
+        mock.patch("ai_guardian.ui.forms.NativeForm") as native,
+        mock.patch(
+            "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess",
+            return_value={"directory": "/vm/project"},
+        ) as tk,
+        mock.patch("ai_guardian.tray.sandbox_dialog._show_nicegui_form") as browser,
+        mock.patch("ai_guardian.daemon.working_dir.set_working_dir") as save,
+    ):
+        native.return_value.side_effect = UIUnavailable("native startup unavailable")
+        make_tray([target])._menu._pick_working_dir(target, None)
+    tk.assert_called_once()
+    browser.assert_not_called()
+    save.assert_called_once_with(target.name, "/vm/project")
+
+
+@pytest.mark.parametrize("preference", ["tkinter", "nicegui", "headless"])
+def test_vm_path_respects_explicit_provider_and_headless(monkeypatch, preference):
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from tests.fixtures.ssh_tray import make_tray
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", preference)
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    target = DaemonTarget("ssh-vm", "ssh")
+    with (
+        mock.patch("ai_guardian.ui.forms.NativeForm") as native,
+        mock.patch(
+            "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess",
+            return_value=None,
+        ) as tk,
+        mock.patch(
+            "ai_guardian.tray.sandbox_dialog._show_nicegui_form", return_value=None
+        ) as browser,
+        mock.patch("ai_guardian.daemon.working_dir.set_working_dir") as save,
+    ):
+        make_tray([target])._menu._pick_working_dir(target, None)
+    native.assert_not_called()
+    assert tk.call_count == int(preference == "tkinter")
+    assert browser.call_count == int(preference == "nicegui")
+    save.assert_not_called()
+
+
+def test_unsupported_workstation_plugin_cannot_execute_from_vm_menu():
+    """USER EXPERIENCE: unsupported VM plugin → actionable text, never local exec."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.tray.plugins import execute_plugin_command
+
+    with (
+        mock.patch("subprocess.run") as run,
+        mock.patch("ai_guardian.tray.plugins.show_dialog") as dialog,
+    ):
+        execute_plugin_command(
+            "echo workstation", "notification", target=DaemonTarget("ssh-vm", "ssh")
+        )
+    run.assert_not_called()
+    assert (
+        dialog.call_args.args[1]
+        == "Workstation command plugins are unavailable in an SSH daemon menu. Use a workstation/global plugin for local commands, or configure this VM command to run on its target."
+    )
+
+
+@pytest.mark.parametrize("notice", [False, True])
+def test_empty_alias_inventory_does_not_show_disabled_zero_candidate_menu(notice):
+    from ai_guardian.tray.ssh_connections import build_candidate_items
+    from tests.fixtures.ssh_tray import PYSTRAY
+
+    tray = SimpleNamespace(
+        _discovery=SimpleNamespace(
+            ssh_alias_discovery={
+                "enabled": True,
+                "aliases": (),
+                "notices": (
+                    ("A conditional include was not inspected.",) if notice else ()
+                ),
+            }
+        )
+    )
+    entries = build_candidate_items(tray, PYSTRAY)
+    assert [entry.label for entry in entries] == (
+        ["SSH alias discovery notice"] if notice else []
+    )
+    assert all(entry.enabled for entry in entries)
 
 
 @pytest.mark.parametrize(

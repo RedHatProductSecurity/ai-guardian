@@ -621,6 +621,7 @@ class DaemonTray:
             ),
         )
         self._menu_target_count = len(self._targets)
+        self._menu_target_snapshot = self._target_menu_identity()
         self._menu_stopped_container_count = len(self._stopped_container_targets)
         self._menu_stopped_container_snapshot = tuple(
             (target.name, getattr(target, "container_id", None))
@@ -946,6 +947,10 @@ class DaemonTray:
                 self._menu._invalidate_stats()
                 if (
                     (
+                        getattr(self, "_menu_target_snapshot", None) is not None
+                        and self._menu_target_snapshot != self._target_menu_identity()
+                    )
+                    or (
                         self._menu_target_count is not None
                         and self._menu_target_count != len(self._targets)
                     )
@@ -979,6 +984,21 @@ class DaemonTray:
                     self._schedule_appindicator_menu_watch()
                 except Exception:
                     pass  # intentionally silent — best-effort operation
+
+    def _target_menu_identity(self):
+        """Rebuild for replacement/reordering even when target count is unchanged."""
+        return tuple(
+            (
+                t.runtime,
+                t.name,
+                t.container_id,
+                t.pod_name,
+                t.namespace,
+                t.ssh_id,
+                id(t) if t.runtime == "ssh" else None,
+            )
+            for t in self._targets
+        )
 
     def _schedule_appindicator_menu_watch(self):
         """Watch AppIndicator's exported menu for open/close events.
@@ -1104,6 +1124,26 @@ class DaemonTray:
                     (
                         target.name,
                         target.runtime,
+                        (
+                            (
+                                id(target),
+                                target.error_message,
+                                target_stats.get("request_count"),
+                                target_stats.get("blocked_count"),
+                                target_stats.get("warning_count"),
+                                target_stats.get("log_only_count"),
+                                target_stats.get("mcp_installed"),
+                                target_stats.get("mcp_proactive_level"),
+                                target_stats.get("mcp_enabled"),
+                                target_stats.get("version"),
+                                target_stats.get("last_config_reload_at"),
+                                self._plugins._last_plugins_hash.get(
+                                    self._targets.index(target)
+                                ),
+                            )
+                            if target.runtime == "ssh"
+                            else None
+                        ),
                         self._pause_scope_snapshot(target_stats),
                     )
                 )
@@ -1364,10 +1404,10 @@ class DaemonTray:
         self._anim._discovery_in_progress = False
         self._anim._stop_discovery_animation()
         self._anim._is_initial_discovery = False
-        self._targets = targets
+        self._targets = self._sort_targets(targets)
         stopped_targets = getattr(self._discovery, "stopped_container_targets", ())
         if isinstance(stopped_targets, (list, tuple)):
-            self._stopped_container_targets = list(stopped_targets)
+            self._stopped_container_targets = self._sort_targets(stopped_targets)
         else:
             self._stopped_container_targets = []
         if self._status == "paused":
@@ -1384,6 +1424,20 @@ class DaemonTray:
             logger.info(f"  {t.name} ({t.runtime}) status={t.status} port={t.port}")
         self._register_tray_with_remotes()
         self._catchup_remote_traces()
+
+    @staticmethod
+    def _sort_targets(targets):
+        """Local first, then case-insensitive daemon names across all transports."""
+        return sorted(
+            targets,
+            key=lambda t: (
+                t.runtime != "local",
+                t.name.casefold(),
+                t.name,
+                t.runtime,
+                t.ssh_id or t.container_id or t.pod_name or t.url or "",
+            ),
+        )
 
     def _catchup_remote_traces(self):
         """Catch-up pull for newly discovered remote daemons (#2188)."""

@@ -216,6 +216,7 @@ class DaemonTarget:
     tls: Optional[dict] = dc_field(default_factory=dict, repr=False)
     ssh_id: Optional[str] = None
     ssh_tunnel: Any = dc_field(default=None, repr=False, compare=False)
+    ssh_commands: Any = dc_field(default=None, repr=False, compare=False)
 
 
 class DaemonDiscovery:

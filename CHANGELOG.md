@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SSH tray menu parity (#2592):** Reuse standard daemon menus for SSH VMs,
+  including flat/nested layouts, Console/Violations/Metrics navigation, cached
+  Statistics/Status, Terminal, Maintenance and target-scoped MCP state/controls.
+  Add verified-destination SSH lifecycle, diagnostics, scanner and pip execution
+  using the remote installation's actual virtualenv/configuration/state context;
+  retain connection management, host-key/TLS verification and managed reconnect.
+  Bind actions/plugins to the displayed VM and clicked connection generation,
+  distinguish local browser UI from VM commands, and explain unsupported actions
+  without workstation fallback. Document the parity audit and older-daemon,
+  installer, offline and runtime-specific limitations. Hide the empty SSH alias
+  `(0)` indicator while retaining discovery notices and the settings entry.
+  Keep local daemons first and sort all remaining daemon names alphabetically,
+  ignoring case, without retargeting already displayed actions.
+  Keep SSH Terminal failures open until dismissal so their diagnostics are readable.
+  Default SSH working directories to the remote user's home, never the
+  workstation home; apply only explicitly saved VM paths and display them literally.
+  Support current-main remote daemons through the existing global MCP config API
+  and read-only Linux process-verified installation discovery, without requiring
+  unreleased remote metadata or guessing a workstation/PATH installation.
 - **Tray SSH alias discovery settings (#2591):** Add an always-available
   **Discover SSH aliases...** entry next to pairing, with native-first enable and
   optional-prefix steps, validation, Save/Cancel and automatic candidate refresh.

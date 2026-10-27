@@ -238,6 +238,97 @@ def test_shutdown_during_probe_never_starts_forwarding(context):
     tunnel.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "mcp,expected",
+    [
+        ({}, {"mcp_proactive_level": "low", "mcp_enabled": True}),
+        (
+            {"proactive_level": "medium", "enabled": True},
+            {"mcp_proactive_level": "medium", "mcp_enabled": True},
+        ),
+        ({"enabled": False}, {"mcp_proactive_level": "low", "mcp_enabled": False}),
+    ],
+)
+def test_current_main_daemon_mcp_state_uses_its_global_config_api(
+    context, mcp, expected
+):
+    manager, pairing = context
+    connection = _Connection(pairing.profile)
+    tunnel = mock.Mock()
+    stats = {"request_count": 42, "mcp_installed": True}
+    tunnel.request.side_effect = [dict(stats), {"mcp_server": mcp}]
+
+    def stop(_timeout):
+        connection.stop.set()
+        return True
+
+    with (
+        mock.patch.object(manager, "prepare", return_value=pairing),
+        mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel", return_value=tunnel),
+        mock.patch.object(connection.stop, "wait", side_effect=stop),
+    ):
+        manager._run(connection)
+    assert connection.target.status == "running"
+    assert connection.target.stats == {**stats, **expected}
+    assert tunnel.request.call_args_list == [
+        mock.call("GET", "/api/stats"),
+        mock.call("GET", "/api/config?scope=global"),
+    ]
+    assert stats == {"request_count": 42, "mcp_installed": True}
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        None,
+        {"error": "unsupported"},
+        {"features": {"proactive_level": "high"}},
+        {"mcp_server": None},
+        {"mcp_server": {"proactive_level": []}},
+        SSHConnectionError("Unsupported configuration endpoint"),
+    ],
+)
+def test_optional_mcp_compatibility_failure_keeps_vm_online_without_inventing_state(
+    context, config
+):
+    manager, pairing = context
+    connection = _Connection(pairing.profile)
+    stats = {"request_count": 42, "mcp_installed": True}
+    tunnel = mock.Mock()
+    tunnel.request.side_effect = [stats, config]
+
+    def stop(_timeout):
+        connection.stop.set()
+        return True
+
+    with (
+        mock.patch.object(manager, "prepare", return_value=pairing),
+        mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel", return_value=tunnel),
+        mock.patch.object(connection.stop, "wait", side_effect=stop),
+    ):
+        manager._run(connection)
+    assert connection.target.status == "running"
+    assert connection.target.stats == stats
+    assert connection.target.error_message is None
+
+
+@pytest.mark.parametrize(
+    "stats",
+    [
+        {"mcp_installed": True, "mcp_enabled": True, "mcp_proactive_level": "high"},
+        {"mcp_installed": False},
+        {},
+    ],
+)
+def test_mcp_compatibility_only_fetches_missing_capabilities_for_installed_mcp(
+    context, stats
+):
+    manager, _pairing = context
+    tunnel = mock.Mock()
+    assert manager._stats_with_mcp_state(tunnel, stats) == stats
+    tunnel.request.assert_not_called()
+
+
 def test_shutdown_cancels_an_owned_probe_and_refuses_new_enrollment(context):
     manager, pairing = context
     process = mock.Mock()
@@ -391,6 +482,25 @@ def test_poll_only_rest_flow_retains_https_authentication(tmp_path):
             target, pending.prompt_id, {"decision": "block"}
         )
         assert pending.decision_event.is_set()
+        # Exercise the real authenticated scoped endpoint used by existing main
+        # daemons, not just a fabricated new-stats response. Project overrides
+        # must never be requested and unrelated config must not enter the cache.
+        with mock.patch(
+            "ai_guardian.config.writer.load_scoped_config",
+            return_value={
+                "mcp_server": {"proactive_level": "medium"},
+                "daemon": {"auth_token": "synthetic-private-value"},
+            },
+        ) as config:
+            stats = SSHConnectionManager._stats_with_mcp_state(
+                tunnel, {"mcp_installed": True}
+            )
+        assert stats == {
+            "mcp_installed": True,
+            "mcp_enabled": True,
+            "mcp_proactive_level": "medium",
+        }
+        config.assert_called_once_with("global", None)
     finally:
         tunnel.close()
         api.stop()

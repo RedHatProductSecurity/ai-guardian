@@ -117,6 +117,34 @@ class TrayMenuBuilder:
         self._sandbox_create_lock = threading.Lock()
         self._sandbox_create_in_progress = False
 
+    def _target_at(self, slot):
+        """SSH menus bind a connection object; legacy menus retain dynamic slots."""
+        if not isinstance(slot, int):
+            return slot
+        return self._tray._targets[slot] if slot < len(self._tray._targets) else None
+
+    def _ssh_action(self, target, callback):
+        from ai_guardian.tray.ssh_connections import target_action
+
+        return target_action(self._tray, target, callback)
+
+    def _open_ssh_panel(self, target, panel=None):
+        from ai_guardian.daemon.ssh_storage import SSHConnectionError
+
+        if not self._tray._ensure_web_console_ready():
+            raise SSHConnectionError(
+                "The workstation Console is unavailable. Start the local Web Console and retry; no remote browser was launched."
+            )
+        if (
+            tray_menu.open_web_console(
+                target.name, tray_menu.PANEL_TO_WEB_PATH.get(panel, "") if panel else ""
+            )
+            is False
+        ):
+            raise SSHConnectionError(
+                "The workstation Console is unavailable. Start the local Web Console and retry; no remote browser was launched."
+            )
+
     def _on_about(self, icon, item):
         """Show About info via OS dialog."""
 
@@ -161,9 +189,9 @@ class TrayMenuBuilder:
         """Build About menu label with daemon version for a specific slot."""
 
         def _label(_item=None):
-            if slot >= len(self._tray._targets):
+            target = self._target_at(slot)
+            if target is None:
                 return "About"
-            target = self._tray._targets[slot]
             key = (target.name, target.runtime)
             version = self._tray._health._daemon_versions.get(key, "")
             if version:
@@ -176,19 +204,27 @@ class TrayMenuBuilder:
         """Show About info for a specific daemon via OS dialog."""
 
         def action(icon, __):
-            if slot >= len(self._tray._targets):
+            target = self._target_at(slot)
+            if target is None:
                 return
-            target = self._tray._targets[slot]
+            if target.runtime == "ssh":
+                from copy import copy
+
+                target = copy(target)
             screen_bounds = self._capture_tray_screen_bounds(icon)
 
             def _show():
                 try:
                     from ai_guardian.tray.plugins import show_dialog
 
-                    info = self._tray._daemon_about_cache.get(slot)
+                    info = (
+                        self._tray._daemon_about_cache.get(slot)
+                        if isinstance(slot, int)
+                        else None
+                    )
                     if info is None and self._tray._multi_client:
                         info = self._tray._multi_client.get_about(target)
-                        if info:
+                        if info and isinstance(slot, int):
                             self._tray._daemon_about_cache[slot] = info
                     if info:
                         from ai_guardian.daemon.about import format_about_text
@@ -262,6 +298,17 @@ class TrayMenuBuilder:
 
     def _mcp_proactive_label(self, slot=None):
         """Show the effective MCP level for the selected daemon."""
+        if slot is not None and not isinstance(slot, int):
+            stats = slot.stats or {}
+            installed = stats.get("mcp_installed")
+            if installed is False:
+                return "MCP: not installed"
+            if stats.get("mcp_enabled") is False:
+                return "MCP: disabled"
+            level = stats.get("mcp_proactive_level", "unavailable")
+            if slot.status == "paused" and level != "unavailable":
+                level = "paused"
+            return f"MCP Proactive: {level}"
         paused = False
         if slot is None:
             try:
@@ -273,6 +320,36 @@ class TrayMenuBuilder:
             paused = self._tray._targets[slot].status == "paused"
         level = "paused" if paused else self._tray._proactive_level
         return f"MCP Proactive: {level}"
+
+    def _proactive_for_slot(self, slot):
+        if isinstance(slot, int):
+            return self._tray._proactive_level
+        return (slot.stats or {}).get("mcp_proactive_level")
+
+    def _proactive_available(self, slot):
+        return isinstance(slot, int) or (
+            (slot.stats or {}).get("mcp_installed") is True
+            and (slot.stats or {}).get("mcp_enabled", True) is True
+            and self._proactive_for_slot(slot) in ("low", "medium", "high", "paused")
+        )
+
+    def _mk_proactive_change(self, slot, level):
+        if isinstance(slot, int):
+            return lambda _, __: self._tray._on_change_proactive(level)
+
+        def change(target):
+            if not self._proactive_available(target):
+                return False
+            result = self._tray._multi_client.write_config(
+                target, "global", "mcp_server", "proactive_level", level
+            )
+            return bool(
+                isinstance(result, dict)
+                and result.get("status") == "ok"
+                and not result.get("error")
+            )
+
+        return self._ssh_action(slot, change)
 
     def _get_merged_dir_list(self, stats):
         """Merge recently tracked project dirs and paused dirs into a list.
@@ -325,19 +402,20 @@ class TrayMenuBuilder:
         return stats
 
     def _get_slot_stats(self, slot):
-        if slot >= len(self._tray._targets):
+        target = self._target_at(slot)
+        if target is None:
             return {}
-        target = self._tray._targets[slot]
         # Discovery can reorder/replace targets while Linux's popup is open.
         # Requests must use the target whose controls were actually rendered.
-        self._rendered_targets[slot] = target
+        if isinstance(slot, int):
+            self._rendered_targets[slot] = target
         return self._get_menu_stats(target)
 
     def _send_scoped_control(self, slot, scope, identity, minutes=None):
         """Request exactly one scope; never infer success or broaden a failure."""
-        target = self._rendered_targets.get(slot)
-        if target is None and slot < len(self._tray._targets):
-            target = self._tray._targets[slot]
+        target = self._rendered_targets.get(slot) if isinstance(slot, int) else slot
+        if target is None:
+            target = self._target_at(slot)
         verb = "resume" if minutes is None else "pause"
         success = False
         try:
@@ -371,6 +449,11 @@ class TrayMenuBuilder:
         """Create a pause_dir callback for a multi-daemon slot."""
 
         def pause_dir_fn(directory, minutes):
+            if not isinstance(slot, int):
+                return self._ssh_action(
+                    slot,
+                    lambda t: self._send_scoped_control(t, "dir", directory, minutes),
+                )()
             return self._send_scoped_control(slot, "dir", directory, minutes)
 
         return pause_dir_fn
@@ -379,6 +462,10 @@ class TrayMenuBuilder:
         """Create a resume_dir callback for a multi-daemon slot."""
 
         def resume_dir_fn(directory):
+            if not isinstance(slot, int):
+                return self._ssh_action(
+                    slot, lambda t: self._send_scoped_control(t, "dir", directory)
+                )()
             return self._send_scoped_control(slot, "dir", directory)
 
         return resume_dir_fn
@@ -387,6 +474,13 @@ class TrayMenuBuilder:
         """Create a pause-session callback for a multi-daemon slot."""
 
         def pause_session_fn(session_key, minutes):
+            if not isinstance(slot, int):
+                return self._ssh_action(
+                    slot,
+                    lambda t: self._send_scoped_control(
+                        t, "session", session_key, minutes
+                    ),
+                )()
             return self._send_scoped_control(slot, "session", session_key, minutes)
 
         return pause_session_fn
@@ -395,6 +489,10 @@ class TrayMenuBuilder:
         """Create a resume-session callback for a multi-daemon slot."""
 
         def resume_session_fn(session_key):
+            if not isinstance(slot, int):
+                return self._ssh_action(
+                    slot, lambda t: self._send_scoped_control(t, "session", session_key)
+                )()
             return self._send_scoped_control(slot, "session", session_key)
 
         return resume_session_fn
@@ -732,7 +830,8 @@ class TrayMenuBuilder:
 
     def _daemon_status_details(self, slot):
         """Return dynamic status text used by each daemon's Status submenu."""
-        if slot >= len(self._tray._targets):
+        target = self._target_at(slot)
+        if target is None:
             return (
                 "Daemon: unavailable",
                 "○ Unknown",
@@ -741,7 +840,6 @@ class TrayMenuBuilder:
                 (),
             )
 
-        target = self._tray._targets[slot]
         stats = getattr(target, "stats", None)
         if target.status in ("running", "paused"):
             try:
@@ -767,6 +865,12 @@ class TrayMenuBuilder:
             version_mismatch=key
             in getattr(self._tray._health, "_version_mismatch_notified", set()),
         )
+        if target.runtime == "ssh" and target.name in getattr(
+            self._tray, "_ask_forwarding_failed", set()
+        ):
+            from ai_guardian.daemon.ssh_tunnel import POLLING_ERROR
+
+            warnings = (*warnings, POLLING_ERROR)
         runtime = getattr(target, "runtime_type", None) or target.runtime
         if runtime != target.runtime:
             runtime = f"{runtime} ({target.runtime})"
@@ -800,6 +904,7 @@ class TrayMenuBuilder:
             pystray.MenuItem("☾ Paused", None, enabled=False),
             pystray.MenuItem("◌ Starting or recovering", None, enabled=False),
             pystray.MenuItem("⚠ Stopped or not running", None, enabled=False),
+            pystray.MenuItem("○ Offline — reconnecting", None, enabled=False),
             pystray.MenuItem("✗ Error", None, enabled=False),
             pystray.MenuItem("○ Unknown", None, enabled=False),
         )
@@ -827,10 +932,11 @@ class TrayMenuBuilder:
         """Format the Working Dir menu item label for a daemon slot."""
         from ai_guardian.daemon.working_dir import shorten_path
 
-        if slot < len(self._tray._targets):
-            wd = getattr(self._tray._targets[slot], "working_dir", None)
+        target = self._target_at(slot)
+        if target is not None:
+            wd = getattr(target, "working_dir", None)
             if wd:
-                short = shorten_path(wd)
+                short = wd if target.runtime == "ssh" else shorten_path(wd)
                 if len(short) > 50:
                     short = short[:47] + "..."
                 return f"Working Dir: {short}"
@@ -840,9 +946,9 @@ class TrayMenuBuilder:
         """Create a click handler that opens a directory picker for a slot."""
 
         def action(icon, __):
-            if slot >= len(self._tray._targets):
+            t = self._target_at(slot)
+            if t is None:
                 return
-            t = self._tray._targets[slot]
             current = getattr(t, "working_dir", None)
             threading.Thread(
                 target=self._pick_working_dir,
@@ -856,6 +962,42 @@ class TrayMenuBuilder:
     def _pick_working_dir(self, target, current, screen_bounds=None):
         """Run directory picker in background thread and persist result."""
         from ai_guardian.daemon.working_dir import choose_directory, set_working_dir
+
+        if target.runtime == "ssh":
+            from ai_guardian.ui.forms import run_form_flow
+            import posixpath
+
+            def choose(form):
+                message = "Enter an absolute directory on the VM for Terminal and maintenance commands. This does not select a workstation folder or change the daemon's configuration scope."
+                while True:
+                    values = form(
+                        "Working directory — " + target.name,
+                        message,
+                        [
+                            {
+                                "name": "directory",
+                                "label": "VM directory (empty uses remote home)",
+                                "default": current or "",
+                            }
+                        ],
+                        submit_label="Save",
+                    )
+                    if values is None:
+                        return None
+                    path = values.get("directory", "").strip()
+                    if not path or (
+                        posixpath.isabs(path)
+                        and not any(ord(c) < 32 or ord(c) == 127 for c in path)
+                    ):
+                        return path
+                    message = "Choose an absolute directory on the VM, or leave it empty to use its home directory."
+
+            chosen = run_form_flow(choose, screen_bounds=screen_bounds)
+            if chosen is not None and any(t is target for t in self._tray._targets):
+                target.working_dir = chosen or None
+                set_working_dir(target.name, chosen)
+                self._tray._refresh_event.set()
+            return
 
         chosen = choose_directory(
             current,
@@ -897,10 +1039,20 @@ class TrayMenuBuilder:
 
     def _apply_working_dirs(self):
         """Populate target.working_dir from persisted state after discovery."""
-        from ai_guardian.daemon.working_dir import get_working_dir
+        from ai_guardian.daemon.working_dir import get_working_dir, load_working_dirs
+
+        ssh_dirs = (
+            load_working_dirs()
+            if any(t.runtime == "ssh" for t in self._tray._targets)
+            else {}
+        )
 
         for t in self._tray._targets:
-            if not getattr(t, "working_dir", None):
+            if t.runtime == "ssh":
+                # No saved selection means the SSH user's home, not Path.home()
+                # on this workstation. Also clear an inherited pre-fix default.
+                t.working_dir = ssh_dirs.get(t.name) or None
+            elif not getattr(t, "working_dir", None):
                 t.working_dir = get_working_dir(t.name)
 
     @staticmethod
@@ -910,9 +1062,9 @@ class TrayMenuBuilder:
 
     def _sandbox_target_at(self, slot):
         """Return a target slot when it represents a supported sandbox."""
-        if slot >= len(self._tray._targets):
+        target = self._target_at(slot)
+        if target is None:
             return None
-        target = self._tray._targets[slot]
         if self._sandbox_runtime(target) not in {"container", "openshell"}:
             return None
         return target
@@ -3487,32 +3639,37 @@ class TrayMenuBuilder:
         """
         items = []
         for i in range(len(self._tray._targets)):
-            if self._tray._targets[i].runtime == "ssh":
-                continue  # SSH uses cached status and asynchronous controls.
-            idx = i
+            target = self._tray._targets[i]
+            idx = target if target.runtime == "ssh" else i
 
             def make_label(_item, slot=idx):
-                if slot >= len(self._tray._targets):
+                t = self._target_at(slot)
+                if t is None:
                     return ""
-                return self._version_annotated_label(self._tray._targets[slot])
+                return self._version_annotated_label(t)
 
             def make_visible(_item, slot=idx):
-                return self._tray._is_multi_daemon() and slot < len(self._tray._targets)
+                return (
+                    self._tray._is_multi_daemon() and self._target_at(slot) is not None
+                )
 
-            def _mk_open_panel(panel=None, slot=idx):
+            def _mk_open_panel(panel=None, slot=idx, selected=target):
+                if not isinstance(slot, int):
+                    return self._ssh_action(
+                        slot, lambda t: self._open_ssh_panel(t, panel)
+                    )
+
                 def action(_, __):
                     self._tray._check_and_autostart_daemon()
                     if panel and self._tray._ensure_web_console_ready():
                         web_page = tray_menu.PANEL_TO_WEB_PATH.get(panel, "")
                         daemon_name = (
-                            self._tray._targets[slot].name
-                            if slot < len(self._tray._targets)
-                            else ""
+                            selected.name if slot < len(self._tray._targets) else ""
                         )
                         tray_menu.open_web_console(daemon_name, web_page)
                         return
                     if slot < len(self._tray._targets):
-                        t = self._tray._targets[slot]
+                        t = selected
                         if self._tray._multi_client:
                             self._tray._multi_client.open_console(t, panel)
                         else:
@@ -3520,15 +3677,18 @@ class TrayMenuBuilder:
 
                 return action
 
-            def _mk_web_console_action(slot=idx):
+            def _mk_web_console_action(slot=idx, selected=target):
+                if not isinstance(slot, int):
+                    return self._ssh_action(slot, self._open_ssh_panel)
+
                 def action(_, __):
                     self._tray._check_and_autostart_daemon()
                     if self._tray._ensure_web_console_ready():
                         if slot < len(self._tray._targets):
-                            tray_menu.open_web_console(self._tray._targets[slot].name)
+                            tray_menu.open_web_console(selected.name)
                         return
                     if slot < len(self._tray._targets):
-                        t = self._tray._targets[slot]
+                        t = selected
                         if self._tray._multi_client:
                             self._tray._multi_client.open_console(t)
                         else:
@@ -3538,15 +3698,18 @@ class TrayMenuBuilder:
 
             def _mk_web_console_visible(slot=idx):
                 def check(_):
-                    return slot < len(self._tray._targets)
+                    return self._target_at(slot) is not None
 
                 return check
 
-            def _mk_open_shell(slot=idx):
+            def _mk_open_shell(slot=idx, selected=target):
+                if not isinstance(slot, int):
+                    return self._ssh_action(slot, self._tray._multi_client.open_shell)
+
                 def action(_, __):
                     self._tray._check_and_autostart_daemon()
                     if slot < len(self._tray._targets):
-                        t = self._tray._targets[slot]
+                        t = selected
                         if self._tray._multi_client:
                             self._tray._multi_client.open_shell(t)
                         else:
@@ -3565,11 +3728,14 @@ class TrayMenuBuilder:
             else:
                 shell_item = pystray.MenuItem("Terminal", _mk_open_shell())
 
-            def _mk_doctor(slot=idx):
+            def _mk_doctor(slot=idx, selected=target):
+                if not isinstance(slot, int):
+                    return self._ssh_action(slot, self._tray._multi_client.open_doctor)
+
                 def action(_, __):
                     self._tray._check_and_autostart_daemon()
                     if slot < len(self._tray._targets):
-                        t = self._tray._targets[slot]
+                        t = selected
                         if self._tray._multi_client:
                             self._tray._multi_client.open_doctor(t)
                         else:
@@ -3577,11 +3743,16 @@ class TrayMenuBuilder:
 
                 return action
 
-            def _mk_pause(minutes, slot=idx):
+            def _mk_pause(minutes, slot=idx, selected=target):
+                if not isinstance(slot, int):
+                    return self._ssh_action(
+                        slot, lambda t: self._tray._multi_client.send_pause(t, minutes)
+                    )
+
                 def action(_, __):
                     self._tray._check_and_autostart_daemon()
                     if slot < len(self._tray._targets):
-                        t = self._tray._targets[slot]
+                        t = selected
                         if self._tray._multi_client:
                             self._tray._multi_client.send_pause(t, minutes)
                         else:
@@ -3590,11 +3761,14 @@ class TrayMenuBuilder:
 
                 return action
 
-            def _mk_resume(slot=idx):
+            def _mk_resume(slot=idx, selected=target):
+                if not isinstance(slot, int):
+                    return self._ssh_action(slot, self._tray._multi_client.send_resume)
+
                 def action(_, __):
                     self._tray._check_and_autostart_daemon()
                     if slot < len(self._tray._targets):
-                        t = self._tray._targets[slot]
+                        t = selected
                         if self._tray._multi_client:
                             self._tray._multi_client.send_resume(t)
                         else:
@@ -3603,22 +3777,28 @@ class TrayMenuBuilder:
 
                 return action
 
-            def _mk_stop(slot=idx):
+            def _mk_stop(slot=idx, selected=target):
+                if not isinstance(slot, int):
+                    return self._ssh_action(slot, self._tray._multi_client.send_stop)
+
                 def action(_, __):
                     if slot < len(self._tray._targets):
-                        t = self._tray._targets[slot]
+                        t = selected
                         if self._tray._multi_client:
                             self._tray._multi_client.send_stop(t)
 
                 return action
 
-            def _mk_restart(slot=idx):
+            def _mk_restart(slot=idx, selected=target):
+                if not isinstance(slot, int):
+                    return self._ssh_action(slot, self._tray._multi_client.send_restart)
+
                 def action(_, __):
                     if self._tray._health._restart_in_progress:
                         return
                     if slot >= len(self._tray._targets):
                         return
-                    t = self._tray._targets[slot]
+                    t = selected
                     if not self._tray._multi_client:
                         return
                     self._tray._health._restart_in_progress = True
@@ -3664,9 +3844,9 @@ class TrayMenuBuilder:
 
             def _mk_daemon_stale_vis(slot=idx):
                 def check(_item):
-                    if slot >= len(self._tray._targets):
+                    t = self._target_at(slot)
+                    if t is None:
                         return False
-                    t = self._tray._targets[slot]
                     return (
                         t.runtime == "local"
                         and self._tray._health._is_target_stale(t)
@@ -3677,9 +3857,9 @@ class TrayMenuBuilder:
 
             def _mk_daemon_stale_vis_remote(slot=idx):
                 def check(_item):
-                    if slot >= len(self._tray._targets):
+                    t = self._target_at(slot)
+                    if t is None:
                         return False
-                    t = self._tray._targets[slot]
                     return t.runtime in (
                         "container",
                         "kubernetes",
@@ -3691,9 +3871,9 @@ class TrayMenuBuilder:
                 def label(_item):
                     from ai_guardian import __version__ as _hv
 
-                    if slot >= len(self._tray._targets):
+                    t = self._target_at(slot)
+                    if t is None:
                         return "⚠️ Container daemon outdated — rebuild image"
-                    t = self._tray._targets[slot]
                     daemon_ver = self._tray._health._daemon_versions.get(
                         (t.name, t.runtime), ""
                     )
@@ -3800,14 +3980,15 @@ class TrayMenuBuilder:
             stats_fns = _mk_stats()
 
             def _is_slot_running(_item, slot=idx):
-                if slot >= len(self._tray._targets):
+                t = self._target_at(slot)
+                if t is None:
                     return False
-                if self._tray._targets[slot].status in ("running", "paused"):
+                if t.status in ("running", "paused"):
                     return True
-                return self._tray._can_autostart_daemon()
+                return t.runtime != "ssh" and self._tray._can_autostart_daemon()
 
             multi_plugin_items = self._tray._plugins._build_multi_daemon_plugin_slots(
-                idx
+                target
             )
 
             def _has_multi_pause_dirs(_item, stats_fn=stats_fns[13]):
@@ -3879,152 +4060,172 @@ class TrayMenuBuilder:
                 visible=_is_slot_running,
             )
 
-            items.append(
-                pystray.MenuItem(
-                    make_label,
-                    pystray.Menu(
-                        pystray.MenuItem(
-                            "⚠️ Running old code — click to restart",
-                            _mk_restart(),
-                            visible=_mk_daemon_stale_vis(),
+            daemon_item = pystray.MenuItem(
+                make_label,
+                pystray.Menu(
+                    pystray.MenuItem(
+                        "⚠️ Running old code — click to restart",
+                        _mk_restart(),
+                        visible=_mk_daemon_stale_vis(),
+                    ),
+                    pystray.MenuItem(
+                        _mk_stale_remote_label(),
+                        None,
+                        visible=_mk_daemon_stale_vis_remote(),
+                        enabled=False,
+                    ),
+                    self._build_daemon_status_menu_item(idx),
+                    pause_item,
+                    shell_item,
+                    self._build_sandbox_manage_menu_item(idx),
+                    pystray.Menu.SEPARATOR,
+                    pystray.MenuItem(
+                        "Console",
+                        _mk_web_console_action(idx),
+                        visible=_mk_web_console_visible(idx),
+                        enabled=_is_slot_running,
+                    ),
+                    pystray.MenuItem(
+                        "Violations",
+                        _mk_open_panel("panel-violations"),
+                        enabled=_is_slot_running,
+                    ),
+                    pystray.MenuItem(
+                        "Metrics & Audit",
+                        _mk_open_panel("panel-metrics"),
+                        enabled=_is_slot_running,
+                    ),
+                    pystray.MenuItem(
+                        "Statistics",
+                        pystray.Menu(
+                            pystray.MenuItem(stats_fns[0], None),
+                            pystray.MenuItem(stats_fns[1], None),
+                            pystray.MenuItem(stats_fns[2], None),
+                            pystray.MenuItem(stats_fns[3], None),
+                            pystray.Menu.SEPARATOR,
+                            pystray.MenuItem(stats_fns[4], None),
+                            pystray.MenuItem(stats_fns[5], None),
+                            pystray.MenuItem(stats_fns[6], None),
+                            pystray.Menu.SEPARATOR,
+                            pystray.MenuItem(stats_fns[7], None),
+                            pystray.Menu.SEPARATOR,
+                            pystray.MenuItem(stats_fns[8], None, visible=stats_fns[9]),
+                            pystray.Menu.SEPARATOR,
+                            pystray.MenuItem(stats_fns[10], None),
                         ),
-                        pystray.MenuItem(
-                            _mk_stale_remote_label(),
-                            None,
-                            visible=_mk_daemon_stale_vis_remote(),
-                            enabled=False,
-                        ),
-                        self._build_daemon_status_menu_item(idx),
-                        pause_item,
-                        shell_item,
-                        self._build_sandbox_manage_menu_item(idx),
-                        pystray.Menu.SEPARATOR,
-                        pystray.MenuItem(
-                            "Console",
-                            _mk_web_console_action(idx),
-                            visible=_mk_web_console_visible(idx),
-                            enabled=_is_slot_running,
-                        ),
-                        pystray.MenuItem(
-                            "Violations",
-                            _mk_open_panel("panel-violations"),
-                            enabled=_is_slot_running,
-                        ),
-                        pystray.MenuItem(
-                            "Metrics & Audit",
-                            _mk_open_panel("panel-metrics"),
-                            enabled=_is_slot_running,
-                        ),
-                        pystray.MenuItem(
-                            "Statistics",
-                            pystray.Menu(
-                                pystray.MenuItem(stats_fns[0], None),
-                                pystray.MenuItem(stats_fns[1], None),
-                                pystray.MenuItem(stats_fns[2], None),
-                                pystray.MenuItem(stats_fns[3], None),
-                                pystray.Menu.SEPARATOR,
-                                pystray.MenuItem(stats_fns[4], None),
-                                pystray.MenuItem(stats_fns[5], None),
-                                pystray.MenuItem(stats_fns[6], None),
-                                pystray.Menu.SEPARATOR,
-                                pystray.MenuItem(stats_fns[7], None),
-                                pystray.Menu.SEPARATOR,
-                                pystray.MenuItem(
-                                    stats_fns[8], None, visible=stats_fns[9]
-                                ),
-                                pystray.Menu.SEPARATOR,
-                                pystray.MenuItem(stats_fns[10], None),
+                        enabled=_is_slot_running,
+                    ),
+                    pystray.Menu.SEPARATOR,
+                    pystray.MenuItem(
+                        lambda _i, s=idx: self._mcp_proactive_label(s),
+                        pystray.Menu(
+                            pystray.MenuItem(
+                                "Remote MCP state unavailable; reconnect or upgrade the daemon. If MCP is not installed, run setup on the VM.",
+                                None,
+                                enabled=False,
+                                visible=lambda _, s=idx: not isinstance(s, int)
+                                and not self._proactive_available(s),
                             ),
-                            enabled=_is_slot_running,
-                        ),
-                        pystray.Menu.SEPARATOR,
-                        pystray.MenuItem(
-                            lambda _i, s=idx: self._mcp_proactive_label(s),
-                            pystray.Menu(
-                                pystray.MenuItem(
-                                    "low",
-                                    lambda _, __: self._tray._on_change_proactive(
-                                        "low"
-                                    ),
-                                    checked=lambda _: self._tray._proactive_level
-                                    == "low",
-                                    radio=True,
-                                ),
-                                pystray.MenuItem(
-                                    "medium",
-                                    lambda _, __: self._tray._on_change_proactive(
-                                        "medium"
-                                    ),
-                                    checked=lambda _: self._tray._proactive_level
-                                    == "medium",
-                                    radio=True,
-                                ),
-                                pystray.MenuItem(
-                                    "high",
-                                    lambda _, __: self._tray._on_change_proactive(
-                                        "high"
-                                    ),
-                                    checked=lambda _: self._tray._proactive_level
-                                    == "high",
-                                    radio=True,
-                                ),
-                                pystray.MenuItem(
-                                    "paused",
-                                    lambda _, __: self._tray._on_change_proactive(
-                                        "paused"
-                                    ),
-                                    checked=lambda _: self._tray._proactive_level
-                                    == "paused",
-                                    radio=True,
-                                ),
+                            pystray.MenuItem(
+                                "low",
+                                self._mk_proactive_change(idx, "low"),
+                                checked=lambda _, s=idx: self._proactive_for_slot(s)
+                                == "low",
+                                enabled=lambda _, s=idx: self._proactive_available(s),
+                                radio=True,
                             ),
-                            visible=lambda _i, s=idx: self._tray._is_mcp_for_slot(s),
-                            enabled=_is_slot_running,
-                        ),
-                        pystray.Menu.SEPARATOR,
-                        pystray.MenuItem(
-                            lambda _i, s=idx: self._working_dir_menu_label(s),
-                            self._mk_change_working_dir(idx),
-                        ),
-                        pystray.Menu.SEPARATOR,
-                        *multi_plugin_items,
-                        pystray.Menu.SEPARATOR,
-                        pystray.MenuItem(
-                            "Start daemon",
-                            _mk_restart(),
-                            visible=lambda _i, s=idx: (
-                                s < len(self._tray._targets)
-                                and self._tray._targets[s].status
-                                not in ("running", "paused")
+                            pystray.MenuItem(
+                                "medium",
+                                self._mk_proactive_change(idx, "medium"),
+                                checked=lambda _, s=idx: self._proactive_for_slot(s)
+                                == "medium",
+                                enabled=lambda _, s=idx: self._proactive_available(s),
+                                radio=True,
+                            ),
+                            pystray.MenuItem(
+                                "high",
+                                self._mk_proactive_change(idx, "high"),
+                                checked=lambda _, s=idx: self._proactive_for_slot(s)
+                                == "high",
+                                enabled=lambda _, s=idx: self._proactive_available(s),
+                                radio=True,
+                            ),
+                            pystray.MenuItem(
+                                "paused",
+                                self._mk_proactive_change(idx, "paused"),
+                                checked=lambda _, s=idx: self._proactive_for_slot(s)
+                                == "paused",
+                                enabled=lambda _, s=idx: self._proactive_available(s),
+                                radio=True,
                             ),
                         ),
-                        pystray.MenuItem(
-                            lambda _i, s=idx: self._tray._health._upgrade_label(
-                                (
-                                    self._tray._targets[s]
-                                    if s < len(self._tray._targets)
-                                    else None
-                                ),
-                            ),
-                            self._tray._health._mk_upgrade(idx),
-                            visible=lambda _i, s=idx: (
-                                s < len(self._tray._targets)
-                                and self._tray._health._is_upgrade_available(
-                                    self._tray._targets[s]
-                                )
-                            ),
-                        ),
-                        pystray.Menu.SEPARATOR,
-                        pystray.MenuItem(
-                            self._daemon_about_label(idx),
-                            self._on_daemon_about(idx),
-                            enabled=_is_slot_running,
+                        visible=lambda _i, s=idx: not isinstance(s, int)
+                        or self._tray._is_mcp_for_slot(s),
+                        enabled=_is_slot_running,
+                    ),
+                    pystray.Menu.SEPARATOR,
+                    pystray.MenuItem(
+                        lambda _i, s=idx: self._working_dir_menu_label(s),
+                        self._mk_change_working_dir(target),
+                    ),
+                    pystray.Menu.SEPARATOR,
+                    *multi_plugin_items,
+                    pystray.Menu.SEPARATOR,
+                    pystray.MenuItem(
+                        "Start daemon",
+                        _mk_restart(),
+                        visible=lambda _i, s=idx: (
+                            self._target_at(s) is not None
+                            and self._target_at(s).status not in ("running", "paused")
                         ),
                     ),
-                    visible=make_visible,
-                )
+                    pystray.MenuItem(
+                        lambda _i, s=idx: self._tray._health._upgrade_label(
+                            self._target_at(s),
+                        ),
+                        self._tray._health._mk_upgrade(target),
+                        visible=lambda _i, s=idx: (
+                            self._target_at(s) is not None
+                            and self._tray._health._is_upgrade_available(
+                                self._target_at(s)
+                            )
+                        ),
+                    ),
+                    pystray.Menu.SEPARATOR,
+                    pystray.MenuItem(
+                        self._daemon_about_label(target),
+                        self._on_daemon_about(target),
+                        enabled=_is_slot_running,
+                    ),
+                    *self._ssh_management_items(target),
+                ),
+                visible=make_visible,
             )
+            if target.runtime == "ssh" and len(self._tray._targets) == 1:
+                items.append(pystray.MenuItem(make_label, None))
+                items.extend(daemon_item.submenu.items)
+            else:
+                items.append(daemon_item)
         return items
+
+    def _ssh_management_items(self, target):
+        if target.runtime != "ssh":
+            return []
+        from ai_guardian.tray.ssh_connections import open_management
+
+        return [
+            pystray.MenuItem(
+                "Remote CLI unavailable — start the daemon and reconnect, or use Terminal",
+                None,
+                enabled=False,
+                visible=lambda _: target.ssh_commands is None
+                or target.ssh_commands.cli is None,
+            ),
+            pystray.MenuItem(
+                "Manage SSH connection...",
+                self._ssh_action(target, lambda _: open_management(self._tray)),
+            ),
+        ]
 
     def _build_ide_setup_menu_items(self):
         """Build the top-level IDE/CLI setup submenu.

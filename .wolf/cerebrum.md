@@ -6,6 +6,10 @@
 
 ## User Preferences
 
+- Tray target ordering: keep local daemons first, then sort all other displayed
+  daemon names alphabetically ignoring case. An empty SSH alias `(0)` indicator
+  should disappear; retain discovery warnings and the always-available settings.
+
 - New modal entry points must reuse a shared dispatcher, never repeat the
   Native → Tkinter → NiceGUI cascade locally. Keep the implementation checklist
   in `AGENTS.md` and the reusable recipe in `docs/MODAL_PROVIDERS.md` so future
@@ -106,6 +110,20 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **SSH menu compatibility and working directories (#2592):** A healthy remote
+  daemon from main does not publish new feature-branch stats or PID fields.
+  Asking the user to upgrade main cannot add them. Read missing MCP state from
+  that VM's existing authenticated `/api/config?scope=global`, not workstation
+  settings or the daemon's active project overlay. Keep optional capability-query
+  failures separate from daemon connectivity. The fixed read-only Linux probe can
+  identify the same-user daemon interpreter from procfs argv/executable identity;
+  preserve its venv link, never guess PATH or publish context before TLS/auth.
+  `get_working_dir(name)` defaults to **workstation** `Path.home()`: SSH must load
+  only explicit saved selections and otherwise retain `None`/remote home, including
+  after repeated discovery or resetting to empty. Display remote paths literally,
+  never shorten against workstation home. Keep SSH terminals open after exit so
+  diagnostics can be read. Mock tests without the discovery step missed this bug.
 
 - **Tray SSH discovery settings (#2591):** Keep the narrow workstation-global
   writer in `daemon/ssh_config.py`; Web service entry points still enforce the
