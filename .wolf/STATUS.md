@@ -5,9 +5,49 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-27 (UTC)
+> Last updated: 2026-10-28 (UTC)
 
 ---
+
+## Issue #2581 implementation — 2026-10-28
+
+- User authorized implementation with “go” after initialization. Managed DAF
+  `RedHatProductSecurity-ai-guardian-2581`, existing branch `2581`; the qualified
+  ticket was read once. Keep DAF-managed titles and defer commits/PR to completion.
+- Added stdlib-only `ui/monitor.py`: frozen display-only context, JSON restoration,
+  action-time Windows Shell/GTK-X11 capture, usable monitor inventory, identity
+  revalidation, current-DPI clamping and disconnected-screen primary fallback.
+  Extended existing macOS AppKit capture; do not import AppKit before isolated Tk.
+- Propagated context through modal lifecycle/children, plugin parameters and Browse,
+  target-selector CLI/follow-up output, sandbox windows and delayed source support
+  flows including View, separate upload/publication reviews and results. Support
+  loads installed placement helpers by anchored path, without package/cwd imports.
+  Display metadata never enters diagnostic bundles or grants consent.
+- Unpositioned native providers defer to Tk without weakening exclusive preferences,
+  complete controls, startup-only fallback or terminal cancellation. Cocoa/WinForms
+  revalidate identity inside their child too. Long parameter/support forms use a
+  two-axis viewport with reserved actions; wrapped, unchecked consent stays visible.
+- Browser, Wayland/XWayland and remote-panel restrictions have explicit manual-move
+  guidance, not placement guarantees. Inventory failure discards stale offsets for
+  a small resizable WM-positioned recovery window. Single-monitor/scheduled/hook
+  defaults remain unchanged. Docs: `docs/MODAL_PROVIDERS.md`, `docs/SUPPORT.md`;
+  updated Unreleased changelog and release-readiness CLI/contracts gate.
+- **Validation:** **2,230 related unit/UX tests pass**, including complete affected
+  SSH/support/modal/about/setup/sandbox contracts; 3 dependency deprecation warnings.
+  Focused 54-test rerun measures **91%** for monitor helpers at
+  `/tmp/opencode/guardian-2581-monitor.coverage`. Coverage needs a targeted rcfile
+  because the normal configuration omits `ui/*`. Black py310, Ruff, Pylint E,
+  project `uv run --extra dev mypy` (324 files), CLI help and whitespace pass.
+  Standalone global Mypy has unrelated Requests-stub errors; use the project env.
+- **Pending:** physical mouse/keyboard multi-monitor qualification across macOS,
+  Windows/X11, mixed DPI/taskbars/negative coordinates, delayed/reopened dialogs,
+  disconnects and explicit browser/Wayland/remote-panel fallback. Mocks do not prove
+  real placement/focus. No deliberate live UI qualification, uploads, settings changes, restart, full
+  suite, containers, commit, push or PR. Changes remain uncommitted; OpenWolf's
+  generated anatomy changes were reviewed and retained. Added a DAF progress note
+  and issue comment `6458179852`, explicitly keeping physical qualification pending;
+  logged the session via `openwolf memory log` using DAF's verified native session ID.
+  Earlier sections are history.
 
 ## PR #2600 repeated CodeQL failure — 2026-10-27
 

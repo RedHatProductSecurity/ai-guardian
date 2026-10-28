@@ -81,6 +81,9 @@ def test_support_entry_is_global_without_daemon_or_mcp_dependency(monkeypatch, t
     monkeypatch.setattr(tray, "_can_autostart_daemon", daemon)
     launch = Mock(return_value=True)
     monkeypatch.setattr(menu, "launch_support", launch)
+    bounds = (1920, 0, 1920, 1040)
+    capture = Mock(return_value=bounds)
+    monkeypatch.setattr(tray._menu, "_capture_tray_screen_bounds", capture)
 
     rendered = tray._build_tray_menu()
     support = [
@@ -98,7 +101,8 @@ def test_support_entry_is_global_without_daemon_or_mcp_dependency(monkeypatch, t
 
     support[0].action(None, support[0])
 
-    launch.assert_called_once_with()
+    launch.assert_called_once_with(screen_bounds=bounds)
+    capture.assert_called_once_with(None)
     daemon.assert_not_called()
 
 

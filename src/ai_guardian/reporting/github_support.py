@@ -588,6 +588,10 @@ def review_dialog(request: dict) -> dict | None:
     """A native child owns the UI event loop; no stdin/HTTP approval fallback."""
     import sys
     from ai_guardian.ui.display import get_preferred_ui, _ensure_tcl_library
+    from ai_guardian.ui.monitor import current_origin, screen_payload
+
+    # Display metadata never grants consent and is never retained in diagnostics.
+    request = {**request, "screen_bounds": screen_payload(current_origin())}
 
     public_review = request.get("mode") in ("edit", "upload", "approve")
     if get_preferred_ui() == "headless" or os.environ.get("AI_GUARDIAN_NO_TKINTER"):

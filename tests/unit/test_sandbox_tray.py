@@ -2812,7 +2812,7 @@ class TestSandboxDialogFallback:
             ),
             mock.patch.dict("sys.modules", {"AppKit": appkit}),
         ):
-            assert _get_tray_screen_bounds(icon) == (1920, 37, 2560, 1380)
+            assert _get_tray_screen_bounds(icon).bounds == (1920, 37, 2560, 1380)
 
     def test_tray_screen_bounds_falls_back_to_pointer_display_without_icon(self):
         from ai_guardian.tray.sandbox_dialog import _get_tray_screen_bounds
@@ -2837,7 +2837,7 @@ class TestSandboxDialogFallback:
             ),
             mock.patch.dict("sys.modules", {"AppKit": appkit}),
         ):
-            assert _get_tray_screen_bounds() == (1920, 37, 2560, 1380)
+            assert _get_tray_screen_bounds().bounds == (1920, 37, 2560, 1380)
 
     def test_tray_screen_bounds_prefer_current_menu_event_display(self):
         from ai_guardian.tray.sandbox_dialog import _get_tray_screen_bounds
@@ -2866,7 +2866,7 @@ class TestSandboxDialogFallback:
             ),
             mock.patch.dict("sys.modules", {"AppKit": appkit}),
         ):
-            assert _get_tray_screen_bounds(icon) == (1920, 37, 2560, 1380)
+            assert _get_tray_screen_bounds(icon).bounds == (1920, 37, 2560, 1380)
 
     def test_tray_screen_bounds_use_pointer_display_for_mouse_menu_event(self):
         from ai_guardian.tray.sandbox_dialog import _get_tray_screen_bounds
@@ -2900,7 +2900,7 @@ class TestSandboxDialogFallback:
             ),
             mock.patch.dict("sys.modules", {"AppKit": appkit}),
         ):
-            assert _get_tray_screen_bounds(icon) == (1920, 37, 2560, 1380)
+            assert _get_tray_screen_bounds(icon).bounds == (1920, 37, 2560, 1380)
 
     def test_place_window_on_screen_uses_centered_geometry(self):
         from ai_guardian.tray.sandbox_dialog import _place_window_on_screen

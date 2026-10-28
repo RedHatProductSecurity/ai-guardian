@@ -71,14 +71,15 @@ controls.
 
 ### Explicit exceptions
 
-- **Placement:** with captured macOS screen bounds, plain AppleScript messages,
-  confirmations and directory pickers skip native and use the screen-aware Tk
-  implementation first. Cocoa setup/action prompts can place their native window
-  on that display. Tk retains the captured geometry through subprocess payloads.
-  Browser-window placement is desktop-managed, not guaranteed on that monitor.
-  A screen-aware directory picker without Tk returns no selection rather than
-  opening an unplaced native panel. Bounds do not force Tk over an explicit
-  browser preference for forms/messages.
+- **Placement:** with captured monitor context, native implementations without a
+  positioned window/owner are ineligible on **all** platforms. Messages,
+  confirmations and host-path pickers therefore start with isolated Tk; Linux's
+  zenity/kdialog forms/actions likewise defer to Tk. Cocoa forms/setup/actions and
+  WinForms simple forms retain native eligibility when the complete layout fits.
+  Restricted/unknown origins and small work areas use the complete scrollable Tk
+  implementation. Browser forms retain the context and show explicit manual-move
+  guidance rather than claiming URL launch places a window. Explicit preferences
+  remain exclusive. See [Physical-monitor placement](#physical-monitor-placement).
 - **Multi-target selection:** the existing NiceGUI-only implementation preserves
   multi-selection, Select all, validation and disconnect cancellation. No native
   or Tk implementation currently implements that complete contract. `tkinter`
@@ -149,6 +150,54 @@ No-UI outcomes remain non-destructive: forms/target/path selection return no val
 confirmations return false, proactive prompts dismiss (or use the shortest snooze
 in two-step flows), and ask uses its existing configured security fallback. No
 provider failure independently grants permission or performs a destructive action.
+
+## Physical-monitor placement
+
+Tray callbacks capture display-only context **before** starting a worker, child
+process, source collection or command. It contains immutable usable bounds,
+platform display identity when available, coordinate/DPI information and whether
+automatic placement can be enforced. The same context follows confirmations,
+reopened forms, pickers, progress/log/error/result windows and support View/upload/
+publication reviews. It is not saved in bundles/configuration and grants no consent.
+
+`ui/monitor.py` is the shared placement implementation. Immediately before showing
+a window it re-enumerates monitors by identity, not by the later pointer/focus or
+old geometry. Rearranged/resized monitors use their current work area. If the
+origin disappears, use the primary monitor's current work area. If inventory is
+unavailable, discard the stale offset and let the window manager place a smaller,
+resizable recovery window; its title explains **Display unavailable; move window
+to a visible screen**. Single-monitor and non-tray flows keep normal WM defaults.
+Identity means the platform's display identifier, not a promise of hardware serial
+tracking where the desktop exposes only connector/logical identity.
+
+| Platform / host | Capture and coordinates | Qualification / explicit fallback |
+|---|---|---|
+| macOS | Existing AppKit mouse-menu event, menu window/status-item context for keyboard activation; `screens[0]` baseline converts Cocoa points to Tk top-left coordinates. Cocoa display number survives geometry changes. | Tk stays isolated; inventory uses a non-UI Cocoa child, never AppKit-before-Tk. An unknown keyboard origin is not replaced with an unrelated pointer. |
+| Windows | Shell notification-icon rectangle, not another application's focus or the keyboard user's pointer. Monitor work areas exclude taskbars; device interface identity is preferred over display numbering. | Capture and Tk/WinForms use per-monitor-aware physical pixels. Coordinates are not multiplied by DPI; current DPI controls decoration allowance. |
+| Linux X11 | Mapped GTK tray-menu window, or an actual pointer menu event; GTK device scale converts to XRandR root pixels. XRandR monitor identity and EWMH work area are queried through optional system X11/XRandR libraries. | No Tk or subprocess is started on the tray loop. Missing libraries/desktop geometry produce explicit recovery, not stale offsets. Native commands lacking reliable monitor ownership are ineligible. |
+| Remote AppIndicator/DBusMenu hosts | The panel may render the menu in another process without supplying its physical coordinates, including keyboard activation. | Do **not** guess from pointer/focus. Use a visible desktop-managed Tk window titled **Move this window to the tray screen**; move it with the title bar or the desktop's Move-to-screen command before continuing. |
+| Wayland / XWayland | The compositor can deny absolute positioning or expose only XWayland monitor data. | Position requests are best effort, **not a guarantee**. The same explicit title/manual-move fallback applies. Native Wayland without X11 inventory uses the smaller WM-positioned recovery window. |
+| NiceGUI in a normal browser | Every standalone modal retains originating context, including target selection and plugin parameter forms. | A browser may reuse any window. A visible banner says **The browser cannot place this dialog… Move this window… before continuing.** Move the browser with the title bar/desktop controls. No unsupported `moveTo`, silent discarded argument, automatic permission grant, or claim of enforced placement. Already-open Web Console pages remain browser-owned. |
+
+Placement-capable Tk windows clamp to usable work areas with current-DPI frame
+allowance and capped minimum/maximum sizes; scrollable content and bottom actions
+remain available. Parameter forms and tray support reviews use a shared
+two-axis viewport with reserved actions; support's full, wrapped, initially
+unchecked consent stays outside that scrolling review. Native Cocoa providers
+share an in-child identity check for every window, including Later, and reject
+an undersized complete layout before first display rather than dropping controls.
+WinForms also rechecks screen identity/work area after child startup.
+Negative coordinates are absolute (`+-N` in Tk geometry), not
+offsets from another screen's edge. Owned file panels receive a positioned parent;
+support preview windows use the action origin even if the parent was moved later.
+Folder opening/external application links remain explicitly user-launched desktop
+applications, not AI Guardian-owned modal windows.
+
+Scheduled setup/upgrade prompts and hook-originated asks have **no tray origin**:
+their existing provider/security fallback and WM/browser placement remain the
+default. No pointer position is fabricated to label them as tray actions. Support
+continues to require its isolated native user-only approvals; moving a window,
+Next, or provider failure never authorizes collection/upload/publication.
 
 ## Implementation and automated contracts
 
@@ -237,10 +286,20 @@ monitor, result and sanitized screenshots/timing for each matrix row.
    informational/review windows open beyond 30 seconds. No cancellation or
    interrupted wait should produce another toolkit. Inject a post-map child
    failure in a developer test harness and confirm no replacement window appears.
-5. From a secondary monitor, exercise placement-aware rows, including Cocoa setup,
-   Tk forms/messages/directory panels and destructive confirmation. Check focus
-   after the tray closes, repeated opens, and that no permanent topmost hint remains.
-   Record browser placement limitations separately.
+5. On **physical** monitors, invoke every applicable matrix row from a non-primary
+   tray/menu, with both mouse and keyboard. Include About/results, setup plus Later,
+   SSH settings/pairing, parameters plus Browse, target selection and each sandbox
+   form/confirmation/upload/policy/progress/log/error/reopen. Repeat while delayed:
+   move pointer **and** application focus to a different screen before display.
+   Exercise a pre-display provider failure and subsequent windows without changing
+   the origin. Verify the complete outer window and controls fit the usable area.
+   Repeat with monitors left/right/above/below primary, negative coordinates,
+   mixed resolutions, 100%/150%/200% scaling and taskbars/docks on different edges.
+   Rearrange/resize, then disconnect the originating screen during a delayed flow;
+   verify visible primary fallback, and single-monitor behavior. Check focus after
+   tray close/repeated opens and absence of permanent topmost. For remote panels,
+   Wayland or browsers, verify the **explicit manual-move guidance** and actually
+   move the window before continuing; record this as fallback, not enforcement.
 6. Verify typed-name deletion rejects incorrect/empty text. Review the last lines
    of large policies, upload errors and logs, then cancel: no mutation occurs.
    Check log scrolling/copy and progress/Connect behavior separately.
@@ -253,6 +312,9 @@ monitor, result and sanitized screenshots/timing for each matrix row.
     desktop opens, and failures never collect desktop files as a substitute.
    Mock/cancel public upload and publication reviews; do not publish diagnostics as
     part of UI verification. Live publication requires separate operator consent.
+   For each support stage, including per-file View, check the same physical-monitor
+   origin through source delays and provider startup errors. No placement test may
+   auto-check consent, upload a Gist, publish a Discussion or duplicate a send.
 8. SSH discovery settings: with discovery off, zero matches and no enrolled
    daemons, find **Discover SSH aliases...** next to **Add daemon via SSH**.
    Check both current values, cancel/close either step, and confirm no persistence.

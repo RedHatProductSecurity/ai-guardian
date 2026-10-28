@@ -126,8 +126,10 @@ def _show_file_preview(parent, request: dict, name: str) -> None:
     from tkinter.scrolledtext import ScrolledText
 
     window = tk.Toplevel(parent)
+    window.withdraw()
     window.title(f"Prepared diagnostic — {name}")
     window.geometry("900x650")
+    _place_review_window(window, request, 900, 650)
     window.transient(parent)
     controls = ttk.Frame(window)
     controls.pack(side="bottom", fill="x", padx=12, pady=(0, 12))
@@ -204,6 +206,7 @@ def _show_file_preview(parent, request: dict, name: str) -> None:
 
     ttk.Button(controls, text="Close", command=close).pack(side="right")
     window.protocol("WM_DELETE_WINDOW", close)
+    _present_window(window)
     window.grab_set()
     parent.wait_window(window)
 
@@ -401,6 +404,21 @@ def _present_window(root) -> None:
     root.after(200, release_topmost)
 
 
+def _monitor_helpers():
+    # Anchored installed stdlib-only code, never cwd/PYTHONPATH or a request path.
+    # Keep the trusted reviewer usable with isolated, user-site-only installs.
+    import runpy
+
+    return runpy.run_path(str(Path(__file__).resolve().with_name("monitor.py")))
+
+
+def _place_review_window(window, request, width, height):
+    if request.get("screen_bounds") is not None:
+        _monitor_helpers()["place_tk_window"](
+            window, request["screen_bounds"], width, height
+        )
+
+
 def show_review(request: dict) -> dict | None:
     import tkinter as tk
     from tkinter import ttk
@@ -411,6 +429,7 @@ def show_review(request: dict) -> dict | None:
     # PYTHONPATH code, including on user-site-only installations.
     mode = request["mode"]
     categories = request.get("categories", {})
+    _monitor_helpers()["prepare_tk_display"]()
     root = tk.Tk()
     root.withdraw()  # Finish layout before mapping and requesting foreground focus.
     root.title(
@@ -421,9 +440,19 @@ def show_review(request: dict) -> dict | None:
     _style_window(root)
     root.geometry("960x820")
     root.minsize(650, 500)
+    _place_review_window(root, request, 960, 820)
     result = None
-    frame = ttk.Frame(root, padding=20, style="Support.TFrame")
-    frame.pack(fill="both", expand=True)
+    if request.get("screen_bounds") is not None:
+        frame, buttons = _monitor_helpers()["tk_scrollable_content"](
+            root, padding=20, style="Support.TFrame"
+        )
+    else:
+        frame = ttk.Frame(root, padding=20, style="Support.TFrame")
+        frame.pack(fill="both", expand=True)
+        buttons = ttk.Frame(frame, style="Support.TFrame")
+        # Non-tray layout remains unchanged; tray reviews reserve the footer
+        # outside their scrollable viewport, including on small/scaled monitors.
+        buttons.pack(side="bottom", fill="x", pady=(12, 0))
     ttk.Label(
         frame,
         text="Support result" if mode == "result" else "Contact supports",
@@ -479,10 +508,6 @@ def show_review(request: dict) -> dict | None:
     def close():
         root.destroy()
 
-    buttons = ttk.Frame(frame, style="Support.TFrame")
-    # Reserve actions first so shrinking the window cannot push Cancel/Send off
-    # screen behind the expanding file list or public-content preview.
-    buttons.pack(side="bottom", fill="x", pady=(12, 0))
     if mode == "delivery":
         ttk.Label(
             frame,
@@ -730,8 +755,15 @@ def show_review(request: dict) -> dict | None:
             ),
             style="Support.TLabel",
         ).pack(anchor="w")
-        consent_row = ttk.Frame(frame, style="Support.TFrame")
-        consent_row.pack(side="bottom", fill="x", pady=(8, 0))
+        consent_row = ttk.Frame(
+            buttons if request.get("screen_bounds") is not None else frame,
+            style="Support.TFrame",
+        )
+        consent_row.pack(
+            side="top" if request.get("screen_bounds") is not None else "bottom",
+            fill="x",
+            pady=(8, 0),
+        )
         ttk.Label(
             consent_row,
             text=f"Check the consent box below to enable {action_text}.",
@@ -754,18 +786,40 @@ def show_review(request: dict) -> dict | None:
             style="Support.Primary.TButton",
         )
         publish_button.pack(side="right")
-        ttk.Checkbutton(
-            consent_row,
-            text=(
-                "I approve uploading these exact files to an unlisted Gist owned by my GitHub account."
-                if upload
-                else "I reviewed the exact publication and approve making it public."
-            ),
-            variable=consent,
-            command=lambda: publish_button.configure(
-                state="normal" if consent.get() else "disabled"
-            ),
-        ).pack(anchor="w")
+        consent_text = (
+            "I approve uploading these exact files to an unlisted Gist owned by my GitHub account."
+            if upload
+            else "I reviewed the exact publication and approve making it public."
+        )
+
+        def update_consent():
+            publish_button.configure(state="normal" if consent.get() else "disabled")
+
+        if request.get("screen_bounds") is not None:
+            # ttk checkbox text cannot wrap. Keep the full approval text next to
+            # its unchecked control, outside the scrolling review on small screens.
+            consent_controls = ttk.Frame(consent_row, style="Support.TFrame")
+            consent_controls.pack(fill="x")
+            ttk.Checkbutton(
+                consent_controls, variable=consent, command=update_consent
+            ).pack(side="left", anchor="n")
+            consent_label = ttk.Label(
+                consent_controls,
+                text=consent_text,
+                wraplength=520,
+                style="Support.TLabel",
+            )
+            consent_label.pack(side="left", fill="x", expand=True)
+            consent_controls.bind(
+                "<Configure>",
+                lambda event: consent_label.configure(
+                    wraplength=max(1, event.width - 40)
+                ),
+            )
+        else:
+            ttk.Checkbutton(
+                consent_row, text=consent_text, variable=consent, command=update_consent
+            ).pack(anchor="w")
         body = ScrolledText(frame, wrap="word")
         body.insert("1.0", request["body"])
         body.configure(state="disabled")

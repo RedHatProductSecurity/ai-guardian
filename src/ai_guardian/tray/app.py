@@ -610,7 +610,11 @@ class DaemonTray:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Contact supports — local tray host",
-                lambda _, __: tray_menu.launch_support(),
+                lambda icon, _item: tray_menu.launch_support(
+                    **self._menu._screen_bounds_kwargs(
+                        self._menu._capture_tray_screen_bounds(icon)
+                    )
+                ),
             ),
             pystray.MenuItem(
                 tray_menu.about_label,

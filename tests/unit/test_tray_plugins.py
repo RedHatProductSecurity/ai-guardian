@@ -1230,7 +1230,9 @@ class TestShowDialog:
 
         show_tk.assert_not_called()
         mock_run.assert_not_called()
-        nicegui.assert_called_once_with("Test Title", "Hello", links=())
+        nicegui.assert_called_once_with(
+            "Test Title", "Hello", links=(), screen_bounds=bounds
+        )
 
     def test_linux_uses_zenity(self):
         with mock.patch("platform.system", return_value="Linux"):

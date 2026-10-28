@@ -117,6 +117,29 @@
 
 ## Key Learnings
 
+- **Tray monitor origin (#2581):** Freeze display-only identity/work area before
+  worker dispatch; retain it in child payloads and every follow-up, then resolve
+  current geometry by identity rather than a later pointer/focus or stale offset.
+  pystray's GTK widget is `_menu_handle`, not abstract `_menu`; keyboard activation
+  can use local `_status_icon` geometry, but a remote AppIndicator may expose none.
+  Use explicit manual-move guidance for unknown origins/Wayland/browser reuse.
+  Cocoa inventory/placement should unwrap `NSScreenNumber`; keep AppKit out of a
+  Tk child before Tk initialization. Native children must revalidate after startup.
+- **Small-screen review (#2581):** Clamping the outer window is insufficient if
+  fields or consent are clipped. Shared scrollable body + reserved footer keeps
+  actions and full wrapped, initially unchecked support consent reachable. Support
+  can load stdlib-only display helpers from the installed sibling path with runpy;
+  never include credentials, approval objects or monitor metadata in diagnostics.
+- **Targeted UI coverage/toolchain (#2581):** The default coverage config omits
+  `src/ai_guardian/ui/*`; `--source=ai_guardian.ui.monitor` alone still collects no
+  data. Use a dedicated coverage configuration for this helper (91% verified).
+  Run project Mypy through `uv run --extra dev`; standalone global Requests stubs
+  can produce unrelated errors absent from the declared project environment.
+- **OpenWolf session summary:** Use supported `openwolf memory log` instead of
+  manually editing the hook-owned memory file. It requires `--session` explicitly;
+  obtain the active native agent ID from `daf info`, not an invented ID or another
+  session's most recent conversation.
+
 - **Support path checks / CodeQL (#2597, PR #2600):** The local project-config
   branch must use the same unlinked-regular-file reader as source collection.
   Reject links in the original path/ancestors before lexical normalization can
@@ -1112,6 +1135,11 @@
   container targets.
 
 ## Do-Not-Repeat
+
+- [2026-10-28] Placement changes affect provider eligibility. Mock every reachable
+  provider in UX tests, not only the previously first native implementation:
+  native-only Linux fixtures can open real Tk and hang. Exercise Cocoa/WinForms
+  and Tk contracts separately while preserving complete controls/cancel semantics.
 
 - [2026-10-06] Do not place `exit` in copy-paste guards intended for an
   interactive shell; use a subshell or an `if/else` block so missing optional

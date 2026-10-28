@@ -17,6 +17,13 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, TypeVar
 
 from ai_guardian.ui.display import ui_provider_order
+from ai_guardian.ui.monitor import (
+    current_origin,
+    monitor_origin,
+    monitor_json_default,
+    prepare_tk_display,
+    placement_notice,
+)
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -44,6 +51,7 @@ def run_modal(
     preferred=None,
 ) -> T:
     """Execute eligible implementations once, never retry a completed dialog."""
+    screen_bounds = screen_bounds if screen_bounds is not None else current_origin()
     for provider in ui_provider_order(
         dialog_type, screen_bounds=screen_bounds, preferred=preferred
     ):
@@ -52,7 +60,8 @@ def run_modal(
         state = _Lifecycle()
         token = _lifecycle.set(state)
         try:
-            return providers[provider]()
+            with monitor_origin(screen_bounds):
+                return providers[provider]()
         except UIUnavailable:
             if state.displayed:
                 logger.warning(
@@ -87,6 +96,7 @@ def create_tk_root():
 
     try:
         _ensure_tcl_library()
+        prepare_tk_display()
         root = tk.Tk()
     except (tk.TclError, OSError) as exc:
         raise UIUnavailable("Tk initialization unavailable") from exc
@@ -116,7 +126,7 @@ def _find_free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def run_nicegui_modal(title: str, *, dark=None) -> None:
+def run_nicegui_modal(title: str, *, dark=None, screen_bounds=None) -> None:
     """Run one browser modal, latching possible visibility before its launch.
 
     Capture the lifecycle now: server callbacks may execute in another context.
@@ -128,6 +138,21 @@ def run_nicegui_modal(title: str, *, dark=None) -> None:
 
     state = _lifecycle.get()
     port = _find_free_port()
+    notice = placement_notice(
+        screen_bounds if screen_bounds is not None else current_origin(), browser=True
+    )
+    if notice:
+        # A regular browser can reuse a window on another monitor. Do not pretend
+        # moveTo or opening a URL enforces placement; provide an explicit fallback.
+        encoded_notice = json.dumps(notice).replace("<", "\\u003c")
+        ui.add_head_html(
+            "<script>document.addEventListener('DOMContentLoaded',()=>{"
+            "const note=document.createElement('div');note.setAttribute('role','status');"
+            "note.style.cssText='padding:12px;background:#fff3cd;color:#332701;white-space:normal';"
+            f"note.textContent={encoded_notice};"
+            "document.body.prepend(note);});</script>",
+            shared=True,
+        )
 
     def open_page():
         if state is not None:
@@ -170,7 +195,13 @@ def run_modal_subprocess(
             capture_output=True,
             text=True,
             encoding="utf-8",
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            env={
+                **os.environ,
+                "PYTHONIOENCODING": "utf-8",
+                "_AI_GUARDIAN_MODAL_MONITOR": json.dumps(
+                    current_origin(), default=monitor_json_default
+                ),
+            },
             timeout=None,
             check=False,
             input=input_text,

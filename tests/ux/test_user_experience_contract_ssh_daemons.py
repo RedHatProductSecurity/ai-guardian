@@ -206,15 +206,16 @@ def test_main_daemon_with_healthy_mcp_does_not_need_unreleased_stats_fields(paus
 @pytest.mark.parametrize(
     "answer", [None, {"directory": "/vm/project"}, {"directory": ""}]
 )
-def test_vm_directory_form_is_native_first_complete_and_cancel_safe(
-    monkeypatch, answer
+@pytest.mark.parametrize("system", ["Darwin", "Windows", "Linux"])
+def test_vm_directory_form_is_placement_capable_complete_and_cancel_safe(
+    monkeypatch, answer, system
 ):
-    """USER EXPERIENCE: VM path entry → native-first Save, not host folder selection."""
+    """USER EXPERIENCE: VM path entry → positioned Save, not host folder selection."""
     from ai_guardian.daemon.discovery import DaemonTarget
     from tests.fixtures.ssh_tray import make_tray
 
     monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
-    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("platform.system", lambda: system)
     monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
     target = DaemonTarget("ssh-vm", "ssh", working_dir="/vm/current")
     tray = make_tray([target])
@@ -227,10 +228,16 @@ def test_vm_directory_form_is_native_first_complete_and_cancel_safe(
         mock.patch("ai_guardian.daemon.working_dir.choose_directory") as local_picker,
         mock.patch("ai_guardian.daemon.working_dir.set_working_dir") as save,
     ):
-        native.return_value.return_value = answer
+        renderer = tk if system == "Linux" else native.return_value
+        renderer.return_value = answer
         tray._menu._pick_working_dir(target, target.working_dir, (0, 0, 1920, 1080))
-    native.assert_called_once_with(screen_bounds=(0, 0, 1920, 1080))
-    fields = native.return_value.call_args.args[2]
+    if system == "Linux":
+        native.assert_not_called()
+        assert tk.call_args.kwargs["screen_bounds"] == (0, 0, 1920, 1080)
+    else:
+        native.assert_called_once_with(screen_bounds=(0, 0, 1920, 1080))
+        tk.assert_not_called()
+    fields = renderer.call_args.args[2]
     assert fields == [
         {
             "name": "directory",
@@ -239,7 +246,6 @@ def test_vm_directory_form_is_native_first_complete_and_cancel_safe(
         }
     ]
     local_picker.assert_not_called()
-    tk.assert_not_called()
     browser.assert_not_called()
     if answer is None:
         save.assert_not_called()
@@ -614,8 +620,9 @@ def test_poll_only_cannot_smuggle_callback_configuration(body):
 
 
 @pytest.mark.parametrize("consent", [None, {"trust": False}, {"trust": True}])
-def test_discovered_alias_review_skips_host_entry_but_keeps_full_native_confirmation(
-    monkeypatch, pairing, consent
+@pytest.mark.parametrize("system", ["Darwin", "Windows", "Linux"])
+def test_discovered_alias_review_skips_host_entry_but_keeps_full_positioned_confirmation(
+    monkeypatch, pairing, consent, system
 ):
     """USER EXPERIENCE: click a discovered alias → same complete trust boundary.
 
@@ -626,7 +633,7 @@ def test_discovered_alias_review_skips_host_entry_but_keeps_full_native_confirma
     from ai_guardian.ui.ssh_pairing import TRUST_LABEL
 
     monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
-    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("platform.system", lambda: system)
     monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
     tray = mock.Mock()
     tray._discovery.ssh_manager.prepare_discovered.return_value = pairing
@@ -637,9 +644,10 @@ def test_discovered_alias_review_skips_host_entry_but_keeps_full_native_confirma
         ) as tk,
         mock.patch("ai_guardian.tray.sandbox_dialog._show_nicegui_form") as browser,
     ):
-        native.return_value.side_effect = [consent, {}]
+        renderer = tk if system == "Linux" else native.return_value
+        renderer.side_effect = [consent, {}]
         open_enrollment(tray, alias="existing-vm", screen_bounds=(0, 0, 1920, 1080))
-    first = native.return_value.call_args_list[0]
+    first = renderer.call_args_list[0]
     assert first.args[0] == "Verify SSH daemon identity"
     assert first.args[2] == [
         {
@@ -654,8 +662,8 @@ def test_discovered_alias_review_skips_host_entry_but_keeps_full_native_confirma
     assert pairing.profile.destination in summary
     assert pairing.profile.server_name in summary
     assert pairing.profile.certificate_sha256 in summary
-    assert pairing.profile.token not in str(native.return_value.call_args_list)
-    assert pairing.profile.ca_pem not in str(native.return_value.call_args_list)
+    assert pairing.profile.token not in str(renderer.call_args_list)
+    assert pairing.profile.ca_pem not in str(renderer.call_args_list)
     tray._discovery.ssh_manager.prepare_discovered.assert_called_once_with(
         "existing-vm"
     )
@@ -665,7 +673,10 @@ def test_discovered_alias_review_skips_host_entry_but_keeps_full_native_confirma
         tray._refresh_event.set.assert_called_once()
     else:
         tray._discovery.ssh_manager.enroll.assert_not_called()
-    tk.assert_not_called()
+    if system == "Linux":
+        native.assert_not_called()
+    else:
+        tk.assert_not_called()
     browser.assert_not_called()
 
 
@@ -748,13 +759,19 @@ def discovery_settings_ui(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "preference,provider",
-    [("auto", "native"), ("tkinter", "tk"), ("nicegui", "browser")],
+    "system,preference,provider",
+    [
+        ("Darwin", "auto", "native"),
+        ("Windows", "auto", "native"),
+        ("Linux", "auto", "tk"),
+        ("Linux", "tkinter", "tk"),
+        ("Linux", "nicegui", "browser"),
+    ],
 )
 def test_discovery_settings_preserve_complete_controls_in_each_provider(
-    discovery_settings_ui, monkeypatch, preference, provider
+    discovery_settings_ui, monkeypatch, system, preference, provider
 ):
-    """USER EXPERIENCE: a native-first two-step form, not Web Console navigation.
+    """USER EXPERIENCE: a placement-capable two-step form, not Web Console navigation.
 
     Continue changes nothing. Save validates/persists both settings; empty prefix
     is a deliberate value. Connecting and trusting remain separate reviewed acts.
@@ -763,6 +780,7 @@ def test_discovery_settings_preserve_complete_controls_in_each_provider(
     from ai_guardian.tray.ssh_connections import open_discovery_settings
 
     monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", preference)
+    monkeypatch.setattr("platform.system", lambda: system)
     renderer = getattr(discovery_settings_ui, provider)
     renderer.side_effect = [{"enabled": True}, {"alias_prefix": ""}, None]
     tray = mock.Mock()

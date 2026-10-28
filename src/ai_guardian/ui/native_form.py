@@ -6,9 +6,16 @@ from html import escape
 from typing import Any, Iterable
 
 from ai_guardian.ui.modal import UIUnavailable, run_native_command
+from ai_guardian.ui.monitor import (
+    COCOA_PLACE_WINDOW,
+    MonitorContext,
+    current_origin,
+    resolve_bounds,
+    restore_context,
+)
 
 # These scripts consume display-only JSON over stdin, never executable input.
-_COCOA_FORM = r"""
+_COCOA_FORM = COCOA_PLACE_WINDOW + r"""
 (function () {
     var displayed = false;
     try {
@@ -71,15 +78,7 @@ _COCOA_FORM = r"""
         alert.setAccessoryView(view);
         submit.setEnabled(ready());
         var window = alert.window;
-        if (p.screen_bounds) {
-            var b = p.screen_bounds;
-            var main = $.NSScreen.screens.objectAtIndex(0).frame;
-            var size = window.frame.size;
-            window.setFrameOrigin($.NSMakePoint(
-                Number(main.origin.x) + b[0] + (b[2] - Number(size.width)) / 2,
-                Number(main.origin.y) + Number(main.size.height) - b[1] - (b[3] + Number(size.height)) / 2
-            ));
-        }
+        placeWindowOnTargetScreen(window, p.screen_bounds, p.monitor_id);
         app.activateIgnoringOtherApps(true);
         displayed = true;
         window.makeKeyAndOrderFront(null);
@@ -106,6 +105,30 @@ try {
     $p = [Console]::In.ReadToEnd() | ConvertFrom-Json
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class GuardianDpi {
+    [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+    private struct Device {
+        public int size;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string name;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string description;
+        public int flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string identity;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string key;
+    }
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+    private static extern bool EnumDisplayDevices(string name, int index, ref Device device, int flags);
+    public static string Identity(string name) {
+        var device = new Device(); device.size = Marshal.SizeOf(typeof(Device));
+        return EnumDisplayDevices(name, 0, ref device, 1) && !String.IsNullOrEmpty(device.identity)
+            ? device.identity : name;
+    }
+}
+'@
+    [GuardianDpi]::SetThreadDpiAwarenessContext([IntPtr](-4)) | Out-Null
     $form = New-Object System.Windows.Forms.Form
     $form.Text = $p.title
     $form.ClientSize = New-Object System.Drawing.Size(760, 520)
@@ -162,6 +185,25 @@ try {
         $form.Controls.Add($control)
         & $update
     }
+    if ($null -ne $p.screen_bounds -or $p.monitor_id) {
+        # Revalidate here, not only in Python before PowerShell startup.
+        $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+        foreach ($candidate in [System.Windows.Forms.Screen]::AllScreens) {
+            $r = $candidate.WorkingArea
+            $b = $p.screen_bounds
+            if (($p.monitor_id -and [GuardianDpi]::Identity($candidate.DeviceName) -eq $p.monitor_id) -or
+                (!$p.monitor_id -and $null -ne $b -and $r.X -eq $b[0] -and $r.Y -eq $b[1] -and $r.Width -eq $b[2] -and $r.Height -eq $b[3])) {
+                $screen = $candidate
+                break
+            }
+        }
+        $area = $screen.WorkingArea
+        $form.AutoScroll = $true
+        $form.AutoScrollMinSize = New-Object System.Drawing.Size(760, 520)
+        $form.Size = New-Object System.Drawing.Size([Math]::Min($form.Width, [Math]::Max(1, $area.Width-32)), [Math]::Min($form.Height, [Math]::Max(1, $area.Height-32)))
+        $form.StartPosition = 'Manual'
+        $form.Location = New-Object System.Drawing.Point([int]($area.X+($area.Width-$form.Width)/2), [int]($area.Y+($area.Height-$form.Height)/2))
+    }
     $form.add_Shown({ $form.Activate(); if ($null -ne $control) { $control.Focus() | Out-Null } })
     $displayed = $true
     $answer = $form.ShowDialog()
@@ -210,12 +252,18 @@ class NativeForm:
             field.setdefault("label", field["name"])
             if field.get("help"):
                 message += "\n\n" + str(field["help"])
+        context = restore_context(
+            self.screen_bounds if self.screen_bounds is not None else current_origin()
+        )
         payload = {
             "title": title,
             "message": message,
             "field": field,
             "submit_label": submit_label,
-            "screen_bounds": self.screen_bounds,
+            "screen_bounds": resolve_bounds(self.screen_bounds),
+            "monitor_id": (
+                context.monitor_id if isinstance(context, MonitorContext) else None
+            ),
         }
         system = platform.system()
         if system == "Linux":

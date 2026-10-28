@@ -31,15 +31,21 @@ def _target_label(target: dict) -> str:
 class TrayTargetSelectorApp:
     """Interactive multi-select target picker backed by NiceGUI."""
 
-    def __init__(self, targets: list):
+    def __init__(self, targets: list, *, screen_bounds=None):
         self._targets = targets
+        self._screen_bounds = screen_bounds
 
     def run(self):
         from ai_guardian.ui.modal import run_modal
 
         # Only this implementation currently preserves the full multi-target
         # selection/validation/disconnect contract; see MODAL_PROVIDERS.md.
-        return run_modal("form", {"nicegui": self._run_nicegui}, fallback=None)
+        return run_modal(
+            "form",
+            {"nicegui": self._run_nicegui},
+            fallback=None,
+            screen_bounds=self._screen_bounds,
+        )
 
     def _run_nicegui(self):
         from nicegui import app, ui
@@ -93,18 +99,10 @@ class TrayTargetSelectorApp:
                     ui.button("Select all", on_click=select_all).props("flat")
                     ui.button("OK", on_click=submit, color="primary")
 
-        from ai_guardian.desktop_utils import open_url
-        from ai_guardian.ui.modal import _find_free_port
+        from ai_guardian.ui.modal import run_nicegui_modal
 
         app.on_disconnect(on_disconnect)
-        port = _find_free_port()
-        app.on_startup(lambda: open_url(f"http://127.0.0.1:{port}"))
-        ui.run(
-            host="127.0.0.1",
-            port=port,
-            title="Select targets",
-            dark=True,
-            show=False,
-            reload=False,
+        run_nicegui_modal(
+            "Select targets", dark=True, screen_bounds=self._screen_bounds
         )
         return result_holder["value"]

@@ -14,6 +14,7 @@ import subprocess
 import sys
 from functools import partial
 from typing import Callable, Optional
+from ai_guardian.ui.monitor import screen_payload, prepare_tk_display
 
 from ai_guardian.tray.sandbox_dialog import (
     ScreenBounds,
@@ -43,7 +44,7 @@ def show_tkinter_message_subprocess(
         {
             "title": title,
             "message": message,
-            "screen_bounds": screen_bounds,
+            "screen_bounds": screen_payload(screen_bounds),
             "links": links,
         },
         ensure_ascii=False,
@@ -106,6 +107,7 @@ def _show_tkinter_message(
     from ai_guardian.ui.display import _ensure_tcl_library
 
     _ensure_tcl_library()
+    prepare_tk_display()
     root = tk.Tk()
     root.withdraw()  # Map once, after layout and the temporary raising hint are ready.
     root.title(title)
@@ -190,7 +192,9 @@ def _show_tkinter_message(
     root.mainloop()
 
 
-def show_nicegui_message_subprocess(title, message, *, links=()) -> bool:
+def show_nicegui_message_subprocess(
+    title, message, *, links=(), screen_bounds=None
+) -> bool:
     """Keep the browser server outside the tray's GUI process."""
     from ai_guardian.ui.modal import run_modal_subprocess
 
@@ -206,13 +210,20 @@ def show_nicegui_message_subprocess(title, message, *, links=()) -> bool:
             sys.executable,
             "-c",
             child,
-            json.dumps({"title": title, "message": message, "links": links}),
+            json.dumps(
+                {
+                    "title": title,
+                    "message": message,
+                    "links": links,
+                    "screen_bounds": screen_payload(screen_bounds),
+                }
+            ),
         ]
     )
     return result.returncode == 0
 
 
-def _show_nicegui_message(title, message, *, links=()) -> bool:
+def _show_nicegui_message(title, message, *, links=(), screen_bounds=None) -> bool:
     """Preserve complete text and user-activated links in the browser tier."""
     from nicegui import app, ui
     from ai_guardian.ui.modal import run_nicegui_modal
@@ -247,7 +258,7 @@ def _show_nicegui_message(title, message, *, links=()) -> bool:
                         remaining = remaining[index + len(anchor) :]
             ui.button("OK", on_click=close)
 
-    run_nicegui_modal(title)
+    run_nicegui_modal(title, screen_bounds=screen_bounds)
     return True
 
 

@@ -25,6 +25,7 @@ from ai_guardian.ui.modal import (
     run_modal_subprocess,
 )
 from ai_guardian.tray.dialog_placement import _place_window_on_screen
+from ai_guardian.ui.monitor import screen_payload
 
 logger = logging.getLogger(__name__)
 
@@ -517,7 +518,7 @@ class ProactivePromptDialog:
                 "snooze_options": self.snooze_options,
                 "ide_choices": self.ide_choices,
                 "profile_choices": self.profile_choices,
-                "screen_bounds": self.screen_bounds,
+                "screen_bounds": screen_payload(self.screen_bounds),
                 "two_step_snooze": self.two_step_snooze,
             }
         )

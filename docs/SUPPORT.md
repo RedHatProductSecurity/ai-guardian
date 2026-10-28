@@ -77,6 +77,14 @@ use `support prepare` followed later by `support send`, as below.
 
 ## From the system tray
 
+Tray-launched destination, file review/View, ZIP, upload/publication consent and
+result windows retain the originating monitor context throughout preparation.
+Disconnected displays fall back to a visible work area. Some remote tray panels
+and Wayland compositors cannot expose/enforce that position: the window title
+explicitly asks you to move it to the tray screen before continuing. See
+[Physical-monitor placement](MODAL_PROVIDERS.md#physical-monitor-placement) for
+platform limits and the manual fallback. Placement never supplies consent.
+
 Choose **Contact supports — local tray host**, directly above **About** in the
 top-level tray menu, for diagnostics from the desktop running the tray.
 It honors the configured support destination and opens a native modal, not a
