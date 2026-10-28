@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-09-17T01:39:01.894Z
-> Files: 1249 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1250 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21062 tok)
-- `CHANGELOG.md` — Change log (~78187 tok)
+- `CHANGELOG.md` — Change log (~78367 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -22,7 +22,7 @@
 - `install.sh` (~8726 tok)
 - `LICENSE` — Project license (~196 tok)
 - `Makefile` — Make build targets (~62 tok)
-- `mkdocs.yml` (~1208 tok)
+- `mkdocs.yml` (~1222 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2605 tok)
 - `README.md` — Project documentation (~10806 tok)
@@ -906,7 +906,7 @@
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
 - `AUDIT_LOGGING.md` — Compliance Audit Logging (~1442 tok)
 - `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4050 tok)
-- `CONFIGURATION.md` — Configuration Guide (~7448 tok)
+- `CONFIGURATION.md` — Configuration Guide (~7593 tok)
 - `CONSOLE.md` — AI Guardian Console Guide (~1368 tok)
 - `COOKBOOK.md` — Configuration Cookbook (~15503 tok)
 - `DEVELOPER_GUIDE.md` — Developer Guide (~3796 tok)
@@ -920,7 +920,7 @@
 - `MCP_SERVER.md` — MCP Security Advisor Server (~5114 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
 - `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~6498 tok)
-- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~19341 tok)
+- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~19649 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9412 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
@@ -930,7 +930,7 @@
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `POTENTIAL_INTEGRATIONS.md` — Potential Integrations (~507 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
-- `README.md` — Project documentation (~1644 tok)
+- `README.md` — Project documentation (~1695 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
 - `Sandbox.md` — Sandbox CLI (~5751 tok)
 - `Sandbox.simplified.md` — Sandbox CLI (~3000 tok)
@@ -942,6 +942,7 @@
 - `TOML_PATTERNS.md` — TOML Pattern Engine (~3798 tok)
 - `TOOL_POLICY.md` — Tool Policy System (~5839 tok)
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7389 tok)
+- `UBUNTU_VM.md` — Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release) (~8328 tok)
 - `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3729 tok)
 - `VIOLATION_LOGGING.md` — Violation Logging (~3194 tok)
 

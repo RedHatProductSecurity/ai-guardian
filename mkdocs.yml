@@ -73,6 +73,7 @@ nav:
   - Getting Started:
       - Documentation: documentation.md
       - Quick Start: index.md
+      - Headless Ubuntu VM (Upcoming): UBUNTU_VM.md
       - Developer Install: DEVELOPER_GUIDE.md
       - Configuration: CONFIGURATION.md
       - Configuration Cookbook: COOKBOOK.md

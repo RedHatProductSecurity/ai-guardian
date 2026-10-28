@@ -117,6 +117,18 @@
 
 ## Key Learnings
 
+- **Published-artifact documentation gate (#2585):** On 2026-10-28 production
+  PyPI still reported 1.20.0; its SHA-256-verified wheel lacked native TLS/SSH
+  modules and TLS schema. Keep the Ubuntu VM guide explicitly upcoming with a
+  provisional 1.21 constraint and unconfirmed first published version; recheck
+  PyPI before removing that gate. #2591/#2592 are merged development UI, not yet
+  published features. Source walkthroughs, shell checks and synthetic TLS cannot
+  qualify a fresh PyPI VM **and workstation**, live tunnel lifecycle or desktops.
+- **Synthetic TLS documentation fixtures (#2585):** Send explicit Content-Length
+  so current curl does not depend on abrupt TLS EOF to delimit HTTP/1.0 bodies.
+  Consume complete successful responses; record expected disconnects only during
+  deliberately failing SAN/untrusted-certificate checks, not on positive paths.
+
 - **Release announcements (#2595):** Dispatch announcement preview/retry before
   constructing `ReleaseHelper`: version auto-detection can write its configuration.
   Use an explicit stable version, exact public Release and production PyPI
