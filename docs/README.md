@@ -41,6 +41,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 |----------|-------------|
 | [Security Overview](security/README.md) | Index of all security feature documentation |
 | [Secret Scanning](security/SECRET_SCANNING.md) | Secret detection, pattern server, false positives |
+| [Password Likelihood](security/PASSWORD_LIKELIHOOD.md) | Experimental opt-in local suspected-password heuristics, privacy and release gates |
 | [Prompt Injection](security/PROMPT_INJECTION.md) | Heuristic detection, sensitivity, allowlists |
 | [SSRF Protection](security/SSRF_PROTECTION.md) | Private IP blocking, metadata endpoints, limitations |
 | [Unicode Attacks](security/UNICODE_ATTACKS.md) | Zero-width chars, bidi override, homoglyphs |

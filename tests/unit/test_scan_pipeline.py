@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ai_guardian.hook_events import post_tool_use
 from ai_guardian.hook_events.scanners import apply_language_overlays
 from ai_guardian.scanners.pipeline import (
     _resolve_scanner_config,
@@ -328,8 +329,12 @@ class TestScanContent:
     )
     def test_source_command_builds_context(self, mock_pi, mock_cp, mock_secret):
         mock_secret.return_value = None
-        with patch(
-            "ai_guardian.hook_events.post_tool_use._sanitize_source_command",
+        # Import the consuming module before patching scanner functions. A first
+        # import inside these decorators retains a mock runner in PostToolUse,
+        # contaminating the existing credential UX contracts in the same process.
+        with patch.object(
+            post_tool_use,
+            "_sanitize_source_command",
             return_value="safe_cmd",
         ):
             scan_content(

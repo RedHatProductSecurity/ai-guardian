@@ -322,6 +322,10 @@ def run_content_pipeline(
             )
             continue
 
+        if scanner_name == ScannerName.PASSWORD_LIKELIHOOD:
+            _collect(scanner_name, result, ViolationType.SUSPECTED_PASSWORD)
+            continue
+
         if not result.detected:
             if result.error_message:
                 warning_messages.append(result.error_message)

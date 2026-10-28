@@ -153,13 +153,21 @@ def log_violation(
         violation_logger = ViolationLogger()
 
     try:
+        private_candidate = result.violation_type == "suspected_password"
         blocked = result.to_blocked_dict(source=source)
-        if blocked_overrides:
+        if blocked_overrides and not private_candidate:
             blocked.update(blocked_overrides)
 
         ctx = context.to_dict()
-        if context_overrides:
+        if context_overrides and not private_candidate:
             ctx.update(context_overrides)
+
+        if private_candidate:
+            # No source snippets, candidate hashes, commands or arbitrary extra
+            # payloads in this type's audit/retrieval/support paths.
+            ctx.pop("tool_name", None)
+            policy_decision = None
+            source = "scanner"
 
         canonical_decision = policy_decision or PolicyDecision.from_scan_result(
             result,
@@ -167,8 +175,16 @@ def log_violation(
             source=source,
         )
 
-        metadata = allowlist_context or context.allowlist_context
-        if metadata is None and context.allowlist_content is not None:
+        metadata = (
+            None
+            if private_candidate
+            else allowlist_context or context.allowlist_context
+        )
+        if (
+            not private_candidate
+            and metadata is None
+            and context.allowlist_content is not None
+        ):
             from ai_guardian.violations.allowlist_context import (
                 build_allowlist_context,
             )
@@ -195,7 +211,9 @@ def log_violation(
             "blocked": blocked,
             "context": ctx,
             "suggestion": (
-                {} if result.extra.get("is_immutable") is True else suggestion or {}
+                {}
+                if private_candidate or result.extra.get("is_immutable") is True
+                else suggestion or {}
             ),
             "severity": result.severity,
             "violation_id": result.id,
@@ -205,7 +223,12 @@ def log_violation(
         log_kwargs["policy_decision"] = canonical_decision
         violation_logger.log_violation(**log_kwargs)
     except Exception as e:
-        logger.error("Failed to log %s violation: %s", result.violation_type, e)
+        if result.violation_type == "suspected_password":
+            logger.critical(
+                "Failed to persist suspected-password violation; details withheld"
+            )
+        else:
+            logger.error("Failed to log %s violation: %s", result.violation_type, e)
 
 
 def log_violations(

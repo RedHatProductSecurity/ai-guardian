@@ -8,6 +8,21 @@ from typing import Any, Dict
 _GITHUB_DOCS = "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs"
 
 SCANNER_HELP: Dict[str, Dict[str, Any]] = {
+    "password_likelihood": {
+        "title": "Password Likelihood (Opt-in Heuristic)",
+        "summary": "Offline suspected-password analysis. Default off; enabled checks default to private Allow Once / Block approval via existing local/remote Ask. Unavailable approval blocks. A warning does not prevent a leak.",
+        "catches": [
+            "Qualified contextual ASCII candidates",
+            "Ambiguous mixed-character candidates (advisory only)",
+        ],
+        "does_not_catch": [
+            "Arbitrary context-free passphrases",
+            "Multilingual segmentation",
+            "Passwords outside the documented bounded candidate classes",
+        ],
+        "config_summary": "Global-only password_likelihood.enabled (default false) and action (ask by default, warn or block). Ambiguous findings remain advisory; SDK checks deny unresolved Ask without opening a dialog. Host pre-model enforcement needs separate qualification.",
+        "doc_url": f"{_GITHUB_DOCS}/security/PASSWORD_LIKELIHOOD.md",
+    },
     "secret_scanning": {
         "title": "Secret Scanning",
         "summary": (

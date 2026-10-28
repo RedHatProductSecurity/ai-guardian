@@ -53,6 +53,7 @@ controls.
 | Proactive action/upgrade/snooze: `ProactivePromptDialog.show` | N JXA/Cocoa NSAlert/accessory controls → T → G | N zenity question/extra buttons or kdialog menu → T → G | T → G; no complete native action/snooze implementation |
 | Structured setup/profile/per-IDE choices and later/snooze | N JXA/Cocoa checkbox pairs/profile popup → T → G | T → G; native tools do not implement the complete setup form | T → G; same capability restriction |
 | Ask/security decision: CLI `prompt --mode ask` | T → G; native simple prompts lack full decision/edit controls | T → G | T → G |
+| Password-likelihood Ask: existing `prompt --mode ask`, private decision-only variant | T → G; same Ask providers, values withheld, Allow Once / Block only | T → G | T → G |
 | Tray-forwarded remote ask on macOS 14+ | G in subprocess; existing tray focus-safety Tk suppression remains | As above | As above |
 | Plugin parameter forms: `TrayPromptApp.run` | T → G | T → G | T → G |
 | Simple form flows / tray Add daemon via SSH and discovered-alias review: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | N desktop-ordered zenity/kdialog input/checklist → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
@@ -70,6 +71,18 @@ controls.
 | Web Console's already-open page/dialog controls | G, stays in the current browser session | Same | Same |
 
 ### Explicit exceptions
+
+- **Password-likelihood Ask:** reuses the existing local/remote transport and
+  modal dispatcher, with one operation-scoped Allow Once / Block decision. Both
+  providers withhold candidate text and omit source/persistent-exception controls;
+  there is no source-file recovery. Cancellation, timeout and unavailable approval
+  deny. Automatic display-less detection still permits registered remote tray
+  forwarding; explicit headless does not. A queued remote timeout is terminal.
+  Manually verify synthetic contextual/ambiguous/incomplete input, both decisions,
+  Close/Escape/timeout, provider startup-only fallback and exclusive preferences,
+  local and SSH tray forwarding/disconnect, and unchanged stronger credential
+  enforcement. These UI/transport checks do not establish the model boundary;
+  follow [password-likelihood qualification](security/PASSWORD_LIKELIHOOD.md).
 
 - **Placement:** with captured monitor context, native implementations without a
   positioned window/owner are ineligible on **all** platforms. Messages,

@@ -167,6 +167,26 @@
         }
       }
     },
+    "password_likelihood": {
+      "type": "object",
+      "description": "Global-only, explicit human opt-in local suspected-password heuristic. No vault/source enrollment. Off by default; Ask is the default enabled outcome, never proof that a value is a password. Project settings and content cannot activate or weaken it.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable bounded offline analysis. Default off, including strict profiles."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["ask", "warn", "block"],
+          "default": "ask",
+          "description": "ask requests private Allow Once / Block approval for contextual candidates or incomplete analysis using existing local/remote Ask transport. Cancellation, timeout and unavailable approval block. SDK/static checks do not prompt; unresolved Ask is denied at enforcing SDK checks. warn is advisory only; block requests denial. Ambiguous candidates remain advisory in every mode. Actual pre-model host enforcement must be qualified separately. No automatic heuristic redaction."
+        },
+        "_comment_enabled": {"type": "string"},
+        "_comment_action": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
     "secret_scanning": {
       "type": "object",
       "description": "Secret scanning with multi-engine support (v1.4.0+). Object with 'enabled' property that supports boolean (permanent) or time-based (temporary) formats. Multi-engine support added in v1.5.0 - configure multiple engines with automatic fallback.",
@@ -2011,6 +2031,7 @@
               "tool_permission",
               "directory_blocking",
               "secret_detected",
+              "suspected_password",
               "secret_redaction",
               "prompt_injection",
               "jailbreak_detected",
@@ -2036,6 +2057,7 @@
             "tool_permission",
             "directory_blocking",
             "secret_detected",
+            "suspected_password",
             "secret_redaction",
             "prompt_injection",
             "jailbreak_detected",

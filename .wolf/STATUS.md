@@ -9,6 +9,307 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2612 Console auto-save follow-up — 2026-10-28
+
+- User corrected the extra global Save-button UX and requested normal auto-save;
+  continued after **retry**, without repeating or replacing the existing work.
+  Removed the separate button. Enable/outcome now auto-save on human change while
+  remaining global-only for the selected daemon, including with a project selected.
+- The saver validates and updates one field against fresh global policy. Outcome
+  changes do not enable analysis; rendering never writes/opts in. Serialize rapid
+  saves within a card, preserve sibling/unrelated settings, retain read-only guards
+  and existing success/failure notices. No default/action/enforcement changes.
+- Updated every old exact Save-button assertion, the complete password UX contract,
+  configuration/security docs, changelog and readiness test list. Added isolated
+  auto-save callback/invalid-value/concurrency tests; no real configuration writes.
+- **Validation:** **269 related unit/UX tests pass**, including the complete
+  password-likelihood and existing PostToolUse-secret UX files, shared Web config
+  routing/scope and existing Secrets-page tests. Ruff, Black py310, error-level
+  Pylint and Mypy pass; readiness YAML/test paths and whitespace pass. The expected
+  red UI tests were fixed rather than skipped. Manual simplification review done.
+- Local/uncommitted on `2612`; no runtime config/restart, commit/push/PR/release or
+  issue closure. Earlier Ask qualification/coverage and original corpus/live-host/
+  platform gates below remain historical evidence/open gates, not newly verified
+  prevention. User still must review/qualify the actual installed Console.
+
+## Issue #2612 Ask default follow-up — 2026-10-28
+
+- User explicitly requested implementation after proposing Ask/default-Ask and
+  pointing out existing remote Ask support. Continued existing DAF session and
+  branch `2612`; preserved the earlier uncommitted implementation and user work.
+- **Secrets → Secret Scanning** now offers Ask/Warn/Block. The feature remains
+  default-off in every profile; new/missing enabled outcomes default to Ask.
+  Existing explicitly saved Warn/Block choices are unchanged. Schema, templates,
+  example, loader, help/status, docs/changelog and readiness gate are synchronized.
+- Contextual/incomplete hook checks use existing Ask transport and dispatcher,
+  including remote/SSH. One value-withheld Allow Once / Block decision covers the
+  operation; no persistent exceptions, candidate source recovery, View File,
+  annotation/ignore editor or candidate fingerprints. Ambiguous spans stay advisory.
+  SDK/static checks do not open UI; unresolved enforcing SDK Ask denies.
+- Callers honor resolved decisions (not raw should_block), and safe canonical audit
+  records approval correctly. Approval never skips stronger credential checks or
+  authorizes another hook. Private dialog/audit failures withhold exception details.
+- Reproduced/fixed existing remote display regression: auto-detected display-less
+  daemons can forward to registered workstation trays, while explicit headless
+  remains noninteractive. A queued remote timeout is terminal security fallback,
+  never another local dialog. Existing non-heuristic fallback policy is preserved.
+- **Validation:** final combined **1,226 related tests pass**, including all four
+  affected password/PostToolUse-secret/modal/SSH UX files and shared Ask/audit/
+  transcript/SDK/config regressions. Four existing dependency warnings. Ruff,
+  Black py310, error-level Pylint and Mypy pass; JSON/readiness YAML/test paths,
+  buglog IDs and whitespace pass. Manual simplification/privacy review completed;
+  no simplify skill or delegated agents. Focused branch coverage **79.7%** across
+  Ask/pipeline/detector/dispatch modules (detector 93.4%, post-scan 97.5%). Artifact:
+  `/tmp/opencode/guardian-2612-ask.coverage`; ephemeral coverage, no dependency change.
+- Saved DAF/OpenWolf progress and posted the local-completion/open-gates checklist:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2612#issuecomment-6473579086.
+- **Still experimental/not release-qualified:** original held-out real-corpus,
+  actual model-boundary/remote-native UI and cross-platform CI gates below remain
+  open. Tests establish responses/transport contracts, not live host prevention.
+  No full suite/integration/container scenarios, runtime configuration changes,
+  installed daemon/tray restart, commit, push, PR, release or issue closure.
+
+## Issue #2612 experimental implementation — 2026-10-28 (before Ask follow-up)
+
+- User authorized implementation with **go**. Continued in managed DAF `open`
+  session `RedHatProductSecurity-ai-guardian-2612`, native ID
+  `ses_e7d450862ffe4kws4qRmhUJKO4`, existing branch `2612`. The repository-qualified
+  ticket was already read once; no repeat remote lookup, new branch or clone sync.
+  Preserve the pre-existing STATUS/cerebrum changes and OpenWolf-owned index work.
+- Added `scanners/password_likelihood.py`: independent, offline/default-off,
+  global-only literal human opt-in; local entropy reuse and bounded structural
+  contextual/ambiguous classes. Reviewed detect-secrets v1.5.0 Apache-2.0 and its
+  offline limitations; no new application dependency, dictionary/model or vault.
+  Arbitrary context-free passphrases, multilingual/escaped/multiline recognition
+  and real-host prevention remain unqualified, not universal detection claims.
+- Added scanner/violation registration, shared content/file/command integration,
+  bounded nested tool-argument traversal and independent PostToolUse inspection.
+  Warn is advisory; block requests denial for contextual candidates or incomplete
+  analysis, not ambiguous strings. Existing credential warning/block behavior is
+  regression-tested; coordinate-based stronger-match dedup applies in the shared
+  content pipeline, never downgrading stronger findings. Missing coordinates are
+  not overlap proof. Host compliance is not established by response tests.
+- Findings use safe locations/fixed labels, not values, partial hints or candidate
+  hashes. Explicit sanitization replaces whole repeated/overlapping spans and
+  withholds incomplete content. Audit/context overrides and exception text are
+  withheld for this violation, including failures swallowed by the underlying
+  logger. No automatic heuristic PostToolUse transformation is claimed.
+- Synchronized schema/setup/example/all four profiles, global Secrets controls,
+  status/help, static/SARIF rule metadata, violation filters/log-type selection,
+  SDK/daemon paths, ignore-tooling name/schema, readiness workflow and docs/nav/
+  changelog. Project exclusions/annotations/language overlays do not weaken this
+  opt-in policy; explicit SDK null/missing policy does not load workstation opt-in.
+- **Validation:** 1,558 directly related unit/UX tests passed together (three
+  existing deprecation warnings), then 87 targeted tests passed after the final
+  control/log-type checks, including both entire affected UX contracts. New
+  heuristic module coverage is **94%**; source Ruff/Black (`py310`)/error-level
+  Pylint/Mypy pass. JSON/schema/YAML, new doc links and whitespace checks pass.
+  Manual simplification/privacy/budget review done; no `/simplify` skill is
+  available in this harness, and no subagents were spawned. No full suite,
+  integration/container scenarios, MkDocs build or live host tests were run.
+- Qualification runner/fixture: `scripts/qualify_password_likelihood.py` and
+  `tests/fixtures/password_likelihood_corpus.py`. Frozen seed 26122026: 8,000
+  synthetic positives (1,000/class), 6,000 benign **template** samples. Supported
+  class recall 98.6–100%; template negatives 0 flags; contextual precision 100%
+  **only in this constructed corpus**. No population/zero-FP claim. Linux/Python
+  3.14.7: 4-KiB p95 0.94 ms, bounded adversarial worst 15.28 ms, peak traced
+  allocations 2,858,268 bytes (not RSS), within predeclared local budgets.
+- **Open gates:** the unadjudicated repository sample flags 3/11 source windows
+  (39,131 chars) and 3/9 documentation windows (32,915 chars), all ambiguous,
+  none contextual/incomplete. This does not qualify real-world false positives.
+  Independently adjudicate representative held-out corpora, then qualify actual
+  pre-model payloads for each claimed host/version/platform and CI platforms.
+  Keep experimental status and the v1.21.0 delivery/prevention claim gated; do not
+  close the issue or treat generic hook denial/SDK checks as live host evidence.
+- `docs/security/PASSWORD_LIKELIHOOD.md` records scope, measured results and manual
+  evidence protocol; `docs/AGENT_SUPPORT.md` explicitly marks real hosts unqualified.
+  Aggregate local report: `/tmp/opencode/guardian-2612-qualification.json`;
+  focused coverage: `/tmp/opencode/guardian-2612.coverage` (ephemeral coverage tool,
+  no project dependency/lock change). Initial red tests and mock/import-order
+  contamination were fixed and logged, not skipped or silenced.
+- Saved a DAF progress note and posted a completed-local/open-gates checklist:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2612#issuecomment-6472198028.
+  No commits/pushes/PRs/releases/issue closure, real password/source access, runtime
+  configuration/security changes or installed daemon restarts. Changes are local
+  and uncommitted for review, not ready for acceptance/release completion.
+
+## Issue #2612 session initialization — 2026-10-28 (historical)
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2612`; verified this repository and existing
+  branch `2612`. Read the repository-qualified GitHub ticket exactly once. This
+  real-workspace development session requires no temporary-clone sync.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context files
+  and hierarchical skills are absent. Loaded DAF workflow/Git/OpenWolf guidance,
+  project protocol, handoff and relevant learning constraints. Project release
+  skill is unrelated. Leave native titles DAF-managed; defer commits/PR to DAF.
+- User requested initialization only; implementation has not started. Preserve
+  the pre-existing changes in this handoff and `.wolf/cerebrum.md`.
+- Next: read scanner/IDE integration checklists and audit bundled assignments,
+  entropy/post-scan filters, optional detect-secrets reuse and SDK/daemon/hook
+  boundaries. Select a minimal offline approach with license review before adding
+  dependencies, and define class-specific held-out quality/performance budgets.
+- Plan an independent default-off heuristic with trusted human opt-in, bounded
+  candidate extraction and qualified contextual passphrases. Keep suspected-secret
+  confidence distinct from password identity/strength, preserve stronger matches,
+  and protect candidate values across every finding, log and diagnostic sink.
+- Qualify advisory versus preventive surfaces and full repeated/overlapping-span
+  handling; warnings/transcript scans are not leak prevention. Actual pre-model
+  host evidence remains a release gate, not something unit hook mocks establish.
+- Plan isolated related unit tests and complete affected UX contracts, synchronize
+  applicable configuration/profiles/Web controls/registration/status/readiness and
+  docs/changelog, and run related tests plus required linters after code work.
+  Narrow/defer unqualified passphrase classes rather than claim universal coverage.
+- No application changes, dependency installs, tests, tracker updates, vault reads,
+  runtime/configuration changes, commits, pushes or PRs. Only this initialization
+  handoff was added; OpenWolf owns automatic anatomy/memory bookkeeping. Earlier
+  entries are historical, not implementation of the current issue.
+
+## Default detect-secrets dependency discussion — 2026-10-28
+
+- User asks whether the optional package should ship by default; this is a
+  packaging discussion, not authorization to install or change application code.
+- Current PyPI metadata: detect-secrets 1.5.0, published 2024-05-06, universal
+  Python wheel 120341 bytes. Base runtime dependencies are PyYAML and Requests,
+  both already core AI Guardian dependencies. Optional gibberish/word-list extras
+  add other packages and are not implicitly selected. Verified Apache-2.0 license
+  from upstream tag `v1.5.0`; distribution metadata alone had no license field.
+- Provisional recommendation: if #2612 qualifies reuse of this detector, bundling
+  the dependency can make sense while the new heuristic stays default-off and
+  explicitly opt-in. Installation alone does not activate its detectors or extend
+  the bundled TOML scanner. Do not blindly replace the existing scanner or enable
+  the entire backend. Qualify offline behavior, false positives, supported Python/
+  OS versions, security/maintenance and required blocking/redaction capabilities.
+- No package installed, application code changed or issue updated for this
+  discussion. #2612 remains the evaluation target; vault epic remains backlog.
+
+## Password-heuristic issue #2612 created — 2026-10-28
+
+- Follow-up wording clarification: `scanners/engine_builder.py` is present; it
+  registers the optional third-party `detect-secrets` backend. Rechecked that
+  backend's module/distribution and `.venv/bin/detect-secrets` are absent from
+  this project's test venv, and no executable is on the inherited PATH. This is
+  not a missing AI Guardian source module or a prerequisite for the built-in
+  TOML scanner; it only limits which backend was exercised. No installation or
+  live daemon configuration inspection was performed.
+- User explicitly requested **no code changes**, only an issue for a viable
+  solution. Created and read-back verified:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2612
+  (`[Feature]: Opt-in local password-likelihood heuristics for unstructured text`).
+- Labels: enhancement, security, secret-scanning, known-secret-protection,
+  **1.21.0**. This is a target gated on quality/performance/pre-model enforcement,
+  not a claim that universal password recognition or delivery is guaranteed.
+- Scope: optional/default-off, entirely local heuristic candidate/scoring work,
+  reuse/evaluate existing entropy/external detectors first, mixed-symbol strings
+  plus qualified contextual passphrases, safe confidence-aware enforcement and
+  full-span redaction. Includes representative false-positive/precision-recall,
+  bounded performance, no-network/privacy and complete affected UX evidence gates.
+- Explicit limits: strength/entropy does not prove a string is a password;
+  context-free arbitrary joined-word recognition is not promised. No vault/source
+  access, candidate persistence or raw-value diagnostics. Existing pattern/exact
+  detections must not be weakened by heuristic non-secret scores.
+- Independent related issue, not a new child/prerequisite of #2588. Verified
+  #2588 stays backlog without 1.21.0 and still has exactly #2604-#2611 as its
+  eight native children. #2612 has no parent or blocker dependencies.
+- Draft: `/tmp/opencode/guardian-password-heuristics-issue-20261028.md`.
+  Published body matched the draft; state/labels/independence verified via API.
+  No application code changes, dependency installs, real vault reads or new
+  heuristic implementation. Earlier probe results remain illustrative only.
+
+## Password-heuristic capability review — 2026-10-28 (historical)
+
+- User proposes an optional heuristic for random mixed-character passwords and
+  joined-word passphrases as a smaller possible 1.21.0 delivery, conditional on
+  what AI Guardian already supports. No application implementation or additional
+  GitHub issue/dependency/release changes have been made for this proposal.
+- Current source already has `shannon_entropy` in `patterns/validators.py`,
+  contextual password/secret assignment rules and post-pattern entropy filtering
+  in `scanners/toml_patterns.py`. Entropy filters matched candidates; it does not
+  independently discover every random-looking standalone value. No dedicated
+  general passphrase/word-segmentation detector was found in application source.
+- Supported `detect-secrets` preset exists in `scanners/engine_builder.py` and its
+  upstream documentation includes high-entropy detectors. Package is absent from
+  this project environment; external-engine/adapter behavior was not exercised.
+- Synthetic bundled-engine probe: five styles (random alphanumeric, random mixed
+  symbols, joined words, CamelCase words, hyphenated words). Standalone 0/5 and
+  natural-language examples 0/5 detected; password assignments 5/5 and JSON
+  password fields 5/5 detected. Three benign controls produced no findings.
+  These illustrate behavior, not measured precision/recall or universal coverage;
+  no user vault/configuration or real passwords were supplied to the scanner.
+- Recommendation: independent opt-in local password-likelihood candidate/scoring
+  improvement, reusing existing entropy support and evaluating external-engine
+  reuse first. Qualify mixed-character candidates, contextual passphrases, benign
+  code/identifiers/hashes/logs, privacy/full redaction and actual model boundaries.
+  Strength/randomness is not proof a value is a password; context-free joined
+  words cannot reliably be distinguished from ordinary text/identifiers.
+- Proposed 1.21.0 scope must be benchmark/false-positive gated, not a promise of
+  universal password detection or a prerequisite for the vault epic. Ask whether
+  to create the separate scoped issue; #2588/#2604-#2611 stay backlog unchanged.
+
+## Issue #2588 parent/sub-issue publication — 2026-10-28
+
+- User authorized converting #2588 into a parent, creating the proposed eight
+  children with a feature label, adding dependencies and removing the 1.21.0
+  target. Explicitly confirmed the full eight-issue/seven-edge proposal before
+  publication. No replacement release was selected.
+- Published parent: https://github.com/RedHatProductSecurity/ai-guardian/issues/2588
+  (`[Epic]: Opt-in known-secret leak prevention before LLM submission`). The
+  original Bitwarden-first proposal remains in a clearly historical details block.
+- Created native GitHub sub-issues: #2604 design, #2605 shared core/enforcement,
+  #2606 Linux Secret Service, #2607 macOS Keychain, #2608 Windows Credential
+  Manager, #2609 Bitwarden encrypted exports, #2610 Firefox feasibility/provider,
+  #2611 remote-daemon user-provided source access.
+- Verified native `blocked by` edges: #2604 -> #2605; #2605 -> #2606, #2607,
+  #2608, #2609, #2610; #2606 -> #2611. All eight are open, parented to #2588;
+  no circular parent-as-prerequisite dependency or unrelated-provider ordering.
+- Created/applied `known-secret-protection`; parent/children also have
+  enhancement/security/secret-scanning/backlog. Removed parent `1.21.0` and
+  verified no parent/child release milestone or 1.21.0 label remains.
+- User clarified remote scope: no workstation secrets/index/session forwarding.
+  A remote daemon can use its own reachable source only after separate opt-in,
+  with a supported access mechanism and least-privilege permissions provided
+  and administered by the human in that remote environment.
+- User proposed Bitwarden encrypted exports. #2609 now initially targets portable
+  password-protected encrypted JSON, not account-restricted exports or mandatory
+  live CLI access. Require qualified/license-compatible authenticated decryption,
+  private passphrase handling, no decrypted files/caches, and explicit snapshot
+  age/expiry/replacement rules: reloading old ciphertext cannot discover new
+  passwords or renew vault currentness. Account-restricted support is excluded.
+- **Validation:** offline issue-body/size checks and acyclic eight-node/seven-edge
+  topology passed; read-back GraphQL verified all hierarchy/dependency/label/
+  scheduling state. Bitwarden official encrypted-export documentation reviewed.
+  No application code changes, real vault/export/account reads, decryption
+  qualification, runtime/security settings changes, app tests, commits or PRs.
+- Scratch publisher/snapshot/journal are under `/tmp/opencode/guardian-2588-*`;
+  publication journal is `guardian-2588-publication-20261028.json` (`complete`).
+  Standalone task; branch `2585` and its historical task notes are preserved.
+
+## Independent issue #2588 design review — 2026-10-28 (historical)
+
+- Standalone conversational review, not implementation of the existing `2585`
+  branch. User corrected the requested issue number from #3588 to #2588; the
+  qualified #2588 ticket was read successfully and has no comments.
+- Follow-up: user explicitly requires optional, opt-in integrations and asks
+  about Linux passwd and cross-platform equivalents. Distinguish account
+  authentication databases from saved-secret stores: `/etc/passwd` is not a
+  plaintext-password source; `/etc/shadow` holds password verifiers. Recommend
+  an opt-in Linux Secret Service provider instead, without reading real account
+  databases or promising access to the OS login password.
+- The existing proposal starts with Bitwarden Password Manager and already
+  requires human consent, ephemeral matching state, safe output sinks,
+  fail-closed required protection and no default copying to remote daemons.
+- Recommendation for discussion: retain those shared requirements in a parent
+  issue, qualify the matcher/security lifecycle first, then separate OS-native
+  providers, Bitwarden, Firefox and remote deployment. Native stores do not
+  automatically expose browser or third-party vault passwords.
+- Prefer no persistent credential cache. Same-process memory encryption does
+  not protect a compromised runtime; keyed fingerprints need substring-search
+  correctness/performance qualification and do not defeat host compromise.
+- No application changes, real vault access, tests, security configuration
+  changes or GitHub mutations. Only local review/handoff notes were saved.
+  Await user direction before editing #2588 or creating child issues. Existing
+  task history below is preserved; this review does not complete #2585.
+
 ## Issue #2585 documentation implementation — 2026-10-28
 
 - User authorized implementation with **go** after initialization; continued on

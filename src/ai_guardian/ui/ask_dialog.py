@@ -54,6 +54,32 @@ class AskViolationInfo:
     finding_index: Optional[int] = None
     total_findings: Optional[int] = None
 
+    @property
+    def decision_only(self) -> bool:
+        """This heuristic supports only private, operation-scoped decisions."""
+        return self.violation_type == "suspected_password"
+
+    def __post_init__(self):
+        if self.decision_only:
+            from ai_guardian.scanners.password_likelihood import (
+                MESSAGE,
+                INCOMPLETE_MESSAGE,
+            )
+
+            self.error_message = (
+                INCOMPLETE_MESSAGE
+                if self.error_message == INCOMPLETE_MESSAGE
+                else MESSAGE
+            )
+            self.summary = (
+                self.error_message + " Allow Once approves this operation only."
+            )
+            self.matched_text = "[Candidate values withheld]"
+            self.matched_pattern = ""
+            self.config_section = "password_likelihood"
+            self.finding_index = None
+            self.total_findings = None
+
 
 @dataclass
 class AskResult:
@@ -243,8 +269,8 @@ def _show_via_tray_forwarding(
 ) -> Optional[AskResult]:
     """Queue prompt for host tray pickup on headless remote daemon (#1342).
 
-    Returns None if no tray registered or decision timed out (caller falls
-    through to existing headless fallback with zero delay).
+    Returns None only if no tray is registered. An unanswered queued prompt
+    uses its security fallback and is terminal, never a second local prompt.
     """
     try:
         from ai_guardian.daemon import get_daemon_state
@@ -269,7 +295,7 @@ def _show_via_tray_forwarding(
             pending.prompt_id,
             fallback_action,
         )
-        return None
+        return AskResult(decision=_map_fallback_to_decision(fallback_action))
 
     data = pending.result
     decision_str = data.get("decision", "block")
@@ -560,7 +586,8 @@ def show_ask_dialog(
                                              decision_event.set()
                                              AskResult returned to hook
 
-    No tray registered + headless env → immediate fallback (no block).
+    Explicit headless preference → immediate security fallback, no forwarding.
+    Auto-detected display-less daemon → tray forwarding, then security fallback.
 
     Args:
         violation: Violation details to display.
@@ -570,23 +597,23 @@ def show_ask_dialog(
     Returns:
         AskResult with the user's decision and optional allowlist pattern.
     """
-    if _is_headless_env():
-        decision = _map_fallback_to_decision(fallback_action)
-        logger.info("headless env, using fallback: %s -> %s", fallback_action, decision)
-        return AskResult(decision=decision)
+    from ai_guardian.ui.display import get_preferred_ui
 
-    # Tray forwarding is only used when an interactive UI is permitted.
-    result = _show_via_tray_forwarding(violation, fallback_action, timeout_seconds)
-    if result is not None:
-        return result
+    if get_preferred_ui() != "headless":
+        # A remote daemon needs no display of its own. Explicit headless still
+        # prohibits forwarding; automatic display detection only gates local UI.
+        result = _show_via_tray_forwarding(violation, fallback_action, timeout_seconds)
+        if result is not None:
+            return result
 
-    result = _show_via_daemon(violation, fallback_action, timeout_seconds)
-    if result is not None:
-        return result
+        if not _is_headless_env():
+            result = _show_via_daemon(violation, fallback_action, timeout_seconds)
+            if result is not None:
+                return result
 
-    result = _show_via_subprocess(violation, fallback_action, timeout_seconds)
-    if result is not None:
-        return result
+            result = _show_via_subprocess(violation, fallback_action, timeout_seconds)
+            if result is not None:
+                return result
 
     decision = _map_fallback_to_decision(fallback_action)
     logger.info(f"Ask dialog headless fallback: {fallback_action} -> {decision}")

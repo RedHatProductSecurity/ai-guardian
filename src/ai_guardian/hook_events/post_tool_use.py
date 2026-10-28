@@ -32,6 +32,10 @@ from ai_guardian.hook_events.scanners import (
     run_pii_scan,
 )
 from ai_guardian.scanners.scanner_registry import ScannerName, get_default_registry
+from ai_guardian.scanners.post_scan_filters import (
+    PostScanContext,
+    apply_post_scan_pipeline,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +202,41 @@ def handle_post_tool_use(ctx=None, **kwargs):
         tool_name=tool_name,
     )
 
+    # Independent of credential-engine selection, annotation/project exclusions,
+    # and cross-hook clean-input shortcuts: tool results are different content.
+    from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
+
+    password_warning = None
+    password_result = run_password_likelihood_scan(tool_output)
+    if password_result is not None:
+        password_decision = apply_post_scan_pipeline(
+            get_default_registry().get(ScannerName.PASSWORD_LIKELIHOOD),
+            password_result,
+            PostScanContext(
+                handle_ask_mode_auto=_handle_ask_mode_auto,
+                log_ask_decision=_log_ask_decision,
+                format_ask_info_message=_format_ask_info_message,
+                hook_event=hook_event,
+                hook_session_id=hook_session_id,
+                hook_tool_use_id=hook_tool_use_id,
+                tool_name=tool_name,
+                ide_type_value=agent_type,
+                violation_logger=violation_logger,
+                latency_timer=_latency_timer,
+                invocation_allowed_findings=_invocation_allowed,
+            ),
+        )
+        if password_decision.should_block:
+            _advance_transcript_position(hook_data)
+            return _format_response(
+                adapter,
+                has_secrets=True,
+                hook_event=hook_event,
+                error_message=password_result.error_message,
+                violation_type=ViolationType.SUSPECTED_PASSWORD,
+            )
+        password_warning = "\n\n".join(password_decision.warnings) or None
+
     # Load PreToolUse context for cross-hook correlation (#366)
     pretool_ctx = None
     if context_mgr and hook_tool_use_id:
@@ -257,7 +296,15 @@ def handle_post_tool_use(ctx=None, **kwargs):
     ):
         logger.info("Secret scanning is disabled - skipping PostToolUse scan")
         _advance_transcript_position(hook_data)
-        return _format_response(adapter, has_secrets=False, hook_event=hook_event)
+        return _format_response(
+            adapter,
+            has_secrets=False,
+            hook_event=hook_event,
+            warning_message=password_warning,
+            violation_type=(
+                ViolationType.SUSPECTED_PASSWORD if password_warning else None
+            ),
+        )
 
     ignore_files = secret_config.get("ignore_files", []) if secret_config else []
     ignore_tools = secret_config.get("ignore_tools", []) if secret_config else []
@@ -339,7 +386,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
             adapter,
             has_secrets=False,
             hook_event=hook_event,
-            warning_message=error_message,
+            warning_message="\n\n".join(
+                filter(None, (password_warning, error_message))
+            ),
             violation_type=ViolationType.SECRET_DETECTED,
         )
 
@@ -479,6 +528,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     )
                     logger.warning(f"WARN mode: {warning_msg}")
 
+                if password_warning:
+                    warning_msg = "\n\n".join(
+                        filter(None, (password_warning, warning_msg))
+                    )
+
                 if len(redacted_text) > _MAX_REDACTED_CONTEXT_BYTES:
                     orig_len = len(redacted_text)
                     redacted_text = (
@@ -534,7 +588,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
     logger.info(f"✓ No secrets detected in {tool_identifier} output")
 
     # Accumulate warning messages for PII ask-mode decisions
-    warning_messages = []
+    warning_messages = [password_warning] if password_warning else []
 
     # PII scanning in PostToolUse (Issue #262)
     pii_file_path = tool_input.get("file_path") or tool_input.get("path")
@@ -774,8 +828,10 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     )
 
     # Prompt injection and context poisoning scanning on PostToolUse output (#1285)
-    post_warning_messages = []
-    post_warn_types: list = []
+    post_warning_messages = [password_warning] if password_warning else []
+    post_warn_types: list = (
+        [ViolationType.SUSPECTED_PASSWORD] if password_warning else []
+    )
     post_pi_cp_filename = (
         f"{tool_identifier}_output" if tool_identifier else "tool_output"
     )

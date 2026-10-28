@@ -18,6 +18,10 @@
       "additionalProperties": false
     },
     "secret_scanning": { "$ref": "#/$defs/scanner_section" },
+    "password_likelihood": {
+      "$ref": "#/$defs/scanner_section",
+      "description": "Recognized scanner name. Experimental password likelihood uses global-only policy and does not consume project ignore paths."
+    },
     "scan_pii": { "$ref": "#/$defs/scanner_section" },
     "prompt_injection": { "$ref": "#/$defs/scanner_section" },
     "config_file_scanning": { "$ref": "#/$defs/scanner_section" },

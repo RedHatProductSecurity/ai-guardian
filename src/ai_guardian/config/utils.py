@@ -91,6 +91,7 @@ GLOBAL_ONLY_SECTIONS: FrozenSet[str] = frozenset(
         "developer_session",
         "agent_config_protection",
         "self_protection",
+        "password_likelihood",
     }
 )
 
@@ -926,6 +927,10 @@ def get_feature_flags(cfg: Dict) -> Dict[str, bool]:
         else:
             features[key] = bool(section) if section is not None else True
     features["permissions"] = cfg.get("permissions", {}).get("enabled", True)
+    heuristic = cfg.get("password_likelihood")
+    features["password_likelihood"] = (
+        isinstance(heuristic, dict) and heuristic.get("enabled") is True
+    )
     return features
 
 

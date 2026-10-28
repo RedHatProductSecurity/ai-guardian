@@ -2,9 +2,20 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-27
+> Last updated: 2026-10-28
 
 ## User Preferences
+
+- **2026-10-28 — #2612 Console auto-save:** Global-only policy does not need a
+  special Save button. Follow the Console's existing auto-save-on-change behavior
+  for password-likelihood enable/outcome controls. Viewing the page is not consent;
+  changing outcome must not enable analysis. Save only the changed field to the
+  selected daemon's global policy, retain read-only/failure guards and serialize
+  rapid changes in the same card so the two controls do not overwrite each other.
+
+- **2026-10-28 — #2588:** Secret-source integrations must be optional and
+  disabled by default, with explicit human opt-in; do not infer vault/account
+  database access authorization from discussion of possible providers.
 
 - **Per-daemon support (#2597):** Keep an independently available local tray-host
   action and add source-bound Contact supports actions for each connected daemon.
@@ -116,6 +127,114 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-10-28 — #2612 private Ask boundaries:** Reusing generic Ask needs more
+  than registry opt-in: it can read a source line when matched text is empty and
+  can persist exception patterns. Password-likelihood uses a value-withheld,
+  operation-scoped Allow Once / Block variant, no source/editor controls, and
+  rejects persistent decisions before writer/cache callbacks. Raw Ask remains
+  fail-closed for SDK/static checks without UI. Incomplete analysis is not a
+  positive finding but still needs the selected approval/deny outcome. Callers
+  must honor the resolved decision rather than the original should_block flag;
+  private canonical audit must likewise record the resolved state.
+- **2026-10-28 — Ask remote display and timeout:** Explicit headless must prohibit
+  all dialogs/forwarding; automatically detecting no local display must NOT skip
+  a registered workstation tray. Separate preference from display eligibility.
+  Once a remote prompt is queued, timeout is a terminal security fallback, not
+  pre-display unavailability that permits another local prompt. Mocked remote
+  queue/decision and SSH contracts do not establish actual pre-model prevention.
+
+- **2026-10-28 — #2612 remote Ask reuse:** The user pointed out that existing
+  Ask already supports remote daemons. Verified `ui/ask_dialog.py` queues remote
+  prompts and `tray/app.py` polls/displays/returns decisions for container,
+  Kubernetes, manual and SSH targets; SSH uses authenticated poll-only registration
+  in `daemon/multi_client.py`. Reuse this flow rather than design another remote
+  approval system. Password likelihood currently declares `supports_ask_mode=False`;
+  adding Ask/default-Ask needs scanner-specific privacy/enforcement wiring and
+  tests, not a new transport. Source/contract evidence is not live host qualification.
+
+- **2026-10-28 — #2612 integration boundaries:** The shared content pipeline
+  covers prompts/file content, not arbitrary Write/Edit/Bash argument values.
+  Use bounded nested string traversal rather than JSON serialization (which
+  escapes contextual quotes), and never treat a tool's policy-shaped data as
+  trusted configuration. Explicit SDK null/missing policy must not fall through
+  to global opt-in. Distinguish an incomplete analysis from positive detection
+  while still warning or enforcing the deliberately selected outcome.
+- **2026-10-28 — #2612 privacy/budgets:** Enforce finding caps during extraction
+  for both contextual and ambiguous spans, not just when emitting sorted results;
+  otherwise same-line overlap work grows unnecessarily. A logging wrapper cannot
+  protect exception privacy if the underlying ViolationLogger swallows and logs
+  the raw exception first; test real persistence failures as well as mock raises.
+  Guard the actual save callback's read-only state, not only button eligibility.
+- **2026-10-28 — scanner mock import order:** `test_scan_pipeline` imported
+  PostToolUse while scanner decorators were active in its source-command test,
+  retaining a mocked `run_secret_scan` in the module. Reproduced 11 failures when
+  the existing PostToolUse UX file ran afterward. Import the consuming module at
+  collection, then patch its attribute with `patch.object`; do not change or
+  silence credential behavior to hide test-order contamination. Static config
+  sections sharing a page also need an explicit section-to-route mapping because
+  the constants module otherwise assumes one section per slug.
+- **2026-10-28 — #2612 qualification:** The frozen synthetic/template and local
+  performance gates pass, but 6/20 unadjudicated repository windows have advisory
+  flags (none block-eligible). Do not claim representative benign quality, zero
+  false positives or prevention based on those constructed datasets or hook JSON.
+  Keep experimental/default-off status, independently adjudicated held-out corpus
+  and actual model-boundary host/version/platform evidence as open release gates.
+
+- **2026-10-28 — detect-secrets packaging:** PyPI 1.5.0 is a roughly 120 KB
+  universal wheel with Requests/PyYAML base dependencies already present in the
+  project requirements; optional gibberish/word-list extras are separate. Verified
+  Apache-2.0 at upstream `v1.5.0/LICENSE` (the unprefixed tag URL does not exist).
+  Default installation and default activation are separate decisions. Conditional
+  bundling after #2612 qualification is not permission to install now or turn on
+  the whole backend; verify offline behavior, compatibility, false positives and
+  model-boundary handling first. Latest PyPI release date alone is not proof of
+  either compatibility, maintenance quality or a security defect.
+
+- **2026-10-28 — #2612 wording:** Distinguish AI Guardian's present internal
+  `scanners/engine_builder.py` from the optional third-party `detect-secrets`
+  package/executable it registers. Only that optional backend was absent from
+  the checked development venv/PATH, not the builder source or built-in engine.
+  State the exact checked environment; do not imply a live daemon was inspected.
+
+- **2026-10-28 — heuristic versus entropy filter:** Bundled `TomlPatternsScanner`
+  runs pattern matching before Shannon-entropy filtering; existing entropy support
+  is not a standalone arbitrary-password detector. Synthetic five-style probes
+  found assignment/JSON password cases but not standalone/natural-language
+  examples. This is illustrative coverage, not a recall estimate. A supported
+  `detect-secrets` backend already offers upstream entropy heuristics, but was not
+  installed/tested here; evaluate existing capabilities before duplicating them.
+  Joined-word password strength does not imply detectable password identity.
+  User then authorized issue creation only, not code: #2612 targets 1.21.0
+  subject to evidence gates and is independent of the backlog known-value/source
+  epic. #2588's eight children/dependencies remain unchanged; #2612 is related
+  but has no parent/blocker dependency.
+
+- **2026-10-28 — #2588 approved decomposition:** Published native parent #2588
+  and children #2604-#2611 with `known-secret-protection` and backlog, no 1.21.0
+  target/replacement release. Actual dependency edges are design #2604 -> core
+  #2605 -> five providers #2606-#2610, plus Linux #2606 -> remote #2611.
+  `gh issue create --parent ... --blocked-by ...` supports both relationships in
+  this installed CLI; verified through GraphQL, not merely textual references.
+- **2026-10-28 — user source refinements:** Remote known-secret matching may
+  consume a source reachable in that runtime only through separately opted-in,
+  human-provided supported access/permissions; do not forward workstation values,
+  indexes or unlock sessions. Bitwarden #2609 starts with portable password-
+  protected encrypted JSON snapshots. Official docs distinguish account-
+  restricted exports tied to the account key; those are excluded initially.
+  Documentation of encryption is not qualification of an automated decryption
+  SDK/license. Retain ciphertext only as the user-owned source, never decrypted
+  files/index caches; snapshot reload must not masquerade as live-vault refresh.
+
+- **2026-10-28 — #2588 design-review boundary:** The current issue starts with
+  Bitwarden Password Manager, not an OS-native provider, and already requires
+  ephemeral state, human authorization, full-span redaction, safe sinks and
+  fail-closed required egress. The OS-native-first split was initially a review
+  suggestion and is now explicitly approved/published as recorded above. Native credential stores do not
+  automatically cover Firefox/Bitwarden vaults; provider enumeration, item
+  accessibility and user-session/lock behavior must be qualified separately.
+  Fingerprints do not automatically solve embedded-value matching, and
+  encrypting memory with a same-process key does not defeat runtime compromise.
 
 - **Published-artifact documentation gate (#2585):** On 2026-10-28 production
   PyPI still reported 1.20.0; its SHA-256-verified wheel lacked native TLS/SSH

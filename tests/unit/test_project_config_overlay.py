@@ -598,6 +598,7 @@ class TestGlobalOnlySections:
             "developer_session",
             "agent_config_protection",
             "self_protection",
+            "password_likelihood",
         }
         assert GLOBAL_ONLY_SECTIONS == expected
 

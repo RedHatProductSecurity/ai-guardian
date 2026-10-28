@@ -214,14 +214,15 @@ class _TkinterAskDialog:
             command=lambda: self._on_decision(root, AskDecision.ALLOW_ONCE),
         ).pack(side="left", padx=(0, 5))
 
-        ttk.Button(
-            btn_frame,
-            text="Allow Always...",
-            style="AllowAlways.TButton",
-            command=lambda: self._on_allow_always(root),
-        ).pack(side="left", padx=5)
+        if not v.decision_only:
+            ttk.Button(
+                btn_frame,
+                text="Allow Always...",
+                style="AllowAlways.TButton",
+                command=lambda: self._on_allow_always(root),
+            ).pack(side="left", padx=5)
 
-        if v.file_path:
+        if v.file_path and not v.decision_only:
             ttk.Button(
                 btn_frame,
                 text="View File",

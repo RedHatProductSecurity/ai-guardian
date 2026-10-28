@@ -121,14 +121,26 @@ class ViolationLogger:
 
                 ViolationCounter().increment(violation_type)
             except Exception as counter_err:
-                logger.warning(f"Failed to increment violation counter: {counter_err}")
+                if violation_type == "suspected_password":
+                    logger.warning(
+                        "Failed to increment suspected-password counter; details withheld"
+                    )
+                else:
+                    logger.warning(
+                        f"Failed to increment violation counter: {counter_err}"
+                    )
 
             # Rotate log if needed
             self._rotate_log_if_needed()
 
         except Exception as e:
             # Fail-open: don't block operations if logging fails
-            logger.warning(f"Failed to log violation: {e}")
+            if violation_type == "suspected_password":
+                logger.critical(
+                    "Failed to persist suspected-password violation; details withheld"
+                )
+            else:
+                logger.warning(f"Failed to log violation: {e}")
 
     def get_recent_violations(
         self,

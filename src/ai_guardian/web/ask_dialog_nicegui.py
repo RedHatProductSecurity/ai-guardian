@@ -507,11 +507,12 @@ class _NiceGuiAskDialog:
 
                         dlg.open()
 
-                    ui.button("Allow Always...", on_click=show_editor).props(
-                        f"color={quasar_button('allow_always')}"
-                    )
+                    if not v.decision_only:
+                        ui.button("Allow Always...", on_click=show_editor).props(
+                            f"color={quasar_button('allow_always')}"
+                        )
 
-                    if v.file_path:
+                    if v.file_path and not v.decision_only:
                         file_path = v.file_path
 
                         def view_file():

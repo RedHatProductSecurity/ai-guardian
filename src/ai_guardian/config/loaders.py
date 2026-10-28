@@ -580,6 +580,13 @@ def _load_secret_redaction_config():
     return _load_config_section("secret_redaction")
 
 
+def _load_password_likelihood_config():
+    """Global-only, default-off human opt-in; never merge project exclusions."""
+    return _load_config_section(
+        "password_likelihood", defaults={"enabled": False, "action": "ask"}
+    )
+
+
 def _load_audit_logging_config():
     """Load the general compliance audit logging configuration."""
     return _load_config_section("audit_logging")

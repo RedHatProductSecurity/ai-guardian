@@ -409,6 +409,18 @@ class ScanResult:
             blocked["start_column"] = self.start_column
         if self.end_column is not None:
             blocked["end_column"] = self.end_column
+        if self.violation_type == "suspected_password":
+            # Never use partial-hint redaction or surrounding text for suspected
+            # passwords, even if a future caller accidentally supplies a match.
+            blocked["reason"] = (
+                "Password-likelihood analysis incomplete; protection is not assured."
+                if self.extra.get("incomplete")
+                else "Suspected password-like content (heuristic; not a confirmed secret)."
+            )
+            blocked["action"] = "block" if self.should_block else "warn"
+            blocked["findings"] = self.findings or []
+            blocked["total_findings"] = self.total_findings
+            return blocked
         if self.matched_text:
             from ai_guardian.violations.redact import (
                 REDACT_VIOLATION_TYPES,

@@ -507,7 +507,9 @@ class TestDirectSessionSanitize:
             s._config = {}
             result = s.sanitize("some text")
             assert result["sanitized_text"] == "clean"
-            mock_sanitize.assert_called_once_with("some text", pi_config=None)
+            mock_sanitize.assert_called_once_with(
+                "some text", pi_config=None, password_config={"enabled": False}
+            )
 
     @patch("ai_guardian.sdk._DirectSession._ensure_config")
     @patch(
@@ -524,7 +526,9 @@ class TestDirectSessionSanitize:
             s._config = {"prompt_injection": pi}
             s.sanitize("from module import __init__")
             mock_sanitize.assert_called_once_with(
-                "from module import __init__", pi_config=pi
+                "from module import __init__",
+                pi_config=pi,
+                password_config={"enabled": False},
             )
 
     @patch("ai_guardian.sdk._DirectSession._ensure_config")
@@ -534,7 +538,9 @@ class TestDirectSessionSanitize:
         with monitor() as s:
             s._config = {"prompt_injection": pi}
             s.sanitize_batch(["text"])
-            mock_batch.assert_called_once_with(["text"], pi_config=pi)
+            mock_batch.assert_called_once_with(
+                ["text"], pi_config=pi, password_config={"enabled": False}
+            )
 
 
 # ---------------------------------------------------------------------------

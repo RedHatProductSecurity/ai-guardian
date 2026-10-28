@@ -1,5 +1,6 @@
 """Secret Scanning page — secret detection settings and allowlist config."""
 
+import asyncio
 import re as re_mod
 from datetime import datetime, timedelta, timezone
 
@@ -7,7 +8,12 @@ from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.help_panel import add_help_button, field_help_icon
-from ai_guardian.web.config_helpers import load_web_config, save_web_config
+from ai_guardian.web.config_helpers import (
+    is_web_config_read_only,
+    load_web_config,
+    load_web_config_global,
+    save_web_config,
+)
 
 DURATION_RE = re_mod.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?$", re_mod.IGNORECASE)
 
@@ -139,6 +145,89 @@ def _render_toggle(
                 )
 
 
+def _save_password_likelihood_setting(key, value):
+    """Save a human-changed field globally without overwriting its sibling."""
+    if is_web_config_read_only() or not (
+        (key == "enabled" and isinstance(value, bool))
+        or (key == "action" and value in ("ask", "warn", "block"))
+    ):
+        return False
+    config = load_web_config_global()
+    section = config.get("password_likelihood", {})
+    section = dict(section) if isinstance(section, dict) else {}
+    section[key] = value
+    config["password_likelihood"] = section
+    return save_web_config(config, scope="global")
+
+
+def _render_password_likelihood(config):
+    section = config.get("password_likelihood", {})
+    if not isinstance(section, dict):
+        section = {}
+    with ui.card().classes("w-full"):
+        with ui.row().classes("items-center gap-2"):
+            ui.label("Password Likelihood (Experimental, Opt-in)").classes(
+                "text-lg font-bold"
+            )
+            add_help_button("password_likelihood")
+        ui.label(
+            "Global policy for this daemon; changes save automatically. "
+            "Offline heuristic, not proof of a password. "
+            "Ask (default) requests Allow Once / Block approval for contextual candidates "
+            "or incomplete analysis; unavailable approval blocks. Ambiguous candidates remain "
+            "advisory. Warn does not prevent leaks; Block requests denial. Actual host "
+            "enforcement needs qualification. "
+            "No vault access or automatic heuristic redaction."
+        ).classes("text-xs text-grey-6")
+        with ui.row().classes("items-center gap-2"):
+            enabled = ui.checkbox(
+                "Enable local password-likelihood analysis",
+                value=section.get("enabled") is True,
+            )
+            field_help_icon("password_likelihood.enabled")
+        with ui.row().classes("items-center gap-2"):
+            selected_action = section.get("action", "ask")
+            action = ui.select(
+                ["ask", "warn", "block"],
+                value=(
+                    selected_action
+                    if selected_action in ("ask", "warn", "block")
+                    else "block"
+                ),
+                label="Outcome",
+            )
+            field_help_icon("password_likelihood.action")
+
+        save_lock = asyncio.Lock()
+
+        async def save(key, value):
+            # Preserve rapid edits to both controls: each save loads fresh policy.
+            async with save_lock:
+                success = await run.io_bound(
+                    _save_password_likelihood_setting, key, value
+                )
+                ui.notify(
+                    (
+                        "Global password-likelihood settings saved"
+                        if success
+                        else "Could not save global password-likelihood settings"
+                    ),
+                    type="positive" if success else "negative",
+                )
+
+        async def save_enabled(event):
+            await save("enabled", event.value)
+
+        async def save_action(event):
+            await save("action", event.value)
+
+        enabled.on_value_change(save_enabled)
+        action.on_value_change(save_action)
+        if is_web_config_read_only():
+            enabled.disable()
+            action.disable()
+
+
 def create_secrets_page(service, daemon_name: str):
     """Create the Secret Scanning settings page."""
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/secrets")
@@ -159,6 +248,7 @@ def create_secrets_page(service, daemon_name: str):
             config = await run.io_bound(load_web_config)
 
             with content:
+                _render_password_likelihood(config)
                 ss = config.get("secret_scanning", {})
                 if not isinstance(ss, dict):
                     ss = {}

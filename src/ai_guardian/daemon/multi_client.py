@@ -742,6 +742,10 @@ class MultiDaemonClient:
             else:
                 scanner_actions[key] = global_action
         features["scanner_actions"] = scanner_actions
+        heuristic = cfg.get("password_likelihood")
+        scanner_actions["password_likelihood"] = (
+            heuristic.get("action", "ask") if isinstance(heuristic, dict) else "ask"
+        )
         if isinstance(mcp_cfg, dict):
             features["proactive_level"] = mcp_cfg.get("proactive_level", "low")
         else:

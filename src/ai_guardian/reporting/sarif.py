@@ -86,6 +86,19 @@ class SARIFFormatter:
                 "precision": "high",
             },
         },
+        "PASSWORD-001": {
+            "id": "PASSWORD-001",
+            "name": "SuspectedPassword",
+            "shortDescription": {"text": "Suspected password-like content (heuristic)"},
+            "fullDescription": {
+                "text": "Optional local likelihood heuristic, not proof of a password. Static scans are advisory, not leak prevention."
+            },
+            "defaultConfiguration": {"level": "warning"},
+            "properties": {
+                "tags": ["security", "suspected-secret"],
+                "precision": "low",
+            },
+        },
         "PII-001": {
             "id": "PII-001",
             "name": "PIIDetected",
@@ -454,6 +467,22 @@ def create_secret_finding(
     if start_column is not None:
         result["start_column"] = start_column
     return result
+
+
+def create_password_likelihood_finding(
+    file_path: str, span: Dict[str, Any]
+) -> Dict[str, Any]:
+    """A safe location, never a candidate/snippet/partial hint."""
+    return {
+        "rule_id": "PASSWORD-001",
+        "level": "warning",
+        "message": "Suspected password-like content (heuristic; not a confirmed secret).",
+        "file_path": file_path,
+        "line_number": span["line_number"],
+        "start_column": span["start_column"],
+        "end_column": span["end_column"],
+        "details": dict(span),
+    }
 
 
 def create_pii_finding(

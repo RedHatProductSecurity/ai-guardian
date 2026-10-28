@@ -384,7 +384,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 
 | Feature | Description |
 |---------|-------------|
-| [Secret Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Multi-layered detection of API keys, tokens, passwords |
+| [Secret Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Credential patterns and [experimental opt-in password heuristics](docs/security/PASSWORD_LIKELIHOOD.md) |
 | [PII Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Detect personally identifiable information |
 | [Prompt Injection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Language-aware detection with tree-sitter AST parsing and configurable sensitivity |
 | [Image Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md) | OCR-based secret and PII detection in screenshots and images |
