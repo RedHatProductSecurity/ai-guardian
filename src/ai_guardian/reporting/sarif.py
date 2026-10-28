@@ -469,19 +469,43 @@ def create_secret_finding(
     return result
 
 
-def create_password_likelihood_finding(
+def create_heuristic_location_finding(
     file_path: str, span: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """A safe location, never a candidate/snippet/partial hint."""
+    """Password-likelihood location metadata, never a credential or snippet."""
+    details = {
+        key: span[key]
+        for key in ("start", "end", "line_number", "start_column", "end_column")
+        if isinstance(span.get(key), int)
+        and not isinstance(span[key], bool)
+        and span[key] >= 0
+    }
+    for key, allowed in (
+        (
+            "candidate_class",
+            {
+                "spaced_passphrase",
+                "separated_passphrase",
+                "camelcase_passphrase",
+                "joined_word_like",
+                "mixed_symbol",
+                "random_alphanumeric",
+            },
+        ),
+        ("confidence_class", {"contextual", "ambiguous"}),
+    ):
+        label = span.get(key)
+        if isinstance(label, str) and label in allowed:
+            details[key] = label
     return {
         "rule_id": "PASSWORD-001",
         "level": "warning",
         "message": "Suspected password-like content (heuristic; not a confirmed secret).",
         "file_path": file_path,
-        "line_number": span["line_number"],
-        "start_column": span["start_column"],
-        "end_column": span["end_column"],
-        "details": dict(span),
+        "line_number": details.get("line_number"),
+        "start_column": details.get("start_column"),
+        "end_column": details.get("end_column"),
+        "details": details,
     }
 
 

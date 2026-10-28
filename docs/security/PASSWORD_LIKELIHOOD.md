@@ -76,6 +76,9 @@ persistent exception, source annotation or ignore-file editor. Existing explicit
 saved `warn`/`block` outcomes are preserved; missing outcomes now default to `ask`.
 SDK and static scans never open a UI. Enforcing SDK checks reject unresolved Ask;
 the trusted application must handle that denial rather than assume approval.
+The trusted violation Details view offers private review guidance, not a copyable
+source/persistent-exception snippet. Static reports retain only validated numeric
+locations and fixed class labels; they do not copy arbitrary fields from findings.
 
 ## Initial supported classes and limits
 

@@ -2519,14 +2519,14 @@ def _process_hook_data(hook_data, daemon_state=None):
                 )
                 warning_messages.extend(password_decision.warnings)
                 if password_decision.warnings:
-                    warn_violation_types.append(ViolationType.SUSPECTED_PASSWORD)
+                    warn_violation_types.append(ViolationType.HEURISTIC_CANDIDATE)
                 if password_decision.should_block:
                     return _format_response(
                         adapter,
                         has_secrets=True,
                         hook_event=hook_event,
                         error_message=password_result.error_message,
-                        violation_type=ViolationType.SUSPECTED_PASSWORD,
+                        violation_type=ViolationType.HEURISTIC_CANDIDATE,
                         security_message=security_message,
                     )
             # Bash command exfiltration detection (Issue #1100)

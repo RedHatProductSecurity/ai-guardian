@@ -90,7 +90,7 @@ def _handle_ask_mode(
     if primary_action != ActionMode.ASK:
         return None
 
-    private_candidate = violation_type == ViolationType.SUSPECTED_PASSWORD
+    private_candidate = violation_type == ViolationType.HEURISTIC_CANDIDATE
     if private_candidate:
         # This stage never enrolls source exceptions or recovers candidate text.
         fallback_action = ActionMode.BLOCK
@@ -346,7 +346,7 @@ def _handle_ask_mode_auto(
     findings=None,
 ):
     """Route to multi or single ask dialog based on findings count."""
-    if violation_type == ViolationType.SUSPECTED_PASSWORD:
+    if violation_type == ViolationType.HEURISTIC_CANDIDATE:
         # One private decision covers the current operation, including incomplete
         # analysis. Do not deduplicate by values or prompt for ambiguous spans.
         return _handle_ask_mode(
@@ -405,7 +405,7 @@ def _handle_ask_mode_auto(
 
 _ASK_VIOLATION_LABELS = {
     ViolationType.SECRET_DETECTED: "Secret detection",
-    ViolationType.SUSPECTED_PASSWORD: "Password-likelihood review",
+    ViolationType.HEURISTIC_CANDIDATE: "Password-likelihood review",
     ViolationType.PII_DETECTED: "PII detection",
     ViolationType.TOOL_PERMISSION: "Permission rule",
     ViolationType.DIRECTORY_BLOCKING: "Directory access",
@@ -461,7 +461,7 @@ def _log_ask_decision(
     """
     if not HAS_VIOLATION_LOGGER:
         return
-    private_candidate = violation_type == ViolationType.SUSPECTED_PASSWORD
+    private_candidate = violation_type == ViolationType.HEURISTIC_CANDIDATE
     if private_candidate:
         from ai_guardian.scanners.password_likelihood import MESSAGE, INCOMPLETE_MESSAGE
 

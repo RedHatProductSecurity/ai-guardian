@@ -9,6 +9,43 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2612 / PR #2613 CI follow-up — 2026-10-28
+
+- User reported CI failure after publishing `de3f4301` on existing branch `2612`.
+  Baseline was clean and tracked `origin/2612`; earlier implementation/auto-save
+  changes are now committed by the user, not by this agent. PR:
+  https://github.com/RedHatProductSecurity/ai-guardian/pull/2613.
+- Test run `40753709484` failed all eight matrix jobs. Inspected Linux 3.10/3.14
+  and Windows 3.14 logs: same four failures, no platform-specific cause. The two
+  audit failures reproduce with sanitizer CLI file-not-found followed by the tests:
+  CLI disables global logging. Tests now explicitly enable pytest-managed capture,
+  keep all privacy assertions, and require actual safe diagnostics (no vacuous
+  absence-of-secret assertions). Production logging behavior is unchanged.
+- Added specific private-review-only guidance for `suspected_password`. Complete
+  unit/UX guidance contracts now require no persistent-exception snippet for this
+  type and verify candidate values never appear, rather than inventing an unsafe
+  configuration example just to satisfy the old all-types assertion.
+- Inspected Python CodeQL analysis `2048191684` (8 alerts). Seven traces originate
+  in a public enum label, a location-report factory, and notice variables, not raw
+  candidates. Clarified internal metadata names without changing public strings,
+  rule IDs, SDK/config or wire semantics. Factory now validates numeric locations
+  and fixed class labels instead of copying arbitrary span fields. Replaced the
+  flagged repeated phrase regex with delimiter splitting and ASCII word checks,
+  preserving existing candidate-class acceptance/bounds. No analyzer suppressions
+  or CI checks were disabled. **New CodeQL run still required.**
+- **Validation:** red reproductions confirmed all four failures; final combined
+  **1,091 related unit/UX tests pass**, sanitizer first, including complete password,
+  PostToolUse-secret, guidance, modal and SSH contracts. Four existing deprecation
+  warnings. Black py310, Ruff, error-level Pylint and Mypy pass. Focused branch
+  coverage: detector 93%, report metadata/SARIF 90%, guidance 90% (combined 92%);
+  `/tmp/opencode/guardian-2613-ci.coverage`. Readiness YAML/test paths and whitespace
+  pass. Updated readiness test list, docs and changelog; manually reviewed changes.
+- Fixes remain local/uncommitted; no commit/push, workflow rerun or runtime changes.
+  GitHub currently still reports failures for the original commit, not these fixes.
+  Python 3.14 is the only supported local interpreter; Windows/3.10–3.13 and actual
+  CodeQL confirmation await publication/CI. Original real-corpus/live-host release
+  qualification gates remain open; no full suite/integration/container runs locally.
+
 ## Issue #2612 Console auto-save follow-up — 2026-10-28
 
 - User corrected the extra global Save-button UX and requested normal auto-save;

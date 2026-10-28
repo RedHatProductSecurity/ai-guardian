@@ -323,7 +323,7 @@ def run_content_pipeline(
             continue
 
         if scanner_name == ScannerName.PASSWORD_LIKELIHOOD:
-            _collect(scanner_name, result, ViolationType.SUSPECTED_PASSWORD)
+            _collect(scanner_name, result, ViolationType.HEURISTIC_CANDIDATE)
             continue
 
         if not result.detected:

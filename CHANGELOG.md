@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overriding explicit headless mode; queued prompt timeouts are terminal.
   Console enable/outcome controls auto-save human changes globally without a
   separate Save button; viewing the page or changing outcome does not opt in.
+  Details provide private-review guidance without persistent-exception snippets;
+  report metadata is restricted to numeric locations and fixed labels. Delimited
+  phrase validation avoids repeated-regex backtracking.
   No dependency, vault/source enrollment or
   universal passphrase recognition. Warnings are not prevention; real-corpus and
   actual pre-model host evidence remain explicit release gates, not inferred from

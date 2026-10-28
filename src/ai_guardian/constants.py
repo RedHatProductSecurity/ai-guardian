@@ -59,7 +59,7 @@ class ViolationType(str, Enum):
     """Violation types logged by the violation logger."""
 
     SECRET_DETECTED = "secret_detected"
-    SUSPECTED_PASSWORD = "suspected_password"
+    HEURISTIC_CANDIDATE = "suspected_password"  # public category, never a value
     PII_DETECTED = "pii_detected"
     DIRECTORY_BLOCKING = "directory_blocking"
     TOOL_PERMISSION = "tool_permission"

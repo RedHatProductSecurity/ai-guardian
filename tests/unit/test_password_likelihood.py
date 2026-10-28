@@ -1,6 +1,7 @@
 """Synthetic, offline tests: suspected secrets are not known passwords."""
 
 import json
+import logging
 from dataclasses import asdict
 from unittest.mock import patch
 
@@ -79,6 +80,25 @@ def test_confusable_negatives(text):
 
 
 @pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("copper meadow orbit lantern", "spaced_passphrase"),
+        ("copper_meadow-orbit_lantern", "separated_passphrase"),
+        ("a copper meadow orbit", "spaced_passphrase"),
+        ("A" * 128, None),
+        ("A" * 120 + " meadow orbit!", None),
+        ("copper  meadow orbit", None),
+        ("copper__meadow_orbit", None),
+        ("copper-meadow-orbit-", None),
+    ],
+)
+def test_delimited_phrase_validation_is_non_backtracking(value, expected):
+    from ai_guardian.scanners.password_likelihood import _candidate_class
+
+    assert _candidate_class(value, contextual=True) == expected
+
+
+@pytest.mark.parametrize(
     "config", [{}, {"enabled": False}, {"enabled": "true"}, {"enabled": 1}]
 )
 def test_only_literal_opt_in_activates_detector(config):
@@ -135,6 +155,7 @@ def test_work_limits_are_explicit_and_require_approval_or_block_unless_warn(text
 
 
 def test_exception_messages_and_tracebacks_never_escape(caplog):
+    caplog.set_level(logging.WARNING, logger="ai_guardian")
     with patch(
         "ai_guardian.scanners.password_likelihood.analyze_password_likelihood",
         side_effect=ValueError(MIXED),
@@ -143,6 +164,7 @@ def test_exception_messages_and_tracebacks_never_escape(caplog):
             MIXED, config={"enabled": True, "action": "block"}
         )
     assert result.should_block and not result.detected
+    assert "Password-likelihood analysis failed; details withheld" in caplog.text
     assert MIXED not in caplog.text + repr(result)
 
 

@@ -206,7 +206,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
     # and cross-hook clean-input shortcuts: tool results are different content.
     from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
 
-    password_warning = None
+    heuristic_notice = None
     password_result = run_password_likelihood_scan(tool_output)
     if password_result is not None:
         password_decision = apply_post_scan_pipeline(
@@ -233,9 +233,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 has_secrets=True,
                 hook_event=hook_event,
                 error_message=password_result.error_message,
-                violation_type=ViolationType.SUSPECTED_PASSWORD,
+                violation_type=ViolationType.HEURISTIC_CANDIDATE,
             )
-        password_warning = "\n\n".join(password_decision.warnings) or None
+        heuristic_notice = "\n\n".join(password_decision.warnings) or None
 
     # Load PreToolUse context for cross-hook correlation (#366)
     pretool_ctx = None
@@ -300,9 +300,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
             adapter,
             has_secrets=False,
             hook_event=hook_event,
-            warning_message=password_warning,
+            warning_message=heuristic_notice,
             violation_type=(
-                ViolationType.SUSPECTED_PASSWORD if password_warning else None
+                ViolationType.HEURISTIC_CANDIDATE if heuristic_notice else None
             ),
         )
 
@@ -387,7 +387,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
             has_secrets=False,
             hook_event=hook_event,
             warning_message="\n\n".join(
-                filter(None, (password_warning, error_message))
+                filter(None, (heuristic_notice, error_message))
             ),
             violation_type=ViolationType.SECRET_DETECTED,
         )
@@ -528,9 +528,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     )
                     logger.warning(f"WARN mode: {warning_msg}")
 
-                if password_warning:
+                if heuristic_notice:
                     warning_msg = "\n\n".join(
-                        filter(None, (password_warning, warning_msg))
+                        filter(None, (heuristic_notice, warning_msg))
                     )
 
                 if len(redacted_text) > _MAX_REDACTED_CONTEXT_BYTES:
@@ -588,7 +588,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
     logger.info(f"✓ No secrets detected in {tool_identifier} output")
 
     # Accumulate warning messages for PII ask-mode decisions
-    warning_messages = [password_warning] if password_warning else []
+    warning_messages = [heuristic_notice] if heuristic_notice else []
 
     # PII scanning in PostToolUse (Issue #262)
     pii_file_path = tool_input.get("file_path") or tool_input.get("path")
@@ -828,9 +828,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     )
 
     # Prompt injection and context poisoning scanning on PostToolUse output (#1285)
-    post_warning_messages = [password_warning] if password_warning else []
+    post_warning_messages = [heuristic_notice] if heuristic_notice else []
     post_warn_types: list = (
-        [ViolationType.SUSPECTED_PASSWORD] if password_warning else []
+        [ViolationType.HEURISTIC_CANDIDATE] if heuristic_notice else []
     )
     post_pi_cp_filename = (
         f"{tool_identifier}_output" if tool_identifier else "tool_output"

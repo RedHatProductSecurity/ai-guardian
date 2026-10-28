@@ -858,7 +858,7 @@ jobs:
 
       - name: Qualify experimental local password-likelihood stage
         run: |
-          python -m pytest tests/unit/test_password_likelihood.py tests/unit/test_password_likelihood_ask.py tests/unit/test_password_likelihood_autosave.py tests/unit/test_password_likelihood_integration.py tests/unit/test_password_likelihood_quality.py tests/ux/test_password_likelihood_contract.py tests/ux/test_user_experience_contract_posttooluse_secret.py -v
+          python -m pytest tests/unit/test_password_likelihood.py tests/unit/test_password_likelihood_ask.py tests/unit/test_password_likelihood_autosave.py tests/unit/test_password_likelihood_integration.py tests/unit/test_password_likelihood_quality.py tests/unit/test_violation_guidance.py tests/ux/test_password_likelihood_contract.py tests/ux/test_user_experience_contract_posttooluse_secret.py tests/ux/test_user_experience_contract_violation_guidance.py -v
           python scripts/qualify_password_likelihood.py
           # Synthetic/performance gates are automated; independently adjudicated
           # real corpora and actual pre-model host evidence remain manual gates.

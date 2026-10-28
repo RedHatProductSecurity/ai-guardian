@@ -128,6 +128,27 @@
 
 ## Key Learnings
 
+- **2026-10-28 — #2613 CI capture/guidance:** A sanitizer CLI test disables global
+  logging, so new privacy tests must establish pytest-managed caplog levels and
+  assert the safe diagnostic is actually emitted. Reproduce by putting
+  `TestSanitizeCommand::test_file_not_found` first; do not alter runtime logging to
+  hide test-order state. Adding a violation enum also affects both complete
+  guidance contracts: suspected-password findings need specific private review,
+  explicitly no persistent-exception snippet, not a generic config example.
+- **2026-10-28 — #2613 CodeQL metadata sources:** SARIF traces can start at enum
+  labels or factories/notices whose names resemble raw credential variables.
+  Inspect source-to-sink flows before changing logging or declaring a leak. Use
+  accurate diagnostic/location names, validate report metadata to numeric locations
+  and fixed labels, preserve external type/rule strings and test no-value output.
+  Avoid analyzer suppressions. Delimiter splitting avoids repeated phrase regex
+  analysis without changing the existing ASCII candidate-class acceptance.
+  Only a fresh GitHub analysis establishes CodeQL success.
+- **2026-10-28 — GitHub job logs:** `gh run view --log-failed` waits for the entire
+  workflow even when an individual job is complete. Raw `gh api .../logs` can be
+  refused for terminal control sequences; preserve that safeguard and use the
+  normal run-log renderer after completion. Investigate independent check-run
+  annotations/SARIF while the remaining jobs finish.
+
 - **2026-10-28 — #2612 private Ask boundaries:** Reusing generic Ask needs more
   than registry opt-in: it can read a source line when matched text is empty and
   can persist exception patterns. Password-likelihood uses a value-withheld,

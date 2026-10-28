@@ -1,6 +1,7 @@
 """Isolated policy, pipeline, audit, SDK and static-scan contracts for #2612."""
 
 import json
+import logging
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -113,6 +114,46 @@ def test_static_findings_and_sarif_do_not_contain_candidate_text():
     assert report["runs"][0]["results"][0]["ruleId"] == "PASSWORD-001"
 
 
+def test_location_report_drops_unexpected_fields_and_noncanonical_labels():
+    from ai_guardian.reporting.sarif import create_heuristic_location_finding
+
+    span = {
+        "start": 4,
+        "end": 20,
+        "line_number": 1,
+        "start_column": 4,
+        "end_column": 20,
+        "candidate_class": VALUE,
+        "confidence_class": VALUE,
+        "matched_text": VALUE,
+        "snippet": TEXT,
+    }
+    finding = create_heuristic_location_finding("notes.txt", span)
+    assert VALUE not in json.dumps(finding)
+    assert finding["details"] == {
+        key: span[key]
+        for key in ("start", "end", "line_number", "start_column", "end_column")
+    }
+
+
+def test_violation_category_remains_public_metadata_not_a_candidate_value():
+    from ai_guardian.constants import ViolationType
+
+    assert ViolationType.HEURISTIC_CANDIDATE == "suspected_password"
+    assert json.dumps(ViolationType.HEURISTIC_CANDIDATE) == '"suspected_password"'
+
+
+@pytest.mark.parametrize(
+    "field", ["start", "end", "line_number", "start_column", "end_column"]
+)
+def test_location_report_cannot_smuggle_text_in_coordinate_fields(field):
+    from ai_guardian.reporting.sarif import create_heuristic_location_finding
+
+    finding = create_heuristic_location_finding("notes.txt", {field: VALUE})
+    assert VALUE not in json.dumps(finding)
+    assert finding["details"] == {}
+
+
 def test_profiles_schema_example_and_status_are_default_off():
     from ai_guardian.setup.config import _get_default_config_template
     import jsonschema
@@ -170,6 +211,7 @@ def test_shared_sanitizer_batch_and_sdk_policy_replace_all_spans():
 
 
 def test_audit_failures_withhold_exception_details(caplog):
+    caplog.set_level(logging.WARNING, logger="ai_guardian")
     result = run_password_likelihood_scan(TEXT, config={"enabled": True})
     logger = Mock()
     logger.log_violation.side_effect = ValueError(TEXT)
@@ -208,6 +250,7 @@ def test_persisted_and_retrieved_audit_is_safe(tmp_path):
 def test_persistence_failure_withholds_exception_text_in_real_logger(tmp_path, caplog):
     from ai_guardian.violations.logger import ViolationLogger
 
+    caplog.set_level(logging.WARNING, logger="ai_guardian")
     audit = ViolationLogger(
         log_path=tmp_path / "violations.jsonl", config={"enabled": True}
     )

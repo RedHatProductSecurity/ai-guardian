@@ -67,8 +67,11 @@ def _candidate_class(value: str, *, contextual: bool) -> str | None:
     # cue. These are structural classes, not dictionary/segmentation claims.
     if contextual:
         words = _WORDS.findall(value)
-        if 3 <= len(words) <= 8 and re.fullmatch(
-            r"[A-Za-z]+(?:[ _-][A-Za-z]+){2,7}", value
+        parts = re.split(r"[ _-]", value)
+        if (
+            3 <= len(words) <= 8
+            and 3 <= len(parts) <= 8
+            and all(part.isalpha() for part in parts)
         ):
             return "spaced_passphrase" if " " in value else "separated_passphrase"
         if (

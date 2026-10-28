@@ -47,6 +47,14 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return IMMUTABLE_VIOLATION_NOTICE, ""
 
     vtype = violation.get("violation_type", violation.get("type", ""))
+    if vtype == "suspected_password":
+        return (
+            "Review the reported location privately. This is suspected password-like "
+            "content, not a confirmed secret; candidate values are withheld. "
+            "Use the trusted Console for policy review. No source or persistent "
+            "exception is generated for this finding.",
+            "",
+        )
     blocked = violation.get("blocked", {})
     if not isinstance(blocked, dict):
         blocked = {}

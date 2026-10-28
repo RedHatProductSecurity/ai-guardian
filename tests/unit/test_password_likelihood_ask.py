@@ -1,6 +1,7 @@
 """Password-likelihood Ask reuses existing transport without exposing candidates."""
 
 import json
+import logging
 from unittest.mock import Mock, patch
 
 import pytest
@@ -147,6 +148,7 @@ def test_approved_audit_records_allow_without_values_or_candidate_hashes():
 
 
 def test_unavailable_ui_fails_closed_and_error_text_is_withheld(caplog):
+    caplog.set_level(logging.WARNING, logger="ai_guardian")
     with patch(
         "ai_guardian.ui.ask_dialog.show_ask_dialog", side_effect=RuntimeError(VALUE)
     ):
@@ -154,6 +156,7 @@ def test_unavailable_ui_fails_closed_and_error_text_is_withheld(caplog):
             "ask", "suspected_password", "password_likelihood", MESSAGE
         )
     assert result.decision == AskDecision.BLOCK
+    assert "Password-likelihood Ask failed; blocking, details withheld" in caplog.text
     assert VALUE not in caplog.text
 
 
@@ -228,6 +231,7 @@ def test_sdk_unresolved_ask_is_fail_closed_and_does_not_launch_a_dialog():
 def test_private_ask_audit_has_no_values_or_transcript_exception(caplog):
     from ai_guardian.ask_mode import _log_ask_decision
 
+    caplog.set_level(logging.WARNING, logger="ai_guardian")
     audit = Mock()
     allowed = set()
     with patch("ai_guardian.ask_mode.ViolationLogger", return_value=audit):
@@ -243,6 +247,10 @@ def test_private_ask_audit_has_no_values_or_transcript_exception(caplog):
         assert not allowed
         audit.log_violation.side_effect = RuntimeError(VALUE)
         _log_ask_decision("suspected_password", AskDecision.BLOCK, matched_text=VALUE)
+    assert (
+        "Failed to persist password-likelihood Ask decision; details withheld"
+        in caplog.text
+    )
     assert VALUE not in caplog.text
 
 

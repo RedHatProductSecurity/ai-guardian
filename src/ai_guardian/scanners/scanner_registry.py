@@ -386,7 +386,7 @@ def _build_default_registry() -> ScannerRegistry:
         ScannerEntry(
             name=ScannerName.PASSWORD_LIKELIHOOD,
             run_fn=run_password_likelihood_scan,
-            violation_type=ViolationType.SUSPECTED_PASSWORD,
+            violation_type=ViolationType.HEURISTIC_CANDIDATE,
             hook_events=CONTENT_EVENTS | {HookEvent.POST_TOOL_USE},
             order=71,
             config_section="password_likelihood",
