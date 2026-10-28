@@ -150,7 +150,11 @@ class TrayMenuBuilder:
                     and any(item is target for item in self._tray._targets)
                     else None
                 )
-            return tray_menu.launch_support(target=clicked, client=client)
+            return tray_menu.launch_support(
+                target=clicked,
+                client=client,
+                **self._screen_bounds_kwargs(self._capture_tray_screen_bounds(_icon)),
+            )
 
         options = {"visible": visible} if visible is not None else {}
         return pystray.MenuItem(

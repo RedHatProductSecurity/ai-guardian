@@ -19,6 +19,13 @@ def _screen_bounds_kwargs(screen_bounds):
     return {"screen_bounds": screen_bounds} if screen_bounds is not None else {}
 
 
+def _screen_bounds_json(screen_bounds):
+    import json
+    from ai_guardian.ui.monitor import monitor_json_default
+
+    return json.dumps(screen_bounds, default=monitor_json_default)
+
+
 try:
     import pystray
 except Exception:
@@ -253,7 +260,7 @@ class TrayPluginMenuBuilder:
             if label:
                 prompt_cmd += ["--title", label]
             if screen_bounds is not None:
-                prompt_cmd += ["--screen-bounds", json_mod.dumps(screen_bounds)]
+                prompt_cmd += ["--screen-bounds", _screen_bounds_json(screen_bounds)]
 
             subprocess.Popen(prompt_cmd)
 
@@ -330,7 +337,7 @@ class TrayPluginMenuBuilder:
             if label:
                 prompt_cmd += ["--title", label]
             if screen_bounds is not None:
-                prompt_cmd += ["--screen-bounds", json_mod.dumps(screen_bounds)]
+                prompt_cmd += ["--screen-bounds", _screen_bounds_json(screen_bounds)]
 
             from ai_guardian.daemon.multi_client import _launch_in_terminal
 
@@ -458,7 +465,7 @@ class TrayPluginMenuBuilder:
             if label:
                 prompt_cmd += ["--title", label]
             if screen_bounds is not None:
-                prompt_cmd += ["--screen-bounds", json_mod.dumps(screen_bounds)]
+                prompt_cmd += ["--screen-bounds", _screen_bounds_json(screen_bounds)]
 
             subprocess.Popen(prompt_cmd)
 
@@ -532,7 +539,7 @@ class TrayPluginMenuBuilder:
             if label:
                 prompt_cmd += ["--title", label]
             if screen_bounds is not None:
-                prompt_cmd += ["--screen-bounds", json_mod.dumps(screen_bounds)]
+                prompt_cmd += ["--screen-bounds", _screen_bounds_json(screen_bounds)]
 
             from ai_guardian.daemon.multi_client import _launch_in_terminal
 
@@ -565,7 +572,6 @@ class TrayPluginMenuBuilder:
         from ai_guardian.tray.plugins import (
             resolve_command,
         )
-        from ai_guardian.daemon.multi_client import _launch_in_terminal
 
         targets_json = json_mod.dumps(self._serialize_targets_for_selector())
         tmpdir = tempfile.mkdtemp(prefix="ai-guardian-target-")
@@ -578,9 +584,16 @@ class TrayPluginMenuBuilder:
             "--output-file",
             output_path,
         )
-        _launch_in_terminal(select_cmd, keep_open=False, clear=True)
+        if screen_bounds is not None:
+            select_cmd += ["--screen-bounds", _screen_bounds_json(screen_bounds)]
+        import subprocess
+
+        selector = subprocess.Popen(
+            select_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
 
         def _watch_and_dispatch():
+            selector.wait()
             raw = tray_plugins.poll_output_file(output_path, tmpdir)
             if not raw:
                 return
@@ -613,6 +626,7 @@ class TrayPluginMenuBuilder:
                         plugin_item.type,
                         run_on_target=plugin_item.run_on_target,
                         label=plugin_item.label,
+                        screen_bounds=screen_bounds,
                     )
 
         watcher = threading.Thread(target=_watch_and_dispatch, daemon=True)

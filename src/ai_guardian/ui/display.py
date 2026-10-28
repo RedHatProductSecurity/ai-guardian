@@ -81,12 +81,25 @@ def ui_provider_order(
     }
     native |= dialog_type == "action" and system in {"Darwin", "Linux"}
     native |= dialog_type == "setup" and system == "Darwin"
-    if (
-        system == "Darwin"
-        and screen_bounds is not None
-        and dialog_type in {"simple", "confirmation", "picker"}
-    ):
-        native = False
+    if screen_bounds is not None:
+        # These native implementations have no positioned owner/window API.
+        # Do not discard placement to retain a nominal native-first appearance.
+        native = native and (
+            (system == "Darwin" and dialog_type in {"basic_form", "action", "setup"})
+            or (system == "Windows" and dialog_type == "basic_form")
+        )
+        from ai_guardian.ui.monitor import MonitorContext, restore_context
+
+        context = restore_context(screen_bounds)
+        if isinstance(context, MonitorContext):
+            # Fixed native accessory layouts need room for every control. The
+            # complete scrollable Tk implementation is eligible on small screens.
+            native = (
+                native
+                and context.enforceable
+                and context.bounds[2] >= 960
+                and context.bounds[3] >= 760
+            )
     candidates = (
         ("native", "tkinter", "nicegui") if preferred == "auto" else (preferred,)
     )

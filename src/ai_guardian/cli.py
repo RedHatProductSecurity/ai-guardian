@@ -1614,6 +1614,11 @@ def main():
             help="JSON array of target dicts (name, runtime, container_name, etc.)",
         )
         tray_target_parser.add_argument(
+            "--screen-bounds",
+            default=None,
+            help="JSON originating-monitor context captured from the tray action",
+        )
+        tray_target_parser.add_argument(
             "--output-file",
             default=None,
             help="Write selected target indices (JSON array) to this file",

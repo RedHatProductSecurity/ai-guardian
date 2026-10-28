@@ -91,7 +91,7 @@ def test_ssh_pairing_needs_a_real_explicit_confirmation(forms, tmp_path, consent
 
 
 def test_ssh_success_preserves_identity_checkbox_and_never_serializes_credentials(
-    forms, tmp_path
+    forms, tmp_path, monkeypatch
 ):
     from ai_guardian.ui.ssh_pairing import TRUST_LABEL
 
@@ -100,6 +100,8 @@ def test_ssh_success_preserves_identity_checkbox_and_never_serializes_credential
     tray._discovery.ssh_manager.prepare.return_value = pairing
     forms.native.side_effect = [{"host": "known-alias"}, {"trust": True}, None]
     bounds = (1920, 0, 1920, 1080)
+    # Cocoa is placement-capable; Linux native tools now correctly defer to Tk.
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
     ssh_connections.open_enrollment(tray, screen_bounds=bounds)
     tray._discovery.ssh_manager.enroll.assert_called_once_with(pairing)
     tray._refresh_event.set.assert_called_once()

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from ai_guardian.config.utils import get_state_dir
+from ai_guardian.ui.monitor import screen_payload, placement_notice
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +111,8 @@ def choose_directory(
     Args:
         current: Directory to start from (shown as default).
         title: Dialog title/description.
-        screen_bounds: Optional Tk virtual-screen bounds captured from the
-            tray click. Used by the macOS picker when supplied.
+        screen_bounds: Optional immutable monitor context (or legacy bounds)
+            captured from the tray action, before any worker starts.
 
     Returns:
         Selected directory path, or None if cancelled.
@@ -171,7 +172,7 @@ def _choose_directory_tkinter_subprocess(
     title: str,
     screen_bounds,
 ) -> Tuple[bool, Optional[str]]:
-    """Run a macOS directory panel from an isolated Tk process.
+    """Run a positioned directory panel from an isolated Tk process.
 
     The hidden one-pixel parent window is centered on the display captured
     from the tray event. macOS opens the native directory panel relative to
@@ -184,7 +185,7 @@ def _choose_directory_tkinter_subprocess(
         {
             "current": current,
             "title": title,
-            "screen_bounds": screen_bounds,
+            "screen_bounds": screen_payload(screen_bounds),
         },
         ensure_ascii=False,
     )
@@ -212,7 +213,7 @@ def _choose_directory_tkinter_subprocess(
 
 
 def _show_tkinter_directory(current, title, screen_bounds):
-    """Show the Tk parent for the screen-aware macOS directory panel."""
+    """Show the positioned Tk owner for the native directory panel."""
     import tkinter as tk
     from tkinter import filedialog
 
@@ -223,6 +224,7 @@ def _show_tkinter_directory(current, title, screen_bounds):
     from ai_guardian.ui.modal import create_tk_root
 
     root = create_tk_root()
+    root.withdraw()
     root.title(title)
     root.geometry("1x1")
     _place_window_on_screen(root, screen_bounds, 1, 1)
@@ -238,6 +240,8 @@ def _show_tkinter_directory(current, title, screen_bounds):
     root.focus_force()
     root.update()
     try:
+        if placement_notice(screen_bounds):
+            title += " — Move this window to the tray screen"
         selected = filedialog.askdirectory(
             parent=root,
             initialdir=current or None,

@@ -1099,9 +1099,9 @@ def _handle_prompt_params(args):
     raw_screen_bounds = getattr(args, "screen_bounds", None)
     if isinstance(raw_screen_bounds, str) and raw_screen_bounds:
         try:
-            parsed_bounds = json.loads(raw_screen_bounds)
-            if isinstance(parsed_bounds, (list, tuple)) and len(parsed_bounds) == 4:
-                screen_bounds = tuple(int(value) for value in parsed_bounds)
+            from ai_guardian.ui.monitor import restore_context
+
+            screen_bounds = restore_context(json.loads(raw_screen_bounds))
         except (TypeError, ValueError, json.JSONDecodeError):
             prompt_logger.warning("Ignoring invalid --screen-bounds value")
 
@@ -1264,7 +1264,16 @@ def _handle_tray_target_select(args):
         sel_logger.error("UI dependencies not available: %s", e)
         return 1
 
-    app = TrayTargetSelectorApp(targets=targets)
+    from ai_guardian.ui.monitor import restore_context
+
+    try:
+        screen_bounds = restore_context(
+            json.loads(getattr(args, "screen_bounds", None) or "null")
+        )
+    except (TypeError, ValueError):
+        screen_bounds = None
+    options = {"screen_bounds": screen_bounds} if screen_bounds is not None else {}
+    app = TrayTargetSelectorApp(targets=targets, **options)
     result = app.run()
 
     output_file = getattr(args, "output_file", None)

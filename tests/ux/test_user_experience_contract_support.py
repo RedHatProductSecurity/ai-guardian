@@ -242,8 +242,8 @@ def test_healthy_ssh_support_uses_click_time_connection_not_stale_menu(
     monkeypatch.setattr(
         menu,
         "launch_support",
-        lambda *, target, client: tray_support.run_support_flow(
-            target=target, client=client
+        lambda *, target, client, screen_bounds=None: tray_support.run_support_flow(
+            target=target, client=client, screen_bounds=screen_bounds
         ),
     )
 

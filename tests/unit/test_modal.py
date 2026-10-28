@@ -672,7 +672,10 @@ def test_cocoa_reports_only_pre_display_initialization_failure_as_retryable(
     browser.assert_not_called()
     script = native.call_args.args[0][-1]
     assert script.index("try {") < script.index('ObjC.import("Cocoa")')
-    assert "placeWindowOnTargetScreen(delayWindow)" in script
+    assert (
+        "placeWindowOnTargetScreen(delayWindow, payload.screen_bounds, payload.monitor_id)"
+        in script
+    )
     assert script.index(
         "interactionStarted = true;", script.index("var alertWindow")
     ) < script.index("alertWindow.makeKeyAndOrderFront")

@@ -1105,7 +1105,7 @@ def show_dialog(
             "native": lambda: _show_native_message(title, message),
             "tkinter": tkinter,
             "nicegui": lambda: show_nicegui_message_subprocess(
-                title, message, links=links
+                title, message, links=links, screen_bounds=screen_bounds
             ),
         },
         fallback=False,
@@ -1539,7 +1539,17 @@ def _show_native_cocoa_choice_dialog(
 ) -> Optional[object]:
     """Show the structured prompt with native Cocoa controls on macOS."""
     from ai_guardian.ui.modal import UIUnavailable, run_native_command
+    from ai_guardian.ui.monitor import (
+        COCOA_PLACE_WINDOW,
+        current_origin,
+        resolve_bounds,
+        MonitorContext,
+        restore_context,
+    )
 
+    context = restore_context(
+        screen_bounds if screen_bounds is not None else current_origin()
+    )
     ide_choices = tuple(ide_choices)
     profile_choices = tuple(profile_choices)
     options = tuple(str(option) for option in snooze_options if option)
@@ -1551,14 +1561,17 @@ def _show_native_cocoa_choice_dialog(
         "snooze_options": options,
         "ide_choices": ide_choices,
         "profile_choices": profile_choices,
-        "screen_bounds": screen_bounds,
+        "screen_bounds": resolve_bounds(screen_bounds),
+        "monitor_id": (
+            context.monitor_id if isinstance(context, MonitorContext) else None
+        ),
         "two_step_snooze": two_step_snooze,
     }
     payload_script = json.dumps(payload, ensure_ascii=False)
 
     # This is intentionally self-contained: the tray can invoke it through
     # the system-provided JXA runtime without adding a PyObjC dependency.
-    script = r"""
+    script = COCOA_PLACE_WINDOW + r"""
 (function () {
 var interactionStarted = false;
 try {
@@ -1658,7 +1671,7 @@ function selectedSnooze() {
     interactionStarted = true;
     var delayWindow = delayAlert.window;
     if (delayWindow) {
-        placeWindowOnTargetScreen(delayWindow);
+        placeWindowOnTargetScreen(delayWindow, payload.screen_bounds, payload.monitor_id);
         delayWindow.makeKeyAndOrderFront(null);
     }
     var response = Number(delayAlert.runModal);
@@ -1667,40 +1680,6 @@ function selectedSnooze() {
         index = 0;
     }
     return "snooze_" + payload.snooze_options[index];
-}
-
-function placeWindowOnTargetScreen(window) {
-    if (!payload.screen_bounds || payload.screen_bounds.length !== 4) {
-        return;
-    }
-    var target = payload.screen_bounds;
-    var screens = $.NSScreen.screens;
-    if (!screens || Number(screens.count) === 0) {
-        return;
-    }
-    var mainFrame = screens.objectAtIndex(0).frame;
-    var mainX = Number(mainFrame.origin.x);
-    var mainY = Number(mainFrame.origin.y);
-    var mainHeight = Number(mainFrame.size.height);
-    for (var index = 0; index < Number(screens.count); index++) {
-        var visible = screens.objectAtIndex(index).visibleFrame;
-        var tkX = Number(visible.origin.x) - mainX;
-        var tkY = mainY + mainHeight -
-            (Number(visible.origin.y) + Number(visible.size.height));
-        if (Math.abs(tkX - Number(target[0])) > 1 ||
-            Math.abs(tkY - Number(target[1])) > 1 ||
-            Math.abs(Number(visible.size.width) - Number(target[2])) > 1 ||
-            Math.abs(Number(visible.size.height) - Number(target[3])) > 1) {
-            continue;
-        }
-        var frame = window.frame;
-        var x = Number(visible.origin.x) +
-            (Number(visible.size.width) - Number(frame.size.width)) / 2;
-        var y = Number(visible.origin.y) +
-            (Number(visible.size.height) - Number(frame.size.height)) / 2;
-        window.setFrameOrigin($.NSMakePoint(x, y));
-        return;
-    }
 }
 
 function showDialog() {
@@ -1797,7 +1776,7 @@ function showDialog() {
     var alertWindow = alert.window;
     if (alertWindow) {
         alertWindow.setLevel(3);
-        placeWindowOnTargetScreen(alertWindow);
+        placeWindowOnTargetScreen(alertWindow, payload.screen_bounds, payload.monitor_id);
         interactionStarted = true;
         alertWindow.makeKeyAndOrderFront(null);
     }

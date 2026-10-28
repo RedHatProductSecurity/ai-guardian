@@ -11,6 +11,7 @@ from pathlib import Path
 from ai_guardian.reporting import github_support as github
 from ai_guardian.reporting import support_bundle as bundles
 from ai_guardian.tray.notifications import show_notification
+from ai_guardian.ui.monitor import monitor_origin
 
 logger = logging.getLogger(__name__)
 _review_lock = threading.Lock()
@@ -59,6 +60,15 @@ def _show_result(result: dict, info: dict) -> None:
 
 
 def run_support_flow(
+    *, destination: str | None = None, target=None, client=None, screen_bounds=None
+) -> dict:
+    # Context belongs to this worker, not a bundle, source daemon or another
+    # concurrent action. All review/consent/result children retain it.
+    with monitor_origin(screen_bounds):
+        return _run_support_flow(destination=destination, target=target, client=client)
+
+
+def _run_support_flow(
     *, destination: str | None = None, target=None, client=None
 ) -> dict:
     """Prepare source diagnostics, review on this desktop, never infer consent."""
@@ -140,17 +150,18 @@ def run_support_flow(
     return result
 
 
-def _worker(target=None, client=None) -> None:
+def _worker(target=None, client=None, screen_bounds=None) -> None:
     try:
+        options = {"screen_bounds": screen_bounds} if screen_bounds is not None else {}
         if target is None:
-            run_support_flow()
+            run_support_flow(**options)
         else:
-            run_support_flow(target=target, client=client)
+            run_support_flow(target=target, client=client, **options)
     finally:
         _review_lock.release()
 
 
-def open_support_dialog(*, target=None, client=None) -> bool:
+def open_support_dialog(*, target=None, client=None, screen_bounds=None) -> bool:
     """Open one support workflow without blocking the tray or opening a shell."""
     from ai_guardian.ui.display import get_preferred_ui
 
@@ -173,11 +184,15 @@ def open_support_dialog(*, target=None, client=None) -> bool:
         return False
     try:
         if target is None:
-            worker = _worker
+            worker = (
+                partial(_worker, screen_bounds=screen_bounds)
+                if screen_bounds is not None
+                else _worker
+            )
         else:
             selected = copy(target)
             selected.tls = deepcopy(target.tls)
-            worker = partial(_worker, selected, client)
+            worker = partial(_worker, selected, client, screen_bounds=screen_bounds)
         threading.Thread(target=worker, name="support-review", daemon=True).start()
     except RuntimeError:
         _review_lock.release()

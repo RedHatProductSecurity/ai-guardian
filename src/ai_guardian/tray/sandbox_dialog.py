@@ -22,10 +22,19 @@ from ai_guardian.ui.modal import (
     run_nicegui_modal,
     UIUnavailable,
 )
+from ai_guardian.ui.monitor import (
+    ScreenBounds,
+    MonitorContext,
+    capture_monitor,
+    center_geometry,
+    place_tk_window,
+    screen_payload,
+    monitor_json_default,
+    placement_notice,
+)
 
 logger = logging.getLogger(__name__)
 
-ScreenBounds = Tuple[int, int, int, int]
 _PROGRESS_READY = "__AI_GUARDIAN_SANDBOX_PROGRESS_READY__"
 _PROGRESS_READY_TIMEOUT = 5.0
 
@@ -261,7 +270,9 @@ def _point_in_rect(point, rect) -> bool:
     )
 
 
-def _tk_screen_bounds(cocoa_rect, cocoa_main_rect) -> Optional[ScreenBounds]:
+def _tk_screen_bounds(
+    cocoa_rect, cocoa_main_rect
+) -> Optional[Tuple[int, int, int, int]]:
     """Convert a Cocoa screen rectangle to Tk's top-left coordinate system.
 
     Cocoa uses a bottom-left origin while Tk uses a top-left origin.  The
@@ -368,7 +379,7 @@ def _screen_containing_point(point, screens):
 
 
 def _get_tray_screen_bounds(icon=None) -> Optional[ScreenBounds]:
-    """Return the visible bounds of the display containing the tray menu.
+    """Capture the originating monitor, retaining the existing AppKit contract.
 
     This is intentionally captured by the tray process before a Tk child is
     started.  Importing AppKit in the child before ``tk.Tk()`` can trigger a
@@ -379,7 +390,7 @@ def _get_tray_screen_bounds(icon=None) -> Optional[ScreenBounds]:
     paths. ``None`` preserves the existing window-manager placement fallback.
     """
     if platform.system() != "Darwin":
-        return None
+        return capture_monitor(icon)
 
     try:
         import AppKit
@@ -405,50 +416,37 @@ def _get_tray_screen_bounds(icon=None) -> Optional[ScreenBounds]:
         if screen is None:
             screen = _status_item_screen(icon)
         if screen is None:
+            if event is not None and not _event_is_mouse_activation(event, AppKit):
+                return MonitorContext(
+                    (0, 0, 800, 600), "", enforceable=False, source="unavailable"
+                )
             screen = pointer_screen
         if screen is not None:
-            return _tk_screen_bounds(screen.visibleFrame(), main_frame)
+            bounds = _tk_screen_bounds(screen.visibleFrame(), main_frame)
+            if bounds is not None:
+                try:
+                    identity = str(screen.deviceDescription()["NSScreenNumber"])
+                except (AttributeError, KeyError, TypeError):
+                    # Synthetic/older AppKit bridges can lack a stable ID.
+                    return bounds
+                return MonitorContext(bounds, identity)
     except Exception as exc:
         logger.debug("Could not determine the tray display bounds: %s", exc)
-    return None
+    return MonitorContext((0, 0, 800, 600), "", enforceable=False, source="unavailable")
 
 
 def _center_window_geometry(
     window_width: int, window_height: int, screen_bounds
 ) -> Optional[Tuple[int, int, int, int]]:
     """Return centered ``(x, y, width, height)`` geometry for a screen."""
-    try:
-        screen_x, screen_y, screen_width, screen_height = (
-            int(value) for value in screen_bounds
-        )
-        window_width = min(max(1, int(window_width)), screen_width)
-        window_height = min(max(1, int(window_height)), screen_height)
-    except (TypeError, ValueError):
-        return None
-    if screen_width <= 0 or screen_height <= 0:
-        return None
-
-    return (
-        screen_x + (screen_width - window_width) // 2,
-        screen_y + (screen_height - window_height) // 2,
-        window_width,
-        window_height,
-    )
+    return center_geometry(window_width, window_height, screen_bounds)
 
 
 def _place_window_on_screen(
     window, screen_bounds, window_width: int, window_height: int
 ) -> bool:
     """Center a Tk window on explicit screen bounds when available."""
-    geometry = _center_window_geometry(window_width, window_height, screen_bounds)
-    if geometry is None:
-        return False
-    x, y, width, height = geometry
-    # The leading plus introduces an absolute virtual-screen coordinate. A
-    # negative value therefore needs the ``+-N`` form; ``-N`` means an offset
-    # from the right or bottom edge in Tk geometry syntax.
-    window.geometry(f"{width}x{height}+{x}+{y}")
-    return True
+    return place_tk_window(window, screen_bounds, window_width, window_height)
 
 
 def _scroll_canvas(event, canvas) -> str:
@@ -847,7 +845,14 @@ def _show_tkinter_form(
             control_frame.columnconfigure(0, weight=1)
 
             def browse(variable=variable, field=field, kind=kind):
-                options = {"title": field.get("browse_title", "Select a path")}
+                _place_window_on_screen(
+                    root, screen_bounds, root.winfo_width(), root.winfo_height()
+                )
+                root.update_idletasks()
+                title = field.get("browse_title", "Select a path")
+                if placement_notice(screen_bounds):
+                    title += " — Move this window to the tray screen"
+                options = {"title": title, "parent": root}
                 initialdir = _browse_initialdir(variable.get())
                 if initialdir:
                     options["initialdir"] = initialdir
@@ -1050,7 +1055,7 @@ def _show_tkinter_form_subprocess(
             "title": title,
             "message": message,
             "fields": tuple(fields),
-            "screen_bounds": screen_bounds,
+            "screen_bounds": screen_payload(screen_bounds),
             "submit_label": submit_label,
         },
         ensure_ascii=False,
@@ -1452,7 +1457,7 @@ def _show_tkinter_confirmation_subprocess(
             "title": title,
             "message": message,
             "expected_name": expected_name,
-            "screen_bounds": screen_bounds,
+            "screen_bounds": screen_payload(screen_bounds),
         },
         ensure_ascii=False,
     )
@@ -1510,7 +1515,7 @@ def _show_tkinter_log_subprocess(
             "title": title,
             "message": message,
             "log": log_text,
-            "screen_bounds": screen_bounds,
+            "screen_bounds": screen_payload(screen_bounds),
         },
         ensure_ascii=False,
     )
@@ -1535,7 +1540,11 @@ def _show_tkinter_progress_subprocess(
 ) -> Optional[SandboxProgress]:
     """Start the live progress window outside the tray process."""
     payload = json.dumps(
-        {"title": title, "message": message, "screen_bounds": screen_bounds},
+        {
+            "title": title,
+            "message": message,
+            "screen_bounds": screen_payload(screen_bounds),
+        },
         ensure_ascii=False,
     )
     child = (
@@ -1634,7 +1643,9 @@ def _run_sandbox_browser(kind: str, payload: Dict[str, Any]) -> Any:
     )
     process = run_modal_subprocess(
         [sys.executable, "-c", child],
-        input_text=json.dumps(payload, ensure_ascii=False),
+        input_text=json.dumps(
+            payload, ensure_ascii=False, default=monitor_json_default
+        ),
     )
     output = (process.stdout or "").strip().splitlines()
     return json.loads(output[-1]) if output else None
@@ -1654,7 +1665,7 @@ def _show_nicegui_form(
             "title": title,
             "message": message,
             "fields": tuple(fields),
-            "screen_bounds": screen_bounds,
+            "screen_bounds": screen_payload(screen_bounds),
             "submit_label": submit_label,
         },
     )
@@ -1670,7 +1681,6 @@ def _render_nicegui_form(
     submit_label: str = "Continue",
 ) -> Optional[Dict[str, Any]]:
     """Show the sandbox form in a browser using NiceGUI."""
-    del screen_bounds
     from nicegui import app, ui
 
     field_list = tuple(fields)
@@ -1797,7 +1807,7 @@ def _render_nicegui_form(
                 ui.button("Cancel", on_click=close).props("flat")
                 ui.button(submit_label, on_click=submit, color="primary")
 
-    run_nicegui_modal(title, dark=True)
+    run_nicegui_modal(title, dark=True, screen_bounds=screen_bounds)
     return result_holder["value"]
 
 
@@ -2243,7 +2253,7 @@ def _show_tkinter_upload_confirmation_subprocess(
             "message": message,
             "error_lines": tuple(error_lines),
             "confirm_label": confirm_label,
-            "screen_bounds": screen_bounds,
+            "screen_bounds": screen_payload(screen_bounds),
         },
         ensure_ascii=False,
     )

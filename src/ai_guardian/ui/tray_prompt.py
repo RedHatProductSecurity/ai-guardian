@@ -20,7 +20,12 @@ import os
 from typing import Any, Dict, Optional
 
 from ai_guardian.ui.display import get_preferred_ui
-from ai_guardian.ui.modal import _find_free_port, create_tk_root, run_modal
+from ai_guardian.ui.modal import create_tk_root, run_modal
+from ai_guardian.ui.monitor import (
+    screen_payload,
+    placement_notice,
+    tk_scrollable_content,
+)
 from ai_guardian.tray.dialog_placement import _place_window_on_screen
 
 logger = logging.getLogger(__name__)
@@ -69,6 +74,7 @@ class _TkinterPromptApp:
         self._messagebox = messagebox
 
         self._root = create_tk_root()
+        self._root.withdraw()  # No first map on the default screen during layout.
 
         if platform.system() == "Darwin":
             try:
@@ -78,12 +84,19 @@ class _TkinterPromptApp:
             except Exception:
                 pass  # intentionally silent — optional dependency
         self._root.title(self._title)
-        self._root.resizable(False, False)
+        self._root.resizable(
+            self._screen_bounds is not None, self._screen_bounds is not None
+        )
         self._root.protocol("WM_DELETE_WINDOW", self._cancel)
         self._root.bind("<Escape>", lambda e: self._cancel())
 
-        frame = ttk.Frame(self._root, padding=16)
-        frame.grid(row=0, column=0, sticky="nsew")
+        if self._screen_bounds is None:
+            frame = ttk.Frame(self._root, padding=16)
+            frame.grid(row=0, column=0, sticky="nsew")
+        else:
+            # A long parameter list must not lose controls when the target work
+            # area is smaller than the form. Keep actions outside the viewport.
+            frame, btn_frame = tk_scrollable_content(self._root)
 
         for i, param in enumerate(self._params):
             label_text = param["name"]
@@ -173,14 +186,11 @@ class _TkinterPromptApp:
 
         frame.columnconfigure(1, weight=1)
 
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(
-            row=len(self._params),
-            column=0,
-            columnspan=2,
-            pady=(16, 0),
-            sticky="e",
-        )
+        if self._screen_bounds is None:
+            btn_frame = ttk.Frame(frame)
+            btn_frame.grid(
+                row=len(self._params), column=0, columnspan=2, pady=(16, 0), sticky="e"
+            )
         ttk.Button(btn_frame, text="Cancel", command=self._cancel).pack(
             side="left",
             padx=(0, 8),
@@ -196,10 +206,19 @@ class _TkinterPromptApp:
         _place_window_on_screen(
             self._root,
             self._screen_bounds,
-            self._root.winfo_reqwidth(),
-            self._root.winfo_reqheight(),
+            (
+                self._root.winfo_reqwidth()
+                if self._screen_bounds is None
+                else frame.winfo_reqwidth() + 24
+            ),
+            (
+                self._root.winfo_reqheight()
+                if self._screen_bounds is None
+                else frame.winfo_reqheight() + btn_frame.winfo_reqheight() + 24
+            ),
         )
 
+        self._root.deiconify()
         self._root.lift()
         self._root.attributes("-topmost", True)
         self._root.after(100, lambda: self._root.attributes("-topmost", False))
@@ -223,16 +242,28 @@ class _TkinterPromptApp:
         def _browse():
             from tkinter import filedialog
 
+            _place_window_on_screen(
+                self._root,
+                self._screen_bounds,
+                self._root.winfo_width(),
+                self._root.winfo_height(),
+            )
+            self._root.update_idletasks()
             initial = var.get() or None
+            title = "Select directory" if ptype == "path-dir" else "Select file"
+            if placement_notice(self._screen_bounds):
+                title += " — Move this window to the tray screen"
             if ptype == "path-dir":
                 path = filedialog.askdirectory(
                     parent=self._root,
                     initialdir=initial,
+                    title=title,
                 )
             else:
                 path = filedialog.askopenfilename(
                     parent=self._root,
                     initialdir=initial,
+                    title=title,
                 )
             if path:
                 var.set(path)
@@ -271,6 +302,13 @@ class _TkinterPromptApp:
             )
             valid, err = validate_param_value(pp, values.get(param["name"], ""))
             if not valid:
+                _place_window_on_screen(
+                    self._root,
+                    self._screen_bounds,
+                    self._root.winfo_width(),
+                    self._root.winfo_height(),
+                )
+                self._root.update_idletasks()
                 self._messagebox.showerror(
                     "Validation Error",
                     err,
@@ -299,7 +337,7 @@ def _resolve(value, extra_vars):
 # -- NiceGUI fallback -------------------------------------------------------
 
 
-def _native_file_picker(pick_directory=False):
+def _native_file_picker(pick_directory=False, screen_bounds=None):
     """Auxiliary host-path picker; browser controls cannot return absolute paths.
 
     A NiceGUI parent deliberately delegates Browse to the local OS/Tk chooser,
@@ -310,9 +348,12 @@ def _native_file_picker(pick_directory=False):
         "picker",
         {
             "native": lambda: _native_file_picker_impl(pick_directory),
-            "tkinter": lambda: _tkinter_file_picker_subprocess(pick_directory),
+            "tkinter": lambda: _tkinter_file_picker_subprocess(
+                pick_directory, screen_bounds=screen_bounds
+            ),
         },
         fallback=None,
+        screen_bounds=screen_bounds,
         preferred="auto" if preferred == "nicegui" else preferred,
     )
 
@@ -371,7 +412,7 @@ def _native_file_picker_impl(pick_directory=False):
     return None
 
 
-def _tkinter_file_picker_subprocess(pick_directory=False):
+def _tkinter_file_picker_subprocess(pick_directory=False, screen_bounds=None):
     import json
     import sys
     from ai_guardian.ui.modal import run_modal_subprocess
@@ -380,30 +421,59 @@ def _tkinter_file_picker_subprocess(pick_directory=False):
         "import json, sys; "
         "from ai_guardian.ui.tray_prompt import _show_tkinter_file_picker; "
         "from ai_guardian.ui.modal import run_modal_child; "
-        "run_modal_child(lambda: _show_tkinter_file_picker(json.loads(sys.argv[1])))"
+        "p=json.loads(sys.argv[1]); "
+        "run_modal_child(lambda: _show_tkinter_file_picker(p['directory'], p['screen_bounds']))"
     )
     result = run_modal_subprocess(
-        [sys.executable, "-c", child, json.dumps(pick_directory)]
+        [
+            sys.executable,
+            "-c",
+            child,
+            json.dumps(
+                {
+                    "directory": pick_directory,
+                    "screen_bounds": screen_payload(screen_bounds),
+                }
+            ),
+        ]
     )
     output = (result.stdout or "").strip().splitlines()
     value = json.loads(output[-1]) if output else None
     return value if isinstance(value, str) and value else None
 
 
-def _show_tkinter_file_picker(pick_directory=False):
+def _show_tkinter_file_picker(pick_directory=False, screen_bounds=None):
+    import tkinter as tk
     from tkinter import filedialog
     from ai_guardian.ui.modal import mark_modal_displayed
 
     root = create_tk_root()
     root.withdraw()
+    from ai_guardian.ui.monitor import place_tk_window
+
+    place_tk_window(root, screen_bounds, 1, 1)
+    root.update_idletasks()
     try:
+        if screen_bounds is not None:
+            # Native file panels choose their owner's monitor, not necessarily
+            # the geometry of a never-mapped withdrawn root.
+            try:
+                root.attributes("-alpha", 0.0)
+                root.deiconify()
+                root.lift()
+                root.update()
+            except tk.TclError:
+                logger.debug("Picker owner cannot use a transparent placement hint")
         choose = (
             filedialog.askdirectory if pick_directory else filedialog.askopenfilename
         )
         # The native panel does not map its withdrawn parent. After entering it,
         # visibility is unknown and a failure cannot authorize another picker.
         mark_modal_displayed()
-        return choose(parent=root) or None
+        title = "Select directory" if pick_directory else "Select file"
+        if placement_notice(screen_bounds):
+            title += " — Move this window to the tray screen"
+        return choose(parent=root, title=title) or None
     finally:
         root.destroy()
 
@@ -540,6 +610,7 @@ class _NiceGuiPromptApp:
                                 path = await ng_run.io_bound(
                                     _native_file_picker,
                                     is_dir,
+                                    self._screen_bounds,
                                 )
                                 if path:
                                     inp.set_value(path)
@@ -642,21 +713,9 @@ class _NiceGuiPromptApp:
             app.shutdown()
 
         app.on_disconnect(_on_disconnect)
-        port = _find_free_port()
+        from ai_guardian.ui.modal import run_nicegui_modal
 
-        from ai_guardian.desktop_utils import open_url
-
-        url = f"http://127.0.0.1:{port}"
-        app.on_startup(lambda: open_url(url))
-
-        ui.run(
-            host="127.0.0.1",
-            port=port,
-            title=form_title,
-            dark=True,
-            show=False,
-            reload=False,
-        )
+        run_nicegui_modal(form_title, dark=True, screen_bounds=self._screen_bounds)
         return result_holder["value"]
 
 

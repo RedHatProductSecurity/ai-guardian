@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Tray physical-monitor context (#2581):** Capture action-time display identity
+  and usable bounds on macOS, Windows and geometry-capable Linux tray hosts;
+  retain them through delayed dialogs, child pickers, target selection and support
+  review/preview/results. Revalidate topology/DPI before placement and fall back
+  visibly when a monitor disappears. Native providers without positioning defer
+  to isolated Tk; browser/Wayland/remote-panel limitations have explicit manual
+  move-window guidance, not a false placement guarantee. Preserve cancellation,
+  exclusive preferences, single-monitor defaults and native user-only consent.
+  Includes isolated unit/UX contracts and physical-desktop verification guidance.
 - **Per-daemon Contact Support (#2597):** Add source-bound diagnostics actions for
   local/container/Kubernetes/manual HTTPS/SSH/OpenShell daemons in flat and nested
   tray menus. Keep the independently available local tray-host action. Collect
