@@ -188,16 +188,20 @@ removed in v1.13.0.
 
 ## Discovery Methods
 
-The tray discovers daemons using four methods:
+The tray finds daemon targets through runtime discovery, explicit SSH enrollment
+or manual configuration:
 
 | Runtime | Discovery | How |
 |---------|-----------|-----|
 | Local | PID file + socket ping | Check `~/.local/state/ai-guardian/daemon.pid` |
 | Podman/Docker | `podman ps` / `docker ps` | Label filter + port filter (cascading) |
 | Kubernetes | `kubectl get pods` | Label selector + user filter |
+| SSH | Explicit enrollment + saved connections | Verify a known alias with **Add daemon via SSH**; optional alias inventory offers candidates, not trusted targets |
 | Manual | Config file | `~/.config/ai-guardian/tray-targets.json` |
 
-Discovery runs on-demand when the tray icon is clicked (~1 second to refresh).
+Runtime discovery refreshes in the background and on tray interaction. SSH alias
+inventory is opt-in; saved SSH targets reconnect independently of that inventory.
+The [Ubuntu VM guide](UBUNTU_VM.md) covers its upcoming-release PyPI prerequisites.
 
 ### Container Discovery
 
@@ -312,6 +316,12 @@ namespaces. The ownership selector is added to `label_selector` and cannot be
 removed by setting a broader base selector.
 
 ### Add daemon via SSH
+
+**Fresh headless Ubuntu VM?** Start with the
+[ordered PyPI/venv HTTPS/SSH guide](UBUNTU_VM.md), including the release gate,
+VM-hosted Console bootstrap and workstation-side pairing. As of 2026-10-28,
+production PyPI 1.20.0 does not contain these features; the guide targets 1.21
+development until a supporting published artifact is qualified.
 
 For an SSH-only VM (including a known AWS instance), choose **Add daemon via SSH**
 in the tray. The shared modal dispatcher tries **Native → Tkinter → NiceGUI**,
@@ -475,9 +485,12 @@ cancellation or a later-step error. Configuration reads/writes and enumeration
 run outside the tray GUI thread. Saving does not contact hosts, execute SSH or
 grant trust; connection and identity verification remain explicit separate steps.
 
-The **loopback Web Console → daemon picker → SSH daemon connections** retains
+The **workstation loopback Web Console home `/` → SSH daemon connections** retains
 the equivalent **Discover SSH aliases**, prefix and **Save SSH discovery settings**
-controls. Both entry points share workstation-global validation and persistence,
+controls above the daemon cards. The picker is not a sidebar item: from a daemon
+dashboard, click **AI Guardian** in the top-left header to return home. Launch
+this Console in a workstation terminal, not through the VM's SSH bootstrap
+tunnel. Both entry points share workstation-global validation and persistence,
 not the selected remote daemon or a project. Untouched Web Console fields follow
 saved tray changes on refresh; unsaved browser edits are not overwritten. Settings
 survive tray restarts. Alternatively, set the following in the local user
@@ -624,8 +637,12 @@ ai-guardian tray start --no-discover
 
 ### Native HTTPS and explicit certificate trust
 
-Native HTTPS is opt-in (`daemon.rest_tls`, available in 1.21). Existing localhost
-HTTP configurations need no changes. TLS does **not** change `rest_host`, publish
+Native HTTPS is opt-in (`daemon.rest_tls`, targeting 1.21; not in PyPI 1.20.0).
+For a fresh headless guest, use the [Ubuntu VM HTTPS/SSH guide](UBUNTU_VM.md);
+it explicitly separates the upcoming release from published-PyPI qualification.
+The advanced trust/PKI reference below remains applicable to supporting builds.
+Existing localhost HTTP configurations need no changes. TLS does **not** change
+`rest_host`, publish
 ports, open a firewall, enable mTLS, or replace the daemon's bearer token. Container
 bind-address defaults also remain unchanged. Set an explicit loopback bind address
 when the daemon must only be reachable through an administrative tunnel.

@@ -9,6 +9,85 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2585 documentation implementation — 2026-10-28
+
+- User authorized implementation with **go** after initialization; continued on
+  existing managed branch `2585` and resumed after interrupted responses. The
+  qualified ticket was already read once. No clone sync/new branch/commit/push/PR.
+- Added `docs/UBUNTU_VM.md`: ordered Ubuntu guest prerequisites, independently
+  verified SSH/public-key/agent access, regular-user PyPI/venv install, explicit
+  global setup/private storage, optional official OpenCode V2 integration, fresh
+  private lab certificate, VM Console bootstrap, exact global HTTPS fields,
+  restart/verified health, workstation pairing/discovery, reboot recovery and
+  separately owned foreground/background Console-tunnel cleanup. All machine,
+  Console, listener, path and pairing boundaries are labeled.
+- Updated docs index/MkDocs/configuration/HTTPS/SSH links and discovery-method
+  table, plus Unreleased changelog. Existing advanced trust/PKI reference from
+  Listener and client configuration onward and generated notebook export remain
+  unchanged. OpenWolf-owned anatomy updates are reviewed and retained.
+- **Publication gate:** production PyPI checked 2026-10-28 still has latest
+  **1.20.0**, no `1.21.*`. Downloaded 1.20.0 wheel matches published SHA-256 and
+  lacks native TLS/SSH modules and TLS schema. Guide/nav are explicitly upcoming;
+  `>=1.21.0` is provisional/unavailable, not a confirmed first published release.
+  #2591/#2592 are now closed/merged **development** UI changes, not yet PyPI
+  features; document historical reduced menus versus development parity honestly.
+- **Validation:** 21 Bash blocks pass syntax; 11 local guide links/anchors,
+  incoming navigation, MkDocs YAML and 14 exact source UI labels pass. Isolated
+  SSH-config parsing makes no connection; remote HOME quoting uses a fake binary.
+  Exact lab TLS recipe passes 0700/0600 ownership/modes, repeat/no-overwrite,
+  90-day validity, SAN/extensions, OpenSSL/Python strict verification, wrong SAN
+  and untrusted-certificate rejection. Curl health/401-shaped responses came
+  from a **synthetic loopback endpoint**, not daemon authentication qualification.
+- Tools: Linux, Python 3.14.7, OpenSSL 3.5.8, curl 8.18.0, OpenSSH 10.2p1.
+  Harness `/tmp/opencode/guardian-2585-validate.py`; final record
+  `/tmp/opencode/guardian-2585-zs6cih6h/validation.json`. Owned endpoint is stopped.
+  Corrected scratch response framing/negative-disconnect handling; recorded
+  fixture iterations and publication/validation learnings in buglog/cerebrum.
+  Whitespace and buglog JSON/unique IDs pass. Documentation-only: no application
+  test suite, linters or local MkDocs build required/run; no new dependency.
+- Saved DAF progress note and explicit completed-docs/open-release checklist:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2585#issuecomment-6463406036.
+- **Still pending:** first supporting production release per feature, then actual
+  fresh PyPI VM **and workstation** walkthrough with exact artifact/version and
+  native UI/live SSH/Console/tunnel/reboot observations. Source reporter evidence
+  and these synthetic checks do not meet that gate; issue is not marked complete.
+  No live SSH/VM, real credential access, installed daemon/tray/Console restart,
+  runtime/security settings changes or release publication. Changes remain local
+  and uncommitted for review. Earlier entries are historical, not the active task.
+
+## Issue #2585 session initialization — 2026-10-28
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2585`; confirmed this repository, existing
+  branch `2585` and initially clean worktree. Read the repository-qualified GitHub
+  ticket exactly once. This real-workspace session needs no temporary-clone sync.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  markdown and hierarchical skills are absent. Loaded DAF workflow/Git/OpenWolf
+  guidance, project protocol, handoff and user preferences. The project release
+  skill is unrelated. Leave native titles DAF-managed; defer commits/PR to DAF.
+- User requested initialization only; implementation has not started. Next:
+  verify production PyPI availability and which published versions contain native
+  HTTPS, SSH enrollment, alias discovery and later menu/settings changes. The
+  ticket's last check found only 1.20.0; do not treat that historical observation
+  or merged development PRs as current publication/qualification evidence.
+- Plan one ordered `docs/UBUNTU_VM.md` guide covering verified SSH, regular-user
+  PyPI/venv installation, explicit global setup/private storage, lab TLS identity,
+  VM Console bootstrap, listener restart/verified health, workstation enrollment,
+  optional alias discovery, reboot recovery and separately owned tunnel cleanup.
+  Label machines, paths, Console origins and candidate versus pairing state.
+- Match navigation/menu instructions to the published artifact, checking #2591
+  and #2592 rather than assuming either pending or shipped. Preserve loopback,
+  host-key/TLS verification, explicit trust, daemon authentication and VM-only
+  private keys. Link advanced PKI guidance and synchronize docs index, MkDocs,
+  configuration/multi-daemon references, discovery table and Unreleased changelog.
+- Actual fresh-VM **and workstation** validation against the published PyPI build
+  remains an explicit acceptance gate; source-build walkthroughs do not satisfy it.
+  If no suitable release exists, label the guide upcoming and keep that gate open.
+  Do not regenerate `docs/notebooklm-export.md`; documentation-only tests/builds
+  are not required. No code/docs implementation, tests, tracker updates, live SSH,
+  runtime/configuration changes, commits, pushes or PRs. Only this handoff changed;
+  OpenWolf owns anatomy/memory bookkeeping. Earlier sections are history.
+
 ## Issue #2595 implementation — 2026-10-28
 
 - User authorized implementation with **go** after initialization. Continued

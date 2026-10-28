@@ -23,6 +23,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | Document | Description |
 |----------|-------------|
 | [Configuration Guide](CONFIGURATION.md) | Config file locations, options, precedence, and remote configs |
+| [Headless Ubuntu VM](UBUNTU_VM.md) | Upcoming-release PyPI/venv walkthrough: private HTTPS, Console bootstrap and workstation SSH enrollment; published-artifact qualification pending |
 | [Configuration Cookbook](COOKBOOK.md) | Practical Q&A pairs for common configuration tasks |
 | [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage pinned secret scanner engines |
 | [TOML Pattern Engine](TOML_PATTERNS.md) | Built-in Python scanner with 267 pre-compiled TOML patterns |
@@ -71,7 +72,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 |----------|-------------|
 | [MCP Server](MCP_SERVER.md) | MCP security advisor server — tools, setup, proactive levels, support bundles |
 | [MCP Security Scanning](MCP_SERVER.md#mcp-security-scanning) | Audit MCP server configs and source code for credential exposure, supply chain risks |
-| [Multi-Daemon Tray](MULTI_DAEMON_TRAY.md) | Discover and manage daemons across local, Podman/Docker, and Kubernetes |
+| [Multi-Daemon Tray](MULTI_DAEMON_TRAY.md) | Discover and manage local, Podman/Docker, Kubernetes and explicitly enrolled SSH daemons |
 
 ## IDE Integration
 

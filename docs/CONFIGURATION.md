@@ -60,6 +60,12 @@ four steps for the local daemon REST API, without VMs, SSH, private-CA
 administration or system-wide certificate installation. This does not change
 the Web Console webpage to HTTPS.
 
+**Setting up a headless Ubuntu VM from PyPI?** Follow the ordered
+[Ubuntu VM HTTPS/SSH guide](UBUNTU_VM.md) for setup, private certificates,
+VM Console bootstrap and workstation enrollment. It targets an **upcoming
+release**: PyPI 1.20.0 lacks this workflow; published-artifact qualification and
+the confirmed minimum supporting version remain pending.
+
 `daemon.rest_tls` enables optional native HTTPS without changing existing bind
 addresses, localhost HTTP defaults, REST fields or daemon-token authentication.
 Configure `enabled` (default `false`), `cert_file` and `key_file`; local REST
@@ -91,8 +97,11 @@ for all fields, file protection, tunnel identity and certificate lifecycle.
 the example and every built-in profile. Set `enabled: true` once to offer local SSH
 aliases at tray startup/refresh and in the loopback Web Console picker. The optional
 `alias_prefix` defaults to `"ai-guardian-"`; `""` discovers concrete existing aliases
-without renaming. Save these settings in **SSH daemon connections** on the picker,
-not a remote daemon/project settings page. Discovery never probes hosts or grants
+without renaming. Save these settings in the **workstation Console home `/` → SSH
+daemon connections** card (from a dashboard, click the **AI Guardian** header),
+not a remote daemon/project settings page. The development tray also offers
+**Discover SSH aliases...**; see the VM guide's release gate before assuming
+availability in a published build. Discovery never probes hosts or grants
 trust; review and explicit identity confirmation remain mandatory. See
 [SSH config locations, bounded Includes, Match behavior and persistent dismissal](MULTI_DAEMON_TRAY.md#discover-ssh-aliases).
 

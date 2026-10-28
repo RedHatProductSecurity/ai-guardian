@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Headless Ubuntu VM quickstart (#2585):** Add an ordered PyPI/venv guide for
+  verified SSH, explicit global setup/private storage, lab TLS, VM-hosted Console
+  bootstrap, restart/verified health and workstation enrollment/discovery. Cover
+  reboot recovery, owned foreground/background tunnels, current development-menu
+  changes and troubleshooting; link from navigation/configuration/HTTPS/SSH
+  references and include enrolled SSH targets in the discovery table. Clearly mark
+  the upcoming-release gate: PyPI 1.20.0 lacks the features, the first supporting
+  published version is unconfirmed, and fresh VM/workstation PyPI qualification
+  remains pending rather than being inferred from source-build validation.
 - **Production release announcements (#2595):** The release helper and shell script
   announce the exact verified public GitHub Release and downloadable production
   PyPI wheel/sdist in Announcements using existing `gh` authentication. Includes
