@@ -15,8 +15,9 @@ scripts/release.sh --dry-run minor    # preview without executing
 
 The script automates prerequisite validation, Release Readiness CI, interactive
 Cursor verification, release preparation, TestPyPI, production tagging,
-publication checks, and merge-back. Run it as an authorized maintainer in your
-terminal, outside an active DAF agent session. Land preparation changes through
+publication checks, a production release announcement, and merge-back. Run it as
+an authorized maintainer in your terminal, outside an active DAF agent session.
+Land preparation changes through
 the normal feature-branch review workflow first; do not launch it from a DAF
 issue branch such as `2563`.
 
@@ -41,6 +42,65 @@ verify every deliverable in the [release checklist](#release-checklist). Keep
 the release issue open until that evidence and the post-release checks exist.
 
 **Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`, `curl`, `git-cliff` (`brew install git-cliff`).
+
+### Production release announcements
+
+Phase 7b invokes the Python release helper before merge-back/development-version
+changes. It posts **AI Guardian vX.Y.Z is now available** to
+**RedHatProductSecurity/ai-guardian → Announcements** (`announcements`), with
+version-specific GitHub Release and PyPI `#files` links. The category and repository
+node IDs are resolved through GitHub, not stored in configuration.
+
+Prerequisites, checked independently of warning-only shell checks:
+
+- The exact `vX.Y.Z` GitHub Release is published, not draft or prerelease.
+- Production PyPI reports exactly `ai-guardian` version `X.Y.Z`, with both
+  non-yanked wheel and source distributions; each download URL responds successfully.
+- The existing authenticated `gh` account can read the repository/releases and
+  Discussions and create a Discussion in Announcements. The helper never initiates
+  login, changes permission scopes, or stores credentials.
+
+Development/prerelease/test-suffixed versions and TestPyPI releases are excluded.
+No announcement is authorized merely because a workflow watcher, `pip` check, or
+the release script reached its end. Missing publication, category, permissions or
+failed/incomplete API lookups prevent creation.
+
+Preview offline, without GitHub/PyPI access or any local/remote mutations:
+
+```bash
+python3 .claude/skills/release/release_helper.py announce-release X.Y.Z --dry-run
+```
+
+`scripts/release.sh --dry-run minor` also previews this announcement. A preview
+does not verify publication or claim that anything was posted.
+
+To retry **only the announcement** for an explicitly specified published version:
+
+```bash
+python3 .claude/skills/release/release_helper.py announce-release X.Y.Z
+```
+
+This command is independent of the current branch/development version. It never
+creates tags, bumps versions, rewrites release configuration, republishes packages
+or rolls back a release. Category and existing-Discussion lookup handle pagination;
+an existing matching repository/tag announcement returns its URL without reposting.
+A stable body marker retains identity if its title is edited; older exact-title
+announcements with the exact release link are also recognized.
+
+At most one creation is attempted per invocation. An uncertain create response is
+reconciled through read-only lookup; if that cannot confirm a Discussion, the helper
+reports uncertainty rather than posting again or claiming success. Inspect
+Announcements before explicitly retrying; run retries serially, since GitHub does
+not enforce a unique per-tag Discussion key. Lookup failure is never “not found.”
+
+Confirmed creation/reuse prints the Discussion URL (stdout) and includes it in the
+release summary. A failed/unconfirmed announcement is explicitly shown as such;
+the shell still completes merge-back, then exits nonzero. The published release
+remains unchanged: use the announcement-only retry, **not the full release script**.
+Other release deliverables still require independent checklist verification.
+
+This maintainer workflow is separate from support reporting. Support category
+restrictions and native user-only upload/publication consent are unchanged.
 
 ### One-time Read the Docs setup
 
@@ -724,6 +784,7 @@ Use this checklist for each release:
 - [ ] Matching Publish Package and Build Container Image runs both conclude `success`
 - [ ] PyPI exact version, clean installation, CLI/doctor, and previous-stable upgrade verified
 - [ ] GitHub Release notes, wheel, sdist, four middleware archives, and checksums verified
+- [ ] Announcements Discussion for the exact release confirmed; its URL is recorded in the summary (retry announcement only if needed)
 - [ ] Python/middleware versions agree; non-Python archives are not PyPI distributions
 - [ ] Both separate Quay repositories have versioned manifests/digests and runtime-version evidence
 - [ ] Exact versioned Read the Docs site works; stable points to it and latest remains main
@@ -735,7 +796,6 @@ Use this checklist for each release:
 - [ ] Rust/stable-reference checks pass and the new Unreleased section is usable
 - [ ] Attach source/tag, CI/manual evidence, registry URLs, checksums/digests, docs, and deferrals to the issue
 - [ ] Close the release issue only after all deliverables are independently verified
-- [ ] Announce release (if applicable)
 
 ### Patch / Hotfix (if needed)
 - [ ] Check if `release-x.y` branch exists (preferred) or create `hotfix-x.y.z` from tag (fallback)

@@ -462,6 +462,11 @@ jobs:
         run: |
           python -m pytest tests/unit/test_daemon_support.py tests/unit/test_remote_support.py tests/unit/test_tray_support.py tests/ux/test_user_experience_contract_support.py -q
 
+      - name: Verify release announcement CLI and mocked publication contracts
+        run: |
+          python .claude/skills/release/release_helper.py announce-release --help
+          python -m pytest tests/unit/test_release_helper.py tests/unit/test_release_script.py -q
+
       - name: Create config
         run: |
           export XDG_CONFIG_HOME=$(mktemp -d)
