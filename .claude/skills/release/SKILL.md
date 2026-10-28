@@ -73,7 +73,8 @@ When invoked with arguments (e.g., `/release minor`), this skill guides you thro
 13. TestPyPI verification (recommended — see TestPyPI Verification section below)
 14. Create tag and push
 15. Verify PyPI publication and both versioned container images
-16. Provide post-release checklist
+16. Confirm the production Announcements Discussion with the helper (see below)
+17. Provide post-release checklist
 
 ### Hotfix Release (`/release hotfix <tag>`)
 
@@ -502,6 +503,49 @@ If the OpenShell repository has not been created or the workflow cannot push
 to it, stop the release and have a maintainer provision
 `quay.io/redhatproductsecurity/ai-guardian-openshell` before retrying.
 
+## Production Release Announcements
+
+AI Guardian's canonical `scripts/release.sh` calls the Python helper after
+publication checks and before merge-back/development-version changes. It resolves
+**RedHatProductSecurity/ai-guardian → Announcements** (`announcements`) through
+the existing authenticated `gh` CLI, without hard-coded node IDs, stored credentials,
+login or automatic permission changes. The account must be able to read releases
+and Discussions and create announcements in this category.
+
+The helper independently requires the exact published `vX.Y.Z` GitHub Release
+(not draft/prerelease) and production PyPI's exact `X.Y.Z` with downloadable,
+non-yanked wheel and source distributions. Development/test/prerelease versions
+and TestPyPI are excluded. Warning-only script checks or script completion are
+not publication evidence. The title/body link to that exact Release and PyPI
+version/files, never `latest` or the next development version.
+
+Preview offline without posting or writing configuration/version files:
+
+```bash
+python3 .claude/skills/release/release_helper.py announce-release X.Y.Z --dry-run
+```
+
+Retry just the announcement for an already published explicit version:
+
+```bash
+python3 .claude/skills/release/release_helper.py announce-release X.Y.Z
+```
+
+This does not create tags, bump versions, republish artifacts or roll back the
+release. Category/Discussion lookup paginates and fails safely on errors. A
+matching repository/tag announcement returns its existing URL without reposting.
+Creation is attempted at most once; an uncertain response triggers only read-only
+reconciliation. If still unconfirmed, inspect Announcements before an explicit
+retry and run retries serially. Never blindly repeat a create request.
+
+Confirmed creation/reuse prints the URL and the script includes it in its summary.
+Failures, missing category/permissions or unavailable publication are reported as
+unconfirmed, never successfully posted. The shell completes merge-back but exits
+nonzero if the announcement is unconfirmed; retry the helper, **not publication**.
+See [RELEASING.md](../../../RELEASING.md#production-release-announcements) for details.
+Keep this maintainer flow separate from support reporting: do not broaden support
+categories or change its native user-only consent stages.
+
 ## Git Operations
 
 **Branch Naming**:
@@ -534,15 +578,16 @@ to it, stop the release and have a maintainer provision
 3. [ ] Verify package publication (PyPI, npm, etc.)
 4. [ ] Verify both versioned container images, including the dedicated OpenShell repository
 5. [ ] Verify release notes created
-6. [ ] Test installation from package registry
-7. [ ] Merge release branch back to main
-8. [ ] Bump version to next dev cycle (X.Y+1.0-dev)
-9. [ ] Ensure main branch `README.md` install URLs point to `main` (not a version tag — there is no PyPI release for dev versions)
-10. [ ] Push main branch
-11. [ ] (Hotfix only) Cherry-pick fix to main
-12. [ ] Verify the tagged combined docs export was generated before tagging, after source documentation and stable references were finalized; do not defer its generation until after publication
-13. [ ] Update NotebookLM sources — if the `notebooklm-mcp` MCP server is available, upload the generated `docs/notebooklm-export.md` and update other sources in the AI Guardian notebook using `source_add`
-14. [ ] Generate demo guide — create `X.Y-demo-guide.md` in the external docs directory (see AGENTS.md) documenting new features with step-by-step demonstrations for stakeholder walkthroughs
+6. [ ] Confirm the exact release's Announcements Discussion URL (use announcement-only retry if needed)
+7. [ ] Test installation from package registry
+8. [ ] Merge release branch back to main
+9. [ ] Bump version to next dev cycle (X.Y+1.0-dev)
+10. [ ] Ensure main branch `README.md` install URLs point to `main` (not a version tag — there is no PyPI release for dev versions)
+11. [ ] Push main branch
+12. [ ] (Hotfix only) Cherry-pick fix to main
+13. [ ] Verify the tagged combined docs export was generated before tagging, after source documentation and stable references were finalized; do not defer its generation until after publication
+14. [ ] Update NotebookLM sources — if the `notebooklm-mcp` MCP server is available, upload the generated `docs/notebooklm-export.md` and update other sources in the AI Guardian notebook using `source_add`
+15. [ ] Generate demo guide — create `X.Y-demo-guide.md` in the external docs directory (see AGENTS.md) documenting new features with step-by-step demonstrations for stakeholder walkthroughs
 
 **If you are NOT authorized:**
 - ❌ DO NOT push the tag
@@ -620,6 +665,7 @@ to it, stop the release and have a maintainer provision
 14. **TestPyPI verification**: Create test tag, verify README renders correctly on TestPyPI (recommended, may skip for hotfixes)
 15. **Create production tag**: After TestPyPI verification passes
 16. **Validate**: Run `python scripts/sync_release_versions.py --check` and ensure package versions match
+17. **Announce**: After verified production publication, use `announce-release X.Y.Z` and record its confirmed Discussion URL; never re-run publication to retry an announcement
 
 **Error Recovery**:
 - If any step fails, provide clear error message and recovery steps

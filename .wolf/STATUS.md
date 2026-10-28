@@ -9,6 +9,79 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2595 implementation — 2026-10-28
+
+- User authorized implementation with **go** after initialization. Continued
+  existing managed branch `2595`; the qualified ticket was already read once.
+  No clone sync, new branch, commit, push or PR. Changes remain local/uncommitted.
+- Added independent `announce-release X.Y.Z [--dry-run]` to the Python helper,
+  dispatched before version/config initialization. Verify the exact published
+  non-draft/non-prerelease Release and production PyPI exact-version, non-yanked,
+  downloadable wheel/sdist before resolving Announcements and checking duplicates.
+  Development/test/prerelease versions and TestPyPI are excluded.
+- Existing authenticated `gh` resolves IDs and paginates categories/Discussions;
+  markers bind identity to repository/tag, with exact-title/link legacy recognition.
+  Lookup errors/incomplete pagination fail safely. At most one create is attempted;
+  uncertain responses are reconciled read-only, never blindly reposted. URL-only
+  successful stdout supports shell capture; errors never claim a successful post.
+- Shell Phase 7b runs after verification and before merge-back/dev bump. Dry-run
+  previews offline without new mutations. Confirmed URL goes into the release
+  summary; an unconfirmed announcement preserves publication, completes merge-back,
+  then exits nonzero with announcement-only retry guidance. Retry must be serial;
+  GitHub has no transactional unique per-tag Discussion key.
+- Updated `RELEASING.md`, release skill, Unreleased changelog and release-readiness
+  gate (CLI help plus mocked related tests). Support reporting/category/native
+  consent, production workflows, package versions/dependencies and generated docs
+  export are unchanged. Simplification reviewed; explicitly validate hidden helper.
+- **Validation:** **121 related unit tests pass**, including complete shell
+  contracts with fake executables in disposable trees and retained Windows skips.
+  Announcement-class coverage **98.6%**, entire helper **78.5%**; data/report:
+  `/tmp/opencode/guardian-2595.coverage`, `/tmp/opencode/guardian-2595-coverage.json`.
+  Black py310, Ruff, Pylint E and project Mypy (325 source/helper files) pass.
+  Recorded fixture/exception-scope corrections and implementation iterations.
+- DAF progress note saved; completed implementation checklist and validation scope:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2595#issuecomment-6459237303.
+- **Next:** review and external DAF completion, then fresh CI. No real release,
+  tag/package publication, Discussion creation, authentication/security-setting
+  change, full suite, integration or container scenarios were run. Live publication
+  is deliberately not part of mocked validation; do not claim a real announcement
+  exists. OpenWolf owns automatic anatomy/memory updates; earlier entries are history.
+
+## Issue #2595 session initialization — 2026-10-28
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2595`; confirmed the active repository,
+  existing branch `2595` and initially clean worktree. Read the qualified GitHub
+  ticket exactly once. This real-workspace development session needs no clone sync.
+- Config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  markdown and hierarchical skills are absent. Loaded DAF workflow/Git/OpenWolf
+  and the relevant project release skill, protocol and learning constraints.
+  Leave native conversation titles DAF-managed; defer commits/PR to completion.
+- User requested initialization only; implementation has not started. Next:
+  inspect `.claude/skills/release/release_helper.py`, `scripts/release.sh`,
+  `.github/workflows/publish.yml` and their related unit tests before implementing
+  an independently retryable exact-version announcement command.
+- Plan explicit positive verification of the intended public, non-draft,
+  non-prerelease GitHub Release and exact production PyPI version/distributions;
+  exclude development/TestPyPI/test-tag releases. Shell completion or warning-only
+  verification is not publication proof. Do not run a real release during this work.
+- Resolve this repository's Announcements category through authenticated `gh`,
+  without stored credentials or automatic permission changes. Include exact-version
+  release/PyPI files links. Paginate duplicate lookup by repository/release tag;
+  lookup errors fail safely and uncertain creation must never trigger blind reposts.
+- Dry-run previews without mutations; retry must not create tags, bump versions,
+  republish artifacts or roll back an existing release. Print confirmed existing/new
+  Discussion URLs in results and the release summary; distinguish failure/uncertainty.
+  Keep support-reporting category restrictions and native consent behavior unchanged.
+- Plan mocked helper and shell contracts for publication gating, exclusions,
+  pagination/idempotency, dry-run/retry and API/category/permission/uncertain failures;
+  retain Windows Bash-only skips. Update `RELEASING.md`, the release `SKILL.md` and
+  Unreleased changelog. Run only related tests and required linters after code work.
+- No code changes, tests, tracker updates, real release/Discussion publication,
+  authentication/configuration changes, commits, pushes or PRs. Only this handoff
+  was updated; OpenWolf owns automatic anatomy/memory bookkeeping. Earlier entries
+  are history, not the active task.
+
 ## Issue #2581 implementation — 2026-10-28
 
 - User authorized implementation with “go” after initialization. Managed DAF

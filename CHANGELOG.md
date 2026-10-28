@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Production release announcements (#2595):** The release helper and shell script
+  announce the exact verified public GitHub Release and downloadable production
+  PyPI wheel/sdist in Announcements using existing `gh` authentication. Includes
+  paginated duplicate-safe lookup, offline dry-run, announcement-only retry,
+  uncertain-create reconciliation and explicit summary/error status. No support
+  reporting category or consent changes; includes mocked helper/shell contracts.
 - **Tray physical-monitor context (#2581):** Capture action-time display identity
   and usable bounds on macOS, Windows and geometry-capable Linux tray hosts;
   retain them through delayed dialogs, child pickers, target selection and support

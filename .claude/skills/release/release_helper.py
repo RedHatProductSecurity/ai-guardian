@@ -9,6 +9,7 @@ This module provides automation utilities for release management:
 - Validates version consistency
 - Calculates next version based on release type
 - Reports the versioned normal and OpenShell container image references
+- Announces verified production releases through the authenticated gh CLI
 
 Supports optional .release-config.json for custom configurations.
 """
@@ -16,16 +17,17 @@ Supports optional .release-config.json for custom configurations.
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple, Optional, List, Dict, Any
-
+from urllib.error import URLError
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 NORMAL_CONTAINER_REPOSITORY = "quay.io/redhatproductsecurity/ai-guardian"
-OPENSHELL_CONTAINER_REPOSITORY = (
-    "quay.io/redhatproductsecurity/ai-guardian-openshell"
-)
+OPENSHELL_CONTAINER_REPOSITORY = "quay.io/redhatproductsecurity/ai-guardian-openshell"
 
 
 def get_container_image_references(version: str) -> Dict[str, str]:
@@ -37,6 +39,362 @@ def get_container_image_references(version: str) -> Dict[str, str]:
         "normal": f"{NORMAL_CONTAINER_REPOSITORY}:{version}",
         "openshell": f"{OPENSHELL_CONTAINER_REPOSITORY}:{version}",
     }
+
+
+class AnnouncementError(RuntimeError):
+    """Publication or announcement could not be confirmed; do not republish."""
+
+
+class ReleaseAnnouncer:
+    """Maintainer-only announcements, independent of version/config management."""
+
+    REPOSITORY = "RedHatProductSecurity/ai-guardian"
+    CATEGORY = "announcements"
+    CATEGORIES_QUERY = """
+        query ReleaseCategories($owner: String!, $name: String!, $after: String) {
+          repository(owner: $owner, name: $name) {
+            id
+            discussionCategories(first: 100, after: $after) {
+              nodes { id slug }
+              pageInfo { hasNextPage endCursor }
+            }
+          }
+        }
+    """
+    DISCUSSIONS_QUERY = """
+        query ReleaseDiscussions($owner: String!, $name: String!, $after: String,
+                                 $categoryId: ID!) {
+          repository(owner: $owner, name: $name) {
+            id
+            discussions(first: 100, after: $after, categoryId: $categoryId,
+                        orderBy: {field: CREATED_AT, direction: ASC}) {
+              nodes { title body url }
+              pageInfo { hasNextPage endCursor }
+            }
+          }
+        }
+    """
+    CREATE_MUTATION = """
+        mutation CreateReleaseAnnouncement($repositoryId: ID!, $categoryId: ID!,
+                                           $title: String!, $body: String!) {
+          createDiscussion(input: {repositoryId: $repositoryId,
+                                   categoryId: $categoryId, title: $title, body: $body}) {
+            discussion { url }
+          }
+        }
+    """
+
+    def __init__(self, version: str, repo_path: str = "."):
+        if not re.fullmatch(
+            r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version
+        ):
+            raise ValueError(
+                "Specify a stable release version X.Y.Z (no v prefix or suffix)"
+            )
+        self.version = version
+        self.repo_path = repo_path
+        self.tag = f"v{version}"
+        self.release_url = (
+            f"https://github.com/{self.REPOSITORY}/releases/tag/{self.tag}"
+        )
+        self.pypi_url = f"https://pypi.org/project/ai-guardian/{version}/#files"
+        self.title = f"AI Guardian {self.tag} is now available"
+        self.marker = f"<!-- ai-guardian-release: {self.REPOSITORY}/{self.tag} -->"
+        self.body = (
+            f"AI Guardian {self.tag} has been released!\n\n"
+            f"- Release notes and assets: {self.release_url}\n"
+            f"- PyPI package and distributions: {self.pypi_url}\n\n{self.marker}\n"
+        )
+
+    def _github(self, endpoint: str, payload: Optional[Dict[str, Any]] = None):
+        """Do not retry requests, especially mutations with uncertain outcomes."""
+        command = ["gh", "api", "--hostname", "github.com", endpoint]
+        if payload is not None:
+            command += ["--method", "POST", "--input", "-"]
+        try:
+            result = subprocess.run(
+                command,
+                input=json.dumps(payload) if payload is not None else None,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=60,
+                cwd=self.repo_path,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise AnnouncementError(
+                "GitHub request unavailable or timed out; check the existing gh CLI authentication."
+            ) from error
+        if result.returncode:
+            raise AnnouncementError(
+                f"GitHub request failed (exit {result.returncode}); check gh authentication, "
+                "repository access and Discussions read/write permissions."
+            )
+        try:
+            data = json.loads(result.stdout)
+        except (ValueError, TypeError) as error:
+            raise AnnouncementError(
+                "GitHub returned an invalid JSON response."
+            ) from error
+        if not isinstance(data, dict) or data.get("errors"):
+            raise AnnouncementError(
+                "GitHub API error or incomplete response; check repository access and Discussions permissions."
+            )
+        return data
+
+    def _pages(self, query: str, field: str, **variables):
+        """Every page must be valid before an empty lookup can authorize creation."""
+        owner, name = self.REPOSITORY.split("/")
+        after = None
+        seen = set()
+        repository_id = None
+        while True:
+            result = self._github(
+                "graphql",
+                {
+                    "query": query,
+                    "variables": {
+                        "owner": owner,
+                        "name": name,
+                        "after": after,
+                        **variables,
+                    },
+                },
+            )
+            data = result.get("data")
+            repo = data.get("repository") if isinstance(data, dict) else None
+            if (
+                not isinstance(repo, dict)
+                or not isinstance(repo.get("id"), str)
+                or not repo["id"]
+            ):
+                raise AnnouncementError(
+                    "GitHub repository lookup failed or access is unavailable."
+                )
+            if repository_id is not None and repository_id != repo["id"]:
+                raise AnnouncementError("GitHub repository changed during pagination.")
+            repository_id = repo["id"]
+            connection = repo.get(field)
+            if not isinstance(connection, dict):
+                raise AnnouncementError(
+                    f"GitHub {field} lookup returned an incomplete response."
+                )
+            nodes, page = connection.get("nodes"), connection.get("pageInfo")
+            if (
+                not isinstance(nodes, list)
+                or not all(isinstance(node, dict) for node in nodes)
+                or not isinstance(page, dict)
+                or not isinstance(page.get("hasNextPage"), bool)
+            ):
+                raise AnnouncementError(f"GitHub {field} pagination is incomplete.")
+            cursor = page.get("endCursor")
+            if page["hasNextPage"] and (
+                not isinstance(cursor, str) or not cursor or cursor in seen
+            ):
+                raise AnnouncementError(
+                    f"GitHub {field} pagination cursor is missing or repeated."
+                )
+            yield repository_id, nodes
+            if not page["hasNextPage"]:
+                return
+            seen.add(cursor)
+            after = cursor
+
+    def _category(self):
+        for repository_id, nodes in self._pages(
+            self.CATEGORIES_QUERY, "discussionCategories"
+        ):
+            for node in nodes:
+                if (
+                    not isinstance(node.get("slug"), str)
+                    or not isinstance(node.get("id"), str)
+                    or not node["id"]
+                ):
+                    raise AnnouncementError(
+                        "GitHub category lookup returned incomplete category data."
+                    )
+                if node["slug"] == self.CATEGORY:
+                    return repository_id, node["id"]
+        raise AnnouncementError(
+            f"GitHub category Announcements ({self.CATEGORY}) was not found in {self.REPOSITORY}."
+        )
+
+    def _discussion_url(self, url):
+        if not isinstance(url, str) or not re.fullmatch(
+            rf"https://github\.com/{re.escape(self.REPOSITORY)}/discussions/[1-9][0-9]*",
+            url,
+        ):
+            raise AnnouncementError(
+                "GitHub returned an invalid announcement Discussion URL."
+            )
+        return url
+
+    def _existing(self, category_id):
+        for _, nodes in self._pages(
+            self.DISCUSSIONS_QUERY, "discussions", categoryId=category_id
+        ):
+            for node in nodes:
+                if not isinstance(node.get("title"), str) or not isinstance(
+                    node.get("body"), str
+                ):
+                    raise AnnouncementError(
+                        "GitHub Discussion lookup returned incomplete content."
+                    )
+                # The marker survives title edits; recognize an older manually posted exact-title/link announcement too.
+                if self.marker in node["body"] or (
+                    node["title"] == self.title
+                    and re.search(
+                        re.escape(self.release_url) + r"(?=$|[\s)>])", node["body"]
+                    )
+                ):
+                    return self._discussion_url(node.get("url"))
+        return None
+
+    def _verify_publication(self):
+        release = self._github(f"repos/{self.REPOSITORY}/releases/tags/{self.tag}")
+        if (
+            release.get("tag_name") != self.tag
+            or release.get("draft") is not False
+            or release.get("prerelease") is not False
+            or not release.get("published_at")
+            or release.get("html_url") != self.release_url
+        ):
+            raise AnnouncementError(
+                f"Public production GitHub Release {self.tag} is not confirmed (draft/prerelease excluded)."
+            )
+        try:
+            request = Request(f"https://pypi.org/pypi/ai-guardian/{self.version}/json")
+            with urlopen(request, timeout=30) as response:
+                metadata = json.load(response)
+        except (OSError, URLError, ValueError) as error:
+            raise AnnouncementError(
+                f"Production PyPI publication for {self.version} is unavailable or invalid."
+            ) from error
+        if (
+            not isinstance(metadata, dict)
+            or not isinstance(metadata.get("info"), dict)
+            or metadata["info"].get("name") != "ai-guardian"
+            or metadata["info"].get("version") != self.version
+            or not isinstance(metadata.get("urls"), list)
+            or not metadata["urls"]
+        ):
+            raise AnnouncementError(
+                f"Exact production PyPI package/version {self.version} is not confirmed."
+            )
+        types = set()
+        for distribution in metadata["urls"]:
+            if not isinstance(distribution, dict):
+                raise AnnouncementError("PyPI distribution metadata is incomplete.")
+            kind, filename, url = (
+                distribution.get(key) for key in ("packagetype", "filename", "url")
+            )
+            valid_filename = isinstance(filename, str) and (
+                (
+                    kind == "bdist_wheel"
+                    and filename.startswith(f"ai_guardian-{self.version}-")
+                    and filename.endswith(".whl")
+                )
+                or (
+                    kind == "sdist"
+                    and filename
+                    in (
+                        f"ai_guardian-{self.version}.tar.gz",
+                        f"ai-guardian-{self.version}.tar.gz",
+                    )
+                )
+            )
+            if (
+                not valid_filename
+                or distribution.get("yanked") is not False
+                or not isinstance(url, str)
+            ):
+                raise AnnouncementError(
+                    "PyPI distributions must be exact-version, non-yanked wheels and source archives."
+                )
+            parsed = urlsplit(url)
+            if (
+                parsed.scheme != "https"
+                or parsed.netloc != "files.pythonhosted.org"
+                or not parsed.path.startswith("/packages/")
+            ):
+                raise AnnouncementError(
+                    "PyPI distribution URL is not on the production package host."
+                )
+            try:
+                with urlopen(Request(url, method="HEAD"), timeout=30) as response:
+                    if response.status != 200:
+                        raise AnnouncementError(
+                            f"PyPI distribution is not downloadable: {filename}"
+                        )
+            except (OSError, URLError, ValueError) as error:
+                raise AnnouncementError(
+                    f"PyPI distribution is not downloadable: {filename}"
+                ) from error
+            types.add(kind)
+        if types != {"bdist_wheel", "sdist"}:
+            raise AnnouncementError(
+                "Production PyPI publication needs both a downloadable wheel and source archive."
+            )
+
+    def announce(self, dry_run: bool = False) -> Optional[str]:
+        if dry_run:
+            print(f"[dry-run] {self.REPOSITORY} → Announcements ({self.CATEGORY})")
+            print(f"Title: {self.title}\n\n{self.body}")
+            print(
+                "[dry-run] Not posted; publication and duplicate lookup will be checked before creation."
+            )
+            return None
+        self._verify_publication()
+        repository_id, category_id = self._category()
+        existing = self._existing(category_id)
+        if existing:
+            print("Announcement already exists; reusing Discussion.", file=sys.stderr)
+            return existing
+        try:
+            result = self._github(
+                "graphql",
+                {
+                    "query": self.CREATE_MUTATION,
+                    "variables": {
+                        "repositoryId": repository_id,
+                        "categoryId": category_id,
+                        "title": self.title,
+                        "body": self.body,
+                    },
+                },
+            )
+            data = result.get("data")
+            created = data.get("createDiscussion") if isinstance(data, dict) else None
+            discussion = (
+                created.get("discussion") if isinstance(created, dict) else None
+            )
+            url = self._discussion_url(
+                discussion.get("url") if isinstance(discussion, dict) else None
+            )
+        except AnnouncementError as error:
+            # A timeout, API error, or missing receipt may follow a committed POST.
+            # Reconcile read-only, never blindly repeat the mutation.
+            try:
+                existing = self._existing(category_id)
+                reconciliation = (
+                    "No matching Discussion was confirmed by follow-up lookup."
+                )
+            except AnnouncementError as lookup_error:
+                existing = None
+                reconciliation = f"Follow-up lookup also failed: {lookup_error}"
+            if existing:
+                print(
+                    "Announcement confirmed by lookup after an uncertain create response.",
+                    file=sys.stderr,
+                )
+                return existing
+            raise AnnouncementError(
+                f"Creation outcome uncertain; no automatic repost. {error} "
+                f"{reconciliation} "
+                f"Check Announcements before retrying announce-release {self.version}; the release is unchanged."
+            ) from error
+        print("Release announcement posted.", file=sys.stderr)
+        return url
 
 
 class VersionFile:
@@ -848,6 +1206,19 @@ def main():
     )
     container_parser.add_argument("version", help="Release version (e.g., 1.2.0)")
 
+    announcement_parser = subparsers.add_parser(
+        "announce-release",
+        help="Announce an explicitly specified, already published production release",
+    )
+    announcement_parser.add_argument(
+        "version", help="Exact stable version X.Y.Z (not the current dev version)"
+    )
+    announcement_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview offline without posting or writing files",
+    )
+
     # Validate
     validate_parser = subparsers.add_parser("validate", help="Validate prerequisites")
     validate_parser.add_argument(
@@ -876,6 +1247,19 @@ def main():
     if not args.command:
         parser.print_help()
         sys.exit(1)
+
+    # Announcement retry/preview must never auto-detect/write config or touch versions.
+    if args.command == "announce-release":
+        try:
+            url = ReleaseAnnouncer(args.version, args.repo).announce(
+                dry_run=args.dry_run
+            )
+        except (AnnouncementError, ValueError) as error:
+            print(f"Announcement not confirmed: {error}", file=sys.stderr)
+            sys.exit(1)
+        if url:
+            print(url)
+        sys.exit(0)
 
     helper = ReleaseHelper(args.repo)
 
@@ -925,8 +1309,8 @@ def main():
             sys.exit(0)
         else:
             print("✗ Validation failed:", file=sys.stderr)
-            for error in errors:
-                print(f"  - {error}", file=sys.stderr)
+            for validation_error in errors:
+                print(f"  - {validation_error}", file=sys.stderr)
             sys.exit(1)
 
     elif args.command == "detect":

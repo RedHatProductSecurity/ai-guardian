@@ -502,6 +502,31 @@ else
     fi
 fi
 
+# --- Phase 7b: Announce only verified production publication -----------------
+
+section "Phase 7b: Release Announcement"
+
+ANNOUNCEMENT_URL=""
+ANNOUNCEMENT_STATUS="not confirmed (retry announcement only; release unchanged)"
+if $DRY_RUN; then
+    # The helper previews offline and bypasses version/config auto-detection.
+    $HELPER announce-release "$NEW_VERSION" --dry-run
+    ANNOUNCEMENT_STATUS="not posted (dry-run)"
+else
+    # Warning-only workflow/pip checks above are NOT proof of publication. The
+    # helper independently verifies the exact public Release and production PyPI
+    # wheel/sdist before its paginated lookup and at most one create request.
+    if ANNOUNCEMENT_URL=$($HELPER announce-release "$NEW_VERSION") && \
+        [[ "$ANNOUNCEMENT_URL" =~ ^https://github\.com/RedHatProductSecurity/ai-guardian/discussions/[1-9][0-9]*$ ]]; then
+        ANNOUNCEMENT_STATUS="$ANNOUNCEMENT_URL"
+        info "Release announcement: ${ANNOUNCEMENT_URL}"
+    else
+        ANNOUNCEMENT_URL=""
+        warn "Release announcement not confirmed; the existing release is unchanged."
+        warn "Check Announcements, then retry only: $HELPER announce-release ${NEW_VERSION}"
+    fi
+fi
+
 # --- Phase 8: Post-release merge back --------------------------------------
 
 section "Phase 8: Post-Release Merge Back"
@@ -560,16 +585,24 @@ info "Main branch updated"
 
 # --- Done -------------------------------------------------------------------
 
-section "Release Complete"
+section "Release Summary"
 
 echo "  Version: ${NEW_VERSION}"
 echo "  Tag: ${TAG_NAME}"
 echo "  PyPI: https://pypi.org/project/ai-guardian/${NEW_VERSION}/"
 echo "  GitHub: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/${TAG_NAME}"
+echo "  Announcement: ${ANNOUNCEMENT_STATUS}"
 echo "  Container: ${NORMAL_CONTAINER_IMAGE}"
 echo "  OpenShell: ${OPENSHELL_CONTAINER_IMAGE}"
 echo "  Docs: https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
 echo "  Docs (stable): https://ai-guardian.readthedocs.io/en/stable/"
 echo "  Docs (latest): https://ai-guardian.readthedocs.io/en/latest/"
 echo ""
-info "Done!"
+if $DRY_RUN; then
+    info "Dry run complete; no announcement posted."
+elif [[ -n "$ANNOUNCEMENT_URL" ]]; then
+    info "Done!"
+else
+    warn "Release process finished with an unconfirmed announcement; retry the announcement only, not publication."
+    exit 1
+fi

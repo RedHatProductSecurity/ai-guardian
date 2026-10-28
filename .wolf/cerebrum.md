@@ -117,6 +117,19 @@
 
 ## Key Learnings
 
+- **Release announcements (#2595):** Dispatch announcement preview/retry before
+  constructing `ReleaseHelper`: version auto-detection can write its configuration.
+  Use an explicit stable version, exact public Release and production PyPI
+  wheel/sdist availability, not warning-only shell completion, as publication proof.
+  Resolve category IDs and exhaust Discussion pagination through existing `gh`;
+  ambiguous create responses permit read-only reconciliation, never blind reposts.
+  Keep this maintainer flow separate from support categories/consent.
+- **Release-helper typing (#2595):** Standard source-only checks exclude the
+  hidden helper, so run Mypy/Pylint on it explicitly too. Do not reuse an exception
+  alias as a later loop variable in the same CLI function; Python deletes that
+  alias after `except`, and Mypy rejects the shared binding. Use a distinct
+  validation-error name and retain exact existing CLI message tests.
+
 - **Tray monitor origin (#2581):** Freeze display-only identity/work area before
   worker dispatch; retain it in child payloads and every follow-up, then resolve
   current geometry by identity rather than a later pointer/focus or stale offset.
