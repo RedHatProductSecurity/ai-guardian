@@ -9,6 +9,30 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2622 implementation — 2026-10-29
+
+- Continued managed DAF `open` session `RedHatProductSecurity-ai-guardian-2622`
+  on its existing branch `2622`; the worktree was clean at initialization. Read
+  the repository-qualified GitHub issue exactly once. No temporary-clone sync or
+  branch change was applicable.
+- OpenCode MCP setup now selects the active runtime generation: V1 retains the
+  flat `mcp.ai-guardian` entry and its `enabled` field; V2 writes a valid local
+  server at `mcp.servers.ai-guardian` without V1-only fields. Re-setup migrates
+  only the owned entry. Verification/Doctor follow the active generation, and
+  normal uninstall removes both supported locations while preserving unrelated
+  MCP servers/settings.
+- Plugin and MCP config paths continue to use the canonical resolver. Added
+  isolated coverage across V1/V2, JSON/JSONC, both `OPENCODE_CONFIG` overrides,
+  verification, removal, and Doctor UX.
+- **Validation:** 636 related unit/UX tests pass, including the complete IDE setup
+  UX contract. Ruff, Black (Python 3.10 target), error-level Pylint and Mypy pass.
+  OpenCode 2.0.22 `opencode mcp list` reported `✓ ai-guardian connected` using
+  the isolated config directory `/tmp/opencode/guardian-2622.L00fM0`. No live user
+  configuration was changed.
+- Saved a DAF progress note and GitHub progress comment; preserved `bug` and
+  `1.21.0` labels while adding `done`. All acceptance criteria are met locally.
+  Changes remain uncommitted on branch `2622`; no commit, push or PR was created.
+
 ## Issue #2617 implementation — 2026-10-29
 
 - Continued managed DAF `open` session `RedHatProductSecurity-ai-guardian-2617`

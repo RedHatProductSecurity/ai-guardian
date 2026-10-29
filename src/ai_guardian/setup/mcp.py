@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ai_guardian import __version__
+from ai_guardian.opencode_support import detect_opencode_runtime
 
 from ai_guardian.ide_paths import resolve_ide_config_path, resolve_ide_mcp_path
 from ai_guardian.setup.utils import (
@@ -53,6 +54,67 @@ def _load_mcp_config(
     if error or config is None:
         return config, error
     return config, _mcp_schema_error(config, config_path, mcp_config["config_key"])
+
+
+def _opencode_mcp_generation() -> str:
+    """Return the active OpenCode MCP config generation, defaulting to V1."""
+    generation = detect_opencode_runtime().get("generation")
+    return generation if generation in {"v1", "v2"} else "v1"
+
+
+def _opencode_mcp_schema_error(
+    config: Dict[str, Any], config_path: Path, generation: str
+) -> Optional[str]:
+    """Validate the MCP server container used by the selected OpenCode version."""
+    error = _mcp_schema_error(config, config_path, "mcp")
+    if error:
+        return error
+
+    mcp = config.get("mcp")
+    if not isinstance(mcp, dict):
+        return None
+
+    key = "mcp.servers" if generation == "v2" else "mcp"
+    container = mcp.get("servers") if generation == "v2" else mcp
+    format_name = {
+        ".jsonc": "JSONC",
+        ".toml": "TOML",
+        ".yaml": "YAML",
+        ".yml": "YAML",
+    }.get(config_path.suffix.lower(), "JSON")
+    if generation == "v2" and "servers" in mcp and not isinstance(container, dict):
+        return (
+            f"Invalid {format_name} schema in {config_path}: "
+            f"'{key}' must be an object/mapping"
+        )
+    if isinstance(container, dict) and "ai-guardian" in container:
+        if not isinstance(container["ai-guardian"], dict):
+            return (
+                f"Invalid {format_name} schema in {config_path}: "
+                f"'{key}.ai-guardian' must be an object/mapping"
+            )
+    return None
+
+
+def _remove_opencode_mcp_entries(config: Dict[str, Any]) -> bool:
+    """Remove only AI Guardian's legacy and V2 OpenCode server entries."""
+    mcp = config.get("mcp")
+    if not isinstance(mcp, dict):
+        return False
+
+    changed = "ai-guardian" in mcp
+    mcp.pop("ai-guardian", None)
+
+    servers = mcp.get("servers")
+    if isinstance(servers, dict) and "ai-guardian" in servers:
+        del servers["ai-guardian"]
+        changed = True
+        if not servers:
+            del mcp["servers"]
+
+    if changed and not mcp:
+        del config["mcp"]
+    return changed
 
 
 PI_EXTENSION_NAME = "ai-guardian"
@@ -684,6 +746,9 @@ def verify_mcp_config(
         return base
 
     config, config_error = _load_mcp_config(config_path, mcp_ide)
+    generation = _opencode_mcp_generation() if ide_type == "opencode" else None
+    if config_error is None and config is not None and generation is not None:
+        config_error = _opencode_mcp_schema_error(config, config_path, generation)
     if config_error:
         base["mcp_status"] = "invalid"
         base["mcp_diagnostic"] = config_error
@@ -691,19 +756,30 @@ def verify_mcp_config(
     if config is None:
         return base
 
-    servers = config.get(mcp_ide["config_key"], {})
+    if ide_type == "opencode":
+        mcp = config.get("mcp", {})
+        servers = mcp.get("servers", {}) if generation == "v2" else mcp
+    else:
+        servers = config.get(mcp_ide["config_key"], {})
 
     if not isinstance(servers, dict):
         base["mcp_status"] = "invalid"
-        base["mcp_diagnostic"] = _mcp_schema_error(
-            config, config_path, mcp_ide["config_key"]
+        base["mcp_diagnostic"] = (
+            _opencode_mcp_schema_error(config, config_path, generation)
+            if generation is not None
+            else _mcp_schema_error(config, config_path, mcp_ide["config_key"])
         )
         return base
 
     entry = servers.get("ai-guardian")
     if not isinstance(entry, dict):
         return base
-    if entry.get("enabled") is False:
+    disabled = (
+        entry.get("disabled") is True
+        if generation == "v2"
+        else entry.get("enabled") is False
+    )
+    if disabled:
         base["mcp_status"] = "disabled"
         return base
 
@@ -910,6 +986,7 @@ def _install_mcp_config(
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
         return
+    generation = _opencode_mcp_generation() if ide_type == "opencode" else None
 
     if ide_type == "pi":
         if dry_run:
@@ -974,6 +1051,8 @@ def _install_mcp_config(
 
     # Read or create config file
     config, config_error = _load_mcp_config(config_path, mcp_ide)
+    if config_error is None and config is not None and generation is not None:
+        config_error = _opencode_mcp_schema_error(config, config_path, generation)
     if config_error:
         # Never replace a non-empty user config that cannot be parsed or does
         # not have the host's expected MCP container shape.
@@ -989,20 +1068,30 @@ def _install_mcp_config(
     key = mcp_ide["config_key"]
 
     if ide_type == "opencode":
-        mcp_entry = {
+        mcp_entry: Dict[str, Any] = {
             "type": "local",
             "command": [abs_path, "mcp-server"],
-            "enabled": True,
         }
+        if generation == "v1":
+            mcp_entry["enabled"] = True
     else:
         mcp_entry = dict(_MCP_SERVER_ENTRY)
         mcp_entry["command"] = abs_path
         if ide_type == "cursor":
             mcp_entry["type"] = "stdio"
 
-    if key not in config:
-        config[key] = {}
-    config[key]["ai-guardian"] = mcp_entry
+    if ide_type == "opencode":
+        _remove_opencode_mcp_entries(config)
+        mcp_config = config.setdefault("mcp", {})
+        if generation == "v2":
+            servers = mcp_config.setdefault("servers", {})
+            servers["ai-guardian"] = mcp_entry
+        else:
+            mcp_config["ai-guardian"] = mcp_entry
+    else:
+        if key not in config:
+            config[key] = {}
+        config[key]["ai-guardian"] = mcp_entry
 
     if config == original_config:
         print(f"  MCP: ai-guardian MCP server already configured in {config_path}")
@@ -1255,6 +1344,18 @@ def _remove_mcp_config(
     config, config_error = _load_mcp_config(config_path, mcp_ide)
     if config_error or config is None:
         logger.warning("Failed to read MCP config %s: %s", config_path, config_error)
+        return
+
+    if ide_type == "opencode":
+        if not _remove_opencode_mcp_entries(config):
+            print("  MCP: ai-guardian MCP server not found in config")
+            return
+        if not _backup_before_write(setup, config_path, "MCP removal"):
+            return
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+            f.write("\n")
+        print(f"  MCP: Removed ai-guardian MCP server from {config_path}")
         return
 
     key = mcp_ide["config_key"]

@@ -2270,7 +2270,11 @@ class TestCodexSetup:
         )
         monkeypatch.setenv("OPENCODE_CONFIG", str(config_path))
 
-        result = verify_mcp_config("opencode")
+        with mock.patch(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            return_value={"generation": "v1"},
+        ):
+            result = verify_mcp_config("opencode")
 
         assert result["mcp_installed"] is False
         assert result["mcp_status"] == "disabled"
@@ -5031,6 +5035,14 @@ class TestMcpDefaultOn:
 class TestOpenCodeMcpConfig:
     """Tests for OpenCode MCP config handling (#1377)."""
 
+    @pytest.fixture(autouse=True)
+    def _v1_mcp_runtime(self, monkeypatch):
+        """Keep legacy-shape tests independent of the installed OpenCode CLI."""
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": "v1"},
+        )
+
     @pytest.mark.parametrize(
         "contents, expected",
         [
@@ -5419,6 +5431,159 @@ class TestOpenCodeMcpConfig:
         assert jsonc_path.exists()
         config = json.loads(jsonc_path.read_text())
         assert "ai-guardian" in config["mcp"]
+
+    @pytest.mark.parametrize("generation", ["v1", "v2"])
+    @pytest.mark.parametrize("suffix", [".json", ".jsonc"])
+    @pytest.mark.parametrize("config_env", ["OPENCODE_CONFIG_DIR", "OPENCODE_CONFIG"])
+    def test_setup_selects_generation_and_shared_relocated_config(
+        self, tmp_path, monkeypatch, generation, suffix, config_env
+    ):
+        """Plugin and MCP paths agree for either OpenCode config override."""
+        from ai_guardian.setup.mcp import _install_mcp_config, get_mcp_config_path
+
+        monkeypatch.delenv("OPENCODE_CONFIG_DIR", raising=False)
+        monkeypatch.delenv("OPENCODE_CONFIG", raising=False)
+        if config_env == "OPENCODE_CONFIG_DIR":
+            config_dir = tmp_path / "relocated-opencode"
+            config_path = config_dir / f"opencode{suffix}"
+            monkeypatch.setenv(config_env, str(config_dir))
+        else:
+            config_path = tmp_path / "profile" / f"settings{suffix}"
+            config_dir = config_path.parent
+            monkeypatch.setenv(config_env, str(config_path))
+
+        config_path.parent.mkdir(parents=True)
+        original = {
+            "provider": {"local": {"options": {"keep": True}}},
+            "mcp": {
+                "timeout": {"startup": 1200},
+                "servers": {"other": {"type": "local", "command": ["other"]}},
+                "ai-guardian": {"type": "local", "command": ["old"]},
+            },
+        }
+        raw = json.dumps(original, indent=2).encode("utf-8")
+        if suffix == ".jsonc":
+            raw = b"// Keep this profile comment.\n" + raw
+        config_path.write_bytes(raw)
+
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": generation},
+        )
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp._resolve_binary_path",
+            lambda: "/usr/bin/ai-guardian",
+        )
+        setup = IDESetup()
+
+        assert Path(setup.get_config_path("opencode")) == config_dir / "plugins"
+        assert get_mcp_config_path("opencode") == config_path
+
+        _install_mcp_config(setup, "opencode")
+
+        assert (
+            config_path.with_suffix(config_path.suffix + ".backup").read_bytes() == raw
+        )
+        updated = json.loads(config_path.read_text(encoding="utf-8"))
+        assert updated["provider"] == original["provider"]
+        assert updated["mcp"]["timeout"] == {"startup": 1200}
+        assert updated["mcp"]["servers"]["other"] == original["mcp"]["servers"]["other"]
+        if generation == "v1":
+            assert updated["mcp"]["ai-guardian"] == {
+                "type": "local",
+                "command": ["/usr/bin/ai-guardian", "mcp-server"],
+                "enabled": True,
+            }
+            assert "ai-guardian" not in updated["mcp"]["servers"]
+        else:
+            assert updated["mcp"]["servers"]["ai-guardian"] == {
+                "type": "local",
+                "command": ["/usr/bin/ai-guardian", "mcp-server"],
+            }
+            assert "ai-guardian" not in updated["mcp"]
+
+    @pytest.mark.parametrize(
+        "generation, config_fragment, expected_status",
+        [
+            (
+                "v1",
+                {"ai-guardian": {"type": "local", "enabled": False}},
+                "disabled",
+            ),
+            (
+                "v2",
+                {"servers": {"ai-guardian": {"type": "local"}}},
+                "healthy",
+            ),
+            (
+                "v2",
+                {"servers": {"ai-guardian": {"type": "local", "disabled": True}}},
+                "disabled",
+            ),
+        ],
+    )
+    def test_verification_recognizes_generation_specific_registration(
+        self, tmp_path, monkeypatch, generation, config_fragment, expected_status
+    ):
+        """Doctor's MCP verifier reads the active V1 or V2 server location."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        config_path = tmp_path / "opencode.jsonc"
+        config_path.write_text(
+            "// isolated test profile\n" + json.dumps({"mcp": config_fragment}),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_CONFIG", str(config_path))
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": generation},
+        )
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_status"] == expected_status
+        assert result["mcp_installed"] is (expected_status == "healthy")
+        assert result["mcp_config_path"] == str(config_path)
+
+    @pytest.mark.parametrize("layout", ["legacy", "v2", "both"])
+    def test_removal_cleans_both_shapes_and_preserves_other_servers(
+        self, tmp_path, monkeypatch, layout
+    ):
+        """Uninstall removes owned entries from both OpenCode config generations."""
+        from ai_guardian.setup.mcp import _remove_mcp_config
+
+        config_dir = tmp_path / "relocated-opencode"
+        config_dir.mkdir()
+        config_path = config_dir / "opencode.jsonc"
+        mcp = {
+            "timeout": {"startup": 1200},
+            "servers": {
+                "other": {"type": "local", "command": ["other"]},
+            },
+        }
+        if layout in {"legacy", "both"}:
+            mcp["ai-guardian"] = {"type": "local", "command": ["legacy"]}
+        if layout in {"v2", "both"}:
+            mcp["servers"]["ai-guardian"] = {
+                "type": "local",
+                "command": ["/usr/bin/ai-guardian", "mcp-server"],
+            }
+        raw = b"// Keep profile comment.\n" + json.dumps(
+            {"provider": {"local": {}}, "mcp": mcp}, indent=2
+        ).encode("utf-8")
+        config_path.write_bytes(raw)
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(config_dir))
+        setup = IDESetup()
+
+        _remove_mcp_config(setup, "opencode")
+
+        assert config_path.with_suffix(".jsonc.backup").read_bytes() == raw
+        updated = json.loads(config_path.read_text(encoding="utf-8"))
+        assert updated["provider"] == {"local": {}}
+        assert updated["mcp"] == {
+            "timeout": {"startup": 1200},
+            "servers": {"other": {"type": "local", "command": ["other"]}},
+        }
 
     def test_skip_silently_when_no_config_path(self):
         """IDEs without MCP config path skip silently (no output)."""

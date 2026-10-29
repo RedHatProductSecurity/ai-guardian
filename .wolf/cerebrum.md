@@ -647,8 +647,10 @@
   keep its finite user/project inventory aligned with setup via parity tests.
   Copilot stores managed events at top level; Codex MCP is TOML, and OpenCode V2
   uses `mcp.servers`. Verify surgical edits against the complete parsed document,
-  retain ambiguous sources, and never convert ordinary security denials into
-  cleanup. Empty project arguments must not expand to cwd. Native PowerShell
+  and make versioned-host E2E assertions generation-aware rather than applying
+  one registry key to every version. Retain ambiguous sources, and never convert
+  ordinary security denials into cleanup. Empty project arguments must not expand
+  to cwd. Native PowerShell
   `Write-Error` with Stop throws before a later `exit 2`; use explicit stderr for
   prerequisite diagnostics. Windows backups inherit directory ACLs (0600 is
   POSIX-only). Use separate missing-runtime evidence, not launcher-import tests,

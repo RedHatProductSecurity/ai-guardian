@@ -199,7 +199,9 @@ def _mcp_config_path(ide_type: str) -> Optional[Path]:
     return get_mcp_config_path(ide_type)
 
 
-def _assert_mcp_registration(ide_type: str) -> None:
+def _assert_mcp_registration(
+    ide_type: str, opencode_generation: Optional[str] = None
+) -> None:
     """Verify MCP registration, including the intentional Copilot limitation."""
     spec = _MCP_IDE_CONFIGS[ide_type]
     path = _mcp_config_path(ide_type)
@@ -224,10 +226,33 @@ def _assert_mcp_registration(ide_type: str) -> None:
         config = _load_toml_text(path.read_text(encoding="utf-8"))
     else:
         config = _read_json_config(path)
-    entry = config.get(spec["config_key"], {}).get("ai-guardian")
+
+    if ide_type == "opencode":
+        from ai_guardian.opencode_support import detect_opencode_runtime
+
+        generation = opencode_generation or detect_opencode_runtime().get("generation")
+        if generation not in {"v1", "v2"}:
+            generation = "v1"
+        mcp_config = config.get("mcp", {})
+        assert isinstance(
+            mcp_config, dict
+        ), "opencode/mcp-config: mcp must be an object"
+        servers = mcp_config.get("servers", {}) if generation == "v2" else mcp_config
+        assert isinstance(
+            servers, dict
+        ), f"opencode/mcp-config: {generation} server container must be an object"
+        entry = servers.get("ai-guardian")
+    else:
+        entry = config.get(spec["config_key"], {}).get("ai-guardian")
+
     assert isinstance(entry, dict), f"{ide_type}/mcp-config: entry missing"
     if ide_type == "opencode":
         assert entry.get("command", [None, None])[1:] == ["mcp-server"]
+        if generation == "v2":
+            assert "ai-guardian" not in mcp_config
+            assert "enabled" not in entry
+        else:
+            assert entry.get("enabled") is True
     else:
         assert entry.get("args") == ["mcp-server"]
         assert entry.get("command"), f"{ide_type}/mcp-config: command missing"
@@ -650,7 +675,7 @@ def test_opencode_versioned_plugin_setup(
     setup, verification = _install_and_verify("opencode")
 
     assert verification["opencode_generation"] == generation
-    _assert_mcp_registration("opencode")
+    _assert_mcp_registration("opencode", opencode_generation=generation)
     _assert_plugin_or_extension_bridge(setup, "opencode")
 
     source_path = (

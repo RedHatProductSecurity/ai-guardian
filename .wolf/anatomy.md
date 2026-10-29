@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21348 tok)
-- `CHANGELOG.md` — Change log (~79272 tok)
+- `CHANGELOG.md` — Change log (~79370 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -1373,7 +1373,7 @@
 - `__init__.py` — setup_hooks (~10896 tok)
 - `config.py` — Default configuration creation for ai-guardian. (~7878 tok)
 - `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~48647 tok)
-- `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
+- `mcp.py` — MCP server configuration for ai-guardian setup. (~14796 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
 - `utils.py` — Shared utility functions for ai-guardian setup modules. (~3326 tok)
 

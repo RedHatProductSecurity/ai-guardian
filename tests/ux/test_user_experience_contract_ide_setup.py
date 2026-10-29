@@ -159,6 +159,75 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
     assert "runtime load not verified" in structured_opencode["message"]
 
 
+def test_doctor_recognizes_v2_opencode_mcp_registration(tmp_path, monkeypatch):
+    """
+    USER EXPERIENCE: OpenCode V2 MCP registration -> Doctor reports healthy.
+
+    The V2 server lives under ``mcp.servers`` and is active unless its
+    ``disabled`` field is true. Doctor must read that documented location so a
+    successful setup is not reported as missing MCP.
+    """
+    config_dir = tmp_path / "relocated-opencode"
+    config_dir.mkdir()
+    config_path = config_dir / "opencode.jsonc"
+    config_path.write_text(
+        "// Isolated V2 profile\n"
+        + json.dumps(
+            {
+                "mcp": {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["/usr/bin/ai-guardian", "mcp-server"],
+                        },
+                        "other": {
+                            "type": "local",
+                            "command": ["other-mcp"],
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(config_dir))
+
+    with (
+        patch(
+            "ai_guardian.setup.IDESetup.list_detected_ides",
+            return_value=["opencode"],
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.get_config_path",
+            return_value=str(config_dir / "plugins"),
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.check_hooks_for_ide",
+            return_value=(True, "OpenCode: plugin files configured"),
+        ),
+        patch(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            return_value={"version": "2.0.22", "generation": "v2"},
+        ),
+        patch.object(
+            Doctor,
+            "_detect_cli_runtime",
+            return_value={
+                "executable": "opencode",
+                "version": "2.0.22",
+                "generation": "v2",
+            },
+        ),
+    ):
+        result = Doctor().check_hooks()
+
+    assert result.status == CheckStatus.PASS
+    assert "OpenCode: plugin files configured; MCP: healthy" in result.message
+    opencode = next(item for item in result.integrations if item["ide"] == "opencode")
+    assert opencode["verification"]["mcp_status"] == "healthy"
+    assert opencode["verification"]["mcp_config_path"] == str(config_path)
+
+
 def test_console_health_uses_the_running_local_daemon_runtime():
     """
     USER EXPERIENCE: Tray Console -> health reflects the selected daemon.
