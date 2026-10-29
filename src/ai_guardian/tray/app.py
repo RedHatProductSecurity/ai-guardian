@@ -608,13 +608,19 @@ class DaemonTray:
             pystray.MenuItem("Restart", self._on_restart_tray),
             pystray.MenuItem("Quit", self._on_quit),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(
-                "Contact supports — local tray host",
-                lambda icon, _item: tray_menu.launch_support(
-                    **self._menu._screen_bounds_kwargs(
-                        self._menu._capture_tray_screen_bounds(icon)
+            *(
+                [
+                    pystray.MenuItem(
+                        "Contact supports — local tray host",
+                        lambda icon, _item: tray_menu.launch_support(
+                            **self._menu._screen_bounds_kwargs(
+                                self._menu._capture_tray_screen_bounds(icon)
+                            )
+                        ),
                     )
-                ),
+                ]
+                if not self._targets
+                else []
             ),
             pystray.MenuItem(
                 tray_menu.about_label,

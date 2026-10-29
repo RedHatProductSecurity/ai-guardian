@@ -1,8 +1,12 @@
 """Public support UX contracts. Never read personal config or publish live data.
 
 Manual desktop verification:
-0. Choose Contact supports — local tray host immediately above About, including with no running daemon.
-   It opens a native modal, never a shell; it must not auto-submit.
+0. With no daemon targets, choose Contact supports — local tray host immediately
+   above About. It opens a native modal, never a shell; it must not auto-submit.
+   With one daemon, the flat menu has one Contact supports daemon action and no
+   local-host duplicate. With multiple daemons, each daemon submenu has exactly
+   one Contact supports action and the root menu has no local-host action. When a
+   local daemon is alongside another target, its submenu also retains Maintenance.
    When GitHub is the configured/default destination, the first screen has a
    read-only Destination dropdown: Create ZIP only (default), Gist + Discussion.
    Changing it does not advance. Click Next for the selected review page, or Cancel.
@@ -55,8 +59,7 @@ Manual desktop verification:
 Headless, authentication/category failures, changed files, and uncertain results
 must never silently publish or switch destinations.
 
-8. With two remote daemons, choose Contact supports in one daemon's submenu.
-   With one daemon, use Contact supports — <name> (daemon), not the local-host action.
+8. With multiple daemons, choose Contact supports in each daemon's submenu.
    Check Source during preparation, destination selection, file review, upload,
    publication and result. Reorder/refresh/remove targets while preparing: never
    switch source. View daemon-source.json for sanitized provenance and omissions.
@@ -122,6 +125,95 @@ def support(monkeypatch, tmp_path, support_github_transport):
     support_github_transport(client)
     monkeypatch.setattr(gh, "GitHubClient", lambda: client)
     return root, bundle, client
+
+
+@pytest.mark.parametrize(
+    "runtimes",
+    [[], ["local"], ["manual"], ["local", "manual"]],
+)
+def test_tray_support_menu_has_one_action_per_daemon_target(monkeypatch, runtimes):
+    """USER EXPERIENCE: support actions follow the daemon menu scope."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.tray import app, menu_builder, plugin_runner
+    from ai_guardian.tray.plugins import _load_bundled_plugins, plugins_to_dict
+    from tests.fixtures.ssh_tray import PYSTRAY, make_tray, visible
+
+    targets = [
+        DaemonTarget(
+            "Local" if runtime == "local" else f"Target {index}",
+            runtime,
+            status="running",
+        )
+        for index, runtime in enumerate(runtimes, start=1)
+    ]
+    tray = make_tray(targets)
+    tray._stopped_container_targets = []
+    tray._get_stats.return_value = {}
+    tray._multi_client.get_status.return_value = {}
+
+    if any(target.runtime == "local" for target in targets):
+        tray._multi_client._local_plugins.return_value = plugins_to_dict(
+            _load_bundled_plugins()
+        )
+        tray._multi_client.get_plugins.return_value = None
+        monkeypatch.setattr(tray._plugins, "_get_daemon_menu_tags", lambda _target: [])
+        tray._plugins._poll_plugins()
+
+    for owner, method in (
+        (tray, "_build_ssh_menu_items"),
+        (tray._menu, "_build_openshell_middleware_menu_items"),
+        (tray._menu, "_build_sandbox_create_menu_items"),
+        (tray._menu, "_build_sandbox_start_menu_items"),
+        (tray._menu, "_build_ide_setup_menu_items"),
+        (tray._plugins, "_build_global_plugin_items"),
+    ):
+        monkeypatch.setattr(owner, method, lambda: [])
+
+    monkeypatch.setattr(app, "pystray", PYSTRAY)
+    monkeypatch.setattr(menu_builder, "pystray", PYSTRAY)
+    monkeypatch.setattr(plugin_runner, "pystray", PYSTRAY)
+    root = visible(tray._build_tray_menu())
+    host_actions = [
+        item for item in root if item.text == "Contact supports — local tray host"
+    ]
+
+    if not targets:
+        assert len(host_actions) == 1
+        return
+
+    assert host_actions == []
+    if len(targets) == 1:
+        target_actions = [
+            item
+            for item in root
+            if isinstance(item.text, str) and item.text.startswith("Contact supports")
+        ]
+        assert [item.text for item in target_actions] == [
+            f"Contact supports — {targets[0].name} (daemon)"
+        ]
+        return
+
+    daemon_menus = [
+        item.submenu
+        for item in root
+        if item.submenu
+        and any(child.text == "Contact supports" for child in visible(item.submenu))
+    ]
+    assert len(daemon_menus) == len(targets)
+    assert all(
+        sum(child.text == "Contact supports" for child in visible(daemon_menu)) == 1
+        for daemon_menu in daemon_menus
+    )
+    local_menus = [
+        daemon_menu
+        for daemon_menu in daemon_menus
+        if any(child.label == "Maintenance" for child in visible(daemon_menu))
+    ]
+    assert len(local_menus) == 1
+    maintenance = next(
+        child for child in visible(local_menus[0]) if child.label == "Maintenance"
+    )
+    assert any(child.label == "Stop Daemon" for child in visible(maintenance.submenu))
 
 
 @pytest.mark.parametrize("source", ["local", "daemon"])

@@ -30,11 +30,13 @@
   disabled by default, with explicit human opt-in; do not infer vault/account
   database access authorization from discussion of possible providers.
 
-- **Per-daemon support (#2597):** Keep an independently available local tray-host
-  action and add source-bound Contact supports actions for each connected daemon.
-  Remote diagnostics use the source environment, while destination choice,
-  per-file review, ZIP export and both public consent stages stay on the desktop.
-  This supersedes the earlier local-only tray-support scope, not its safety rules.
+- **Per-daemon support (#2597/#2614):** Keep the local tray-host Contact supports
+  action only when no daemon targets are discovered. With targets present, show
+  exactly one source-bound action in each daemon menu (including the local daemon)
+  and no duplicate root host action. Remote diagnostics use the source environment,
+  while destination choice, per-file review, ZIP export and both public consent
+  stages stay on the desktop. The local daemon retains its bundled Maintenance
+  submenu in multi-daemon mode.
 
 - Tray target ordering: keep local daemons first, then sort all other displayed
   daemon names alphabetically ignoring case. An empty SSH alias `(0)` indicator

@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21248 tok)
-- `CHANGELOG.md` — Change log (~78939 tok)
+- `CHANGELOG.md` — Change log (~79036 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -1423,7 +1423,7 @@
 
 - `__init__.py` — System tray UI and daemon client. (~12 tok)
 - `animation.py` — Declares TrayIconManager (~1492 tok)
-- `app.py` — URL configuration (~20116 tok)
+- `app.py` — URL configuration (~20170 tok)
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~2697 tok)
 - `health.py` — URL configuration (~17205 tok)
 - `icons.py` — URL configuration (~1302 tok)
