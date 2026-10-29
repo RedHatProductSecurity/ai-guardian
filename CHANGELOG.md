@@ -226,6 +226,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **OpenCode blocked first prompt (#2615):** For the reporter-confirmed V2
+  generation, replace the blocked prompt draft with a fixed refusal notice, clear
+  attachments and agent/skill selections, and complete safe prompt admission
+  instead of throwing. This keeps the safe turn in the requested session without
+  admitting the original content; V2 may run the model on the fixed notice. Also
+  replace blocked V1 prompt parts instead of leaving an empty turn. Add executable
+  first-block, safe-follow-up, and later-block coverage plus V1/V2 UX contracts.
+  The reporter's exact OpenCode patch version and OS remain unknown.
 - **Tray daemon menu support actions (#2614):** Keep bundled Maintenance available
   in a local daemon submenu alongside other targets. Show Contact supports once per
   daemon without a duplicate root-level host action; retain the standalone host

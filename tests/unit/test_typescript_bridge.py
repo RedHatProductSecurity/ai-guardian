@@ -373,7 +373,36 @@ def _write_opencode_plugin_runtime(tmp_path):
     )
     (bridge_dir / "ai-guardian-bridge.ts").write_text(
         """export function createGuardianBridge() {
-  return { run(data) { globalThis.guardianCalls.push(data); return { blocked: false }; } };
+  return { run(data) {
+    globalThis.guardianCalls.push(data);
+    return globalThis.guardianResponses?.shift() ?? { blocked: false };
+  } };
+}
+""",
+        encoding="utf-8",
+    )
+
+
+def _write_opencode_v1_plugin_runtime(tmp_path):
+    """Load the generated V1 plugin with a recording, non-scanning bridge."""
+    (tmp_path / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
+    plugin_dir = tmp_path / "ai-guardian-plugin"
+    plugin_dir.mkdir()
+    bridge_dir = tmp_path / "ai-guardian"
+    bridge_dir.mkdir()
+    (plugin_dir / "index.ts").write_text(
+        _OPENCODE_PLUGIN_TS.replace(
+            "'../ai-guardian/ai-guardian-bridge'",
+            "'../ai-guardian/ai-guardian-bridge.ts'",
+        ),
+        encoding="utf-8",
+    )
+    (bridge_dir / "ai-guardian-bridge.ts").write_text(
+        """export function createGuardianBridge() {
+  return { run(data) {
+    globalThis.guardianCalls.push(data);
+    return globalThis.guardianResponses.shift() ?? { blocked: false };
+  } };
 }
 """,
         encoding="utf-8",
@@ -445,6 +474,172 @@ console.log(JSON.stringify({ calls: globalThis.guardianCalls, aborted: subscript
     assert result["aborted"] is True
     assert all(call["session_title"] == "Native title" for call in result["calls"][:2])
     assert all("session_title" not in call for call in result["calls"][2:])
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_v1_first_and_later_blocks_preserve_only_safe_prompt_content(tmp_path):
+    """Execute the V1 hook for a new session, safe follow-up, and later block."""
+    _write_opencode_v1_plugin_runtime(tmp_path)
+    runner = tmp_path / "run-v1-prompts.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import { AiGuardian } from './ai-guardian-plugin/index.ts';
+globalThis.guardianCalls = [];
+globalThis.guardianResponses = [
+  { blocked: true, error: 'private scanner detail' },
+  { blocked: false },
+  { blocked: true, error: 'private scanner detail' },
+];
+const toasts = [];
+const plugin = await AiGuardian({
+  directory: process.cwd(),
+  client: { tui: { showToast: async ({ body }) => toasts.push(body) } },
+});
+const sessionID = 'new-session';
+const refusal = 'AI Guardian refused the previous prompt. The original prompt was not sent to the model. Do not answer or continue that request. Ask the user to provide a new prompt without the sensitive or blocked content.';
+const parts = (messageID, text) => [
+  { id: `text-${messageID}`, sessionID, messageID, type: 'text', text },
+  { id: `file-${messageID}`, sessionID, messageID, type: 'file', mime: 'image/png', filename: 'fixture.png', url: 'file:///tmp/fixture.png' },
+];
+const firstText = 'blocked test input marker';
+const first = { parts: parts('first', firstText) };
+await plugin['chat.message']({ sessionID, messageID: 'first' }, first);
+assert.deepEqual(first.parts, [{
+  id: 'text-first', sessionID, messageID: 'first', type: 'text',
+  text: refusal, synthetic: true,
+}]);
+assert.equal(JSON.stringify(first.parts).includes(firstText), false);
+assert.equal(JSON.stringify(first.parts).includes('fixture.png'), false);
+assert.equal(JSON.stringify(first.parts).includes('private scanner detail'), false);
+assert.equal(first.parts[0].sessionID, sessionID);
+
+const safeText = 'safe follow-up prompt';
+const safe = { parts: [{ id: 'text-safe', sessionID, messageID: 'safe', type: 'text', text: safeText }] };
+await plugin['chat.message']({ sessionID, messageID: 'safe' }, safe);
+assert.equal(safe.parts[0].text, safeText);
+
+const laterText = 'later blocked test input marker';
+const later = { parts: parts('later', laterText) };
+await plugin['chat.message']({ sessionID, messageID: 'later' }, later);
+assert.deepEqual(later.parts, [{
+  id: 'text-later', sessionID, messageID: 'later', type: 'text',
+  text: refusal, synthetic: true,
+}]);
+assert.equal(JSON.stringify([first, later, toasts]).includes(firstText), false);
+assert.equal(JSON.stringify([first, later, toasts]).includes(laterText), false);
+assert.equal(JSON.stringify(toasts).includes('private scanner detail'), false);
+assert.equal(toasts.length, 2);
+assert.ok(toasts.every(toast => toast.message.includes('fixed refusal notice')));
+assert.deepEqual(globalThis.guardianCalls.map(call => call.prompt), [firstText, safeText, laterText]);
+assert.ok(globalThis.guardianCalls.every(call => call.session_id === sessionID));
+console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, toasts: toasts.length }));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"calls": 3, "toasts": 2}
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_v2_first_and_later_blocks_admit_only_safe_notice(tmp_path):
+    """Execute V2 prompt refusal and safe follow-up through the generated plugin."""
+    _write_opencode_plugin_runtime(tmp_path)
+    runner = tmp_path / "run-v2-prompts.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import plugin from './ai-guardian-plugin/index.ts';
+globalThis.guardianCalls = [];
+globalThis.guardianResponses = [
+  { blocked: true, error: 'private scanner detail' },
+  { blocked: false },
+  { blocked: true, error: 'private scanner detail' },
+];
+const hooks = {};
+const syntheticMessages = [];
+const sessionID = 'new-session';
+const cleanup = await plugin.setup({
+  location: { directory: process.cwd() },
+  app: { version: '2.0.22' },
+  session: {
+    hook: async (name, handler) => { hooks[name] = handler; },
+    get: async () => ({ title: 'New session' }),
+    synthetic: async message => syntheticMessages.push(message),
+  },
+  tool: { hook: async (name, handler) => { hooks[name] = handler; } },
+  event: { async *subscribe() {} },
+});
+const makeEvent = (messageID, text) => ({
+  sessionID,
+  messageID,
+  prompt: {
+    text,
+    files: [{ uri: `file:///sensitive-location/${messageID}`, name: `blocked-file-${messageID}` }],
+    agents: [{ name: `private-agent-${messageID}` }],
+    skills: [{ id: `private-skill-${messageID}` }],
+  },
+});
+const submit = async (messageID, text) => {
+  const event = makeEvent(messageID, text);
+  await hooks.prompt(event);
+  return event;
+};
+const firstText = 'blocked test input marker';
+const safeText = 'safe follow-up prompt';
+const laterText = 'later blocked test input marker';
+const first = await submit('first', firstText);
+const safe = await submit('safe', safeText);
+const later = await submit('later', laterText);
+const refusal = 'AI Guardian refused the previous prompt. The original prompt was not sent to the model. Do not answer or continue that request. Ask the user to provide a new prompt without the sensitive or blocked content.';
+const safePrompt = { ...makeEvent('safe', safeText).prompt };
+for (const event of [first, later]) {
+  assert.deepEqual(event.prompt, {
+    text: refusal,
+    files: [],
+    agents: [],
+    skills: [],
+  });
+}
+assert.deepEqual(safe.prompt, safePrompt);
+assert.ok([first, safe, later].every(event => event.sessionID === sessionID));
+assert.deepEqual([first.messageID, safe.messageID, later.messageID], ['first', 'safe', 'later']);
+assert.equal(JSON.stringify([first.prompt, later.prompt]).includes(firstText), false);
+assert.equal(JSON.stringify([first.prompt, later.prompt]).includes(laterText), false);
+assert.equal(JSON.stringify([first.prompt, later.prompt]).includes('sensitive-location'), false);
+assert.equal(JSON.stringify([first.prompt, later.prompt]).includes('private-agent'), false);
+assert.equal(JSON.stringify([first.prompt, later.prompt]).includes('private-skill'), false);
+assert.equal(JSON.stringify([first, later]).includes('private scanner detail'), false);
+assert.deepEqual(syntheticMessages, []);
+assert.deepEqual(globalThis.guardianCalls.map(call => call.prompt), [firstText, safeText, laterText]);
+assert.ok(globalThis.guardianCalls.every(call => call.session_id === sessionID));
+cleanup();
+console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, syntheticMessages: syntheticMessages.length }));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"calls": 3, "syntheticMessages": 0}
 
 
 @pytest.mark.skipif(

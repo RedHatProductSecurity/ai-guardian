@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21248 tok)
-- `CHANGELOG.md` — Change log (~79036 tok)
+- `CHANGELOG.md` — Change log (~79193 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -924,7 +924,7 @@
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9506 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3542 tok)
-- `OPENCODE.md` — OpenCode Support (~2173 tok)
+- `OPENCODE.md` — OpenCode Support (~2479 tok)
 - `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~8431 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
@@ -1382,8 +1382,8 @@
 - `ai-guardian-bridge.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~1154 tok)
 - `aiderdesk-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~928 tok)
 - `openclaw-plugin.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~470 tok)
-- `opencode-plugin-v1.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~870 tok)
-- `opencode-plugin-v2.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~2613 tok)
+- `opencode-plugin-v1.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~1106 tok)
+- `opencode-plugin-v2.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~2660 tok)
 - `pi-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~3203 tok)
 
 ## src/ai_guardian/skills/
