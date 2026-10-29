@@ -226,6 +226,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **Tray daemon menu support actions (#2614):** Keep bundled Maintenance available
+  in a local daemon submenu alongside other targets. Show Contact supports once per
+  daemon without a duplicate root-level host action; retain the standalone host
+  action when no daemon targets exist. Add unit and UX coverage for zero, single,
+  and multiple targets, including local-plus-remote menus.
 - **Support project-config path validation (#2597 / PR #2600):** Route local and
   daemon project diagnostic reads through the shared regular-file reader, reject
   file/directory symlinks and hard links, and validate normalized absolute path

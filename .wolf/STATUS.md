@@ -9,6 +9,35 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2614 session initialization — 2026-10-28
+
+- Initialized managed DAF `open` session `RedHatProductSecurity-ai-guardian-2614`
+  in the real workspace on existing branch `2614`; the worktree is clean. Read
+  the repository-qualified GitHub issue exactly once. No temporary-clone sync is
+  applicable, and the DAF-managed OpenCode title was left unchanged.
+- Acceptance criteria: preserve the local daemon's Maintenance submenu in
+  multi-daemon mode; show exactly one Contact supports entry per daemon and no
+  duplicate root-level local-host entry when daemon targets exist; retain one
+  Contact supports entry in the single-daemon flat menu and the standalone host
+  action when there are no daemon targets; cover zero, one, and multiple targets
+  (including local plus another daemon) in unit and UX regression tests.
+- DAF config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  files and skills are absent. `daf assets --dry-run` reported no changes. Loaded
+  DAF workflow and OpenWolf guidance plus project instructions. No applicable
+  additional project skill was found.
+- Implemented the menu fix in `src/ai_guardian/tray/app.py`: the standalone
+  local-host support action is present only when no daemon targets exist. Added
+  zero/single/multiple-target unit and UX coverage, including exactly one support
+  action in each daemon menu and bundled Maintenance under the local submenu.
+  Updated the complete support UX manual contract, CHANGELOG and this handoff.
+- **Validation:** 763 related tray unit tests and the complete support UX contract
+  (56 tests) pass. Ruff, Black (Python 3.10 target), error-level Pylint and Mypy
+  pass across their configured project scopes. The initial regression reproduced
+  the duplicate root action for every non-empty target set; the fix passes all
+  target-count cases. No live tray/runtime/configuration changes were made.
+- Acceptance criteria are met locally. Changes remain uncommitted on branch `2614`;
+  no PR or issue closure was performed. Ready for review and external DAF completion.
+
 ## OpenCode pasted-credential diagnostic — 2026-10-28
 
 - User asked why a pasted credential-like assignment reached the model. Initial

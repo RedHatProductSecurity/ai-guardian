@@ -1,4 +1,4 @@
-"""Global tray support entry: native review, never a shell or direct send."""
+"""Tray support entries: native review, never a shell or direct send."""
 
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -50,7 +50,7 @@ def test_support_launcher_reports_missing_desktop_without_sending(monkeypatch):
         ],
     ],
 )
-def test_support_entry_is_global_without_daemon_or_mcp_dependency(monkeypatch, targets):
+def test_host_support_entry_is_only_shown_without_daemon_targets(monkeypatch, targets):
     class Menu(list):
         SEPARATOR = object()
 
@@ -91,6 +91,12 @@ def test_support_entry_is_global_without_daemon_or_mcp_dependency(monkeypatch, t
         for entry in rendered
         if getattr(entry, "text", None) == "Contact supports — local tray host"
     ]
+    if targets:
+        assert support == []
+        launch.assert_not_called()
+        daemon.assert_not_called()
+        return
+
     assert len(support) == 1
     assert support[0].enabled is True
     labels = [getattr(entry, "text", None) for entry in rendered]
@@ -129,11 +135,22 @@ def test_target_support_is_present_in_flat_and_nested_menus_and_never_retargets(
     if runtime == "ssh" or multi:
         rendered = build(tray)
         if multi:
-            rendered = visible(rendered)[0].submenu
+            daemon_menus = [entry.submenu for entry in visible(rendered)]
+            assert len(daemon_menus) == 2
+            for daemon_menu in daemon_menus:
+                assert (
+                    sum(
+                        entry.label == "Contact supports"
+                        for entry in visible(daemon_menu)
+                    )
+                    == 1
+                )
+            rendered = daemon_menus[0]
     else:
         monkeypatch.setattr(menu_builder, "pystray", PYSTRAY)
         rendered = Menu(*tray._menu._build_single_daemon_menu_items())
     label = "Contact supports" if multi else "Contact supports — chosen (daemon)"
+    assert sum(entry.label == label for entry in visible(rendered)) == 1
     action = find(rendered, label)
     launch = Mock()
     monkeypatch.setattr(menu, "launch_support", launch)
@@ -152,6 +169,29 @@ def test_target_support_is_present_in_flat_and_nested_menus_and_never_retargets(
     )
     assert launch.call_args.kwargs["client"] is tray._multi_client
     tray._check_and_autostart_daemon.assert_not_called()
+
+
+def test_local_daemon_keeps_bundled_maintenance_menu_in_multi_daemon_mode(
+    monkeypatch,
+):
+    from ai_guardian.tray.plugins import _load_bundled_plugins, plugins_to_dict
+    from tests.fixtures.ssh_tray import build, find, make_tray, visible
+
+    local = DaemonTarget("local", "local", status="running")
+    remote = DaemonTarget("remote", "manual", status="running")
+    tray = make_tray([local, remote])
+    tray._multi_client._local_plugins.return_value = plugins_to_dict(
+        _load_bundled_plugins()
+    )
+    tray._multi_client.get_plugins.return_value = None
+    monkeypatch.setattr(tray._plugins, "_get_daemon_menu_tags", lambda _target: [])
+    tray._plugins._poll_plugins()
+
+    local_menu = visible(build(tray))[0].submenu
+    maintenance = find(local_menu, "Maintenance")
+
+    assert find(maintenance.submenu, "Stop Daemon")
+    assert find(maintenance.submenu, "Restart Daemon")
 
 
 def test_remote_launcher_captures_tunnel_before_async_completion(monkeypatch):
