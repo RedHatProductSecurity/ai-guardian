@@ -19,6 +19,24 @@ V2 are both installed under different executable names, the version resolved as
 | V1 | `opencode-ai` 1.x | `@opencode-ai/plugin` import | `plugin` | `tool.execute.before`, `chat.message`, `tool.execute.after`, `session.end` |
 | V2 | `@opencode/cli` 2.x | Local auto-discovery; direct `{ id, setup }` export | None for this local plugin | `ctx.session.hook("prompt")`, `ctx.tool.hook("execute.before")`, `ctx.tool.hook("execute.after")`, session events |
 
+The V1 plugin replaces every blocked prompt part with one fixed synthetic
+refusal notice, retaining only the required part/session/message identifiers.
+This avoids an empty turn, removes original text and attachments before model
+submission, and lets a safe follow-up remain in the same session. V1 cannot skip
+the assistant turn, so OpenCode may process the fixed notice and produce a brief
+response; the toast explains the substitution.
+
+The issue reporter confirmed the affected generation is V2 (2.x); the exact patch
+version and OS are still unknown. In the previous V2 handler, a block added a
+synthetic notice and threw from prompt admission. V2's admission hook has no typed
+denial result, so this failed-admission path is consistent with the reported
+first-prompt session switch, but still needs live-host confirmation. The generated
+V2 plugin now replaces the mutable prompt draft with the fixed refusal notice,
+clears file attachments, agent mentions, and skills, and lets the safe input be
+admitted into the requested session. The original prompt data is not persisted or
+sent to the model. V2 may run the model on the fixed notice and produce a generic
+response; it no longer adds a duplicate synthetic entry or rejects admission.
+
 The V2 plugin deliberately omits the documented `@opencode/plugin` import.
 OpenCode V2 server builds have been reported to fail resolving that scoped
 package from local plugin files, while accepting a plain default-exported
@@ -54,14 +72,13 @@ the tool's side effects cannot be undone. Both notices avoid tool arguments and
 result contents. OpenCode receives a fixed tool error immediately, and the
 synthetic transcript notice is available as context on the next model turn.
 
-When the V2 prompt hook blocks a prompt, it adds a fixed AI Guardian refusal
-notice to the session transcript as a synthetic entry with `resume: false`,
-then rejects the original prompt. OpenCode records the notice as synthetic
-user-role input rather than a generated assistant answer. The next model turn
-sees that the request was refused; the original prompt and detection details
-are not included. OpenCode V2 does not expose a typed prompt-denial result, so
-it may still display its generic failed-send notification for the rejected
-prompt.
+When the V2 prompt hook blocks a prompt, it replaces the prompt draft with a
+fixed AI Guardian refusal notice and clears file attachments, agent mentions,
+and selected skills. This avoids a failed admission and keeps the safe turn in
+the requested session; the original prompt and detection details are not admitted.
+V2 does not expose a typed prompt-denial result, so the model may run on the fixed
+notice and produce a generic response. The notice is the admitted user input, not
+a separate synthetic transcript entry.
 
 The shared bridge remains outside the direct plugin discovery directory:
 

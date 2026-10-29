@@ -4,6 +4,8 @@ import type { Plugin } from '@opencode-ai/plugin';
 import { createGuardianBridge } from '../ai-guardian/ai-guardian-bridge';
 
 const guardian = createGuardianBridge({ ideType: 'opencode' });
+const PROMPT_REFUSAL_NOTICE =
+  'AI Guardian refused the previous prompt. The original prompt was not sent to the model. Do not answer or continue that request. Ask the user to provide a new prompt without the sensitive or blocked content.';
 
 export const AiGuardian: Plugin = async (ctx) => {
   const cwd = ctx.directory || process.cwd();
@@ -43,13 +45,24 @@ export const AiGuardian: Plugin = async (ctx) => {
       };
       const result = guardian.run(hookData);
       if (result.blocked) {
-        output.parts.length = 0;
+        const firstPart = output.parts[0];
+        // V1 has no supported prompt-cancel result. Keep a safe, nonempty user
+        // message so OpenCode can retain a newly created session; discard every
+        // original part before the host builds the model request.
+        output.parts.splice(0, output.parts.length, {
+          id: firstPart.id,
+          sessionID: input.sessionID,
+          messageID: firstPart.messageID,
+          type: 'text',
+          text: PROMPT_REFUSAL_NOTICE,
+          synthetic: true,
+        });
         try {
           await ctx.client.tui.showToast({
             query: { directory: cwd },
             body: {
               title: 'AI Guardian',
-              message: '🛡️ ai-guardian blocked your message because it contained content identified as a secret. Original content was removed and cannot be recovered. Resend without credentials, tokens, or other sensitive values.',
+              message: '🛡️ AI Guardian blocked your message because it contained content identified as a secret. The original content was removed before model submission. A fixed refusal notice was substituted so this OpenCode session stays active. Resend without credentials, tokens, or other sensitive values.',
               variant: 'error',
               duration: 8000,
             },

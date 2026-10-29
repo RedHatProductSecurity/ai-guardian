@@ -17,7 +17,11 @@ from ai_guardian.opencode_support import (
     opencode_generation,
     parse_opencode_version,
 )
-from ai_guardian.setup.hooks import IDESetup, _OPENCODE_PLUGIN_V2_TS
+from ai_guardian.setup.hooks import (
+    IDESetup,
+    _OPENCODE_PLUGIN_TS,
+    _OPENCODE_PLUGIN_V2_TS,
+)
 
 OPENWOLF_PLUGIN_DIR = (
     Path(__file__).resolve().parents[2] / ".opencode" / "plugins" / "openwolf"
@@ -350,8 +354,25 @@ def test_v2_plugin_template_uses_domain_hooks():
     assert "event.result =" in _OPENCODE_PLUGIN_V2_TS
 
 
-def test_v2_prompt_blocks_add_safe_model_visible_refusal_notice():
-    """Blocked prompts add a fixed transcript notice before they are rejected."""
+def test_v1_blocked_prompt_is_replaced_with_a_safe_nonempty_message():
+    """V1 keeps the new session by replacing, not emptying, the blocked turn."""
+    prompt_hook = _OPENCODE_PLUGIN_TS.split("async 'chat.message'", maxsplit=1)[
+        1
+    ].split("async 'tool.execute.after'", maxsplit=1)[0]
+
+    assert "const PROMPT_REFUSAL_NOTICE =" in _OPENCODE_PLUGIN_TS
+    assert "The original prompt was not sent to the model." in _OPENCODE_PLUGIN_TS
+    assert "output.parts.splice(0, output.parts.length, {" in prompt_hook
+    assert "id: firstPart.id" in prompt_hook
+    assert "sessionID: input.sessionID" in prompt_hook
+    assert "messageID: firstPart.messageID" in prompt_hook
+    assert "synthetic: true" in prompt_hook
+    assert "output.parts.length = 0" not in prompt_hook
+    assert "result.error" not in prompt_hook
+
+
+def test_v2_prompt_blocks_replace_all_input_with_a_fixed_safe_notice():
+    """Blocked prompts are replaced before OpenCode admits the user turn."""
     prompt_hook = _OPENCODE_PLUGIN_V2_TS.split(
         "await ctx.session.hook('prompt'", maxsplit=1
     )[1].split("await ctx.tool.hook('execute.before'", maxsplit=1)[0]
@@ -360,10 +381,13 @@ def test_v2_prompt_blocks_add_safe_model_visible_refusal_notice():
     assert "AI Guardian refused the previous prompt." in _OPENCODE_PLUGIN_V2_TS
     assert "The original prompt was not sent to the model." in _OPENCODE_PLUGIN_V2_TS
     assert "Do not answer or continue that request." in _OPENCODE_PLUGIN_V2_TS
-    assert "await recordRefusalNotice(" in prompt_hook
-    assert "event.messageID" in prompt_hook
-    assert "resume: false" in _OPENCODE_PLUGIN_V2_TS
-    assert "throw new Error('Blocked by ai-guardian')" in prompt_hook
+    assert "event.prompt = {" in prompt_hook
+    assert "text: PROMPT_REFUSAL_NOTICE" in prompt_hook
+    assert "files: []" in prompt_hook
+    assert "agents: []" in prompt_hook
+    assert "skills: []" in prompt_hook
+    assert "await recordRefusalNotice(" not in prompt_hook
+    assert "throw new Error('Blocked by ai-guardian')" not in prompt_hook
     assert "result.error" not in prompt_hook
 
 

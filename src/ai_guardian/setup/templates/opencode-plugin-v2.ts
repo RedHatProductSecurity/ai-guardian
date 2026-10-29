@@ -156,13 +156,15 @@ export default {
         prompt,
       }));
       if (result.blocked) {
-        await recordRefusalNotice(
-          event.sessionID,
-          event.messageID,
-          PROMPT_REFUSAL_NOTICE,
-          'prompt-refusal',
-        );
-        throw new Error('Blocked by ai-guardian');
+        // V2 prompt hooks transform admission and expose no typed denial result.
+        // Replace the owned draft so the blocked payload is not admitted, while
+        // allowing a safe turn to be recorded in the requested session.
+        event.prompt = {
+          text: PROMPT_REFUSAL_NOTICE,
+          files: [],
+          agents: [],
+          skills: [],
+        };
       }
     });
 

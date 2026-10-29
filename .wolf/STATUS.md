@@ -5,9 +5,48 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-28 (UTC)
+> Last updated: 2026-10-29 (UTC)
 
 ---
+
+## Issue #2615 implementation — 2026-10-29
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2615` in the real workspace on its existing
+  branch `2615`; the worktree is clean. Read the repository-qualified GitHub
+  issue exactly once. No temporary-clone sync or branch change is applicable.
+- DAF config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  files and skills are absent. `daf assets --dry-run` reported no changes. Read
+  the project handoff/protocol and OpenWolf guidance; no additional relevant
+  OpenCode project skill was found. The native title remains DAF-managed.
+- Reporter confirmed OpenCode V2 (2.x); exact patch version and OS remain
+  unknown. The local CLI is v2.0.22. The V2 source path added a synthetic refusal
+  and then threw from `ctx.session.hook('prompt')`. V2 prompt admission has no
+  typed denial result; this failed-admission path is consistent with the reported
+  session switch but still needs live-host confirmation.
+- Updated V2 to replace the mutable prompt draft with one fixed refusal notice,
+  clear `files`, `agents`, and `skills`, and complete safe admission into the
+  requested session. Original prompt content is not persisted or delivered to the
+  model. V2 may run the model on the safe notice and produce a generic response.
+  Also hardened V1's analogous empty-parts path by replacing every part with a
+  fixed synthetic notice; the toast discloses that V1 may process it.
+- Added executable Node plugin-harness tests for V1 and V2 first blocks, a safe
+  follow-up, and later blocked prompts, plus unit and complete OpenCode self-
+  protection UX contracts. Source review found other generated prompt adapters
+  (Pi, OpenClaw, AiderDesk) use host-specific handled/cancel/blocked return
+  results rather than the V2 transform-hook exception path. No other-agent source
+  was changed or runtime-qualified.
+- **Validation:** 79 related unit/UX tests pass; Ruff, Black (Python 3.10 target),
+  error-level Pylint, project Mypy, `git diff --check`, and buglog JSON validation
+  pass. Runtime plugin harnesses execute both generated templates through first
+  block, safe follow-up, and later block; the V2 harness verifies all prompt
+  payload fields are removed on block and safe prompts stay unchanged. No live
+  OpenCode TUI or other-agent runtime qualification was run.
+- **Pending:** Obtain the reporter's exact OpenCode patch version and OS, then
+  manually verify the new session remains selected and accepts a safe follow-up
+  on that runtime. Keep the ticket open until this host-level behavior is
+  confirmed. Changes are uncommitted on existing branch `2615`; no commit or PR
+  was created.
 
 ## Issue #2614 session initialization — 2026-10-28
 

@@ -1316,7 +1316,18 @@
   so generated hooks must narrow before reading or mutating `result`. Validate
   generated TypeScript against the published declarations, not only string
   contract tests. The local ignored `.opencode/package.json` now carries both
-  the V1 and V2 plugin pins.
+  the V1 and V2 plugin pins. V2 `ctx.session.hook('prompt')` is a transform-only
+  admission hook with no typed denial result; throwing prevents admission. Its
+  owned mutable `event.prompt` draft contains text, files, agent mentions, and
+  skills. When a blocked first prompt must leave a usable turn in the same
+  session, replace the draft with a fixed safe notice and clear every attachment/
+  selection field. OpenCode then admits that safe user input and may run the model
+  on the notice; this is preferable to leaking original data or rejecting the
+  admission, but is not a true model-turn cancellation. Other generated prompt
+  adapters inspected (Pi, OpenClaw, AiderDesk) use host-specific handled/cancel/
+  blocked return values instead of throwing from a transform-only admission hook;
+  this failure mode appears OpenCode-specific, though those agents still need
+  their own runtime qualification for session behavior.
 
 - **OpenShell middleware lifecycle UX:** Do not add an AI Guardian middleware
   lifecycle command. The Rust binary is an external service; OpenShell owns

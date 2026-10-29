@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 import ai_guardian
-from ai_guardian.setup.hooks import _OPENCODE_PLUGIN_V2_TS
+from ai_guardian.setup.hooks import _OPENCODE_PLUGIN_TS, _OPENCODE_PLUGIN_V2_TS
 from ai_guardian.tools.policy import ToolPolicyChecker
 
 
@@ -94,37 +94,94 @@ def test_opencode_safe_file_read_remains_allowed():
     assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
 
 
-def test_opencode_v2_refused_prompt_is_recorded_without_sending_prompt_to_model():
+def test_opencode_v1_blocked_first_prompt_keeps_a_safe_nonempty_session_turn():
     """
-    USER EXPERIENCE: Sensitive prompt -> AI Guardian refusal reaches transcript.
+    USER EXPERIENCE: OpenCode V1 blocked first prompt -> safe refusal, same session.
 
     Scenario:
-    1. The user submits a prompt that AI Guardian blocks.
-    2. The V2 prompt hook records a fixed refusal notice in the transcript.
-    3. OpenCode rejects the original prompt; no blocked text is copied into the
-       notice or passed to the model.
+    1. The user opens a new session while an older session exists.
+    2. The first prompt triggers an AI Guardian block.
+    3. V1's chat.message hook replaces every submitted part with a fixed refusal
+       notice before OpenCode constructs the model request.
+    4. The user submits a safe follow-up, then compares a later blocked prompt.
 
     Expected User Experience:
-    - The transcript identifies AI Guardian as refusing the previous prompt.
-    - OpenCode shows the notice as synthetic user-role input, not an assistant
-      answer, and does not start a model run for it.
-    - The next model turn sees that the prior request was refused and must not
-      continue it.
-    - The refused prompt, detection details, and bridge error are not exposed
-      in the notice.
+    - OpenCode receives a nonempty safe message for the new session rather than
+      an empty prompt that can discard the newly selected session.
+    - The original text, attachments, scanner reason, and other prompt data are
+      absent from the replacement, toast, and refusal text.
+    - A safe follow-up is scanned and remains in that same session.
+    - V1 has no supported prompt-cancel/noReply result, so it may run a model turn
+      on the fixed, non-sensitive refusal notice; the original prompt is withheld.
+
+    Manual verification with OpenCode V1 (1.x):
+    1. Keep an older session available, then create a new session.
+    2. Submit a synthetic test prompt that triggers the configured block.
+    3. Confirm the new session stays selected, the toast explains the refusal,
+       and no original text or attachment reaches the model.
+    4. Submit a safe follow-up and confirm it works in the same session.
+    5. Trigger a later block and compare that the same safe replacement is used.
+    6. Record the exact V1 version when manually validating this compatibility path.
+    """
+    prompt_hook = _OPENCODE_PLUGIN_TS.split("async 'chat.message'", maxsplit=1)[
+        1
+    ].split("async 'tool.execute.after'", maxsplit=1)[0]
+    expected_notice = (
+        "AI Guardian refused the previous prompt. "
+        "The original prompt was not sent to the model. "
+        "Do not answer or continue that request. "
+        "Ask the user to provide a new prompt without the sensitive or blocked content."
+    )
+
+    assert expected_notice in _OPENCODE_PLUGIN_TS
+    assert "output.parts.splice(0, output.parts.length, {" in prompt_hook
+    assert "id: firstPart.id" in prompt_hook
+    assert "sessionID: input.sessionID" in prompt_hook
+    assert "messageID: firstPart.messageID" in prompt_hook
+    assert "synthetic: true" in prompt_hook
+    assert "output.parts.length = 0" not in prompt_hook
+    assert "result.error" not in prompt_hook
+    assert "fixed refusal notice was substituted" in prompt_hook
+
+
+def test_opencode_v2_blocked_prompt_is_replaced_before_admission():
+    """
+    USER EXPERIENCE: Blocked OpenCode V2 prompt -> safe input admitted to same session.
+
+    Scenario:
+    1. An older session exists; the user creates a new V2 session and submits a
+       first prompt that AI Guardian blocks.
+    2. The V2 prompt hook replaces the owned prompt draft with one fixed refusal
+       notice and removes files, agent mentions, and selected skills.
+    3. OpenCode admits only that safe replacement into the requested session; the
+       hook does not throw or add a duplicate synthetic entry.
+    4. The user sends a safe follow-up in that same session, then compares a later
+       blocked prompt.
+
+    Expected User Experience:
+    - The transcript contains the fixed refusal as the admitted user input, not
+      as a separate synthetic entry.
+    - The blocked text, attachments, agent/skill selections, detection details,
+      and bridge error are absent from admitted input.
+    - OpenCode may run the model on the fixed notice and produce a generic
+      response; the original prompt is never processed by the model.
+    - A safe follow-up and any later block remain in the same selected session.
 
     Exact notice:
     "AI Guardian refused the previous prompt. The original prompt was not sent
     to the model. Do not answer or continue that request. Ask the user to
     provide a new prompt without the sensitive or blocked content."
 
-    Manual verification with OpenCode V2:
-    1. Start a session with the generated AI Guardian plugin loaded.
-    2. Submit a test prompt that triggers a configured AI Guardian block.
-    3. Confirm the transcript contains the synthetic refusal notice and the
-       original prompt was not processed by the model.
-    4. Submit a safe follow-up and confirm the model sees the refusal notice,
-       not the blocked text.
+    Manual verification with OpenCode V2 (the reporter confirmed V2; exact patch
+    version and OS are not yet known):
+    1. Keep an older session available and create a new session with the generated
+       AI Guardian plugin loaded.
+    2. Submit a synthetic test prompt that triggers a configured AI Guardian block.
+    3. Confirm the new session remains selected and its user transcript contains
+       only the fixed refusal notice; no original text or attachment is admitted.
+    4. Confirm OpenCode may generate a response to that safe notice, then submit a
+       safe follow-up and verify it stays in the same session.
+    5. Trigger a later block and confirm it does not switch sessions either.
     """
     prompt_hook = _OPENCODE_PLUGIN_V2_TS.split(
         "await ctx.session.hook('prompt'", maxsplit=1
@@ -137,10 +194,13 @@ def test_opencode_v2_refused_prompt_is_recorded_without_sending_prompt_to_model(
     )
 
     assert expected_notice in _OPENCODE_PLUGIN_V2_TS
-    assert "await recordRefusalNotice(" in prompt_hook
-    assert "resume: false" in _OPENCODE_PLUGIN_V2_TS
+    assert "event.prompt = {" in prompt_hook
+    assert "files: []" in prompt_hook
+    assert "agents: []" in prompt_hook
+    assert "skills: []" in prompt_hook
+    assert "await recordRefusalNotice(" not in prompt_hook
     assert "result.error" not in prompt_hook
-    assert "throw new Error('Blocked by ai-guardian')" in prompt_hook
+    assert "throw new Error('Blocked by ai-guardian')" not in prompt_hook
 
 
 def test_opencode_v2_pre_and_post_tool_blocks_reach_transcript_and_model():
