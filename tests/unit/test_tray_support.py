@@ -135,8 +135,19 @@ def test_target_support_is_present_in_flat_and_nested_menus_and_never_retargets(
     if runtime == "ssh" or multi:
         rendered = build(tray)
         if multi:
-            daemon_menus = [entry.submenu for entry in visible(rendered)]
+            daemon_menus = [
+                entry.submenu
+                for entry in visible(rendered)
+                if entry.submenu is not None
+            ]
             assert len(daemon_menus) == 2
+            assert (
+                sum(
+                    entry.label == "Pause..." and entry.submenu is None
+                    for entry in visible(rendered)
+                )
+                == 1
+            )
             for daemon_menu in daemon_menus:
                 assert (
                     sum(

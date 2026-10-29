@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Status-aware tray pause modal (#2620):** Replace nested pause submenus with
+  one **Pause...** action. The modal mirrors the daemon → project directory →
+  hook session hierarchy, with status glyphs and a duration/Resume dropdown
+  at every level. A larger, width-fitting layout wraps long labels so row controls
+  remain visible without horizontal scrolling, explicitly applies initial geometry
+  without monitor context, and keeps detailed help collapsed below the controls.
+  Keep existing durations and pause lifetimes, show inherited
+  pauses explicitly, and refresh the same isolated Tk/NiceGUI window after each
+  action. Closing without an action is non-mutating; failed or stale requests
+  never fall back to a broader scope.
 - **Bundled TOML secret-scanning defaults (#2617):** Align the canonical example
   and schema with the runtime default of built-in `toml-patterns` followed by
   Gitleaks. Keep all built-in profile comments in sync and clarify explicit

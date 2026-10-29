@@ -261,3 +261,86 @@ def run_native_command(
     ):
         raise UIUnavailable("Native display initialization failed")
     return result
+
+
+def run_modal_channel(
+    command: list[str],
+    initial: dict[str, Any],
+    on_event: Callable[[dict[str, Any]], dict[str, Any]],
+) -> None:
+    """Keep an isolated modal alive across explicit actions and status refreshes.
+
+    JSON lines carry display snapshots and narrow user events, not backend
+    objects. The child uses run_modal_child's existing startup-only signal.
+    There is no user-reading deadline; EOF/unknown failures are terminal.
+    """
+    try:
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            bufsize=1,
+            env={
+                **os.environ,
+                "PYTHONIOENCODING": "utf-8",
+                "_AI_GUARDIAN_MODAL_MONITOR": json.dumps(
+                    current_origin(), default=monitor_json_default
+                ),
+            },
+        )
+    except OSError as exc:
+        raise UIUnavailable("Modal process could not start") from exc
+
+    try:
+        if process.stdin is None or process.stdout is None:
+            raise RuntimeError("Modal channel unavailable")
+
+        def respond(snapshot):
+            assert process.stdin is not None
+            process.stdin.write(
+                json.dumps(snapshot, ensure_ascii=False, default=monitor_json_default)
+                + "\n"
+            )
+            process.stdin.flush()
+
+        respond(initial)
+        while True:
+            # Events contain only a row token, action and duration. Bound input
+            # without cropping the complete display snapshot sent to the child.
+            line = process.stdout.readline(65537)
+            if not line or len(line) > 65536:
+                raise RuntimeError("Modal channel ended without completion")
+            if line.strip() == _UNAVAILABLE:
+                raise UIUnavailable("Modal child unavailable before display")
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                # NiceGUI can emit startup information on stdout. Never echo it
+                # into diagnostics or interpret it as permission to act.
+                continue
+            if event is None:
+                return
+            if not isinstance(event, dict):
+                raise RuntimeError("Invalid modal event")
+            mark_modal_displayed()
+            respond(on_event(event))
+    finally:
+        for stream in (process.stdin, process.stdout):
+            if stream is not None:
+                try:
+                    stream.close()
+                except OSError:
+                    pass  # intentionally silent — channel cleanup
+        try:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=3)
+        except OSError:
+            pass  # intentionally silent — child already exited during cleanup

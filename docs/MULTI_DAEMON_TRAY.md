@@ -45,7 +45,6 @@ transports. Discovery refresh preserves that ordering and the selected target.
 ```
 ● local                         >
   Status                        >
-  Pause...                      >
   Terminal
   Console
   Violations
@@ -57,7 +56,6 @@ transports. Discovery refresh preserves that ordering and the selected target.
   About
 ● ssh-my-vm                     >
   Status                        >
-  Pause...                      >
   Terminal
   Console
   Violations
@@ -68,6 +66,7 @@ transports. Discovery refresh preserves that ordering and the selected target.
   Maintenance                   >
   About
   Manage SSH connection...
+Pause...
 ─────────────
 Restart
 Quit
@@ -76,7 +75,8 @@ Contact supports
 About
 ```
 
-- **●** Running daemon — full submenu with Statistics, Pause/Resume, Stop/Restart
+- **●** Running daemon — full submenu with Statistics and Stop/Restart;
+  the shared **Pause...** modal controls pause/resume for every daemon.
 - **○** Offline SSH daemon — cached diagnostics, Terminal and management remain;
   REST-dependent actions are unavailable and **Start daemon** is offered.
 - **⚠●** Running daemon with stale code detected — shows orange dot; local daemons show a **Restart daemon (stale code)** item; remote/container/Kubernetes daemons show a **Rebuild image** hint instead
@@ -384,7 +384,7 @@ and runtime differences:
 |---|---|
 | Status / Statistics | Selected VM's cached counters, pause scopes, version and connection/prompt warnings; menu rendering never starts SSH or requests REST. Offline targets do not present unavailable counters as live data. |
 | Console / Violations / Metrics & Audit | Open the workstation-hosted Console at the selected saved VM's route, never a browser/server on the VM or the workstation daemon's data. REST-backed navigation is disabled while offline. |
-| Pause... | Same global durations, individual sessions and all-sessions-in-directory groups. Requests stay on the selected connection; missing scope support or failed acknowledgement is reported, never broadened. |
+| Pause... (shared root action) | One modal mirrors daemon → project directory → individual session rows, each with its own duration/Resume dropdown. Requests stay on the displayed connection; missing scope support or failed acknowledgement is reported, never broadened. |
 | Terminal | A workstation terminal runs system OpenSSH to the saved destination, retaining host-key checks and alias/jump-host settings. The terminal stays open after SSH exits so login/connection errors remain readable until dismissal. No local shell/container fallback; an unavailable terminal reports failure. |
 | Maintenance | The VM's daemon-scoped plugins, with bundled defaults while remote definitions are unavailable. Stop/Restart/Reload and scanner installation run as the SSH user on that VM. Bundled **View Doctor** opens its workstation Console health page; remote CLI diagnostics are also supported by the SSH transport. Nonzero exit/timeout is not reported as success. |
 | MCP | Installation/enabled state and configured proactive level come from the VM, not workstation settings. If older/main daemons omit the new stats fields, the connection worker reads the existing authenticated `GET /api/config?scope=global` endpoint. Supported level changes write only that VM's global configuration through authenticated REST, which reloads it. A daemon-wide pause changes the displayed effective level, not the saved choice. Only absent/invalid capabilities show unavailable controls; installation remains VM-side setup, not workstation setup. |
@@ -1286,15 +1286,14 @@ By default, all plugins appear on all daemons. Use tags to filter plugins to spe
 
 On Linux, the tray intentionally does not rebuild the native menu every second
 while a daemon is paused. GTK/AppIndicator replaces the menu during an update,
-which can collapse an open nested submenu in KDE before **Resume** can be
-selected. Linux pause labels therefore use a stable paused indicator instead of
-a live countdown; pause/resume visibility still refreshes when the pause state
-changes. macOS keeps the live countdown refresh behavior.
+which can discard a selected action in KDE. Pause/resume now lives in its own
+modal; the daemon header's pause state still refreshes on actual transitions,
+not countdown-only changes. macOS keeps its existing countdown refresh behavior.
 
 AppIndicator popup replacement is deferred until the popup closes and a short
 click-delivery grace period elapses, then renders fresh daemon stats. KDE sends
 the popup's close event before the selected item's click; rebuilding immediately
-can discard that action, including Pause/Resume or About. Rapid reopening keeps
+can discard that action, including **Pause...** or About. Rapid reopening keeps
 the new popup protected from an older close callback.
 Scoped actions and idle polling refresh actual pause/resume
 transitions, expiry, session end, and session/project-list changes; countdown-only
@@ -1302,16 +1301,52 @@ changes do not replace Linux menus. Windows and macOS retain countdown updates.
 
 ### Session and directory pause controls
 
-**Sessions...** lists active hook sessions that have a stable identity from their
+One root **Pause...** action opens a status-aware modal. In the single-daemon
+flat menu it follows **Status**; multi-daemon menus share one root action rather
+than repeating nested controls inside each daemon submenu.
+
+The window mirrors the existing hierarchy, with inline dropdowns at every level:
+
+```text
+◐ workstation (local)                         [Pause for… ▾]
+    ◐ Project: /path/to/project               [Pause for… ▾]
+        ☾ Session: OpenCode: Fix tray labels  [Resume…    ▾]
+        ● Session: Claude Code: Add tests     [Pause for… ▾]
+● remote-vm (ssh)                             [Pause for… ▾]
+    ● Project: /remote/project                [Pause for… ▾]
+```
+
+Choose **5 minutes**, **15 minutes**, **30 minutes**, **1 hour**, or **Until resume**
+from the intended row's dropdown to pause it immediately. A row with its own
+pause offers **Resume** instead; selecting it removes only that row's own pause.
+There is no shared duration selector or separate Pause button.
+A successful action refreshes the
+same window; **Refresh status** reads external changes and expiry without changing
+pause state. Opening the window or a dropdown, Close, or Escape without selecting
+an action sends no pause/resume request. Closing does not undo actions already taken.
+
+The Tk window explicitly applies a **1200 × 820** initial size within the window
+manager's limits, including when no monitor-placement context is available.
+Captured-monitor placement then clamps it to that monitor's usable area.
+Labels wrap to the viewport and dropdowns keep their own visible column;
+no horizontal scrolling is needed to reach an action, including on smaller
+screens. The full hierarchy scrolls vertically, while Close/Refresh remain in a
+reserved footer. A short instruction and legend appear above the
+rows; detailed instructions and session-lifetime notes start collapsed under
+**Show help** (Tk) / **Help** (browser), below the hierarchy. Toggling help changes
+no pause state and opens no replacement window. All discovered daemons appear, including unavailable
+ones with disabled controls. Tk runs in an isolated process; NiceGUI is the
+complete browser fallback. Toolkit preferences and startup-only fallback follow
+the [modal provider policy](MODAL_PROVIDERS.md).
+
+Session rows list active hook sessions that have a stable identity from their
 agent adapter. Entries prefer a human-readable session title, for example
 `OpenCode: Fix tray labels`, and fall back to the session ID, then the stable
 session key when no usable title is known (including older daemons). Titles are
-compact, single-line, display-safe text capped at 80 characters. Identical labels
-receive an eight-character stable-key fingerprint so they remain distinguishable.
-Windows menu text escapes literal ampersands so titles such as `Fix A&B` retain
-the `&` instead of turning it into a keyboard mnemonic. Stored titles and other
-platforms' menu text are unchanged.
-The submenu retains the full session key and project directory; controls always
+compact, single-line, display-safe text capped at 80 characters. Rows retain full
+session keys and project directories, so duplicate titles remain distinguishable.
+Literal ampersands are displayed unchanged in every modal provider.
+Controls always
 target that key, never the title. This works for local, remote, and container
 daemons, so two sessions in the same directory can be paused independently.
 
@@ -1329,43 +1364,45 @@ pauses expire automatically; every session pause is cleared on a SessionEnd
 event, after 24 hours without hook activity, or when the daemon restarts. Session
 pauses are intentionally not persisted across restarts.
 
-The **All sessions in directory...** submenu is the explicit bulk control. It
-combines explicitly paused directories with `active_project_dirs`, which records
+Each **Project** row is the explicit all-sessions-in-directory bulk control. It
+combines explicitly paused directories, session project paths and
+`active_project_dirs`, which records
 recently observed project directories rather than currently open IDE sessions.
 Directory entries remain until the project tracking TTL expires (currently 24
 hours without another request), including while global scanning is paused.
 
-In both single- and multi-daemon layouts, a confirmed session or directory pause
-shows **☾** and a selectable **Resume** on the next menu opening, even immediately
-within the stats-cache window. Resume restores **●** and the duration choices.
-Headers, Status, and scoped controls share the same stats snapshot; no additional
-hook request, unrelated menu interaction, or tray restart is needed.
+After an action, the modal reads authoritative state and updates every level.
+The tray header and **Status** also refresh; no additional hook request,
+unrelated menu interaction or tray restart is needed.
 
 | Indicator | Meaning |
 |-----------|---------|
-| **● Daemon (global)** | No global pause; session/directory pauses may still apply |
-| **☾ Daemon (global)** | Scanning is paused globally |
-| **● / ☾** on a session or directory | That scope's own pause is absent / present |
-| **◐** on a daemon header | Daemon is not globally paused, but at least one session or directory is paused |
+| **●** | Active at the displayed level |
+| **◐** | Partially paused: a daemon has scoped pauses, or a project has individual paused sessions |
+| **☾** | Paused, including an inherited global/directory pause |
+| **○** | Unavailable/offline, unsupported scope, or no known targets |
 
 Resuming a session does not clear a directory or global pause. Resuming a
-directory does not clear individual session or global pauses. Thus a scoped
-**●** is not a promise that effective scanning has resumed; each submenu explains
-that other pause layers may still apply. Directory controls remain the bulk
+directory does not clear individual session or global pauses. Row text explicitly
+identifies inherited pauses. A row paused only by its parent still offers
+pause durations to add its own independent pause, not a misleading Resume that would
+clear the parent. Directory controls remain the bulk
 control for all callers in that project, including those without stable IDs.
 
 Scoped requests require an explicit daemon acknowledgement. An unreachable,
-unsupported, or ended scope produces a failure notification without claiming
+unsupported, or ended scope produces feedback in the same modal without claiming
 success or falling back to a broader scope. Older daemons without session support
 show that limitation while retaining their directory/global controls.
 
 Session controls are offered only for hooks that provide a stable session ID;
 the daemon never guesses an identity from a project directory. Integrations,
 MCP callers, and provider middleware requests without a stable hook identity
-cannot be isolated by session. Use the global control or **All sessions in
-directory...** for those callers. `GET /api/stats` reports `active_sessions` with
-the daemon-issued `session_key` for CLI/API control. The tray pre-allocates 16
-session entries; additional sessions are listed by `ai-guardian daemon status`.
+cannot be isolated by session. Use the daemon or project-directory row for those
+callers. `GET /api/stats` reports `active_sessions` with the daemon-issued
+`session_key` for CLI/API control. The modal shows all reported sessions rather
+than imposing the former 16-entry native-menu slot limit. Displayed row tokens
+are bound to their connection and stable key; stale actions after refresh,
+removal, expiry or SSH reconnect cannot silently retarget another row.
 
 ## Migration from v1.7.x
 

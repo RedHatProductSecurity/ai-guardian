@@ -26,6 +26,8 @@ from ai_guardian.tray.menu_builder import (
     TRAY_OPENSHELL_MODE_CHOICES,
     TrayMenuBuilder,
 )
+from ai_guardian.tray.pause import PauseSnapshot, UNCONFIRMED
+from tests.fixtures.tray_pause import pause_values
 
 
 class FakeMenu:
@@ -44,6 +46,10 @@ class FakeMenuItem:
         self.label = label
         self.action = action
         self.kwargs = kwargs
+
+    @property
+    def submenu(self):
+        return self.action if isinstance(self.action, FakeMenu) else None
 
 
 FAKE_PYSTRAY = SimpleNamespace(Menu=FakeMenu, MenuItem=FakeMenuItem)
@@ -85,14 +91,13 @@ def _make_tray(targets):
 
 class TestSessionPauseLabels:
     @staticmethod
-    def _items(stats, live_countdown=False):
-        pause, resume = mock.Mock(), mock.Mock()
-        tray = SimpleNamespace(_supports_live_pause_countdown=lambda: live_countdown)
-        with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
-            items = TrayMenuBuilder(tray)._build_session_pause_items(
-                lambda _item: stats, pause, resume
-            )
-        return items[2:], pause, resume
+    def _items(stats):
+        tray = SimpleNamespace(
+            _targets=[DaemonTarget("local", "local")],
+            _get_stats=lambda: {"paused": False, **stats},
+            _multi_client=mock.Mock(),
+        )
+        return PauseSnapshot(tray).views[0].scopes["session"]
 
     @pytest.mark.parametrize(
         "title", [None, "", " \n\t ", 42, {}, ["invalid"], "\x00\u202e"]
@@ -105,11 +110,13 @@ class TestSessionPauseLabels:
         if has_id:
             session["session_id"] = "session-id"
         stats = {"active_sessions": [session]}
-        items, _, _ = self._items(stats)
-        expected = "● OpenCode: " + ("session-id" if has_id else "Adapter:session-id")
-        assert items[0].label(None) == expected  # older daemon: no title field
+        items = self._items(stats)
+        expected = "● Session: OpenCode: " + (
+            "session-id" if has_id else "Adapter:session-id"
+        )
+        assert items[0].label.startswith(expected)  # older daemon: no title field
         session["session_title"] = title
-        assert items[0].label(None) == expected
+        assert self._items(stats)[0].label.startswith(expected)
 
     def test_names_refresh_and_pause_indicators_are_unchanged(self):
         session = {
@@ -121,15 +128,18 @@ class TestSessionPauseLabels:
             "pause_remaining_seconds": 75,
         }
         stats = {"active_sessions": [session]}
-        items, _, _ = self._items(stats, live_countdown=True)
-        assert items[0].label(None) == "☾ OpenCode: Fix tray labels (1m 15s)"
+        items = self._items(stats)
+        assert items[0].label.startswith("☾ Session: OpenCode: Fix tray labels")
+        assert "1m 15s left" in items[0].label
         session["session_title"] = "x" * 1000
-        assert items[0].label(None) == "☾ OpenCode: " + "x" * 77 + "... (1m 15s)"
-        items, _, _ = self._items(stats, live_countdown=False)
-        assert items[0].label(None) == "☾ OpenCode: " + "x" * 77 + "..."
+        assert self._items(stats)[0].label.startswith(
+            "☾ Session: OpenCode: " + "x" * 77 + "..."
+        )
         session["session_title"] = "Renamed session"
         session["paused"] = False
-        assert items[0].label(None) == "● OpenCode: Renamed session"
+        assert self._items(stats)[0].label.startswith(
+            "● Session: OpenCode: Renamed session"
+        )
 
     @pytest.mark.parametrize("title", ["Shared name", "x" * 1000])
     def test_colliding_names_keep_distinct_labels_and_stable_control_keys(self, title):
@@ -144,39 +154,24 @@ class TestSessionPauseLabels:
             }
             for index in range(2)
         ]
-        items, pause, resume = self._items({"active_sessions": sessions})
-        labels = [item.label(None) for item in items[:2]]
+        items = self._items({"active_sessions": sessions})
+        labels = [item.label for item in items[:2]]
         assert labels[0] != labels[1]
-        assert all(label.endswith("]") for label in labels)
-        assert all(len(label) <= len("● OpenCode: ") + 80 + 11 for label in labels)
         for index, item in enumerate(items[:2]):
-            assert (
-                item.action.items[0].label(None)
-                == f"Session key: {sessions[index]['session_key']}"
-            )
-            assert item.action.items[1].label(None) == "Project: /shared-project"
-            actions = {
-                child.label: child
-                for child in item.action.items
-                if isinstance(child, FakeMenuItem)
-            }
-            actions["15 minutes"].action(None, None)
-            pause.assert_called_with(sessions[index]["session_key"], 15)
-            sessions[index]["paused"] = True
-            actions["Resume"].action(None, None)
-            resume.assert_called_with(sessions[index]["session_key"])
+            assert f"Key: {sessions[index]['session_key']}" in item.label
+            assert "Project: /shared-project" in item.label
         sessions[1]["session_title"] = "Different name"
-        assert "[" not in items[0].label(None)
+        assert "Different name" in self._items({"active_sessions": sessions})[1].label
 
     @pytest.mark.parametrize(
         ("platform", "expected_titles"),
         [
-            ("win32", ["Fix A&&B", "Fix AB", "Fix A&&&&B"]),
+            ("win32", ["Fix A&B", "Fix AB", "Fix A&&B"]),
             ("linux", ["Fix A&B", "Fix AB", "Fix A&&B"]),
             ("darwin", ["Fix A&B", "Fix AB", "Fix A&&B"]),
         ],
     )
-    def test_literal_ampersands_are_escaped_only_for_windows_display(
+    def test_modal_ampersands_are_literal_on_every_platform(
         self, monkeypatch, platform, expected_titles
     ):
         monkeypatch.setattr(
@@ -193,27 +188,17 @@ class TestSessionPauseLabels:
             }
             for index, title in enumerate(titles)
         ]
-        items, pause, resume = self._items({"active_sessions": sessions})
-        assert [item.label(None) for item in items[:3]] == [
-            f"● OpenCode: {title}" for title in expected_titles
-        ]
+        items = self._items({"active_sessions": sessions})
+        assert all(
+            item.label.startswith(f"● Session: OpenCode: {title}\n")
+            for item, title in zip(items, expected_titles)
+        )
         assert [session["session_title"] for session in sessions] == titles
         for index, item in enumerate(items[:3]):
-            actions = {
-                child.label: child
-                for child in item.action.items
-                if isinstance(child, FakeMenuItem)
-            }
-            actions["15 minutes"].action(None, None)
-            pause.assert_called_with(sessions[index]["session_key"], 15)
-            sessions[index]["paused"] = True
-            actions["Resume"].action(None, None)
-            resume.assert_called_with(sessions[index]["session_key"])
+            assert f"Key: {sessions[index]['session_key']}" in item.label
 
-    def test_collision_work_is_bounded_to_visible_session_slots(self):
-        # An identical name outside the pre-allocated slots does not require a
-        # suffix on a uniquely displayed session or additional metadata work.
-        limit = TrayMenuBuilder._MAX_SESSION_PAUSE_SLOTS
+    def test_all_reported_sessions_are_visible_beyond_former_native_slot_limit(self):
+        limit = 16
         sessions = [
             {
                 "session_key": f"Adapter:{index}",
@@ -224,10 +209,10 @@ class TestSessionPauseLabels:
             for index in range(limit + 1)
         ]
         sessions[-1]["session_title"] = "Name 0"
-        items, _, _ = self._items({"active_sessions": sessions})
-        assert len(items) == limit + 1  # existing overflow/status hint
-        assert items[-1].kwargs["visible"](None) is True
-        assert items[0].label(None) == "● OpenCode: Name 0"
+        items = self._items({"active_sessions": sessions})
+        assert len(items) == limit + 1
+        assert items[0].label.startswith("● Session: OpenCode: Name 0")
+        assert items[-1].label != items[0].label
 
     @pytest.mark.parametrize("multi", [False, True])
     @pytest.mark.parametrize("runtime", ["local", "container", "remote"])
@@ -252,34 +237,32 @@ class TestSessionPauseLabels:
             ]
         }
         tray._multi_client.get_status.side_effect = lambda selected: (
-            stats if selected is target else {}
+            stats if selected.name == target.name else {}
         )
         tray._get_stats = mock.Mock(return_value=stats)
-        with (
-            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
-            mock.patch("ai_guardian.tray.plugin_runner.pystray", FAKE_PYSTRAY),
-        ):
-            if multi:
-                menu = tray._menu._build_multi_daemon_menu_items()[1].action
-                pause_menu = next(
-                    item
-                    for item in menu.items
-                    if isinstance(item, FakeMenuItem) and item.label == "Pause..."
-                ).action
-            else:
-                pause_menu = tray._menu._build_single_daemon_pause_menu_item(
-                    lambda _: stats, lambda _: mock.Mock(), mock.Mock(), lambda _: True
-                ).action
-        session_item = pause_menu.items[2].action.items[2]
-        assert session_item.label(None) == "● OpenCode: Fix tray labels"
-        actions = {
-            child.label: child
-            for child in session_item.action.items
-            if isinstance(child, FakeMenuItem)
-        }
-        with mock.patch.object(tray, "_check_and_autostart_daemon"):
-            actions["15 minutes"].action(None, None)
-            actions["Resume"].action(None, None)
+        stats["paused"] = False
+        tray._dispatch_to_main = mock.Mock()
+        snapshot = PauseSnapshot(tray)
+        option = snapshot.views[int(multi)].find("session", "Adapter:id")
+        assert "● Session: OpenCode: Fix tray labels" in option.label
+        values = pause_values(
+            snapshot,
+            daemon=int(multi),
+            scope="session",
+            identity="Adapter:id",
+            minutes=15,
+        )
+        snapshot.request(*snapshot.resolve(values))
+        stats["active_sessions"][0]["paused"] = True
+        snapshot = PauseSnapshot(tray)
+        values = pause_values(
+            snapshot,
+            daemon=int(multi),
+            scope="session",
+            identity="Adapter:id",
+            action="Resume",
+        )
+        snapshot.request(*snapshot.resolve(values))
         tray._multi_client.send_pause_session.assert_called_once_with(
             target, "Adapter:id", 15
         )
@@ -331,7 +314,7 @@ class TestScopedPauseMenuState:
         # Each daemon response is a new snapshot, not a shared mutable dict.
         tray._get_stats = mock.Mock(side_effect=lambda: deepcopy(stats))
         tray._multi_client.get_status.side_effect = lambda selected: (
-            deepcopy(stats) if selected is target else {}
+            deepcopy(stats) if selected.name == target.name else {}
         )
         tray._icon = mock.Mock()
         tray._dispatch_to_main = lambda callback: callback()
@@ -343,29 +326,38 @@ class TestScopedPauseMenuState:
         else:
             items = tray._menu._build_single_daemon_menu_items()
             header = items[2]
-        pause = next(
-            item
-            for item in items
-            if isinstance(item, FakeMenuItem) and item.label == "Pause..."
-        ).action
-        controls = {
-            "session": pause.items[2].action.items[2],
-            "dir": pause.items[3].action.items[0],
-        }
-        return tray, target, stats, header, pause.items[0], controls
+        return tray, target, stats, header
 
     @staticmethod
-    def _actions(control):
-        return {
-            item.label: item
-            for item in control.action.items
-            if isinstance(item, FakeMenuItem) and isinstance(item.label, str)
-        }
+    def _selection(tray, scope, *, resume=False, minutes=5):
+        snapshot = PauseSnapshot(tray)
+        index = next(
+            i for i, view in enumerate(snapshot.views) if view.target.name == "selected"
+        )
+        identity = "Adapter:stable-key" if scope == "session" else "/selected-project"
+        values = pause_values(
+            snapshot,
+            daemon=index,
+            scope=scope,
+            identity=identity,
+            action="Resume" if resume else "Pause",
+            minutes=minutes,
+        )
+        return snapshot, snapshot.resolve(values)
+
+    @staticmethod
+    def _option(tray, scope):
+        view = next(
+            view for view in PauseSnapshot(tray).views if view.target.name == "selected"
+        )
+        return view.find(
+            scope, "Adapter:stable-key" if scope == "session" else "/selected-project"
+        )
 
     def test_shared_cache_updates_metadata_and_tolerates_older_stats(
         self, isolated_menu
     ):
-        tray, target, stats, header, _, _ = self._menu("container", False)
+        tray, target, stats, header = self._menu("container", False)
         stats.update(name="configured-name", mcp_installed=True, version="1.19.0")
         header.label(None)
         assert target.name == "configured-name"
@@ -382,16 +374,14 @@ class TestScopedPauseMenuState:
         assert tray._menu._get_slot_stats(0) == {}
 
     def test_missing_scoped_transport_reports_failure_without_local_fallback(self):
-        tray, _, _, _, _, controls = self._menu("local", False)
-        controls["session"].label(None)
+        tray, _, _, _ = self._menu("local", False)
         tray._multi_client = None
         tray._pause = mock.Mock()
-        with mock.patch(
-            "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
-        ) as notify:
-            self._actions(controls["session"])["5 minutes"].action(None, None)
-        assert notify.call_count == 1
-        assert "Could not pause session on selected." in notify.call_args.args[1]
+        with mock.patch("ai_guardian.tray.pause.MultiDaemonClient") as client:
+            client.return_value.send_pause_session.return_value = False
+            snapshot, selection = self._selection(tray, "session")
+            assert snapshot.request(*selection) == UNCONFIRMED
+        client.return_value.send_pause_session.assert_called_once()
         tray._pause.assert_not_called()
 
     @pytest.mark.parametrize("runtime", ["local", "manual", "container"])
@@ -401,13 +391,9 @@ class TestScopedPauseMenuState:
     def test_success_exposes_resume_immediately_within_cache_window(
         self, runtime, multi, scope, minutes
     ):
-        tray, target, stats, header, global_control, controls = self._menu(
-            runtime, multi
-        )
-        control = controls[scope]
-        actions = self._actions(control)
-        assert control.label(None).startswith("●")
-        assert actions["Resume"].kwargs["visible"](None) is False
+        tray, target, stats, header = self._menu(runtime, multi)
+        assert self._option(tray, scope).label.startswith("●")
+        assert self._option(tray, scope).paused is False
 
         def pause(identity, duration):
             if scope == "session":
@@ -431,47 +417,40 @@ class TestScopedPauseMenuState:
             identity, duration
         )
         resume_method.side_effect = lambda selected, identity: resume(identity)
-        choice = (
-            "5 minutes"
-            if minutes
-            else (
-                "Until resumed or session ends"
-                if scope == "session"
-                else "Until resume"
-            )
-        )
-        actions[choice].action(None, None)
+        snapshot, selection = self._selection(tray, scope, minutes=minutes)
+        assert "confirmed" in snapshot.request(*selection)
         identity = "Adapter:stable-key" if scope == "session" else "/selected-project"
         pause_method.assert_called_once_with(target, identity, minutes)
-        assert control.label(None).startswith("☾")
-        assert actions["Resume"].kwargs["visible"](None) is True
-        assert actions["5 minutes"].kwargs["visible"](None) is False
+        assert self._option(tray, scope).label.startswith("☾")
+        assert self._option(tray, scope).paused is True
         assert header.label(None).startswith("◐")
-        assert global_control.label(None) == "● Daemon (global)"
+        assert stats["paused"] is False
         assert tray._refresh_event.is_set()
         tray._icon.update_menu.assert_called_once()
 
-        actions["Resume"].action(None, None)
+        snapshot, selection = self._selection(tray, scope, resume=True)
+        assert "confirmed" in snapshot.request(*selection)
         resume_method.assert_called_once_with(target, identity)
-        assert control.label(None).startswith("●")
-        assert actions["Resume"].kwargs["visible"](None) is False
-        assert actions["5 minutes"].kwargs["visible"](None) is True
+        assert self._option(tray, scope).label.startswith("●")
+        assert self._option(tray, scope).paused is False
         assert header.label(None).startswith("●")
         assert tray._icon.update_menu.call_count == 2
 
     @pytest.mark.parametrize("multi", [False, True])
     @pytest.mark.parametrize("scope", ["session", "dir"])
-    def test_header_status_and_submenus_share_one_cached_snapshot(self, multi, scope):
-        tray, _, stats, header, _, controls = self._menu("container", multi)
-        assert controls[scope].label(None).startswith("●")
+    def test_header_status_share_cache_and_modal_reads_fresh_snapshot(
+        self, multi, scope
+    ):
+        tray, _, stats, header = self._menu("container", multi)
+        assert header.label(None).startswith("●")
         if scope == "session":
             stats["active_sessions"][0]["paused"] = True
         else:
             stats["paused_dirs"]["/selected-project"] = 0
         assert header.label(None).startswith("●")
         assert tray._menu._daemon_status_details(int(multi))[1] == "● Running"
+        assert self._option(tray, scope).label.startswith("☾")
         tray._refresh_menu()
-        assert controls[scope].label(None).startswith("☾")
         assert header.label(None).startswith("◐")
         assert tray._menu._daemon_status_details(int(multi))[1] == "◐ Partially paused"
 
@@ -480,15 +459,14 @@ class TestScopedPauseMenuState:
     def test_open_popup_defers_replacement_and_close_uses_latest_state(
         self, multi, scope
     ):
-        tray, _, stats, _, _, controls = self._menu("container", multi)
-        controls[scope].label(None)
+        tray, _, stats, _ = self._menu("container", multi)
         tray._on_appindicator_menu_event(None, "opened", None, 0)
         getattr(tray._multi_client, f"send_pause_{scope}").return_value = True
         if scope == "session":
             stats["active_sessions"][0]["paused"] = True
         else:
             stats["paused_dirs"]["/selected-project"] = 0
-        self._actions(controls[scope])["5 minutes"].action(None, None)
+        tray._refresh_menu()
         assert tray._menu_refresh_pending is True
         tray._icon.update_menu.assert_not_called()
         # A further external change/expiry happens before the popup closes.
@@ -498,8 +476,8 @@ class TestScopedPauseMenuState:
         tray._icon.update_menu.assert_not_called()
         tray._defer_appindicator_menu_close.call_args.args[0]()
         tray._icon.update_menu.assert_called_once()
-        assert controls[scope].label(None).startswith("●")
-        assert self._actions(controls[scope])["Resume"].kwargs["visible"](None) is False
+        assert self._option(tray, scope).label.startswith("●")
+        assert self._option(tray, scope).paused is False
 
     @pytest.mark.parametrize("multi", [False, True])
     @pytest.mark.parametrize("scope", ["session", "dir"])
@@ -507,8 +485,8 @@ class TestScopedPauseMenuState:
     def test_action_keeps_rendered_identity_and_target_after_discovery_changes(
         self, isolated_menu, multi, scope, replace_target
     ):
-        tray, target, stats, _, _, controls = self._menu("container", multi)
-        controls[scope].label(None)
+        tray, target, stats, _ = self._menu("container", multi)
+        snapshot, selection = self._selection(tray, scope)
         stats["active_sessions"].insert(0, {"session_key": "Adapter:different"})
         stats["active_project_dirs"].insert(0, "/aaa-different")
         if replace_target:
@@ -516,11 +494,15 @@ class TestScopedPauseMenuState:
                 name="replacement", runtime="container"
             )
         isolated_menu.return_value += 3  # The old snapshot would expire on click.
-        self._actions(controls[scope])["5 minutes"].action(None, None)
+        message = snapshot.request(*selection)
         identity = "Adapter:stable-key" if scope == "session" else "/selected-project"
-        getattr(tray._multi_client, f"send_pause_{scope}").assert_called_once_with(
-            target, identity, 5
-        )
+        if replace_target:
+            assert "no request was sent" in message
+            getattr(tray._multi_client, f"send_pause_{scope}").assert_not_called()
+        else:
+            getattr(tray._multi_client, f"send_pause_{scope}").assert_called_once_with(
+                target, identity, 5
+            )
         tray._multi_client.send_pause.assert_not_called()
 
     @pytest.mark.parametrize("multi", [False, True])
@@ -530,30 +512,19 @@ class TestScopedPauseMenuState:
     def test_failure_reports_unconfirmed_scope_without_optimistic_state(
         self, multi, scope, resume, failure
     ):
-        tray, _, stats, _, _, controls = self._menu("container", multi)
+        tray, _, stats, _ = self._menu("container", multi)
         if resume:
             stats["active_sessions"][0]["paused"] = scope == "session"
             stats["paused_dirs"] = {"/selected-project": 0} if scope == "dir" else {}
-        before = controls[scope].label(None)
+        before = self._option(tray, scope).label
         verb = "resume" if resume else "pause"
         method = getattr(tray._multi_client, f"send_{verb}_{scope}")
         method.return_value = False
         if isinstance(failure, Exception):
             method.side_effect = failure
-        with mock.patch(
-            "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
-        ) as notify:
-            self._actions(controls[scope])["Resume" if resume else "5 minutes"].action(
-                None, None
-            )
-        name = "session" if scope == "session" else "directory"
-        notify.assert_called_once_with(
-            "AI Guardian",
-            f"Could not {verb} {name} on selected. The daemon did not confirm the request. "
-            "It may be unreachable, the selected scope may no longer exist, or this operation may be unsupported. "
-            "No broader pause or resume was requested.",
-        )
-        assert controls[scope].label(None) == before
+        snapshot, selection = self._selection(tray, scope, resume=resume)
+        assert snapshot.request(*selection) == UNCONFIRMED
+        assert self._option(tray, scope).label == before
         assert tray._status == "running"
         tray._multi_client.send_pause.assert_not_called()
         tray._multi_client.send_resume.assert_not_called()
@@ -657,6 +628,38 @@ class TestSandboxTrayCommands:
 
 
 class TestSandboxTrayMenu:
+    @pytest.mark.parametrize(
+        "runtimes", [("local",), ("ssh",), ("local", "ssh"), ("container", "manual")]
+    )
+    def test_exactly_one_visible_root_pause_action_and_no_nested_pause_menus(
+        self, runtimes
+    ):
+        tray = _make_tray(
+            [
+                DaemonTarget(f"daemon-{i}", runtime, status="running")
+                for i, runtime in enumerate(runtimes)
+            ]
+        )
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", FAKE_PYSTRAY),
+        ):
+            items = [
+                *tray._menu._build_single_daemon_menu_items(),
+                *tray._menu._build_multi_daemon_menu_items(),
+            ]
+        visible = [
+            item
+            for item in items
+            if isinstance(item, FakeMenuItem)
+            and item.label == "Pause..."
+            and item.kwargs.get("visible", lambda _: True)(None)
+        ]
+        assert len(visible) == 1 and callable(visible[0].action)
+        for item in items:
+            if isinstance(item, FakeMenuItem) and isinstance(item.action, FakeMenu):
+                assert "Pause..." not in _walk_labels(item.action)
+
     def test_openshell_connect_and_manage_follow_pause_and_connects(self):
         target = DaemonTarget(
             name="ag-test",
@@ -1012,8 +1015,8 @@ class TestSandboxTrayMenu:
 
         single_status = next(item for item in single_items if item.label == "Status")
         assert single_status.kwargs["visible"](None) is False
-        assert len(items) == 2
-        for daemon_item in items:
+        assert len(items) == 3  # Two daemon headers and one root Pause... action.
+        for daemon_item in items[:2]:
             assert "Status" in _walk_labels(daemon_item.action)
 
     def test_multi_daemon_pause_controls_are_prominent_and_scoped(self):
@@ -1056,126 +1059,22 @@ class TestSandboxTrayMenu:
             daemon_items = tray._menu._build_multi_daemon_menu_items()
 
         second_daemon_menu = daemon_items[1].action
-        pause_item = next(
-            item
-            for item in second_daemon_menu.items
-            if isinstance(item, FakeMenuItem) and item.label == "Pause..."
-        )
-        console_item = next(
-            item
-            for item in second_daemon_menu.items
-            if isinstance(item, FakeMenuItem) and item.label == "Console"
-        )
-        assert second_daemon_menu.items.index(
-            pause_item
-        ) < second_daemon_menu.items.index(console_item)
-        assert pause_item.kwargs["visible"](None) is True
-
-        pause_menu = pause_item.action
-        global_item = pause_menu.items[0]
-        global_menu = global_item.action
-        global_actions = {item.label: item for item in global_menu.items}
-        assert {
-            "5 minutes",
-            "15 minutes",
-            "30 minutes",
-            "1 hour",
-            "Until resume",
-            "Resume",
-        } <= set(global_actions)
-        assert global_actions["15 minutes"].kwargs["visible"](None) is True
-        assert global_actions["Resume"].kwargs["visible"](None) is False
-
-        with mock.patch.object(tray, "_check_and_autostart_daemon"):
-            global_actions["15 minutes"].action(None, None)
-        tray._multi_client.send_pause.assert_called_once_with(targets[1], 15)
-
-        stats_by_name["two"]["paused"] = True
-        assert global_actions["Resume"].kwargs["visible"](None) is True
-        with mock.patch.object(tray, "_check_and_autostart_daemon"):
-            global_actions["Resume"].action(None, None)
-        tray._multi_client.send_resume.assert_called_once_with(targets[1])
-
-        sessions_item = pause_menu.items[2]
-        assert sessions_item.label == "Sessions..."
-        assert sessions_item.action.items[1].label == (
-            "Directory-wide pause also covers callers without stable session IDs"
-        )
-        session_options = [
-            item
-            for item in sessions_item.action.items
-            if isinstance(item, FakeMenuItem)
-            and item.action is not None
-            and item.kwargs.get("visible", lambda _item: True)(None)
-        ]
-        assert len(session_options) == 1
-        session_actions = {
-            item.label: item
-            for item in session_options[0].action.items
-            if isinstance(item, FakeMenuItem)
-        }
-        assert session_actions["15 minutes"].kwargs["visible"](None) is True
-        with mock.patch.object(tray, "_check_and_autostart_daemon"):
-            session_actions["15 minutes"].action(None, None)
-        tray._multi_client.send_pause_session.assert_called_once_with(
-            targets[1], "ClaudeCodeAdapter:session-two", 15
-        )
-
-        stats_by_name["two"]["active_sessions"][0]["paused"] = True
-        assert session_actions["Resume"].kwargs["visible"](None) is True
-        with mock.patch.object(tray, "_check_and_autostart_daemon"):
-            session_actions["Resume"].action(None, None)
-        tray._multi_client.send_resume_session.assert_called_once_with(
-            targets[1], "ClaudeCodeAdapter:session-two"
-        )
-
-        directories_item = pause_menu.items[3]
-        assert directories_item.label == "All sessions in directory..."
-        assert directories_item.kwargs["visible"](None) is True
-        directory_items = directories_item.action.items
-        second_directory_items = [
-            item
-            for item in directory_items
-            if isinstance(item, FakeMenuItem) and item.kwargs["visible"](None)
-        ]
-        assert len(second_directory_items) == 2
         assert all(
-            "/project-one" not in item.label(None) for item in second_directory_items
+            getattr(item, "label", None) != "Pause..."
+            for item in second_daemon_menu.items
         )
-
-        active_directory = next(
-            item
-            for item in second_directory_items
-            if item.label(None).endswith("/project-two")
-        )
-        active_directory_actions = {
-            item.label: item
-            for item in active_directory.action.items
-            if isinstance(item, FakeMenuItem)
-        }
-        assert active_directory_actions["15 minutes"].kwargs["visible"](None) is True
-        with mock.patch.object(tray, "_check_and_autostart_daemon"):
-            active_directory_actions["15 minutes"].action(None, None)
-        tray._multi_client.send_pause_dir.assert_called_once_with(
-            targets[1], "/project-two", 15
-        )
-
-        paused_directory = next(
-            item
-            for item in second_directory_items
-            if item.label(None).endswith("/project-two-paused")
-        )
-        paused_directory_actions = {
-            item.label: item
-            for item in paused_directory.action.items
-            if isinstance(item, FakeMenuItem)
-        }
-        assert paused_directory_actions["Resume"].kwargs["visible"](None) is True
-        with mock.patch.object(tray, "_check_and_autostart_daemon"):
-            paused_directory_actions["Resume"].action(None, None)
-        tray._multi_client.send_resume_dir.assert_called_once_with(
-            targets[1], "/project-two-paused"
-        )
+        pause_item = daemon_items[-1]
+        assert pause_item.label == "Pause..." and callable(pause_item.action)
+        assert pause_item.kwargs["visible"](None) is True
+        snapshot = PauseSnapshot(tray)
+        second = snapshot.views[1]
+        assert second.label.startswith("◐")
+        assert second.find("global", "").paused is False
+        assert second.find("session", "ClaudeCodeAdapter:session-two") is not None
+        assert second.find("dir", "/project-two").paused is False
+        assert second.find("dir", "/project-two-paused").paused is True
+        assert second.find("dir", "/project-one") is None
+        assert sum(row["level"] == 0 for row in snapshot.payload()["rows"]) == 2
 
     def test_single_daemon_pause_menu_follows_status_and_groups_directories(self):
         target = DaemonTarget(name="single", runtime="container", status="running")
@@ -1202,34 +1101,14 @@ class TestSandboxTrayMenu:
             for item in daemon_items
         )
 
-        pause_menu = pause_item.action
-        global_menu = pause_menu.items[0].action
-        global_actions = {
-            item.label: item
-            for item in global_menu.items
-            if isinstance(item, FakeMenuItem)
-        }
-        assert global_actions["15 minutes"].kwargs["visible"](None) is True
-        assert global_actions["Resume"].kwargs["visible"](None) is False
+        assert callable(pause_item.action)
+        snapshot = PauseSnapshot(tray)
+        assert snapshot.views[0].find("global", "").paused is False
         stats["paused"] = True
-        assert global_actions["Resume"].kwargs["visible"](None) is True
-
-        directories_item = pause_menu.items[3]
-        assert directories_item.label == "All sessions in directory..."
-        assert directories_item.kwargs["visible"](None) is True
-        visible_directories = [
-            item
-            for item in directories_item.action.items
-            if isinstance(item, FakeMenuItem) and item.kwargs["visible"](None)
-        ]
-        assert len(visible_directories) == 2
-        assert any(
-            item.label(None).endswith("/single-project") for item in visible_directories
-        )
-        assert any(
-            item.label(None).endswith("/single-project-paused")
-            for item in visible_directories
-        )
+        assert PauseSnapshot(tray).views[0].find("global", "").paused is True
+        assert snapshot.views[0].find("dir", "/single-project") is not None
+        assert snapshot.views[0].find("dir", "/single-project-paused").paused is True
+        assert sum(row["level"] == 0 for row in snapshot.payload()["rows"]) == 1
 
     def test_start_menu_lists_stopped_container_and_openshell_sandboxes(self):
         stopped_container = DaemonTarget(
@@ -2296,17 +2175,18 @@ class TestSandboxTrayMenu:
             if isinstance(item, FakeMenuItem) and item.label == "Manage sandbox"
         )
         second_items = daemon_items[1].action.items
-        pause_item = next(
+        status_item = next(
             item
             for item in second_items
-            if isinstance(item, FakeMenuItem) and item.label == "Pause..."
+            if isinstance(item, FakeMenuItem) and item.label == "Status"
         )
         connect_item = next(
             item
             for item in second_items
             if isinstance(item, FakeMenuItem) and item.label == "Connect"
         )
-        assert second_items.index(connect_item) == second_items.index(pause_item) + 1
+        assert second_items.index(connect_item) == second_items.index(status_item) + 1
+        assert daemon_items[-1].label == "Pause..."
         assert (
             second_items.index(second_manage_item)
             == second_items.index(connect_item) + 1

@@ -11,6 +11,8 @@ from unittest import mock
 import pytest
 
 from ai_guardian.daemon.discovery import DaemonTarget
+from ai_guardian.tray.pause import PauseSnapshot
+from tests.fixtures.tray_pause import pause_values
 from ai_guardian.tray.app import (
     DaemonTray,
     HAS_PYSTRAY,
@@ -168,7 +170,9 @@ class TestDaemonTrayCallbacks:
         )
         tray._status = "paused"
         with mock.patch("platform.system", return_value="Darwin"):
-            label = tray._menu._resume_menu_label()
+            label = _pause_options(
+                tray, {"paused": True, **tray._get_stats()}, "global"
+            )[0].label
         assert "2m" in label
         assert "5s" in label
 
@@ -271,22 +275,10 @@ class TestTrayPauseRoutesLocalThroughMultiClient:
         pause_cb.assert_called_once_with(5)
 
 
-class TestSingleDaemonPauseResumeUpdatesStatus:
-    """Verify pause/resume closures call DaemonTray.update_status (issue #1999)."""
+class TestTrayPauseModalWorkers:
+    """Opening pause controls is single-flight, isolated and non-mutating."""
 
-    def _build_closures(self, tray):
-        with (
-            mock.patch("ai_guardian.tray.menu_builder.pystray") as mock_pystray,
-            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
-        ):
-            mock_pystray.MenuItem = mock.MagicMock()
-            mock_pystray.Menu = mock.MagicMock()
-            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
-            tray._menu._build_single_daemon_menu_items()
-            tray._menu._build_single_daemon_daemon_items()
-        return tray._menu._single_daemon_closures
-
-    def test_pause_action_calls_tray_update_status(self):
+    def test_pause_action_captures_monitor_before_worker_without_changing_state(self):
         local_target = DaemonTarget(name="local", runtime="local", status="running")
         tray = DaemonTray(
             get_stats_callback=lambda: {},
@@ -294,13 +286,24 @@ class TestSingleDaemonPauseResumeUpdatesStatus:
             pause_callback=mock.MagicMock(),
         )
         tray._targets = [local_target]
-        closures = self._build_closures(tray)
+        bounds = (1920, 0, 1920, 1080)
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.threading.Thread") as worker,
+            mock.patch.object(
+                tray._menu, "_capture_tray_screen_bounds", return_value=bounds
+            ) as capture,
+            mock.patch("ai_guardian.tray.pause.open_pause_controls") as show,
+            mock.patch.object(tray, "update_status") as update,
+        ):
+            icon = mock.Mock()
+            tray._menu._on_pause_controls(icon, None)
+            capture.assert_called_once_with(icon)
+            show.assert_not_called()
+            worker.call_args.kwargs["target"]()
+            show.assert_called_once_with(tray, screen_bounds=bounds)
+            update.assert_not_called()
 
-        with mock.patch.object(tray, "update_status") as mock_update:
-            closures["pause_action"](5)(None, None)
-            mock_update.assert_called_once_with("paused")
-
-    def test_resume_action_calls_tray_update_status(self):
+    def test_pause_action_is_single_flight_and_cancel_releases_worker(self):
         local_target = DaemonTarget(name="local", runtime="local", status="paused")
         tray = DaemonTray(
             get_stats_callback=lambda: {},
@@ -308,11 +311,41 @@ class TestSingleDaemonPauseResumeUpdatesStatus:
             pause_callback=mock.MagicMock(),
         )
         tray._targets = [local_target]
-        closures = self._build_closures(tray)
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.threading.Thread") as worker,
+            mock.patch.object(
+                tray._menu, "_capture_tray_screen_bounds", return_value=None
+            ),
+            mock.patch("ai_guardian.tray.pause.open_pause_controls", return_value=None),
+        ):
+            tray._menu._on_pause_controls(None, None)
+            tray._menu._on_pause_controls(None, None)
+            assert worker.call_count == 1
+            worker.call_args.kwargs["target"]()
+            tray._menu._on_pause_controls(None, None)
+            assert worker.call_count == 2
+            worker.call_args.kwargs["target"]()
+        assert tray._status == "running"
 
-        with mock.patch.object(tray, "update_status") as mock_update:
-            closures["resume_action"](None, None)
-            mock_update.assert_called_once_with("running")
+    @pytest.mark.parametrize("startup", [False, True])
+    def test_worker_failure_releases_single_flight_lock(self, startup):
+        tray = DaemonTray(lambda: {}, lambda: None, mock.Mock())
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.threading.Thread") as worker,
+            mock.patch.object(
+                tray._menu, "_capture_tray_screen_bounds", return_value=None
+            ),
+            mock.patch(
+                "ai_guardian.tray.pause.open_pause_controls",
+                side_effect=RuntimeError("private"),
+            ),
+        ):
+            if startup:
+                worker.return_value.start.side_effect = RuntimeError("startup")
+            tray._menu._on_pause_controls(None, None)
+            if not startup:
+                worker.call_args.kwargs["target"]()
+            assert not tray._menu._pause_dialog_lock.locked()
 
 
 class TestFlashReload:
@@ -1678,10 +1711,10 @@ class TestWorkingDirApply:
 
 
 class TestUntilResumePauseOption:
-    """Tests for 'Until resume' indefinite pause menu option (issue #698)."""
+    """Indefinite pause remains in the modal, not a nested menu (#698/#2620)."""
 
     def test_single_daemon_pause_menu_includes_until_resume(self):
-        """Single-daemon Pause submenu contains 'Until resume' item."""
+        """Single-daemon modal retains 'Until resume'."""
         tray = DaemonTray(
             get_stats_callback=lambda: {},
             stop_callback=lambda: None,
@@ -1708,10 +1741,14 @@ class TestUntilResumePauseOption:
                 for call in mock_pystray.MenuItem.call_args_list
                 if isinstance(call[0][0], str)
             ]
-            assert "Until resume" in labels
+            assert "Until resume" not in labels
+        from ai_guardian.tray.pause import PauseSnapshot
+
+        tray._get_stats = lambda: {"paused": False}
+        assert PauseSnapshot(tray).payload()["durations"]["Until resume"] == 0
 
     def test_multi_daemon_pause_menu_includes_until_resume(self):
-        """Multi-daemon per-daemon Pause submenu contains 'Until resume' item."""
+        """The shared multi-daemon modal retains 'Until resume'."""
         mc = mock.MagicMock()
         tray = DaemonTray(
             get_stats_callback=lambda: {},
@@ -1741,7 +1778,12 @@ class TestUntilResumePauseOption:
                 for call in mock_pystray.MenuItem.call_args_list
                 if isinstance(call[0][0], str)
             ]
-            assert labels.count("Until resume") >= 1
+            assert "Until resume" not in labels
+        from ai_guardian.tray.pause import PauseSnapshot
+
+        tray._get_stats = lambda: {"paused": False}
+        mc.get_status.return_value = {"paused": False}
+        assert PauseSnapshot(tray).payload()["durations"]["Until resume"] == 0
 
     def test_until_resume_routes_zero_minutes_via_multi_client(self):
         """'Until resume' sends pause with minutes=0 through multi_client."""
@@ -1899,7 +1941,7 @@ class TestMultiDaemonMenuCapacity:
             mock_pystray.Menu.SEPARATOR = mock.MagicMock()
             items = tray._menu._build_multi_daemon_menu_items()
 
-        assert len(items) == len(tray._targets)
+        assert len(items) == len(tray._targets) + 1  # One root Pause... action.
 
     def test_refresh_rebuilds_menu_when_target_count_changes(self):
         tray = DaemonTray(
@@ -1925,8 +1967,8 @@ class TestMultiDaemonMenuCapacity:
         tray._icon.update_menu.assert_not_called()
 
 
-class TestResumeMenuLabelFormats:
-    """Tests for resume menu label formatting (issue #684)."""
+class TestModalResumeButtonAndDuration:
+    """Duration is snapshot metadata, not a changing native-menu action label."""
 
     def test_resume_label_indefinite(self):
         tray = DaemonTray(
@@ -1934,8 +1976,10 @@ class TestResumeMenuLabelFormats:
             stop_callback=lambda: None,
             pause_callback=lambda mins: None,
         )
-        label = tray._menu._resume_menu_label()
-        assert label == "Resume (paused)"
+        label = _pause_options(tray, {"paused": True, **tray._get_stats()}, "global")[
+            0
+        ].label
+        assert label == "☾ Daemon (global) (until resume)"
 
     def test_resume_label_with_countdown(self):
         tray = DaemonTray(
@@ -1944,7 +1988,9 @@ class TestResumeMenuLabelFormats:
             pause_callback=lambda mins: None,
         )
         with mock.patch("platform.system", return_value="Darwin"):
-            label = tray._menu._resume_menu_label()
+            label = _pause_options(
+                tray, {"paused": True, **tray._get_stats()}, "global"
+            )[0].label
         assert "3m" in label
         assert "42s" in label
 
@@ -1955,11 +2001,12 @@ class TestResumeMenuLabelFormats:
             pause_callback=lambda mins: None,
         )
         with mock.patch("platform.system", return_value="Linux"):
-            assert tray._menu._resume_menu_label() == "Resume (paused)"
+            _pause_options(tray, {"paused": True, **tray._get_stats()}, "global")
+            assert PauseSnapshot(tray).payload()["rows"][0]["action"] == "Resume"
 
 
 class TestLinuxPauseMenuStability:
-    """Keep KDE nested pause menus stable while a timed pause counts down."""
+    """Keep KDE root actions stable while a timed pause counts down."""
 
     def _make_tray(self, stats=None, multi_client=None):
         return DaemonTray(
@@ -2026,20 +2073,27 @@ class TestLinuxPauseMenuStability:
             tray._menu._build_single_daemon_menu_items()
             tray._menu._build_single_daemon_daemon_items()
 
-            resume_calls = [
-                call
+            assert any(
+                call.args[0] == "Pause..." and callable(call.args[1])
                 for call in mock_pystray.MenuItem.call_args_list
-                if call[0] and call[0][0] == "Resume"
+            )
+        from ai_guardian.tray.pause import PauseSnapshot
+
+        snapshot = PauseSnapshot(tray)
+        option = snapshot.views[0].find("global", "")
+        assert option.paused is True
+        assert (
+            next(row for row in snapshot.payload()["rows"] if row["scope"] == "global")[
+                "action"
             ]
-            assert resume_calls
-            with mock.patch("platform.system", return_value="Linux"):
-                assert any(call[1]["visible"](None) for call in resume_calls)
+            == "Resume"
+        )
 
     def test_multi_daemon_resume_stays_visible_on_linux(self):
         stats = {"paused": True, "pause_remaining_seconds": 60}
         multi_client = mock.MagicMock()
         multi_client.get_status.return_value = stats
-        tray = self._make_tray(multi_client=multi_client)
+        tray = self._make_tray(stats=stats, multi_client=multi_client)
         tray._targets = [
             DaemonTarget(name="local", runtime="local", status="paused"),
             DaemonTarget(name="remote", runtime="container", status="paused"),
@@ -2053,14 +2107,20 @@ class TestLinuxPauseMenuStability:
             mock_pystray.Menu.SEPARATOR = mock.MagicMock()
             tray._menu._build_multi_daemon_menu_items()
 
-            resume_calls = [
-                call
-                for call in mock_pystray.MenuItem.call_args_list
-                if call[0] and call[0][0] == "Resume"
-            ]
-            assert resume_calls
-            with mock.patch("platform.system", return_value="Linux"):
-                assert any(call[1]["visible"](None) for call in resume_calls)
+            assert (
+                sum(
+                    call.args[0] == "Pause..."
+                    for call in mock_pystray.MenuItem.call_args_list
+                )
+                == 1
+            )
+        from ai_guardian.tray.pause import PauseSnapshot
+
+        snapshot = PauseSnapshot(tray)
+        for view in snapshot.views:
+            option = view.find("global", "")
+            assert option.paused is True
+            assert any(v is view and o is option for v, o in snapshot.rows.values())
 
 
 class TestAppIndicatorMenuRefreshStability:
@@ -5971,8 +6031,20 @@ class TestAutostartEnabledMenuItems:
             assert tray._check_and_autostart_daemon() is False
 
 
-class TestGetMergedDirList:
-    """Test _get_merged_dir_list merges active and paused dirs (#997)."""
+def _pause_options(tray, stats, scope="dir"):
+    tray._targets = [DaemonTarget("local", "local", status="running")]
+    tray._get_stats = lambda: {"paused": False, **stats}
+    return PauseSnapshot(tray).views[0].scopes[scope]
+
+
+def _pause_directory_ids(tray, stats):
+    return [
+        option.identity for option in _pause_options(tray, stats) if option.available
+    ]
+
+
+class TestPauseDirectoryInventory:
+    """Modal inventory merges active and paused project directories (#997/#2620)."""
 
     def test_empty_stats(self):
         tray = DaemonTray(
@@ -5980,7 +6052,7 @@ class TestGetMergedDirList:
             stop_callback=lambda: None,
             pause_callback=lambda _: None,
         )
-        assert tray._menu._get_merged_dir_list({}) == []
+        assert _pause_directory_ids(tray, {}) == []
 
     def test_active_dirs_only(self):
         tray = DaemonTray(
@@ -5989,7 +6061,7 @@ class TestGetMergedDirList:
             pause_callback=lambda _: None,
         )
         stats = {"active_project_dirs": ["/b", "/a"], "paused_dirs": {}}
-        result = tray._menu._get_merged_dir_list(stats)
+        result = _pause_directory_ids(tray, stats)
         assert result == ["/a", "/b"]
 
     def test_paused_dirs_only(self):
@@ -5999,7 +6071,7 @@ class TestGetMergedDirList:
             pause_callback=lambda _: None,
         )
         stats = {"active_project_dirs": [], "paused_dirs": {"/c": 120.0}}
-        result = tray._menu._get_merged_dir_list(stats)
+        result = _pause_directory_ids(tray, stats)
         assert result == ["/c"]
 
     def test_merged_and_deduplicated(self):
@@ -6012,29 +6084,23 @@ class TestGetMergedDirList:
             "active_project_dirs": ["/a", "/b"],
             "paused_dirs": {"/b": 60.0, "/c": 0.0},
         }
-        result = tray._menu._get_merged_dir_list(stats)
+        result = _pause_directory_ids(tray, stats)
         assert result == ["/a", "/b", "/c"]
 
 
-@pytest.mark.skipif(
-    not HAS_PYSTRAY,
-    reason="pystray/Pillow not installed",
-)
-class TestBuildDirPauseItems:
-    """Test _build_dir_pause_items returns correct slot structure (#997)."""
+class TestDirectoryPauseRows:
+    """All directory rows remain visible without fixed native-menu slots."""
 
-    def test_returns_max_slots(self):
+    def test_has_no_native_slot_cap(self):
         tray = DaemonTray(
             get_stats_callback=lambda: {},
             stop_callback=lambda: None,
             pause_callback=lambda _: None,
         )
-        items = tray._menu._build_dir_pause_items(
-            lambda _: {},
-            lambda d, m: None,
-            lambda d: None,
+        items = _pause_options(
+            tray, {"active_project_dirs": [f"/project-{i}" for i in range(100)]}
         )
-        assert len(items) == tray._menu._MAX_DIR_PAUSE_SLOTS
+        assert len(items) == 100 and all(item.available for item in items)
 
     def test_slots_visible_for_active_dirs(self):
         stats = {
@@ -6046,14 +6112,8 @@ class TestBuildDirPauseItems:
             stop_callback=lambda: None,
             pause_callback=lambda _: None,
         )
-        items = tray._menu._build_dir_pause_items(
-            lambda _: stats,
-            lambda d, m: None,
-            lambda d: None,
-        )
-        assert items[0].visible is True
-        assert items[1].visible is True
-        assert items[2].visible is False
+        items = _pause_options(tray, stats)
+        assert len(items) == 2 and all(item.available for item in items)
 
     def test_paused_dir_label_shows_half_circle(self):
         stats = {
@@ -6065,13 +6125,9 @@ class TestBuildDirPauseItems:
             stop_callback=lambda: None,
             pause_callback=lambda _: None,
         )
-        items = tray._menu._build_dir_pause_items(
-            lambda _: stats,
-            lambda d, m: None,
-            lambda d: None,
-        )
+        items = _pause_options(tray, stats)
         with mock.patch("platform.system", return_value="Darwin"):
-            label = items[0].text
+            label = items[0].label
         assert label.startswith("☾")
         assert "2m" in label
 
@@ -6085,17 +6141,13 @@ class TestBuildDirPauseItems:
             stop_callback=lambda: None,
             pause_callback=lambda _: None,
         )
-        items = tray._menu._build_dir_pause_items(
-            lambda _: stats,
-            lambda d, m: None,
-            lambda d: None,
-        )
-        label = items[0].text
+        items = _pause_options(tray, stats)
+        label = items[0].label
         assert label.startswith("●")
 
 
-class TestMultiGlobalPauseLabel:
-    """Test _multi_global_pause_label shows correct status circle (#997)."""
+class TestModalGlobalPauseLabel:
+    """Global rows show current pause state and snapshot duration."""
 
     def test_active_shows_full_circle(self):
         tray = DaemonTray(
@@ -6106,7 +6158,9 @@ class TestMultiGlobalPauseLabel:
         stats_fns = [None] * 14
         stats_fns[11] = lambda _: False
         stats_fns[13] = lambda _: {}
-        label = tray._menu._multi_global_pause_label(stats_fns, None)
+        label = _pause_options(
+            tray, {"paused": stats_fns[11](None), **stats_fns[13](None)}, "global"
+        )[0].label
         assert label == "● Daemon (global)"
 
     def test_paused_indefinite_shows_half_circle(self):
@@ -6118,8 +6172,10 @@ class TestMultiGlobalPauseLabel:
         stats_fns = [None] * 14
         stats_fns[11] = lambda _: True
         stats_fns[13] = lambda _: {"pause_remaining_seconds": 0}
-        label = tray._menu._multi_global_pause_label(stats_fns, None)
-        assert label == "☾ Daemon (global)"
+        label = _pause_options(
+            tray, {"paused": stats_fns[11](None), **stats_fns[13](None)}, "global"
+        )[0].label
+        assert label == "☾ Daemon (global) (until resume)"
 
     def test_paused_with_timer_shows_remaining(self):
         tray = DaemonTray(
@@ -6131,7 +6187,9 @@ class TestMultiGlobalPauseLabel:
         stats_fns[11] = lambda _: True
         stats_fns[13] = lambda _: {"pause_remaining_seconds": 305}
         with mock.patch("platform.system", return_value="Darwin"):
-            label = tray._menu._multi_global_pause_label(stats_fns, None)
+            label = _pause_options(
+                tray, {"paused": stats_fns[11](None), **stats_fns[13](None)}, "global"
+            )[0].label
         assert "☾ Daemon (global)" in label
         assert "5m" in label
 
@@ -6145,8 +6203,10 @@ class TestMultiGlobalPauseLabel:
         stats_fns[11] = lambda _: True
         stats_fns[13] = lambda _: {"pause_remaining_seconds": 305}
         with mock.patch("platform.system", return_value="Linux"):
-            label = tray._menu._multi_global_pause_label(stats_fns, None)
-        assert label == "☾ Daemon (global)"
+            label = _pause_options(
+                tray, {"paused": stats_fns[11](None), **stats_fns[13](None)}, "global"
+            )[0].label
+        assert label == "☾ Daemon (global) (5m 5s left)"
 
 
 class TestDirPauseRouting:
@@ -6174,7 +6234,7 @@ class TestDirPauseRouting:
             tray._menu._build_single_daemon_menu_items()
         mc.send_pause_dir.assert_not_called()
 
-    def test_mk_multi_pause_dir_calls_multi_client(self):
+    def test_modal_pause_dir_calls_multi_client(self):
         mc = mock.MagicMock()
         local_target = DaemonTarget(
             name="local",
@@ -6188,15 +6248,26 @@ class TestDirPauseRouting:
             multi_client=mc,
         )
         tray._targets = [local_target]
-        fn = tray._menu._mk_multi_pause_dir(0)
-        fn("/home/user/proj", 15)
+        tray._get_stats = lambda: {
+            "paused": False,
+            "active_project_dirs": ["/home/user/proj"],
+        }
+        tray._dispatch_to_main = mock.Mock()
+        snapshot = PauseSnapshot(tray)
+        snapshot.request(
+            *snapshot.resolve(
+                pause_values(
+                    snapshot, scope="dir", identity="/home/user/proj", minutes=15
+                )
+            )
+        )
         mc.send_pause_dir.assert_called_once_with(
             local_target,
             "/home/user/proj",
             15,
         )
 
-    def test_mk_multi_resume_dir_calls_multi_client(self):
+    def test_modal_resume_dir_calls_multi_client(self):
         mc = mock.MagicMock()
         local_target = DaemonTarget(
             name="local",
@@ -6210,8 +6281,19 @@ class TestDirPauseRouting:
             multi_client=mc,
         )
         tray._targets = [local_target]
-        fn = tray._menu._mk_multi_resume_dir(0)
-        fn("/home/user/proj")
+        tray._get_stats = lambda: {
+            "paused": False,
+            "paused_dirs": {"/home/user/proj": 0},
+        }
+        tray._dispatch_to_main = mock.Mock()
+        snapshot = PauseSnapshot(tray)
+        snapshot.request(
+            *snapshot.resolve(
+                pause_values(
+                    snapshot, scope="dir", identity="/home/user/proj", action="Resume"
+                )
+            )
+        )
         mc.send_resume_dir.assert_called_once_with(
             local_target,
             "/home/user/proj",
