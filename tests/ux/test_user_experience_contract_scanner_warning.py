@@ -248,3 +248,6 @@ class ScannerNotInstalledWarningTests(TestCase):
         assert (
             "scanner" in warning.lower()
         ), "Warning should mention scanner when no engine is available"
+        mock_select_engine.assert_called_once_with(
+            ["toml-patterns", "gitleaks"], parent_config=None
+        )

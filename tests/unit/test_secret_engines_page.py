@@ -36,6 +36,12 @@ def test_toggle_engine_removes_only_the_requested_engine():
     assert updated == ["leaktk", "toml-patterns"]
 
 
+def test_toggle_default_engines_can_opt_out_of_toml_patterns():
+    updated = secret_engines._toggle_engine(None, "toml-patterns", False)
+
+    assert updated == ["gitleaks"]
+
+
 def test_engine_inventory_comes_from_selected_daemon():
     target = object()
     service = Mock()
@@ -101,3 +107,30 @@ def test_save_engine_selection_preserves_other_config_and_engine_options(monkeyp
     ]
     assert saved[0]["secret_scanning"]["execution_strategy"] == "consensus"
     assert saved[0]["unrelated"] == {"keep": True}
+
+
+def test_save_engine_selection_persists_toml_patterns_opt_out(monkeypatch):
+    config = {"secret_scanning": {"enabled": True}}
+
+    async def io_bound(function, *args):
+        return function(*args)
+
+    def load_config():
+        return copy.deepcopy(config)
+
+    def save_config(value):
+        config.clear()
+        config.update(copy.deepcopy(value))
+        return True
+
+    monkeypatch.setattr(secret_engines, "run", SimpleNamespace(io_bound=io_bound))
+    monkeypatch.setattr(secret_engines, "load_web_config", load_config)
+    monkeypatch.setattr(secret_engines, "save_web_config", save_config)
+
+    saved, engines = asyncio.run(
+        secret_engines._save_engine_selection("toml-patterns", False)
+    )
+
+    assert saved is True
+    assert engines == ["gitleaks"]
+    assert config["secret_scanning"]["engines"] == ["gitleaks"]

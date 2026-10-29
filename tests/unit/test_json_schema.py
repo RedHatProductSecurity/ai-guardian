@@ -82,6 +82,25 @@ def test_example_config_is_valid_json():
 
 
 @pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_secret_scanning_schema_and_example_default_to_toml_patterns(
+    schema, example_config
+):
+    """The schema and canonical config share the built-in engine default."""
+    engines_schema = schema["properties"]["secret_scanning"]["properties"]["engines"]
+    assert engines_schema["default"] == ["toml-patterns", "gitleaks"]
+    assert (
+        "omit toml-patterns to intentionally opt out" in engines_schema["description"]
+    )
+
+    example_engines = example_config["secret_scanning"]["engines"]
+    assert example_engines[0] == "toml-patterns"
+    validate(instance={"secret_scanning": {"engines": example_engines}}, schema=schema)
+
+    # An explicit Gitleaks-only selection remains schema-valid as an opt-out.
+    validate(instance={"secret_scanning": {"engines": ["gitleaks"]}}, schema=schema)
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
 def test_valid_config_validates(schema, valid_config):
     """Test that a clean configuration (without comments) validates against the schema."""
     try:

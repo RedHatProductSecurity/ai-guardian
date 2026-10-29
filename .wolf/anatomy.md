@@ -12,8 +12,8 @@
 - `.readthedocs.yaml` (~55 tok)
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
-- `ai-guardian-example.json` — ', '**/examples/**')", (~21248 tok)
-- `CHANGELOG.md` — Change log (~79193 tok)
+- `ai-guardian-example.json` — ', '**/examples/**')", (~21348 tok)
+- `CHANGELOG.md` — Change log (~79265 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -990,7 +990,7 @@
 - `PROMPT_INJECTION.md` — Prompt Injection Detection (~4533 tok)
 - `README.md` — Project documentation (~1632 tok)
 - `SECRET_REDACTION.md` — Secret Redaction (~4748 tok)
-- `SECRET_SCANNING.md` — Secret Scanning Configuration Guide (~9480 tok)
+- `SECRET_SCANNING.md` — Secret Scanning Configuration Guide (~9579 tok)
 - `SSRF_PROTECTION.md` — SSRF Protection (~6619 tok)
 - `UNICODE_ATTACKS.md` — Unicode-Based Attack Detection (~3861 tok)
 
@@ -1349,7 +1349,7 @@
 
 ## src/ai_guardian/schemas/
 
-- `ai-guardian-config.schema.json` (~40264 tok)
+- `ai-guardian-config.schema.json` (~40327 tok)
 - `aiguardignore.schema.json` (~620 tok)
 - `policy-decision.schema.json` (~584 tok)
 - `scenario.schema.json` — Declares to (~1315 tok)
@@ -1371,7 +1371,7 @@
 ## src/ai_guardian/setup/
 
 - `__init__.py` — setup_hooks (~10896 tok)
-- `config.py` — Default configuration creation for ai-guardian. (~7824 tok)
+- `config.py` — Default configuration creation for ai-guardian. (~7878 tok)
 - `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~48647 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~13698 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)

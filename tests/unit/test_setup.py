@@ -4114,6 +4114,9 @@ class TestCreateDefaultConfig:
         engines = ss["engines"]
         assert len(engines) == 2
         assert engines[0]["type"] == "toml-patterns"
+        assert "default" in ss["_comment_engines"].lower()
+        assert "explicit list replaces this default" in ss["_comment_engines"]
+        assert "omit toml-patterns to opt out" in ss["_comment_engines"]
         engine = engines[1]
         assert isinstance(engine, dict)
         assert engine["type"] == "gitleaks"

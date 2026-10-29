@@ -9,6 +9,31 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2617 implementation — 2026-10-29
+
+- Continued managed DAF `open` session `RedHatProductSecurity-ai-guardian-2617`
+  on its existing branch `2617`; the worktree was clean at initialization.
+- Aligned the canonical example and schema with the runtime default
+  `toml-patterns` + Gitleaks. Fresh setup already emitted TOML first; clarified
+  its generated-config comments. Explicit engine lists still replace the default.
+- Clarified the Engine Configuration checkbox and documented opt-out behavior.
+  Added Console regression coverage showing TOML selected when `engines` is
+  omitted, then saved off and still unselected after Reload.
+- **Validation:** 446 related unit/UX tests pass; Ruff, Black py310, error-level
+  Pylint and project-environment Mypy pass. JSON parsing and `git diff --check`
+  pass. Standalone global Mypy reports 14 existing errors in untouched
+  `skill_discovery.py` and `scanners/secret_validator.py`; project Mypy is clean.
+  An initial schema-fragment test failure was fixed by validating through the
+  root schema and recorded in the buglog.
+- All acceptance criteria are met locally. DAF note and GitHub progress comment
+  are saved; issue #2617 remains open with `enhancement`, `1.21.0`, and `done`
+  labels. Changes are uncommitted;
+  no PR or issue closure. No live config or daemon changes.
+- **Next:** Review the diff, then exit the agent and run `daf complete` from the
+  user's terminal. Do not commit or create a PR in this session.
+
+---
+
 ## Issue #2615 implementation — 2026-10-29
 
 - Initialized managed DAF `open` session
