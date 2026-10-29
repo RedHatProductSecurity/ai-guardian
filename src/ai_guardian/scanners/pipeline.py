@@ -31,6 +31,7 @@ _CONTENT_SCANNER_NAMES = frozenset(
         ScannerName.CANARY_DETECTION,
         ScannerName.CONFIG_FILE,
         ScannerName.SECRET,
+        ScannerName.PASSWORD_LIKELIHOOD,
         ScannerName.PII,
     }
 )
@@ -97,7 +98,7 @@ def scan_content(
         scanner_names=scanner_names,
     )
 
-    results = []
+    results: List[ScanResult] = []
     overrides = content_overrides or {}
     extra_kwargs = dict(scanner_kwargs) if scanner_kwargs else {}
 
@@ -120,6 +121,7 @@ def scan_content(
     for entry in pipeline:
         scanner_name = entry.name
         scan_text = overrides.get(scanner_name, text)
+        scanner_config = None
 
         try:
             scanner_config = _resolve_scanner_config_for_entry(config, entry, cwd=cwd)
@@ -143,6 +145,12 @@ def scan_content(
                 latency_timer=latency_timer,
                 **merged_kwargs,
             )
+            if result is not None and scanner_name == ScannerName.PASSWORD_LIKELIHOOD:
+                from ai_guardian.scanners.password_likelihood import (
+                    exclude_credential_overlaps,
+                )
+
+                result = exclude_credential_overlaps(result, results)
             if result is not None:
                 result.extra.setdefault("scanner_name", scanner_name.value)
                 if (
@@ -152,6 +160,14 @@ def scan_content(
                 ):
                     results.append(result)
         except Exception as exc:
+            if scanner_name == ScannerName.PASSWORD_LIKELIHOOD:
+                from ai_guardian.scanners.password_likelihood import (
+                    incomplete_password_scan,
+                )
+
+                logger.warning("Password-likelihood stage failed; details withheld")
+                results.append(incomplete_password_scan(scanner_config))
+                continue
             logger.warning(
                 "%s scan error (fail-open)", scanner_name.value, exc_info=True
             )
@@ -233,6 +249,20 @@ def scan_command(
 
     results = []
 
+    # Independent password stage; command data never supplies policy.
+    from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
+
+    heuristic_config = (
+        config.get("password_likelihood") or {"enabled": False}
+        if config is not None
+        else None
+    )
+    heuristic_result = run_password_likelihood_scan(command, config=heuristic_config)
+    if heuristic_result is not None and (
+        heuristic_result.detected or heuristic_result.error_message
+    ):
+        results.append(heuristic_result)
+
     # --- Bash command exfil (config scanner) ---
     try:
         cfg_scanner_cfg = _resolve_scanner_config(
@@ -306,6 +336,13 @@ def _resolve_scanner_config_for_entry(full_config, entry, *, cwd=None):
     section_key = entry.config_section
     if not section_key:
         return None
+
+    if section_key == "password_likelihood":
+        # Explicit SDK config is trusted application policy, not scan content.
+        # Missing opt-in in that config must NOT fall through to workstation policy.
+        if full_config is not None:
+            return full_config.get(section_key) or {"enabled": False}
+        return _loaders._load_password_likelihood_config()[0]
 
     if full_config is not None:
         section = full_config.get(section_key)

@@ -66,6 +66,7 @@ SCHEMA_HEADER = "#:schema https://raw.githubusercontent.com/RedHatProductSecurit
 SCANNER_TYPES = frozenset(
     {
         "secret_scanning",
+        "password_likelihood",
         "scan_pii",
         "prompt_injection",
         "config_file_scanning",

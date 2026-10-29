@@ -367,6 +367,67 @@ class TestCheckScanners:
             result = doctor.check_scanners()
         assert result.status == CheckStatus.PASS
         assert "gitleaks 8.30.1" in result.message
+        assert "toml-patterns: configured; built-in" in result.detail
+
+    def test_missing_toml_patterns_warns_and_lists_supported_engines(
+        self, _isolate_config_dir
+    ):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps({"secret_scanning": {"engines": ["gitleaks"]}})
+        )
+        mock_scanner = mock.MagicMock()
+        mock_scanner.name = "gitleaks"
+        mock_scanner.version = "8.30.1"
+        mock_manager = mock.MagicMock()
+        mock_manager.list_installed.return_value = [mock_scanner]
+        mock_cls = mock.MagicMock(return_value=mock_manager)
+
+        with mock.patch("ai_guardian.scanners.manager.ScannerManager", mock_cls):
+            result = Doctor().check_scanners()
+
+        assert result.status == CheckStatus.WARN
+        assert "toml-patterns: not configured; built-in" in result.detail
+        assert "gitleaks: configured; installed (8.30.1)" in result.detail
+        assert "toml-patterns is not configured" in result.detail
+        assert 'Add "toml-patterns" to secret_scanning.engines' in result.fix_hint
+        for scanner in (
+            "betterleaks",
+            "detect-secrets",
+            "gitguardian",
+            "leaktk",
+            "secretlint",
+            "trufflehog",
+        ):
+            assert f"{scanner}: not configured; not installed" in result.detail
+
+    def test_missing_toml_patterns_does_not_warn_when_scanning_disabled(
+        self, _isolate_config_dir
+    ):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "secret_scanning": {
+                        "enabled": False,
+                        "engines": ["gitleaks"],
+                    }
+                }
+            )
+        )
+        mock_scanner = mock.MagicMock()
+        mock_scanner.name = "gitleaks"
+        mock_scanner.version = "8.30.1"
+        mock_manager = mock.MagicMock()
+        mock_manager.list_installed.return_value = [mock_scanner]
+        mock_cls = mock.MagicMock(return_value=mock_manager)
+
+        with mock.patch("ai_guardian.scanners.manager.ScannerManager", mock_cls):
+            result = Doctor().check_scanners()
+
+        assert result.status == CheckStatus.PASS
+        assert "toml-patterns: not configured; built-in" in result.detail
+        assert "Warning: toml-patterns" not in result.detail
 
     def test_unsupported_scanner_name_is_reported(self, _isolate_config_dir):
         config_path = _isolate_config_dir / "ai-guardian.json"
@@ -385,7 +446,7 @@ class TestCheckScanners:
     ):
         config_path = _isolate_config_dir / "ai-guardian.json"
         config_path.write_text(
-            json.dumps({"secret_scanning": {"engines": ["toml-patterns"]}})
+            json.dumps({"secret_scanning": {"engines": [{"type": "toml-patterns"}]}})
         )
         mock_manager = mock.MagicMock()
         mock_manager.list_installed.return_value = []
@@ -396,6 +457,8 @@ class TestCheckScanners:
 
         assert result.status == CheckStatus.PASS
         assert result.message == "toml-patterns (built-in)"
+        assert "toml-patterns: configured; built-in" in result.detail
+        assert "Warning: toml-patterns" not in result.detail
 
     def test_custom_engine_config_is_validated_as_an_object(self, _isolate_config_dir):
         config_path = _isolate_config_dir / "ai-guardian.json"
@@ -462,7 +525,10 @@ class TestCheckPatternServer:
             json.dumps(
                 {
                     "secret_scanning": {
-                        "pattern_server": {"url": "https://example.com/patterns"}
+                        "pattern_server": {
+                            "url": "https://example.com/patterns",
+                            "patterns_endpoint": "/patterns/gitleaks/v1",
+                        }
                     }
                 }
             )
@@ -472,6 +538,47 @@ class TestCheckPatternServer:
         result = doctor.check_pattern_server()
         assert result.status == CheckStatus.PASS
         assert "Configured" in result.message
+        assert result.detail == (
+            "secret_scanning: URL=https://example.com/patterns; "
+            "patterns_endpoint=/patterns/gitleaks/v1"
+        )
+
+    def test_lists_per_engine_servers_one_per_line(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "secret_scanning": {
+                        "engines": [
+                            {
+                                "type": "gitleaks",
+                                "pattern_server": {
+                                    "url": "https://secrets.example/patterns",
+                                    "patterns_endpoint": "/patterns/gitleaks/v1",
+                                },
+                            },
+                            {
+                                "type": "leaktk",
+                                "pattern_server": {
+                                    "url": "https://community.example/patterns",
+                                    "patterns_endpoint": "/patterns/gitleaks/8.27.0",
+                                },
+                            },
+                        ]
+                    }
+                }
+            )
+        )
+
+        result = Doctor().check_pattern_server()
+
+        assert result.status == CheckStatus.PASS
+        assert result.detail.splitlines() == [
+            "gitleaks: URL=https://secrets.example/patterns; "
+            "patterns_endpoint=/patterns/gitleaks/v1",
+            "leaktk: URL=https://community.example/patterns; "
+            "patterns_endpoint=/patterns/gitleaks/8.27.0",
+        ]
 
 
 class TestCheckHooks:

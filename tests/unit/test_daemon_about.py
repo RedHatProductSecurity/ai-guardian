@@ -14,6 +14,7 @@ class TestGetAboutInfo:
         assert "platform" in info
         assert "config_path" in info
         assert "scanners" in info
+        assert "installed_scanners" in info
         assert "url" in info
 
     def test_version_is_string(self):
@@ -67,8 +68,8 @@ class TestGetAboutInfo:
         assert info["scanners"][0]["version"] == "8.30.1"
         assert info["scanners"][0]["is_default"] is True
 
-    def test_uses_list_configured_not_list_installed(self):
-        """About must use list_configured so unconfigured scanners are excluded."""
+    def test_reports_configured_and_installed_scanners_separately(self):
+        """About separates active scanners from the installable inventory."""
         from ai_guardian.scanners.manager import InstalledScanner
 
         configured = [
@@ -93,15 +94,16 @@ class TestGetAboutInfo:
                 return_value=configured,
             ) as mock_configured,
             mock.patch(
-                "ai_guardian.scanners.manager.ScannerManager.list_installed",
-                return_value=installed,
-            ) as mock_installed,
+                "ai_guardian.scanners.manager.ScannerManager.list_installed_names",
+                return_value=[scanner.name for scanner in installed],
+            ) as mock_installed_names,
         ):
             info = get_about_info()
         mock_configured.assert_called_once()
-        mock_installed.assert_not_called()
+        mock_installed_names.assert_called_once()
         assert len(info["scanners"]) == 1
         assert info["scanners"][0]["name"] == "gitleaks"
+        assert info["installed_scanners"] == ["gitleaks", "leaktk"]
 
 
 class TestFormatAboutText:

@@ -375,6 +375,14 @@ class TestEngineTesterData:
         expected = {"from-config", "first-match", "any-match", "consensus"}
         assert set(STRATEGY_OPTIONS.keys()) == expected
 
+    def test_engine_list_note_says_only_configured_engines_are_shown(self):
+        from ai_guardian.web.pages.engine_tester import ENGINE_LIST_NOTE
+
+        assert ENGINE_LIST_NOTE == (
+            "Only engines explicitly configured in secret_scanning.engines are "
+            "listed. Built-in or installed engines are not added automatically."
+        )
+
 
 # ---------------------------------------------------------------------------
 # Directory Scan helpers
@@ -431,6 +439,17 @@ class TestDirectoryScanHelpers:
 
 
 class TestHealthCheckData:
+
+    def test_detail_label_preserves_line_breaks(self):
+        from ai_guardian.web.pages import health_check
+
+        label = mock.MagicMock()
+        with mock.patch.object(health_check.ui, "label", return_value=label) as factory:
+            health_check._detail_label("first line\nsecond line")
+
+        factory.assert_called_once_with("first line\nsecond line")
+        label.classes.assert_called_once_with("text-xs text-grey-6")
+        label.style.assert_called_once_with("white-space: pre-line")
 
     def test_get_status_icons_covers_all(self):
         from ai_guardian.doctor import CheckStatus

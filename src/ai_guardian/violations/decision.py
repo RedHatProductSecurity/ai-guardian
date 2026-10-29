@@ -37,6 +37,7 @@ _DECISION_ALIASES = {
 
 _REASON_LABELS = {
     "secret_detected": "secret detected",
+    "suspected_password": "suspected password-like content (heuristic)",
     "pii_detected": "PII detected",
     "directory_blocking": "directory access blocked",
     "tool_permission": "tool permission denied",

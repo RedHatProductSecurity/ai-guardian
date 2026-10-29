@@ -170,6 +170,13 @@
     "expire_after_hours": 168
   },
 
+  "_comment_password_likelihood": "Optional local suspected-password heuristic. Global-only human opt-in; no vault access. Not proof of a password or universal leak prevention.",
+  "password_likelihood": {
+    "_comment_enabled": "Default off in every profile. Only explicit boolean true enables local analysis.",
+    "enabled": false,
+    "_comment_action": "ask (default) requests private Allow Once / Block approval for contextual candidates or incomplete analysis; unavailable approval blocks. warn is advisory; block requests denial. Ambiguous candidates remain advisory. Host model-boundary qualification is required.",
+    "action": "ask"
+  },
   "secret_scanning": {
     "_comment": "NEW in v1.4.0: Secret scanning with Gitleaks control",
     "_comment2": "Controls whether secret scanning is performed",

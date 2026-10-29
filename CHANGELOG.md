@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Console engine selection:** Engine Configuration now offers checkboxes for
+  built-in TOML patterns and external scanners installed on the selected daemon.
+  Selection changes save immediately and update the advanced JSON editor; the
+  About API exposes installed scanner names without binary paths.
+- **Doctor secret-engine diagnostics:** List every supported secret-scanning
+  engine with configured/installed status, and warn when enabled scanning omits
+  the built-in `toml-patterns` engine. Preserve multiline detail formatting in
+  the Web Console so each engine remains on its own line. Doctor and scanner
+  catalog pattern-server lists now show one server per line with its
+  `patterns_endpoint`. The Engine Tester lists only explicitly configured engines
+  and explains that installed/built-in engines are not added automatically.
+- **Experimental password-likelihood heuristics (#2612):** Independent offline,
+  default-off/global-only suspected-password analysis with explicit trusted opt-in,
+  contextual versus ambiguous classes, bounded work and generic privacy-safe
+  locations. Adds shared SDK/daemon/hook/static-scan integration, a trusted Secrets
+  control, full-span explicit sanitization, isolated unit/UX coverage and frozen
+  synthetic quality/performance budgets. Once enabled, defaults to Ask through
+  existing local/remote tray approval, with value-withheld Allow Once / Block,
+  fail-closed unavailable approval and unchanged stronger credential decisions.
+  Automatic display-less remote daemons can forward to a registered tray without
+  overriding explicit headless mode; queued prompt timeouts are terminal.
+  Console enable/outcome controls auto-save human changes globally without a
+  separate Save button; viewing the page or changing outcome does not opt in.
+  Details provide private-review guidance without persistent-exception snippets;
+  report metadata is restricted to numeric locations and fixed labels. Delimited
+  phrase validation avoids repeated-regex backtracking.
+  No dependency, vault/source enrollment or
+  universal passphrase recognition. Warnings are not prevention; real-corpus and
+  actual pre-model host evidence remain explicit release gates, not inferred from
+  hook responses or existing credential-scanner support ratings.
 - **Headless Ubuntu VM quickstart (#2585):** Add an ordered PyPI/venv guide for
   verified SSH, explicit global setup/private storage, lab TLS, VM-hosted Console
   bootstrap, restart/verified health and workstation enrollment/discovery. Cover

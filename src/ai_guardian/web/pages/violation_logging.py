@@ -15,6 +15,10 @@ ALL_LOG_TYPES = [
     ("tool_permission", "Tool Permission — blocked tool/skill invocations"),
     ("directory_blocking", "Directory Blocking — protected directory access"),
     ("secret_detected", "Secret Detected — API keys, tokens, credentials"),
+    (
+        "suspected_password",
+        "Suspected Password — experimental likelihood heuristic, not proof",
+    ),
     ("secret_redaction", "Secret Redaction — redacted secrets in output"),
     ("prompt_injection", "Prompt Injection — injection/obfuscation attacks"),
     ("jailbreak_detected", "Jailbreak Detected — jailbreak and role-play attempts"),

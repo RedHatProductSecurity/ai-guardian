@@ -2506,6 +2506,29 @@ def _process_hook_data(hook_data, daemon_state=None):
             # PreToolUse, PermissionRequest, or beforeReadFile hook
             logger.info(f"Processing {hook_event} hook...")
 
+            from ai_guardian.scanners.password_likelihood import (
+                run_tool_input_password_scan,
+            )
+
+            password_result = run_tool_input_password_scan(tool_input)
+            if password_result is not None:
+                password_decision = apply_post_scan_pipeline(
+                    _registry.get(ScannerName.PASSWORD_LIKELIHOOD),
+                    password_result,
+                    _post_scan_ctx,
+                )
+                warning_messages.extend(password_decision.warnings)
+                if password_decision.warnings:
+                    warn_violation_types.append(ViolationType.HEURISTIC_CANDIDATE)
+                if password_decision.should_block:
+                    return _format_response(
+                        adapter,
+                        has_secrets=True,
+                        hook_event=hook_event,
+                        error_message=password_result.error_message,
+                        violation_type=ViolationType.HEURISTIC_CANDIDATE,
+                        security_message=security_message,
+                    )
             # Bash command exfiltration detection (Issue #1100)
             if (
                 hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.PERMISSION_REQUEST)

@@ -191,9 +191,9 @@ class TestDefaultRegistry:
         yield
         reset_default_registry()
 
-    def test_has_all_thirteen_scanners(self):
+    def test_has_all_registered_scanners(self):
         reg = get_default_registry()
-        assert len(reg) == 13
+        assert len(reg) == len(ScannerName) == 14
         for name in ScannerName:
             assert reg.get(name) is not None, f"Missing scanner: {name}"
 
@@ -312,6 +312,7 @@ class TestDefaultRegistry:
             ScannerName.CANARY_DETECTION,
             ScannerName.CONFIG_FILE,
             ScannerName.SECRET,
+            ScannerName.PASSWORD_LIKELIHOOD,
             ScannerName.PII,
             ScannerName.DIRECTORY,
         ]

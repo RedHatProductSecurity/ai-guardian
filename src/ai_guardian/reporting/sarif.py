@@ -86,6 +86,19 @@ class SARIFFormatter:
                 "precision": "high",
             },
         },
+        "PASSWORD-001": {
+            "id": "PASSWORD-001",
+            "name": "SuspectedPassword",
+            "shortDescription": {"text": "Suspected password-like content (heuristic)"},
+            "fullDescription": {
+                "text": "Optional local likelihood heuristic, not proof of a password. Static scans are advisory, not leak prevention."
+            },
+            "defaultConfiguration": {"level": "warning"},
+            "properties": {
+                "tags": ["security", "suspected-secret"],
+                "precision": "low",
+            },
+        },
         "PII-001": {
             "id": "PII-001",
             "name": "PIIDetected",
@@ -454,6 +467,46 @@ def create_secret_finding(
     if start_column is not None:
         result["start_column"] = start_column
     return result
+
+
+def create_heuristic_location_finding(
+    file_path: str, span: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Password-likelihood location metadata, never a credential or snippet."""
+    details = {
+        key: span[key]
+        for key in ("start", "end", "line_number", "start_column", "end_column")
+        if isinstance(span.get(key), int)
+        and not isinstance(span[key], bool)
+        and span[key] >= 0
+    }
+    for key, allowed in (
+        (
+            "candidate_class",
+            {
+                "spaced_passphrase",
+                "separated_passphrase",
+                "camelcase_passphrase",
+                "joined_word_like",
+                "mixed_symbol",
+                "random_alphanumeric",
+            },
+        ),
+        ("confidence_class", {"contextual", "ambiguous"}),
+    ):
+        label = span.get(key)
+        if isinstance(label, str) and label in allowed:
+            details[key] = label
+    return {
+        "rule_id": "PASSWORD-001",
+        "level": "warning",
+        "message": "Suspected password-like content (heuristic; not a confirmed secret).",
+        "file_path": file_path,
+        "line_number": details.get("line_number"),
+        "start_column": details.get("start_column"),
+        "end_column": details.get("end_column"),
+        "details": details,
+    }
 
 
 def create_pii_finding(

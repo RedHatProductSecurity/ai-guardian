@@ -92,15 +92,24 @@ class TestGetAvailableEngines:
         assert result == ["betterleaks", "gitleaks"]
 
     @patch("ai_guardian._load_secret_scanning_config")
-    def test_default_gitleaks_when_no_config(self, mock_cfg):
+    def test_no_engines_when_config_missing(self, mock_cfg):
         mock_cfg.return_value = (None, None)
-        assert get_available_engines() == ["gitleaks"]
+        assert get_available_engines() == []
 
     @patch("ai_guardian._load_secret_scanning_config")
-    def test_default_gitleaks_appended_if_missing(self, mock_cfg):
+    def test_does_not_append_unconfigured_gitleaks(self, mock_cfg):
         mock_cfg.return_value = ({"engines": ["betterleaks"]}, None)
-        result = get_available_engines()
-        assert result == ["betterleaks", "gitleaks"]
+        assert get_available_engines() == ["betterleaks"]
+
+    @patch("ai_guardian._load_secret_scanning_config")
+    def test_toml_patterns_is_listed_only_when_configured(self, mock_cfg):
+        mock_cfg.return_value = ({"engines": ["toml-patterns"]}, None)
+        assert get_available_engines() == ["toml-patterns"]
+
+    @patch("ai_guardian._load_secret_scanning_config")
+    def test_missing_engine_list_is_not_populated_from_defaults(self, mock_cfg):
+        mock_cfg.return_value = ({"enabled": True}, None)
+        assert get_available_engines() == []
 
     @patch("ai_guardian._load_secret_scanning_config")
     def test_no_duplicate_gitleaks(self, mock_cfg):

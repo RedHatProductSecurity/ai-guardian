@@ -235,11 +235,19 @@ class TestShowViaTrayForwarding:
         assert result is not None
         assert result.decision == AskDecision.ALLOW_ONCE
 
-    def test_returns_none_on_timeout(self, violation, daemon_state):
+    @pytest.mark.parametrize(
+        "fallback,decision",
+        [("block", AskDecision.BLOCK), ("warn", AskDecision.ALLOW_ONCE)],
+    )
+    def test_timeout_returns_terminal_security_fallback(
+        self, violation, daemon_state, fallback, decision
+    ):
         daemon_state.register_tray("host.docker.internal", 63152)
         with patch("ai_guardian.daemon.get_daemon_state", return_value=daemon_state):
-            result = _show_via_tray_forwarding(violation, timeout_seconds=0.05)
-        assert result is None
+            result = _show_via_tray_forwarding(
+                violation, fallback_action=fallback, timeout_seconds=0.05
+            )
+        assert result.decision == decision
 
     def test_allow_always_with_pattern(self, violation, daemon_state):
         daemon_state.register_tray("host.docker.internal", 63152)

@@ -27,6 +27,7 @@ from typing import Any, Dict, Iterator, Literal, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 _SAFE_SUGGESTIONS: Dict[str, str] = {
+    "suspected_password": "Review the indicated location; this heuristic is not proof of a password",
     "secret_detected": "Remove the secret and use environment variables or a secret manager",
     "pii_detected": "Remove PII from the file or use anonymized test data",
     "directory_blocking": "This path is protected by security policy",
@@ -742,6 +743,10 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                     features[key] = bool(section) if section is not None else True
 
             features["permissions"] = config.get("permissions", {}).get("enabled", True)
+            heuristic = config.get("password_likelihood")
+            features["password_likelihood"] = (
+                isinstance(heuristic, dict) and heuristic.get("enabled") is True
+            )
 
             si_section = config.get("security_instructions", {})
             features["security_instructions"] = is_feature_enabled(
@@ -771,6 +776,9 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                 else:
                     scanner_actions[key] = global_action
             features["scanner_actions"] = scanner_actions
+            scanner_actions["password_likelihood"] = (
+                heuristic.get("action", "ask") if isinstance(heuristic, dict) else "ask"
+            )
 
             mcp_section = config.get("mcp_server", {})
             if not isinstance(mcp_section, dict):

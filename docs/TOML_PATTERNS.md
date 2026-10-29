@@ -14,7 +14,11 @@ The TOML patterns work out of the box. All detection modules load them automatic
 
 ## Scanner SDK Engine (Optional)
 
-For the secret scanning PreToolUse pipeline, `toml-patterns` is also available as a Scanner SDK engine. This is useful if you want to run it instead of (or alongside) gitleaks:
+For the secret-scanning PreToolUse pipeline, `toml-patterns` is a built-in
+Scanner SDK engine and is included by default when `secret_scanning.engines` is
+omitted. An explicit engine list replaces that default; for example,
+`["gitleaks"]` does not run `toml-patterns` in this pipeline. Use the engine
+list to select it alone or alongside external scanners:
 
 ```json
 {

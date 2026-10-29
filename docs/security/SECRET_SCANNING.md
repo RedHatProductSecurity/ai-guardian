@@ -57,15 +57,19 @@ Default engine order: ["toml-patterns", "gitleaks"]
 
 ### Configuration
 
-**Default (Gitleaks):**
+**Default engine selection:**
 ```json
 {
   "secret_scanning": {
     "enabled": true
-    // Defaults to gitleaks if not specified
+    // If engines is omitted, defaults to ["toml-patterns", "gitleaks"]
   }
 }
 ```
+
+An explicit `engines` list replaces that default. For example,
+`"engines": ["gitleaks"]` runs Gitleaks only and does not run the built-in
+`toml-patterns` engine in this secret-scanning pipeline.
 
 **Recommended (BetterLeaks with Gitleaks fallback):**
 ```json
@@ -155,9 +159,14 @@ When the ai-guardian daemon is running and LeakTK (v0.3.3+) is installed, secret
 AI Guardian automatically selects the first available scanner from your `engines` list:
 
 1. **Defaults to toml-patterns:** If no `engines` configured, uses `["toml-patterns", "gitleaks"]` — `toml-patterns` is always available (pure Python, no binary)
-2. **Checks availability:** Tries each scanner binary in order
-3. **Selects first found:** Uses the first scanner that exists in PATH
-4. **Falls back gracefully:** If an external scanner is not installed, the next engine in the list is tried; `toml-patterns` always provides a working fallback
+2. **Explicit lists replace defaults:** Only engines in `secret_scanning.engines` are selected; a Gitleaks-only list omits `toml-patterns`
+3. **Checks availability:** Tries each scanner binary in order
+4. **Selects first found:** Uses the first scanner that exists in PATH
+5. **Falls back gracefully:** If an external scanner is not installed, the next engine in the list is tried; `toml-patterns` always provides a working fallback when included
+
+`ai-guardian doctor` lists supported engines and indicates which are configured
+and installed. It warns when secret scanning is enabled but `toml-patterns` is
+not selected.
 
 **Example:**
 ```bash

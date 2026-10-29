@@ -46,8 +46,36 @@ def test_every_violation_type_has_user_facing_resolution_guidance(violation_type
     instructions, snippet = get_resolution_instructions(violation)
 
     assert instructions
-    if violation_type != "canary_detected":
+    if violation_type not in {"canary_detected", "suspected_password"}:
         assert snippet
+    else:
+        assert snippet == ""
+
+
+def test_heuristic_details_offer_private_review_not_candidate_enrollment():
+    """USER EXPERIENCE: suspected content → private review, not a confirmed secret.
+
+    No raw value, source pattern, or persistent exception snippet is displayed.
+    This guidance is only for the trusted Details view, never an agent protocol.
+    """
+    instructions, snippet = get_resolution_instructions(
+        {
+            "violation_type": "suspected_password",
+            "blocked": {
+                "matched_text": "SYNTHETIC_CANDIDATE",
+                "file_path": "SYNTHETIC_CANDIDATE",
+            },
+            "suggestion": {"pattern": "SYNTHETIC_CANDIDATE"},
+        }
+    )
+    assert instructions == (
+        "Review the reported location privately. This is suspected password-like "
+        "content, not a confirmed secret; candidate values are withheld. "
+        "Use the trusted Console for policy review. No source or persistent "
+        "exception is generated for this finding."
+    )
+    assert snippet == ""
+    assert "SYNTHETIC_CANDIDATE" not in instructions
 
 
 def test_tool_permission_details_show_rule_instruction_and_snippet():

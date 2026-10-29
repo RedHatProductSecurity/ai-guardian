@@ -196,7 +196,10 @@ class GuardSession:
         self._results.append(result)
         if result.blocked:
             raise SecurityViolation(result)
-        if result.detected:
+        if result.detected or (
+            result.message
+            and "suspected_password" in (result.violation_type or "").split(",")
+        ):
             warnings.warn(
                 result.message or "Security issue detected",
                 _SecurityWarning,
@@ -511,16 +514,29 @@ class _DirectSession(GuardSession):
         if context is not None:
             seq = context.next_sequence()
             try:
-                return sanitize_text(text, pi_config=pi_config)
+                return sanitize_text(
+                    text,
+                    pi_config=pi_config,
+                    password_config=config.get("password_likelihood")
+                    or {"enabled": False},
+                )
             finally:
                 context.end_sequence(seq)
-        return sanitize_text(text, pi_config=pi_config)
+        return sanitize_text(
+            text,
+            pi_config=pi_config,
+            password_config=config.get("password_likelihood") or {"enabled": False},
+        )
 
     def sanitize_batch(self, texts: List[str]) -> List[str]:
         from ai_guardian.scanners.sanitizer import sanitize_text_batch
 
         config = self._config or {}
-        return sanitize_text_batch(texts, pi_config=config.get("prompt_injection"))
+        return sanitize_text_batch(
+            texts,
+            pi_config=config.get("prompt_injection"),
+            password_config=config.get("password_likelihood") or {"enabled": False},
+        )
 
     def get_violations(
         self,

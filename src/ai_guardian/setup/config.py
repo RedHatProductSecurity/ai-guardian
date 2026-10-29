@@ -127,6 +127,13 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
         "$schema": schema_uri,
         "_comment_project_overlay": "Project-level .ai-guardian/ai-guardian.json at repo root merges on top of this global config. Use immutable arrays to lock fields from project override.",
         "_comment_secret_scanning": "Scan for secrets (API keys, tokens, passwords). Detection always blocks — use allowlist_patterns for false positives. Supported engines: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian",
+        "_comment_password_likelihood": "Optional local suspected-password heuristic. Global-only human opt-in; no vault access. Not proof of a password or universal leak prevention.",
+        "password_likelihood": {
+            "_comment_enabled": "Default off in every profile. Only explicit boolean true enables local analysis.",
+            "enabled": False,
+            "_comment_action": "ask (default) requests private Allow Once / Block approval for contextual candidates or incomplete analysis; unavailable approval blocks. warn is advisory; block requests denial. Ambiguous candidates remain advisory. Host model-boundary qualification is required.",
+            "action": "ask",
+        },
         "secret_scanning": {
             "enabled": True,
             "ignore_files": [],

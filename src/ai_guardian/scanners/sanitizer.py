@@ -185,6 +185,7 @@ def sanitize_text(
     no_pii: bool = False,
     no_threats: bool = False,
     pi_config: Optional[Dict] = None,
+    password_config: Optional[Dict] = None,
 ) -> Dict:
     """
     Sanitize text by redacting secrets, PII, and threats.
@@ -197,6 +198,9 @@ def sanitize_text(
         pi_config: Prompt injection config dict (with allowlist_patterns etc.).
             When provided, overrides the hardcoded default so user allowlists
             are respected.  Pass ``config.get("prompt_injection")``.
+        password_config: Trusted password-likelihood policy override. If absent,
+            load global opt-in. Sanitization fully replaces all qualified spans;
+            this is not automatic pre-model host transformation.
 
     Returns:
         Dict with sanitized_text, redactions list, and stats
@@ -217,6 +221,16 @@ def sanitize_text(
     sanitized = text
     all_redactions: List[Dict] = []
     stats = {"secrets": 0, "pii": 0, "prompt_injection": 0, "unicode": 0}
+
+    if not no_secrets:
+        from ai_guardian.scanners.password_likelihood import redact_password_likelihood
+
+        sanitized, suspected = redact_password_likelihood(
+            sanitized, config=password_config
+        )
+        if suspected:
+            stats["suspected_password"] = len(suspected)
+            all_redactions.extend(suspected)
 
     # 1. Unicode attacks (strip invisible chars before pattern matching)
     if not no_threats:
@@ -274,6 +288,7 @@ def sanitize_text(
 def sanitize_text_batch(
     texts: List[str],
     pi_config: Optional[Dict] = None,
+    password_config: Optional[Dict] = None,
 ) -> List[str]:
     """Batch-sanitize texts, reusing compiled patterns across all entries.
 
@@ -300,13 +315,20 @@ def sanitize_text_batch(
     det_config = dict(_PI_DETECTOR_CONFIG, **(pi_config or {}))
     detector = get_cached_detector(det_config)
 
+    from ai_guardian.scanners.password_likelihood import redact_password_likelihood
+
+    if password_config is None:
+        from ai_guardian.config.loaders import _load_password_likelihood_config
+
+        password_config, _ = _load_password_likelihood_config()
+
     results: List[str] = []
     for text in texts:
         if not text:
             results.append(text)
             continue
 
-        sanitized = text
+        sanitized, _ = redact_password_likelihood(text, config=password_config)
 
         sanitized, _ = _sanitize_unicode(sanitized)
 

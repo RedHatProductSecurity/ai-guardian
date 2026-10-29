@@ -22,6 +22,13 @@ from ai_guardian.violations.utils import is_immutable_violation, is_temp_path
 FILTER_TABS = [("All", None, "Show all violation types")] + list(VIOLATION_FILTER_TYPES)
 
 DETAIL_FIELDS = {
+    "suspected_password": [
+        ("File", "file_path"),
+        ("Line", "line_number"),
+        ("Column", "start_column"),
+        ("Findings", "total_findings"),
+        ("Reason", "reason"),
+    ],
     "tool_permission": [
         ("Tool", "tool_name"),
         ("File", "tool_value"),

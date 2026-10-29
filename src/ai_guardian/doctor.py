@@ -515,32 +515,36 @@ class Doctor:
                 detail="Expected a list of scanner names or engine objects.",
             )
 
-        supported_names = set(ENGINE_PRESETS) | {"toml-patterns"}
+        supported_engine_names = ["toml-patterns", *sorted(ENGINE_PRESETS)]
+        supported_names = set(supported_engine_names)
         invalid_names = []
-        has_builtin_scanner = False
+        configured_names = set()
         for engine in configured_engines:
             if isinstance(engine, str):
                 if engine not in supported_names:
                     invalid_names.append(engine)
-                has_builtin_scanner |= engine == "toml-patterns"
+                configured_names.add(engine)
                 continue
             if not isinstance(engine, dict):
                 invalid_names.append(str(engine))
                 continue
             engine_type = engine.get("type")
             if engine_type == "python":
+                configured_names.add("python")
                 if not engine.get("class") or not (
                     engine.get("module") or engine.get("path")
                 ):
                     invalid_names.append("python (missing module/path/class)")
                 continue
             if engine_type == "custom":
+                configured_names.add("custom")
                 if not engine.get("binary") or not engine.get("command_template"):
                     invalid_names.append("custom (missing binary/command_template)")
                 continue
-            if engine_type not in supported_names:
+            if not isinstance(engine_type, str) or engine_type not in supported_names:
                 invalid_names.append(str(engine_type or "<missing type>"))
-            has_builtin_scanner |= engine_type == "toml-patterns"
+            else:
+                configured_names.add(engine_type)
 
         if invalid_names:
             return CheckResult(
@@ -549,7 +553,7 @@ class Doctor:
                 message=("Unsupported scanner name(s): " + ", ".join(invalid_names)),
                 detail=(
                     "Supported scanners: "
-                    + ", ".join(sorted(supported_names))
+                    + ", ".join(supported_engine_names)
                     + "; custom engines require binary and command_template; "
                     "custom Python engines require module/path and class."
                 ),
@@ -558,6 +562,34 @@ class Doctor:
 
         manager = ScannerManager(config=config)
         installed = manager.list_installed()
+        installed_by_name = {scanner.name: scanner for scanner in installed}
+        has_builtin_scanner = "toml-patterns" in configured_names
+        scanning_enabled = secret_config.get("enabled", True) is not False
+        missing_builtin_warning = scanning_enabled and not has_builtin_scanner
+
+        details = ["Supported secret-scanning engines:"]
+        for name in supported_engine_names:
+            selected = "configured" if name in configured_names else "not configured"
+            if name == "toml-patterns":
+                availability = "built-in"
+            else:
+                scanner = installed_by_name.get(name)
+                availability = (
+                    f"installed ({scanner.version})" if scanner else "not installed"
+                )
+            details.append(f"  {name}: {selected}; {availability}")
+
+        additional_engine_types = sorted(configured_names - set(supported_engine_names))
+        if additional_engine_types:
+            details.append(
+                "Configured custom engine types: " + ", ".join(additional_engine_types)
+            )
+
+        if missing_builtin_warning:
+            details.append(
+                "Warning: toml-patterns is not configured; its bundled rules are "
+                "omitted from the secret_scanning engine pipeline."
+            )
 
         if not installed:
             if has_builtin_scanner:
@@ -565,54 +597,92 @@ class Doctor:
                     name="scanners",
                     status=CheckStatus.PASS,
                     message="toml-patterns (built-in)",
+                    detail="\n".join(details),
                 )
             return CheckResult(
                 name="scanners",
                 status=CheckStatus.FAIL,
                 message="No scanners installed",
-                fix_hint="Run: ai-guardian scanner install gitleaks",
+                detail="\n".join(details),
+                fix_hint=(
+                    'Add "toml-patterns" to secret_scanning.engines or install '
+                    "a configured external scanner."
+                ),
             )
 
         names = [f"{s.name} {s.version}" for s in installed]
         unknown = [s for s in installed if s.version == "unknown"]
         if unknown:
+            details.append("Some installed scanners have unknown version.")
             return CheckResult(
                 name="scanners",
                 status=CheckStatus.WARN,
                 message=f"Installed: {', '.join(names)}",
-                detail="Some scanners have unknown version",
+                detail="\n".join(details),
+                fix_hint=(
+                    'Add "toml-patterns" to secret_scanning.engines to include its '
+                    "bundled rules."
+                    if missing_builtin_warning
+                    else None
+                ),
             )
 
         return CheckResult(
             name="scanners",
-            status=CheckStatus.PASS,
+            status=(CheckStatus.WARN if missing_builtin_warning else CheckStatus.PASS),
             message=", ".join(names),
+            detail="\n".join(details),
+            fix_hint=(
+                'Add "toml-patterns" to secret_scanning.engines to include its '
+                "bundled rules."
+                if missing_builtin_warning
+                else None
+            ),
         )
 
-    def _get_ps_config(self) -> Optional[Dict]:
-        """Extract pattern server config (per-engine, global, or root-level)."""
+    def _get_ps_configs(self) -> List[Tuple[str, Dict]]:
+        """Return configured secret-scanning pattern servers with their source."""
         self._ensure_config()
         if not self._config:
-            return None
+            return []
         ss = self._config.get("secret_scanning", {})
         if isinstance(ss, dict):
-            # Priority 1: per-engine pattern_server
-            for engine_spec in ss.get("engines", []):
-                if isinstance(engine_spec, dict):
+            # Per-engine configuration takes precedence over deprecated globals.
+            engine_servers = []
+            engines = ss.get("engines", [])
+            if isinstance(engines, list):
+                for index, engine_spec in enumerate(engines, start=1):
+                    if not isinstance(engine_spec, dict):
+                        continue
                     ps = engine_spec.get("pattern_server")
                     if isinstance(ps, dict) and ps.get("url"):
-                        return ps
-            # Priority 2: global secret_scanning.pattern_server (deprecated)
+                        engine_name = engine_spec.get("type")
+                        source = (
+                            engine_name
+                            if isinstance(engine_name, str) and engine_name
+                            else f"engine {index}"
+                        )
+                        engine_servers.append((source, ps))
+            if engine_servers:
+                return engine_servers
+
+            # Deprecated global secret_scanning.pattern_server.
             if "pattern_server" in ss:
                 ps = ss["pattern_server"]
                 if isinstance(ps, dict) and ps.get("url"):
-                    return ps
-        # Priority 3: root-level pattern_server (deprecated)
+                    return [("secret_scanning", ps)]
+
+        # Deprecated root-level pattern_server.
         if "pattern_server" in self._config:
             ps = self._config["pattern_server"]
             if isinstance(ps, dict) and ps.get("url"):
-                return ps
-        return None
+                return [("root-level", ps)]
+        return []
+
+    def _get_ps_config(self) -> Optional[Dict]:
+        """Extract the primary pattern server for existing single-server checks."""
+        configs = self._get_ps_configs()
+        return configs[0][1] if configs else None
 
     def _refresh_ps_cache(self, ps_config: Dict) -> tuple:
         """Attempt to refresh pattern cache. Returns (success, error_msg)."""
@@ -628,18 +698,26 @@ class Doctor:
             return False, str(e)
 
     def check_pattern_server(self) -> CheckResult:
-        ps_config = self._get_ps_config()
-        if not ps_config:
+        ps_configs = self._get_ps_configs()
+        if not ps_configs:
             return CheckResult(
                 name="pattern_server",
                 status=CheckStatus.SKIP,
                 message="No pattern server configured",
             )
+
+        detail_lines = []
+        for source, ps_config in ps_configs:
+            endpoint = ps_config.get("patterns_endpoint") or "(default)"
+            detail_lines.append(
+                f"{source}: URL={ps_config.get('url', 'unknown')}; "
+                f"patterns_endpoint={endpoint}"
+            )
         return CheckResult(
             name="pattern_server",
             status=CheckStatus.PASS,
             message="Configured",
-            detail=f"URL: {ps_config.get('url', 'unknown')}",
+            detail="\n".join(detail_lines),
         )
 
     def check_ps_cache_path(self) -> CheckResult:

@@ -242,6 +242,7 @@ class TestRestAPIEndpoints:
         assert "python" in data
         assert "platform" in data
         assert "scanners" in data
+        assert "installed_scanners" in data
         assert "url" in data
         assert data["author"] == "Dominique Vernier"
         assert data["author_url"] == "https://github.com/itdove"

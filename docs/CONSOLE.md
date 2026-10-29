@@ -60,6 +60,8 @@ The historical `ai-guardian tui` command remains as an alias for
   daemon TLS identity, view reconnect/offline state, and remove saved pairings
   (loopback-bound Console only; [SSH workflow](MULTI_DAEMON_TRAY.md#add-daemon-via-ssh))
 - **Global Settings**: Effective security configuration and search
+- **Engine Config**: Select built-in or installed secret-scanning engines with
+  immediate save; advanced JSON configuration remains available
 - **Violations**: Filterable violation records by daemon and type
 - **Violation Logging**: Violation retention and output settings
 - **Metrics**: Violation counts by type and severity

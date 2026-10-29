@@ -59,6 +59,7 @@ class ViolationType(str, Enum):
     """Violation types logged by the violation logger."""
 
     SECRET_DETECTED = "secret_detected"
+    HEURISTIC_CANDIDATE = "suspected_password"  # public category, never a value
     PII_DETECTED = "pii_detected"
     DIRECTORY_BLOCKING = "directory_blocking"
     TOOL_PERMISSION = "tool_permission"
@@ -422,6 +423,11 @@ VIOLATION_FILTER_TYPES = [
         "Secrets found in tool output and redacted before reaching the AI model",
     ),
     (
+        "Suspected Password",
+        "suspected_password",
+        "Optional local password-likelihood heuristic; not a confirmed secret",
+    ),
+    (
         "Directories",
         "directory_blocking",
         "File access blocked by directory protection rules",
@@ -503,6 +509,7 @@ ALL_ACTION_MODES = tuple(a.value for a in ActionMode)
 
 RULE_ID_LABELS = {
     "SECRET-001": "Secrets",
+    "PASSWORD-001": "Suspected Password (Heuristic)",
     "PII-001": "PII",
     "PROMPT-INJECTION-001": "Prompt Injection",
     "SSRF-001": "SSRF",
@@ -527,6 +534,7 @@ RULE_ID_TO_SCANNER = {
 
 RULE_ID_TO_VIOLATION_TYPE = {
     "SECRET-001": "secret_detected",
+    "PASSWORD-001": "suspected_password",
     "PII-001": "pii_detected",
     "PROMPT-INJECTION-001": "prompt_injection",
     "SSRF-001": "ssrf_blocked",
@@ -541,6 +549,7 @@ RULE_ID_TO_VIOLATION_TYPE = {
 
 RULE_ID_TO_CONFIG_SECTION = {
     "SECRET-001": "secret_scanning",
+    "PASSWORD-001": "password_likelihood",
     "PII-001": "scan_pii",
     "PROMPT-INJECTION-001": "prompt_injection",
     "SSRF-001": "ssrf_protection",
@@ -583,6 +592,8 @@ _SECTION_TO_SLUG: dict[str, str] = {}
 for _slug, _section in SLUG_TO_CONFIG_SECTION.items():
     _SECTION_TO_SLUG.setdefault(_section, _slug)
 del _slug, _section
+# This opt-in control shares the Secrets page rather than adding navigation.
+_SECTION_TO_SLUG["password_likelihood"] = "/secrets"
 
 RULE_ID_TO_SLUG = {
     rule_id: ("/pi-unicode" if rule_id == "UNICODE-001" else _SECTION_TO_SLUG[section])

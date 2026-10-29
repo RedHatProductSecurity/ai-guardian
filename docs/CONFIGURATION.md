@@ -24,6 +24,18 @@ scheduled for removal in 2.x (#2194).
 
 ## Configuration Files
 
+The experimental [password-likelihood heuristic](security/PASSWORD_LIKELIHOOD.md)
+is global-only, default-off in every profile and controlled separately from secret
+engine selection. Its Secrets-page controls auto-save human changes to the selected
+daemon's global policy, even when a project is selected; viewing the page or
+changing the outcome does not enable analysis. `ask` is the
+default enabled outcome, reusing local/remote private Allow Once / Block approval
+and denying when approval is unavailable. `warn` is advisory and `block` requests
+denial only for contextual candidates or incomplete analysis. Ambiguous findings
+remain advisory; SDK checks deny unresolved Ask without opening a UI.
+Real-host pre-model prevention remains unqualified. Project overlays,
+tool payloads and project exclusions cannot activate or weaken this policy.
+
 AI Guardian loads configuration from multiple sources in a specific priority order:
 
 ### 1. User Configuration (Default)

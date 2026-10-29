@@ -90,20 +90,28 @@ def _handle_ask_mode(
     if primary_action != ActionMode.ASK:
         return None
 
+    private_candidate = violation_type == ViolationType.HEURISTIC_CANDIDATE
+    if private_candidate:
+        # This stage never enrolls source exceptions or recovers candidate text.
+        fallback_action = ActionMode.BLOCK
+
     try:
         from ai_guardian.ui.ask_dialog import (
             show_ask_dialog,
             AskViolationInfo,
             AskDecision,
+            AskResult,
             format_hook_label,
         )
 
         import re as _re
 
-        display_text = matched_text or ""
+        display_text = (
+            "[Candidate values withheld]" if private_candidate else matched_text or ""
+        )
         display_line = line_number
 
-        if error_msg and not matched_text:
+        if error_msg and not matched_text and not private_candidate:
             display_text = ""
 
         if not display_text and file_path and error_msg:
@@ -170,6 +178,17 @@ def _handle_ask_mode(
         if latency_timer is not None:
             latency_timer.add_ask_wait(_dialog_elapsed_ms)
 
+        if private_candidate:
+            # Only explicit, invocation-scoped approval is meaningful here.
+            return AskResult(
+                decision=(
+                    AskDecision.ALLOW_ONCE
+                    if result.decision == AskDecision.ALLOW_ONCE
+                    else AskDecision.BLOCK
+                ),
+                dialog_wait_ms=_dialog_elapsed_ms,
+            )
+
         if result.decision == AskDecision.ALLOW_ALWAYS and result.allowlist_pattern:
             if not getattr(result, "config_saved", False):
                 from pathlib import Path as _Path
@@ -196,7 +215,10 @@ def _handle_ask_mode(
         return result
 
     except Exception as e:
-        logger.warning(f"Ask dialog error, falling back to {fallback_action}: {e}")
+        if private_candidate:
+            logger.warning("Password-likelihood Ask failed; blocking, details withheld")
+        else:
+            logger.warning(f"Ask dialog error, falling back to {fallback_action}: {e}")
         from ai_guardian.ui.ask_dialog import (
             AskResult,
             AskDecision,
@@ -324,6 +346,21 @@ def _handle_ask_mode_auto(
     findings=None,
 ):
     """Route to multi or single ask dialog based on findings count."""
+    if violation_type == ViolationType.HEURISTIC_CANDIDATE:
+        # One private decision covers the current operation, including incomplete
+        # analysis. Do not deduplicate by values or prompt for ambiguous spans.
+        return _handle_ask_mode(
+            action_str,
+            violation_type,
+            "",
+            "password_likelihood",
+            error_msg,
+            file_path=file_path,
+            line_number=line_number,
+            start_column=start_column,
+            latency_timer=latency_timer,
+            hook_context=hook_context,
+        )
     if findings and len(findings) > 1:
         return _handle_ask_mode_multi(
             action_str,
@@ -368,6 +405,7 @@ def _handle_ask_mode_auto(
 
 _ASK_VIOLATION_LABELS = {
     ViolationType.SECRET_DETECTED: "Secret detection",
+    ViolationType.HEURISTIC_CANDIDATE: "Password-likelihood review",
     ViolationType.PII_DETECTED: "PII detection",
     ViolationType.TOOL_PERMISSION: "Permission rule",
     ViolationType.DIRECTORY_BLOCKING: "Directory access",
@@ -423,6 +461,12 @@ def _log_ask_decision(
     """
     if not HAS_VIOLATION_LOGGER:
         return
+    private_candidate = violation_type == ViolationType.HEURISTIC_CANDIDATE
+    if private_candidate:
+        from ai_guardian.scanners.password_likelihood import MESSAGE, INCOMPLETE_MESSAGE
+
+        matched_text = ""
+        error_msg = INCOMPLETE_MESSAGE if error_msg == INCOMPLETE_MESSAGE else MESSAGE
     try:
         from ai_guardian.ui.ask_dialog import AskDecision
 
@@ -487,7 +531,11 @@ def _log_ask_decision(
 
         # Record allowed findings for transcript scanner dedup within this invocation (#1364, #1439).
         # Uses invocation_allowed_findings (local set) so Allow Once does not persist to next invocation.
-        if action_taken == "allowed" and invocation_allowed_findings is not None:
+        if (
+            not private_candidate
+            and action_taken == "allowed"
+            and invocation_allowed_findings is not None
+        ):
             _record_allowed_for_transcript(
                 invocation_allowed_findings,
                 violation_type,
@@ -496,7 +544,12 @@ def _log_ask_decision(
                 finding_fingerprints,
             )
     except Exception as e:
-        logger.error(f"Failed to log ask decision: {e}")
+        if private_candidate:
+            logger.critical(
+                "Failed to persist password-likelihood Ask decision; details withheld"
+            )
+        else:
+            logger.error(f"Failed to log ask decision: {e}")
 
 
 def _record_allowed_for_transcript(

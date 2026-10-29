@@ -11,6 +11,11 @@ STRATEGY_OPTIONS = {
     "consensus": "Consensus",
 }
 
+ENGINE_LIST_NOTE = (
+    "Only engines explicitly configured in secret_scanning.engines are listed. "
+    "Built-in or installed engines are not added automatically."
+)
+
 
 def _get_engines():
     try:
@@ -57,9 +62,7 @@ def create_engine_tester_page(service, daemon_name: str):
 
     with ui.column().classes("flex-grow p-6 gap-4"):
         ui.label("Engine Tester").classes("text-2xl font-bold")
-        ui.label("Test strings against installed scanner engines.").classes(
-            "text-xs text-grey-6"
-        )
+        ui.label(ENGINE_LIST_NOTE).classes("text-xs text-grey-6")
 
         with ui.card().classes("w-full"):
             ui.label("Configuration").classes("text-lg font-bold")

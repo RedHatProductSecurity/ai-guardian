@@ -28,6 +28,7 @@ class ScannerName(str, enum.Enum):
     CANARY_DETECTION = "canary_detection"
     CONFIG_FILE = "config_file"
     SECRET = "secret"
+    PASSWORD_LIKELIHOOD = "password_likelihood"
     PII = "pii"
     CODE_SECURITY = "code_security"
     BASH_EXFIL = "bash_exfil"
@@ -146,6 +147,8 @@ def _build_default_registry() -> ScannerRegistry:
         run_secret_scan,
         run_supply_chain_scan,
     )
+
+    from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
 
     registry = ScannerRegistry()
 
@@ -375,6 +378,23 @@ def _build_default_registry() -> ScannerRegistry:
                     "Secrets should never be committed to source control."
                     " Remove and rotate the credential."
                 ),
+            },
+        )
+    )
+
+    registry.register(
+        ScannerEntry(
+            name=ScannerName.PASSWORD_LIKELIHOOD,
+            run_fn=run_password_likelihood_scan,
+            violation_type=ViolationType.HEURISTIC_CANDIDATE,
+            hook_events=CONTENT_EVENTS | {HookEvent.POST_TOOL_USE},
+            order=71,
+            config_section="password_likelihood",
+            supports_ask_mode=True,
+            violation_severity="medium",
+            violation_suggestion={
+                "action": "review_suspected_secret",
+                "note": "Review the indicated location; this heuristic is not proof of a password.",
             },
         )
     )

@@ -697,6 +697,9 @@ class FileScanner:
             if HAS_SECRET_SCANNER and "SECRET-001" not in _skip:
                 self._check_secrets(relative_path, secret_content, str(file_path))
 
+            if "PASSWORD-001" not in _skip:
+                self._check_password_likelihood(relative_path, content)
+
             if HAS_PII_SCANNER and "PII-001" not in _skip:
                 self._check_pii(relative_path, pii_content)
 
@@ -978,6 +981,30 @@ class FileScanner:
                     print(f"  [SECRET] {count} secret(s) detected")
         except Exception as e:
             logger.warning(f"Error checking secrets: {e}")
+
+    def _check_password_likelihood(self, file_path: str, content: str) -> None:
+        from ai_guardian.scanners.password_likelihood import (
+            run_password_likelihood_scan,
+        )
+        from ai_guardian.reporting.sarif import create_heuristic_location_finding
+
+        result = run_password_likelihood_scan(
+            content, config=self.config.get("password_likelihood") or {"enabled": False}
+        )
+        if result is None:
+            return
+        for span in result.findings or []:
+            self.findings.append(create_heuristic_location_finding(file_path, span))
+        if result.extra.get("incomplete"):
+            self.findings.append(
+                {
+                    "rule_id": "PASSWORD-001",
+                    "level": "warning",
+                    "file_path": file_path,
+                    "message": result.error_message,
+                    "details": {"incomplete": True},
+                }
+            )
 
     def _check_pii(self, file_path: str, content: str) -> None:
         """Check for personally identifiable information."""
@@ -1541,6 +1568,7 @@ def scan_command(args) -> int:
 
 _RULE_ID_TO_VIOLATION_TYPE = {
     "SECRET": "secret_detected",
+    "PASSWORD": "suspected_password",
     "PROMPT": "prompt_injection",
     "PII": "pii_detected",
     "SSRF": "ssrf_blocked",

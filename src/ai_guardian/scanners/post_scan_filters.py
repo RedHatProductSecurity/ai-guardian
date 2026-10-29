@@ -21,6 +21,7 @@ _VIOLATION_LABELS = {
     "prompt_injection": "Prompt injection",
     "context_poisoning": "Context poisoning",
     "secret_detected": "Secret",
+    "suspected_password": "Suspected password-like content",
     "pii_detected": "PII",
     "ssrf_blocked": "SSRF threat",
     "config_file_exfil": "Config file threat",
@@ -86,6 +87,8 @@ def build_detailed_warn_message(
 
     Used for systemMessage (visible to user, not agent) in warn mode.
     """
+    if result.violation_type == "suspected_password":
+        return result.error_message + " Advisory only; content was not blocked."
     label = _VIOLATION_LABELS.get(
         getattr(entry, "violation_type", "") or "", "Security violation"
     )
@@ -255,8 +258,14 @@ def apply_post_scan_pipeline(
 
     Replaces ~50 lines of per-scanner boilerplate in process_hook_data().
     """
-    if not result.detected:
+    private_candidate = result.violation_type == "suspected_password"
+    if not result.detected and not (
+        private_candidate and result.extra.get("incomplete")
+    ):
         return PostScanDecision(should_block=False)
+
+    # An incomplete scan may require approval/denial but is not a positive match.
+    skip_violation_log = skip_violation_log or not result.detected
 
     should_block = result.should_block
     error_msg = result.error_message or ""
@@ -291,12 +300,15 @@ def apply_post_scan_pipeline(
         if ask_result is not None:
             from ai_guardian.ui.ask_dialog import AskDecision
 
-            if ask_result.decision not in (
-                AskDecision.BLOCK,
-                AskDecision.BLOCK_ALL,
-            ):
+            allowed = (
+                ask_result.decision == AskDecision.ALLOW_ONCE
+                if private_candidate
+                else ask_result.decision
+                not in (AskDecision.BLOCK, AskDecision.BLOCK_ALL)
+            )
+            if allowed:
                 should_block = False
-                detail = file_path or filename or ""
+                detail = "" if private_candidate else file_path or filename or ""
                 info_msg = ctx.format_ask_info_message(
                     entry.violation_type,
                     ask_result.decision,
@@ -324,9 +336,21 @@ def apply_post_scan_pipeline(
                 decision_override="block" if should_block else "allow",
             )
             if not skip_violation_log:
+                logged_result = (
+                    replace(
+                        result,
+                        should_block=should_block,
+                        extra={
+                            **result.extra,
+                            "action": "block" if should_block else "allow",
+                        },
+                    )
+                    if private_candidate
+                    else result
+                )
                 log_scan_violation(
                     entry,
-                    result,
+                    logged_result,
                     ctx,
                     source=source,
                     blocked_overrides=blocked_overrides,
