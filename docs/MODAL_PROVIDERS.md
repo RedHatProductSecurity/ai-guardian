@@ -61,6 +61,7 @@ controls.
 | Multi-target plugin selection: `TrayTargetSelectorApp.run` | G only | G only | G only |
 | Working-directory picker: `working_dir.choose_directory` | N AppleScript choose folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms FolderBrowserDialog → isolated T |
 | SSH VM working directory: `run_form_flow` | N JXA/Cocoa optional absolute-path input → isolated T → G | N desktop-ordered zenity/kdialog input → isolated T → G | N PowerShell WinForms input → isolated T → G |
+| Tray Pause... daemon/project/session hierarchy: `open_pause_controls` | isolated T → G | isolated T → G | isolated T → G |
 | Browser form's auxiliary file/directory Browse | N AppleScript choose file/folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms OpenFileDialog/FolderBrowserDialog → isolated T |
 | Sandbox create/configuration/policy editor: `show_sandbox_form` | isolated T → G | isolated T → G | isolated T → G |
 | Sandbox deletion (must type exact name): `show_sandbox_confirmation` | N AppleScript text-entry confirmation → isolated T → G | N zenity entry/kdialog inputbox → isolated T → G | N PowerShell VisualBasic InputBox → isolated T → G |
@@ -72,6 +73,25 @@ controls.
 
 ### Explicit exceptions
 
+- **Tray pause controls:** a complete hierarchy needs inline per-row duration/Resume
+  dropdowns, full identities, inherited-state explanations and
+  in-place refresh. Native simple forms do not implement this contract and are
+  ineligible; the shared dispatcher selects isolated Tk → isolated NiceGUI.
+  One child/window remains open across actions. Only display snapshots and narrow
+  row/action/duration events cross its stdin/stdout channel; credentials and
+  transport objects stay in the tray worker. Row tokens expire on refresh.
+  Dropdowns start at inert placeholders. Selecting a duration pauses that row
+  immediately; a paused row instead offers Resume. There is no separate Pause
+  button or shared duration selector. The Tk window requests 1200 × 820 within
+  usable bounds, with width-fitting content and responsive label wrapping so the
+  action column remains visible on narrow screens. Close/Escape before any action changes nothing; closing never rolls back actions
+  already explicitly taken. Resume clears only the selected row's own pause.
+  Unknown/offline/unsupported rows remain visible with unavailable controls.
+  The same captured monitor context follows startup fallback and every refresh.
+  The initial Tk geometry is applied explicitly before monitor placement, so
+  single-monitor/no-context flows do not fall back to the canvas's small natural
+  size. Compact instructions keep controls first; full help/lifetime text remains
+  available in a collapsed in-window section without switching providers.
 - **Password-likelihood Ask:** reuses the existing local/remote transport and
   modal dispatcher, with one operation-scoped Allow Once / Block decision. Both
   providers withhold candidate text and omit source/persistent-exception controls;
@@ -301,7 +321,7 @@ monitor, result and sanitized screenshots/timing for each matrix row.
    failure in a developer test harness and confirm no replacement window appears.
 5. On **physical** monitors, invoke every applicable matrix row from a non-primary
    tray/menu, with both mouse and keyboard. Include About/results, setup plus Later,
-   SSH settings/pairing, parameters plus Browse, target selection and each sandbox
+    SSH settings/pairing, pause controls, parameters plus Browse, target selection and each sandbox
    form/confirmation/upload/policy/progress/log/error/reopen. Repeat while delayed:
    move pointer **and** application focus to a different screen before display.
    Exercise a pre-display provider failure and subsequent windows without changing
@@ -346,3 +366,16 @@ monitor, result and sanitized screenshots/timing for each matrix row.
 
 Do not check off desktop qualification using selector mocks or merely installed
 native executables. Keep any untested platform/scenario explicitly pending.
+
+For **Pause...**, verify a single root action with one/multiple daemons; daemon →
+project → session rows each have their own duration/Resume dropdown. Exercise every
+duration, timed expiry, an inherited pause and resuming only one layer. Confirm
+in-place refresh, inert initial dropdown values, unavailable/older-daemon rows,
+duplicate session titles with full keys, stale clicks and SSH reconnect/removal.
+Opening, Refresh, Close and Escape without an action must not change pause state.
+Check that a single-monitor/no-placement-context launch actually applies the
+requested initial geometry within WM limits. Confirm row controls are visible
+before expanding help, and Show help/Help changes no pause state.
+Repeat startup-only fallback, post-display failure, exclusive preferences,
+headless and physical-monitor checks; never change a live security configuration
+just to simulate failure.

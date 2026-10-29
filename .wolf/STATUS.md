@@ -9,6 +9,60 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2620 implementation — 2026-10-29
+
+- Continued managed DAF `open` session `RedHatProductSecurity-ai-guardian-2620`
+  on its existing branch `2620`, native conversation
+  `ses_e76cb3961ffeQkM16qJ07YlkJe`. The repository-qualified ticket was read once;
+  no temporary clone sync or new branch was needed.
+- User clarified the intended layout: mirror the existing daemon → project →
+  session hierarchy with Pause/Resume at every level, not scope/target dropdowns.
+  Implemented one root Pause... action and a persistent isolated Tk/NiceGUI
+  window with inline row actions, full identities, glyph legend, inherited-pause
+  explanations, explicit Refresh and non-mutating Close/Escape. Latest user
+  feedback replaces Pause buttons/shared duration with a duration/Resume dropdown
+  on each row. Tk now requests 1200 × 820 within usable bounds; opt-in width-fitting
+  content and responsive label wrapping keep the action column visible.
+  A subsequent user screenshot exposed the real no-context sizing bug: placement
+  intentionally does not set geometry in that path. The pause UI now explicitly
+  applies initial geometry within WM limits before placement, and detailed help
+  starts collapsed below the hierarchy in both providers. Initial controls are
+  no longer preceded by the full multi-paragraph instructions.
+- `tray/pause.py` keeps credentials/connections private, verifies acknowledgement
+  and authoritative state, rejects stale/removed/reconnected targets, and never
+  broadens failed requests. `ui/pause_controls.py` renders complete controls;
+  `ui/modal.py` supplies the reusable persistent JSON-lines child channel with
+  startup-only fallback. Removed obsolete native pause builders and slot limits.
+- Updated related unit and complete UX contracts, modal/provider and multi-daemon
+  docs, changelog and release-readiness coverage. Manual simplification review
+  completed; no `/simplify` skill exists in this harness and no agents were delegated.
+- **Validation:** 1,243 related unit/UX tests pass; one unrelated support UX test
+  still fails on this Mac with `ValueError: Linked configuration omitted` at
+  `reporting/cli_diagnostics.py:116`. It reproduces with unmodified HEAD sources.
+  Focused branch coverage is 92% across backend/UI/modal modules (97% backend,
+  87% UI, 92% shared modal). Coverage data/config are under the approved temporary
+  OpenCode directory as `guardian-2620.coverage` / `guardian-2620-coverage.ini`.
+- Ruff, Black py310 and standalone error-level Pylint pass. Full project-uv Mypy
+  reports the same two baseline errors in `ui/clipboard.py:39` and
+  `ui/ask_dialog.py:530`; an unmodified HEAD archive reproduces both with the same
+  environment. No unrelated support/typing/security checks were weakened or skipped.
+- Saved a DAF progress note and published the automated acceptance checklist and
+  remaining validation gates at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2620#issuecomment-6508859177.
+  The issue remains open; existing labels and issue-body text were preserved.
+  Latest sizing/dropdown follow-up:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2620#issuecomment-6509343912.
+  A final focused rerun of all pause/placement unit and UX files passed 243 tests.
+  Latest no-context geometry/help regression run: 316 pause/placement/modal unit
+  and complete affected UX tests pass. The earlier broader run and its unrelated
+  baseline blockers remain documented above; post-fix desktop confirmation is pending.
+  Geometry/help follow-up:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2620#issuecomment-6510099065.
+- **Next:** review the inline UI on actual desktops/physical monitors, then fresh
+  CI and external DAF completion. The changes are uncommitted; no commit, push,
+  PR, issue closure, live pause/resume, security-config change or daemon restart
+  was performed. Native visual/focus/placement qualification remains pending.
+
 ## Issue #2622 implementation — 2026-10-29
 
 - Continued managed DAF `open` session `RedHatProductSecurity-ai-guardian-2622`

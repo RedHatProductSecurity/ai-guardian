@@ -2,9 +2,20 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-28
+> Last updated: 2026-10-29
 
 ## User Preferences
+
+- **2026-10-29 — Tray pause hierarchy (#2620):** Keep the familiar daemon →
+  project directory → session hierarchy inside one modal, with an inline
+  Pause/Resume action at every level. Do not replace it with separate scope/target
+  dropdowns. Latest correction: replace the separate Pause buttons/shared duration
+  selector with a duration/Resume dropdown on each row. Selecting a duration is
+  the explicit pause action. Increase the default window and fit/wrap row labels
+  to the viewport so action controls are visible without horizontal scrolling.
+  Inert initial dropdown values must not act; inherited pauses remain explicit.
+  Screenshot follow-up: keep detailed instructions/lifetime notes collapsed under
+  Show help/Help so the initial view shows daemon/project/session controls first.
 
 - **2026-10-28 — Doctor scanner inventory:** List all supported secret engines with
   configured/installed status. Warn only when secret scanning is enabled and the
@@ -142,6 +153,28 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-10-29 — Inline pause layout/dropdowns:** Content-sized scroll canvases
+  plus fixed label widths can push row controls offscreen when monitor placement
+  clamps a window. Use opt-in `tk_scrollable_content(..., fit_width=True)` with
+  labels wrapping to their actual widget width; keep existing two-axis behavior
+  for other callers. Row dropdowns need inert initial values and explicit selection
+  events only. NiceGUI must check `event.value is not None`, not truthiness,
+  because `0` is the valid indefinite-pause choice. Resume remains row-local.
+
+- **2026-10-29 — macOS validation baseline (#2620):** In this Mac/Python 3.12.11
+  environment, project-uv Mypy reports existing `clipboard.py:39` missing return
+  and `ask_dialog.py:530` unreachable code. Both reproduce against an unmodified
+  HEAD archive with the same interpreter/dependencies. The daemon variant of
+  support's linked-project-configuration UX test also reproduces its
+  `ValueError: Linked configuration omitted` using baseline sources. Do not weaken
+  safe file-reading checks or change these unrelated files to make pause-modal
+  validation appear green. Standalone `pylint` is installed; the project dev extra
+  does not provide its module on this machine.
+- **2026-10-29 — Local OpenWolf CLI:** This Mac installation exposes `scan` and
+  `bug search`, but no `memory log` or bug-add command in help. The earlier Linux
+  memory-log guidance is installation-specific; do not invent unsupported CLI
+  commands. Preserve existing metadata when applying the protocol's manual notes.
 
 - **2026-10-29 — JSON Schema test fragments:** When a nested schema contains
   references to root-level definitions, validate the test instance through the
@@ -1378,6 +1411,12 @@
 
 ## Do-Not-Repeat
 
+- [2026-10-29] `place_tk_window` intentionally applies no geometry when monitor
+  context is absent. Passing larger requested dimensions alone does not enlarge
+  a single-monitor dialog. Explicitly set initial geometry within `window.maxsize()`
+  before placement, and assert the actual `window.geometry(...)` call before
+  mainloop in tests—not only the arguments passed to the placement helper.
+
 - [2026-10-28] Placement changes affect provider eligibility. Mock every reachable
   provider in UX tests, not only the previously first native implementation:
   native-only Linux fixtures can open real Tk and hang. Exercise Cocoa/WinForms
@@ -1427,6 +1466,13 @@
 - [2026-08-05] **Canary payload selection for smoke tests:** (1) `AKIAIOSFODNN7EXAMPLE` is in gitleaks allowlist — use `sk-proj-...` format instead for secret scanning. (2) Context poisoning requires BOTH persistence pattern (`from now on`, `remember`) AND dangerous pattern (`delete`, `ignore security`) — single-category text won't trigger. (3) ExfilDetectionScanner matches credential-specific patterns (credential_theft, key_file_exfil, base64_encoding, etc.), NOT general curl uploads — use `base64 ~/.aws/credentials` not `curl -d @/etc/passwd`. (4) Bandit does NOT flag `subprocess.call(input())` — use `os.system(input())` which triggers B605. (5) Secret redaction has its own patterns separate from gitleaks — `AKIAIOSFODNN7EXAMPLE` IS redacted even though gitleaks skips it.
 
 ## Decision Log
+
+- [2026-10-29] **Inline pause UI (#2620):** Use the shared `run_modal("form", ...)`
+  dispatcher with complete isolated Tk/NiceGUI implementations; simple native
+  forms are ineligible. A persistent JSON-lines child channel carries only display
+  snapshots and narrow row/action/duration events. Keep connections and credentials
+  in the parent, refresh row tokens after every response, and revalidate the
+  original connection and stable scope key before sending any explicit action.
 
 - [2026-10-11] Keep targeted CLI overwrite confirmation aligned with the exact
   guard in `IDESetup.setup_ide_hooks`: share the existing-config classifier so

@@ -18,6 +18,8 @@ from ai_guardian.cli import main
 from ai_guardian.setup.hooks import _OPENCODE_PLUGIN_V2_TS
 from ai_guardian.tray.menu_builder import TrayMenuBuilder
 from ai_guardian.tray.app import DaemonTray
+from ai_guardian.tray.pause import MESSAGE, UNCONFIRMED, PauseSnapshot
+from tests.fixtures.tray_pause import pause_values
 
 
 @pytest.fixture
@@ -194,34 +196,38 @@ def scoped_tray(isolated_server, active_cli_sessions, run_scoped_cli, monkeypatc
         tray._defer_appindicator_menu_close = mock.Mock()
         if multi:
             tray._targets.insert(0, DaemonTarget(name="other", runtime="manual"))
-            header = tray._menu._build_multi_daemon_menu_items()[1]
+            root_items = tray._menu._build_multi_daemon_menu_items()
+            header = root_items[1]
             items = header.action.items
         else:
             items = tray._menu._build_single_daemon_menu_items()
+            root_items = items
             header = items[2]
         pause = next(
-            item for item in items if getattr(item, "label", None) == "Pause..."
-        ).action
+            item for item in root_items if getattr(item, "label", None) == "Pause..."
+        )
         first = active_cli_sessions["first"]
-        candidates = pause.items[2 if scope == "session" else 3].action.items
-        expected = (
-            f"Session key: {first['session_key']}"
-            if scope == "session"
-            else f"All sessions in: {shorten_path(first['project_dir'])}"
-        )
-        control = next(
-            item
-            for item in candidates
-            if getattr(item, "action", None) is not None
-            and item.kwargs.get("visible", lambda _: True)(None)
-            and item.action.items[0].label(None) == expected
-        )
-        actions = {
-            item.label: item
-            for item in control.action.items
-            if isinstance(getattr(item, "label", None), str)
-        }
-        return tray, header, pause.items[0], control, actions
+        identity = first["session_key"] if scope == "session" else first["project_dir"]
+
+        def snapshot():
+            return PauseSnapshot(tray)
+
+        def control():
+            return snapshot().views[int(multi)].find(scope, identity)
+
+        def request(action="Pause", minutes=5):
+            current = snapshot()
+            values = pause_values(
+                current,
+                daemon=int(multi),
+                scope=scope,
+                identity=identity,
+                action=action,
+                minutes=minutes,
+            )
+            return current.request(*current.resolve(values))
+
+        return tray, header, pause, control, request
 
     return build
 
@@ -236,31 +242,24 @@ def test_tray_scope_pause_resume_is_selectable_without_another_hook(
     USER EXPERIENCE: Pause one scope -> next opening exposes selectable Resume.
 
     Manual verification on Linux (also compare macOS/Windows):
-    1. In Pause..., pick Sessions... or All sessions in directory..., then pause.
-    2. Immediately reopen that same submenu, within the two-second cache window.
-    3. Expect its ☾ indicator and Resume, with no duration choices.
-    4. Select Resume; the next opening shows ● and duration choices again.
+    1. Open Pause... and find the project or individual session in the hierarchy.
+    2. Choose a duration from that row's dropdown to pause it immediately.
+    3. The same window refreshes to ☾ and offers Resume on that row.
+    4. Select Resume from its dropdown; that row returns to ● and offers durations again.
     5. Repeat with a timed and indefinite pause; no hook/restart is necessary.
-    6. Daemon (global) stays ● for these scoped pauses; the header shows ◐.
+    6. The global pause stays off; the daemon/header shows ◐.
     """
-    tray, header, global_control, control, actions = scoped_tray(multi, scope)
-    assert control.label(None).startswith("●")
-    assert actions["Resume"].kwargs["visible"](None) is False
-    choice = (
-        "5 minutes"
-        if minutes
-        else ("Until resumed or session ends" if scope == "session" else "Until resume")
-    )
-    actions[choice].action(None, None)
-    assert actions["Resume"].kwargs["visible"](None) is True
-    assert actions["5 minutes"].kwargs["visible"](None) is False
-    assert control.label(None).startswith("☾")
+    tray, header, _, control, request = scoped_tray(multi, scope)
+    assert control().label.startswith("●")
+    assert control().paused is False
+    assert "confirmed" in request(minutes=minutes)
+    assert control().paused is True
+    assert control().label.startswith("☾")
     assert header.label(None).startswith("◐")
-    assert global_control.label(None) == "● Daemon (global)"
-    actions["Resume"].action(None, None)
-    assert actions["5 minutes"].kwargs["visible"](None) is True
-    assert actions["Resume"].kwargs["visible"](None) is False
-    assert control.label(None).startswith("●")
+    assert isolated_server.state.paused is False
+    assert "confirmed" in request("Resume")
+    assert control().paused is False
+    assert control().label.startswith("●")
     assert header.label(None).startswith("●")
     assert not isolated_server.state.get_stats()["paused_dirs"]
     assert not any(
@@ -282,36 +281,34 @@ def test_linux_closed_before_clicked_keeps_scoped_action_deliverable(
     Observed native order: root closed, then clicked roughly 3 ms later.
     Rebuilding on closed deletes the selected ID, silently losing even About.
     Keep native IDs through the click-delivery grace period; only then rebuild.
-    Manual verification: with traffic/discovery pending, choose a session or
-    directory duration/Resume; expect the action to execute and the next opening
-    to show its authoritative pause state. About must open its dialog as well.
+    Manual verification: with traffic/discovery pending, choose root Pause...;
+    expect its modal to open, then click a session/directory action. About must
+    open its dialog as well; neither click may be lost when KDE closes first.
     """
     first = active_cli_sessions["first"]
     identity = first["session_key"] if scope == "session" else first["project_dir"]
     if operation == "resume":
         getattr(isolated_server.state, f"pause_{scope}")(identity, 0)
-    tray, header, global_control, control, actions = scoped_tray(multi, scope)
-    control.label(None)
-    choice = (
-        "Resume"
-        if operation == "resume"
-        else (
-            "5 minutes"
-            if operation == "timed"
-            else (
-                "Until resumed or session ends"
-                if scope == "session"
-                else "Until resume"
-            )
-        )
-    )
-    native_actions = {17: actions[choice].action}
+    tray, header, pause, control, request = scoped_tray(multi, scope)
+    native_actions = {17: pause.action}
     tray._icon.update_menu.side_effect = native_actions.clear
     tray._on_appindicator_menu_event(None, "opened", None, 0)
     tray._refresh_menu()
     tray._on_appindicator_menu_event(None, "closed", None, 0)
     assert 17 in native_actions
-    native_actions[17](None, None)
+    with (
+        mock.patch("ai_guardian.tray.menu_builder.threading.Thread") as worker,
+        mock.patch.object(tray._menu, "_capture_tray_screen_bounds", return_value=None),
+        mock.patch(
+            "ai_guardian.tray.pause.open_pause_controls",
+            side_effect=lambda *_a, **_k: request(
+                "Resume" if operation == "resume" else "Pause",
+                5 if operation == "timed" else 0,
+            ),
+        ),
+    ):
+        native_actions[17](None, None)
+        worker.call_args.kwargs["target"]()
     expected_paused = operation != "resume"
     assert (
         getattr(isolated_server.state, f"is_{scope}_paused")(identity)
@@ -321,10 +318,10 @@ def test_linux_closed_before_clicked_keeps_scoped_action_deliverable(
 
     tray._defer_appindicator_menu_close.call_args.args[0]()
     tray._icon.update_menu.assert_called_once_with()
-    assert control.label(None).startswith("☾" if expected_paused else "●")
-    assert actions["Resume"].kwargs["visible"](None) is expected_paused
+    assert control().label.startswith("☾" if expected_paused else "●")
+    assert control().paused is expected_paused
     assert header.label(None).startswith("◐" if expected_paused else "●")
-    assert global_control.label(None) == "● Daemon (global)"
+    assert isolated_server.state.paused is False
     tray._multi_client.send_pause.assert_not_called()
     tray._multi_client.send_resume.assert_not_called()
 
@@ -336,20 +333,21 @@ def test_idle_external_scope_change_and_expiry_refresh_without_countdown_churn(
     """
     USER EXPERIENCE: External pause/expiry while idle -> scope controls refresh.
 
-    Linux keeps nested submenus stable during the countdown, deferring native
+    Linux keeps its root menu stable during the countdown, deferring native
     replacement while a popup is open. Closing it applies the freshest state.
     Manual verification: pause externally, leave the daemon idle, reopen the
-    menu before/after expiry, and verify nested Resume remains selectable.
+    menu before/after expiry, and verify the header and modal show fresh state.
     """
-    tray, _, _, control, actions = scoped_tray(True, scope)
+    tray, header, _, control, _ = scoped_tray(True, scope)
     first = active_cli_sessions["first"]
     identity = first["session_key"] if scope == "session" else first["project_dir"]
-    control.label(None)
+    assert control().label.startswith("●")
     tray._last_stats_snapshot = tray._build_stats_snapshot()
     getattr(isolated_server.state, f"pause_{scope}")(identity, 5)
     tray._refresh_menu_if_changed()
-    assert control.label(None).startswith("☾")
-    assert actions["Resume"].kwargs["visible"](None) is True
+    assert control().label.startswith("☾")
+    assert control().paused is True
+    assert header.label(None).startswith("◐")
     tray._icon.update_menu.reset_mock()
     pause_clock.return_value += 10
     tray._refresh_menu_if_changed()
@@ -363,8 +361,9 @@ def test_idle_external_scope_change_and_expiry_refresh_without_countdown_churn(
     tray._icon.update_menu.assert_not_called()
     tray._defer_appindicator_menu_close.call_args.args[0]()
     tray._icon.update_menu.assert_called_once()
-    assert control.label(None).startswith("●")
-    assert actions["Resume"].kwargs["visible"](None) is False
+    assert control().label.startswith("●")
+    assert control().paused is False
+    assert header.label(None).startswith("●")
 
 
 @pytest.mark.parametrize("scope", ["session", "dir"])
@@ -378,34 +377,23 @@ def test_tray_unconfirmed_scope_request_reports_failure_without_broadening(
     No success is claimed and no global or other-scope operation is attempted.
     An ended session's stable key is never replaced by its title or project.
     Manual verification: disconnect a remote target (or end a selected session)
-    before invoking its scoped control; expect this notification, not success.
+    before applying its scoped control; expect modal feedback, not success.
     """
     first = active_cli_sessions["first"]
     identity = first["session_key"] if scope == "session" else first["project_dir"]
     if resume:
         getattr(isolated_server.state, f"pause_{scope}")(identity, 0)
-    tray, _, _, control, actions = scoped_tray(False, scope)
-    control.label(None)
+    tray, _, _, control, request = scoped_tray(False, scope)
     verb = "resume" if resume else "pause"
     with (
         mock.patch.object(
             tray._multi_client, f"send_{verb}_{scope}", return_value=False
         ) as send,
-        mock.patch(
-            "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
-        ) as notify,
     ):
-        actions["Resume" if resume else "5 minutes"].action(None, None)
-    scope_name = "session" if scope == "session" else "directory"
-    notify.assert_called_once_with(
-        "AI Guardian",
-        f"Could not {verb} {scope_name} on selected. The daemon did not confirm the request. "
-        "It may be unreachable, the selected scope may no longer exist, or this operation may be unsupported. "
-        "No broader pause or resume was requested.",
-    )
+        assert request("Resume" if resume else "Pause") == UNCONFIRMED
     args = (tray._targets[0], identity) if resume else (tray._targets[0], identity, 5)
     send.assert_called_once_with(*args)
-    assert control.label(None).startswith("☾" if resume else "●")
+    assert control().label.startswith("☾" if resume else "●")
     tray._multi_client.send_pause.assert_not_called()
     tray._multi_client.send_resume.assert_not_called()
 
@@ -414,27 +402,28 @@ def test_older_daemon_retains_directory_and_global_controls(
     scoped_tray, isolated_server, active_cli_sessions
 ):
     """USER EXPERIENCE: Older stats -> session limitation, directory/global retained."""
-    tray, _, global_control, directory, actions = scoped_tray(False, "dir")
+    tray, _, _, directory, request = scoped_tray(False, "dir")
     get_stats = tray._get_stats
     tray._get_stats = lambda: {
         key: value for key, value in get_stats().items() if key != "active_sessions"
     }
     tray._refresh_menu()
-    items = tray._menu._build_single_daemon_menu_items()
-    pause = next(
-        item for item in items if getattr(item, "label", None) == "Pause..."
-    ).action
-    unsupported = pause.items[2].action.items[0]
-    assert unsupported.kwargs["visible"](None) is True
-    assert unsupported.label(None) == "Session pause is not supported by this daemon"
-    assert unsupported.kwargs["enabled"] is False
-    directory.label(None)
-    actions["5 minutes"].action(None, None)
+    snapshot = PauseSnapshot(tray)
+    unsupported = next(
+        option
+        for choices in snapshot.views[0].scopes.values()
+        for option in choices
+        if option.scope == "session"
+    )
+    assert "Session pause is not supported by this daemon" in unsupported.label
+    assert unsupported.available is False
+    assert snapshot.views[0].find("global", "") is not None
+    assert "confirmed" in request()
     assert isolated_server.state.is_dir_paused(
         active_cli_sessions["first"]["project_dir"]
     )
-    assert directory.label(None).startswith("☾")
-    assert global_control.label(None) == "● Daemon (global)"
+    assert directory().label.startswith("☾")
+    assert isolated_server.state.paused is False
 
 
 @pytest.mark.parametrize("scope", ["session", "dir"])
@@ -444,8 +433,8 @@ def test_tray_resume_clears_only_selected_layer_and_hooks_still_obey_other_pause
     """
     USER EXPERIENCE: Resume one layer -> broader/independent pauses still apply.
 
-    A ● scoped indicator means that scope has no pause, not that scanning is
-    necessarily active. The submenu explains this; global/directory/session
+    Symbols show effective state; Resume clears only that scope's own pause.
+    The modal explains this; global/directory/session
     precedence is verified through isolated hook requests, not only symbols.
     Directory pause also covers callers without a stable ID in that project.
     """
@@ -456,18 +445,14 @@ def test_tray_resume_clears_only_selected_layer_and_hooks_still_obey_other_pause
     server.state.pause_session(first["session_key"], 0)
     server.state.pause_dir(first["project_dir"], 0)
     server.state.pause(0)
-    tray, header, global_control, control, actions = scoped_tray(True, scope)
-    assert control.label(None).startswith("☾")
-    explanation = (
-        "Session pause only; global/directory pauses may still apply"
-        if scope == "session"
-        else "Directory pause only; global/session pauses may still apply"
-    )
-    assert actions[explanation].kwargs["enabled"] is False
-    actions["Resume"].action(None, None)
-    assert control.label(None).startswith("●")
+    tray, header, _, control, request = scoped_tray(True, scope)
+    assert control().label.startswith("☾")
+    assert "Resume clears only the selected pause layer" in MESSAGE
+    assert "confirmed" in request("Resume")
+    assert control().paused is False
+    assert control().label.startswith("☾")  # global pause still applies
     assert header.label(None).startswith("☾")
-    assert global_control.label(None) == "☾ Daemon (global)"
+    assert server.state.paused is True
     assert server.state.is_session_paused(first["session_key"]) is (scope == "dir")
     assert server.state.is_dir_paused(first["project_dir"]) is (scope == "session")
 
@@ -522,22 +507,21 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
     - Hooks from the selected session are allowed without running scanners.
     - The other session continues through normal security scanning.
     - Project-directory sharing does not cause the sessions to share pause state.
-    - Duplicate compact titles get distinct short stable-key suffixes. The
-      selected session key and project remain accessible in its submenu.
+    - Duplicate compact titles have distinct full stable keys. The
+      selected session key and project remain visible in the modal.
     - Renaming a paused session updates its label without resuming scanning.
-    - Windows renders literal ampersands, not keyboard mnemonic markers; other
-      platforms retain their literal menu strings. Stored titles remain unescaped.
+    - Every modal provider renders literal ampersands. Stored titles remain unescaped.
 
     Manual verification:
     1. On Windows, name two sessions "Fix A&B" and "Fix AB".
-    2. Open Sessions... and confirm the ampersand is visible and labels differ.
+    2. In Pause..., find those session rows and confirm labels differ.
     3. Pause/resume the first session and confirm the second is unaffected.
     """
     monkeypatch.setattr(
         "ai_guardian.tray.menu_builder.sys", SimpleNamespace(platform=platform)
     )
     title = "Fix A&B"
-    display_title = "Fix A&&B" if platform == "win32" else title
+    display_title = title
     server = isolated_server
     project = tmp_path / "shared-project"
     project.mkdir()
@@ -570,36 +554,38 @@ def test_two_sessions_in_one_directory_can_be_paused_independently(
         first_key = sessions["session-one"]["session_key"]
         assert sessions["session-one"]["project_dir"] == os.path.realpath(project)
         assert sessions["session-two"]["project_dir"] == os.path.realpath(project)
-        tray = SimpleNamespace(_supports_live_pause_countdown=lambda: False)
-        menus = SimpleNamespace(
-            Menu=lambda *items: SimpleNamespace(items=items),
-            MenuItem=lambda label, action=None, **kwargs: SimpleNamespace(
-                label=label, action=action, kwargs=kwargs
-            ),
+        client = mock.Mock()
+        client.send_pause_session.side_effect = (
+            lambda _t, key, minutes: server.state.pause_session(key, minutes)
         )
-        menus.Menu.SEPARATOR = object()
-        with mock.patch("ai_guardian.tray.menu_builder.pystray", menus):
-            items = TrayMenuBuilder(tray)._build_session_pause_items(
-                lambda _: server.state.get_stats(),
-                server.state.pause_session,
-                server.state.resume_session,
-            )
-        first, second = items[2:4]
-        assert first.label(None).startswith(f"● Claude Code: {display_title} [")
-        assert first.label(None) != second.label(None)
-        assert first.action.items[0].label(None) == f"Session key: {first_key}"
-        assert (
-            first.action.items[1].label(None)
-            == f"Project: {shorten_path(str(project))}"
+        tray = SimpleNamespace(
+            _get_stats=server.state.get_stats,
+            _multi_client=client,
+            _targets=[DaemonTarget("selected", "local")],
         )
+        snapshot = PauseSnapshot(tray)
+        first = snapshot.views[0].find("session", first_key)
+        second_key = sessions["session-two"]["session_key"]
+        second = snapshot.views[0].find("session", second_key)
+        assert f"Claude Code: {display_title}" in first.label
+        assert first.label != second.label
+        assert f"Key: {first_key}" in first.label
+        assert f"Project: {str(project)}" in first.label
         # Until resumed/session end, selected by stable key rather than title.
-        first.action.items[7].action(None, None)
+        server.state.pause_session(first_key, 0)
         assert server.state.is_session_paused(first_key)
 
         paused = server._handle_hook_request(hook("session-one", "Renamed session"))
         other = server._handle_hook_request(hook("session-two"))
-        assert first.label(None) == "☾ Claude Code: Renamed session"
-        assert second.label(None) == f"● Claude Code: {display_title}"
+        refreshed = PauseSnapshot(tray).views[0]
+        assert (
+            "☾ Session: Claude Code: Renamed session"
+            in refreshed.find("session", first_key).label
+        )
+        assert (
+            f"● Session: Claude Code: {display_title}"
+            in refreshed.find("session", second_key).label
+        )
         assert server.state.get_active_sessions()[1]["session_title"] == title
 
     assert paused["output"] == "{}"

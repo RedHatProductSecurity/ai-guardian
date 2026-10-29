@@ -6,6 +6,8 @@ import pytest
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.tray.ssh_connections import target_action
+from ai_guardian.tray.pause import PauseSnapshot
+from tests.fixtures.tray_pause import pause_values
 from tests.fixtures.ssh_tray import build, find, make_tray, visible
 
 
@@ -36,7 +38,7 @@ def test_standard_menu_structure_and_cached_selected_vm_statistics(remote, multi
     labels = [item.label for item in visible(menu)]
     standard = [
         "Status",
-        "Pause...",
+        *([] if multi else ["Pause..."]),
         "Terminal",
         "Console",
         "Violations",
@@ -44,6 +46,7 @@ def test_standard_menu_structure_and_cached_selected_vm_statistics(remote, multi
         "Statistics",
     ]
     assert [label for label in labels if label in standard] == standard
+    assert find(build(tray), "Pause...").submenu is None
     assert "Maintenance" in labels
     assert "MCP Proactive: high" in labels
     assert "Manage SSH connection..." in labels
@@ -80,26 +83,16 @@ def test_navigation_bound_after_reorder_and_never_autostarts_workstation(
 
 def test_pause_worker_keeps_clicked_tunnel_and_reports_failure(remote):
     tray = make_tray([remote])
-    pause = find(
-        find(find(build(tray), "Pause...").submenu, "● Daemon (global)").submenu,
-        "5 minutes",
-    )
+    remote.stats["paused"] = False
+    tray._multi_client.get_status.side_effect = lambda _: remote.stats
+    snapshot = PauseSnapshot(tray)
+    selection = snapshot.resolve(pause_values(snapshot))
     old = remote.ssh_tunnel
     tray._multi_client.send_pause.return_value = False
-    with (
-        mock.patch("ai_guardian.tray.ssh_connections.threading.Thread") as thread,
-        mock.patch(
-            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
-            return_value=None,
-        ),
-        mock.patch("ai_guardian.tray.plugins.show_dialog") as dialog,
-    ):
-        pause.action(None, None)
-        tray._multi_client.send_pause.assert_not_called()
-        remote.ssh_tunnel = mock.Mock()
-        thread.call_args.kwargs["target"]()
-    assert tray._multi_client.send_pause.call_args.args[0].ssh_tunnel is old
-    assert "did not confirm" in dialog.call_args.args[1]
+    remote.ssh_tunnel = mock.Mock()
+    assert selection[0].target.ssh_tunnel is old
+    assert "connection changed" in snapshot.request(*selection)
+    tray._multi_client.send_pause.assert_not_called()
 
 
 def test_removed_connection_cannot_retarget_another_vm(remote):
@@ -164,26 +157,27 @@ def test_scoped_pause_controls_keep_clicked_connection_and_never_broaden(
     verb = "resume" if resume else "pause"
     operation = getattr(tray._multi_client, f"send_{verb}_{scope}")
     operation.return_value = False
-    action = getattr(tray._menu, f"_mk_multi_{verb}_{scope}")(remote)
-    old_tunnel = remote.ssh_tunnel
-    with (
-        mock.patch("ai_guardian.tray.ssh_connections.threading.Thread") as thread,
-        mock.patch(
-            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
-            return_value=None,
-        ),
-        mock.patch("ai_guardian.tray.notifications.show_notification") as notice,
-        mock.patch("ai_guardian.tray.plugins.show_dialog"),
-    ):
-        args = ("/vm/project" if scope == "dir" else "stable-vm-session",)
-        action(*(args if resume else (*args, 5)))
-        operation.assert_not_called()
-        remote.ssh_tunnel = mock.Mock()
-        tray._targets.reverse()
-        thread.call_args.kwargs["target"]()
-    assert operation.call_args.args[0].ssh_tunnel is old_tunnel
-    assert operation.call_args.args[1:] == (args if resume else (*args, 5))
-    assert "No broader pause or resume was requested." in notice.call_args.args[1]
+    remote.stats.update(
+        paused=False,
+        active_project_dirs=["/vm/project"],
+        paused_dirs={"/vm/project": 0} if resume else {},
+        active_sessions=[{"session_key": "stable-vm-session", "paused": resume}],
+    )
+    tray._multi_client.get_status.side_effect = lambda _: remote.stats
+    snapshot = PauseSnapshot(tray)
+    identity = "/vm/project" if scope == "dir" else "stable-vm-session"
+    selection = snapshot.resolve(
+        pause_values(
+            snapshot,
+            scope=scope,
+            identity=identity,
+            action="Resume" if resume else "Pause",
+        )
+    )
+    remote.ssh_tunnel = mock.Mock()
+    tray._targets.reverse()
+    assert "no request was sent" in snapshot.request(*selection)
+    operation.assert_not_called()
     tray._multi_client.send_pause.assert_not_called()
     tray._multi_client.send_resume.assert_not_called()
 

@@ -160,7 +160,7 @@ def test_vm_has_standard_menu_labels_and_only_its_cached_data(multi):
     menu = visible(build(tray))[1].submenu if multi else build(tray)
     expected = [
         "Status",
-        "Pause...",
+        *([] if multi else ["Pause..."]),
         "Terminal",
         "Console",
         "Violations",
@@ -172,6 +172,7 @@ def test_vm_has_standard_menu_labels_and_only_its_cached_data(multi):
     ]
     labels = [item.label for item in visible(menu)]
     assert all(label in labels for label in expected)
+    assert find(build(tray), "Pause...").submenu is None
     assert "Web Console" not in labels
     assert find(find(menu, "Statistics").submenu, "Requests: 2,592")
     tray._multi_client.get_status.assert_not_called()

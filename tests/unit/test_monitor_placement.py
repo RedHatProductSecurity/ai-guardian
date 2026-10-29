@@ -497,6 +497,30 @@ def test_scrollable_content_resizes_and_reveals_keyboard_focus(monkeypatch):
     canvas.yview_moveto.assert_not_called()
 
 
+@pytest.mark.parametrize("viewport_width", [360, 640, 1200])
+def test_scrollable_content_can_fit_width_without_pushing_actions_offscreen(
+    monkeypatch, viewport_width
+):
+    window, shell, canvas, body, footer, ttk = (Mock() for _ in range(6))
+    ttk.Frame.side_effect = [shell, body, footer]
+    monkeypatch.setitem(
+        sys.modules,
+        "tkinter",
+        SimpleNamespace(ttk=ttk, Canvas=Mock(return_value=canvas)),
+    )
+    monkeypatch.setitem(sys.modules, "tkinter.ttk", ttk)
+    assert monitor.tk_scrollable_content(window, fit_width=True) == (body, footer)
+    ttk.Scrollbar.return_value.grid_remove.assert_called_once()
+    body.winfo_reqwidth.return_value = 1800
+    body.winfo_reqheight.return_value = 1600
+    canvas.winfo_width.return_value = viewport_width
+    canvas.winfo_height.return_value = 600
+    body.bind.call_args.args[1]()
+    canvas.itemconfigure.assert_called_once_with(
+        canvas.create_window.return_value, width=viewport_width, height=1600
+    )
+
+
 def test_linux_older_randr_server_is_checked_before_monitor_request(monkeypatch):
     monkeypatch.setenv("DISPLAY", ":99")
     x, randr = Mock(), Mock()

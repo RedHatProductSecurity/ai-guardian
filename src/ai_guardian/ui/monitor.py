@@ -581,11 +581,13 @@ def _fit_tk_window(window, width, height, maximum=None):
         )
 
 
-def tk_scrollable_content(window, *, padding=16, style=None):
+def tk_scrollable_content(window, *, padding=16, style=None, fit_width=False):
     """Keep full form/review content reachable with a permanently reserved footer.
 
     Runtime-only stdlib Tk imports also work in support's isolated reviewer.
     No fields, values, consent defaults, event loop or provider policy live here.
+    Width-fitting content wraps labels instead of pushing inline controls beyond
+    the viewport; other callers retain the existing two-axis scrolling behavior.
     """
     import tkinter as tk
     from tkinter import ttk
@@ -603,6 +605,8 @@ def tk_scrollable_content(window, *, padding=16, style=None):
     vertical.grid(row=0, column=1, sticky="ns")
     horizontal = ttk.Scrollbar(shell, orient="horizontal", command=canvas.xview)
     horizontal.grid(row=1, column=0, sticky="ew")
+    if fit_width:
+        horizontal.grid_remove()
     canvas.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
     body = ttk.Frame(canvas, **options)
     item = canvas.create_window((0, 0), window=body, anchor="nw")
@@ -610,7 +614,11 @@ def tk_scrollable_content(window, *, padding=16, style=None):
     def resize(_event=None):
         canvas.itemconfigure(
             item,
-            width=max(body.winfo_reqwidth(), canvas.winfo_width()),
+            width=(
+                max(1, canvas.winfo_width())
+                if fit_width
+                else max(body.winfo_reqwidth(), canvas.winfo_width())
+            ),
             height=max(body.winfo_reqheight(), canvas.winfo_height()),
         )
         canvas.configure(scrollregion=canvas.bbox("all"))
