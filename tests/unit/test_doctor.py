@@ -750,6 +750,10 @@ class TestCheckHooks:
                     "package": "opencode-ai",
                 },
             ),
+            mock.patch(
+                "ai_guardian.setup.mcp.detect_opencode_runtime",
+                return_value={"version": "1.18.34", "generation": "v1"},
+            ),
         ):
             result = Doctor().check_hooks()
 

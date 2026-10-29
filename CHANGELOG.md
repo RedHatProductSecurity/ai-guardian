@@ -230,6 +230,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **OpenCode V2 MCP setup (#2622):** Register the local AI Guardian server under
+  `mcp.servers` with V2's `disabled` semantics while preserving the V1 MCP shape.
+  Doctor verifies the active generation, and setup removal cleans only AI
+  Guardian's legacy/V2 entries while retaining unrelated config. Add isolated
+  JSON/JSONC coverage for both config overrides and a Doctor UX contract.
 - **OpenCode blocked first prompt (#2615):** For the reporter-confirmed V2
   generation, replace the blocked prompt draft with a fixed refusal notice, clear
   attachments and agent/skill selections, and complete safe prompt admission
