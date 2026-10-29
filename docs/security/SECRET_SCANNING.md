@@ -71,7 +71,13 @@ An explicit `engines` list replaces that default. For example,
 `"engines": ["gitleaks"]` runs Gitleaks only and does not run the built-in
 `toml-patterns` engine in this secret-scanning pipeline.
 
-**Recommended (BetterLeaks with Gitleaks fallback):**
+The Console's **Engine Configuration** page shows built-in TOML patterns selected
+when the engine list is omitted. Clear **Built-in TOML patterns** to save an
+explicit opt-out; the selection remains cleared after using **Reload**. Select it
+again to restore built-in pattern scanning.
+
+**External-only example (BetterLeaks with Gitleaks fallback; explicitly opts out
+of built-in TOML patterns):**
 ```json
 {
   "secret_scanning": {
@@ -86,7 +92,7 @@ An explicit `engines` list replaces that default. For example,
 - Falls back to Gitleaks if BetterLeaks not found
 - Works on any system (automatic detection)
 
-**Three-Scanner Fallback:**
+**Three external scanners (also explicitly opts out of built-in TOML patterns):**
 ```json
 {
   "secret_scanning": {

@@ -143,6 +143,14 @@
 
 ## Key Learnings
 
+- **2026-10-29 — JSON Schema test fragments:** When a nested schema contains
+  references to root-level definitions, validate the test instance through the
+  full root schema; validating only the fragment loses the reference scope.
+
+- **2026-10-29 — DAF issue labels:** `daf git update --labels` replaces the
+  entire label set. Preserve existing labels when adding a status label, or
+  feature/milestone labels can be removed.
+
 - **2026-10-29 — NiceGUI Engine Config callbacks:** `update:model-value` editor
   callbacks are synchronous, while value-change callbacks may be async. UX fakes
   should call the editor callback directly and await only async control handlers.

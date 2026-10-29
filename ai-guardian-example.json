@@ -178,7 +178,7 @@
     "action": "ask"
   },
   "secret_scanning": {
-    "_comment": "NEW in v1.4.0: Secret scanning with Gitleaks control",
+    "_comment": "Secret scanning defaults to built-in TOML patterns followed by Gitleaks",
     "_comment2": "Controls whether secret scanning is performed",
     "_comment3": "Supports both boolean (permanent) and time-based (temporary) formats",
     "_comment_immutable": "immutable prevents project-level configs from overriding these fields",
@@ -202,10 +202,11 @@
       "EXAMPLE_API_KEY_[A-Z0-9]+",
       {"pattern": "sk_test_temp_[A-Za-z0-9]+", "valid_until": "2026-06-01T00:00:00Z"}
     ],
-    "_engines_comment": "Multi-engine support with execution strategies and per-engine pattern servers",
+    "_engines_comment": "Default engines are built-in toml-patterns followed by gitleaks. An explicit list replaces this default; omit toml-patterns to opt out, including through the Console Engine Configuration checkbox.",
     "_engines_comment2": "Configure multiple scanner engines with different strategies for combining results",
     "_engines_comment3": "pattern_server is now per-engine (Issue #530) — put it inside the engine object",
     "engines": [
+      "toml-patterns",
       {
         "type": "gitleaks",
         "_comment": "Pattern server config is per-engine (canonical format since v1.7.x)",
@@ -270,9 +271,11 @@
       }
     ],
     "_engines_examples": {
-      "_simple": ["gitleaks"],
-      "_multi_engine": ["gitleaks", "trufflehog"],
+      "_simple": ["toml-patterns", "gitleaks"],
+      "_gitleaks_only_opt_out": ["gitleaks"],
+      "_multi_engine": ["toml-patterns", "gitleaks", "trufflehog"],
       "_with_per_engine_pattern_server": [
+        "toml-patterns",
         {
           "type": "gitleaks",
           "pattern_server": {"url": "https://raw.githubusercontent.com", "patterns_endpoint": "/leaktk/patterns/main/target/patterns/gitleaks/8.27.0"}
@@ -280,6 +283,7 @@
         "betterleaks"
       ],
       "_with_per_engine_config": [
+        "toml-patterns",
         "gitleaks",
         {
           "type": "trufflehog",
@@ -292,14 +296,14 @@
     },
     "_engines_secretlint_example": {
       "_comment": "Secretlint (MIT, Node.js): npm install -g @secretlint/secretlint-rule-preset-recommend",
-      "_config": ["gitleaks", "secretlint"]
+      "_config": ["toml-patterns", "gitleaks", "secretlint"]
     },
     "_engines_gitguardian_example": {
       "_comment": "GitGuardian (MIT ggshield CLI, cloud service): ai-guardian scanner install gitguardian. Requires consent and API key.",
       "_consent": "Run: ai-guardian engine consent gitguardian",
       "_api_key": "Set GITGUARDIAN_API_KEY environment variable",
       "_warning": "Content is sent to GitGuardian cloud API for scanning",
-      "_config": ["gitleaks", "gitguardian"]
+      "_config": ["toml-patterns", "gitleaks", "gitguardian"]
     },
     "_engines_python_scanner_example": {
       "_comment": "Python-based custom scanners (NEW in v1.8.0, Issue #474). Run in-process (~1ms vs ~50ms subprocess). No binary installation needed.",
@@ -317,6 +321,7 @@
         "class": "MyScanner"
       },
       "_config": [
+        "toml-patterns",
         "gitleaks",
         {
           "type": "python",

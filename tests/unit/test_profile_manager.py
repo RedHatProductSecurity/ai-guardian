@@ -156,6 +156,21 @@ class TestLoadProfile:
         )
 
     @pytest.mark.parametrize("profile_name", BUILT_IN_PROFILES)
+    def test_secret_scanning_comments_match_default_template(self, profile_name):
+        from ai_guardian.setup import _get_default_config_template
+
+        default = _get_default_config_template(permissive=False)
+        profile = load_profile(f"@{profile_name}")
+
+        assert (
+            profile["_comment_secret_scanning"] == default["_comment_secret_scanning"]
+        )
+        assert (
+            profile["secret_scanning"]["_comment_engines"]
+            == default["secret_scanning"]["_comment_engines"]
+        )
+
+    @pytest.mark.parametrize("profile_name", BUILT_IN_PROFILES)
     def test_builtin_tls_defaults_match_setup(self, profile_name):
         """Every profile advertises opt-in HTTPS with identical empty trust defaults."""
         from ai_guardian.setup import _get_default_config_template

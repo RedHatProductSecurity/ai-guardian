@@ -1,7 +1,7 @@
 {
   "$schema": "__SCHEMA_URI__",
   "_comment_project_overlay": "Project-level .ai-guardian/ai-guardian.json at repo root merges on top of this global config. Use immutable arrays to lock fields from project override.",
-  "_comment_secret_scanning": "Scan for secrets (API keys, tokens, passwords). Detection always blocks \u2014 use allowlist_patterns for false positives. Supported engines: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian",
+  "_comment_secret_scanning": "Scan for secrets (API keys, tokens, passwords). Detection always blocks — use allowlist_patterns for false positives. The default includes built-in toml-patterns and Gitleaks. Supported engines: toml-patterns, gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian",
   "_comment_password_likelihood": "Optional local suspected-password heuristic. Global-only human opt-in; no vault access. Not proof of a password or universal leak prevention.",
   "password_likelihood": {
     "_comment_enabled": "Default off in every profile. Only explicit boolean true enables local analysis.",
@@ -14,7 +14,7 @@
     "ignore_files": [],
     "ignore_tools": [],
     "allowlist_patterns": [],
-    "_comment_engines": "Engines tried in order. Built-in: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian. Python-based custom scanners: {type: python, module/path: ..., class: ...}. Cloud engines (gitguardian) require consent: ai-guardian engine consent gitguardian",
+    "_comment_engines": "Default engines, in order: built-in toml-patterns then gitleaks. An explicit list replaces this default; omit toml-patterns to opt out. Other supported engines: betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian. Python-based custom scanners: {type: python, module/path: ..., class: ...}. Cloud engines (gitguardian) require consent: ai-guardian engine consent gitguardian",
     "engines": [
       {
         "type": "toml-patterns"

@@ -184,9 +184,11 @@ def create_secret_engines_page(service, daemon_name: str):
                 # Engines editor
                 with ui.card().classes("w-full"):
                     ui.label("Engines").classes("text-lg font-bold")
-                    ui.label("Configure which scanner engines to use.").classes(
-                        "text-xs text-grey-6"
-                    )
+                    ui.label(
+                        "The default engine list includes built-in TOML patterns. "
+                        "Clear its checkbox to opt out; changes save automatically "
+                        "to the selected configuration scope."
+                    ).classes("text-xs text-grey-6")
 
                     engines = ss.get("engines", DEFAULT_ENGINES)
                     if not isinstance(engines, list):
@@ -208,11 +210,6 @@ def create_secret_engines_page(service, daemon_name: str):
                             "daemon. Existing selections are shown; other installed "
                             "engines cannot be added here."
                         ).classes("text-xs text-amber-9")
-                    else:
-                        ui.label(
-                            "Select built-in or installed engines. Changes save "
-                            "automatically to the selected configuration scope."
-                        ).classes("text-xs text-grey-6")
 
                     status_label = ui.label(
                         f"Valid JSON — {len(engines)} engine(s)"

@@ -196,13 +196,14 @@
         },
         "engines": {
           "type": "array",
-          "description": "List of secret scanning engines to use. Tries engines in order, using first available. Supported: 'gitleaks' (default, industry standard), 'betterleaks' (faster fork), 'leaktk' (auto-pattern management), 'trufflehog' (700+ detectors with verification), 'detect-secrets' (baseline workflow), Python-based custom scanners (type: 'python'), or custom engine config objects. See docs/MULTI_ENGINE_SUPPORT.md for examples.",
+          "description": "List of secret scanning engines to use, tried in order. The default is ['toml-patterns', 'gitleaks']; toml-patterns is built in and requires no binary. An explicit list replaces the default, so omit toml-patterns to intentionally opt out. Also supported: 'betterleaks' (faster fork), 'leaktk' (auto-pattern management), 'trufflehog' (700+ detectors with verification), 'detect-secrets' (baseline workflow), Python-based custom scanners (type: 'python'), or custom engine config objects. See docs/MULTI_ENGINE_SUPPORT.md for examples.",
           "items": {
             "oneOf": [
               {
                 "type": "string",
-                "description": "Built-in engine name: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
+                "description": "Built-in or external engine name: 'toml-patterns' (built-in), 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
                 "enum": [
+                  "toml-patterns",
                   "gitleaks",
                   "betterleaks",
                   "leaktk",
@@ -414,6 +415,7 @@
             ]
           },
           "default": [
+            "toml-patterns",
             "gitleaks"
           ]
         },
