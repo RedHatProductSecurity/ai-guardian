@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Bundled TOML secret-scanning defaults (#2617):** Align the canonical example
   and schema with the runtime default of built-in `toml-patterns` followed by
-  Gitleaks. Clarify explicit opt-out behavior in generated-config comments, the
-  Console, and secret-scanning documentation.
+  Gitleaks. Keep all built-in profile comments in sync and clarify explicit
+  opt-out behavior in generated-config comments, the Console, and documentation.
 - **Console engine selection:** Engine Configuration now offers checkboxes for
   built-in TOML patterns and external scanners installed on the selected daemon.
   Selection changes save immediately and update the advanced JSON editor; the

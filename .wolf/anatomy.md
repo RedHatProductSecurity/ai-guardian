@@ -13,7 +13,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21348 tok)
-- `CHANGELOG.md` — Change log (~79265 tok)
+- `CHANGELOG.md` — Change log (~79272 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -1400,10 +1400,10 @@
 
 ## src/ai_guardian/templates/profiles/
 
-- `minimal.json` (~4702 tok)
-- `moderator.json` (~5055 tok)
-- `standard.json` (~5442 tok)
-- `strict.json` (~4651 tok)
+- `minimal.json` (~4754 tok)
+- `moderator.json` (~5108 tok)
+- `standard.json` (~5494 tok)
+- `strict.json` (~4704 tok)
 
 ## src/ai_guardian/templates/tray-plugins/
 

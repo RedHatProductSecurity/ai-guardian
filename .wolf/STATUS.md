@@ -25,12 +25,15 @@ budget_tokens: 1000
   `skill_discovery.py` and `scanners/secret_validator.py`; project Mypy is clean.
   An initial schema-fragment test failure was fixed by validating through the
   root schema and recorded in the buglog.
-- All acceptance criteria are met locally. DAF note and GitHub progress comment
-  are saved; issue #2617 remains open with `enhancement`, `1.21.0`, and `done`
-  labels. Changes are uncommitted;
-  no PR or issue closure. No live config or daemon changes.
-- **Next:** Review the diff, then exit the agent and run `daf complete` from the
-  user's terminal. Do not commit or create a PR in this session.
+- PR #2621 is open on branch `2617`; the original CI test matrix failed in
+  `test_standard_matches_default_template` on all platforms/Python versions
+  because setup's updated secret-scanning comments were not copied to built-in
+  profiles. Synchronized both comment fields in all four profiles and added a
+  parameterized parity regression. The full profile-manager unit file passes
+  locally (47 tests); formatting, lint, JSON parsing, and diff checks pass.
+- DAF note and GitHub progress comment are saved. Issue #2617 remains open with
+  `enhancement`, `1.21.0`, and `done` labels. No issue closure or live config or
+  daemon changes. Check PR #2621 for the CI result after this follow-up is pushed.
 
 ---
 
