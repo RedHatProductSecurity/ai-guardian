@@ -25,7 +25,6 @@ from ai_guardian.constants import (
     AUGMENT_TOOL_MAP,
     canonical_ide,
     HookEvent,
-    OPENCODE_TOOL_INPUT_MAP,
     OPENCODE_TOOL_MAP,
     antigravity_tool_name,
 )
@@ -44,6 +43,7 @@ from ai_guardian.config.utils import (
     get_all_config_paths,
     get_config_dir,
     get_project_config_path,
+    get_project_dir,
     is_expired,
     is_feature_enabled,
 )
@@ -70,6 +70,17 @@ from ai_guardian.tools.patterns import (
     is_ai_guardian_recovery_command,
     is_host_agent_cli_command,
     _strip_bash_heredoc_content,
+)
+from ai_guardian.tools.input import (
+    FILE_TOOLS,
+    INPUT_FAILURE_LABELS,
+    build_input_diagnostics,
+    file_input_failure,
+    is_opencode_hook,
+    normalize_opencode_input,
+    opencode_native_input,
+    opencode_native_name,
+    valid_workspace,
 )
 
 logger = logging.getLogger(__name__)
@@ -605,6 +616,57 @@ class ToolPolicyChecker:
 
             logger.info(f"Checking if tool '{tool_name}' is allowed...")
 
+            # Validate before any protection consumes path values. Do not use a
+            # valid legacy alias to conceal a malformed/conflicting native one.
+            opencode = is_opencode_hook(hook_data)
+            input_failure = None
+            recovered_target = None
+            if opencode and (
+                hook_data.get("workspace_source") == "unknown"
+                or ("cwd" in hook_data and valid_workspace(hook_data["cwd"]) is None)
+            ):
+                input_failure = "workspace_unavailable"
+            elif tool_name in FILE_TOOLS:
+                input_failure, recovered_target = file_input_failure(
+                    tool_name,
+                    opencode_native_input(hook_data) if opencode else tool_input,
+                    tool_input,
+                    hook_data.get("cwd") or get_project_dir(),
+                    opencode=opencode,
+                )
+            if input_failure:
+                self.last_deny_action = "block"
+                self.last_deny_category = _DENY_CATEGORY_ERROR
+                label = INPUT_FAILURE_LABELS[input_failure]
+                input_error_msg = (
+                    f"\n{'='*70}\n🚨 BLOCKED BY POLICY\n{'='*70}\n"
+                    f"Tool: {tool_name}\nReason: {label} (file_path)\n\n"
+                    "The effective file target could not be validated for security checks.\n"
+                    "This operation has been blocked to preserve immutable file protections.\n"
+                    f"{'='*70}\n"
+                )
+                logger.error("Blocked %s: %s", tool_name, label)
+                self._log_violation(
+                    tool_name=tool_name,
+                    check_value=recovered_target,
+                    reason=(
+                        "missing required parameter"
+                        if input_failure == "missing_argument"
+                        else "invalid tool input"
+                    ),
+                    matcher=tool_name,
+                    hook_data=hook_data,
+                    immutable=True,
+                    input_diagnostics=build_input_diagnostics(
+                        hook_data,
+                        tool_name,
+                        input_failure,
+                        target_known=recovered_target is not None,
+                        normalized_input=tool_input,
+                    ),
+                )
+                return False, input_error_msg, tool_name
+
             # This boundary is immutable and must run even when ordinary
             # permissions are disabled or overridden by a configured rule.
             cli_protection = self._check_immutable_cli_protection(
@@ -626,7 +688,11 @@ class ToolPolicyChecker:
             )
             if agent_config_protection is not None:
                 return agent_config_protection
-            if immutable_only and not self._developer_session_enabled:
+            if (
+                immutable_only
+                and tool_name not in FILE_TOOLS
+                and not self._developer_session_enabled
+            ):
                 return True, None, tool_name
 
             # PRIORITY 0: Check SSRF protection (before all other checks)
@@ -734,33 +800,6 @@ class ToolPolicyChecker:
                 if raw_cmd and raw_cmd != check_value:
                     raw_check_value = raw_cmd
 
-            # For file-path tools (Edit/Write/Read/NotebookEdit), require check_value
-            # If we can't extract file_path, fail-closed to prevent bypass (Issue #113)
-            is_file_path_tool = tool_name in ["Write", "Read", "Edit", "NotebookEdit"]
-            if is_file_path_tool and not check_value:
-                error_msg = (
-                    f"\n{'='*70}\n"
-                    f"🚨 BLOCKED BY POLICY\n"
-                    f"{'='*70}\n"
-                    f"Tool: {tool_name}\n"
-                    f"Reason: Missing required parameter (file_path)\n"
-                    f"\n"
-                    f"File-path tools require a file_path parameter for security checks.\n"
-                    f"This operation has been blocked to prevent bypassing immutable\n"
-                    f"file protections.\n"
-                    f"{'='*70}\n"
-                )
-                logger.error(f"🚨 BLOCKED: {tool_name} - missing file_path parameter")
-                self._log_violation(
-                    tool_name=tool_name,
-                    check_value="<missing file_path>",
-                    reason="missing required parameter",
-                    matcher=tool_name,
-                    hook_data=hook_data,
-                    immutable=True,
-                )
-                return False, error_msg, tool_name
-
             if check_value:
                 # Check if this is development source code (allowed for contributors)
                 if self._should_skip_immutable_protection(check_value, tool_name):
@@ -832,6 +871,9 @@ class ToolPolicyChecker:
                         )
                         self.last_deny_category = _DENY_CATEGORY_COMMAND
                         return False, error_msg, tool_name
+
+            if immutable_only and tool_name in FILE_TOOLS:
+                return True, None, tool_name
 
             # The built-in namespace is not an identity proof. Require a
             # process-bound attestation before allowing it, then bypass ordinary
@@ -1161,7 +1203,7 @@ class ToolPolicyChecker:
             # and subagent arguments at the event root.  Normalize those
             # shapes here as well as in the hook adapter because this checker
             # receives the original payload for policy/audit context.
-            if isinstance(tool_input, str):
+            if isinstance(tool_input, str) and not is_opencode_hook(hook_data):
                 try:
                     decoded_input = json.loads(tool_input)
                 except (TypeError, json.JSONDecodeError) as exc:
@@ -1180,20 +1222,16 @@ class ToolPolicyChecker:
 
             # OpenCode's native payload uses lowercase tool names and camelCase
             # arguments. Normalize raw policy callers as well as hook adapters.
-            is_opencode = (
-                hook_data.get("opencode_version")
-                or hook_data.get("hook_source") == "opencode"
-                or str(hook_data.get("_ide_type", "")).lower() == "opencode"
-                or os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower() == "opencode"
-            )
+            is_opencode = is_opencode_hook(hook_data)
             if is_opencode:
+                tool_name = opencode_native_name(hook_data) or tool_name
                 if isinstance(tool_name, str):
                     tool_name = OPENCODE_TOOL_MAP.get(tool_name.casefold(), tool_name)
-                if isinstance(tool_input, dict):
-                    tool_input = dict(tool_input)
-                    for native_key, canonical_key in OPENCODE_TOOL_INPUT_MAP.items():
-                        if canonical_key not in tool_input and native_key in tool_input:
-                            tool_input[canonical_key] = tool_input[native_key]
+                tool_input = normalize_opencode_input(
+                    tool_name,
+                    opencode_native_input(hook_data),
+                    valid_workspace(hook_data.get("cwd")) or get_project_dir(),
+                )
 
             # Cursor/Windsurf: synthesize from event-based hook names
             if not tool_name:
@@ -1966,12 +2004,13 @@ class ToolPolicyChecker:
     def _log_violation(
         self,
         tool_name: str,
-        check_value: str,
+        check_value: Optional[str],
         reason: str,
         matcher: Optional[str],
         hook_data: Dict,
         violation_type: str = ViolationType.TOOL_PERMISSION,
         immutable: bool = False,
+        input_diagnostics: Optional[Dict] = None,
     ):
         """Log a tool permission violation via unified ``log_violation``."""
         if not HAS_VIOLATION_LOGGER:
@@ -1979,6 +2018,11 @@ class ToolPolicyChecker:
 
         from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
         from ai_guardian.violations.log_violation import ScanContext, log_violation
+        from ai_guardian.violations.tool_diagnostics import (
+            safe_input_diagnostics,
+            safe_tool_correlation,
+        )
+        from ai_guardian import __version__
 
         file_path_tools = {"Write", "Read", "Edit", "NotebookEdit"}
         file_path = check_value if tool_name in file_path_tools else None
@@ -2018,20 +2062,67 @@ class ToolPolicyChecker:
             error_message=reason,
             extra={"is_immutable": is_immutable},
         )
+        diagnostics = None
+        if violation_type == ViolationType.TOOL_PERMISSION:
+            diagnostics = safe_input_diagnostics(
+                input_diagnostics
+            ) or build_input_diagnostics(
+                hook_data,
+                tool_name,
+                "immutable_protection" if is_immutable else "permission_denied",
+                target_known=bool(file_path),
+                normalized_input=self._extract_tool_info(hook_data)[1],
+            )
+        workspace_unknown = is_opencode_hook(hook_data) and (
+            hook_data.get("workspace_source") == "unknown"
+            or ("cwd" in hook_data and valid_workspace(hook_data["cwd"]) is None)
+        )
+        project_path = (
+            ""
+            if workspace_unknown
+            else valid_workspace(hook_data.get("cwd")) or get_project_dir()
+        )
+        metadata = safe_tool_correlation(
+            {
+                "context": {
+                    "message_id": hook_data.get("message_id"),
+                    "host_version": hook_data.get("opencode_version"),
+                    "integration_version": __version__,
+                    "workspace_source": hook_data.get("workspace_source")
+                    or ("hook" if hook_data.get("cwd") else "request"),
+                }
+            }
+        )
+        for key in ("id", "session_id", "tool_use_id"):
+            metadata.pop(key, None)
+        metadata["policy_project_path"] = (
+            None if workspace_unknown else get_project_dir()
+        )
+        plugin_cwd = hook_data.get("plugin_cwd")
+        if valid_workspace(plugin_cwd):
+            metadata["plugin_cwd"] = plugin_cwd
         log_violation(
             result,
             ScanContext(
                 ide_type=self._detect_ide_type(hook_data),
                 hook_event=hook_data.get("hook_event_name", ""),
-                project_path=os.getcwd(),
+                project_path=project_path,
                 session_id=hook_data.get("session_id"),
                 tool_use_id=hook_data.get("tool_use_id"),
+                tool_name=tool_name,
+                repository=project_path or None,
             ),
             blocked_overrides={
                 "tool_name": tool_name,
-                "tool_value": check_value,
+                "tool_value": check_value or "",
                 "matcher": matcher,
+                **(
+                    {"input_diagnostics": diagnostics, "file_path": file_path}
+                    if diagnostics
+                    else {}
+                ),
             },
+            context_overrides=metadata,
             suggestion=suggestion,
         )
 

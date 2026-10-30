@@ -1122,6 +1122,128 @@ class TestGetViolations:
         assert violation["end_column"] == 32
 
 
+class TestToolInputViolationDiagnostics:
+    """Input failures are distinguishable without forwarding private records."""
+
+    @staticmethod
+    def _query(violation):
+        with patch("ai_guardian.violations.logger.ViolationLogger") as logger:
+            logger.return_value.get_recent_violations.return_value = [violation]
+            return (
+                create_server()
+                ._tool_manager._tools["get_violations"]
+                .fn()["violations"][0]
+            )
+
+    @staticmethod
+    def _violation():
+        return {
+            "id": "viol_2627abcd",
+            "violation_type": "tool_permission",
+            "blocked": {
+                "tool_name": "Read",
+                "file_path": None,
+                "is_immutable": True,
+                "reason": "PRIVATE_REASON",
+                "input_diagnostics": {
+                    "schema_version": 1,
+                    "subreason": "missing_argument",
+                    "native_tool_name": "read",
+                    "canonical_tool_name": "Read",
+                    "expected_field": "path",
+                    "input_type": "object",
+                    "argument_shape": {
+                        "limit": "integer",
+                        "PRIVATE_KEY": "PRIVATE_VALUE",
+                    },
+                    "unrecognized_argument_count": 1,
+                    "target_status": "unknown",
+                    "raw_payload": "PRIVATE_PAYLOAD",
+                    "advice": "PRIVATE_ADVICE",
+                },
+            },
+            "context": {
+                "session_id": "ses_2627test",
+                "tool_use_id": "call_2627test",
+                "message_id": "msg_2627test",
+                "host_version": "2.0.24",
+                "integration_version": "1.21.0-dev",
+                "workspace_source": "session",
+                "session_title": "PRIVATE_TITLE",
+            },
+            "suggestion": {"rule": {"patterns": ["PRIVATE_PATTERN"]}},
+            "policy_decision": {
+                "decision": "block",
+                "violation_type": "tool_permission",
+                "reason": "PRIVATE_REASON",
+            },
+        }
+
+    def test_stored_tool_name_fallback_and_safe_correlation(self):
+        entry = self._query(self._violation())
+        assert entry["tool"] == "Read"
+        assert entry["id"] == "viol_2627abcd"
+        assert entry["session_id"] == "ses_2627test"
+        assert entry["tool_use_id"] == "call_2627test"
+        assert entry["message_id"] == "msg_2627test"
+        assert entry["host_version"] == "2.0.24"
+        assert entry["integration_version"] == "1.21.0-dev"
+        assert entry["input_diagnostics"]["argument_shape"] == {"limit": "integer"}
+        assert "admin" not in entry["suggestion"]
+        assert entry["policy_decision"]["reason"] == "tool permission denied"
+        assert "PRIVATE_" not in json.dumps(entry)
+
+    def test_legacy_missing_argument_has_unknown_shape_not_admin_advice(self):
+        entry = self._query(
+            {
+                "violation_type": "tool_permission",
+                "blocked": {
+                    "tool_name": "Read",
+                    "reason": "missing required parameter",
+                },
+            }
+        )
+        assert entry["tool"] == "Read"
+        assert entry["input_diagnostics"]["subreason"] == "missing_argument"
+        assert entry["input_diagnostics"]["argument_shape"] == {}
+        assert entry["input_diagnostics"]["unrecognized_argument_count"] is None
+        assert entry["host_version"] is None
+        assert entry["message_id"] is None
+        assert "admin" not in entry["suggestion"]
+
+    def test_malformed_stored_diagnostics_are_not_forwarded(self):
+        violation = self._violation()
+        violation["blocked"]["input_diagnostics"]["subreason"] = "PRIVATE_SUBREASON"
+        entry = self._query(violation)
+        assert "input_diagnostics" not in entry
+        assert "PRIVATE_" not in json.dumps(entry)
+
+    def test_stored_metadata_and_shape_are_revalidated_and_bounded(self):
+        violation = self._violation()
+        violation["context"].update(
+            {
+                "message_id": "PRIVATE_MESSAGE",
+                "host_version": "PRIVATE_VERSION",
+                "workspace_source": {"PRIVATE_KEY": "PRIVATE_VALUE"},
+            }
+        )
+        violation["blocked"]["input_diagnostics"].update(
+            {
+                "native_tool_name": [],
+                "expected_field": {"PRIVATE_KEY": "PRIVATE_VALUE"},
+                "argument_shape": {"path": "PRIVATE_TYPE", "limit": ["PRIVATE_TYPE"]},
+                "unrecognized_argument_count": 10**20,
+            }
+        )
+        entry = self._query(violation)
+        assert entry["message_id"] is None
+        assert entry["host_version"] is None
+        assert entry["workspace_source"] == "unknown"
+        assert entry["input_diagnostics"]["argument_shape"] == {}
+        assert entry["input_diagnostics"]["unrecognized_argument_count"] == 10000
+        assert "PRIVATE_" not in json.dumps(entry)
+
+
 class TestGetConfig:
     """Test get_config tool."""
 

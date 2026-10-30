@@ -288,7 +288,12 @@ def _setup_single_ide(
         hook_kwargs.update({"scope": scope, "project_dir": project_dir})
     success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
     mcp_repair = False
-    if not success and ide_type in ("codex", "cursor", "pi"):
+    # The tray's explicit setup action must be able to repair OpenCode MCP
+    # without forcing replacement of a verified, already healthy plugin.
+    can_repair_mcp = ide_type in ("codex", "cursor", "pi") or (
+        ide_type == "opencode" and not no_mcp
+    )
+    if not success and can_repair_mcp:
         try:
             hook_verification = setup.verify_hooks_for_ide(
                 ide_type,

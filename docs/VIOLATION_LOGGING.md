@@ -88,6 +88,54 @@ entries can treat a missing `policy_decision` field as a legacy record; the
 current REST, SDK, SARIF, and OTEL adapters preserve their existing shapes and
 add the normalized record or its safe fields.
 
+### Tool Input Diagnostics
+
+New tool-permission records add optional `blocked.input_diagnostics` with integer
+`schema_version: 1`. This distinguishes validation failures from ordinary policy
+denials without copying the native tool payload:
+
+```json
+{
+  "schema_version": 1,
+  "subreason": "missing_argument",
+  "native_tool_name": "read",
+  "canonical_tool_name": "Read",
+  "expected_field": "path",
+  "input_type": "object",
+  "argument_shape": {"limit": "integer"},
+  "unrecognized_argument_count": 0,
+  "target_status": "unknown"
+}
+```
+
+Subreasons are fixed labels: `missing_argument`, `empty_argument`,
+`invalid_argument`, `conflicting_arguments`, `normalization_failure`,
+`workspace_unavailable`, `immutable_protection`, or `permission_denied`.
+Recognized keys depend on the tool schema; only JSON type labels are retained.
+Unrecognized keys are counted, not persisted, and the count is capped at 10,000.
+Argument values, arbitrary keys, file contents, credentials, and session titles
+are excluded. A normalization failure can retain a recoverable target in the
+existing `blocked.file_path`; unknown/ambiguous targets are `null`, with an empty
+string `tool_value` rather than a fabricated file name.
+
+The associated context preserves canonical `tool_name`, existing session/call
+correlation, and available `message_id`, `host_version`, `integration_version`,
+and `workspace_source`. `project_path` identifies the hook's workspace;
+`policy_project_path` identifies the policy request context, while `plugin_cwd`
+records an available plugin startup location separately. Missing workspace data
+is not replaced by daemon startup CWD. OpenCode's bridge also starts its checker
+in the session workspace so its daemon forwarding uses that same directory.
+
+Console Details and copy views revalidate the added diagnostics. MCP returns
+only vetted fields, bounded IDs/version strings, and fixed guidance; unavailable
+values are `null` or `unknown`. Legacy records without these fields remain valid;
+the exact old missing-parameter classification is recognized without treating
+arbitrary stored reason text as agent-safe. The existing `policy_decision.reason`
+remains the generic safe classification, not a channel for raw details.
+
+Paths and IDs are operational metadata. Review diagnostic copies before sharing.
+Immutable input failures remain blocked and do not gain override actions.
+
 ### Example Log Entry (Blocked Command)
 
 ```json

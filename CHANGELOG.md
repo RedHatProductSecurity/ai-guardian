@@ -240,6 +240,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Fixed
+- **OpenCode V2 file targets and diagnostics (#2627):** Normalize native `path`
+  alongside compatible file aliases in both adapter and direct policy calls;
+  reject malformed/conflicting targets without weakening immutable protection.
+  Bind current-session workspace metadata and checker child CWD to project-policy
+  selection, including parallel sessions and moved sessions. Add value-free input
+  subreasons/shape, version and operation correlation to Console/copy and MCP,
+  including the stored `blocked.tool_name` fallback and legacy-record handling.
+  Input failures no longer receive misleading admin-permission advice. Keep fixed
+  stage-specific refusals, fail closed on unavailable workspaces/checker failures,
+  and cover privacy plus complete affected UX contracts with isolated tests.
+  Pass the canonical target to file-content/directory checks too. Repair missing
+  OpenCode MCP registration from the tray without forcing replacement of verified
+  healthy hooks, avoiding a recurring setup prompt after non-interactive repair.
 - **OpenCode V2 MCP setup (#2622):** Register the local AI Guardian server under
   `mcp.servers` with V2's `disabled` semantics while preserving the V1 MCP shape.
   Doctor verifies the active generation, and setup removal cleans only AI
