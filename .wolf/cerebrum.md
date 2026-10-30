@@ -2,9 +2,14 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-29
+> Last updated: 2026-10-30
 
 ## User Preferences
+
+- **2026-10-30 — OpenCode partial setup repair (#2627):** User approved repairing
+  missing MCP registration without forcing replacement of verified healthy hooks.
+  An explicit setup/update action is not blanket consent to rewrite healthy
+  integration artifacts. Preserve final health verification and cancellation.
 
 - **2026-10-29 — Tray pause hierarchy (#2620):** Keep the familiar daemon →
   project directory → session hierarchy inside one modal, with an inline
@@ -153,6 +158,25 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-10-30 — OpenCode V2 target/workspace contract (#2627):** In upstream
+  2.0.24, file tools use `path`; execution resolves against the exact session's
+  `location.directory`, not plugin startup CWD or project-relative `subpath`.
+  FileAccess expands leading `~` and Windows shell drive aliases. Check aliases
+  against the same effective target; do not invent per-drive relative directories.
+  Bind the checker child's CWD too: daemon forwarding uses the child's process
+  CWD, and daemon logging must use per-request project context, not os.getcwd().
+  Pass canonical input to file-content extraction, which otherwise re-extracts
+  native relative/camelCase paths and can scan the wrong file or skip scanning.
+- **2026-10-30 — Partial OpenCode MCP repair:** Tray non-interactive setup may
+  encounter already healthy hooks while MCP is missing. Its force heuristic only
+  handles changed/obsolete hooks. `_setup_single_ide` must permit MCP-only repair
+  after explicit positive hook verification, not blindly force all setup calls.
+- **2026-10-30 — Diagnostic projection:** Keep recognized key/type summaries and
+  fixed subreason enums separate from legacy raw reasons. Revalidate stored
+  diagnostics before MCP and Console/JSON/Markdown copies; unknown metadata stays
+  unknown. For other policy callers, summarize parsed canonical arguments without
+  changing their native normalization. Keep actual native identity when recognized.
 
 - **2026-10-29 — Inline pause layout/dropdowns:** Content-sized scroll canvases
   plus fixed label widths can push row controls offscreen when monitor placement

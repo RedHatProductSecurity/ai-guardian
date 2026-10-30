@@ -660,6 +660,12 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         try:
             from ai_guardian.violations.logger import ViolationLogger
             from ai_guardian.violations.decision import safe_policy_decision
+            from ai_guardian.tools.input import INPUT_FAILURE_LABELS
+            from ai_guardian.violations.tool_diagnostics import (
+                INPUT_FAILURE_GUIDANCE,
+                safe_tool_correlation,
+                violation_input_diagnostics,
+            )
 
             vl = ViolationLogger()
             violations = vl.get_recent_violations(
@@ -681,13 +687,26 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                     "timestamp": v.get("timestamp", ""),
                     "type": vtype,
                     "severity": v.get("severity", ""),
-                    "tool": ctx.get("tool_name", "") or blocked.get("tool", ""),
+                    "tool": ctx.get("tool_name", "")
+                    or blocked.get("tool", "")
+                    or blocked.get("tool_name", ""),
                     "file": blocked.get("file_path", "") or ctx.get("file_path", ""),
                     "action": "blocked" if v.get("blocked") else "logged",
                     "suggestion": _SAFE_SUGGESTIONS.get(
                         vtype, "Review the security policy for this violation type"
                     ),
                 }
+                diagnostics = violation_input_diagnostics(v)
+                if diagnostics is not None:
+                    entry["input_diagnostics"] = diagnostics
+                    entry.update(safe_tool_correlation(v))
+                    if diagnostics["subreason"] in INPUT_FAILURE_LABELS:
+                        entry["suggestion"] = INPUT_FAILURE_GUIDANCE
+                    elif diagnostics["subreason"] == "immutable_protection":
+                        entry["suggestion"] = (
+                            "Built-in protection blocked this operation; review the "
+                            "reported target and diagnostic details"
+                        )
                 if ctx.get("source"):
                     entry["source"] = ctx["source"]
                 if blocked.get("line_number"):

@@ -5,9 +5,82 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-29 (UTC)
+> Last updated: 2026-10-30 (UTC)
 
 ---
+
+## Issue #2627 implementation — 2026-10-30
+
+- User authorized implementation with **go**, then explicitly approved the
+  additional OpenCode MCP-only tray repair. Continued on existing managed branch
+  `2627`; no branch change, commit, push, PR or issue closure.
+- Added shared tool-scoped file normalization and bounded, value-free input
+  diagnostics. V2 `path`, legacy `filePath` and canonical `file_path` agree across
+  adapter and direct policy callers; invalid/conflicting aliases fail closed.
+  Verified V2 2.0.24 MIT source semantics for session location, home expansion and
+  Windows shell drive aliases; ambiguous Windows drive-relative targets deny.
+- Canonical targets now reach directory/content checks as well as policy.
+  V2 fetches exact-session metadata afresh per event, deduplicating concurrent
+  lookups only; the checker child uses that directory, and logging preserves
+  hook/policy/plugin workspace attribution without process-wide chdir.
+- MCP and Console/copy views expose vetted input classifications, shape and
+  available version/correlation fields. Arbitrary values/keys, titles and stored
+  reasons are not forwarded through diagnostics; legacy records and immutable
+  action restrictions remain supported. Fixed stage-specific refusals stay intact.
+- Added OpenCode to verified-healthy-hook MCP repair, without blanket forced
+  replacement. A tray-flow regression reproduces the previous loop and verifies
+  a second check stays quiet. The user manually ran setup outside the agent;
+  read-only Doctor subsequently reports OpenCode MCP healthy, activation unverified.
+- **Validation:** 2,400 directly related unit/UX tests pass; one Windows-only case
+  skips locally. All three affected UX files ran completely. Focused branch
+  coverage is 95% (adapter 100%, input normalization/diagnostics 94%, safe projection
+  97%). Ruff, Black py310, error-level Pylint and targeted Mypy pass; readiness
+  YAML/11 test paths and whitespace checks pass. Updated docs and CHANGELOG.
+- Full-package Mypy retains existing `ui/clipboard.py:39` missing-return and
+  `ui/ask_dialog.py:530` unreachable errors. An unmodified HEAD archive reproduces
+  both in the same Mac/Python 3.12.11 environment. No unrelated fixes/suppressions.
+  Coverage and baseline artifacts remain in the approved OpenCode temp directory.
+- DAF progress note and automated checklist/open gates are saved:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2627#issuecomment-6530664258.
+  Manual simplification/privacy review completed; no simplify skill or subagents.
+- **Next:** fresh CI (Python/Windows/Node matrix), then actual OpenCode 2.0.24
+  verification after loading the generated plugin: safe/protected reads, parallel
+  workspaces and session movement. Harness tests do not prove host activation.
+  Changes remain uncommitted. No full/integration/container suite, installed
+  configuration changes or service restarts were performed by the agent.
+
+## Issue #2627 session initialization — 2026-10-30
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2627`, native conversation
+  `ses_e72ba525bffeecFsom92yQ8Z8G`, in the real workspace on existing branch
+  `2627`. The worktree was clean. Read the repository-qualified GitHub issue
+  exactly once; its comments list is empty. No temporary-clone sync applies.
+- Loaded all four hierarchical context files from
+  `/Users/dvernier/.config/devaiflow`, the installed hierarchical skills, DAF/Git
+  guidance, OpenCode V2 guidance, and OpenWolf protocol/handoff/learning context.
+  No additional OpenCode project skill was found; the project release skill is
+  unrelated. `daf assets --dry-run --agent opencode` reported current generic
+  skills and outdated hierarchical assets/configuration; nothing was upgraded.
+  Leave the native conversation title DAF-managed.
+- **Next:** verify generation/tool-specific effective-target normalization in
+  both adapter and direct policy callers. Cover `path`, `filePath`, `file_path`,
+  relative paths, missing/empty/malformed inputs and conflicting aliases without
+  checking one target while the host executes another; preserve fail-closed and
+  immutable protections from #2425.
+- Add bounded, vetted input-failure/shape diagnostics and native/canonical tool,
+  version and correlation metadata without raw payloads, arbitrary key strings,
+  credentials, file contents, policy patterns or protection-suppression advice.
+  Investigate trustworthy per-call workspace attribution across parallel sessions;
+  the reported attribution mismatch alone does not establish wrong-policy routing.
+- Extend MCP tool-name fallback and appropriate safe guidance, plus Console
+  detail/copy views and legacy-record compatibility. Add isolated related unit
+  tests and complete affected OpenCode/guidance UX contracts; synchronize exact
+  wording assertions, relevant documentation and CHANGELOG, then run related
+  tests and required linters only when implementation is authorized.
+- User requested initialization only. No acceptance criteria have been verified
+  or marked complete. No application changes, tests, tracker mutations, runtime
+  changes, commits, pushes or PRs; only initialization handoff bookkeeping.
 
 ## Issue #2620 implementation — 2026-10-29
 

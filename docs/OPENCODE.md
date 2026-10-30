@@ -60,11 +60,14 @@ only closes its event subscription; it does not delete persistent sessions.
 
 V2 prompt, tool, and idle hooks also forward the native title obtained from
 `ctx.session.get({ sessionID })` as optional `session_title` display metadata.
-Lookup is bounded to 500 ms and cached for 30 seconds per exact session (including
-misses, at most 128 entries). Later activity refreshes generated/renamed titles.
-Unavailable or invalid metadata never skips hook checks: the tray retains a known
-title or uses the stable ID fallback. Deletion clears the cached entry. No
-messages or full transcripts are loaded to obtain a title.
+The same metadata supplies `session.location.directory` for the exact session.
+Lookup is bounded to 500 ms, with at most 128 concurrent requests. Concurrent
+lookups for the same session share one request; completed results are not cached
+across events, so session moves and title changes are observed on the next event.
+No messages or full transcripts are loaded. A missing title uses the stable ID
+fallback; an unavailable workspace is explicitly unknown and cannot authorize
+prompt admission or tool/result delivery. Deleted-session cleanup uses the stable
+session ID without inventing a workspace.
 
 Blocked pre-tool calls add a fixed notice saying the tool did not run. Blocked
 post-tool results add a notice saying the tool ran but its result was withheld;
@@ -90,6 +93,54 @@ The shared bridge remains outside the direct plugin discovery directory:
 
 The bridge invokes `ai-guardian --ide opencode` with a 30-second timeout and
 keeps the host plugin free of duplicated process and response handling.
+For OpenCode, it sets the child process's `cwd` to the hook's workspace. This
+binds direct checks and the daemon client's existing CWD forwarding to the same
+project without changing the shared OpenCode process's working directory.
+Missing/unusable workspaces and checker process failures fail closed; they do
+not silently fall back to the plugin or server startup directory. A failure
+before the checker starts may have no backend violation record. Fixed,
+stage-specific OpenCode refusal notices still withhold private bridge errors.
+
+If Check hooks/MCP finds a healthy OpenCode plugin but missing MCP registration,
+the tray's explicit setup action can repair MCP without forcing replacement of
+healthy hooks. Setup verifies the existing plugin before taking that path, and
+the tray's final health check remains authoritative. Cancelling makes no change.
+
+## Native File Arguments and Diagnostics
+
+V2 `read` uses `path`, as do V2 `write` and `edit`. Normalization is shared by the
+adapter and direct policy callers. Their existing `filePath` and `file_path`
+representations remain compatible; this does not change OpenCode's own native
+input schema. Relative targets are resolved against the hook's workspace, not
+the daemon's startup CWD. Directory checks and content scanning receive the same
+canonical target as tool policy. Other tools' `path` arguments are not reinterpreted as
+file operations.
+Resolution also follows V2's leading `~` home expansion and Windows shell drive
+aliases; it does not invent `~username` expansion. Ambiguous Windows drive-relative
+targets are rejected instead of guessing a per-drive process directory. These
+semantics were checked against the MIT-licensed V2 2.0.24 `FileAccess.resolvePath`
+and `FSUtil.windowsPath` implementation; no new runtime dependency is added.
+
+Every supplied file alias must be a nonempty string without NUL characters and
+resolve to the same target. Missing, whitespace-only, malformed, and conflicting
+aliases are denied before protection checks consume them, including when ordinary
+permission rules are disabled. Protected valid targets still receive an immutable
+protection denial rather than a false missing-parameter error.
+
+New tool-permission records include bounded `blocked.input_diagnostics`: a fixed
+subreason, native/canonical tool names, expected field, schema-recognized argument
+names and JSON types, an unrecognized-argument count, and known/unknown target
+status. No argument values, arbitrary key strings, prompt/file contents, or
+session titles are copied into those diagnostics. Recoverable targets use the
+existing `blocked.file_path`; genuinely unknown targets are `null`.
+
+Console Details and Markdown/JSON copies expose the safe diagnostic projection
+and available violation/session/call/message IDs and versions. Workspace labels
+distinguish the hook location, the actual policy request context, and the plugin
+startup location. MCP exposes vetted diagnostic/correlation fields, not raw
+stored reasons or policy patterns; input failures do not receive admin-permission
+advice. Older records remain readable with unavailable metadata shown as unknown.
+See [violation logging](VIOLATION_LOGGING.md#tool-input-diagnostics).
 
 ## Database And Paths
 
@@ -149,19 +200,30 @@ The directly affected local validation command is:
 ```bash
 uv run --extra dev python -m pytest \
   tests/unit/test_opencode_support.py \
+  tests/unit/test_opencode_input.py \
+  tests/unit/test_typescript_bridge.py \
   tests/unit/test_opencode_transcript.py \
   tests/unit/test_ide_sessions.py \
   tests/unit/test_cli_version_check.py \
   tests/unit/test_ide_registry.py \
   tests/unit/test_setup.py \
   tests/unit/test_container_scripts.py \
-  tests/ux/test_user_experience_contract_opencode_self_protection.py -q
+  tests/ux/test_user_experience_contract_opencode_self_protection.py \
+  tests/ux/test_user_experience_contract_violation_guidance.py \
+  tests/ux/test_user_experience_contract_ide_setup.py -q
 ```
 
 Release readiness validates the normal image's pinned V1 executable; V2 remains
 a host-plugin contract only. V2 doctor status confirms generated files and
 discovery-path configuration, but does not inspect whether a running OpenCode
 server successfully activated the plugin.
+
+The #2627 regressions exercise the generated V2 plugin/bridge with Node and
+isolated Python policy contexts, including concurrent projects with different
+rules, session movement, malformed aliases, unavailable metadata, fixed tool
+refusals, and diagnostic privacy. They do not establish live-host behavior for
+every V2 build. Verify safe/protected reads and workspace movement on the exact
+installed OpenCode version before claiming runtime qualification.
 
 The isolated host matrix currently passes both generated plugin generations. The
 version variable below is a test-only override used to exercise both contracts;

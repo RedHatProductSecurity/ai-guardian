@@ -419,6 +419,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install . pytest
 
+      - name: Set up Node for OpenCode plugin contracts
+        if: matrix.ide == 'opencode'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify OpenCode native paths, workspace routing and safe diagnostics
+        if: matrix.ide == 'opencode'
+        run: |
+          python -m pytest \
+            tests/unit/test_opencode_input.py \
+            tests/unit/test_opencode_support.py \
+            tests/unit/test_setup.py \
+            tests/unit/test_typescript_bridge.py \
+            tests/unit/test_mcp_server.py \
+            tests/unit/test_policy_decision.py \
+            tests/unit/test_web_violation_detail.py \
+            tests/unit/test_web_violation_copy.py \
+            tests/ux/test_user_experience_contract_opencode_self_protection.py \
+            tests/ux/test_user_experience_contract_violation_guidance.py \
+            tests/ux/test_user_experience_contract_ide_setup.py -q
+
       - name: Run isolated ${{ matrix.ide }} hook matrix
         env:
           AI_GUARDIAN_TEST_IDE: ${{ matrix.ide }}

@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-29T21:29:44.326Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-30T18:14:36.659Z
 > Files: 532 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~18894 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21348 tok)
-- `CHANGELOG.md` — Change log (~79497 tok)
+- `CHANGELOG.md` — Change log (~79816 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -198,7 +198,7 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~12174 tok)
+- `release-readiness.yml` — CI: Release Readiness (~12444 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~7113 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -487,7 +487,7 @@
 - `12688293526207289742` (~5067 tok)
 - `13557702066230530462` (~30728 tok)
 - `13968935710496993282` — Declares ToolPolicyExpirationTest (~7296 tok)
-- `15485501020826332868` (~5920 tok)
+- `15485501020826332868` (~5935 tok)
 - `16178935697851355535` (~38 tok)
 - `17334434352421252098` (~38 tok)
 - `17394069628479438492` (~38 tok)
@@ -495,7 +495,7 @@
 - `6104817260871073537` — Declares GeminiExtractor (~5231 tok)
 - `7153808617179489713` (~27 tok)
 - `8170611304334835321` (~38 tok)
-- `8968419096469374728` (~3984 tok)
+- `8968419096469374728` (~4010 tok)
 - `9190452128224351510` (~114 tok)
 - `939103690342658946` (~28 tok)
 - `9488019011187197847` — Declares activeLink (~227585 tok)
