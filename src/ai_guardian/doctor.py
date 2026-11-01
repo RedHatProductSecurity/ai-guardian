@@ -1229,6 +1229,19 @@ class Doctor:
                 mcp_verification = verify_mcp_config(ide_type)
                 mcp_status = mcp_verification.get("mcp_status")
             mcp_detail = f"; MCP: {mcp_status}" if mcp_status else ""
+            if ide_type == "opencode" and mcp_verification:
+                mcp_scope = mcp_verification.get("effective_mcp_scope")
+                mcp_source = mcp_verification.get("effective_mcp_source")
+                if mcp_status == "missing" or mcp_scope == "not-found":
+                    mcp_scope = mcp_verification.get("mcp_config_scope")
+                    mcp_source = mcp_verification.get("mcp_config_source")
+                location_details = []
+                if mcp_scope and mcp_scope != "not-found":
+                    location_details.append(f"scope: {mcp_scope}")
+                if mcp_source:
+                    location_details.append(f"source: {mcp_source}")
+                if location_details:
+                    mcp_detail += f" ({'; '.join(location_details)})"
             if mcp_verification and mcp_verification.get("mcp_diagnostic"):
                 mcp_detail += f" ({mcp_verification['mcp_diagnostic']})"
             mcp_healthy = mcp_status in (None, "healthy", "external")

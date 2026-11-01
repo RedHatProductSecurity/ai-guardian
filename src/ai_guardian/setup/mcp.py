@@ -3,16 +3,23 @@
 import json
 import logging
 import os
+import plistlib
 import re
 import sys
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
+from xml.parsers.expat import ExpatError
 
 from ai_guardian import __version__
 from ai_guardian.opencode_support import detect_opencode_runtime
 
-from ai_guardian.ide_paths import resolve_ide_config_path, resolve_ide_mcp_path
+from ai_guardian.ide_paths import (
+    resolve_ide_config_path,
+    resolve_ide_mcp_path,
+    resolve_opencode_config_layers,
+)
 from ai_guardian.setup.utils import (
     _create_config_backup,
     _load_cli_config,
@@ -37,6 +44,7 @@ def _mcp_schema_error(
         ".toml": "TOML",
         ".yaml": "YAML",
         ".yml": "YAML",
+        ".plist": "property list",
     }.get(config_path.suffix.lower(), "JSON")
     return (
         f"Invalid {format_name} schema in {config_path}: "
@@ -81,6 +89,7 @@ def _opencode_mcp_schema_error(
         ".toml": "TOML",
         ".yaml": "YAML",
         ".yml": "YAML",
+        ".plist": "property list",
     }.get(config_path.suffix.lower(), "JSON")
     if generation == "v2" and "servers" in mcp and not isinstance(container, dict):
         return (
@@ -94,6 +103,292 @@ def _opencode_mcp_schema_error(
                 f"'{key}.ai-guardian' must be an object/mapping"
             )
     return None
+
+
+def _load_opencode_layer_config(
+    config_path: Path,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Load an OpenCode JSON/JSONC or managed-preference config layer."""
+    if config_path.suffix.lower() != ".plist":
+        return _load_mcp_config(config_path, _MCP_IDE_CONFIGS["opencode"])
+
+    try:
+        with config_path.open("rb") as config_file:
+            config = plistlib.load(config_file)
+    except (OSError, plistlib.InvalidFileException, ValueError, ExpatError) as exc:
+        return (
+            None,
+            f"Invalid OpenCode managed preference plist in {config_path}: {exc}",
+        )
+
+    if not isinstance(config, dict):
+        return (
+            None,
+            f"Invalid OpenCode managed preference plist in {config_path}: "
+            "root must be an object/mapping",
+        )
+    return config, _mcp_schema_error(config, config_path, "mcp")
+
+
+def _opencode_mcp_registration(
+    config: Dict[str, Any], generation: str, config_path: Path
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
+    """Return OpenCode's selected registration, layout, and safe diagnostic.
+
+    V2 accepts the supported V1 flat layout in memory. When both layouts name
+    the same server, its native ``mcp.servers`` entry takes precedence.
+    """
+    mcp = config.get("mcp", {})
+    if not isinstance(mcp, dict):
+        return None, None, None
+
+    if generation == "v2":
+        servers = mcp.get("servers", {})
+        if not isinstance(servers, dict):
+            # The caller's schema check normally catches this; fail closed if
+            # a future caller skips it.
+            return (
+                None,
+                "native-v2",
+                f"Invalid OpenCode MCP configuration in {config_path}: "
+                "'mcp.servers' must be an object/mapping",
+            )
+        if "ai-guardian" in servers:
+            entry = servers["ai-guardian"]
+            layout = "native-v2"
+        elif "ai-guardian" in mcp:
+            entry = mcp["ai-guardian"]
+            layout = "legacy-v1"
+        else:
+            return None, None, None
+    else:
+        if "ai-guardian" not in mcp:
+            return None, None, None
+        entry = mcp["ai-guardian"]
+        layout = "v1"
+
+    if not isinstance(entry, dict):
+        return (
+            None,
+            layout,
+            f"Invalid OpenCode {layout} MCP registration in {config_path}: "
+            "'ai-guardian' must be an object/mapping",
+        )
+
+    if layout == "native-v2":
+        disabled_value = entry.get("disabled", False)
+        if not isinstance(disabled_value, bool):
+            return (
+                None,
+                layout,
+                f"Invalid OpenCode {layout} MCP registration in {config_path}: "
+                "'disabled' must be a boolean",
+            )
+        if disabled_value:
+            return entry, layout, None
+    else:
+        enabled_value = entry.get("enabled", True)
+        if not isinstance(enabled_value, bool):
+            return (
+                None,
+                layout,
+                f"Invalid OpenCode {layout} MCP registration in {config_path}: "
+                "'enabled' must be a boolean",
+            )
+        if generation == "v2" and "disabled" in entry:
+            disabled_value = entry["disabled"]
+            if not isinstance(disabled_value, bool):
+                return (
+                    None,
+                    layout,
+                    f"Invalid OpenCode {layout} MCP registration in {config_path}: "
+                    "'disabled' must be a boolean",
+                )
+            if disabled_value:
+                return entry, layout, None
+        if not enabled_value:
+            return entry, layout, None
+
+    server_type = entry.get("type")
+    if server_type == "local":
+        command = entry.get("command")
+        if (
+            not isinstance(command, list)
+            or not command
+            or any(not isinstance(part, str) or not part.strip() for part in command)
+        ):
+            return (
+                None,
+                layout,
+                f"Invalid OpenCode {layout} MCP registration in {config_path}: "
+                "local servers require a non-empty string command array",
+            )
+    elif server_type == "remote":
+        url = entry.get("url")
+        try:
+            parsed_url = urlparse(url) if isinstance(url, str) else None
+        except ValueError:
+            parsed_url = None
+        if (
+            parsed_url is None
+            or parsed_url.scheme not in {"http", "https"}
+            or not parsed_url.netloc
+        ):
+            return (
+                None,
+                layout,
+                f"Invalid OpenCode {layout} MCP registration in {config_path}: "
+                "remote servers require an absolute HTTP(S) URL",
+            )
+    else:
+        return (
+            None,
+            layout,
+            f"Invalid OpenCode {layout} MCP registration in {config_path}: "
+            "'type' must be 'local' or 'remote'",
+        )
+
+    return entry, layout, None
+
+
+def _verify_opencode_mcp_config(
+    scope: str = "user", project_dir: Optional[str] = None
+) -> Dict[str, Any]:
+    """Verify the effective OpenCode MCP registration without launching it."""
+    config_path = get_mcp_config_path("opencode", scope=scope, project_dir=project_dir)
+    if config_path is None:
+        return {
+            "mcp_installed": None,
+            "mcp_status": "unsupported",
+            "mcp_registration": "none",
+            "mcp_config_path": None,
+            "mcp_config_scope": "user",
+            "mcp_config_source": None,
+            "mcp_config_scopes": [],
+            "effective_mcp_scope": "not-found",
+            "effective_mcp_config_path": None,
+        }
+
+    generation = _opencode_mcp_generation()
+    project_context = project_dir
+    layers = resolve_opencode_config_layers(project_context)
+    target_source = (
+        "OPENCODE_CONFIG"
+        if os.environ.get("OPENCODE_CONFIG")
+        else next(
+            (
+                source
+                for layer_scope, source, layer_path in layers
+                if layer_scope == "user" and layer_path == config_path
+            ),
+            "explicit",
+        )
+    )
+
+    layer_results: List[Dict[str, Any]] = []
+    for layer_scope, source, layer_path in layers:
+        layer_result: Dict[str, Any] = {
+            "scope": layer_scope,
+            "source": source,
+            "config_path": str(layer_path),
+            "exists": layer_path.is_file(),
+            "configured": False,
+            "status": "missing",
+        }
+        if layer_path.is_file():
+            config, config_error = _load_opencode_layer_config(layer_path)
+            if config_error is None and config is not None:
+                config_error = _opencode_mcp_schema_error(
+                    config, layer_path, generation
+                )
+            if config_error:
+                layer_result.update({"status": "invalid", "diagnostic": config_error})
+            elif config is not None:
+                entry, layout, diagnostic = _opencode_mcp_registration(
+                    config, generation, layer_path
+                )
+                if diagnostic:
+                    layer_result.update(
+                        {
+                            "status": "invalid",
+                            "diagnostic": diagnostic,
+                            "registration_layout": layout,
+                        }
+                    )
+                elif entry is not None:
+                    disabled = (
+                        entry.get("disabled") is True
+                        if layout == "native-v2"
+                        else entry.get("enabled") is False
+                        or (generation == "v2" and entry.get("disabled") is True)
+                    )
+                    layer_result.update(
+                        {
+                            "configured": True,
+                            "status": "disabled" if disabled else "healthy",
+                            "registration_layout": layout,
+                        }
+                    )
+        layer_results.append(layer_result)
+
+    target_key = os.path.abspath(str(config_path))
+    target_result = next(
+        (
+            layer
+            for layer in layer_results
+            if os.path.abspath(layer["config_path"]) == target_key
+        ),
+        {
+            "status": "missing",
+            "registration_layout": None,
+        },
+    )
+
+    effective_result = next(
+        (
+            layer
+            for layer in reversed(layer_results)
+            if layer.get("status") != "missing"
+        ),
+        None,
+    )
+    effective_status = (
+        effective_result.get("status", "missing")
+        if effective_result is not None
+        else "missing"
+    )
+    result: Dict[str, Any] = {
+        "mcp_installed": effective_status == "healthy",
+        "mcp_status": effective_status,
+        "mcp_registration": "local",
+        "mcp_config_path": str(config_path),
+        "mcp_config_scope": "user",
+        "mcp_config_source": target_source,
+        "mcp_target_status": target_result.get("status", "missing"),
+        "mcp_target_registration_layout": target_result.get("registration_layout"),
+        "mcp_config_scopes": layer_results,
+        "effective_mcp_scope": (
+            effective_result.get("scope", "not-found")
+            if effective_result is not None
+            else "not-found"
+        ),
+        "effective_mcp_source": (
+            effective_result.get("source") if effective_result is not None else None
+        ),
+        "effective_mcp_config_path": (
+            effective_result.get("config_path")
+            if effective_result is not None
+            else None
+        ),
+        "mcp_registration_layout": (
+            effective_result.get("registration_layout")
+            if effective_result is not None
+            else None
+        ),
+    }
+    if effective_result and effective_result.get("diagnostic"):
+        result["mcp_diagnostic"] = effective_result["diagnostic"]
+    return result
 
 
 def _remove_opencode_mcp_entries(config: Dict[str, Any]) -> bool:
@@ -721,6 +1016,8 @@ def verify_mcp_config(
     """
     if ide_type == "pi":
         return verify_pi_mcp_extension(scope=scope, project_dir=project_dir)
+    if ide_type == "opencode":
+        return _verify_opencode_mcp_config(scope=scope, project_dir=project_dir)
 
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
@@ -746,9 +1043,6 @@ def verify_mcp_config(
         return base
 
     config, config_error = _load_mcp_config(config_path, mcp_ide)
-    generation = _opencode_mcp_generation() if ide_type == "opencode" else None
-    if config_error is None and config is not None and generation is not None:
-        config_error = _opencode_mcp_schema_error(config, config_path, generation)
     if config_error:
         base["mcp_status"] = "invalid"
         base["mcp_diagnostic"] = config_error
@@ -756,29 +1050,19 @@ def verify_mcp_config(
     if config is None:
         return base
 
-    if ide_type == "opencode":
-        mcp = config.get("mcp", {})
-        servers = mcp.get("servers", {}) if generation == "v2" else mcp
-    else:
-        servers = config.get(mcp_ide["config_key"], {})
+    servers = config.get(mcp_ide["config_key"], {})
 
     if not isinstance(servers, dict):
         base["mcp_status"] = "invalid"
-        base["mcp_diagnostic"] = (
-            _opencode_mcp_schema_error(config, config_path, generation)
-            if generation is not None
-            else _mcp_schema_error(config, config_path, mcp_ide["config_key"])
+        base["mcp_diagnostic"] = _mcp_schema_error(
+            config, config_path, mcp_ide["config_key"]
         )
         return base
 
     entry = servers.get("ai-guardian")
     if not isinstance(entry, dict):
         return base
-    disabled = (
-        entry.get("disabled") is True
-        if generation == "v2"
-        else entry.get("enabled") is False
-    )
+    disabled = entry.get("enabled") is False
     if disabled:
         base["mcp_status"] = "disabled"
         return base

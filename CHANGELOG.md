@@ -278,6 +278,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Doctor verifies the active generation, and setup removal cleans only AI
   Guardian's legacy/V2 entries while retaining unrelated config. Add isolated
   JSON/JSONC coverage for both config overrides and a Doctor UX contract.
+- **OpenCode V2 MCP verification (#2628):** Recognize supported legacy flat MCP
+  registrations in V2, with a native entry taking precedence in mixed configs.
+  Evaluate known system/managed and explicitly supplied project layers separately
+  from the user setup target, exposing safe source/scope metadata. Doctor and tray
+  distinguish an MCP-only issue from configured plugin artifacts; plugin activation
+  remains explicitly unverified.
 - **OpenCode blocked first prompt (#2615):** For the reporter-confirmed V2
   generation, replace the blocked prompt draft with a fixed refusal notice, clear
   attachments and agent/skill selections, and complete safe prompt admission

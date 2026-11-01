@@ -10,7 +10,7 @@ import pytest
 
 from ai_guardian.hook_adapters.codex import CodexAdapter
 from ai_guardian.hook_adapters.copilot import CopilotAdapter
-from ai_guardian.ide_paths import get_ide_home
+from ai_guardian.ide_paths import get_ide_home, resolve_opencode_config_layers
 from ai_guardian.mcp.audit import MCPAuditor
 from ai_guardian.scanners.supply_chain import SupplyChainScanner
 from ai_guardian.sessions.adapters import (
@@ -166,6 +166,79 @@ def test_opencode_explicit_config_file_relocates_adjacent_plugin_directory(
     assert Path(IDESetup().get_config_path("opencode")) == (
         config_file.parent / "plugins"
     )
+
+
+def test_opencode_config_layers_follow_documented_precedence(monkeypatch, tmp_path):
+    """Enumerate only explicit project context plus user and system layers."""
+    user_dir = tmp_path / "user"
+    user_dir.mkdir()
+    (user_dir / "opencode.jsonc").touch()
+    project_root = tmp_path / "project"
+    nested_project = project_root / "packages" / "web"
+    nested_project.mkdir(parents=True)
+    (project_root / "opencode.json").touch()
+    (nested_project / "opencode.jsonc").touch()
+    (project_root / ".opencode").mkdir()
+    (project_root / ".opencode" / "opencode.jsonc").touch()
+    (nested_project / ".opencode").mkdir()
+    (nested_project / ".opencode" / "opencode.json").touch()
+    system_dir = tmp_path / "system"
+    system_dir.mkdir()
+    (system_dir / "opencode.jsonc").touch()
+    explicit_path = tmp_path / "profile" / "settings.jsonc"
+    explicit_path.parent.mkdir()
+    explicit_path.touch()
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(user_dir))
+    monkeypatch.setenv("OPENCODE_CONFIG", str(explicit_path))
+    monkeypatch.setattr(
+        "ai_guardian.ide_paths._opencode_system_config_directories",
+        lambda: [system_dir],
+    )
+    monkeypatch.setattr(
+        "ai_guardian.ide_paths._opencode_managed_preference_files", lambda: []
+    )
+
+    layers = resolve_opencode_config_layers(str(nested_project))
+
+    assert layers == [
+        ("user", "OPENCODE_CONFIG_DIR", user_dir / "opencode.jsonc"),
+        ("user", "OPENCODE_CONFIG", explicit_path),
+        ("project", "project", project_root / "opencode.json"),
+        ("project", "project", nested_project / "opencode.jsonc"),
+        (
+            "project",
+            "project-opencode-dir",
+            project_root / ".opencode" / "opencode.jsonc",
+        ),
+        (
+            "project",
+            "project-opencode-dir",
+            nested_project / ".opencode" / "opencode.json",
+        ),
+        ("system", "system", system_dir / "opencode.jsonc"),
+    ]
+
+
+def test_opencode_explicit_config_is_reported_as_the_user_source(monkeypatch, tmp_path):
+    explicit = tmp_path / "profile" / "settings.json"
+    monkeypatch.setenv("OPENCODE_CONFIG", str(explicit))
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "ignored-home"))
+    monkeypatch.delenv("OPENCODE_CONFIG_CONTENT", raising=False)
+    monkeypatch.setattr(
+        "ai_guardian.ide_paths._opencode_system_config_directories", lambda: []
+    )
+    monkeypatch.setattr(
+        "ai_guardian.ide_paths._opencode_managed_preference_files", lambda: []
+    )
+
+    assert resolve_opencode_config_layers() == [
+        (
+            "user",
+            "OPENCODE_CONFIG_DIR",
+            tmp_path / "ignored-home" / "opencode.jsonc",
+        ),
+        ("user", "OPENCODE_CONFIG", explicit),
+    ]
 
 
 @pytest.mark.parametrize(

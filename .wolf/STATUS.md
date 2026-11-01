@@ -9,6 +9,36 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2628 implementation — 2026-11-01
+
+- Continued the initialized managed DAF session on existing branch `2628` after
+  the user's **go**. Preserved existing workspace state; no branch switch, commit,
+  push, issue mutation, or DAF progress/checklist update.
+- OpenCode MCP verification now recognizes supported V1 flat registrations under
+  V2, preferring a native `mcp.servers.ai-guardian` entry when both are present.
+  It evaluates known global, explicit `OPENCODE_CONFIG`, explicitly supplied
+  project, system, and macOS managed-preference file layers in documented order,
+  while distinguishing the user setup target from effective known-file status.
+  Result metadata includes source/scope/path and status only; config values are
+  not returned. Doctor reports this context, and the tray offers a focused **Set
+  Up MCP** prompt when OpenCode plugin files are configured but MCP is unhealthy.
+  Plugin runtime activation remains explicitly unverified.
+- Added isolated regressions for V1/V2 formats, mixed-layout precedence,
+  malformed/disabled registrations, config-layer precedence, system/managed and
+  explicit-project sources, Doctor output, and the MCP-only tray flow. Updated
+  OpenCode docs and CHANGELOG; OpenWolf buglog/cerebrum updated, anatomy refreshed
+  automatically.
+- **Validation:** 710 related unit tests and all 39 tests in the complete affected
+  IDE setup UX contract pass. Full Ruff, Black (Python 3.10 target), error-level
+  Pylint (10/10), and project Mypy pass. JSON and whitespace checks pass.
+- An isolated `opencode mcp list` probe using a temporary config and synthetic
+  stdio server timed out; it did not inspect or change the user's OpenCode config.
+  No live host activation or reporter-machine-specific cause is established.
+- **Next:** user review; if host behavior needs qualification, repeat a controlled
+  OpenCode runtime check. Keep the issue open and do not claim runtime activation
+  or reporter-specific diagnosis from these file/verifier tests. Changes remain
+  local and uncommitted.
+
 ## Issue #2627 implementation — 2026-10-30
 
 ## Issue #2632 session initialization — 2026-11-01

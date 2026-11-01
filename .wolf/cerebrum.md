@@ -174,6 +174,14 @@
 
 ## Key Learnings
 
+- **2026-11-01 — OpenCode V2 config/MCP verification (#2628):** Keep the global
+  config as a separate source when `OPENCODE_CONFIG` is set: the explicit custom
+  file is loaded after global but before project configs, while system config and
+  macOS managed preferences have higher precedence. Project layers may be checked
+  only when a caller supplies the workspace; never infer one from a tray/daemon
+  CWD. V2 normalizes supported V1 flat MCP entries, but native `mcp.servers` wins
+  when both registrations are present.
+
 - **2026-10-30 — OpenCode V2 target/workspace contract (#2627):** In upstream
   2.0.24, file tools use `path`; execution resolves against the exact session's
   `location.directory`, not plugin startup CWD or project-relative `subpath`.

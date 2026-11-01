@@ -494,6 +494,37 @@ class TrayHealthMonitor:
         return detail
 
     @staticmethod
+    def _opencode_mcp_attention(verification):
+        """Describe OpenCode MCP health without implying plugin enforcement."""
+        if not isinstance(verification, dict):
+            return None
+        if verification.get("ide") != "opencode":
+            return None
+        if verification.get("mcp_installed") is not False:
+            return None
+
+        status = verification.get("mcp_status") or "missing"
+        scope = verification.get("effective_mcp_scope")
+        source = verification.get("effective_mcp_source")
+        config_path = verification.get("effective_mcp_config_path")
+        if not scope or scope == "not-found":
+            scope = verification.get("mcp_config_scope", "user")
+            source = verification.get("mcp_config_source")
+            config_path = verification.get("mcp_config_path")
+
+        details = [f"MCP registration {status}"]
+        if scope:
+            details.append(f"scope: {scope}")
+        if source:
+            details.append(f"source: {source}")
+        if config_path:
+            details.append(f"config: {config_path}")
+        diagnostic = verification.get("mcp_diagnostic")
+        if diagnostic:
+            details.append(str(diagnostic))
+        return "; ".join(details)
+
+    @staticmethod
     def _verification_attention(verification):
         """Return actionable, user-facing details for an unhealthy result."""
         if not isinstance(verification, dict):
@@ -519,6 +550,10 @@ class TrayHealthMonitor:
         pi_mcp_attention = TrayHealthMonitor._pi_mcp_attention(verification)
         if pi_mcp_attention:
             attention.append(pi_mcp_attention)
+        elif opencode_mcp_attention := TrayHealthMonitor._opencode_mcp_attention(
+            verification
+        ):
+            attention.append(opencode_mcp_attention)
         elif verification.get("mcp_installed") is False:
             attention.append("MCP server (missing)")
 
@@ -724,6 +759,12 @@ class TrayHealthMonitor:
                 pi_mcp_attention = TrayHealthMonitor._pi_mcp_attention(status)
                 if pi_mcp_attention:
                     details.append(pi_mcp_attention)
+                elif (
+                    opencode_mcp_attention := TrayHealthMonitor._opencode_mcp_attention(
+                        status
+                    )
+                ):
+                    details.append(opencode_mcp_attention)
                 else:
                     mcp_status = status.get("mcp_status")
                     if mcp_status and mcp_status != "healthy":
@@ -1007,6 +1048,17 @@ class TrayHealthMonitor:
                 if not self._verification_is_healthy(status)
                 else ""
             )
+        opencode_mcp_only = (
+            len(unconfigured) == 1
+            and unconfigured[0] == "opencode"
+            and isinstance(statuses.get("opencode"), dict)
+            and statuses["opencode"].get("hooks_healthy") is True
+            and statuses["opencode"].get("mcp_installed") is False
+        )
+        if opencode_mcp_only:
+            # MCP repair must not implicitly offer creation of an unrelated
+            # security profile when the plugin artifacts are already healthy.
+            profile_choices = None
         prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
         state = self._ide_setup_state or ProactivePromptState()
         if not manual:
@@ -1070,6 +1122,36 @@ class TrayHealthMonitor:
                             f"Codex MCP configuration: "
                             f"{codex_status.get('mcp_config_path', 'global config.toml')}"
                             "\n\nRegister the AI Guardian MCP server now?"
+                        )
+                        action_label = "Set Up MCP"
+                    elif opencode_mcp_only:
+                        opencode_status = statuses["opencode"]
+                        mcp_status = opencode_status.get("mcp_status", "missing")
+                        scope = opencode_status.get("effective_mcp_scope")
+                        source = opencode_status.get("effective_mcp_source")
+                        config_path = opencode_status.get("effective_mcp_config_path")
+                        if not scope or scope == "not-found":
+                            scope = opencode_status.get("mcp_config_scope", "user")
+                            source = opencode_status.get("mcp_config_source")
+                            config_path = opencode_status.get("mcp_config_path")
+                        location = []
+                        if scope:
+                            location.append(f"scope: {scope}")
+                        if source:
+                            location.append(f"source: {source}")
+                        if config_path:
+                            location.append(f"config: {config_path}")
+                        location_detail = (
+                            f" ({'; '.join(location)})" if location else ""
+                        )
+                        diagnostic = opencode_status.get("mcp_diagnostic")
+                        diagnostic_detail = f"\n{diagnostic}" if diagnostic else ""
+                        message = (
+                            "OpenCode plugin files are configured; runtime load is "
+                            "not verified.\n\n"
+                            f"AI Guardian MCP registration status: {mcp_status}"
+                            f"{location_detail}.{diagnostic_detail}\n\n"
+                            "Register the AI Guardian MCP server now?"
                         )
                         action_label = "Set Up MCP"
                     else:

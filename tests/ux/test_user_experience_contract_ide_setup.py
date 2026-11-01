@@ -4,6 +4,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.daemon.multi_client import MultiDaemonClient
@@ -159,38 +161,59 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
     assert "runtime load not verified" in structured_opencode["message"]
 
 
-def test_doctor_recognizes_v2_opencode_mcp_registration(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "mcp_config, expected_layout",
+    [
+        (
+            {
+                "servers": {
+                    "ai-guardian": {
+                        "type": "local",
+                        "command": ["/usr/bin/ai-guardian", "mcp-server"],
+                    },
+                    "other": {"type": "local", "command": ["other-mcp"]},
+                }
+            },
+            "native-v2",
+        ),
+        (
+            {
+                "ai-guardian": {
+                    "type": "local",
+                    "command": ["/usr/bin/ai-guardian", "mcp-server"],
+                    "enabled": True,
+                }
+            },
+            "legacy-v1",
+        ),
+    ],
+    ids=["native-v2", "supported-v1-compatibility"],
+)
+def test_doctor_recognizes_v2_opencode_mcp_registration(
+    tmp_path, monkeypatch, mcp_config, expected_layout
+):
     """
     USER EXPERIENCE: OpenCode V2 MCP registration -> Doctor reports healthy.
 
-    The V2 server lives under ``mcp.servers`` and is active unless its
-    ``disabled`` field is true. Doctor must read that documented location so a
-    successful setup is not reported as missing MCP.
+    V2's native server lives under ``mcp.servers``; a supported V1 flat entry
+    remains compatible. Doctor must recognize both without reporting a
+    successful setup as missing MCP.
     """
     config_dir = tmp_path / "relocated-opencode"
     config_dir.mkdir()
     config_path = config_dir / "opencode.jsonc"
     config_path.write_text(
-        "// Isolated V2 profile\n"
-        + json.dumps(
-            {
-                "mcp": {
-                    "servers": {
-                        "ai-guardian": {
-                            "type": "local",
-                            "command": ["/usr/bin/ai-guardian", "mcp-server"],
-                        },
-                        "other": {
-                            "type": "local",
-                            "command": ["other-mcp"],
-                        },
-                    }
-                }
-            }
-        ),
+        "// Isolated V2 profile\n" + json.dumps({"mcp": mcp_config}),
         encoding="utf-8",
     )
     monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(config_dir))
+    monkeypatch.delenv("OPENCODE_CONFIG", raising=False)
+    monkeypatch.setattr(
+        "ai_guardian.ide_paths._opencode_system_config_directories", lambda: []
+    )
+    monkeypatch.setattr(
+        "ai_guardian.ide_paths._opencode_managed_preference_files", lambda: []
+    )
 
     with (
         patch(
@@ -223,9 +246,14 @@ def test_doctor_recognizes_v2_opencode_mcp_registration(tmp_path, monkeypatch):
 
     assert result.status == CheckStatus.PASS
     assert "OpenCode: plugin files configured; MCP: healthy" in result.message
+    assert "scope: user; source: OPENCODE_CONFIG_DIR" in result.message
     opencode = next(item for item in result.integrations if item["ide"] == "opencode")
     assert opencode["verification"]["mcp_status"] == "healthy"
     assert opencode["verification"]["mcp_config_path"] == str(config_path)
+    assert opencode["verification"]["mcp_config_scope"] == "user"
+    assert opencode["verification"]["mcp_config_source"] == "OPENCODE_CONFIG_DIR"
+    assert opencode["verification"]["effective_mcp_scope"] == "user"
+    assert opencode["verification"]["mcp_registration_layout"] == expected_layout
 
 
 def test_console_health_uses_the_running_local_daemon_runtime():
@@ -708,6 +736,66 @@ def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_pat
             "missing.\n\n"
             f"{CODEX_COVERAGE_NOTE}\n\n"
             f"Codex MCP configuration: {mcp_path}\n\n"
+            "Register the AI Guardian MCP server now?"
+        ),
+        action_label="Set Up MCP",
+        dismiss_label="Don't Ask Again",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        two_step_snooze=True,
+    )
+
+
+def test_opencode_plugins_healthy_but_mcp_missing_gets_targeted_prompt(tmp_path):
+    """
+    USER EXPERIENCE: OpenCode plugin configured + MCP missing -> explain only MCP.
+
+    Scenario:
+    1. OpenCode's AI Guardian plugin artifacts are configured.
+    2. Runtime plugin loading remains unverified and the checked user config has
+       no AI Guardian MCP registration.
+    3. The tray offers MCP setup without claiming that hooks are absent.
+
+    Expected User Experience:
+    - The prompt distinguishes configured plugin files from unknown runtime load.
+    - The checked MCP source/scope and config path are visible.
+    - The action only offers MCP setup, without a security-profile selector.
+    """
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    mcp_path = tmp_path / "opencode" / "opencode.jsonc"
+    verification = {
+        "ide": "opencode",
+        "healthy": False,
+        "hooks_healthy": True,
+        "mcp_installed": False,
+        "mcp_status": "missing",
+        "mcp_config_scope": "user",
+        "mcp_config_source": "OPENCODE_CONFIG",
+        "mcp_config_path": str(mcp_path),
+        "effective_mcp_scope": "not-found",
+        "events": {"plugin": "healthy"},
+        "obsolete": [],
+    }
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=True),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["opencode"]),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    dialog.assert_called_once_with(
+        title="Set Up AI Guardian",
+        message=(
+            "OpenCode plugin files are configured; runtime load is not verified.\n\n"
+            f"AI Guardian MCP registration status: missing (scope: user; "
+            f"source: OPENCODE_CONFIG; config: {mcp_path}).\n\n"
             "Register the AI Guardian MCP server now?"
         ),
         action_label="Set Up MCP",
