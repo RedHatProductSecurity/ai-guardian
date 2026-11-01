@@ -48,7 +48,7 @@ jobs:
 
       - name: Set up Node.js for Codex candidate smoke
         if: steps.check-versions.outputs.exit_code == '1' || inputs.codex_version != ''
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22.19.0'
 

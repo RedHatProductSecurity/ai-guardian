@@ -361,7 +361,7 @@ class TestContainerLaunchers:
         assert "codex_version:" in workflow
         assert "scripts/check_cli_versions.py" in workflow
         assert "Smoke-test Codex candidate without credentials" in workflow
-        assert "actions/setup-node@v4" in workflow
+        assert "actions/setup-node@v7" in workflow
         assert "codex exec --help" in workflow
         assert "OAuth credentials are intentionally not stored" in workflow
         assert "Fail manual candidate smoke when it does not pass" in workflow
