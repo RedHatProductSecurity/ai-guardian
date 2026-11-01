@@ -94,7 +94,7 @@ AI Guardian's SSRF protection blocks these attacks by checking all Bash commands
 
 These protections **CANNOT be disabled** via configuration:
 
-### Private IP Ranges (RFC 1918 + Loopback + Link-local)
+### Private, Reserved, and Special-Use IP Ranges
 
 **IPv4:**
 - `10.0.0.0/8` - Private network (Class A)
@@ -103,8 +103,10 @@ These protections **CANNOT be disabled** via configuration:
 - `127.0.0.0/8` - Loopback (localhost)
 - `169.254.0.0/16` - Link-local (AWS/Azure metadata)
 - `0.0.0.0/8` - Unspecified and reserved destination addresses
+- `198.18.0.0/15` - Benchmarking range (RFC 2544)
 
 **IPv6:**
+- `::/128` - Unspecified destination address
 - `::1/128` - Loopback
 - `fc00::/7` - Unique local addresses (private network)
 - `fe80::/10` - Link-local addresses
@@ -144,6 +146,7 @@ destination policy to these protocol-defined IPv4 endpoints:
 | IPv4-mapped (`::ffff:0:0/96`) | The mapped IPv4 address |
 | 6to4 (`2002::/16`) | The IPv4 routing endpoint encoded after the prefix |
 | Teredo (`2001::/32`) | Both the server IPv4 address and decoded client IPv4 address |
+| Well-known NAT64 (`64:ff9b::/96`) | The embedded IPv4 destination |
 
 The Teredo client identifies the tunneled endpoint. Its server can receive
 setup/control traffic, so both roles are relevant to destination policy; the
@@ -153,6 +156,10 @@ a blanket ban on transition prefixes. Numeric metadata checks also cover fresh
 DNS results, including the existing Alibaba Cloud (`100.100.100.200`) and Oracle
 Cloud (`192.0.0.192`) endpoints outside the core private ranges. Classification
 uses the existing standard-library `ipaddress` properties without DNS or sockets.
+For NAT64, only the well-known `/96` prefix is decoded; the prefix itself is not
+blocked, and a public embedded IPv4 destination remains allowed. A single
+terminal DNS root dot is normalized before metadata and domain policy checks, so
+`metadata.google.internal.` receives the same protection as its undotted name.
 
 Public transition endpoints and native public IPv6 remain allowed by this
 check. Private-looking bits in an unrelated IPv6 address, or in a 6to4 interface
@@ -174,7 +181,8 @@ result at their connection boundary, as described below.
 validation failure in another product; it is not a CVE assignment for AI Guardian.
 Implementation is independently authored from protocol facts in
 [RFC 3056](https://www.rfc-editor.org/rfc/rfc3056.html),
-[RFC 4380](https://www.rfc-editor.org/rfc/rfc4380.html), and the
+[RFC 4380](https://www.rfc-editor.org/rfc/rfc4380.html),
+[RFC 6052](https://www.rfc-editor.org/rfc/rfc6052.html), and the
 [Python IPv6 address properties](https://docs.python.org/3/library/ipaddress.html#ipaddress.IPv6Address.sixtofour).
 No third-party detector code or dependency was added.
 
@@ -188,9 +196,10 @@ changes.
 Network-aware integrations that own the connection boundary can revalidate the
 destination with `SSRFProtector.check_resolved_destination(url, addresses)`.
 Pass every fresh IPv4 and IPv6 address returned immediately before connecting.
-Any private, loopback, link-local, metadata, IPv6-local, or `0.0.0.0/8`
-destination is an immutable block. A domain allow-list cannot override that
-result; it only applies to configurable domain deny-list entries.
+Any destination covered by a private, loopback, link-local, metadata, or IPv6-local
+block, or by `0.0.0.0/8`, `198.18.0.0/15`, or `::/128`, is an immutable block.
+A domain allow-list cannot override that result; it only applies to configurable
+domain deny-list entries.
 
 For redirects, pass the complete absolute URL chain to
 `SSRFProtector.check_redirect_chain()` and provide fresh addresses for each

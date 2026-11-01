@@ -115,6 +115,16 @@ When the ai-guardian daemon is running and LeakTK (v0.3.3+) is installed, secret
 
 **Prefix-based token detection** — TOML rules can declare `token_prefixes` for fast prefix matching, separate from keyword-based pre-filtering. This enables detection of tokens with known prefixes (e.g., `sk-or-`, `hvs.`, `AIza`) without running the full regex against all content. See [TOML_PATTERNS.md](../TOML_PATTERNS.md) for field documentation.
 
+**Bundled service credentials** — the built-in engine recognizes standalone
+Baseten (`b10_`), Labelbox (`lbx_`), Recursion (`rma_`), Supabase secret
+(`sb_secret_`), and typed Tailscale API, auth, OAuth-client, and webhook keys.
+The formats are based on [vendor documentation](https://docs.baseten.co/organization/api-keys),
+[Supabase API key documentation](https://supabase.com/docs/guides/api/api-keys),
+[Tailscale key-prefix documentation](https://tailscale.com/docs/reference/key-prefixes),
+and [MIT-licensed Betterleaks rules](https://github.com/betterleaks/betterleaks/pull/429).
+These bundled rules perform format matching, not live credential validation; the
+Tailscale SCIM format remains excluded because its key-ID layout is undocumented.
+
 **Credentials in git remote URLs** — AI Guardian detects credentials embedded in git remote URLs (e.g., `https://user:token@github.com/org/repo`). This pattern catches a common source of credential leaks where tokens are hardcoded into remote URLs instead of using credential helpers. The detection runs automatically as part of the secret scanning pipeline.
 
 ### Advanced Configuration

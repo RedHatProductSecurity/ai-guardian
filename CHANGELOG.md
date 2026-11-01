@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Bundled credential patterns (#2632):** Detect standalone Baseten, Labelbox,
+  Recursion, Supabase secret, and typed Tailscale API/auth/OAuth-client/webhook
+  credential formats with the built-in TOML engine. Add synthetic scanner and
+  blocking/redaction UX coverage plus CI detection canaries; no live validation
+  or corpus-wide false-positive claim.
 - **Status-aware tray pause modal (#2620):** Replace nested pause submenus with
   one **Pause...** action. The modal mirrors the daemon → project directory →
   hook session hierarchy, with status glyphs and a duration/Resume dropdown
@@ -245,6 +250,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builds and scanner-version validation.
 
 ### Fixed
+- **SSRF destination classification (#2632):** Normalize a terminal DNS root dot,
+  block the RFC 2544 benchmarking range and IPv6 unspecified address, and apply
+  existing destination policy to IPv4 endpoints embedded in the well-known NAT64
+  prefix without blanket-blocking public NAT64 destinations.
 - **Scanner version CI checks:** When GitHub rejects the repository-scoped token
   for a public upstream release, retry the metadata request without credentials
   instead of reporting an existing scanner release as missing.

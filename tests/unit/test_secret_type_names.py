@@ -15,6 +15,25 @@ class TestSecretTypeNames:
         assert get_secret_type_display("env-variable") == "Environment Variable"
         assert get_secret_type_display("private-key") == "Private Key"
 
+    def test_issue_2632_credential_display_names(self):
+        assert get_secret_type_display("baseten-api-key") == "Baseten API Key"
+        assert get_secret_type_display("labelbox-api-key") == "Labelbox API Key"
+        assert get_secret_type_display("recursion-api-key") == "Recursion API Key"
+        assert (
+            get_secret_type_display("supabase-project-api-key")
+            == "Supabase Project API Key"
+        )
+        assert get_secret_type_display("tailscale-api-key") == "Tailscale API Key"
+        assert get_secret_type_display("tailscale-auth-key") == "Tailscale Auth Key"
+        assert (
+            get_secret_type_display("tailscale-oauth-client-secret")
+            == "Tailscale OAuth Client Secret"
+        )
+        assert (
+            get_secret_type_display("tailscale-webhook-secret")
+            == "Tailscale Webhook Secret"
+        )
+
     def test_known_pii_types(self):
         assert get_secret_type_display("pii-ssn") == "Social Security Number (SSN)"
         assert get_secret_type_display("pii-credit-card") == "Credit Card Number"
