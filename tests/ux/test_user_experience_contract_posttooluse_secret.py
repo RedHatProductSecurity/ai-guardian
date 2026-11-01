@@ -22,6 +22,9 @@ import ai_guardian
 from ai_guardian.hook_events.scanners import run_secret_scan as _run_secret_scan
 from ai_guardian.scanners.secret_redactor import SecretRedactor
 from tests.fixtures.nuget_sonar_tokens import CREDENTIAL_CASES
+from tests.fixtures.research_secret_tokens import (
+    CREDENTIAL_CASES as RESEARCH_CREDENTIAL_CASES,
+)
 
 
 class PostToolUseSecretBlockingTests(TestCase):
@@ -757,6 +760,69 @@ class TestStandaloneNugetSonarCredentials:
         assert (
             result["redacted_text"]
             == f'Build output:\n  "{token[:6]}...{token[-4:]}"\nFinished.'
+        )
+        assert token not in result["redacted_text"]
+        assert result["redactions"][0]["type"] == description
+
+
+class TestStandaloneResearchCredentials:
+    """USER EXPERIENCE: #2632 credential-shaped values remain protected.
+
+    A standalone synthetic candidate in a tool request is denied, while the same
+    candidate in tool output is redacted before the AI agent receives it. Manual
+    verification uses only generated values and the bundled TOML engine; no live
+    credentials, scanner binaries, user configuration, or network are involved.
+    """
+
+    @pytest.mark.parametrize(
+        "rule_id,description,token",
+        RESEARCH_CREDENTIAL_CASES,
+        ids=[case[0] for case in RESEARCH_CREDENTIAL_CASES],
+    )
+    @pytest.mark.parametrize(
+        "event,tool", (("PreToolUse", "Write"), ("PostToolUse", "Bash"))
+    )
+    @patch(
+        "ai_guardian.scanners.secret_scanning._load_pattern_server_config",
+        return_value=None,
+    )
+    def test_standalone_value_is_detected_and_blocked(
+        self, mock_pattern, rule_id, description, token, event, tool
+    ):
+        result = _run_secret_scan(
+            token,
+            filename="credential-output.txt",
+            config={"enabled": True, "engines": ["toml-patterns"]},
+            secret_context={"hook_event": event},
+            tool_name=tool,
+        )
+
+        assert result is not None
+        assert result.detected
+        assert result.should_block
+        assert "Secret Detected" in result.error_message
+        assert "Scanner: toml-patterns" in result.error_message
+        assert token not in result.error_message
+        assert any(finding["rule_id"] == rule_id for finding in result.findings)
+
+    @pytest.mark.parametrize(
+        "rule_id,description,token",
+        RESEARCH_CREDENTIAL_CASES,
+        ids=[case[0] for case in RESEARCH_CREDENTIAL_CASES],
+    )
+    def test_posttooluse_redaction_masks_value_and_preserves_context(
+        self, rule_id, description, token
+    ):
+        redactor = SecretRedactor(
+            config={"enabled": True, "log_redactions": False},
+            pii_config={"enabled": False},
+        )
+        output = f"Build output:\n  {token}\nFinished."
+
+        result = redactor.redact(output)
+
+        assert result["redacted_text"] == (
+            f"Build output:\n  {token[:6]}...{token[-4:]}\nFinished."
         )
         assert token not in result["redacted_text"]
         assert result["redactions"][0]["type"] == description

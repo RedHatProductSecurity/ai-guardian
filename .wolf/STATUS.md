@@ -11,6 +11,70 @@ budget_tokens: 1000
 
 ## Issue #2627 implementation — 2026-10-30
 
+## Issue #2632 session initialization — 2026-11-01
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2632`, native conversation
+  `ses_e671e99b2ffe4zwo2u5VWqC1Qz`, in the real workspace
+  `/home/itdove/development/ai/ai-guardian` on the existing issue branch `2632`.
+  Read the repository-qualified GitHub issue exactly once. This is not a temporary
+  clone, so no sync/rebase applies.
+- Read the DAF workflow and issue checklist, OpenWolf handoff/protocol, and project
+  instructions. DAF context files and hierarchical skills are absent; project
+  OpenCode skill discovery found no relevant skill, and `daf assets --dry-run
+  --agent opencode` reported installed DAF skills up to date. The release skill is
+  unrelated. Leave the native title DAF-managed.
+- Issue #2632 requests a twice-monthly security-pattern research review across the
+  listed priority sources and scanner categories, evaluating candidates against
+  applicability, duplication, false-positive risk, reproducibility, and license
+  compatibility, then recording review dates/findings and updating the reminder.
+- User initially requested session initialization only, then authorized the review
+  with **go**. Completed a research pass for 2026-10-19–2026-11-01 and recorded the
+  findings in `AGENTS.md`: precise Baseten, Labelbox/Recursion, and Tailscale
+  credential candidates; Supabase default-engine coverage discrepancy; no new
+  deterministic PI/context, supply-chain/config-exfil, canary, offensive-language,
+  or command-exfil signatures; and SSRF normalization/range gaps confirmed with
+  no-network local probes.
+- Synthetic credentials were generated in memory only. The bundled TOML scanner
+  missed the tested standalone candidate strings; assignment controls generally
+  reached the generic environment-variable rule. No live credential validation or
+  destination network access was performed. Research does not claim corpus-wide
+  false-positive rates.
+- No detection code, tests, tracker comments/issues, branch changes, commits, or
+  pushes were made. DAF-reported session status and time tracking remain unchanged.
+- **Next:** decide whether to open focused follow-up issues for the secret-pattern
+  candidates and SSRF canonicalization/address-classification gaps before any
+  implementation work.
+
+## Issue #2632 implementation follow-through — 2026-11-01
+
+- User subsequently requested implementation of the recorded findings. Continued
+  on existing branch `2632`, preserving the earlier research and local worktree
+  changes. No branch switch, tracker update, commit, or push.
+- Added eight bundled standalone credential rules: Baseten, Labelbox, Recursion,
+  Supabase `sb_secret_`, and typed Tailscale API/auth/client/webhook formats.
+  Added display names, deterministic synthetic fixtures, direct scanner and full
+  PostToolUse/PreToolUse UX tests, documentation, changelog, and release-readiness
+  plus smoke-test canaries. SCIM stays deferred because its key-ID layout is not
+  documented; no live validation or population-wide false-positive claim.
+- SSRF now canonicalizes a single terminal DNS root dot, immutably blocks
+  `198.18.0.0/15` and `::/128`, and applies the existing IPv4 destination policy
+  to addresses embedded in the well-known NAT64 `64:ff9b::/96` prefix. Public
+  embedded addresses remain allowed. Synchronized bundled TOML, fallback ranges,
+  and the separately hardcoded pattern-server immutable set; added no-network
+  boundary, redirect/resolution, and UX coverage.
+- **Validation:** 1,675 directly related unit/UX tests pass, including the complete
+  SSRF revalidation and PostToolUse-secret UX contracts. Ruff, Black (Python 3.10),
+  error-level Pylint, JSON parsing, and whitespace checks pass. Full-package Mypy
+  still reports 14 errors in untouched `skill_discovery.py` and
+  `secret_validator.py`; none are in the changed source modules.
+- Changes remain local and uncommitted on `2632`. No full/integration/container
+  suite, DAF progress/status/time mutation, tracker comment/issue, commit, or push.
+- **Next:** user review; decide separately whether to publish or create tracker
+  follow-ups. Do not claim live network reachability or corpus-wide FP qualification.
+
+## Issue #2627 implementation — 2026-10-30
+
 - User authorized implementation with **go**, then explicitly approved the
   additional OpenCode MCP-only tray repair. Continued on existing managed branch
   `2627`; no branch change, commit, push, PR or issue closure.

@@ -97,15 +97,21 @@ class SSRFProtector:
     # These CANNOT be disabled via configuration
     CORE_BLOCKED_IP_RANGES = [
         "0.0.0.0/8",  # Unspecified/reserved destination range (RFC 1122)
+        "198.18.0.0/15",  # Benchmarking range (RFC 2544)
         "10.0.0.0/8",  # Private network (RFC 1918)
         "172.16.0.0/12",  # Private network (RFC 1918)
         "192.168.0.0/16",  # Private network (RFC 1918)
         "127.0.0.0/8",  # Loopback
         "169.254.0.0/16",  # Link-local (AWS metadata)
+        "::/128",  # Unspecified IPv6 destination
         "::1/128",  # IPv6 loopback
         "fc00::/7",  # IPv6 private network
         "fe80::/10",  # IPv6 link-local
     ]
+
+    # RFC 6052 well-known NAT64 prefix. Decode its embedded IPv4 endpoint for
+    # policy checks, but do not block the shared prefix or public destinations.
+    NAT64_WELL_KNOWN_PREFIX = ipaddress.ip_network("64:ff9b::/96")
 
     # IMMUTABLE: Metadata hosts, shared by literal and resolved IP checks.
     CORE_METADATA_HOSTS = [
@@ -570,6 +576,8 @@ class SSRFProtector:
             teredo = ip_addr.teredo
             if teredo is not None:
                 yield from teredo
+            if ip_addr in SSRFProtector.NAT64_WELL_KNOWN_PREFIX:
+                yield ipaddress.IPv4Address(int(ip_addr) & 0xFFFFFFFF)
 
     def _is_ip_blocked(self, ip_str: str) -> bool:
         """
@@ -880,6 +888,13 @@ class SSRFProtector:
 
         if not hostname:
             return False, "", False
+
+        # A single terminal DNS root dot is equivalent to the absolute name
+        # without it. Canonicalize before metadata, IP, allowlist, and path checks.
+        if hostname.endswith("."):
+            hostname = hostname[:-1]
+        if not hostname:
+            return True, "failed to parse URL", True
 
         # Normalize alternative IP encodings (hex/octal/decimal) that bypass
         # Python's ipaddress module but are resolved by curl/wget/browsers

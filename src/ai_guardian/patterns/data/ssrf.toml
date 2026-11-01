@@ -12,6 +12,13 @@ description = "Unspecified and reserved IPv4 destinations"
 tier = "immutable"
 
 [[rules]]
+id = "ssrf-benchmarking-ipv4"
+match_type = "cidr"
+cidr = "198.18.0.0/15"
+description = "IPv4 benchmarking range"
+tier = "immutable"
+
+[[rules]]
 id = "ssrf-private-class-a"
 match_type = "cidr"
 cidr = "10.0.0.0/8"
@@ -44,6 +51,13 @@ id = "ssrf-link-local"
 match_type = "cidr"
 cidr = "169.254.0.0/16"
 description = "Link-local / AWS metadata"
+tier = "immutable"
+
+[[rules]]
+id = "ssrf-ipv6-unspecified"
+match_type = "cidr"
+cidr = "::/128"
+description = "Unspecified IPv6 destination"
 tier = "immutable"
 
 [[rules]]

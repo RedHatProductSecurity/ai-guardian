@@ -8,7 +8,14 @@ import pytest
 
 from ai_guardian.scanners.ssrf import SSRFProtector
 
-ADDRESS_FORMATS = ["native", "mapped", "6to4", "teredo-server", "teredo-client"]
+ADDRESS_FORMATS = [
+    "native",
+    "mapped",
+    "6to4",
+    "teredo-server",
+    "teredo-client",
+    "nat64-well-known",
+]
 ENTRY_POINTS = ["literal", "resolved", "redirect-literal", "redirect-resolved"]
 
 # Include range boundaries, metadata singletons, and adjacent allowed controls.
@@ -30,6 +37,10 @@ DESTINATION_POLICY = [
     ("169.254.169.254", True),
     ("169.254.255.255", True),
     ("169.255.0.0", False),
+    ("198.17.255.255", False),
+    ("198.18.0.0", True),
+    ("198.19.255.255", True),
+    ("198.20.0.0", False),
     ("172.15.255.255", False),
     ("172.16.0.0", True),
     ("172.31.255.255", True),
@@ -94,6 +105,11 @@ def _destination_address(ipv4, address_format):
         return _teredo_address(ipv4, "1.1.1.1")
     if address_format == "teredo-client":
         return _teredo_address("8.8.8.8", ipv4)
+    if address_format == "nat64-well-known":
+        prefix = ipaddress.IPv6Address("64:ff9b::")
+        return str(
+            ipaddress.IPv6Address(int(prefix) | int(ipaddress.IPv4Address(ipv4)))
+        )
     raise AssertionError(f"Unknown address format: {address_format}")
 
 
@@ -202,6 +218,18 @@ def test_localhost_policy_does_not_hide_other_teredo_endpoint(server, client):
     assert protector._is_ip_blocked(_teredo_address(server, client))
 
 
+@pytest.mark.parametrize("entry_point", ENTRY_POINTS)
+@pytest.mark.parametrize("allow_localhost", [False, True])
+def test_ipv6_unspecified_destination_is_immutable(entry_point, allow_localhost):
+    protector = SSRFProtector({"enabled": True, "allow_localhost": allow_localhost})
+
+    result = _check_entry_point(protector, "::", entry_point)
+
+    assert result[0]
+    assert result[2]
+    assert "::" in result[1]
+
+
 @pytest.mark.parametrize("address_format", ADDRESS_FORMATS[1:])
 def test_explicit_ipv6_range_is_checked_before_embedded_public_addresses(
     address_format,
@@ -260,6 +288,8 @@ def test_resolved_transition_address_representations(representation):
         "2002:808:808::a00:1",  # Only 8.8.8.8 is the 6to4 routing endpoint.
         "2001:0:4136:e378:8000:63bf:3fff:fdd2",  # Known Teredo layout control.
         "::fffe:a00:1",  # Not an IPv4-mapped address.
+        "64:ff9b::808:808",  # Well-known NAT64 prefix carrying public IPv4.
+        "64:ff9b:1::a9fe:a9fe",  # Outside the well-known NAT64 prefix.
     ],
 )
 @pytest.mark.parametrize("entry_point", ENTRY_POINTS)
@@ -280,6 +310,7 @@ def test_native_and_transition_controls_are_not_blanket_blocked(address, entry_p
             "2001:0:4136:e378:8000:63bf:3fff:fdd2",
             ["2001:0:4136:e378:8000:63bf:3fff:fdd2", "65.54.227.120", "192.0.2.45"],
         ),
+        ("64:ff9b::a00:1", ["64:ff9b::a00:1", "10.0.0.1"]),
     ],
 )
 def test_protocol_defined_destinations_have_fixed_layouts(address, expected):

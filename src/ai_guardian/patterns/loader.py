@@ -180,6 +180,7 @@ class SSRFPatternLoader(PatternLoader):
     Pattern loader for SSRF Protection.
 
     Immutable: Unspecified IPv4 destinations, cloud metadata endpoints,
+    IPv6 unspecified destinations, benchmarking-range destinations, and
     dangerous URL schemes
     Overridable: RFC 1918 private ranges
     """
@@ -193,6 +194,8 @@ class SSRFPatternLoader(PatternLoader):
 
         Includes:
         - Unspecified IPv4 destinations: 0.0.0.0/8
+        - IPv4 benchmarking range: 198.18.0.0/15
+        - Unspecified IPv6 destination: ::/128
         - Cloud metadata endpoints: 169.254.169.254, metadata.google.internal
         - Dangerous URL schemes: file://, gopher://, etc.
         - IPv6 metadata: fd00:ec2::254
@@ -202,6 +205,16 @@ class SSRFPatternLoader(PatternLoader):
                 {
                     "cidr": "0.0.0.0/8",
                     "description": "Unspecified and reserved IPv4 destinations",
+                    "immutable": True,
+                },
+                {
+                    "cidr": "198.18.0.0/15",
+                    "description": "IPv4 benchmarking range",
+                    "immutable": True,
+                },
+                {
+                    "cidr": "::/128",
+                    "description": "Unspecified IPv6 destination",
                     "immutable": True,
                 },
                 {

@@ -1,4 +1,4 @@
-"""User experience contracts for SSRF destination policy (#2482, #2559).
+"""User experience contracts for SSRF destination policy (#2482, #2559, #2632).
 
 These checks classify synthetic inputs only; no URL is ever executed.
 Manual verification: use a mocked tool executor in an isolated agent environment,
@@ -66,6 +66,7 @@ def test_user_experience_bind_address_is_allowed():
         "2002:a9fe:a9fe::1",  # 6to4 routing endpoint.
         "2001:0:a9fe:a9fe:0:f227:fefe:fefe",  # Teredo server.
         "2001:0:808:808:0:f227:5601:5601",  # Teredo client.
+        "64:ff9b::a9fe:a9fe",  # Well-known NAT64 prefix carrying metadata IPv4.
     ],
 )
 @pytest.mark.parametrize("action", ["block", "warn", "log-only"])
@@ -107,6 +108,8 @@ def test_user_experience_embedded_metadata_is_denied(address, action, tool_name)
         "2002:808:808::a00:1",
         "2001:0:808:808:0:f227:fefe:fefe",
         "2001:db8::a00:1",
+        "64:ff9b::808:808",  # Well-known NAT64 prefix carrying public IPv4.
+        "64:ff9b:1::a9fe:a9fe",  # Outside the well-known NAT64 prefix.
     ],
 )
 @pytest.mark.parametrize("tool_name", ["Bash", "WebFetch"])
@@ -144,3 +147,47 @@ def test_user_experience_allowed_hostname_cannot_hide_embedded_redirect_destinat
         f"domain 'redirect.example' resolves to blocked IP address '{address}'",
         True,
     )
+
+
+@pytest.mark.parametrize(
+    "url,destination",
+    (
+        ("http://metadata.google.internal./", "metadata.google.internal"),
+        ("http://169.254.169.254./", "169.254.169.254"),
+    ),
+)
+@pytest.mark.parametrize("action", ["block", "warn", "log-only"])
+@pytest.mark.parametrize("tool_name", ["Bash", "WebFetch"])
+def test_user_experience_terminal_root_dot_metadata_is_immutable(
+    url, destination, action, tool_name
+):
+    protector = SSRFProtector({"enabled": True, "action": action})
+    tool_input = {"command": f'curl "{url}"'} if tool_name == "Bash" else {"url": url}
+
+    should_block, message = protector.check(tool_name, tool_input)
+
+    assert should_block
+    assert protector.last_is_immutable
+    assert message is not None
+    assert "🚨 SSRF PATTERN DETECTED" in message
+    assert destination in message
+    assert f"URL: {url}" in message
+
+
+@pytest.mark.parametrize(
+    "url,destination",
+    [("http://198.18.0.1/", "198.18.0.1"), ("http://[::]/", "::")],
+)
+@pytest.mark.parametrize("action", ["block", "warn", "log-only"])
+def test_user_experience_reserved_and_unspecified_addresses_are_immutable(
+    url, destination, action
+):
+    protector = SSRFProtector({"enabled": True, "action": action})
+
+    should_block, message = protector.check("WebFetch", {"url": url})
+
+    assert should_block
+    assert protector.last_is_immutable
+    assert message is not None
+    assert "🚨 SSRF PATTERN DETECTED" in message
+    assert destination in message

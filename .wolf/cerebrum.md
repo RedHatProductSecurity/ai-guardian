@@ -954,6 +954,13 @@
   No-network regression matrices establish classification, not routing or a
   population-wide false-positive rate.
 
+- **NAT64 and SSRF core-range updates (#2632):** Decode only IPv4 endpoints in
+  the RFC 6052 well-known `64:ff9b::/96` prefix; do not blanket-block that shared
+  prefix or infer arbitrary network-specific NAT64 prefixes. A newly immutable
+  address range must be synchronized across `CORE_BLOCKED_IP_RANGES`, bundled
+  `patterns/data/ssrf.toml`, and `SSRFPatternLoader.get_immutable_patterns()`;
+  the pattern-server path has a separate hardcoded immutable set.
+
 - **CodeQL bundled-path false positive (PR #2561):** A test lookup of
   `BUNDLED_FILES["secrets"]` is heuristically classified as a credential source;
   the Python SARIF trace then follows that file path into parser logs. For

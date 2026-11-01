@@ -69,6 +69,24 @@ jobs:
           print("Standalone NuGet V4/Sonar: 4 synthetic credentials detected")
           PY
 
+      - name: Verify standalone research credentials
+        run: |
+          python - <<'PY'
+          from ai_guardian.scanners.toml_patterns import TomlPatternsScanner
+          from tests.fixtures.research_secret_tokens import CREDENTIAL_CASES
+
+          scanner = TomlPatternsScanner()
+          assert len(CREDENTIAL_CASES) == 8
+          for rule_id, description, token in CREDENTIAL_CASES:
+              assert any(
+                  finding.rule_id == rule_id
+                  and finding.description == description
+                  and finding.matched_text == token
+                  for finding in scanner.scan(token)
+              ), f"Standalone credential not recognized: {rule_id}"
+          print("Standalone research credentials: 8 synthetic values detected")
+          PY
+
       - name: "PII Phase 1 (SSN, credit card, phone)"
         run: |
           TEST_DIR=$(mktemp -d)

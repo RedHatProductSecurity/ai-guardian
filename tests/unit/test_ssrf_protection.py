@@ -363,7 +363,12 @@ class TestCloudMetadataEndpoints:
             ("http://169.254.169.254/latest/meta-data/", "AWS"),
             ("http://169.254.169.254/latest/user-data", "AWS"),
             ("http://metadata.google.internal/", "GCP"),
+            ("http://metadata.google.internal./", "GCP with terminal DNS root dot"),
             ("http://metadata.goog/", "GCP alternative"),
+            (
+                "http://169.254.169.254./latest/meta-data/",
+                "AWS with terminal DNS root dot",
+            ),
             ("http://[fd00:ec2::254]/", "AWS IPv6"),
             ("http://100.100.100.200/latest/meta-data/", "Alibaba Cloud"),
             ("http://192.0.0.192/opc/v2/instance/", "Oracle Cloud"),
@@ -377,6 +382,20 @@ class TestCloudMetadataEndpoints:
         assert should_block, f"Failed to block {provider} metadata endpoint"
         assert "SSRF" in msg
 
+    @pytest.mark.parametrize(
+        "hostname", ["metadata.google.internal", "169.254.169.254"]
+    )
+    def test_terminal_dns_root_dot_cannot_hide_core_metadata_from_allowlist(
+        self, hostname
+    ):
+        protector = SSRFProtector({"allowed_domains": [hostname]})
+
+        should_block, message, immutable = protector._check_url(f"http://{hostname}./")
+
+        assert should_block
+        assert immutable
+        assert "blocked domain" in message
+
     def test_alibaba_cloud_metadata_blocked_via_webfetch(self):
         """Alibaba Cloud metadata blocked for WebFetch tool calls."""
         protector = SSRFProtector()
@@ -386,6 +405,21 @@ class TestCloudMetadataEndpoints:
 
         assert should_block, "Failed to block Alibaba Cloud metadata via WebFetch"
         assert "SSRF" in msg
+
+    def test_pattern_server_cannot_override_new_immutable_ranges(self):
+        from ai_guardian.patterns.loader import SSRFPatternLoader
+
+        loader = SSRFPatternLoader()
+        immutable = loader.get_immutable_patterns()
+        merged = loader.merge_patterns(
+            immutable,
+            {"blocked_ip_ranges": [], "blocked_domains": []},
+            local=None,
+        )
+
+        ranges = {entry["cidr"] for entry in merged["blocked_ip_ranges"]}
+        assert "198.18.0.0/15" in ranges
+        assert "::/128" in ranges
 
     def test_unrelated_100x_public_ip_not_blocked(self):
         """Unrelated 100.x public IPs must not be blocked (only 100.100.100.200 is metadata)."""
