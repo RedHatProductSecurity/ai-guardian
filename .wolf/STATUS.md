@@ -91,6 +91,24 @@ budget_tokens: 1000
   scanner-asset existence check passes, and `git diff --check` is clean.
 - Changes remain uncommitted on branch `2627`; no commit, push or remote CI rerun.
 
+### CI public-release API 403 follow-up — 2026-11-01
+
+- Inspected both latest `Verify Scanner Versions Exist` failures (runs
+  `41322881959` and `41322881984`). They fail on the GitHub release-metadata API
+  for Betterleaks `v1.9.0`; the logs show a 403 with the Actions `GITHUB_TOKEN`,
+  while the other scanner checks pass. The log omits the API response body, so the
+  precise cause of the 403 is not proven.
+- Unauthenticated release metadata and direct x64/arm64 asset checks return 200
+  locally. The checker now retries public GitHub metadata without Authorization
+  after an authenticated 403, with a regression test. The fix passes all 11
+  scanner-version unit tests, the live pinned-asset check, Ruff, Black and Pylint.
+- Full-package Mypy still reports errors in untouched `skill_discovery.py` and
+  `secret_validator.py`; standalone Mypy on the checker reports its existing
+  `tomllib` import redefinition. Fresh hosted CI is still required to confirm the
+  fallback works on the Actions runner.
+- Saved DAF progress and issue update:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2627#issuecomment-6560319398.
+
 ## Issue #2627 session initialization — 2026-10-30
 
 - Initialized managed DAF `open` session

@@ -245,6 +245,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builds and scanner-version validation.
 
 ### Fixed
+- **Scanner version CI checks:** When GitHub rejects the repository-scoped token
+  for a public upstream release, retry the metadata request without credentials
+  instead of reporting an existing scanner release as missing.
 - **OpenCode V2 file targets and diagnostics (#2627):** Normalize native `path`
   alongside compatible file aliases in both adapter and direct policy calls;
   reject malformed/conflicting targets without weakening immutable protection.

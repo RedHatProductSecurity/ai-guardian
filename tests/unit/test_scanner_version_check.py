@@ -115,6 +115,37 @@ def test_check_scanner_exists_uses_github_token(mock_get, monkeypatch):
     )
 
 
+@mock.patch("scripts.check_scanner_versions.requests.get")
+def test_check_scanner_exists_retries_public_api_without_scoped_token(
+    mock_get, monkeypatch
+):
+    monkeypatch.setenv("GITHUB_TOKEN", "repo-scoped-token")
+    forbidden_response = mock.Mock(status_code=403)
+    public_response = mock.Mock(status_code=200)
+    public_response.raise_for_status.return_value = None
+    public_response.json.return_value = {
+        "assets": [
+            {
+                "name": "betterleaks_1.9.0_linux_x64.tar.gz",
+                "browser_download_url": "https://github.com/test/betterleaks.tar.gz",
+                "size": 1024,
+            }
+        ]
+    }
+    mock_get.side_effect = [forbidden_response, public_response]
+
+    result = check_scanner_exists(
+        "betterleaks/betterleaks", "1.9.0", "betterleaks", platform="linux_x64"
+    )
+
+    assert result["exists"] is True
+    assert mock_get.call_count == 2
+    assert mock_get.call_args_list[0].kwargs["headers"]["Authorization"] == (
+        "Bearer repo-scoped-token"
+    )
+    assert "Authorization" not in mock_get.call_args_list[1].kwargs["headers"]
+
+
 def test_check_existence_requires_both_linux_container_assets(
     tmp_path, monkeypatch, capsys
 ):
