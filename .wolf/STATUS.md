@@ -81,6 +81,16 @@ budget_tokens: 1000
 - Corrected PR follow-up comment records the exact CI job/test, root cause and
   local validation: https://github.com/RedHatProductSecurity/ai-guardian/pull/2629#issuecomment-6559806494.
 
+### Betterleaks pin follow-up — 2026-11-01
+
+- User reported a CI failure because Betterleaks `1.3.1` is no longer available
+  and directed moving to `1.9.0`. Updated the `pyproject.toml` pin and the
+  scanner-installation fallback example; added an Unreleased changelog entry.
+- Verified the upstream `v1.9.0` release and both required Linux assets.
+  `tests/unit/test_scanner_version_check.py` passes (10 tests), the full pinned
+  scanner-asset existence check passes, and `git diff --check` is clean.
+- Changes remain uncommitted on branch `2627`; no commit, push or remote CI rerun.
+
 ## Issue #2627 session initialization — 2026-10-30
 
 - Initialized managed DAF `open` session

@@ -124,7 +124,7 @@ When GitHub API is unavailable (offline, network issues), ai-guardian falls back
 ```toml
 [tool.ai-guardian.scanners]
 gitleaks = "8.30.1"
-betterleaks = "1.3.1"
+betterleaks = "1.9.0"
 leaktk = "0.3.4"
 secretlint = "13.0.5"
 gitguardian = "1.54.0"

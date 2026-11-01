@@ -239,6 +239,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   originals remain unchanged. Documents public posting permissions and the need
   for a separately arranged private channel for confidential diagnostics.
 
+### Changed
+- **Betterleaks scanner pin:** Update Betterleaks from 1.3.1 to 1.9.0. The
+  upstream release includes the Linux x64 and arm64 assets required by container
+  builds and scanner-version validation.
+
 ### Fixed
 - **OpenCode V2 file targets and diagnostics (#2627):** Normalize native `path`
   alongside compatible file aliases in both adapter and direct policy calls;
