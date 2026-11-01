@@ -137,6 +137,22 @@ def _openshell_env_values(args: list[str]) -> list[str]:
     return _env_values(args, "--env")
 
 
+def test_container_images_match_project_rapidocr_pin():
+    project = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"rapidocr==3.10.0"' in project
+
+    for dockerfile in (DOCKERFILE, OPENSHELL_DOCKERFILE):
+        contents = dockerfile.read_text(encoding="utf-8")
+        assert "rapidocr==3.10.0" in contents
+        assert "rapidocr==3.9.2" not in contents
+
+
+def test_docs_requirements_pin_mkdocstrings_compatible_pymdown_extensions():
+    requirements = (REPO_ROOT / "docs" / "requirements.txt").read_text(encoding="utf-8")
+    assert "mkdocstrings[python]==1.0.6" in requirements
+    assert "pymdown-extensions==11.0.1" in requirements
+
+
 @pytest.mark.skipif(
     os.name == "nt", reason="The container launchers are POSIX shell scripts"
 )
