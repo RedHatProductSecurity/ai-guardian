@@ -438,6 +438,7 @@ jobs:
             tests/unit/test_web_violation_detail.py \
             tests/unit/test_web_violation_copy.py \
             tests/ux/test_user_experience_contract_opencode_self_protection.py \
+            tests/ux/test_user_experience_contract_agent_config.py \
             tests/ux/test_user_experience_contract_violation_guidance.py \
             tests/ux/test_user_experience_contract_ide_setup.py -q
 

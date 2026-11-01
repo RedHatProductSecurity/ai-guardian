@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-10-30
+> Last updated: 2026-11-01
 
 ## User Preferences
 
@@ -10,6 +10,21 @@
   missing MCP registration without forcing replacement of verified healthy hooks.
   An explicit setup/update action is not blanket consent to rewrite healthy
   integration artifacts. Preserve final health verification and cancellation.
+
+- **2026-11-01 — Shared file validation precedence (#2627 CI):** Native immutable
+  agent-configuration guards for non-OpenCode integrations must run before the
+  new common missing-path validator, or valid Grok `write_file`/JSON `toolInput`
+  mutations get a generic parameter error and bypass the intended named guard.
+  Validate OpenCode aliases earlier because its host target must be unambiguous
+  before selecting any policy/protection target. Preserve each integration's
+  original response reason and behavior; extend the complete UX regression file.
+
+- **2026-11-01 — Shell heredoc comments:** When posting Markdown that contains
+  inline-code backticks through `gh ... --body "$(...)"`, shell double quotes
+  still process command substitutions inside backticks. Use a single-quoted
+  heredoc inside the command substitution. If an already-published comment loses
+  formatting/content, read it back and post a clear correction; do not claim the
+  malformed output was posted as intended.
 
 - **2026-10-29 — Tray pause hierarchy (#2620):** Keep the familiar daemon →
   project directory → session hierarchy inside one modal, with an inline

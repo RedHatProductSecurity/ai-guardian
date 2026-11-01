@@ -586,6 +586,61 @@ class ToolPolicyChecker:
         )
         return False, error_message, tool_name
 
+    def _check_tool_input(
+        self, hook_data: Dict, tool_name: str, tool_input: Dict
+    ) -> Optional[Tuple[bool, Optional[str], Optional[str]]]:
+        """Reject unvalidated targets without changing native protection precedence."""
+        opencode = is_opencode_hook(hook_data)
+        input_failure = None
+        recovered_target = None
+        if opencode and (
+            hook_data.get("workspace_source") == "unknown"
+            or ("cwd" in hook_data and valid_workspace(hook_data["cwd"]) is None)
+        ):
+            input_failure = "workspace_unavailable"
+        elif tool_name in FILE_TOOLS:
+            input_failure, recovered_target = file_input_failure(
+                tool_name,
+                opencode_native_input(hook_data) if opencode else tool_input,
+                tool_input,
+                hook_data.get("cwd") or get_project_dir(),
+                opencode=opencode,
+            )
+        if not input_failure:
+            return None
+
+        self.last_deny_action = "block"
+        self.last_deny_category = _DENY_CATEGORY_ERROR
+        label = INPUT_FAILURE_LABELS[input_failure]
+        input_error_msg = (
+            f"\n{'='*70}\n🚨 BLOCKED BY POLICY\n{'='*70}\n"
+            f"Tool: {tool_name}\nReason: {label} (file_path)\n\n"
+            "The effective file target could not be validated for security checks.\n"
+            "This operation has been blocked to preserve immutable file protections.\n"
+            f"{'='*70}\n"
+        )
+        logger.error("Blocked %s: %s", tool_name, label)
+        self._log_violation(
+            tool_name=tool_name,
+            check_value=recovered_target,
+            reason=(
+                "missing required parameter"
+                if input_failure == "missing_argument"
+                else "invalid tool input"
+            ),
+            matcher=tool_name,
+            hook_data=hook_data,
+            immutable=True,
+            input_diagnostics=build_input_diagnostics(
+                hook_data,
+                tool_name,
+                input_failure,
+                target_known=recovered_target is not None,
+                normalized_input=tool_input,
+            ),
+        )
+        return False, input_error_msg, tool_name
+
     def check_tool_allowed(
         self, hook_data: Dict, *, immutable_only: bool = False
     ) -> Tuple[bool, Optional[str], Optional[str]]:
@@ -616,56 +671,15 @@ class ToolPolicyChecker:
 
             logger.info(f"Checking if tool '{tool_name}' is allowed...")
 
-            # Validate before any protection consumes path values. Do not use a
-            # valid legacy alias to conceal a malformed/conflicting native one.
+            # OpenCode aliases must agree before a protection selects a target.
+            # Other integrations retain their native immutable guards first.
             opencode = is_opencode_hook(hook_data)
-            input_failure = None
-            recovered_target = None
-            if opencode and (
-                hook_data.get("workspace_source") == "unknown"
-                or ("cwd" in hook_data and valid_workspace(hook_data["cwd"]) is None)
-            ):
-                input_failure = "workspace_unavailable"
-            elif tool_name in FILE_TOOLS:
-                input_failure, recovered_target = file_input_failure(
-                    tool_name,
-                    opencode_native_input(hook_data) if opencode else tool_input,
-                    tool_input,
-                    hook_data.get("cwd") or get_project_dir(),
-                    opencode=opencode,
+            if opencode:
+                input_protection = self._check_tool_input(
+                    hook_data, tool_name, tool_input
                 )
-            if input_failure:
-                self.last_deny_action = "block"
-                self.last_deny_category = _DENY_CATEGORY_ERROR
-                label = INPUT_FAILURE_LABELS[input_failure]
-                input_error_msg = (
-                    f"\n{'='*70}\n🚨 BLOCKED BY POLICY\n{'='*70}\n"
-                    f"Tool: {tool_name}\nReason: {label} (file_path)\n\n"
-                    "The effective file target could not be validated for security checks.\n"
-                    "This operation has been blocked to preserve immutable file protections.\n"
-                    f"{'='*70}\n"
-                )
-                logger.error("Blocked %s: %s", tool_name, label)
-                self._log_violation(
-                    tool_name=tool_name,
-                    check_value=recovered_target,
-                    reason=(
-                        "missing required parameter"
-                        if input_failure == "missing_argument"
-                        else "invalid tool input"
-                    ),
-                    matcher=tool_name,
-                    hook_data=hook_data,
-                    immutable=True,
-                    input_diagnostics=build_input_diagnostics(
-                        hook_data,
-                        tool_name,
-                        input_failure,
-                        target_known=recovered_target is not None,
-                        normalized_input=tool_input,
-                    ),
-                )
-                return False, input_error_msg, tool_name
+                if input_protection is not None:
+                    return input_protection
 
             # This boundary is immutable and must run even when ordinary
             # permissions are disabled or overridden by a configured rule.
@@ -688,6 +702,12 @@ class ToolPolicyChecker:
             )
             if agent_config_protection is not None:
                 return agent_config_protection
+            if not opencode:
+                input_protection = self._check_tool_input(
+                    hook_data, tool_name, tool_input
+                )
+                if input_protection is not None:
+                    return input_protection
             if (
                 immutable_only
                 and tool_name not in FILE_TOOLS

@@ -5,7 +5,7 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-10-30 (UTC)
+> Last updated: 2026-11-01 (UTC)
 
 ---
 
@@ -35,7 +35,7 @@ budget_tokens: 1000
   skips locally. All three affected UX files ran completely. Focused branch
   coverage is 95% (adapter 100%, input normalization/diagnostics 94%, safe projection
   97%). Ruff, Black py310, error-level Pylint and targeted Mypy pass; readiness
-  YAML/11 test paths and whitespace checks pass. Updated docs and CHANGELOG.
+  YAML/12 test paths and whitespace checks pass. Updated docs and CHANGELOG.
 - Full-package Mypy retains existing `ui/clipboard.py:39` missing-return and
   `ui/ask_dialog.py:530` unreachable errors. An unmodified HEAD archive reproduces
   both in the same Mac/Python 3.12.11 environment. No unrelated fixes/suppressions.
@@ -48,6 +48,38 @@ budget_tokens: 1000
   workspaces and session movement. Harness tests do not prove host activation.
   Changes remain uncommitted. No full/integration/container suite, installed
   configuration changes or service restarts were performed by the agent.
+
+### CI follow-up — PR #2629, 2026-11-01
+
+- Inspected failing GitHub Actions run `41130868107` for PR #2629 / head
+  `6a103cda67b5e44694aeff14acb8b0a5c3b505e0`. Build, CodeQL, lint, smoke,
+  integration, container and scenario workflows passed; six Python/OS test-matrix
+  jobs failed on the same UX contract:
+  `tests/ux/test_user_experience_contract_agent_config.py::test_grok_project_configuration_mutation_is_denied_before_tool_execution`.
+- Root cause: the new shared file-input validation ran before Grok's existing
+  native configuration protection. Grok normalizes `write_file` and `path` in
+  its adapter, while direct policy extraction must still recognize its
+  `toolName`/`toolInput` envelope. The missing-argument branch shadowed the
+  intended configuration-protection reason.
+- Corrected precedence: OpenCode validates alias agreement before selecting a
+  target; other integrations retain immutable CLI, host and agent-configuration
+  guard precedence before shared missing-input validation. Do not weaken the
+  Grok UX assertion. Expanded it across dict/JSON inputs, `path`/`filePath`/
+  `file_path`, `write_file`/`search_replace`, and ordinary permissions on/off.
+  Added direct conflict-order regression and included the complete agent-config
+  UX file in OpenCode release readiness.
+- **Validation after correction:** **1,806 related unit/UX tests pass**, one
+  Windows-only skip on this Mac; all three directly affected UX contracts pass.
+  Ruff, Black py310, error-level Pylint, targeted Mypy, whitespace and readiness
+  YAML/test-path checks pass. Full package Mypy retains the same two unrelated
+  UI errors, previously reproduced from an unmodified HEAD archive.
+- DAF note and issue progress are recorded below/current GitHub thread. CI still
+  describes the original published SHA; this follow-up remains local/uncommitted,
+  so do not claim the remote failure is cleared. User must publish through the
+  normal DAF completion flow, then fresh CI and live OpenCode 2.0.24 qualification
+  remain outstanding. Agent did not commit, push, rerun workflows, or restart apps.
+- Corrected PR follow-up comment records the exact CI job/test, root cause and
+  local validation: https://github.com/RedHatProductSecurity/ai-guardian/pull/2629#issuecomment-6559806494.
 
 ## Issue #2627 session initialization — 2026-10-30
 

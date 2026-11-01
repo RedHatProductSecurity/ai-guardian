@@ -253,6 +253,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Pass the canonical target to file-content/directory checks too. Repair missing
   OpenCode MCP registration from the tray without forcing replacement of verified
   healthy hooks, avoiding a recurring setup prompt after non-interactive repair.
+  Preserve other adapters' native immutable-configuration guard precedence before
+  canonical input validation; Grok native file mutations retain the correct
+  configuration-protection denial for dict/JSON arguments and file-path aliases.
 - **OpenCode V2 MCP setup (#2622):** Register the local AI Guardian server under
   `mcp.servers` with V2's `disabled` semantics while preserving the V1 MCP shape.
   Doctor verifies the active generation, and setup removal cleans only AI

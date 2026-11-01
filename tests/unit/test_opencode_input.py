@@ -146,6 +146,19 @@ def test_native_payload_wins_over_conflicting_canonical_wrapper(checker, tmp_pat
         assert checker.check_tool_allowed(hook)[0] is False
 
 
+def test_opencode_conflicts_are_validated_before_native_config_guard(checker):
+    hook = _hook({"path": ".grok/config.toml", "file_path": "safe.md"}, tool="write")
+    with (
+        patch.object(checker, "_check_agent_config_protection") as native_guard,
+        patch("ai_guardian.violations.logger.ViolationLogger") as logger,
+    ):
+        assert checker.check_tool_allowed(hook)[0] is False
+    native_guard.assert_not_called()
+    blocked = logger.return_value.log_violation.call_args.kwargs["blocked"]
+    assert blocked["file_path"] is None
+    assert blocked["input_diagnostics"]["subreason"] == "conflicting_arguments"
+
+
 def test_normalization_failure_retains_recoverable_target(checker, tmp_path):
     target = str(tmp_path / "README.md")
     hook = _hook({"path": target, "limit": 180}, cwd=tmp_path)
