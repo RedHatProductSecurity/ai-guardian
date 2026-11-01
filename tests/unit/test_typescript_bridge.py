@@ -277,9 +277,12 @@ def _write_bridge_runtime(tmp_path: Path) -> tuple[Path, Path]:
     fake_guardian = tmp_path / "fake-guardian.mjs"
     fake_guardian.write_text(
         """#!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 const mode = process.env.BRIDGE_CASE;
 if (mode === 'allow') {
   process.stdout.write(JSON.stringify({args: process.argv.slice(2), ide: process.env.AI_GUARDIAN_IDE_TYPE}));
+} else if (mode === 'cwd') {
+  process.stdout.write(JSON.stringify({cwd: process.cwd(), input: JSON.parse(readFileSync(0, 'utf8'))}));
 } else if (mode === 'nested-block') {
   process.stdout.write(JSON.stringify({output: JSON.stringify({decision: 'block', reason: 'blocked response'})}));
 } else if (mode === 'redaction') {
@@ -302,12 +305,12 @@ if (mode === 'allow') {
     runner.write_text(
         """import { createGuardianBridge } from './ai-guardian-bridge.ts';
 const bridge = createGuardianBridge({
-  ideType: 'test',
+  ideType: process.env.BRIDGE_IDE || 'test',
   binary: process.env.BRIDGE_BINARY,
   args: process.env.BRIDGE_ARGS ? JSON.parse(process.env.BRIDGE_ARGS) : undefined,
   timeoutMs: Number(process.env.BRIDGE_TIMEOUT || 30000),
 });
-console.log(JSON.stringify(bridge.run({ source: 'unit-test' })));
+console.log(JSON.stringify(bridge.run({ source: 'unit-test', ...(process.env.BRIDGE_CWD !== undefined ? { cwd: process.env.BRIDGE_CWD } : {}) })));
 """,
         encoding="utf-8",
     )
@@ -365,7 +368,7 @@ def _write_opencode_plugin_runtime(tmp_path):
     bridge_dir = tmp_path / "ai-guardian"
     bridge_dir.mkdir()
     (plugin_dir / "index.ts").write_text(
-        _OPENCODE_PLUGIN_V2_TS.replace(
+        _render_typescript_source(_OPENCODE_PLUGIN_V2_TS).replace(
             "'../ai-guardian/ai-guardian-bridge'",
             "'../ai-guardian/ai-guardian-bridge.ts'",
         ),
@@ -435,7 +438,7 @@ const finished = new Promise(resolve => { finish = resolve; });
 const ctx = {
   location: { directory: process.cwd() },
   app: { version: '2.0.22' },
-  session: { hook: async () => {}, get: async () => ({ title: 'Native title' }) },
+  session: { hook: async () => {}, get: async () => ({ title: 'Native title', location: { directory: process.cwd() } }) },
   tool: { hook: async () => {} },
   event: { async *subscribe({ signal }) {
     subscriptionSignal = signal;
@@ -470,7 +473,9 @@ console.log(JSON.stringify({ calls: globalThis.guardianCalls, aborted: subscript
         ("SessionEnd", "session-one"),
     ]
     assert all(call["opencode_version"] == "2.0.22" for call in result["calls"])
-    assert all(call["cwd"] == str(tmp_path) for call in result["calls"])
+    assert all(call["cwd"] == str(tmp_path) for call in result["calls"][:2])
+    assert all(call["cwd"] == "" for call in result["calls"][2:])
+    assert all(call["workspace_source"] == "unknown" for call in result["calls"][2:])
     assert result["aborted"] is True
     assert all(call["session_title"] == "Native title" for call in result["calls"][:2])
     assert all("session_title" not in call for call in result["calls"][2:])
@@ -576,7 +581,7 @@ const cleanup = await plugin.setup({
   app: { version: '2.0.22' },
   session: {
     hook: async (name, handler) => { hooks[name] = handler; },
-    get: async () => ({ title: 'New session' }),
+    get: async () => ({ title: 'New session', location: { directory: process.cwd() } }),
     synthetic: async message => syntheticMessages.push(message),
   },
   tool: { hook: async (name, handler) => { hooks[name] = handler; } },
@@ -647,7 +652,7 @@ console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, syntheticMe
     reason="Node.js with TypeScript type stripping is required",
 )
 def test_opencode_v2_session_titles_runtime(tmp_path):
-    """Metadata lookup is exact, bounded/cached, refreshable, and never skips hooks."""
+    """Metadata is fresh, bounded, concurrent-deduplicated, and never skips hooks."""
     _write_opencode_plugin_runtime(tmp_path)
     runner = tmp_path / "run-titles.mjs"
     runner.write_text(
@@ -672,7 +677,7 @@ const cleanup = await plugin.setup({
       if (mode === 'throw') throw new Error('metadata unavailable');
       if (mode === 'hang') return new Promise(() => {});
       if (mode === 'delay') await new Promise(resolve => setTimeout(resolve, 20));
-      return { title: titles.get(sessionID) };
+      return { title: titles.get(sessionID), location: { directory: process.cwd() } };
     },
   },
   tool: { hook: async (name, handler) => { hooks[name] = handler; } },
@@ -691,7 +696,7 @@ await prompt('other');
 assert.equal(last().session_title, 'Other title');
 titles.set('first', 'Renamed title');
 await prompt('first');
-assert.equal(last().session_title, 'Original title');
+assert.equal(last().session_title, 'Renamed title');
 now += 30_001;
 await prompt('first');
 assert.equal(last().session_title, 'Renamed title');
@@ -715,7 +720,7 @@ mode = 'throw';
 await prompt('failure');
 await before('failure');
 await after('failure');
-assert.equal(requests.filter(id => id === 'failure').length, 1);
+assert.equal(requests.filter(id => id === 'failure').length, 3);
 assert.equal(last().session_title, '');
 assert.equal(last().hook_event_name, 'tool.execute.after');
 mode = 'hang';
@@ -744,3 +749,181 @@ console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, requests: r
     assert completed.returncode == 0, completed.stderr
     result = json.loads(completed.stdout)
     assert result["calls"] > result["requests"] >= 130
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_v2_workspace_is_fresh_and_session_specific(tmp_path):
+    """Concurrent sessions and moved sessions must not inherit plugin CWD."""
+    _write_opencode_plugin_runtime(tmp_path)
+    runner = tmp_path / "run-workspaces.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import plugin from './ai-guardian-plugin/index.ts';
+globalThis.guardianCalls = [];
+const hooks = {};
+const directories = new Map([['first', '/workspaces/one'], ['second', '/workspaces/two']]);
+const cleanup = await plugin.setup({
+  location: { directory: '/plugin/startup' },
+  app: { version: '2.0.24' },
+  session: {
+    hook: async (name, handler) => { hooks[name] = handler; },
+    get: async ({sessionID}) => ({ title: `Title ${sessionID}`, location: { directory: directories.get(sessionID) } }),
+  },
+  tool: { hook: async (name, handler) => { hooks[name] = handler; } },
+  event: { async *subscribe() {} },
+});
+const before = (sessionID) => hooks['execute.before']({sessionID, messageID: `msg_${sessionID}`, id: `call_${sessionID}`, tool: 'read', input: {path: 'README.md'}});
+await Promise.all([before('first'), before('second')]);
+assert.deepEqual(new Set(globalThis.guardianCalls.map(call => call.cwd)), new Set(['/workspaces/one', '/workspaces/two']));
+directories.set('first', '/workspaces/moved');
+await before('first');
+assert.equal(globalThis.guardianCalls.at(-1).cwd, '/workspaces/moved');
+assert.equal(globalThis.guardianCalls.at(-1).message_id, 'msg_first');
+assert.equal(globalThis.guardianCalls.at(-1).workspace_source, 'session');
+assert.ok(globalThis.guardianCalls.every(call => call.plugin_cwd === '/plugin/startup'));
+assert.ok(globalThis.guardianCalls.every(call => call.opencode_version === '2.0.24'));
+assert.ok(globalThis.guardianCalls.every(call => call.integration_version === process.env.GUARDIAN_VERSION));
+await before('unknown').catch(() => {});
+const unknown = globalThis.guardianCalls.at(-1);
+assert.equal(unknown.cwd, '');
+assert.equal(unknown.workspace_source, 'unknown');
+cleanup();
+console.log(JSON.stringify({calls: globalThis.guardianCalls.length}));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        env={**os.environ, "GUARDIAN_VERSION": __version__},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout)["calls"] == 4
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_bridge_executes_in_hook_workspace(tmp_path):
+    fake_guardian, runner = _write_bridge_runtime(tmp_path)
+    workspace = tmp_path / "session workspace"
+    workspace.mkdir()
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "BRIDGE_BINARY": str(NODE),
+            "BRIDGE_ARGS": json.dumps([str(fake_guardian)]),
+            "BRIDGE_CASE": "cwd",
+            "BRIDGE_IDE": "opencode",
+            "BRIDGE_CWD": str(workspace),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["blocked"] is False
+    assert json.loads(result["output"])["cwd"] == str(workspace)
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+@pytest.mark.parametrize(
+    "workspace", [None, "", "relative-PRIVATE_WORKSPACE", "missing-absolute"]
+)
+def test_opencode_bridge_unknown_or_unusable_workspace_fails_closed(
+    tmp_path, workspace
+):
+    fake_guardian, runner = _write_bridge_runtime(tmp_path)
+    env = {
+        **os.environ,
+        "BRIDGE_BINARY": str(NODE),
+        "BRIDGE_ARGS": json.dumps([str(fake_guardian)]),
+        "BRIDGE_IDE": "opencode",
+        "BRIDGE_CASE": "cwd",
+    }
+    if workspace is not None:
+        env["BRIDGE_CWD"] = (
+            str(tmp_path / "PRIVATE_MISSING_DIRECTORY")
+            if workspace == "missing-absolute"
+            else workspace
+        )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["blocked"] is True
+    assert "workspace" in result["error"]
+    assert "PRIVATE_" not in result["error"]
+    assert not result.get("output")
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_v2_tool_refusals_do_not_forward_private_errors_or_results(tmp_path):
+    _write_opencode_plugin_runtime(tmp_path)
+    runner = tmp_path / "run-tool-refusals.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import plugin from './ai-guardian-plugin/index.ts';
+globalThis.guardianCalls = [];
+globalThis.guardianResponses = [{blocked: true, error: 'PRIVATE_BRIDGE_ERROR'}, {blocked: true, error: 'PRIVATE_BRIDGE_ERROR'}];
+const hooks = {};
+const notices = [];
+const cleanup = await plugin.setup({
+  location: {directory: process.cwd()}, app: {version: '2.0.24'},
+  session: {
+    hook: async (name, handler) => { hooks[name] = handler; },
+    get: async () => ({location: {directory: process.cwd()}}),
+    synthetic: async (notice) => notices.push(notice),
+  },
+  tool: {hook: async (name, handler) => { hooks[name] = handler; }},
+  event: {async *subscribe() {}},
+});
+const input = {path: 'PRIVATE_INPUT'};
+const base = {sessionID: 'ses_2627test', messageID: 'msg_2627test', id: 'call_2627test', tool: 'read', input};
+await assert.rejects(hooks['execute.before'](base), {message: 'AI Guardian blocked this tool call before execution'});
+await assert.rejects(hooks['execute.after']({...base, status: 'completed', result: {output: 'PRIVATE_RESULT'}}), {message: 'AI Guardian blocked this tool result after execution; result withheld'});
+assert.equal(notices.length, 2);
+assert.ok(notices[0].text.includes('The tool did not run.'));
+assert.ok(notices[1].text.includes('The tool ran, but its result was withheld'));
+assert.equal(JSON.stringify(notices).includes('PRIVATE_'), false);
+assert.ok(globalThis.guardianCalls.every(call => call.message_id === 'msg_2627test'));
+cleanup();
+console.log(JSON.stringify({notices: notices.length}));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"notices": 2}

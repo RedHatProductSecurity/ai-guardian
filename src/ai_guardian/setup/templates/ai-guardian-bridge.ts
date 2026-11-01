@@ -1,5 +1,6 @@
 // ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
 import { execFileSync } from 'child_process';
+import { isAbsolute } from 'node:path';
 
 export interface GuardianResult {
   blocked: boolean;
@@ -106,11 +107,23 @@ export function createGuardianBridge(options: GuardianBridgeOptions) {
 
   return {
     run(hookData: Record<string, unknown>): GuardianResult {
+      // OpenCode's server may host sessions outside the plugin's startup CWD.
+      // A per-child CWD also binds daemon forwarding and direct fallback to the
+      // same workspace, without changing shared process state.
+      const opencode = options.ideType === 'opencode';
+      const lifecycle = hookData.hook_event_name === 'SessionEnd'
+        || hookData.hook_event_name === 'Stop';
+      const cwd = typeof hookData.cwd === 'string' && isAbsolute(hookData.cwd)
+        && !hookData.cwd.includes('\0') ? hookData.cwd : undefined;
+      if (opencode && !lifecycle && !cwd) {
+        return { blocked: true, error: 'AI Guardian could not establish the operation workspace' };
+      }
       try {
         const stdout = execFileSync(binary, [...binaryArgs, '--ide', options.ideType], {
           input: JSON.stringify(hookData),
           encoding: 'utf-8',
           timeout: timeoutMs,
+          cwd: opencode ? cwd : undefined,
           env: { ...process.env, AI_GUARDIAN_IDE_TYPE: options.ideType },
           stdio: ['pipe', 'pipe', 'pipe'],
         });
@@ -130,6 +143,9 @@ export function createGuardianBridge(options: GuardianBridgeOptions) {
             error: textValue(failure.stderr).trim() || 'Blocked by ai-guardian',
             output: output || undefined,
           };
+        }
+        if (opencode && !lifecycle) {
+          return { blocked: true, error: 'AI Guardian could not validate the operation in its workspace' };
         }
         return { blocked: false, output: output || undefined };
       }

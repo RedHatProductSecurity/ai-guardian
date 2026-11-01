@@ -179,3 +179,45 @@ class TestViolationSummaryDeepLinks:
 
         source = inspect.getsource(render_violation_summary)
         assert "View all" in source
+
+
+def test_input_diagnostic_detail_renders_safe_fields_and_keeps_immutable_actions_hidden():
+    from unittest.mock import patch
+
+    from ai_guardian.web.pages.violation_detail import _render_violation_detail
+
+    violation = {
+        "id": "viol_2627abcd",
+        "violation_type": "tool_permission",
+        "blocked": {
+            "tool_name": "Read",
+            "is_immutable": True,
+            "input_diagnostics": {
+                "schema_version": 1,
+                "subreason": "missing_argument",
+                "native_tool_name": "read",
+                "canonical_tool_name": "Read",
+                "expected_field": "path",
+                "argument_shape": {"limit": "integer"},
+                "raw_payload": "PRIVATE_PAYLOAD",
+            },
+        },
+        "context": {"message_id": "msg_2627test", "host_version": "2.0.24"},
+    }
+    with (
+        patch("ai_guardian.web.pages.violation_detail.ui") as ui,
+        patch("ai_guardian.web.pages.violation_detail.local_time_label"),
+        patch("ai_guardian.web.pages.violations.ui", ui),
+    ):
+        _render_violation_detail(violation, None, "local")
+    labels = [str(call.args[0]) for call in ui.label.call_args_list if call.args]
+    assert "missing_argument" in labels
+    assert "msg_2627test" in labels
+    assert "2.0.24" in labels
+    assert "unknown" in labels
+    assert "PRIVATE_PAYLOAD" not in str(ui.mock_calls)
+    buttons = [call.args[0] for call in ui.button.call_args_list if call.args]
+    assert "Always Allow..." not in buttons
+    assert "Suppress in Source..." not in buttons
+    # View/copy projection must not mutate the persisted compatibility record.
+    assert violation["blocked"]["input_diagnostics"]["raw_payload"] == "PRIVATE_PAYLOAD"

@@ -11,6 +11,7 @@ from ai_guardian.violations.guidance import (
     get_resolution_instructions,
 )
 from ai_guardian.violations.utils import is_immutable_violation
+from ai_guardian.violations.tool_diagnostics import diagnostic_safe_violation
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.local_time import (
     inject_local_time_js,
@@ -22,6 +23,7 @@ from ai_guardian.web.pages.violations import (
     _NO_SUPPRESSION_TYPES,
     _format_violation_markdown,
     _load_local_violations,
+    _render_tool_diagnostics,
     _show_allow_always_flow,
     _show_ignore_file_flow,
     _show_suppress_in_source_flow,
@@ -101,6 +103,7 @@ def create_violation_detail_page(service, daemon_name: str):
 
 def _render_violation_detail(v: dict, service, daemon_name: str):
     """Render full violation details inline on the page."""
+    v = diagnostic_safe_violation(v)
     vtype = v.get("violation_type", v.get("type", "unknown"))
     severity = v.get("severity", "warning")
     timestamp = v.get("timestamp", "")
@@ -164,6 +167,8 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
                         ui.label(display).classes("text-xs").style(
                             "word-break: break-all"
                         )
+
+    _render_tool_diagnostics(v)
 
     # --- Suggested rule ---
     if not immutable and vtype == "tool_permission" and suggestion.get("rule"):

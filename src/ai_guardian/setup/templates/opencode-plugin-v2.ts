@@ -1,12 +1,11 @@
 // ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
 // ai-guardian-opencode-generation: v2
 import { createGuardianBridge } from '../ai-guardian/ai-guardian-bridge';
+import { isAbsolute } from 'node:path';
 
 const guardian = createGuardianBridge({ ideType: 'opencode' });
-const OPENCODE_VERSION = '2.0.0';
-const SESSION_TITLE_TTL_MS = 30_000;
-const SESSION_TITLE_TIMEOUT_MS = 500;
-const MAX_SESSION_TITLES = 128;
+const SESSION_METADATA_TIMEOUT_MS = 500;
+const MAX_SESSION_REQUESTS = 128;
 const PROMPT_REFUSAL_NOTICE =
   'AI Guardian refused the previous prompt. The original prompt was not sent to the model. Do not answer or continue that request. Ask the user to provide a new prompt without the sensitive or blocked content.';
 const PRE_TOOL_REFUSAL_NOTICE =
@@ -45,11 +44,12 @@ function hookData(
   hookEventName: string,
   cwd: string,
   extra: JsonRecord = {},
-  opencodeVersion: string = OPENCODE_VERSION,
+  opencodeVersion: string = 'unknown',
 ): JsonRecord {
   return {
     hook_event_name: hookEventName,
     opencode_version: opencodeVersion,
+    integration_version: '__AI_GUARDIAN_VERSION__',
     hook_source: 'opencode',
     cwd,
     ...extra,
@@ -75,23 +75,18 @@ function resultWithReplacement(original: unknown, replacement: unknown): unknown
 export default {
   id: 'ai-guardian',
   async setup(ctx) {
-    const cwd = ctx.location.directory || process.cwd();
-    const opencodeVersion = ctx.app.version;
-    // Cache only metadata for the exact session, including misses and concurrent
-    // lookups. Never load messages/transcripts just to name a tray entry.
-    const sessionTitles = new Map<string, { expires: number; title: Promise<string> }>();
-    const readSessionTitle = (sessionID: string): Promise<string> => {
-      const now = Date.now();
-      const cached = sessionTitles.get(sessionID);
-      if (cached && cached.expires > now) return cached.title;
-      for (const [id, entry] of sessionTitles) {
-        if (entry.expires <= now) sessionTitles.delete(id);
-      }
-      if (sessionTitles.size >= MAX_SESSION_TITLES) {
-        const oldest = sessionTitles.keys().next().value;
-        if (oldest !== undefined) sessionTitles.delete(oldest);
-      }
-      const title = (async () => {
+    const pluginCwd = ctx.location.directory;
+    const opencodeVersion = typeof ctx.app.version === 'string' ? ctx.app.version : 'unknown';
+    type SessionMetadata = { title: string; directory: string };
+    const unknownSession = (): SessionMetadata => ({ title: '', directory: '' });
+    // Deduplicate concurrent lookups only. Caching a directory across events
+    // can check a moved session against another workspace's policy.
+    const sessionRequests = new Map<string, Promise<SessionMetadata>>();
+    const readSessionMetadata = (sessionID: string): Promise<SessionMetadata> => {
+      const pending = sessionRequests.get(sessionID);
+      if (pending) return pending;
+      if (sessionRequests.size >= MAX_SESSION_REQUESTS) return Promise.resolve(unknownSession());
+      const request = (async () => {
         const controller = new AbortController();
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
@@ -101,29 +96,42 @@ export default {
               timer = setTimeout(() => {
                 controller.abort();
                 resolve(undefined);
-              }, SESSION_TITLE_TIMEOUT_MS);
+              }, SESSION_METADATA_TIMEOUT_MS);
             }),
           ]);
-          return typeof session?.title === 'string' ? session.title.slice(0, 4096) : '';
+          const directory = session?.location?.directory;
+          return {
+            title: typeof session?.title === 'string' ? session.title.slice(0, 4096) : '',
+            directory: typeof directory === 'string' && directory.length <= 4096
+              && isAbsolute(directory) && !directory.includes('\0') ? directory : '',
+          };
         } catch {
-          console.error('[ai-guardian] Could not read OpenCode session title');
-          return '';
+          console.error('[ai-guardian] Could not read OpenCode session metadata');
+          return unknownSession();
         } finally {
           if (timer !== undefined) clearTimeout(timer);
         }
       })();
-      sessionTitles.set(sessionID, { expires: now + SESSION_TITLE_TTL_MS, title });
-      return title;
+      sessionRequests.set(sessionID, request);
+      void request.finally(() => {
+        if (sessionRequests.get(sessionID) === request) sessionRequests.delete(sessionID);
+      });
+      return request;
     };
     const sessionHookData = async (
       hookEventName: string,
       sessionID: string,
       extra: JsonRecord = {},
-    ): Promise<JsonRecord> => hookData(hookEventName, cwd, {
-      ...extra,
-      session_id: sessionID,
-      session_title: await readSessionTitle(sessionID),
-    }, opencodeVersion);
+    ): Promise<JsonRecord> => {
+      const session = await readSessionMetadata(sessionID);
+      return hookData(hookEventName, session.directory, {
+        ...extra,
+        session_id: sessionID,
+        session_title: session.title,
+        workspace_source: session.directory ? 'session' : 'unknown',
+        plugin_cwd: pluginCwd,
+      }, opencodeVersion);
+    };
 
     const recordRefusalNotice = async (
       sessionID: string,
@@ -154,6 +162,7 @@ export default {
       if (!prompt) return;
       const result = guardian.run(await sessionHookData('message.submit', event.sessionID, {
         prompt,
+        message_id: event.messageID,
       }));
       if (result.blocked) {
         // V2 prompt hooks transform admission and expose no typed denial result.
@@ -170,11 +179,12 @@ export default {
 
     await ctx.tool.hook('execute.before', async (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
-      const input = (event.input || {}) as JsonRecord;
+      const input = event.input;
       const result = guardian.run(await sessionHookData('tool.execute.before', event.sessionID, {
         tool_name: event.tool,
         tool_use: { name: event.tool, input },
         tool_use_id: event.id,
+        message_id: event.messageID,
       }));
       if (result.blocked) {
         await recordRefusalNotice(
@@ -189,7 +199,7 @@ export default {
 
     await ctx.tool.hook('execute.after', async (event) => {
       if (event.tool?.startsWith('ai-guardian')) return;
-      const input = (event.input || {}) as JsonRecord;
+      const input = event.input;
       const error =
         event.status === 'completed' ? undefined : (event.error as unknown);
       const output =
@@ -203,6 +213,7 @@ export default {
         tool_use: { name: event.tool, input },
         tool_response: { output },
         tool_use_id: event.id,
+        message_id: event.messageID,
       }));
       if (result.blocked) {
         await recordRefusalNotice(
@@ -234,10 +245,13 @@ export default {
           if (sessionID) {
             // Idle ends a turn, not the session or its session-scoped pause.
             const hookEvent = record.type === 'session.deleted' ? 'SessionEnd' : 'Stop';
-            if (hookEvent === 'SessionEnd') sessionTitles.delete(sessionID);
             guardian.run(
               hookEvent === 'SessionEnd'
-                ? hookData(hookEvent, cwd, { session_id: sessionID }, opencodeVersion)
+                ? hookData(hookEvent, '', {
+                    session_id: sessionID,
+                    workspace_source: 'unknown',
+                    plugin_cwd: pluginCwd,
+                  }, opencodeVersion)
                 : await sessionHookData(hookEvent, sessionID),
             );
           }

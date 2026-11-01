@@ -4,6 +4,8 @@ import json
 from io import StringIO
 from unittest.mock import patch
 
+import pytest
+
 import ai_guardian
 from ai_guardian.tools.policy import ToolPolicyChecker
 from tests.fixtures.mock_mcp_server import create_hook_data
@@ -68,21 +70,36 @@ def test_agent_configuration_protection_stays_active_when_permissions_are_disabl
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
-def test_grok_project_configuration_mutation_is_denied_before_tool_execution():
+@pytest.mark.parametrize("permissions_enabled", [False, True])
+@pytest.mark.parametrize("tool_name", ["write_file", "search_replace"])
+@pytest.mark.parametrize("path_key", ["path", "filePath", "file_path"])
+@pytest.mark.parametrize("json_input", [False, True])
+def test_grok_project_configuration_mutation_is_denied_before_tool_execution(
+    permissions_enabled, tool_name, path_key, json_input
+):
+    """Native Grok config guards retain precedence over canonical input errors.
+
+    A recognized native path must still produce the configuration-protection
+    denial, including JSON arguments and disabled ordinary permission rules.
+    No operation is allowed and no assertion is relaxed to accept a generic
+    missing-parameter failure.
+    """
+    tool_input = {path_key: ".grok/config.toml"}
     response = json.loads(
         _run_hook(
-            permissions_enabled=False,
+            permissions_enabled=permissions_enabled,
             hook_data={
                 "_ide_type": "grok",
                 "hookEventName": "PreToolUse",
-                "toolName": "write_file",
-                "toolInput": {"path": ".grok/config.toml"},
+                "toolName": tool_name,
+                "toolInput": json.dumps(tool_input) if json_input else tool_input,
             },
         )["output"]
     )
 
     assert response["decision"] == "deny"
     assert "AI Agent Configuration Protection" in response["reason"]
+    assert "Missing required parameter" not in response["reason"]
     assert "allowlist" not in response["reason"].lower()
     assert "bypass" not in response["reason"].lower()
 

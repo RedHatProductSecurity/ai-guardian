@@ -250,7 +250,8 @@ AUGMENT_TOOL_MAP = {
     "remove-files": "Delete",
 }
 
-# OpenCode's built-in tools use lowercase names and camelCase argument keys.
+# OpenCode's built-in tools use lowercase names. V1 file tools use filePath;
+# V2 uses path. File aliases are scoped and validated in tools/input.py.
 # Normalize the security-relevant tools so shared policy checks see the same
 # canonical representation as Claude-compatible integrations.
 OPENCODE_TOOL_MAP = {
@@ -260,8 +261,8 @@ OPENCODE_TOOL_MAP = {
     "edit": "Edit",
 }
 
-OPENCODE_TOOL_INPUT_MAP = {
-    "filePath": "file_path",
+# Path aliases need tool-scoped conflict checks; these aliases are Edit-only.
+OPENCODE_EDIT_INPUT_MAP = {
     "oldString": "old_string",
     "newString": "new_string",
     "replaceAll": "replace_all",

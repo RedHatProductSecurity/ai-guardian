@@ -568,6 +568,13 @@ generated files and reports that server activation is unverified. Unknown or
 unavailable CLI versions retain the V1 compatibility fallback; an existing
 generated V2 plugin is preserved when the runtime cannot report a version. The
 two generations cannot share one active `opencode` executable on the same PATH.
+V2 file tools normalize native `path` and compatible legacy file aliases through
+the same adapter/direct-policy boundary; malformed or conflicting targets remain
+fail-closed. Per-event session metadata supplies the current workspace, and the
+OpenCode checker child uses that directory for both direct and daemon-forwarded
+policy evaluation. Plugin/server startup directories are not workspace fallbacks.
+Safe tool diagnostics distinguish input failures, immutable targets, and ordinary
+permission denials without exposing raw tool payloads or stored reasons to MCP.
 Both support images bundle OpenCode V1 `1.19.0`. The OpenShell selector exposes
 OpenCode with an explicit agent profile; the implemented `claude` profile uses
 native Vertex AI with gateway-owned Google Cloud ADC. That path still requires

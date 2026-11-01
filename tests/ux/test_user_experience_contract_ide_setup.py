@@ -717,6 +717,72 @@ def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_pat
     )
 
 
+def test_opencode_setup_action_repairs_missing_mcp_without_forcing_healthy_hooks(
+    tmp_path,
+):
+    """USER EXPERIENCE: healthy plugin + missing MCP -> setup repairs MCP only.
+
+    Scenario:
+    1. Check hooks/MCP reports OpenCode's plugin healthy but registration missing.
+    2. The user explicitly selects the tray's setup action.
+    3. Non-interactive setup preserves the healthy plugin and registers MCP.
+    4. Final health verification succeeds; repeating Check does not request repair.
+
+    No blanket force or overwrite approval is inferred from MCP repair. Cancel
+    still makes no changes. Manual verification uses an isolated OpenCode profile;
+    configured files are not proof of activation in an already running host.
+    """
+    monitor = TrayHealthMonitor(SimpleNamespace(_standalone=True, _targets=[]))
+    registered = False
+    hooks = MagicMock()
+    hooks.IDE_CONFIGS = {"opencode": {"name": "OpenCode"}}
+    hooks.setup_ide_hooks.return_value = (False, "OpenCode hooks already configured")
+    hooks.verify_hooks_for_ide.return_value = {"healthy": True}
+
+    def verify(_ide):
+        return {
+            "healthy": registered,
+            "hooks_healthy": True,
+            "mcp_installed": registered,
+            "events": {"plugin": "healthy"},
+            "obsolete": [],
+        }
+
+    def register(*_args, **_kwargs):
+        nonlocal registered
+        registered = True
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=True),
+        patch.object(
+            monitor,
+            "_get_unconfigured_ides",
+            side_effect=lambda **_kwargs: [] if registered else ["opencode"],
+        ),
+        patch.object(monitor, "_verify_ide_setup", side_effect=verify),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+        patch("ai_guardian.setup.IDESetup", return_value=hooks),
+        patch("ai_guardian.setup._handle_mcp_setup", side_effect=register) as mcp,
+        patch("ai_guardian.setup._notify_daemon_reload"),
+        patch.object(monitor, "_notify_ide_setup_result") as notify,
+    ):
+        dialog.return_value.show.return_value = "action"
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+        monitor._check_ide_setup_notification()
+    assert registered is True
+    hooks.setup_ide_hooks.assert_called_once_with(
+        "opencode", dry_run=False, force=False
+    )
+    mcp.assert_called_once_with(hooks, "opencode", dry_run=False)
+    assert notify.call_args.args[0][0]["success"] is True
+    assert dialog.call_count == 1
+
+
 def test_manual_health_check_works_without_daemon_for_multiple_ides():
     """
     USER EXPERIENCE: Manual health check -> inspect and optionally set up

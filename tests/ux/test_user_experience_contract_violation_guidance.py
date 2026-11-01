@@ -173,3 +173,86 @@ def test_resolution_guidance_stays_out_of_agent_protocols():
 
     assert "get_resolution_instructions" not in inspect.getsource(hook_processing)
     assert "get_resolution_instructions" not in inspect.getsource(mcp_server)
+
+
+@pytest.mark.parametrize(
+    "subreason",
+    [
+        "missing_argument",
+        "empty_argument",
+        "invalid_argument",
+        "conflicting_arguments",
+        "normalization_failure",
+        "workspace_unavailable",
+    ],
+)
+def test_input_failure_mcp_guidance_explains_validation_not_admin_permission(subreason):
+    """USER EXPERIENCE: input failure -> safe cause, not misleading admin advice.
+
+    Manual verification: inspect an isolated malformed-input fixture in Console,
+    then query its exact violation ID through MCP. Both must show the same vetted
+    classification. OpenCode's model-facing refusal stays fixed and stage-specific;
+    it must not forward the bridge's private error or suggest another attempt.
+    """
+    from unittest.mock import patch
+
+    pytest.importorskip("mcp")
+    from ai_guardian.mcp.server import create_server
+    from ai_guardian.violations.tool_diagnostics import INPUT_FAILURE_GUIDANCE
+
+    violation = {
+        "violation_type": "tool_permission",
+        "blocked": {
+            "tool_name": "Read",
+            "is_immutable": True,
+            "reason": "PRIVATE_REASON",
+            "input_diagnostics": {
+                "schema_version": 1,
+                "subreason": subreason,
+                "native_tool_name": "read",
+                "canonical_tool_name": "Read",
+                "expected_field": "path",
+                "argument_shape": {"limit": "integer"},
+                "raw_payload": "PRIVATE_PAYLOAD",
+            },
+        },
+    }
+    with patch("ai_guardian.violations.logger.ViolationLogger") as logger:
+        logger.return_value.get_recent_violations.return_value = [violation]
+        entry = (
+            create_server()._tool_manager._tools["get_violations"].fn()["violations"][0]
+        )
+    assert entry["tool"] == "Read"
+    assert entry["input_diagnostics"]["subreason"] == subreason
+    assert entry["suggestion"] == INPUT_FAILURE_GUIDANCE
+    assert "admin" not in entry["suggestion"]
+    assert "PRIVATE_" not in str(entry)
+
+
+def test_input_diagnostic_console_copy_keeps_correlation_and_unknown_metadata():
+    """USER EXPERIENCE: Details/copy -> useful safe shape and explicit unknowns.
+
+    Legacy records stay readable. Immutable input failures never gain permission
+    override actions or a copyable suppression rule from these diagnostics.
+    """
+    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
+    from ai_guardian.web.pages.violations import _format_violation_markdown
+
+    text = _format_violation_markdown(
+        {
+            "id": "viol_2627abcd",
+            "violation_type": "tool_permission",
+            "blocked": {
+                "tool_name": "Read",
+                "reason": "missing required parameter",
+                "is_immutable": True,
+            },
+            "context": {"tool_use_id": "call_2627test", "session_id": "ses_2627test"},
+        }
+    )
+    assert "**Input Subreason:** missing_argument" in text
+    assert "**Argument Shape:** unknown" in text
+    assert "**Host Version:** unknown" in text
+    assert "call_2627test" in text
+    assert "ses_2627test" in text
+    assert "Suggested Rule" not in text

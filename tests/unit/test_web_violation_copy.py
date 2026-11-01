@@ -144,3 +144,55 @@ class TestFormatViolationMarkdown:
         v = {"type": "ssrf_blocked", "severity": "high", "blocked": {}}
         md = _format_violation_markdown(v)
         assert "**Type:** ssrf_blocked" in md
+
+    def test_tool_input_diagnostics_and_correlation_are_copyable_without_values(self):
+        markdown = _format_violation_markdown(
+            {
+                "id": "viol_2627abcd",
+                "violation_type": "tool_permission",
+                "blocked": {
+                    "tool_name": "Read",
+                    "is_immutable": True,
+                    "input_diagnostics": {
+                        "schema_version": 1,
+                        "subreason": "missing_argument",
+                        "native_tool_name": "read",
+                        "canonical_tool_name": "Read",
+                        "expected_field": "path",
+                        "input_type": "object",
+                        "argument_shape": {
+                            "limit": "integer",
+                            "PRIVATE_KEY": "PRIVATE_VALUE",
+                        },
+                        "raw_payload": "PRIVATE_PAYLOAD",
+                    },
+                },
+                "context": {
+                    "session_id": "ses_2627test",
+                    "tool_use_id": "call_2627test",
+                    "message_id": "msg_2627test",
+                    "host_version": "2.0.24",
+                    "integration_version": "1.21.0-dev",
+                    "workspace_source": "session",
+                    "project_path": "/workspaces/session",
+                    "policy_project_path": "/workspaces/session",
+                    "plugin_cwd": "/workspaces/plugin",
+                },
+            }
+        )
+        assert "**Input Subreason:** missing_argument" in markdown
+        assert "**Native Tool:** read" in markdown
+        assert "**Expected Field:** path" in markdown
+        assert "**Argument Shape:** limit: integer" in markdown
+        for value in (
+            "viol_2627abcd",
+            "ses_2627test",
+            "call_2627test",
+            "msg_2627test",
+            "2.0.24",
+            "/workspaces/session",
+            "/workspaces/plugin",
+        ):
+            assert value in markdown
+        assert "PRIVATE_" not in markdown
+        assert "Suggested Rule" not in markdown

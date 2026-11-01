@@ -5005,13 +5005,12 @@ class TestMcpDefaultOn:
 
                 mock_mcp.assert_not_called()
 
-    def test_codex_setup_repairs_missing_mcp_when_hooks_are_healthy(self, tmp_path):
-        """A second setup run can repair Codex MCP without rewriting hooks."""
+    @pytest.mark.parametrize("ide_type", ["codex", "opencode"])
+    def test_setup_repairs_missing_mcp_when_hooks_are_healthy(self, tmp_path, ide_type):
+        """A second setup run repairs MCP without forcing healthy hook replacement."""
         with mock.patch("ai_guardian.setup.IDESetup") as MockSetup:
             mock_instance = MockSetup.return_value
-            mock_instance.IDE_CONFIGS = {
-                "codex": {"name": "OpenAI Codex (CLI + Desktop)"}
-            }
+            mock_instance.IDE_CONFIGS = {ide_type: {"name": ide_type}}
             mock_instance.setup_ide_hooks.return_value = (
                 False,
                 "ai-guardian hooks already configured for OpenAI Codex (CLI + Desktop).",
@@ -5022,14 +5021,49 @@ class TestMcpDefaultOn:
                 mock.patch("ai_guardian.setup._handle_mcp_setup") as mock_mcp,
                 mock.patch("ai_guardian.setup._notify_daemon_reload"),
             ):
-                success = setup_hooks(ide_type="codex", interactive=False)
+                success = setup_hooks(ide_type=ide_type, interactive=False)
 
         assert success is True
         mock_mcp.assert_called_once_with(
             mock_instance,
-            "codex",
+            ide_type,
             dry_run=False,
         )
+        mock_instance.setup_ide_hooks.assert_called_once_with(
+            ide_type, dry_run=False, force=False
+        )
+
+    @pytest.mark.parametrize(
+        "verification", [None, {}, {"healthy": False}, {"healthy": "true"}]
+    )
+    def test_opencode_mcp_repair_requires_verified_healthy_hooks(self, verification):
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as setup_class,
+            mock.patch("ai_guardian.setup._handle_mcp_setup") as mcp,
+            mock.patch("ai_guardian.setup._notify_daemon_reload"),
+        ):
+            setup = setup_class.return_value
+            setup.IDE_CONFIGS = {"opencode": {"name": "OpenCode"}}
+            setup.setup_ide_hooks.return_value = (False, "Existing plugin not replaced")
+            setup.verify_hooks_for_ide.return_value = verification
+            assert setup_hooks(ide_type="opencode", interactive=False) is False
+        mcp.assert_not_called()
+
+    def test_opencode_hook_only_setup_does_not_trigger_mcp_repair(self):
+        with (
+            mock.patch("ai_guardian.setup.IDESetup") as setup_class,
+            mock.patch("ai_guardian.setup._handle_mcp_setup") as mcp,
+            mock.patch("ai_guardian.setup._notify_daemon_reload"),
+        ):
+            setup = setup_class.return_value
+            setup.IDE_CONFIGS = {"opencode": {"name": "OpenCode"}}
+            setup.setup_ide_hooks.return_value = (False, "Already configured")
+            setup.verify_hooks_for_ide.return_value = {"healthy": True}
+            assert (
+                setup_hooks(ide_type="opencode", interactive=False, no_mcp=True)
+                is False
+            )
+        mcp.assert_not_called()
 
 
 class TestOpenCodeMcpConfig:

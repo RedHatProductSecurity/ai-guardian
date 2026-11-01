@@ -1,6 +1,7 @@
 """UX contracts for OpenCode immutable configuration protection (#2425)."""
 
 import json
+import logging
 from io import StringIO
 from unittest.mock import patch
 
@@ -11,18 +12,30 @@ from ai_guardian.setup.hooks import _OPENCODE_PLUGIN_TS, _OPENCODE_PLUGIN_V2_TS
 from ai_guardian.tools.policy import ToolPolicyChecker
 
 
-def _run_opencode_hook(tool_name, tool_input, *, permissions_enabled=True):
+def _run_opencode_hook(
+    tool_name, tool_input, *, permissions_enabled=True, version="1.0.0", cwd=None
+):
     config = {
         "permissions": {"enabled": permissions_enabled, "rules": []},
         "agent_config_protection": {"enabled": True},
+        "secret_scanning": {"enabled": False},
+        "secret_redaction": {"enabled": False},
+        "scan_pii": {"enabled": False},
+        "prompt_injection": {"enabled": False},
+        "ssrf_protection": {"enabled": False},
+        "bootstrap_scan": {"enabled": False},
     }
     hook_data = {
         "hook_event_name": "tool.execute.before",
-        "opencode_version": "1.0.0",
+        "opencode_version": version,
         "hook_source": "opencode",
         "tool_use": {"name": tool_name, "input": tool_input},
+        **({"cwd": str(cwd)} if cwd else {}),
     }
     with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file", return_value=(config, None)
+        ),
         patch(
             "ai_guardian.hook_processing._load_permissions_config",
             return_value=({"enabled": permissions_enabled, "rules": []}, None),
@@ -92,6 +105,38 @@ def test_opencode_safe_file_read_remains_allowed():
 
     response = json.loads(result.get("output") or "{}")
     assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+
+@pytest.mark.parametrize("key", ["path", "filePath", "file_path"])
+def test_v2_content_scan_uses_same_absolute_target_as_policy(tmp_path, key):
+    """USER EXPERIENCE: session-relative read -> policy and content scan agree.
+
+    The daemon's startup directory must not choose which file is read for
+    directory checks or scanning, even when its own CWD differs from the session.
+    """
+    import ai_guardian.hook_processing as processing
+
+    target = tmp_path / "session-target-only.md"
+    target.write_text("Safe session content", encoding="utf-8")
+    extracted = []
+    original = processing.extract_file_content_from_tool
+
+    def capture(data, **kwargs):
+        result = original(data, **kwargs)
+        extracted.append(result)
+        return result
+
+    with patch(
+        "ai_guardian.hook_processing.extract_file_content_from_tool",
+        side_effect=capture,
+    ):
+        response = _run_opencode_hook(
+            "read", {key: target.name}, version="2.0.24", cwd=tmp_path
+        )
+    assert not response.get("_blocked")
+    assert extracted
+    assert extracted[0][0] == "Safe session content"
+    assert extracted[0][2] == str(target)
 
 
 def test_opencode_v1_blocked_first_prompt_keeps_a_safe_nonempty_session_turn():
@@ -252,3 +297,109 @@ def test_opencode_v2_pre_and_post_tool_blocks_reach_transcript_and_model():
     )[1].split("await ctx.session.hook('prompt'", maxsplit=1)[0]
     assert "event.input" not in notice_helper
     assert "event.result" not in notice_helper
+
+
+@pytest.mark.parametrize("permissions_enabled", [True, False])
+@pytest.mark.parametrize("key", ["path", "filePath", "file_path"])
+def test_v2_safe_relative_read_checks_the_session_target(
+    tmp_path, key, permissions_enabled
+):
+    """USER EXPERIENCE: V2 read(path) -> safe read proceeds, no missing-field denial.
+
+    Manual verification on the exact installed V2 version:
+    1. Open two isolated projects with distinct README.md files and policies.
+    2. Request an ordinary README read in each session; verify each checks its own
+       project and the returned content belongs to that project.
+    3. Move one session to another project and repeat a fresh safe read.
+    4. Review a deliberately denied fixture in Console: target, native/canonical
+       tool, version, IDs, and hook/policy/plugin workspace labels must agree.
+    Automated tests establish hook/bridge contracts, not live-host qualification.
+    """
+    result = _run_opencode_hook(
+        "read",
+        {key: "README.md", "limit": 180},
+        version="2.0.24",
+        cwd=tmp_path,
+        permissions_enabled=permissions_enabled,
+    )
+    response = json.loads(result.get("output") or "{}")
+    assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+
+@pytest.mark.parametrize("permissions_enabled", [True, False])
+@pytest.mark.parametrize("tool", ["read", "write", "edit"])
+def test_v2_native_path_keeps_immutable_protection_with_ordinary_rules_off(
+    tool, permissions_enabled, tmp_path
+):
+    """USER EXPERIENCE: protected native path -> immutable denial, not input error.
+
+    Turning off ordinary permission rules must not turn off native file-target
+    validation or immutable protections. No override or automatic retry is offered.
+    """
+    target = str(tmp_path / ".ai-guardian.json")
+    with patch("ai_guardian.violations.logger.ViolationLogger") as logger:
+        result = _run_opencode_hook(
+            tool,
+            {"path": target},
+            version="2.0.24",
+            cwd=tmp_path,
+            permissions_enabled=permissions_enabled,
+        )
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    record = logger.return_value.log_violation.call_args.kwargs
+    assert record["blocked"]["input_diagnostics"]["subreason"] == "immutable_protection"
+    assert record["blocked"]["file_path"] == target
+    assert record["suggestion"] == {}
+
+
+@pytest.mark.parametrize("permissions_enabled", [True, False])
+@pytest.mark.parametrize(
+    "args,subreason",
+    [
+        ({"limit": 180}, "missing_argument"),
+        ({"path": ""}, "empty_argument"),
+        ({"path": None}, "invalid_argument"),
+        ({"path": {"PRIVATE_KEY": "PRIVATE_PAYLOAD"}}, "invalid_argument"),
+        (
+            {"path": "safe.md", "file_path": "/workspace/.ai-guardian.json"},
+            "conflicting_arguments",
+        ),
+        (
+            {"path": "/workspace/.ai-guardian.json", "file_path": "safe.md"},
+            "conflicting_arguments",
+        ),
+    ],
+)
+def test_v2_input_failure_is_explained_without_logging_payloads(
+    args, subreason, permissions_enabled, caplog
+):
+    """USER EXPERIENCE: invalid/ambiguous input -> fixed explanation, no payload leak.
+
+    Console/MCP receive a vetted subreason and schema-known names/types, never raw
+    input values, arbitrary argument keys, or instructions to suppress protection.
+    The tool does not execute and ordinary permission settings do not override it.
+    """
+    # Cursor/CLI tests can leave global logging disabled. Pytest owns this
+    # temporary capture scope and restores it; absence checks must not be vacuous.
+    with (
+        caplog.at_level(logging.WARNING, logger="ai_guardian"),
+        patch("ai_guardian.violations.logger.ViolationLogger") as logger,
+    ):
+        result = _run_opencode_hook(
+            "read",
+            args,
+            version="2.0.24",
+            permissions_enabled=permissions_enabled,
+        )
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "could not be validated" in response["systemMessage"]
+    record = logger.return_value.log_violation.call_args.kwargs
+    assert record["blocked"]["input_diagnostics"]["subreason"] == subreason
+    assert record["blocked"]["is_immutable"] is True
+    assert record["suggestion"] == {}
+    assert "Blocked Read:" in caplog.text
+    assert "PRIVATE_" not in caplog.text
+    assert "PRIVATE_" not in json.dumps(record, default=lambda value: value.to_dict())
+    assert "PRIVATE_" not in result["output"]

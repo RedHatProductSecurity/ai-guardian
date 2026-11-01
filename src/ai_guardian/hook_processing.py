@@ -2280,11 +2280,18 @@ def _process_hook_data(hook_data, daemon_state=None):
                 immutable_shell_check_required = bool(
                     tool_name and is_shell_tool_name(tool_name)
                 )
+                # Native file arguments and immutable targets still need
+                # validation when ordinary OpenCode permission rules are off.
+                immutable_file_check_required = bool(
+                    agent_type == "opencode"
+                    and tool_name in {"Read", "Write", "Edit", "NotebookEdit"}
+                )
                 if (
                     permissions_enabled
                     or identity_required
                     or immutable_shell_check_required
                     or agent_config_check_required
+                    or immutable_file_check_required
                 ):
                     trusted_developer_session = (
                         getattr(daemon_state, "developer_session_enabled", None)
@@ -2306,7 +2313,10 @@ def _process_hook_data(hook_data, daemon_state=None):
                     policy_hook_data["tool_name"] = tool_name
                     policy_hook_data["tool_input"] = tool_input
                     immutable_only = bool(
-                        immutable_shell_check_required
+                        (
+                            immutable_shell_check_required
+                            or immutable_file_check_required
+                        )
                         and not permissions_enabled
                         and not identity_required
                     )
@@ -2385,7 +2395,11 @@ def _process_hook_data(hook_data, daemon_state=None):
 
                             # Extract tool-specific parameters for better logging
                             tool_details = ""
-                            if tool_input:
+                            if (
+                                tool_input
+                                and getattr(policy_checker, "last_deny_category", None)
+                                != "policy_check_error"
+                            ):
                                 if checked_tool_name == "Skill" or (
                                     tool_name == "Skill"
                                     and checked_tool_name
@@ -2623,6 +2637,12 @@ def _process_hook_data(hook_data, daemon_state=None):
                 or hook_event == HookEvent.BEFORE_READ_FILE
             ):
                 # Extract file content for tools that read files
+                file_hook_data = hook_data
+                if agent_type == "opencode" and tool_name == "Read":
+                    # The native payload remains available for audit, but file
+                    # checks must consume the same resolved target as policy,
+                    # never re-extract a relative/conflicting native alias.
+                    file_hook_data = {"tool_input": tool_input}
                 with _latency_timer.check("directory_rules"):
                     (
                         content_to_scan,
@@ -2632,7 +2652,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                         deny_reason,
                         dir_warning,
                     ) = extract_file_content_from_tool(
-                        hook_data,
+                        file_hook_data,
                         hook_context={
                             "ide_type": agent_type,
                             "session_id": hook_session_id,

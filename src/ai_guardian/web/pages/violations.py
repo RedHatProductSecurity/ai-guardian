@@ -18,6 +18,13 @@ from ai_guardian.violations.guidance import (
 )
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.violations.utils import is_immutable_violation, is_temp_path
+from ai_guardian.tools.input import INPUT_FAILURE_LABELS
+from ai_guardian.violations.tool_diagnostics import (
+    INPUT_FAILURE_GUIDANCE,
+    diagnostic_safe_violation,
+    safe_tool_correlation,
+    violation_input_diagnostics,
+)
 
 FILTER_TABS = [("All", None, "Show all violation types")] + list(VIOLATION_FILTER_TYPES)
 
@@ -166,8 +173,86 @@ def _get_resolution_instructions(violation: dict):
     return get_resolution_instructions(violation)
 
 
+def _tool_diagnostic_items(violation: dict) -> list:
+    """Use one vetted projection for the detail page, dialog, and Markdown copy."""
+    diagnostics = violation_input_diagnostics(violation)
+    if diagnostics is None:
+        return []
+    shape = ", ".join(
+        f"{key}: {kind}" for key, kind in diagnostics["argument_shape"].items()
+    )
+    items = [
+        ("Input Subreason", diagnostics["subreason"]),
+        ("Native Tool", diagnostics["native_tool_name"] or "unknown"),
+        ("Canonical Tool", diagnostics["canonical_tool_name"] or "unknown"),
+        ("Expected Field", diagnostics["expected_field"] or "unknown"),
+        ("Input Type", diagnostics["input_type"]),
+        (
+            "Argument Shape",
+            shape or ("(none)" if diagnostics["input_type"] == "object" else "unknown"),
+        ),
+        (
+            "Unrecognized Arguments",
+            (
+                diagnostics["unrecognized_argument_count"]
+                if diagnostics["unrecognized_argument_count"] is not None
+                else "unknown"
+            ),
+        ),
+        ("Target Status", diagnostics["target_status"]),
+    ]
+    metadata = safe_tool_correlation(violation)
+    for label, key in (
+        ("Violation ID", "id"),
+        ("Session ID", "session_id"),
+        ("Tool Use ID", "tool_use_id"),
+        ("Message ID", "message_id"),
+        ("Host Version", "host_version"),
+        ("Integration Version", "integration_version"),
+        ("Workspace Source", "workspace_source"),
+    ):
+        items.append((label, metadata[key] or "unknown"))
+    context = violation.get("context")
+    context = context if isinstance(context, dict) else {}
+    for label, key in (
+        ("Hook Workspace", "project_path"),
+        ("Policy Workspace", "policy_project_path"),
+        ("Plugin Location", "plugin_cwd"),
+    ):
+        value = context.get(key)
+        items.append(
+            (
+                label,
+                (
+                    value
+                    if isinstance(value, str)
+                    and 0 < len(value) <= 4096
+                    and value.isprintable()
+                    else "unknown"
+                ),
+            )
+        )
+    return items
+
+
+def _render_tool_diagnostics(violation: dict):
+    items = _tool_diagnostic_items(violation)
+    if not items:
+        return
+    with ui.card().classes("w-full"):
+        ui.label("Tool Input Diagnostics").classes("text-sm font-bold")
+        with ui.grid(columns=2).classes("gap-2 mt-1"):
+            for label, value in items:
+                ui.label(f"{label}:").classes("text-xs text-grey-6")
+                ui.label(str(value)).classes("text-xs").style("word-break: break-all")
+        diagnostics = violation_input_diagnostics(violation)
+        if diagnostics and diagnostics["subreason"] in INPUT_FAILURE_LABELS:
+            ui.label(INPUT_FAILURE_GUIDANCE).classes("text-sm mt-1")
+
+
 def _format_violation_markdown(v: dict) -> str:
     """Format a violation dict as readable Markdown for clipboard sharing."""
+    v = diagnostic_safe_violation(v)
     vtype = v.get("violation_type", v.get("type", "unknown"))
     severity = v.get("severity", "warning")
     timestamp = v.get("timestamp", "")
@@ -192,6 +277,9 @@ def _format_violation_markdown(v: dict) -> str:
 
     if timestamp:
         lines.append(f"**Time:** {timestamp}")
+
+    for label, value in _tool_diagnostic_items(v):
+        lines.append(f"**{label}:** {value}")
 
     suggestion = v.get("suggestion", {})
     if (
@@ -416,6 +504,7 @@ _NO_SUPPRESSION_TYPES = frozenset(
 
 
 def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
+    v = diagnostic_safe_violation(v)
     vtype = v.get("violation_type", v.get("type", "unknown"))
     severity = v.get("severity", "warning")
     timestamp = v.get("timestamp", "")
@@ -506,6 +595,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
             def show_details(violation=v):
                 with ui.dialog() as dialog, ui.card().classes("w-[600px]"):
                     ui.label("Violation Details").classes("text-lg font-bold")
+                    _render_tool_diagnostics(violation)
                     violation_json = json.dumps(
                         violation,
                         indent=2,

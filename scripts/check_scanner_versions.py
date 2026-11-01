@@ -44,12 +44,31 @@ def _github_api_headers() -> dict[str, str]:
     return headers
 
 
+def _github_api_get(api_url: str, timeout: int = 10):
+    """GET GitHub metadata; retry public reads without a scoped token on 403."""
+    headers = _github_api_headers()
+    response = requests.get(api_url, timeout=timeout, headers=headers)
+
+    if response.status_code == 403 and "Authorization" in headers:
+        # Keep authenticated requests as the normal path for rate-limit headroom,
+        # but retry a public upstream read anonymously when the scoped token is
+        # rejected.
+        public_headers = {
+            key: value
+            for key, value in headers.items()
+            if key.lower() != "authorization"
+        }
+        return requests.get(api_url, timeout=timeout, headers=public_headers)
+
+    return response
+
+
 def get_latest_version(repo: str) -> Optional[str]:
     """Get latest version from GitHub releases."""
     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
 
     try:
-        response = requests.get(api_url, timeout=10, headers=_github_api_headers())
+        response = _github_api_get(api_url)
         response.raise_for_status()
         data = response.json()
         tag = data.get('tag_name', '')
@@ -66,7 +85,7 @@ def get_latest_leaktk_pattern_version() -> Optional[str]:
     api_url = "https://api.github.com/repos/leaktk/patterns/contents/target/patterns/gitleaks"
 
     try:
-        response = requests.get(api_url, timeout=10, headers=_github_api_headers())
+        response = _github_api_get(api_url)
         response.raise_for_status()
         contents = response.json()
 
@@ -95,7 +114,7 @@ def get_version_age(repo: str, version: str) -> Optional[int]:
     api_url = f"https://api.github.com/repos/{repo}/releases/tags/v{version}"
 
     try:
-        response = requests.get(api_url, timeout=10, headers=_github_api_headers())
+        response = _github_api_get(api_url)
         response.raise_for_status()
         data = response.json()
 
@@ -199,7 +218,7 @@ def check_scanner_exists(repo: str, version: str, scanner_name: str, platform: s
     api_url = f"https://api.github.com/repos/{repo}/releases/tags/v{version}"
 
     try:
-        response = requests.get(api_url, timeout=10, headers=_github_api_headers())
+        response = _github_api_get(api_url)
 
         if response.status_code == 404:
             return {

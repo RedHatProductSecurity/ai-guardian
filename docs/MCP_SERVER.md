@@ -198,13 +198,24 @@ also be returned. An MCP startup failure reports `startup_failure` or
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `get_violations` | `violation_type?`, `limit?` | violation list with file:line and policy decision | Recent security violations |
+| `get_violations` | `violation_type?`, `limit?` | violation list with file:line, policy decision, optional safe input diagnostics/correlation | Recent security violations |
 | `get_config` | `project_dir?` | feature enabled/disabled map | Current security posture |
 | `get_scanner_status` | — | installed scanners + versions | Scanner inventory |
 | `get_scanner_supported` | — | all available scanners | What can be installed |
 | `get_patterns_list` | — | category names + counts | Active detection patterns |
 | `get_metrics` | `since_days?` | stats by type/severity | Violation statistics |
 | `doctor` | — | check results with fix hints | Health check |
+
+Tool-permission entries can include `input_diagnostics` with fixed validation
+subreasons and schema-recognized argument names/types, never payload values or
+arbitrary key strings. Available `id`, `session_id`, `tool_use_id`, `message_id`,
+`host_version`, `integration_version`, and `workspace_source` are additive bounded
+metadata; unavailable values are explicit. Tool identity also falls back to the
+stored `blocked.tool_name` used by the policy logger. Missing/invalid input gets
+validation guidance, not advice to obtain admin permission. Raw stored reasons,
+session titles, rule patterns, and protection-suppression instructions are not
+forwarded through these diagnostics. See
+[Tool input diagnostics](VIOLATION_LOGGING.md#tool-input-diagnostics).
 
 ### Support Bundle
 
@@ -230,7 +241,7 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 | `check_path` | allowed/denied for operation | Which rule matched, full rules list |
 | `check_command` | allowed/blocked + reason category | Which pattern matched, the deny list |
 | `get_config` | Feature on/off, action mode | Allowlist patterns, regex, rule details |
-| `get_violations` | Type, timestamp, file:line, action, normalized policy decision | Matched pattern internals or raw content |
+| `get_violations` | Type, timestamp, file:line, action, normalized policy decision, vetted input diagnostics/correlation | Matched pattern internals, raw input/content, arbitrary stored reasons |
 | `get_patterns_list` | Category names and counts | Regex patterns |
 
 ### Self-protection
