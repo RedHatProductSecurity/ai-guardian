@@ -106,6 +106,28 @@ the tray's explicit setup action can repair MCP without forcing replacement of
 healthy hooks. Setup verifies the existing plugin before taking that path, and
 the tray's final health check remains authoritative. Cancelling makes no change.
 
+Doctor and tray verification distinguish the user setup target from the
+registration source that wins across the checked OpenCode configuration layers.
+They inspect the selected user JSON/JSONC file (including `OPENCODE_CONFIG` or
+`OPENCODE_CONFIG_DIR`), applicable system configuration, and macOS managed
+preferences. Project files are included only when a project directory is supplied;
+the tray does not infer one from its own working directory. The structured result
+reports the checked scope/source and paths, not configuration values. If the user
+target is missing but a higher-precedence layer supplies a valid registration,
+effective MCP health is healthy while the target status remains separately
+visible. Effective file precedence is global, explicit `OPENCODE_CONFIG`,
+project files (direct configs then `.opencode` configs), system configuration,
+then managed preferences.
+
+OpenCode V2 normalizes supported V1 flat MCP entries in memory. Verification
+checks native `mcp.servers.ai-guardian` first and falls back to the legacy
+`mcp.ai-guardian` entry only when the native entry is absent. If both exist, the
+native entry wins regardless of JSON key order; an invalid or disabled winning
+entry is not reported healthy. OpenCode's `mcp list` connection state is not
+queried by Doctor or the tray: these checks do not launch the configured server,
+prove its connection, or verify that OpenCode activated the plugin. Plugin runtime
+load therefore remains explicitly unverified.
+
 ## Native File Arguments and Diagnostics
 
 V2 `read` uses `path`, as do V2 `write` and `edit`. Normalization is shared by the

@@ -8,8 +8,10 @@ through these user-home resolvers.
 """
 
 import os
+import platform
+import sys
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # Values are ordered by precedence.  The first non-empty variable wins.
 IDE_HOME_ENV_VARS: Dict[str, Tuple[str, ...]] = {
@@ -202,6 +204,97 @@ def resolve_opencode_config() -> Path:
         if candidate.exists():
             return candidate
     return base / "opencode.jsonc"
+
+
+def _opencode_config_in_directory(directory: Path) -> Optional[Path]:
+    """Return the preferred existing OpenCode JSON/JSONC config in a directory."""
+    for name in ("opencode.json", "opencode.jsonc"):
+        candidate = directory / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _opencode_system_config_directories() -> List[Path]:
+    """Return platform-specific OpenCode system configuration directories."""
+    if sys.platform == "darwin":
+        return [Path("/Library/Application Support/opencode")]
+    if sys.platform == "win32":
+        program_data = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+        return [Path(program_data) / "opencode"]
+    return [Path("/etc/opencode")]
+
+
+def _opencode_managed_preference_files() -> List[Path]:
+    """Return the active macOS OpenCode managed-preference plist, if present."""
+    if platform.system().lower() != "darwin":
+        return []
+
+    managed_directory = Path("/Library/Managed Preferences")
+    user_profile = managed_directory / Path.home().name / "ai.opencode.managed.plist"
+    if user_profile.is_file():
+        # OpenCode selects a user-specific profile instead of the machine-wide
+        # profile when both are present.
+        return [user_profile]
+    machine_profile = managed_directory / "ai.opencode.managed.plist"
+    return [machine_profile] if machine_profile.is_file() else []
+
+
+def resolve_opencode_config_layers(
+    project_dir: Optional[str] = None,
+) -> List[Tuple[str, str, Path]]:
+    """Return known OpenCode config files from lowest to highest precedence.
+
+    The result contains only source labels and paths; callers decide how to
+    inspect each file and must not expose its values. OpenCode applies global,
+    explicit ``OPENCODE_CONFIG``, project, system, then managed-preference
+    files. Project files are only included when a caller supplies the relevant
+    workspace explicitly, because a tray or daemon process CWD is not reliable
+    evidence of an active project.
+    """
+    if os.environ.get("OPENCODE_CONFIG_DIR"):
+        user_source = "OPENCODE_CONFIG_DIR"
+    else:
+        user_source = "default-user"
+
+    user_directory = get_ide_home("opencode") or Path("~/.config/opencode").expanduser()
+    user_config = _opencode_config_in_directory(user_directory)
+    if user_config is None:
+        user_config = user_directory / "opencode.jsonc"
+    layers: List[Tuple[str, str, Path]] = [("user", user_source, user_config)]
+
+    explicit_config = get_explicit_ide_config_path("opencode")
+    if explicit_config is not None and os.path.abspath(
+        str(explicit_config)
+    ) != os.path.abspath(str(user_config)):
+        layers.append(("user", "OPENCODE_CONFIG", explicit_config))
+
+    if project_dir:
+        project_root = Path(project_dir).expanduser()
+        if not project_root.is_absolute():
+            project_root = Path.cwd() / project_root
+        directories = [project_root, *project_root.parents]
+
+        # OpenCode merges direct project configs from farthest to closest,
+        # followed by .opencode configs in the same order.
+        for directory in reversed(directories):
+            path = _opencode_config_in_directory(directory)
+            if path is not None:
+                layers.append(("project", "project", path))
+        for directory in reversed(directories):
+            path = _opencode_config_in_directory(directory / ".opencode")
+            if path is not None:
+                layers.append(("project", "project-opencode-dir", path))
+
+    for directory in _opencode_system_config_directories():
+        path = _opencode_config_in_directory(directory)
+        if path is not None:
+            layers.append(("system", "system", path))
+
+    for path in _opencode_managed_preference_files():
+        layers.append(("managed", "managed-preferences", path))
+
+    return layers
 
 
 def resolve_ide_session_dir(

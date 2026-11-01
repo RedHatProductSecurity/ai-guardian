@@ -1702,6 +1702,19 @@ class IDESetup:
                 "mcp_registration": mcp.get("mcp_registration", "local"),
             }
         )
+        for key in (
+            "mcp_config_scope",
+            "mcp_config_source",
+            "mcp_target_status",
+            "mcp_target_registration_layout",
+            "mcp_config_scopes",
+            "effective_mcp_scope",
+            "effective_mcp_source",
+            "effective_mcp_config_path",
+            "mcp_registration_layout",
+        ):
+            if key in mcp:
+                combined[key] = mcp[key]
         if mcp.get("mcp_diagnostic"):
             combined.setdefault("diagnostics", []).append(mcp["mcp_diagnostic"])
         mcp_optional = ide_type == "pi" and combined.get("mcp_status") == "disabled"

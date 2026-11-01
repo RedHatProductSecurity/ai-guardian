@@ -5,6 +5,7 @@ Tests for setup command functionality.
 
 import json
 import os
+import plistlib
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -5077,6 +5078,19 @@ class TestOpenCodeMcpConfig:
             lambda: {"generation": "v1"},
         )
 
+    @pytest.fixture(autouse=True)
+    def _isolate_opencode_configs(self, monkeypatch, tmp_path):
+        """Do not let a developer's machine-wide OpenCode config affect tests."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "global"))
+        monkeypatch.delenv("OPENCODE_CONFIG", raising=False)
+        monkeypatch.setattr(
+            "ai_guardian.ide_paths._opencode_system_config_directories",
+            lambda: [],
+        )
+        monkeypatch.setattr(
+            "ai_guardian.ide_paths._opencode_managed_preference_files", lambda: []
+        )
+
     @pytest.mark.parametrize(
         "contents, expected",
         [
@@ -5546,12 +5560,27 @@ class TestOpenCodeMcpConfig:
             ),
             (
                 "v2",
-                {"servers": {"ai-guardian": {"type": "local"}}},
+                {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                        }
+                    }
+                },
                 "healthy",
             ),
             (
                 "v2",
-                {"servers": {"ai-guardian": {"type": "local", "disabled": True}}},
+                {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                            "disabled": True,
+                        }
+                    }
+                },
                 "disabled",
             ),
         ],
@@ -5578,6 +5607,441 @@ class TestOpenCodeMcpConfig:
         assert result["mcp_status"] == expected_status
         assert result["mcp_installed"] is (expected_status == "healthy")
         assert result["mcp_config_path"] == str(config_path)
+
+    @pytest.mark.parametrize("suffix", [".json", ".jsonc"])
+    @pytest.mark.parametrize(
+        "generation, mcp, expected_status, expected_layout",
+        [
+            (
+                "v1",
+                {
+                    "ai-guardian": {
+                        "type": "local",
+                        "command": ["ai-guardian", "mcp-server"],
+                    }
+                },
+                "healthy",
+                "v1",
+            ),
+            (
+                "v2",
+                {
+                    "ai-guardian": {
+                        "type": "local",
+                        "command": ["ai-guardian", "mcp-server"],
+                    }
+                },
+                "healthy",
+                "legacy-v1",
+            ),
+            (
+                "v2",
+                {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                        }
+                    }
+                },
+                "healthy",
+                "native-v2",
+            ),
+            (
+                "v2",
+                {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "remote",
+                            "url": "https://mcp.example.test/mcp",
+                        }
+                    }
+                },
+                "healthy",
+                "native-v2",
+            ),
+            (
+                "v2",
+                {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "remote",
+                            "url": "http://[",
+                        }
+                    }
+                },
+                "invalid",
+                "native-v2",
+            ),
+            (
+                "v2",
+                {
+                    "ai-guardian": {
+                        "type": "local",
+                        "command": ["legacy", "mcp-server"],
+                        "enabled": False,
+                    },
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                        }
+                    },
+                },
+                "healthy",
+                "native-v2",
+            ),
+            (
+                "v2",
+                {
+                    "ai-guardian": {
+                        "type": "local",
+                        "command": ["legacy", "mcp-server"],
+                    },
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                            "disabled": True,
+                        }
+                    },
+                },
+                "disabled",
+                "native-v2",
+            ),
+            ("v2", {"servers": {}}, "missing", None),
+            (
+                "v2",
+                {"ai-guardian": "not-an-object"},
+                "invalid",
+                "legacy-v1",
+            ),
+            (
+                "v2",
+                {
+                    "servers": {
+                        "ai-guardian": {"type": "local"},
+                    }
+                },
+                "invalid",
+                "native-v2",
+            ),
+        ],
+        ids=[
+            "v1-native-runtime",
+            "v2-legacy-fallback",
+            "v2-native",
+            "v2-remote",
+            "v2-malformed-remote-url",
+            "native-over-legacy",
+            "native-disabled-over-legacy",
+            "missing",
+            "invalid-legacy",
+            "invalid-native",
+        ],
+    )
+    def test_v1_and_v2_mcp_layouts_and_precedence(
+        self,
+        tmp_path,
+        monkeypatch,
+        suffix,
+        generation,
+        mcp,
+        expected_status,
+        expected_layout,
+    ):
+        """V2 accepts legacy layout, with native entries taking precedence."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        config_path = tmp_path / f"opencode{suffix}"
+        prefix = "// isolated config\n" if suffix == ".jsonc" else ""
+        config_path.write_text(prefix + json.dumps({"mcp": mcp}), encoding="utf-8")
+        monkeypatch.setenv("OPENCODE_CONFIG", str(config_path))
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": generation},
+        )
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_status"] == expected_status
+        assert result["mcp_installed"] is (expected_status == "healthy")
+        assert result["mcp_registration_layout"] == expected_layout
+        assert result["mcp_config_scope"] == "user"
+        assert result["mcp_config_source"] == "OPENCODE_CONFIG"
+        assert result["mcp_config_path"] == str(config_path)
+
+    @pytest.mark.parametrize(
+        "user_mcp, system_mcp, expected_status, expected_target_status",
+        [
+            (
+                None,
+                {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                        }
+                    }
+                },
+                "healthy",
+                "missing",
+            ),
+            (
+                {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                        }
+                    }
+                },
+                {
+                    "servers": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                            "disabled": True,
+                        }
+                    }
+                },
+                "disabled",
+                "healthy",
+            ),
+        ],
+    )
+    def test_effective_system_registration_is_distinct_from_user_setup_target(
+        self,
+        tmp_path,
+        monkeypatch,
+        user_mcp,
+        system_mcp,
+        expected_status,
+        expected_target_status,
+    ):
+        """Doctor can distinguish the configured target from higher layers."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        user_dir = tmp_path / "user"
+        user_dir.mkdir()
+        target_path = user_dir / "opencode.jsonc"
+        if user_mcp is not None:
+            target_path.write_text(json.dumps({"mcp": user_mcp}), encoding="utf-8")
+        system_dir = tmp_path / "system"
+        system_dir.mkdir()
+        system_path = system_dir / "opencode.json"
+        system_path.write_text(json.dumps({"mcp": system_mcp}), encoding="utf-8")
+        monkeypatch.setenv("OPENCODE_CONFIG", str(target_path))
+        monkeypatch.setattr(
+            "ai_guardian.ide_paths._opencode_system_config_directories",
+            lambda: [system_dir],
+        )
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": "v2"},
+        )
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_status"] == expected_status
+        assert result["mcp_target_status"] == expected_target_status
+        assert result["mcp_config_path"] == str(target_path)
+        assert result["mcp_config_scope"] == "user"
+        assert result["mcp_config_source"] == "OPENCODE_CONFIG"
+        assert result["effective_mcp_scope"] == "system"
+        assert result["effective_mcp_source"] == "system"
+        assert result["effective_mcp_config_path"] == str(system_path)
+
+    def test_explicit_config_overrides_global_registration(self, tmp_path, monkeypatch):
+        """The custom config layer wins over the global registration."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        global_dir = tmp_path / "global"
+        global_dir.mkdir()
+        global_path = global_dir / "opencode.json"
+        global_path.write_text(
+            json.dumps(
+                {
+                    "mcp": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["global", "mcp-server"],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        explicit_path = tmp_path / "profile" / "settings.jsonc"
+        explicit_path.parent.mkdir()
+        explicit_path.write_text(
+            json.dumps(
+                {
+                    "mcp": {
+                        "servers": {
+                            "ai-guardian": {
+                                "type": "local",
+                                "command": ["custom", "mcp-server"],
+                                "disabled": True,
+                            }
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_CONFIG", str(explicit_path))
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": "v2"},
+        )
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_status"] == "disabled"
+        assert result["mcp_config_path"] == str(explicit_path)
+        assert result["mcp_config_source"] == "OPENCODE_CONFIG"
+        assert result["mcp_target_status"] == "disabled"
+        assert result["effective_mcp_source"] == "OPENCODE_CONFIG"
+        assert result["effective_mcp_config_path"] == str(explicit_path)
+
+    def test_combined_setup_health_uses_effective_registration(
+        self, tmp_path, monkeypatch
+    ):
+        """Healthy effective MCP state keeps combined/tray setup healthy."""
+        user_dir = tmp_path / "user"
+        user_dir.mkdir()
+        target_path = user_dir / "opencode.jsonc"
+        system_dir = tmp_path / "system"
+        system_dir.mkdir()
+        (system_dir / "opencode.json").write_text(
+            json.dumps(
+                {
+                    "mcp": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_CONFIG", str(target_path))
+        monkeypatch.setattr(
+            "ai_guardian.ide_paths._opencode_system_config_directories",
+            lambda: [system_dir],
+        )
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": "v2"},
+        )
+        setup = IDESetup()
+
+        with mock.patch.object(
+            setup,
+            "verify_hooks_for_ide",
+            return_value={
+                "ide": "opencode",
+                "healthy": True,
+                "events": {"plugin": "healthy"},
+                "obsolete": [],
+                "diagnostics": [],
+            },
+        ):
+            result = setup.verify_ide_setup("opencode")
+
+        assert result["hooks_healthy"] is True
+        assert result["mcp_status"] == "healthy"
+        assert result["mcp_installed"] is True
+        assert result["mcp_target_status"] == "missing"
+        assert result["healthy"] is True
+        assert result["effective_mcp_scope"] == "system"
+        assert result["effective_mcp_source"] == "system"
+
+    def test_managed_preference_registration_is_inspected_without_exposing_values(
+        self, tmp_path, monkeypatch
+    ):
+        """Managed config is reported as a source, not as its contents."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        target_path = tmp_path / "user" / "opencode.jsonc"
+        managed_path = tmp_path / "managed" / "ai.opencode.managed.plist"
+        managed_path.parent.mkdir()
+        with managed_path.open("wb") as config_file:
+            plistlib.dump(
+                {
+                    "mcp": {
+                        "servers": {
+                            "ai-guardian": {
+                                "type": "local",
+                                "command": ["ai-guardian", "mcp-server"],
+                            }
+                        }
+                    }
+                },
+                config_file,
+            )
+        monkeypatch.setenv("OPENCODE_CONFIG", str(target_path))
+        monkeypatch.setattr(
+            "ai_guardian.ide_paths._opencode_managed_preference_files",
+            lambda: [managed_path],
+        )
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": "v2"},
+        )
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_status"] == "healthy"
+        assert result["effective_mcp_scope"] == "managed"
+        assert result["effective_mcp_source"] == "managed-preferences"
+        assert result["effective_mcp_config_path"] == str(managed_path)
+        assert "command" not in json.dumps(result)
+
+    def test_explicit_project_layer_can_supply_effective_registration(
+        self, tmp_path, monkeypatch
+    ):
+        """Project config is checked only for an explicitly supplied workspace."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        user_dir = tmp_path / "user"
+        user_dir.mkdir()
+        project_dir = tmp_path / "project"
+        project_config_dir = project_dir / ".opencode"
+        project_config_dir.mkdir(parents=True)
+        project_path = project_config_dir / "opencode.jsonc"
+        project_path.write_text(
+            "// project MCP config\n"
+            + json.dumps(
+                {
+                    "mcp": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(user_dir))
+        monkeypatch.setattr(
+            "ai_guardian.setup.mcp.detect_opencode_runtime",
+            lambda: {"generation": "v2"},
+        )
+
+        result = verify_mcp_config(
+            "opencode", scope="auto", project_dir=str(project_dir)
+        )
+
+        assert result["mcp_status"] == "healthy"
+        assert result["mcp_target_status"] == "missing"
+        assert result["mcp_config_path"] == str(user_dir / "opencode.jsonc")
+        assert result["effective_mcp_scope"] == "project"
+        assert result["effective_mcp_source"] == "project-opencode-dir"
+        assert result["effective_mcp_config_path"] == str(project_path)
 
     @pytest.mark.parametrize("layout", ["legacy", "v2", "both"])
     def test_removal_cleans_both_shapes_and_preserves_other_servers(

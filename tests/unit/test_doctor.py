@@ -731,11 +731,23 @@ class TestCheckHooks:
             json.dumps(
                 {
                     "plugin": [str(plugin_path)],
-                    "mcp": {"ai-guardian": {}},
+                    "mcp": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": ["ai-guardian", "mcp-server"],
+                        }
+                    },
                 }
             )
         )
         monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(config_dir))
+        monkeypatch.delenv("OPENCODE_CONFIG", raising=False)
+        monkeypatch.setattr(
+            "ai_guardian.ide_paths._opencode_system_config_directories", lambda: []
+        )
+        monkeypatch.setattr(
+            "ai_guardian.ide_paths._opencode_managed_preference_files", lambda: []
+        )
 
         with (
             mock.patch(
