@@ -32,8 +32,18 @@ budget_tokens: 1000
   3.10 target), error-level Pylint, changed-module Mypy, JSON parsing, and
   `git diff --check` pass. Full-package Mypy still reports 14 known errors in
   untouched `skill_discovery.py` and `secret_validator.py`.
-- No SQLite decision/migration, commit, push, PR, or issue closure. Changes remain
-  local and uncommitted. **Next:** user review, then normal external DAF completion.
+- Follow-up for GHAS review on PR #2639 / CodeQL alert #328: sensitive violation
+  persistence now recursively omits raw `matched_text` and partial `pattern_hint`
+  values for secret/PII finding types without mutating interactive caller data.
+  Safe location/rule metadata remains. Added storage-boundary regressions; no
+  analyzer suppression. **Validation:** 240 related unit/UX tests pass, full
+  Ruff/Black/error-level Pylint and changed-module Mypy pass. Full-package Mypy
+  remains at 14 known errors in untouched `skill_discovery.py` and
+  `secret_validator.py`. GitHub CodeQL must re-analyze a pushed PR head to confirm
+  alert resolution.
+- No SQLite decision/migration or issue closure. Branch `2637` has open draft PR
+  #2639; the next step is to publish this follow-up on that branch and inspect the
+  fresh CodeQL analysis before treating alert #328 as resolved.
 
 ## Issue #2633 implementation — 2026-11-02
 

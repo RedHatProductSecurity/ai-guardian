@@ -234,3 +234,65 @@ def test_resolution_rewrites_skip_corrupt_and_non_object_lines(tmp_path):
     assert "resolved_action" not in unresolved_entries[0]
     assert "resolved_note" not in unresolved_entries[0]
     assert unresolved_entries[1] == second
+
+
+@pytest.mark.parametrize(
+    "violation_type",
+    ["secret_detected", "image_secret_detected", "pii_detected"],
+)
+def test_sensitive_violation_storage_omits_values_and_partial_hints(
+    tmp_path, violation_type
+):
+    log_path = tmp_path / "violations.jsonl"
+    logger = _logger(log_path)
+    sensitive_value = "synthetic-confidential-probe-value"
+    partial_hint = "synthetic.*value"
+    blocked = {
+        "file_path": "/repo/config.txt",
+        "line_number": 17,
+        "rule_id": "synthetic-rule",
+        "matched_text": sensitive_value,
+        "pattern_hint": partial_hint,
+        "findings": [
+            {
+                "line_number": 17,
+                "matched_text": sensitive_value,
+                "pattern_hint": partial_hint,
+            }
+        ],
+    }
+
+    logger.log_violation(
+        violation_type,
+        blocked=blocked,
+        context={"tool_use_id": "safe-tool-id"},
+    )
+
+    serialized = log_path.read_text(encoding="utf-8")
+    stored = json.loads(serialized)
+    assert sensitive_value not in serialized
+    assert partial_hint not in serialized
+    assert stored["blocked"]["file_path"] == "/repo/config.txt"
+    assert stored["blocked"]["line_number"] == 17
+    assert stored["blocked"]["rule_id"] == "synthetic-rule"
+    assert "matched_text" not in stored["blocked"]
+    assert "pattern_hint" not in stored["blocked"]
+    assert "matched_text" not in stored["blocked"]["findings"][0]
+    assert "pattern_hint" not in stored["blocked"]["findings"][0]
+    # Sanitizing persisted data must not alter the caller's in-memory record.
+    assert blocked["matched_text"] == sensitive_value
+    assert blocked["pattern_hint"] == partial_hint
+
+
+def test_non_sensitive_violation_storage_keeps_matched_text(tmp_path):
+    log_path = tmp_path / "violations.jsonl"
+    logger = _logger(log_path)
+
+    logger.log_violation(
+        "prompt_injection",
+        blocked={"matched_text": "ignore previous instructions"},
+        context={},
+    )
+
+    stored = json.loads(log_path.read_text(encoding="utf-8"))
+    assert stored["blocked"]["matched_text"] == "ignore previous instructions"
