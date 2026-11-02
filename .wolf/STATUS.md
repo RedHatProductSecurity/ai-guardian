@@ -58,12 +58,19 @@ budget_tokens: 1000
   regression tests were updated. **Validation:** 625 focused unit/UX tests pass;
   Ruff, Black, error-level Pylint, changed-module Mypy, and `git diff --check`
   pass. Commit `60630c32` is pushed on branch `2637`. Fresh CodeQL run
-  `41490674947` passed; Python analysis reported zero results, and alerts #328/#329
-  are absent from the PR's open-alert query. Other CI matrix checks are still
-  pending; PR #2639 remains draft.
+  `41490674947` passed with zero Python results and alerts #328/#329 absent from
+  the PR's open-alert query. The Python 3.14 job in run `41491648813` then found
+  eight test failures: seven outdated expectations for the minimal sensitive
+  envelope and one missing fixed label for `middleware_paused`. The tests now
+  assert validation details are not persisted while caller data remains intact;
+  the label allowlist also preserves `middleware_paused`, `scan_finding`, and
+  `canary_detection`. **Validation:** 104 affected unit tests and 40 violation
+  guidance/mirroring UX tests pass, with Ruff, Black, Pylint, changed-module Mypy,
+  and `git diff --check` passing. Verify fresh PR checks, including CodeQL, on
+  this CI-contract correction.
 - No SQLite decision/migration or issue closure. Branch `2637` has open draft PR
-  #2639; publish this follow-up on that branch and inspect the fresh CodeQL
-  analysis before treating alert #329 as resolved.
+  #2639; CodeQL was clear on `60630c32`, and the remaining task is to verify the
+  resulting PR checks on this follow-up.
 
 ## Issue #2633 implementation — 2026-11-02
 

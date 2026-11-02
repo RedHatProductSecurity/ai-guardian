@@ -88,6 +88,12 @@ def _safe_violation_label(violation_type: str) -> str:
         return "annotation_suppressed"
     if violation_type == "bash_exfil":
         return "bash_exfil"
+    if violation_type == "middleware_paused":
+        return "middleware_paused"
+    if violation_type == "scan_finding":
+        return "scan_finding"
+    if violation_type == "canary_detection":
+        return "canary_detection"
     return "other"
 
 
