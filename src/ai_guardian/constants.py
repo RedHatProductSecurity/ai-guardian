@@ -419,6 +419,11 @@ VIOLATION_FILTER_TYPES = [
         "Hard-coded secrets detected in files or prompts (API keys, tokens, passwords)",
     ),
     (
+        "Sensitive Finding",
+        "sensitive_finding",
+        "Secret and PII events; per-finding details are not retained in history",
+    ),
+    (
         "Secret Redaction",
         "secret_redaction",
         "Secrets found in tool output and redacted before reaching the AI model",

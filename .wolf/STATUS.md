@@ -32,20 +32,20 @@ budget_tokens: 1000
   3.10 target), error-level Pylint, changed-module Mypy, JSON parsing, and
   `git diff --check` pass. Full-package Mypy still reports 14 known errors in
   untouched `skill_discovery.py` and `secret_validator.py`.
-- Follow-up for GHAS review on PR #2639 / CodeQL alert #328: commit `203d6521`
-  still produced one high alert at the JSONL write (`logger.py:185`). The CodeQL
-  analysis itself succeeded; its PR gate failed on the alert, with an additional
-  warning that the Rust default-setup configuration is absent on `main`. The
-  reported sources include the violation type and scanner finding metadata. The
-  helper-based allowlist projection did not break the analyzer's taint flow.
-- Current local follow-up moves the sensitive-record projection into
-  `log_violation` using explicit literal-key copies, including nested locations,
-  and maps sensitive event types to fixed category values. It still omits raw
-  values/snippets and preserves caller objects. **Validation:** 250 related
-  unit/UX tests pass; Ruff, Black, error-level Pylint, and changed-module Mypy
-  pass. This follow-up is not yet committed/pushed; CI/CodeQL must analyze it
-  before alert #328 can be considered resolved. Full-package Mypy remains at 14
-  known errors in untouched `skill_discovery.py` and `secret_validator.py`.
+- Follow-up for GHAS review on PR #2639 / CodeQL alert #328: commits `203d6521`
+  and `9b846b49` retained the high alert at the JSONL append despite helper and
+  inline field projections. The user authorized a minimal sensitive-event
+  envelope. Secret, image-secret, and PII writes now retain only ID, timestamp,
+  severity, fixed generic `sensitive_finding` category, and resolution state;
+  no blocked/source/context/suggestion/policy/allowlist fields are persisted.
+  Caller objects and type-specific aggregate counters remain unchanged. The
+  Console now labels the generic category, explains why details are absent, and
+  reads secret aggregate statistics from counters. Docs and regression/UX tests
+  were updated. **Validation:** 332 focused unit/UX tests pass; Ruff, Black,
+  error-level Pylint, and changed-module Mypy pass. Full-package Mypy remains at
+  14 known errors in untouched `skill_discovery.py` and `secret_validator.py`.
+  Current changes are local and not yet committed/pushed; fresh CodeQL analysis
+  must confirm whether alert #328 is cleared.
 - No SQLite decision/migration or issue closure. Branch `2637` has open draft PR
   #2639; the next step is to publish this follow-up on that branch and inspect the
   fresh CodeQL analysis before treating alert #328 as resolved.

@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~19873 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21413 tok)
-- `CHANGELOG.md` — Change log (~80547 tok)
+- `CHANGELOG.md` — Change log (~80548 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -927,7 +927,7 @@
 - `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~20164 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9506 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
-- `OBSERVABILITY.md` — Observability (~3542 tok)
+- `OBSERVABILITY.md` — Observability (~3569 tok)
 - `OPENCODE.md` — OpenCode Support (~3872 tok)
 - `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~8431 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
@@ -947,7 +947,7 @@
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7423 tok)
 - `UBUNTU_VM.md` — Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release) (~8328 tok)
 - `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3729 tok)
-- `VIOLATION_LOGGING.md` — Violation Logging (~4439 tok)
+- `VIOLATION_LOGGING.md` — Violation Logging (~4516 tok)
 
 ## docs/api/
 
@@ -1065,7 +1065,7 @@
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~13209 tok)
 - `cli.py` — main (~31054 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
-- `constants.py` — Constants for AI Guardian. (~5433 tok)
+- `constants.py` — Constants for AI Guardian. (~5476 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
 - `developer_session.py` — Trusted developer-session configuration. (~485 tok)
 - `doctor.py` — URL configuration (~32227 tok)

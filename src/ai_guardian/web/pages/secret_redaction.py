@@ -120,19 +120,14 @@ def _parse_enabled(raw):
 
 
 def _load_redaction_stats():
-    """Load redaction statistics from violation logger."""
-    from ai_guardian.web.config_helpers import load_web_violations
+    """Load aggregate counts without depending on sensitive event details."""
+    from ai_guardian.violations.counter import ViolationCounter
 
-    result = load_web_violations(violation_type="secret_detected")
-    violations = result.get("violations", []) if result else []
-    if not violations:
+    counters = ViolationCounter().get_counters()
+    totals = counters.get("violation_totals", {})
+    if not isinstance(totals, dict):
         return 0, {}
-    by_type = {}
-    for v in violations:
-        blocked = v.get("blocked", {}) or {}
-        stype = blocked.get("secret_type", "unknown")
-        by_type[stype] = by_type.get(stype, 0) + 1
-    return len(violations), by_type
+    return totals.get("secret_detected", 0), {}
 
 
 def _render_toggle(
@@ -436,6 +431,10 @@ def create_secret_redaction_page(service, daemon_name: str):
                 # --- Statistics ---
                 with ui.card().classes("w-full"):
                     ui.label("Redaction Statistics").classes("text-lg font-bold")
+                    ui.label(
+                        "Only aggregate counts are retained; per-finding details and "
+                        "secret types are omitted from violation history for privacy."
+                    ).classes("text-xs text-grey-6")
                     total, by_type = await run.io_bound(_load_redaction_stats)
                     if total is None:
                         ui.label("Violation logging not available.").classes(

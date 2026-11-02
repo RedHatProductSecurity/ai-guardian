@@ -216,10 +216,10 @@ class TestSecretRedactionViolationFields:
                 assert "line_number" in blocked
 
 
-class TestPIIViolationFilePath:
-    """Test that pii_detected violations include file_path and line_number."""
+class TestSensitiveViolationHistory:
+    """Sensitive detections persist only the minimal audit envelope."""
 
-    def test_pretooluse_pii_has_file_path(self):
+    def test_pretooluse_pii_uses_minimal_history(self):
         from ai_guardian.violations.logger import ViolationLogger
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -239,11 +239,11 @@ class TestPIIViolationFilePath:
                 )
                 violations = vl.get_recent_violations(limit=10)
                 assert len(violations) == 1
-                blocked = violations[0]["blocked"]
-                assert blocked["file_path"] == "/home/user/data.csv"
-                assert "line_number" in blocked
+                assert violations[0]["violation_type"] == "sensitive_finding"
+                assert "blocked" not in violations[0]
+                assert "context" not in violations[0]
 
-    def test_posttooluse_pii_has_null_file_path(self):
+    def test_posttooluse_pii_uses_minimal_history(self):
         from ai_guardian.violations.logger import ViolationLogger
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -263,9 +263,9 @@ class TestPIIViolationFilePath:
                 )
                 violations = vl.get_recent_violations(limit=10)
                 assert len(violations) == 1
-                blocked = violations[0]["blocked"]
-                assert blocked["file_path"] is None
-                assert blocked["line_number"] is None
+                assert violations[0]["violation_type"] == "sensitive_finding"
+                assert "blocked" not in violations[0]
+                assert "context" not in violations[0]
 
 
 class TestConfigFileExfilViolationFields:
@@ -295,10 +295,10 @@ class TestConfigFileExfilViolationFields:
                 assert "line_number" in blocked
 
 
-class TestSecretDetectedViolationFieldsUnchanged:
-    """Verify that secret_detected violations still work correctly with existing fields."""
+class TestSecretDetectedViolationFieldsOmitted:
+    """Verify secret findings are persisted without source-derived detail."""
 
-    def test_line_number_preserved(self):
+    def test_secret_details_are_not_persisted(self):
         from ai_guardian.violations.logger import ViolationLogger
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -323,16 +323,17 @@ class TestSecretDetectedViolationFieldsUnchanged:
                 )
                 violations = vl.get_recent_violations(limit=10)
                 assert len(violations) == 1
-                blocked = violations[0]["blocked"]
-                assert blocked["file_path"] == "/repo/config.py"
-                assert blocked["line_number"] == 42
-                assert blocked["end_line"] == 42
+                assert violations[0]["violation_type"] == "sensitive_finding"
+                assert "blocked" not in violations[0]
+                assert "context" not in violations[0]
 
 
-class TestAllViolationTypesHaveFilePath:
-    """Integration test: every violation type's blocked dict includes file_path."""
+class TestViolationHistoryFilePathFields:
+    """Non-sensitive violation entries preserve their file-path metadata."""
 
-    def _log_and_get(self, violation_type, blocked, context=None, severity="warning"):
+    def _log_and_get_entry(
+        self, violation_type, blocked, context=None, severity="warning"
+    ):
         from ai_guardian.violations.logger import ViolationLogger
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -346,7 +347,12 @@ class TestAllViolationTypesHaveFilePath:
                 )
                 violations = vl.get_recent_violations(limit=10)
                 assert len(violations) == 1
-                return violations[0]["blocked"]
+                return violations[0]
+
+    def _log_and_get(self, violation_type, blocked, context=None, severity="warning"):
+        return self._log_and_get_entry(
+            violation_type, blocked, context=context, severity=severity
+        )["blocked"]
 
     def test_tool_permission_has_file_path_key(self):
         blocked = self._log_and_get(
@@ -373,8 +379,8 @@ class TestAllViolationTypesHaveFilePath:
         )
         assert "file_path" in blocked
 
-    def test_secret_detected_has_file_path_key(self):
-        blocked = self._log_and_get(
+    def test_secret_detected_uses_minimal_history_entry(self):
+        entry = self._log_and_get_entry(
             "secret_detected",
             {
                 "file_path": "/repo/config.py",
@@ -385,8 +391,8 @@ class TestAllViolationTypesHaveFilePath:
             },
             severity="critical",
         )
-        assert "file_path" in blocked
-        assert "line_number" in blocked
+        assert entry["violation_type"] == "sensitive_finding"
+        assert "blocked" not in entry
 
     def test_prompt_injection_has_file_path_key(self):
         blocked = self._log_and_get(
@@ -432,8 +438,8 @@ class TestAllViolationTypesHaveFilePath:
         assert "file_path" in blocked
         assert "line_number" in blocked
 
-    def test_pii_detected_has_file_path_key(self):
-        blocked = self._log_and_get(
+    def test_pii_detected_uses_minimal_history_entry(self):
+        entry = self._log_and_get_entry(
             "pii_detected",
             {
                 "tool": "Read",
@@ -444,8 +450,8 @@ class TestAllViolationTypesHaveFilePath:
                 "pii_types": ["email"],
             },
         )
-        assert "file_path" in blocked
-        assert "line_number" in blocked
+        assert entry["violation_type"] == "sensitive_finding"
+        assert "blocked" not in entry
 
     def test_config_file_exfil_has_file_path_key(self):
         blocked = self._log_and_get(

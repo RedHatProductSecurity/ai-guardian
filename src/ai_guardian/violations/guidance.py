@@ -55,6 +55,12 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
             "exception is generated for this finding.",
             "",
         )
+    if vtype == "sensitive_finding":
+        return (
+            "A secret or personal-data finding was recorded. Per-finding details "
+            "are intentionally not retained in violation history for privacy.",
+            "",
+        )
     blocked = violation.get("blocked", {})
     if not isinstance(blocked, dict):
         blocked = {}
