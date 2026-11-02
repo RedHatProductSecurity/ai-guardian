@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Experimental WSL2 platform guidance (#2593):** Document Linux-distribution
+  installation and scanner boundaries, browser-console use from Windows, and
+  manual localhost troubleshooting. Clarify that WSL1 and comprehensive WSL2
+  testing are not covered, and that the reported initial stall is undiagnosed.
 - **Opt-in remote violation history mirroring (#2633):** Allow a receiving
   daemon's tray to import curated summaries from reachable remote daemons into
   separate per-daemon JSONL files included in the local history view. Mirrored

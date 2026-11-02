@@ -50,6 +50,19 @@ ai-guardian console --web --port 8080
 The console binds to `127.0.0.1` by default. Keep the host restricted to a
 trusted interface unless access control and network isolation are configured.
 
+### WSL2 (Experimental)
+
+Run the Console inside the WSL2 Linux distribution, for example with
+`ai-guardian console --web`. The web server is a Linux process in WSL; when WSL
+localhost forwarding is available, you can open its printed localhost URL in a
+Windows browser. Using that browser does not move the server to Windows. Tray
+and native-dialog availability depends on the Linux graphical-session and
+desktop integration, and is not guaranteed by this experimental platform
+status. WSL1 is not included, and WSL2 has not received comprehensive platform
+testing. See
+[WSL2 console troubleshooting](TROUBLESHOOTING.md#wsl2-console-troubleshooting)
+for manual startup and connection checks.
+
 The historical `ai-guardian tui` command remains as an alias for
 `ai-guardian console`; it now opens the browser console.
 

@@ -237,6 +237,27 @@ AI Guardian supports the following platforms and architectures:
 - ARM64
 - x32
 
+### WSL2 (Experimental)
+
+AI Guardian has experimental support when installed and run inside a WSL2 Linux
+distribution. From that distribution, install AI Guardian as on Linux:
+
+```bash
+uv tool install ai-guardian
+# or: pip install ai-guardian
+```
+
+Install any optional scanners from WSL as well, using the Linux instructions
+and corresponding Linux packages or binaries; this does not add Windows scanner
+binaries to the WSL environment. Optional scanner availability still depends on
+each engine's Linux package and release support.
+
+This is not a guarantee for every Linux distribution, scanner, or architecture,
+and WSL2 does not have comprehensive CI or platform-test coverage. WSL1 is not
+included. See the [Console Guide](CONSOLE.md#wsl2-experimental) for browser and
+desktop-integration caveats. [WSL2 troubleshooting](TROUBLESHOOTING.md#wsl2-console-troubleshooting)
+covers manual browser and localhost checks.
+
 ## Troubleshooting
 
 ### Scanner Not Found After Installation

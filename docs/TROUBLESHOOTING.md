@@ -11,6 +11,28 @@ ai-guardian doctor
 ai-guardian doctor --json
 ```
 
+## WSL2 Console Troubleshooting
+
+WSL2 support is experimental; WSL1 is not included, and these steps are
+diagnostic rather than a confirmed fix. The reported initial Console stall has
+not been diagnosed, and retrying is not a guaranteed remedy.
+
+To start the Console inside the Linux distribution without automatically
+opening a browser, run:
+
+```bash
+ai-guardian console --web --no-open --port 8080
+```
+
+While that process is running, manually open `http://127.0.0.1:8080/` in a
+browser available to you. A Windows browser can reach the Linux-hosted Console
+when WSL localhost forwarding and local network policy allow it. If the page
+does not connect, check that the Console is still running, that port 8080 is
+available, and that WSL/host networking permits the connection; these checks do
+not establish the cause of the reported stall. See the
+[Console Guide](CONSOLE.md#wsl2-experimental) for the WSL server/browser
+distinction and desktop-integration limitations.
+
 ## Daemon Startup Issues
 
 ### Stale Lock File Blocking Daemon Start
