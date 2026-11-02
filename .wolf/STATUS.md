@@ -57,8 +57,10 @@ budget_tokens: 1000
   policy-decision fields, and leaves caller data/CLI results unchanged. Docs and
   regression tests were updated. **Validation:** 625 focused unit/UX tests pass;
   Ruff, Black, error-level Pylint, changed-module Mypy, and `git diff --check`
-  pass. The follow-up is committed on branch `2637` and awaits a fresh CodeQL
-  analysis to determine whether #329 clears.
+  pass. Commit `60630c32` is pushed on branch `2637`. Fresh CodeQL run
+  `41490674947` passed; Python analysis reported zero results, and alerts #328/#329
+  are absent from the PR's open-alert query. Other CI matrix checks are still
+  pending; PR #2639 remains draft.
 - No SQLite decision/migration or issue closure. Branch `2637` has open draft PR
   #2639; publish this follow-up on that branch and inspect the fresh CodeQL
   analysis before treating alert #329 as resolved.
