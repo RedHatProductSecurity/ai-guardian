@@ -266,7 +266,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   severity, generic category, and resolution state for secret, image-secret, and
   PII findings. Ask-mode history omits matched input/error text, and CLI scan
   history omits finding messages/snippets; callers and CLI output retain their
-  original data. Generic records persist recognized type/severity labels only.
+  original data. Generic records persist recognized type/severity labels only,
+  including the middleware-paused and CLI fallback/canary categories.
 - **SSRF destination classification (#2632):** Normalize a terminal DNS root dot,
   block the RFC 2544 benchmarking range and IPv6 unspecified address, and apply
   existing destination policy to IPv4 endpoints embedded in the well-known NAT64

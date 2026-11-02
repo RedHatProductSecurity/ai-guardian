@@ -364,3 +364,17 @@ def test_non_sensitive_violation_normalizes_unknown_severity(tmp_path):
     stored = json.loads(log_path.read_text(encoding="utf-8"))
     assert stored["severity"] == "warning"
     assert stored["policy_decision"]["severity"] == "warning"
+
+
+@pytest.mark.parametrize(
+    "violation_type", ["middleware_paused", "scan_finding", "canary_detection"]
+)
+def test_known_non_enum_violation_labels_are_preserved(tmp_path, violation_type):
+    log_path = tmp_path / "violations.jsonl"
+    logger = _logger(log_path)
+
+    logger.log_violation(violation_type, blocked={}, context={})
+
+    stored = json.loads(log_path.read_text(encoding="utf-8"))
+    assert stored["violation_type"] == violation_type
+    assert stored["policy_decision"]["violation_type"] == violation_type

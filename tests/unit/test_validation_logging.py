@@ -199,14 +199,23 @@ class TestApplySecretValidationReturnType:
 
 
 class TestValidationFieldInViolation:
-    """Test that validation info appears in logged violation data."""
+    """Test that sensitive event history omits validation detail."""
 
     @pytest.fixture(autouse=True)
     def _patch_logger(self):
         with patch("ai_guardian.scanners.secret_scanning.HAS_VIOLATION_LOGGER", True):
             yield
 
-    def test_secret_violation_includes_validation(self):
+    @staticmethod
+    def _assert_sensitive_envelope(mock_logger, expected_type, expected_severity):
+        mock_logger.log_sensitive_finding.assert_called_once()
+        mock_logger.log_violation.assert_not_called()
+        kwargs = mock_logger.log_sensitive_finding.call_args.kwargs
+        assert kwargs.keys() == {"violation_type", "severity", "violation_id"}
+        assert kwargs["violation_type"] == expected_type
+        assert kwargs["severity"] == expected_severity
+
+    def test_secret_violation_omits_validation_from_history(self):
         from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation
 
         mock_logger = MagicMock()
@@ -223,13 +232,11 @@ class TestValidationFieldInViolation:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert "validation" in blocked
-        assert blocked["validation"]["status"] == "verified"
-        assert blocked["validation"]["elapsed_ms"] == 156
+        self._assert_sensitive_envelope(mock_logger, "secret_detected", "critical")
+        assert details["validation"]["status"] == "verified"
+        assert details["validation"]["elapsed_ms"] == 156
 
-    def test_secret_violation_no_validation_when_absent(self):
+    def test_secret_violation_without_validation_uses_minimal_history(self):
         from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation
 
         mock_logger = MagicMock()
@@ -241,11 +248,9 @@ class TestValidationFieldInViolation:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert "validation" not in blocked
+        self._assert_sensitive_envelope(mock_logger, "secret_detected", "critical")
 
-    def test_finding_violation_includes_validation(self):
+    def test_pii_finding_omits_validation_from_history(self):
         from ai_guardian.scanners.secret_scanning import _log_finding_violation
 
         mock_logger = MagicMock()
@@ -261,12 +266,10 @@ class TestValidationFieldInViolation:
             },
         }
         _log_finding_violation("test.py", {}, details, violation_logger=mock_logger)
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert "validation" in blocked
-        assert blocked["validation"]["status"] == "unverified"
+        self._assert_sensitive_envelope(mock_logger, "pii_detected", "high")
+        assert details["validation"]["status"] == "unverified"
 
-    def test_finding_violation_no_validation_when_absent(self):
+    def test_pii_finding_without_validation_uses_minimal_history(self):
         from ai_guardian.scanners.secret_scanning import _log_finding_violation
 
         mock_logger = MagicMock()
@@ -277,12 +280,10 @@ class TestValidationFieldInViolation:
             "line_number": 10,
         }
         _log_finding_violation("test.py", {}, details, violation_logger=mock_logger)
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert "validation" not in blocked
+        self._assert_sensitive_envelope(mock_logger, "pii_detected", "high")
 
-    def test_inactive_validation_status_in_violation(self):
-        """Inactive secrets must still produce a violation log entry."""
+    def test_inactive_validation_status_is_not_persisted(self):
+        """Inactive secrets still produce an envelope without validation text."""
         from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation
 
         mock_logger = MagicMock()
@@ -299,12 +300,11 @@ class TestValidationFieldInViolation:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert blocked["validation"]["status"] == "inactive"
-        assert blocked["validation"]["message"] == "Token returned 401"
+        self._assert_sensitive_envelope(mock_logger, "secret_detected", "critical")
+        assert details["validation"]["status"] == "inactive"
+        assert details["validation"]["message"] == "Token returned 401"
 
-    def test_error_validation_status_in_violation(self):
+    def test_error_validation_status_is_not_persisted(self):
         from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation
 
         mock_logger = MagicMock()
@@ -321,7 +321,6 @@ class TestValidationFieldInViolation:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert blocked["validation"]["status"] == "error"
-        assert "Timeout" in blocked["validation"]["message"]
+        self._assert_sensitive_envelope(mock_logger, "secret_detected", "critical")
+        assert details["validation"]["status"] == "error"
+        assert "Timeout" in details["validation"]["message"]

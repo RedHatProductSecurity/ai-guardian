@@ -41,16 +41,21 @@ class TestLogViolationsFlagScan:
             MockLogger.return_value = mock_instance
             _log_scan_findings(findings, args)
 
-            assert mock_instance.log_violation.call_count == 2
+            mock_instance.log_sensitive_finding.assert_called_once()
+            sensitive_call = mock_instance.log_sensitive_finding.call_args
+            assert sensitive_call.kwargs["violation_type"] == "secret_detected"
+            assert sensitive_call.kwargs["severity"] == "warning"
+            assert mock_instance.log_violation.call_count == 1
 
-            first_call = mock_instance.log_violation.call_args_list[0]
-            assert first_call.kwargs["violation_type"] == "secret_detected"
-            assert first_call.kwargs["blocked"]["rule_id"] == "SECRET-001"
-            assert first_call.kwargs["context"]["hook_event"] == "scan"
-            assert first_call.kwargs["context"]["ide_type"] == "cli"
-
-            second_call = mock_instance.log_violation.call_args_list[1]
-            assert second_call.kwargs["violation_type"] == "prompt_injection"
+            generic_call = mock_instance.log_violation.call_args
+            assert generic_call.kwargs["violation_type"] == "prompt_injection"
+            assert generic_call.kwargs["blocked"] == {
+                "rule_id": "PROMPT-INJECTION-001",
+                "file_path": "prompt.txt",
+                "line_number": 1,
+            }
+            assert generic_call.kwargs["context"]["hook_event"] == "scan"
+            assert generic_call.kwargs["context"]["ide_type"] == "cli"
 
     def test_log_violations_not_called_when_flag_absent(self, tmp_path):
         """Without --log-violations, no violations are logged."""
