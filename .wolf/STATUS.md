@@ -49,11 +49,17 @@ budget_tokens: 1000
   unit/UX tests pass; Ruff, Black,
   error-level Pylint, and changed-module Mypy pass. Full-package Mypy remains at
   14 known errors in untouched `skill_discovery.py` and `secret_validator.py`.
-  Routing follow-up is committed on branch `2637`; fresh CodeQL analysis must
-  confirm whether alert #328 is cleared.
+  Fresh CodeQL on `93ceeba9` produced two findings: scanner-supplied severity
+  reached the minimal envelope, and CodeQL did not recognize set-membership
+  sensitive-type guards before the generic sink. Local follow-up now maps
+  severity through fixed literal labels and uses explicit type comparisons at
+  each boundary. **Validation:** 623 focused unit/UX tests pass; Ruff, Black,
+  error-level Pylint, changed-module Mypy, and `git diff --check` pass. This
+  follow-up is committed on branch `2637`; the next fresh CodeQL run must
+  determine whether alert #328/#329 clear.
 - No SQLite decision/migration or issue closure. Branch `2637` has open draft PR
-  #2639; the next step is to publish this follow-up on that branch and inspect the
-  fresh CodeQL analysis before treating alert #328 as resolved.
+  #2639; publish this follow-up on that branch and inspect the fresh CodeQL
+  analysis before treating alerts #328/#329 as resolved.
 
 ## Issue #2633 implementation — 2026-11-02
 
