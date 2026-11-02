@@ -123,7 +123,7 @@ class TestRedactViolationTypes:
 
 class TestLogSecretDetectionViolationRedacts:
     @patch("ai_guardian.scanners.secret_scanning.ViolationLogger")
-    def test_no_raw_secret_in_logged_blocked(self, mock_logger_cls):
+    def test_secret_detection_uses_minimal_sensitive_log(self, mock_logger_cls):
         from ai_guardian.scanners.secret_scanning import (
             _log_secret_detection_violation,
         )
@@ -147,12 +147,15 @@ class TestLogSecretDetectionViolationRedacts:
             },
             violation_logger=mock_logger,
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert raw_secret not in str(blocked)
+        mock_logger.log_sensitive_finding.assert_called_once()
+        args = mock_logger.log_sensitive_finding.call_args.kwargs
+        assert args["violation_type"] == "secret_detected"
+        assert args["severity"] == "critical"
+        mock_logger.log_violation.assert_not_called()
+        assert raw_secret not in str(mock_logger.log_sensitive_finding.call_args)
 
     @patch("ai_guardian.scanners.secret_scanning.ViolationLogger")
-    def test_non_file_secret_gets_pattern_hint(self, mock_logger_cls):
+    def test_prompt_secret_uses_minimal_sensitive_log(self, mock_logger_cls):
         from ai_guardian.scanners.secret_scanning import (
             _log_secret_detection_violation,
         )
@@ -167,12 +170,12 @@ class TestLogSecretDetectionViolationRedacts:
             },
             violation_logger=mock_logger,
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert raw_secret not in str(blocked)
-        findings = blocked.get("findings", [])
-        if findings:
-            assert findings[0].get("pattern_hint") == "AKIA.*MPLE"
+        mock_logger.log_sensitive_finding.assert_called_once()
+        args = mock_logger.log_sensitive_finding.call_args.kwargs
+        assert args["violation_type"] == "secret_detected"
+        assert args["severity"] == "critical"
+        assert raw_secret not in str(mock_logger.log_sensitive_finding.call_args)
+        mock_logger.log_violation.assert_not_called()
 
 
 class TestLogAskDecisionRedacts:
@@ -190,11 +193,15 @@ class TestLogAskDecisionRedacts:
             decision=AskDecision.BLOCK,
             matched_text="AKIAIOSFODNN7EXAMPLE",
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert "AKIAIOSFODNN7EXAMPLE" not in str(blocked)
-        assert blocked.get("pattern_hint") == "AKIA.*MPLE"
-        assert "matched_text" not in blocked
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert (
+            mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"]
+            == "secret_detected"
+        )
+        assert "AKIAIOSFODNN7EXAMPLE" not in str(
+            mock_logger.log_sensitive_finding.call_args
+        )
+        mock_logger.log_violation.assert_not_called()
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_pii_type_redacts_matched_text(self, mock_logger_cls):
@@ -210,11 +217,15 @@ class TestLogAskDecisionRedacts:
             decision=AskDecision.BLOCK,
             matched_text="4111111111111111",
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert "4111111111111111" not in str(blocked)
-        assert blocked.get("pattern_hint") == "4111.*1111"
-        assert "matched_text" not in blocked
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert (
+            mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"]
+            == "pii_detected"
+        )
+        assert "4111111111111111" not in str(
+            mock_logger.log_sensitive_finding.call_args
+        )
+        mock_logger.log_violation.assert_not_called()
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_non_secret_type_keeps_matched_text(self, mock_logger_cls):

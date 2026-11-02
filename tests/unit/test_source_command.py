@@ -83,9 +83,9 @@ class TestSanitizeSourceCommand:
 
 
 class TestSourceCommandInViolationDicts:
-    """Test that source_command appears in violation dicts for tool_result violations."""
+    """Sensitive tool-result violations do not persist command details."""
 
-    def test_pii_violation_includes_source_command(self):
+    def test_pii_violation_omits_source_command(self):
         from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
         from ai_guardian.violations.log_violation import ScanContext, log_violation
 
@@ -106,10 +106,13 @@ class TestSourceCommandInViolationDicts:
                 "command": "grep -rn 'pattern' src/",
             },
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert blocked["source_command"] == "grep -rn 'pattern' src/"
-        assert blocked["command"] == "grep -rn 'pattern' src/"
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert mock_logger.log_sensitive_finding.call_args.kwargs == {
+            "violation_type": "pii_detected",
+            "severity": result.severity,
+            "violation_id": result.id,
+        }
+        mock_logger.log_violation.assert_not_called()
 
     def test_pii_violation_omits_source_command_for_regular_files(self):
         from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
@@ -128,6 +131,5 @@ class TestSourceCommandInViolationDicts:
             ScanContext(),
             violation_logger=mock_logger,
         )
-        mock_logger.log_violation.assert_called_once()
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert "source_command" not in blocked
+        mock_logger.log_sensitive_finding.assert_called_once()
+        mock_logger.log_violation.assert_not_called()

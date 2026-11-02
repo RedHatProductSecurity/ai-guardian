@@ -470,10 +470,7 @@ def _log_ask_decision(
     try:
         from ai_guardian.ui.ask_dialog import AskDecision
 
-        from ai_guardian.violations.redact import (
-            REDACT_VIOLATION_TYPES,
-            redact_secret_hint,
-        )
+        from ai_guardian.violations.redact import REDACT_VIOLATION_TYPES
 
         vlogger = ViolationLogger()
 
@@ -482,23 +479,6 @@ def _log_ask_decision(
             if hasattr(violation_type, "value")
             else str(violation_type)
         )
-        if vtype_str in REDACT_VIOLATION_TYPES:
-            persisted_text = redact_secret_hint(matched_text) if matched_text else ""
-        else:
-            persisted_text = matched_text or ""
-
-        blocked_info = {
-            "description": (error_msg[:200] if error_msg else str(violation_type)),
-        }
-        if vtype_str in REDACT_VIOLATION_TYPES:
-            if persisted_text and persisted_text != "[redacted]":
-                blocked_info["pattern_hint"] = persisted_text
-        else:
-            blocked_info["matched_text"] = persisted_text
-        if file_path:
-            blocked_info["file_path"] = file_path
-        if line_number:
-            blocked_info["line_number"] = line_number
         _DECISION_MAP = {
             AskDecision.BLOCK: ("block", "blocked"),
             AskDecision.BLOCK_ALL: ("block_all", "blocked"),
@@ -509,25 +489,44 @@ def _log_ask_decision(
         decision_str, action_taken = _DECISION_MAP.get(
             decision, ("allow_once", "allowed")
         )
-        context_ide_type = (
-            ide_type.value if hasattr(ide_type, "value") else str(ide_type or "unknown")
-        )
-        ctx = {
-            "ide_type": context_ide_type,
-            "ask_decision": decision_str,
-            "action_taken": action_taken,
-        }
-        if dialog_wait_ms > 0:
-            ctx["dialog_wait_ms"] = round(dialog_wait_ms, 1)
-        from ai_guardian.scanners.scan_result import generate_violation_id
+        if vtype_str in REDACT_VIOLATION_TYPES:
+            from ai_guardian.scanners.scan_result import generate_violation_id
 
-        vlogger.log_violation(
-            violation_type=violation_type,
-            blocked=blocked_info,
-            context=ctx,
-            severity="info",
-            violation_id=generate_violation_id(),
-        )
+            vlogger.log_sensitive_finding(
+                violation_type=vtype_str,
+                severity="info",
+                violation_id=generate_violation_id(),
+            )
+        else:
+            blocked_info = {
+                "description": (error_msg[:200] if error_msg else str(violation_type)),
+                "matched_text": matched_text or "",
+            }
+            if file_path:
+                blocked_info["file_path"] = file_path
+            if line_number:
+                blocked_info["line_number"] = line_number
+            context_ide_type = (
+                ide_type.value
+                if hasattr(ide_type, "value")
+                else str(ide_type or "unknown")
+            )
+            ctx = {
+                "ide_type": context_ide_type,
+                "ask_decision": decision_str,
+                "action_taken": action_taken,
+            }
+            if dialog_wait_ms > 0:
+                ctx["dialog_wait_ms"] = round(dialog_wait_ms, 1)
+            from ai_guardian.scanners.scan_result import generate_violation_id
+
+            vlogger.log_violation(
+                violation_type=violation_type,
+                blocked=blocked_info,
+                context=ctx,
+                severity="info",
+                violation_id=generate_violation_id(),
+            )
 
         # Record allowed findings for transcript scanner dedup within this invocation (#1364, #1439).
         # Uses invocation_allowed_findings (local set) so Allow Once does not persist to next invocation.

@@ -1601,11 +1601,19 @@ def _log_scan_findings(findings: list, args) -> None:
     """Write scan findings to violations.jsonl."""
     try:
         from ai_guardian.violations.logger import ViolationLogger
+        from ai_guardian.violations.redact import REDACT_VIOLATION_TYPES
 
         vlogger = ViolationLogger()
         scan_path = getattr(args, "path", None) or "."
         for finding in findings:
             vtype = _violation_type_from_rule_id(finding.get("rule_id", ""))
+            if vtype in REDACT_VIOLATION_TYPES:
+                vlogger.log_sensitive_finding(
+                    violation_type=vtype,
+                    severity=finding.get("severity", "warning"),
+                )
+                continue
+
             blocked = {
                 "rule_id": finding.get("rule_id", ""),
                 "message": finding.get("message", ""),
