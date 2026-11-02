@@ -30,6 +30,7 @@ class TestConfigFieldHelp:
             "exfil_detection",
             "on_scan_error",
             "violation_logging",
+            "violation_notifications",
             "permissions",
             "security_instructions",
         ]
@@ -43,6 +44,10 @@ class TestConfigFieldHelp:
             "secret_scanning.validate_secrets",
             "secret_scanning.engines",
             "ssrf_protection.allowed_domains",
+            "violation_notifications.enabled",
+            "violation_notifications.channels.desktop",
+            "violation_notifications.channels.email",
+            "violation_notifications.email.recipient",
         ]
         for key in expected_nested:
             assert key in CONFIG_FIELD_HELP, f"Missing nested key: {key!r}"
@@ -51,6 +56,12 @@ class TestConfigFieldHelp:
         for key, val in CONFIG_FIELD_HELP.items():
             assert isinstance(val, str), f"Key {key!r} has non-string value"
             assert len(val) > 0, f"Key {key!r} has empty value"
+
+    def test_violation_alert_recipient_help_explains_tls_smtp_configuration(self):
+        help_text = CONFIG_FIELD_HELP["violation_notifications.email.recipient"]
+        assert "global config under support.email" in help_text
+        assert "587 STARTTLS or 465 implicit TLS" in help_text
+        assert "plaintext SMTP is not used" in help_text
 
     def test_build_field_help_idempotent(self):
         result1 = _build_field_help()

@@ -92,6 +92,7 @@ GLOBAL_ONLY_SECTIONS: FrozenSet[str] = frozenset(
         "agent_config_protection",
         "self_protection",
         "password_likelihood",
+        "violation_notifications",
     }
 )
 

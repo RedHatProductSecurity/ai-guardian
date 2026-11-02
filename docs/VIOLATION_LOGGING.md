@@ -254,6 +254,44 @@ Violation logging is enabled by default:
 }
 ```
 
+## Violation notifications
+
+Privacy-safe alerts are enabled by default and are independent of violation
+history logging and detection. Desktop notifications are selected by default;
+email is optional. Configure one or both channels in the Web Console's
+**Violation Notifications** card or under `violation_notifications`:
+
+```json
+{
+  "violation_notifications": {
+    "enabled": true,
+    "channels": {"desktop": true, "email": false},
+    "email": {"recipient": "security@example.org"}
+  }
+}
+```
+
+Alerts include only a fixed violation category, severity, and originating daemon.
+They never include detected secrets, PII, scanned content, file paths, commands,
+or scanner details. Email alerts use the SMTP host and authentication configured
+under `support.email`, but use their own `violation_notifications.email.recipient`;
+the support-bundle destination is not used. TLS is required (port 465 uses
+implicit TLS; other ports use STARTTLS). Environment-variable SMTP credentials
+are recommended; credentials and alert content are never written to notification
+diagnostics. An email recipient and usable TLS SMTP settings are both required.
+
+Each daemon first attempts its configured channels. The local tray relays remote
+events through this host's own notification settings only when a remote channel is
+known to be unconfigured or to have failed. A durable private event ledger
+deduplicates channel delivery across daemon retries, tray polling, and restarts.
+If the remote send outcome is ambiguous, the local host does not retry that
+channel, avoiding a possible duplicate. Remote alert relay is separate from the
+opt-in remote history mirroring setting. Events are kept in a private outbox for
+up to 30 days so the tray can catch up after reconnecting. For older remote
+daemons without a notification outbox, the tray uses a persisted overlapping
+poll cursor and does not alert on the source's pre-existing history at first
+connection.
+
 ## Remote violation history mirroring
 
 Remote mirroring is **off by default**. Enable the receiving daemon's global
@@ -299,6 +337,15 @@ dedup index remains so previously cleared remote events are not silently restore
 | `max_entries` | Maximum log entries to keep | `1000` |
 | `retention_days` | Delete entries older than N days | `30` |
 | `log_types` | Which violation types to log | All types |
+
+Notification options are separate from that history configuration:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `violation_notifications.enabled` | Enable alerts independently of logging and detection | `true` |
+| `violation_notifications.channels.desktop` | Deliver OS desktop notifications | `true` |
+| `violation_notifications.channels.email` | Deliver email when a recipient and TLS SMTP settings are usable | `false` |
+| `violation_notifications.email.recipient` | Alert recipient; SMTP transport/auth uses `support.email` | Empty |
 
 ---
 

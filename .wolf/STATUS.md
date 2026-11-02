@@ -33,6 +33,47 @@ budget_tokens: 1000
   and saved a DAF progress note. Changes remain uncommitted; ready for review and
   external DAF completion.
 
+## Issue #2634 session initialization — 2026-11-02
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2634` on its existing issue branch `2634`
+  in the real workspace. The worktree is clean; no branch change or temporary
+  clone sync applies. Read the repository-qualified GitHub issue exactly once.
+- Read the issue's acceptance criteria for default-on, independently disableable
+  violation alerts; desktop/email channel selection; per-channel duplicate
+  prevention across retries and remote/local fallback; privacy-safe category,
+  severity and daemon attribution; failure isolation; and synchronized config,
+  docs, unit and UX coverage.
+- The issue is explicitly blocked by #2633, which supplies opt-in local persistence
+  and source attribution for remote violations. No implementation, tests, tracker
+  updates, DAF progress notes, commits or pushes were made during initialization.
+  The DAF-managed OpenCode title remains unchanged.
+
+## Issue #2634 implementation — 2026-11-02
+
+- Implemented default-on local violation alerts with independently configurable
+  desktop and email channels. Email uses the configured TLS SMTP transport and a
+  separate alert recipient. The private SQLite outbox tracks per-channel status
+  and deduplicates retries; remote fallback avoids channels already delivered or
+  with ambiguous outcomes. Older daemons use a persisted poll cursor and do not
+  replay retained history on first connection.
+- Added the notification service/relay, logger and tray integration, global-only
+  config/schema/profile defaults, Web Console controls including a recipient
+  tooltip for global SMTP setup, help text, docs, changelog, release-readiness
+  checks, and unit plus full notification UX contract coverage.
+- **Validation:** 598 focused feature unit/UX tests pass; 513 tray/SSH regression
+  tests pass. Ruff, Black (Python 3.10 target), error-level Pylint (10/10), full
+  package Mypy, JSON/YAML parsing, and `git diff --check` pass. Only upstream GLib
+  and Pillow deprecation warnings appeared in tray tests. The tooltip follow-up
+  also passes its focused 17-test help/notification UX run.
+- Added the `done` label and a progress comment to issue #2634:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2634#issuecomment-6586598285
+  Follow-up tooltip comment:
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2634#issuecomment-6586902395
+  DAF progress notes were recorded. Changes remain uncommitted on branch `2634`;
+  no push or PR was created. **Next:** user review and `daf complete` outside the
+  active agent session.
+
 ## Issue #2637 implementation — 2026-11-02
 
 - Continued managed DAF `open` session

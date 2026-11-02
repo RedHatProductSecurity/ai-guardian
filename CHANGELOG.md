@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installation and scanner boundaries, browser-console use from Windows, and
   manual localhost troubleshooting. Clarify that WSL1 and comprehensive WSL2
   testing are not covered, and that the reported initial stall is undiagnosed.
+- **Violation notifications (#2634):** Send privacy-safe desktop alerts by default
+  and optionally deliver email through configured TLS SMTP. Remote daemons deliver
+  through their selected channels first; the tray falls back locally only for
+  channels known to be unconfigured or to have failed. A private outbox prevents
+  duplicate delivery across retries and excludes detected values and scanned content.
 - **Opt-in remote violation history mirroring (#2633):** Allow a receiving
   daemon's tray to import curated summaries from reachable remote daemons into
   separate per-daemon JSONL files included in the local history view. Mirrored

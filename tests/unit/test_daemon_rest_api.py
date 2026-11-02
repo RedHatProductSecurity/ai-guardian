@@ -442,6 +442,7 @@ class TestViolationsEndpoint:
             with urlopen(url, timeout=5) as resp:
                 data = json.loads(resp.read())
         assert data["count"] == 1
+        assert data["notification_events"] == []
         v = data["violations"][0]
         assert re.fullmatch(r"viol_[0-9a-f]{32}", v["id"])
         assert v["violation_type"] == "secret_detected"
@@ -461,6 +462,7 @@ class TestViolationsEndpoint:
                 data = json.loads(resp.read())
         mock_get.assert_called_once_with(limit=10, violation_type="pii_detected")
         assert data["count"] == 0
+        assert data["notification_events"] == []
 
     def test_get_violations_empty(self, rest_api):
         api, port, state = rest_api
@@ -471,7 +473,11 @@ class TestViolationsEndpoint:
             url = f"http://127.0.0.1:{port}/api/violations"
             with urlopen(url, timeout=5) as resp:
                 data = json.loads(resp.read())
-        assert data == {"violations": [], "count": 0}
+        assert data == {
+            "violations": [],
+            "count": 0,
+            "notification_events": [],
+        }
 
 
 class TestMetricsEndpoint:

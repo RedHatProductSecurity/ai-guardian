@@ -64,7 +64,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Security Design](SECURITY_DESIGN.md) | Architecture principles, self-protection, known limitations |
 | [Tool Policy](TOOL_POLICY.md) | Allow/deny lists for Skills, MCP, Bash, Write |
 | [Permissions Comparison](PERMISSIONS_COMPARISON.md) | ai-guardian vs settings.json permissions |
-| [Violation Logging](VIOLATION_LOGGING.md) | JSON audit trail with unified policy decisions |
+| [Violation Logging](VIOLATION_LOGGING.md) | Privacy-aware violation history, remote mirroring, and desktop/email alerts |
 | [Compliance Audit Logging](AUDIT_LOGGING.md) | Sanitized all-decision audit trail for SOC 2, GDPR, and HIPAA |
 
 ## AI Security Awareness

@@ -1231,6 +1231,19 @@
     "_log_types_note": "Which violation types to log. Remove types to suppress specific categories."
   },
 
+  "_comment_violation_notifications": "Privacy-safe violation alerts, independent of logging/detection. Only category, severity and daemon identity are sent; no detected values or scanned content.",
+  "_comment_violation_notifications_email": "Email uses the SMTP host/TLS/authentication from support.email, but this recipient is separate from support-bundle destinations. TLS is required for alerts.",
+  "violation_notifications": {
+    "enabled": true,
+    "channels": {
+      "desktop": true,
+      "email": false
+    },
+    "email": {
+      "recipient": ""
+    }
+  },
+
   "_comment_security_instructions": "Security rule injection into AI context (v1.7.0 #580, v1.8.0 #584)",
   "_comment_security_instructions2": "Injects 'never bypass' rules via systemMessage on first prompt per session + re-injects after blocks",
   "_comment_security_instructions3": "Default: true. Disable only for ai-guardian development (the AI needs to modify security files)",

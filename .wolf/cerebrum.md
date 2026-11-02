@@ -174,6 +174,13 @@
 
 ## Key Learnings
 
+- **2026-11-02 — Violation notification scope (#2634):** Notification preferences
+  are machine-level; add `violation_notifications` to `GLOBAL_ONLY_SECTIONS` and
+  save Console edits through global scope so project overlays cannot alter them.
+  Merge rapid independent channel edits under a lock to avoid lost updates. Keep
+  the alert recipient separate from `support.email.to` while reusing only the
+  SMTP transport/auth settings.
+
 - **2026-11-01 — OpenCode V2 config/MCP verification (#2628):** Keep the global
   config as a separate source when `OPENCODE_CONFIG` is set: the explicit custom
   file is loaded after global but before project configs, while system config and
