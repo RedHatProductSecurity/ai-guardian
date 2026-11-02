@@ -251,6 +251,7 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
         "file_path": "/repo/config.txt",
         "line_number": 17,
         "rule_id": "synthetic-rule",
+        "description": sensitive_value,
         "matched_text": sensitive_value,
         "pattern_hint": partial_hint,
         "findings": [
@@ -262,10 +263,22 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
         ],
     }
 
+    context = {"tool_use_id": "safe-tool-id", "raw_input": sensitive_value}
+    suggestion = {"warning": sensitive_value}
+    allowlist_context = {
+        "rule_id": "synthetic-rule",
+        "original_file_path": "/repo/config.txt",
+        "line_content_hash": "a" * 64,
+        "surrounding_context": sensitive_value,
+        "git_ref": "synthetic-ref",
+        "project_path": "/repo",
+    }
     logger.log_violation(
         violation_type,
         blocked=blocked,
-        context={"tool_use_id": "safe-tool-id"},
+        context=context,
+        suggestion=suggestion,
+        allowlist_context=allowlist_context,
     )
 
     serialized = log_path.read_text(encoding="utf-8")
@@ -274,14 +287,27 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
     assert partial_hint not in serialized
     assert stored["blocked"]["file_path"] == "/repo/config.txt"
     assert stored["blocked"]["line_number"] == 17
-    assert stored["blocked"]["rule_id"] == "synthetic-rule"
+    assert "rule_id" not in stored["blocked"]
+    assert "description" not in stored["blocked"]
     assert "matched_text" not in stored["blocked"]
     assert "pattern_hint" not in stored["blocked"]
     assert "matched_text" not in stored["blocked"]["findings"][0]
     assert "pattern_hint" not in stored["blocked"]["findings"][0]
+    assert stored["context"] == {"tool_use_id": "safe-tool-id"}
+    assert stored["suggestion"] == {}
+    assert stored["allowlist_context"] == {
+        "original_file_path": "/repo/config.txt",
+        "line_content_hash": "a" * 64,
+        "git_ref": "synthetic-ref",
+        "project_path": "/repo",
+    }
     # Sanitizing persisted data must not alter the caller's in-memory record.
     assert blocked["matched_text"] == sensitive_value
     assert blocked["pattern_hint"] == partial_hint
+    assert blocked["findings"][0]["matched_text"] == sensitive_value
+    assert context["raw_input"] == sensitive_value
+    assert suggestion["warning"] == sensitive_value
+    assert allowlist_context["surrounding_context"] == sensitive_value
 
 
 def test_non_sensitive_violation_storage_keeps_matched_text(tmp_path):

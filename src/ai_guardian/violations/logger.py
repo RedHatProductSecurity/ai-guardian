@@ -29,7 +29,9 @@ from ai_guardian.storage import (
 from ai_guardian.violations.decision import PolicyDecision, safe_policy_decision
 from ai_guardian.violations.redact import (
     REDACT_VIOLATION_TYPES,
+    sanitize_sensitive_allowlist_context,
     sanitize_blocked_for_storage,
+    sanitize_sensitive_violation_context,
 )
 
 logger = logging.getLogger(__name__)
@@ -115,34 +117,59 @@ class ViolationLogger:
 
         try:
             timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            canonical_decision = safe_policy_decision(policy_decision)
+            sensitive_violation = violation_type in REDACT_VIOLATION_TYPES
+            persisted_blocked = (
+                sanitize_blocked_for_storage(blocked)
+                if sensitive_violation
+                else blocked
+            )
+            persisted_context = (
+                sanitize_sensitive_violation_context(context)
+                if sensitive_violation
+                else context
+            )
+            persisted_violation_type = violation_type
+            if sensitive_violation:
+                if violation_type == "secret_detected":
+                    persisted_violation_type = "secret_detected"
+                elif violation_type == "image_secret_detected":
+                    persisted_violation_type = "image_secret_detected"
+                else:
+                    persisted_violation_type = "pii_detected"
+
+            canonical_decision = (
+                None if sensitive_violation else safe_policy_decision(policy_decision)
+            )
             if canonical_decision is None:
                 canonical_decision = PolicyDecision.from_violation(
-                    violation_type,
-                    blocked=blocked,
-                    context=context,
+                    persisted_violation_type,
+                    blocked=persisted_blocked,
+                    context=persisted_context,
                     severity=severity,
                     violation_id=violation_id,
                     timestamp=timestamp,
                 ).to_dict()
-            persisted_blocked = blocked
-            if violation_type in REDACT_VIOLATION_TYPES:
-                persisted_blocked = sanitize_blocked_for_storage(blocked)
             entry = {
                 "id": violation_id,
                 "timestamp": timestamp,
-                "violation_type": violation_type,
+                "violation_type": persisted_violation_type,
                 "severity": severity,
                 "blocked": persisted_blocked,
-                "context": context,
-                "suggestion": suggestion or {},
+                "context": persisted_context,
+                "suggestion": {} if sensitive_violation else suggestion or {},
                 "policy_decision": canonical_decision,
                 "resolved": False,
                 "resolved_at": None,
                 "resolved_action": None,
             }
             if isinstance(allowlist_context, dict) and allowlist_context:
-                entry["allowlist_context"] = allowlist_context
+                persisted_allowlist_context = (
+                    sanitize_sensitive_allowlist_context(allowlist_context)
+                    if sensitive_violation
+                    else allowlist_context
+                )
+                if persisted_allowlist_context:
+                    entry["allowlist_context"] = persisted_allowlist_context
 
             # Append to JSONL. Rotation state is shared across logger instances so
             # request handlers do not each perform a full scan after every write.
