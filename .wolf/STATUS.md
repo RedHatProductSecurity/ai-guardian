@@ -33,10 +33,11 @@ budget_tokens: 1000
   `git diff --check` pass. Full-package Mypy still reports 14 known errors in
   untouched `skill_discovery.py` and `secret_validator.py`.
 - Follow-up for GHAS review on PR #2639 / CodeQL alert #328: sensitive violation
-  persistence now recursively omits raw `matched_text` and partial `pattern_hint`
-  values for secret/PII finding types without mutating interactive caller data.
-  Safe location/rule metadata remains. Added storage-boundary regressions; no
-  analyzer suppression. **Validation:** 240 related unit/UX tests pass, full
+  persistence now uses explicit location/action and standard-context projections
+  for secret/PII finding types, derives policy metadata from that safe projection,
+  retains only hash/path allowlist references, and omits source snippets/suggestions.
+  Caller data remains unchanged. Added storage-boundary regressions; no analyzer
+  suppression. **Validation:** 250 related unit/UX tests pass, full
   Ruff/Black/error-level Pylint and changed-module Mypy pass. Full-package Mypy
   remains at 14 known errors in untouched `skill_discovery.py` and
   `secret_validator.py`. GitHub CodeQL must re-analyze a pushed PR head to confirm
