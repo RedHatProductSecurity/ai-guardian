@@ -53,6 +53,34 @@ class TestFileScannerSecretScanning:
         )
         violation_logger.log_violation.assert_not_called()
 
+    def test_log_scan_omits_message_and_snippet_from_persistent_history(self):
+        from types import SimpleNamespace
+
+        from ai_guardian.scanners.file_scanner import _log_scan_findings
+
+        with mock.patch("ai_guardian.violations.logger.ViolationLogger") as logger_cls:
+            violation_logger = logger_cls.return_value
+            _log_scan_findings(
+                [
+                    {
+                        "rule_id": "PROMPT-INJECTION-001",
+                        "message": "synthetic scanner message",
+                        "file_path": "sample.txt",
+                        "line_number": 3,
+                        "snippet": "synthetic scanner snippet",
+                        "severity": "high",
+                    }
+                ],
+                SimpleNamespace(path="."),
+            )
+
+        blocked = violation_logger.log_violation.call_args.kwargs["blocked"]
+        assert blocked == {
+            "rule_id": "PROMPT-INJECTION-001",
+            "file_path": "sample.txt",
+            "line_number": 3,
+        }
+
     @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_no_secrets(self, mock_gitleaks, tmp_path):
         mock_gitleaks.return_value = (False, None)

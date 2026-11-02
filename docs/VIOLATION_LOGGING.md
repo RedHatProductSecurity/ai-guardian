@@ -190,6 +190,14 @@ remains available to the in-memory caller; the persistent history does not
 distinguish which sensitive type was detected. Aggregate secret counts remain
 available separately.
 
+Ask-mode history does not store the matched input or scanner error text; it keeps
+a fixed description and available source position. CLI scan history stores the
+rule ID and source position, but not the finding message or snippet. The original
+Ask inputs and complete CLI findings remain available to their in-memory callers
+and command output, respectively. Generic records also persist only recognized
+violation/severity labels; unknown labels are normalized rather than copied
+verbatim.
+
 ### Example Log Entry (Directory Blocked)
 
 ```json

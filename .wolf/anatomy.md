@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~19873 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21413 tok)
-- `CHANGELOG.md` — Change log (~80548 tok)
+- `CHANGELOG.md` — Change log (~80572 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -947,7 +947,7 @@
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7423 tok)
 - `UBUNTU_VM.md` — Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release) (~8328 tok)
 - `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3729 tok)
-- `VIOLATION_LOGGING.md` — Violation Logging (~4516 tok)
+- `VIOLATION_LOGGING.md` — Violation Logging (~4639 tok)
 
 ## docs/api/
 
@@ -1061,7 +1061,7 @@
 - `aiguardignore.py` — "]          # all scanners (~3654 tok)
 - `allowlist_utils.py` — extract_pattern_string, is_allowlist_pattern_valid, validate_allowlist_patterns, filter_valid_patterns + 2 more (~1175 tok)
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
-- `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~6210 tok)
+- `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~6184 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~13209 tok)
 - `cli.py` — main (~31054 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
@@ -1256,7 +1256,7 @@
 - `engine_tester.py` — URL configuration (~3606 tok)
 - `executor.py` — run_single_engine, run_python_scanner, run_engine (~4723 tok)
 - `exfil_detection.py` — ExfilDetectionScanner: check_command, scan (~4083 tok)
-- `file_scanner.py` — FileScanner: scan_directory, scan_files, scan_text (~17355 tok)
+- `file_scanner.py` — FileScanner: scan_directory, scan_files, scan_text (~17324 tok)
 - `gitleaks.py` — class: find_project_root, load_gitleaks_allowlist, should_skip_file, filter_findings + 2 more (~2822 tok)
 - `image_scanner.py` — class: is_image_file, is_image_bytes, is_base64_image, strip_base64_images + 6 more (~3596 tok)
 - `installer.py` — InstallMethod: get_github_repo, get_pattern_servers, get_pinned_version, detect_platform + 2 more (~15496 tok)
