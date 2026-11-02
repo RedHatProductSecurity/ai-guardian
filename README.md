@@ -586,8 +586,11 @@ Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`
 
 - **Python 3.10+**
 - **Windows**: Python 3.10, 3.13, and 3.14 are tested; other versions may work but are not CI-verified
+- **WSL2**: Experimental support when installed and run inside a Linux
+  distribution; see [platform and scanner notes](docs/SCANNER_INSTALLATION.md#wsl2-experimental)
+  and [Console guidance](docs/CONSOLE.md#wsl2-experimental).
 - **Scanner engine**: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, or gitguardian
-- **GNOME Linux**: AppIndicator extension for system tray icon ([setup steps](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#getting-started))
+- **GNOME Linux**: AppIndicator extension for system tray icon ([system tray notes](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#system-tray))
 
 See [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) for installation instructions.
 

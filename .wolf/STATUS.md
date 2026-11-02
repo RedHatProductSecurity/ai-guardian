@@ -9,6 +9,30 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2593 implementation — 2026-11-02
+
+- Continued the managed DAF `open` session on its existing branch `2593` in the
+  real workspace. The worktree was clean at initialization; no branch change or
+  temporary-clone sync applied.
+- Documented WSL2 as **Experimental** in the README Requirements and scanner
+  platform guidance. Explained that installation and optional scanners run
+  inside the Linux distribution using Linux packages/binaries, without adding
+  scanner or architecture guarantees or changing existing platform status.
+- Added Console guidance distinguishing the WSL-hosted Linux server from a
+  Windows browser, with desktop-integration caveats. Added no-open/manual
+  localhost troubleshooting and explicitly left the initial reported stall
+  undiagnosed; retrying is not presented as a guaranteed remedy. WSL1 and
+  comprehensive WSL2 CI/platform coverage are excluded.
+- Updated CHANGELOG. Verified six WSL2 cross-document links and the README
+  system-tray link, checked Console CLI flags with `uv run python -m ai_guardian
+  console --help`, and passed `git diff --check`. Tests were not run because this
+  is documentation-only; no runtime changes were made.
+- All six acceptance criteria are met locally. Updated the GitHub checklist and
+  `done` label, posted progress comment
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2593#issuecomment-6588081889,
+  and saved a DAF progress note. Changes remain uncommitted; ready for review and
+  external DAF completion.
+
 ## Issue #2637 implementation — 2026-11-02
 
 - Continued managed DAF `open` session
