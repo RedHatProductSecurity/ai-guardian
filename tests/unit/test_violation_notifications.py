@@ -2,6 +2,7 @@
 
 from unittest.mock import Mock
 from concurrent.futures import ThreadPoolExecutor
+import logging
 import queue
 from datetime import datetime, timezone
 
@@ -476,6 +477,7 @@ def test_untrusted_event_ids_are_replaced_with_stable_opaque_ids():
 
 
 def test_full_dispatch_queue_drops_alert_without_raising(monkeypatch, caplog):
+    caplog.set_level(logging.WARNING, logger=notifications.__name__)
     full_queue = queue.Queue(maxsize=1)
     full_queue.put_nowait(("tool_permission", "warning", "viol_0"))
     monkeypatch.setattr(notifications, "_NOTIFICATION_QUEUE", full_queue)

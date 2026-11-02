@@ -70,9 +70,29 @@ budget_tokens: 1000
   https://github.com/RedHatProductSecurity/ai-guardian/issues/2634#issuecomment-6586598285
   Follow-up tooltip comment:
   https://github.com/RedHatProductSecurity/ai-guardian/issues/2634#issuecomment-6586902395
-  DAF progress notes were recorded. Changes remain uncommitted on branch `2634`;
-  no push or PR was created. **Next:** user review and `daf complete` outside the
-  active agent session.
+  DAF progress notes were recorded. PR #2646 is open. The original implementation
+  was pushed on branch `2634`; the follow-up below is local and uncommitted.
+
+### PR #2646 CI/CodeQL follow-up — 2026-11-02
+
+- Inspected CodeQL alert 216 and PR checks. Alert 216 is marked fixed on the
+  default branch, but the PR's CodeQL check reported a new high
+  `py/clear-text-logging-sensitive-data` finding at
+  `src/ai_guardian/violations/logger.py:259`, where a debug message interpolated a
+  caller-controlled violation category.
+- Test run `41520863742` failed six matrix jobs (Linux Python 3.10–3.14 and Windows
+  Python 3.14) on the same test,
+  `test_full_dispatch_queue_drops_alert_without_raising`. The queue behavior
+  passed; prior suite logging configuration suppressed the warning from caplog.
+- Locally replaced caller-derived debug messages with fixed diagnostics, added a
+  regression test, and set the notification logger level explicitly in the caplog
+  test. The affected violation unit suites pass (73 tests); Ruff, Black, error-level
+  Pylint (10/10), full package Mypy, and `git diff --check` pass. The CI test run is
+  from the previous PR head and has not been rerun; CodeQL must be reevaluated on
+  the follow-up commit. Container Build Validation `41520864019` was still running
+  at last check.
+- **Next:** user review and `daf complete` outside the active agent session to
+  publish the local follow-up, then verify the new PR checks and CodeQL alert state.
 
 ## Issue #2637 implementation — 2026-11-02
 
