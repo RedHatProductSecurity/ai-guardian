@@ -29,9 +29,6 @@ from ai_guardian.storage import (
 from ai_guardian.violations.decision import PolicyDecision, safe_policy_decision
 from ai_guardian.violations.redact import (
     REDACT_VIOLATION_TYPES,
-    sanitize_sensitive_allowlist_context,
-    sanitize_blocked_for_storage,
-    sanitize_sensitive_violation_context,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,17 +115,7 @@ class ViolationLogger:
         try:
             timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             sensitive_violation = violation_type in REDACT_VIOLATION_TYPES
-            persisted_blocked = (
-                sanitize_blocked_for_storage(blocked)
-                if sensitive_violation
-                else blocked
-            )
-            persisted_context = (
-                sanitize_sensitive_violation_context(context)
-                if sensitive_violation
-                else context
-            )
-            persisted_violation_type = violation_type
+            persisted_allowlist_context: Optional[Dict[str, Any]] = {}
             if sensitive_violation:
                 if violation_type == "secret_detected":
                     persisted_violation_type = "secret_detected"
@@ -136,6 +123,109 @@ class ViolationLogger:
                     persisted_violation_type = "image_secret_detected"
                 else:
                     persisted_violation_type = "pii_detected"
+                persisted_blocked = {}
+                if isinstance(blocked, dict):
+                    if "violation_id" in blocked:
+                        persisted_blocked["violation_id"] = blocked["violation_id"]
+                    if "file_path" in blocked:
+                        persisted_blocked["file_path"] = blocked["file_path"]
+                    if "line_number" in blocked:
+                        persisted_blocked["line_number"] = blocked["line_number"]
+                    if "end_line" in blocked:
+                        persisted_blocked["end_line"] = blocked["end_line"]
+                    if "start_column" in blocked:
+                        persisted_blocked["start_column"] = blocked["start_column"]
+                    if "end_column" in blocked:
+                        persisted_blocked["end_column"] = blocked["end_column"]
+                    if "total_findings" in blocked:
+                        persisted_blocked["total_findings"] = blocked["total_findings"]
+                    if "action" in blocked:
+                        persisted_blocked["action"] = blocked["action"]
+                    if "source" in blocked:
+                        persisted_blocked["source"] = blocked["source"]
+                    if "is_immutable" in blocked:
+                        persisted_blocked["is_immutable"] = blocked["is_immutable"]
+
+                    findings = blocked.get("findings")
+                    if isinstance(findings, list):
+                        safe_findings = []
+                        for finding in findings:
+                            if not isinstance(finding, dict):
+                                continue
+                            safe_finding = {}
+                            if "file_path" in finding:
+                                safe_finding["file_path"] = finding["file_path"]
+                            if "line_number" in finding:
+                                safe_finding["line_number"] = finding["line_number"]
+                            if "end_line" in finding:
+                                safe_finding["end_line"] = finding["end_line"]
+                            if "start_column" in finding:
+                                safe_finding["start_column"] = finding["start_column"]
+                            if "end_column" in finding:
+                                safe_finding["end_column"] = finding["end_column"]
+                            if safe_finding:
+                                safe_findings.append(safe_finding)
+                        if safe_findings:
+                            persisted_blocked["findings"] = safe_findings
+
+                persisted_context = {}
+                if isinstance(context, dict):
+                    if "ide_type" in context:
+                        persisted_context["ide_type"] = context["ide_type"]
+                    if "hook_event" in context:
+                        persisted_context["hook_event"] = context["hook_event"]
+                    if "project_path" in context:
+                        persisted_context["project_path"] = context["project_path"]
+                    if "tool_use_id" in context:
+                        persisted_context["tool_use_id"] = context["tool_use_id"]
+                    if "session_id" in context:
+                        persisted_context["session_id"] = context["session_id"]
+                    if "tool_name" in context:
+                        persisted_context["tool_name"] = context["tool_name"]
+                    if "run_id" in context:
+                        persisted_context["run_id"] = context["run_id"]
+                    if "run_sequence" in context:
+                        persisted_context["run_sequence"] = context["run_sequence"]
+                    if "correlation_id" in context:
+                        persisted_context["correlation_id"] = context["correlation_id"]
+                    if "agent" in context:
+                        persisted_context["agent"] = context["agent"]
+                    if "repository" in context:
+                        persisted_context["repository"] = context["repository"]
+                    if "policy_version" in context:
+                        persisted_context["policy_version"] = context["policy_version"]
+                    if "latency_ms" in context:
+                        persisted_context["latency_ms"] = context["latency_ms"]
+                    if "ask_decision" in context:
+                        persisted_context["ask_decision"] = context["ask_decision"]
+                    if "action_taken" in context:
+                        persisted_context["action_taken"] = context["action_taken"]
+                    if "dialog_wait_ms" in context:
+                        persisted_context["dialog_wait_ms"] = context["dialog_wait_ms"]
+
+                persisted_allowlist_context = {}
+                if isinstance(allowlist_context, dict):
+                    if "original_file_path" in allowlist_context:
+                        persisted_allowlist_context["original_file_path"] = (
+                            allowlist_context["original_file_path"]
+                        )
+                    if "line_content_hash" in allowlist_context:
+                        persisted_allowlist_context["line_content_hash"] = (
+                            allowlist_context["line_content_hash"]
+                        )
+                    if "git_ref" in allowlist_context:
+                        persisted_allowlist_context["git_ref"] = allowlist_context[
+                            "git_ref"
+                        ]
+                    if "project_path" in allowlist_context:
+                        persisted_allowlist_context["project_path"] = allowlist_context[
+                            "project_path"
+                        ]
+            else:
+                persisted_violation_type = violation_type
+                persisted_blocked = blocked
+                persisted_context = context
+                persisted_allowlist_context = allowlist_context
 
             canonical_decision = (
                 None if sensitive_violation else safe_policy_decision(policy_decision)
@@ -162,14 +252,11 @@ class ViolationLogger:
                 "resolved_at": None,
                 "resolved_action": None,
             }
-            if isinstance(allowlist_context, dict) and allowlist_context:
-                persisted_allowlist_context = (
-                    sanitize_sensitive_allowlist_context(allowlist_context)
-                    if sensitive_violation
-                    else allowlist_context
-                )
-                if persisted_allowlist_context:
-                    entry["allowlist_context"] = persisted_allowlist_context
+            if (
+                isinstance(persisted_allowlist_context, dict)
+                and persisted_allowlist_context
+            ):
+                entry["allowlist_context"] = persisted_allowlist_context
 
             # Append to JSONL. Rotation state is shared across logger instances so
             # request handlers do not each perform a full scan after every write.

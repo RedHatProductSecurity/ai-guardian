@@ -3,49 +3,6 @@
 REDACT_VIOLATION_TYPES = frozenset(
     {"secret_detected", "image_secret_detected", "pii_detected"}
 )
-_SAFE_BLOCKED_STORAGE_FIELDS = (
-    "violation_id",
-    "file_path",
-    "line_number",
-    "end_line",
-    "start_column",
-    "end_column",
-    "total_findings",
-    "action",
-    "source",
-    "is_immutable",
-)
-_SAFE_FINDING_STORAGE_FIELDS = (
-    "file_path",
-    "line_number",
-    "end_line",
-    "start_column",
-    "end_column",
-)
-_SAFE_CONTEXT_STORAGE_FIELDS = (
-    "ide_type",
-    "hook_event",
-    "project_path",
-    "tool_use_id",
-    "session_id",
-    "tool_name",
-    "run_id",
-    "run_sequence",
-    "correlation_id",
-    "agent",
-    "repository",
-    "policy_version",
-    "latency_ms",
-    "ask_decision",
-    "action_taken",
-    "dialog_wait_ms",
-)
-_SAFE_ALLOWLIST_STORAGE_FIELDS = (
-    "original_file_path",
-    "line_content_hash",
-    "git_ref",
-    "project_path",
-)
 
 
 def redact_secret_hint(value):
@@ -99,58 +56,3 @@ def sanitize_blocked_for_secret(blocked_info):
                 if hint:
                     blocked_info["pattern_hint"] = hint
                     break
-
-
-def sanitize_blocked_for_storage(blocked_info):
-    """Project sensitive blocked data onto location/action metadata only.
-
-    This explicit field projection prevents raw matches, partial hints, scanner
-    rule data, and arbitrary nested payloads from reaching persistent history.
-    The caller's object is not modified.
-    """
-    if not isinstance(blocked_info, dict):
-        return {}
-
-    sanitized = {}
-    for field in _SAFE_BLOCKED_STORAGE_FIELDS:
-        if field in blocked_info:
-            sanitized[field] = blocked_info[field]
-
-    findings = blocked_info.get("findings")
-    if isinstance(findings, list):
-        safe_findings = []
-        for finding in findings:
-            if not isinstance(finding, dict):
-                continue
-            safe_finding = {}
-            for field in _SAFE_FINDING_STORAGE_FIELDS:
-                if field in finding:
-                    safe_finding[field] = finding[field]
-            if safe_finding:
-                safe_findings.append(safe_finding)
-        if safe_findings:
-            sanitized["findings"] = safe_findings
-
-    return sanitized
-
-
-def sanitize_sensitive_violation_context(context):
-    """Keep only standard context identifiers for sensitive finding records."""
-    if not isinstance(context, dict):
-        return {}
-    return {
-        field: context[field]
-        for field in _SAFE_CONTEXT_STORAGE_FIELDS
-        if field in context
-    }
-
-
-def sanitize_sensitive_allowlist_context(context):
-    """Keep hash/path references, but omit source snippets and scanner rules."""
-    if not isinstance(context, dict):
-        return {}
-    return {
-        field: context[field]
-        for field in _SAFE_ALLOWLIST_STORAGE_FIELDS
-        if field in context
-    }
