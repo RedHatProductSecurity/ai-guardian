@@ -459,6 +459,12 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
                 "supply_chain",
             ],
         },
+        "_comment_violation_notifications": "Privacy-safe violation alerts. Independent of violation logging/detection. Email uses the SMTP server/authentication in support.email; its recipient is separate from support-bundle destinations.",
+        "violation_notifications": {
+            "enabled": True,
+            "channels": {"desktop": True, "email": False},
+            "email": {"recipient": ""},
+        },
         "_comment_daemon": "Background daemon for faster hook processing. Auto-starts on any command, falls back to direct if unavailable.",
         "daemon": {
             "idle_timeout_minutes": 0,

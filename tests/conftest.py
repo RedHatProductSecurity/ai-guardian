@@ -32,9 +32,13 @@ def _capture_package_logs(caplog):
 
 @pytest.fixture(autouse=True)
 def _disable_visible_ui(monkeypatch):
-    """Prevent automated tests from opening desktop or browser UI."""
+    """Prevent automated tests from opening UI or sending desktop alerts."""
     monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "headless")
     monkeypatch.setenv("AI_GUARDIAN_NO_TKINTER", "1")
+    monkeypatch.setattr(
+        "ai_guardian.violations.logger.ViolationLogger._notify_violation",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
 
 
 @pytest.fixture(autouse=True)

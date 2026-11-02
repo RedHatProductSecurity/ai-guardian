@@ -109,6 +109,11 @@ def test_generated_config_and_bundled_profiles_default_mirroring_off():
     project_root = Path(__file__).resolve().parents[2]
     generated = _get_default_config_template(permissive=False)
     assert generated["violation_logging"]["mirror_remote_violations"] is False
+    assert generated["violation_notifications"] == {
+        "enabled": True,
+        "channels": {"desktop": True, "email": False},
+        "email": {"recipient": ""},
+    }
 
     schema = json.loads(
         (
@@ -120,6 +125,11 @@ def test_generated_config_and_bundled_profiles_default_mirroring_off():
     ]
     assert mirror_schema["type"] == "boolean"
     assert mirror_schema["default"] is False
+    notification_schema = schema["properties"]["violation_notifications"]
+    assert notification_schema["properties"]["enabled"]["default"] is True
+    notification_channels = notification_schema["properties"]["channels"]["properties"]
+    assert notification_channels["desktop"]["default"] is True
+    assert notification_channels["email"]["default"] is False
 
     for profile in ("minimal", "standard", "strict", "moderator"):
         profile_config = json.loads(
@@ -128,6 +138,10 @@ def test_generated_config_and_bundled_profiles_default_mirroring_off():
             ).read_text()
         )
         assert profile_config["violation_logging"]["mirror_remote_violations"] is False
+        assert (
+            profile_config["violation_notifications"]
+            == generated["violation_notifications"]
+        )
 
 
 def test_mirror_imports_only_curated_fields_and_preserves_source_identity(tmp_path):

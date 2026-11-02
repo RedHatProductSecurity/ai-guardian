@@ -71,6 +71,22 @@ class TestWriteScopedConfig:
         assert not success
         assert "global-only" in msg
 
+    def test_rejects_project_violation_notification_settings(self, tmp_path):
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        from ai_guardian.config.writer import write_scoped_config
+
+        success, msg = write_scoped_config(
+            "project",
+            "violation_notifications",
+            "enabled",
+            False,
+            project_dir=str(project_dir),
+        )
+
+        assert not success
+        assert "global-only" in msg
+
     def test_rejects_self_protection_in_bulk_project_config(self):
         from ai_guardian.config.writer import validate_scoped_config
 

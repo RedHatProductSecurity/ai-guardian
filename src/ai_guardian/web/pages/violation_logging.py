@@ -3,6 +3,7 @@
 import logging
 import json
 import re
+import threading
 from datetime import datetime, timedelta, timezone
 
 from nicegui import run, ui
@@ -39,6 +40,7 @@ ALL_LOG_TYPES = [
     ("image_secret_detected", "Image Secret — secrets found in images via OCR"),
     ("image_pii_detected", "Image PII — PII found in images via OCR"),
 ]
+_NOTIFICATION_CONFIG_LOCK = threading.Lock()
 
 DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?$", re.IGNORECASE)
 
@@ -76,6 +78,28 @@ def _save_remote_mirroring_config(enabled):
         config["violation_logging"] = {}
     config["violation_logging"]["mirror_remote_violations"] = bool(enabled)
     return save_web_config(config, scope="global")
+
+
+def _save_notification_config(updates):
+    """Save alert preferences globally without touching support destinations."""
+    from ai_guardian.web.config_helpers import load_web_config_global, save_web_config
+
+    with _NOTIFICATION_CONFIG_LOCK:
+        config = load_web_config_global()
+        notifications = config.get("violation_notifications", {})
+        if not isinstance(notifications, dict):
+            notifications = {}
+        for key, value in updates.items():
+            if isinstance(value, dict):
+                current = notifications.get(key, {})
+                if not isinstance(current, dict):
+                    current = {}
+                current.update(value)
+                notifications[key] = current
+            else:
+                notifications[key] = value
+        config["violation_notifications"] = notifications
+        return save_web_config(config, scope="global")
 
 
 def _load_local_stats():
@@ -125,6 +149,21 @@ def create_violation_logging_page(service, daemon_name: str):
             global_config = await run.io_bound(load_web_config_global)
             vlog = config.get("violation_logging", {})
             global_vlog = global_config.get("violation_logging", {})
+            notifications = global_config.get("violation_notifications", {})
+            if not isinstance(notifications, dict):
+                notifications = {}
+            notification_channels = notifications.get("channels", {})
+            if not isinstance(notification_channels, dict):
+                notification_channels = {}
+            alert_email = notifications.get("email", {})
+            if not isinstance(alert_email, dict):
+                alert_email = {}
+            support = global_config.get("support", {})
+            support_email = (
+                support.get("email", {}) if isinstance(support, dict) else {}
+            )
+            if not isinstance(support_email, dict):
+                support_email = {}
 
             enabled_raw = vlog.get("enabled", True)
             is_temp = False
@@ -150,6 +189,14 @@ def create_violation_logging_page(service, daemon_name: str):
             mirror_remote_violations = (
                 global_vlog.get("mirror_remote_violations") is True
             )
+            notifications_enabled = notifications.get("enabled", True) is True
+            desktop_alerts = notification_channels.get("desktop", True) is True
+            email_alerts = notification_channels.get("email", False) is True
+            alert_recipient = alert_email.get("recipient", "")
+            smtp_host = support_email.get("smtp_host", "")
+            smtp_port = support_email.get("smtp_port", 587)
+            smtp_tls = support_email.get("smtp_tls", True)
+            smtp_ready = bool(smtp_host) and (smtp_port == 465 or smtp_tls is True)
 
             with content:
                 # --- Enable/Disable Toggle ---
@@ -277,6 +324,107 @@ def create_violation_logging_page(service, daemon_name: str):
                             await refresh()
 
                     mirror_switch.on_value_change(save_mirror_setting)
+
+                # --- Violation Notifications ---
+                with ui.card().classes("w-full"):
+                    ui.label("Violation Notifications").classes("text-lg font-bold")
+                    ui.label(
+                        "Alerts are independent of violation logging and detection. "
+                        "They include only category, severity, and originating daemon; "
+                        "detected values and scanned content are never included."
+                    ).classes("text-xs text-grey-6")
+                    ui.label(
+                        "These alert preferences are global to this daemon."
+                    ).classes("text-xs text-grey-6")
+
+                    notification_switch = ui.switch(
+                        "Enable violation notifications", value=notifications_enabled
+                    )
+
+                    async def save_notification_toggle(e):
+                        saved = await run.io_bound(
+                            _save_notification_config, {"enabled": bool(e.value)}
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Could not save notification setting", type="negative"
+                            )
+                            await refresh()
+
+                    notification_switch.on_value_change(save_notification_toggle)
+
+                    desktop_switch = ui.switch(
+                        "OS desktop notifications", value=desktop_alerts
+                    )
+
+                    async def save_desktop_channel(e):
+                        saved = await run.io_bound(
+                            _save_notification_config,
+                            {"channels": {"desktop": bool(e.value)}},
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Could not save desktop notification setting",
+                                type="negative",
+                            )
+                            await refresh()
+
+                    desktop_switch.on_value_change(save_desktop_channel)
+
+                    email_switch = ui.switch("Email notifications", value=email_alerts)
+
+                    async def save_email_channel(e):
+                        saved = await run.io_bound(
+                            _save_notification_config,
+                            {"channels": {"email": bool(e.value)}},
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Could not save email notification setting",
+                                type="negative",
+                            )
+                            await refresh()
+
+                    email_switch.on_value_change(save_email_channel)
+
+                    with ui.row().classes("items-center gap-2 w-full"):
+                        recipient_input = (
+                            ui.input(
+                                "Alert email recipient",
+                                value=(
+                                    alert_recipient
+                                    if isinstance(alert_recipient, str)
+                                    else ""
+                                ),
+                            )
+                            .props("dense outlined type=email")
+                            .classes("flex-grow max-w-xl min-w-0")
+                        )
+                        field_help_icon("violation_notifications.email.recipient")
+
+                    async def save_alert_recipient(e, inp=recipient_input):
+                        saved = await run.io_bound(
+                            _save_notification_config,
+                            {"email": {"recipient": inp.value or ""}},
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Could not save alert email recipient",
+                                type="negative",
+                            )
+                            await refresh()
+
+                    recipient_input.on("blur", save_alert_recipient)
+                    if smtp_ready:
+                        ui.label(
+                            "TLS SMTP host is configured under Support email settings. "
+                            "Alert emails use that transport but not its support-bundle destination."
+                        ).classes("text-xs text-grey-6")
+                    else:
+                        ui.label(
+                            "Email alerts require a recipient and TLS SMTP settings under "
+                            "Support email settings. Plaintext SMTP is not used."
+                        ).classes("text-xs text-amber")
 
                 # --- Retention Settings ---
                 with ui.card().classes("w-full"):

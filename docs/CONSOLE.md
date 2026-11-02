@@ -76,7 +76,7 @@ The historical `ai-guardian tui` command remains as an alias for
 - **Engine Config**: Select built-in or installed secret-scanning engines with
   immediate save; advanced JSON configuration remains available
 - **Violations**: Filterable violation records by daemon and type
-- **Violation Logging**: Violation retention and output settings
+- **Violation Logging**: History retention, remote mirroring, and notification settings
 - **Metrics**: Violation counts by type and severity
 - **Detection Patterns**: Read-only built-in and pattern-server rules
 - **Auto Directory Rules**: Discovered directory permission rules

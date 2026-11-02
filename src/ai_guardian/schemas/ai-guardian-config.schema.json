@@ -2087,6 +2087,49 @@
       },
       "additionalProperties": false
     },
+    "violation_notifications": {
+      "type": "object",
+      "description": "Privacy-safe global violation alerts for this daemon. Independent of violation history and detection settings. Email uses support.email SMTP transport/authentication but the alert recipient is independent of support-bundle destinations.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable violation alerts independently of violation logging and detection.",
+          "default": true
+        },
+        "channels": {
+          "type": "object",
+          "properties": {
+            "desktop": {
+              "type": "boolean",
+              "description": "Show OS desktop notifications. Remote daemons fall back to the paired local host when desktop delivery fails.",
+              "default": true
+            },
+            "email": {
+              "type": "boolean",
+              "description": "Send an alert email when an alert recipient and usable TLS SMTP settings are configured.",
+              "default": false
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "desktop": true,
+            "email": false
+          }
+        },
+        "email": {
+          "type": "object",
+          "properties": {
+            "recipient": {
+              "type": "string",
+              "description": "Recipient for violation alerts. SMTP transport settings and credentials come from support.email; support export destinations are not used.",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "latency_tracking": {
       "type": "object",
       "description": "Hook latency tracking — records per-hook and per-violation-type timing to latency.jsonl for performance analysis. Disabled by default; enable for debugging or performance testing. NEW in v1.11.0 (Issue #1057).",

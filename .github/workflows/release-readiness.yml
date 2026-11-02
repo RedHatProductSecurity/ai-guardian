@@ -902,6 +902,11 @@ jobs:
           import json
           cfg = json.load(open('$CFG_PATH'))
           assert cfg['violation_logging']['mirror_remote_violations'] is False
+          assert cfg['violation_notifications'] == {
+              'enabled': True,
+              'channels': {'desktop': True, 'email': False},
+              'email': {'recipient': ''},
+          }
           print(f'  Keys: {sorted(cfg.keys())[:5]}...')
           print(f'  Valid JSON: yes')
             "
@@ -910,9 +915,9 @@ jobs:
       - name: Install qualification test dependencies
         run: python -m pip install '.[dev]'
 
-      - name: Test remote violation mirroring
+      - name: Test violation history, mirroring, and notifications
         run: |
-          python -m pytest tests/unit/test_violation_mirroring.py tests/unit/test_violation_logging_types.py tests/unit/test_daemon_rest_api.py tests/unit/test_daemon_multi_client.py tests/unit/test_web_violation_detail.py tests/ux/test_user_experience_contract_violation_mirroring.py -q
+          python -m pytest tests/unit/test_violation_notifications.py tests/unit/test_violation_logger.py tests/unit/test_violation_mirroring.py tests/unit/test_violation_logging_types.py tests/unit/test_daemon_rest_api.py tests/unit/test_daemon_multi_client.py tests/unit/test_profile_manager.py tests/unit/test_json_schema.py tests/unit/test_config_scope.py tests/unit/test_project_config_overlay.py tests/unit/test_help_tooltips.py tests/unit/test_tray_notifications.py tests/unit/test_web_violation_detail.py tests/ux/test_user_experience_contract_violation_notifications.py tests/ux/test_user_experience_contract_violation_mirroring.py -q
 
       - name: Qualify experimental local password-likelihood stage
         run: |

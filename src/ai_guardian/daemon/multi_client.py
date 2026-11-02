@@ -946,7 +946,13 @@ class MultiDaemonClient:
             if "policy_decision" in item:
                 item["policy_decision"] = safe_policy_decision(item["policy_decision"])
             curated.append(item)
-        return {"violations": curated, "count": len(curated)}
+        from ai_guardian.violations.notifications import get_recent_notification_events
+
+        return {
+            "violations": curated,
+            "count": len(curated),
+            "notification_events": get_recent_notification_events(limit=250),
+        }
 
     def get_violation_context(
         self,

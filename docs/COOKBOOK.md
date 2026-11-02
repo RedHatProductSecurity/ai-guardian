@@ -1010,7 +1010,7 @@ Configurations are merged in this order (later overrides earlier):
 3. **User global config** (`~/.config/ai-guardian/ai-guardian.json`)
 4. **Remote configs** (enterprise policies, highest priority)
 
-Exception: fields marked `"immutable": true` in remote configs cannot be overridden by any lower-priority source. Global-only sections (`daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`) cannot be overridden by project config.
+Exception: fields marked `"immutable": true` in remote configs cannot be overridden by any lower-priority source. Global-only sections (`daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`, `violation_notifications`) cannot be overridden by project config.
 
 ### How do I use .aiguardignore.toml for project-level ignores?
 

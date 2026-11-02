@@ -1504,6 +1504,9 @@ class DaemonTray:
                     from ai_guardian.daemon.violation_mirroring import (
                         mirror_remote_violations,
                     )
+                    from ai_guardian.daemon.notification_relay import (
+                        relay_remote_violation_notifications,
+                    )
 
                     targets = [
                         replace(target) if target.runtime == "ssh" else target
@@ -1515,8 +1518,11 @@ class DaemonTray:
                             "Mirrored %d remote violation summary(s) into local history",
                             imported,
                         )
+                    relay_remote_violation_notifications(self._multi_client, targets)
                 except Exception:
-                    logger.warning("Remote violation mirror poll failed; continuing")
+                    logger.warning(
+                        "Remote violation notification/mirror poll failed; continuing"
+                    )
                 self._violation_mirror_wake.wait(self._VIOLATION_MIRROR_POLL_INTERVAL)
 
         threading.Thread(

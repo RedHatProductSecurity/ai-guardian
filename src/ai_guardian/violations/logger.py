@@ -166,6 +166,7 @@ class ViolationLogger:
         ):
             logger.warning("Refusing non-sensitive type in sensitive finding logger")
             return
+        self._notify_violation(violation_type, severity, violation_id)
         if not self._is_logging_enabled() or not self._should_log_type(violation_type):
             return
 
@@ -229,18 +230,6 @@ class ViolationLogger:
             allowlist_context: Safe source metadata for deferred annotation.
             policy_decision: Optional safe, versioned policy decision metadata.
         """
-        # Check if logging is enabled
-        if not self._is_logging_enabled():
-            logger.debug("Violation logging is disabled")
-            return
-
-        # Check if this violation type should be logged
-        if not self._should_log_type(violation_type):
-            logger.debug(
-                f"Violation type {violation_type} is not configured to be logged"
-            )
-            return
-
         if (
             violation_type == "secret_detected"
             or violation_type == "image_secret_detected"
@@ -250,6 +239,24 @@ class ViolationLogger:
                 violation_type=violation_type,
                 severity=severity,
                 violation_id=violation_id,
+            )
+            return
+
+        if not violation_id:
+            from ai_guardian.violations.notifications import new_violation_event_id
+
+            violation_id = new_violation_event_id()
+        self._notify_violation(violation_type, severity, violation_id)
+
+        # Check if logging is enabled
+        if not self._is_logging_enabled():
+            logger.debug("Violation logging is disabled")
+            return
+
+        # Check if this violation type should be logged
+        if not self._should_log_type(violation_type):
+            logger.debug(
+                f"Violation type {violation_type} is not configured to be logged"
             )
             return
 
@@ -329,6 +336,20 @@ class ViolationLogger:
                 )
             else:
                 logger.warning(f"Failed to log violation: {e}")
+
+    @staticmethod
+    def _notify_violation(
+        violation_type: str, severity: str, violation_id: Optional[str]
+    ) -> None:
+        """Queue alerts independently of history logging and scanner outcomes."""
+        try:
+            from ai_guardian.violations.notifications import (
+                schedule_violation_notification,
+            )
+
+            schedule_violation_notification(violation_type, severity, violation_id)
+        except Exception:
+            logger.warning("Could not queue violation notification; details withheld")
 
     def get_recent_violations(
         self,

@@ -62,7 +62,7 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **What can be overridden**: Prompt injection, secret scanning, PII, SSRF, permissions, directory rules, annotations, and more.
 
-**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`.
+**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`, `violation_notifications`.
 
 ### Daemon REST TLS
 

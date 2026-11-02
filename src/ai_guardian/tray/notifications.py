@@ -12,8 +12,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def show_notification(title, message):
-    """Show a desktop notification."""
+def show_notification(title, message, *, wait=False):
+    """Show a desktop notification and optionally report command success."""
     import platform
     import subprocess
 
@@ -24,15 +24,13 @@ def show_notification(title, message):
 
             safe_title = _escape_for_applescript(title)
             safe_msg = _escape_for_applescript(message)
-            subprocess.Popen(
-                [
-                    "osascript",
-                    "-e",
-                    f'display notification "{safe_msg}" with title "{safe_title}"',
-                ]
-            )
+            command = [
+                "osascript",
+                "-e",
+                f'display notification "{safe_msg}" with title "{safe_title}"',
+            ]
         elif system == "Linux":
-            subprocess.Popen(["notify-send", title, message])
+            command = ["notify-send", title, message]
         elif system == "Windows":
             safe_title = title.replace("'", "''").replace("`", "``").replace("$", "`$")
             safe_msg = message.replace("'", "''").replace("`", "``").replace("$", "`$")
@@ -44,9 +42,23 @@ def show_notification(title, message):
                 "$n.Visible = $true; "
                 f"$n.ShowBalloonTip(5000, '{safe_title}', '{safe_msg}', 'Info')"
             )
-            subprocess.Popen(["powershell", "-NoProfile", "-Command", ps])
-    except OSError:
-        pass
+            command = ["powershell", "-NoProfile", "-Command", ps]
+        else:
+            return False
+
+        if wait:
+            result = subprocess.run(
+                command,
+                check=False,
+                timeout=5,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return result.returncode == 0
+        subprocess.Popen(command)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def send_config_error_notification():
