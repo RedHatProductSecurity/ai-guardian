@@ -144,7 +144,7 @@ def test_legacy_non_temp_location_remains_available():
         )
 
 
-def test_shared_logger_persists_safe_context_only():
+def test_sensitive_shared_logger_omits_allowlist_source_metadata():
     source_path = str(Path.cwd() / "app.py")
     result = ScanResult(
         detected=True,
@@ -157,7 +157,7 @@ def test_shared_logger_persists_safe_context_only():
     logger_calls = []
 
     class Logger:
-        def log_violation(self, **kwargs):
+        def log_sensitive_finding(self, **kwargs):
             logger_calls.append(kwargs)
 
     context = ScanContext(
@@ -172,9 +172,12 @@ def test_shared_logger_persists_safe_context_only():
         log_violation(result, context, violation_logger=Logger())
 
     assert len(logger_calls) == 1
-    metadata = logger_calls[0]["allowlist_context"]
-    assert metadata["original_file_path"] == source_path
-    assert "SENSITIVE_VALUE" not in json.dumps(metadata)
+    assert logger_calls[0] == {
+        "violation_type": "secret_detected",
+        "severity": result.severity,
+        "violation_id": result.id,
+    }
+    assert "SENSITIVE_VALUE" not in json.dumps(logger_calls)
 
 
 def test_shared_logger_does_not_persist_private_context_fields():

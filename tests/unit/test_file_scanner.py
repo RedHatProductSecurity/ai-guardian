@@ -28,6 +28,31 @@ class TestFileScannerSecretScanning:
         secret_findings = [f for f in findings if f["rule_id"] == "SECRET-001"]
         assert len(secret_findings) >= 1
 
+    def test_log_scan_secret_uses_sensitive_envelope(self):
+        from types import SimpleNamespace
+
+        from ai_guardian.scanners.file_scanner import _log_scan_findings
+
+        with mock.patch("ai_guardian.violations.logger.ViolationLogger") as logger_cls:
+            violation_logger = logger_cls.return_value
+            _log_scan_findings(
+                [
+                    {
+                        "rule_id": "SECRET-001",
+                        "message": "synthetic sensitive message",
+                        "snippet": "synthetic sensitive snippet",
+                        "severity": "critical",
+                    }
+                ],
+                SimpleNamespace(path="."),
+            )
+
+        violation_logger.log_sensitive_finding.assert_called_once_with(
+            violation_type="secret_detected",
+            severity="critical",
+        )
+        violation_logger.log_violation.assert_not_called()
+
     @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_no_secrets(self, mock_gitleaks, tmp_path):
         mock_gitleaks.return_value = (False, None)

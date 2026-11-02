@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.violations.decision import PolicyDecision
+from ai_guardian.violations.redact import REDACT_VIOLATION_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,16 @@ def log_violation(
 
         violation_logger = ViolationLogger()
 
+    sensitive_type = getattr(result.violation_type, "value", result.violation_type)
     try:
+        if sensitive_type in REDACT_VIOLATION_TYPES:
+            violation_logger.log_sensitive_finding(
+                violation_type=sensitive_type,
+                severity=result.severity,
+                violation_id=result.id,
+            )
+            return
+
         private_candidate = result.violation_type == "suspected_password"
         blocked = result.to_blocked_dict(source=source)
         if blocked_overrides and not private_candidate:
@@ -223,7 +233,9 @@ def log_violation(
         log_kwargs["policy_decision"] = canonical_decision
         violation_logger.log_violation(**log_kwargs)
     except Exception as e:
-        if result.violation_type == "suspected_password":
+        if sensitive_type in REDACT_VIOLATION_TYPES:
+            logger.critical("Failed to persist sensitive finding; details withheld")
+        elif result.violation_type == "suspected_password":
             logger.critical(
                 "Failed to persist suspected-password violation; details withheld"
             )

@@ -2697,14 +2697,11 @@ class TestLogAskDecision:
             matched_text="AWS_KEY",
             error_msg="Secret found",
         )
-        mock_vl.log_violation.assert_called_once()
-        call_kwargs = mock_vl.log_violation.call_args[1]
+        mock_vl.log_sensitive_finding.assert_called_once()
+        call_kwargs = mock_vl.log_sensitive_finding.call_args.kwargs
         assert call_kwargs["violation_type"] == "secret_detected"
         assert call_kwargs["severity"] == "info"
-        assert call_kwargs["context"]["ask_decision"] == "allow_once"
-        assert call_kwargs["context"]["action_taken"] == "allowed"
-        assert "matched_text" not in call_kwargs["blocked"]
-        assert call_kwargs["blocked"]["pattern_hint"] == "AW.*EY"
+        mock_vl.log_violation.assert_not_called()
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_logs_allow_always(self, mock_vl_cls):
@@ -2719,9 +2716,10 @@ class TestLogAskDecision:
             matched_text="email@test.com",
             error_msg="PII found",
         )
-        call_kwargs = mock_vl.log_violation.call_args[1]
-        assert call_kwargs["context"]["ask_decision"] == "allow_always"
-        assert "matched_text" not in call_kwargs["blocked"]
+        call_kwargs = mock_vl.log_sensitive_finding.call_args.kwargs
+        assert call_kwargs["violation_type"] == "pii_detected"
+        assert call_kwargs["severity"] == "info"
+        mock_vl.log_violation.assert_not_called()
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_logs_with_file_path(self, mock_vl_cls):
@@ -2744,8 +2742,8 @@ class TestLogAskDecision:
         mock_vl = MagicMock()
         mock_vl_cls.return_value = mock_vl
         _log_ask_decision("secret_detected", AskDecision.ALLOW_ONCE)
-        call_kwargs = mock_vl.log_violation.call_args[1]
-        assert "file_path" not in call_kwargs["blocked"]
+        mock_vl.log_sensitive_finding.assert_called_once()
+        mock_vl.log_violation.assert_not_called()
 
     @patch("ai_guardian.ask_mode.HAS_VIOLATION_LOGGER", False)
     def test_noop_when_logger_unavailable(self):
@@ -3435,12 +3433,11 @@ class TestLogAskDecisionBlock:
             matched_text="AKIA_KEY",
             error_msg="Secret found",
         )
-        mock_vl.log_violation.assert_called_once()
-        call_kwargs = mock_vl.log_violation.call_args[1]
-        assert call_kwargs["context"]["ask_decision"] == "block"
-        assert call_kwargs["context"]["action_taken"] == "blocked"
-        assert "matched_text" not in call_kwargs["blocked"]
-        assert call_kwargs["blocked"]["pattern_hint"] == "AKIA.*_KEY"
+        mock_vl.log_sensitive_finding.assert_called_once()
+        assert mock_vl.log_sensitive_finding.call_args.kwargs["violation_type"] == (
+            "secret_detected"
+        )
+        mock_vl.log_violation.assert_not_called()
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_logs_block_all_decision(self, mock_vl_cls):
@@ -3455,9 +3452,10 @@ class TestLogAskDecisionBlock:
             matched_text="secret_value",
             error_msg="Secret found",
         )
-        call_kwargs = mock_vl.log_violation.call_args[1]
-        assert call_kwargs["context"]["ask_decision"] == "block_all"
-        assert call_kwargs["context"]["action_taken"] == "blocked"
+        mock_vl.log_sensitive_finding.assert_called_once()
+        assert mock_vl.log_sensitive_finding.call_args.kwargs["violation_type"] == (
+            "secret_detected"
+        )
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_logs_block_with_file_and_line(self, mock_vl_cls):
@@ -3475,10 +3473,12 @@ class TestLogAskDecisionBlock:
             line_number=42,
             dialog_wait_ms=1500.0,
         )
-        call_kwargs = mock_vl.log_violation.call_args[1]
-        assert call_kwargs["blocked"]["file_path"] == "/app/config.py"
-        assert call_kwargs["blocked"]["line_number"] == 42
-        assert call_kwargs["context"]["dialog_wait_ms"] == 1500.0
+        mock_vl.log_sensitive_finding.assert_called_once()
+        call_kwargs = mock_vl.log_sensitive_finding.call_args.kwargs
+        assert call_kwargs["violation_type"] == "secret_detected"
+        assert "file_path" not in call_kwargs
+        assert "line_number" not in call_kwargs
+        assert "dialog_wait_ms" not in call_kwargs
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_logs_pii_block_decision(self, mock_vl_cls):
@@ -3493,10 +3493,10 @@ class TestLogAskDecisionBlock:
             matched_text="555-12-3456",
             error_msg="PII: SSN",
         )
-        call_kwargs = mock_vl.log_violation.call_args[1]
-        assert call_kwargs["violation_type"] == "pii_detected"
-        assert call_kwargs["context"]["ask_decision"] == "block"
-        assert call_kwargs["context"]["action_taken"] == "blocked"
+        mock_vl.log_sensitive_finding.assert_called_once()
+        assert mock_vl.log_sensitive_finding.call_args.kwargs["violation_type"] == (
+            "pii_detected"
+        )
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_allow_once_still_logs_as_allowed(self, mock_vl_cls):
@@ -3512,9 +3512,10 @@ class TestLogAskDecisionBlock:
             matched_text="key",
             error_msg="Secret found",
         )
-        call_kwargs = mock_vl.log_violation.call_args[1]
-        assert call_kwargs["context"]["ask_decision"] == "allow_once"
-        assert call_kwargs["context"]["action_taken"] == "allowed"
+        mock_vl.log_sensitive_finding.assert_called_once()
+        assert mock_vl.log_sensitive_finding.call_args.kwargs["violation_type"] == (
+            "secret_detected"
+        )
 
 
 class TestHandleAskModeMultiDedup:

@@ -151,7 +151,7 @@ class TestBuildSecretDetectedMessage:
 
 
 class TestLogViolationPii:
-    """Tests for unified log_violation() with PII-type inputs."""
+    """Tests that PII ScanResults use only the sensitive audit envelope."""
 
     def test_calls_violation_logger(self):
         mock_logger = MagicMock()
@@ -175,16 +175,12 @@ class TestLogViolationPii:
             blocked_overrides={"pii_count": 3, "pii_types": ["EMAIL", "PHONE"]},
             context_overrides={"action": "block"},
         )
-        mock_logger.log_violation.assert_called_once()
-        call_kwargs = mock_logger.log_violation.call_args[1]
-        assert call_kwargs["violation_type"] == ViolationType.PII_DETECTED
-        blocked = call_kwargs["blocked"]
-        assert blocked["file_path"] == "/tmp/test.py"
-        assert blocked["pii_count"] == 3
-        assert set(blocked["pii_types"]) == {"EMAIL", "PHONE"}
-        ctx_dict = call_kwargs["context"]
-        assert ctx_dict["tool_use_id"] == "tu-123"
-        assert ctx_dict["session_id"] == "sess-456"
+        mock_logger.log_sensitive_finding.assert_called_once()
+        call_kwargs = mock_logger.log_sensitive_finding.call_args.kwargs
+        assert call_kwargs["violation_type"] == "pii_detected"
+        assert call_kwargs["severity"] == result.severity
+        assert call_kwargs["violation_id"] == result.id
+        mock_logger.log_violation.assert_not_called()
 
     def test_no_logger_creates_default(self, monkeypatch):
         mock_vl_cls = MagicMock()
@@ -197,9 +193,9 @@ class TestLogViolationPii:
             id=generate_violation_id(),
         )
         log_violation(result, ScanContext())
-        mock_vl_cls.return_value.log_violation.assert_called_once()
+        mock_vl_cls.return_value.log_sensitive_finding.assert_called_once()
 
-    def test_blocked_overrides_merged(self):
+    def test_blocked_overrides_are_not_persisted(self):
         mock_logger = MagicMock()
         result = ScanResult(
             detected=True,
@@ -212,10 +208,14 @@ class TestLogViolationPii:
             violation_logger=mock_logger,
             blocked_overrides={"command": "cat /etc/passwd"},
         )
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert blocked["command"] == "cat /etc/passwd"
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert mock_logger.log_sensitive_finding.call_args.kwargs == {
+            "violation_type": "pii_detected",
+            "severity": result.severity,
+            "violation_id": result.id,
+        }
 
-    def test_context_overrides_merged(self):
+    def test_context_overrides_are_not_persisted(self):
         mock_logger = MagicMock()
         result = ScanResult(
             detected=True,
@@ -229,10 +229,12 @@ class TestLogViolationPii:
             violation_logger=mock_logger,
             context_overrides={"pretool_context": pretool},
         )
-        ctx = mock_logger.log_violation.call_args[1]["context"]
-        assert ctx["pretool_context"] == pretool
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"] == (
+            "pii_detected"
+        )
 
-    def test_line_number_in_blocked(self):
+    def test_line_number_is_not_persisted(self):
         mock_logger = MagicMock()
         result = ScanResult(
             detected=True,
@@ -242,5 +244,7 @@ class TestLogViolationPii:
             file_path="/f.py",
         )
         log_violation(result, ScanContext(), violation_logger=mock_logger)
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert blocked["line_number"] == 5
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"] == (
+            "pii_detected"
+        )

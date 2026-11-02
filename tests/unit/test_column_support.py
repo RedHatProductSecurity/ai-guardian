@@ -738,9 +738,9 @@ class TestSSRFColumn(unittest.TestCase):
 
 
 class TestPiiViolationColumn(unittest.TestCase):
-    """PII violation logging includes column via log_violation() + ScanResult."""
+    """PII history omits source locations via the sensitive logger path."""
 
-    def test_column_in_blocked_dict(self):
+    def test_column_is_not_persisted(self):
         from unittest.mock import MagicMock
         from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
         from ai_guardian.violations.log_violation import ScanContext, log_violation
@@ -756,9 +756,12 @@ class TestPiiViolationColumn(unittest.TestCase):
             end_column=30,
         )
         log_violation(result, ScanContext(), violation_logger=mock_logger)
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        self.assertEqual(blocked["start_column"], 10)
-        self.assertEqual(blocked["end_column"], 30)
+        mock_logger.log_sensitive_finding.assert_called_once()
+        self.assertEqual(
+            mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"],
+            "pii_detected",
+        )
+        mock_logger.log_violation.assert_not_called()
 
     def test_column_absent_when_none(self):
         from unittest.mock import MagicMock
@@ -774,9 +777,13 @@ class TestPiiViolationColumn(unittest.TestCase):
             line_number=5,
         )
         log_violation(result, ScanContext(), violation_logger=mock_logger)
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        self.assertNotIn("start_column", blocked)
-        self.assertNotIn("end_column", blocked)
+        mock_logger.log_sensitive_finding.assert_called_once()
+        self.assertNotIn(
+            "start_column", mock_logger.log_sensitive_finding.call_args.kwargs
+        )
+        self.assertNotIn(
+            "end_column", mock_logger.log_sensitive_finding.call_args.kwargs
+        )
 
 
 if __name__ == "__main__":

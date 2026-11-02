@@ -41,11 +41,16 @@ budget_tokens: 1000
   Caller objects and type-specific aggregate counters remain unchanged. The
   Console now labels the generic category, explains why details are absent, and
   reads secret aggregate statistics from counters. Docs and regression/UX tests
-  were updated. **Validation:** 332 focused unit/UX tests pass; Ruff, Black,
+  were updated. Commit `33a293d3` still reported six flows at the append line;
+  the listed sources point to CLI scan findings and Ask-mode test inputs. A local
+  follow-up adds an envelope-only `log_sensitive_finding` path and routes Ask-mode,
+  shared ScanResult, and CLI scan findings through it before any source details
+  are assembled/passed to the generic logger. **Validation:** 620 focused
+  unit/UX tests pass; Ruff, Black,
   error-level Pylint, and changed-module Mypy pass. Full-package Mypy remains at
   14 known errors in untouched `skill_discovery.py` and `secret_validator.py`.
-  Current changes are local and not yet committed/pushed; fresh CodeQL analysis
-  must confirm whether alert #328 is cleared.
+  Routing follow-up is committed on branch `2637`; fresh CodeQL analysis must
+  confirm whether alert #328 is cleared.
 - No SQLite decision/migration or issue closure. Branch `2637` has open draft PR
   #2639; the next step is to publish this follow-up on that branch and inspect the
   fresh CodeQL analysis before treating alert #328 as resolved.

@@ -77,6 +77,56 @@ class ViolationLogger:
         if self._is_logging_enabled():
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def log_sensitive_finding(
+        self,
+        violation_type: str,
+        severity: str = "warning",
+        violation_id: Optional[str] = None,
+    ) -> None:
+        """Persist only the minimal audit envelope for a sensitive finding."""
+        if violation_type not in REDACT_VIOLATION_TYPES:
+            logger.warning("Refusing non-sensitive type in sensitive finding logger")
+            return
+        if not self._is_logging_enabled() or not self._should_log_type(violation_type):
+            return
+
+        try:
+            timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            entry = {
+                "id": violation_id,
+                "timestamp": timestamp,
+                "violation_type": "sensitive_finding",
+                "severity": severity,
+                "resolved": False,
+                "resolved_at": None,
+                "resolved_action": None,
+            }
+            serialized_line = json.dumps(entry) + "\n"
+            with _LOG_MAINTENANCE_LOCK:
+                try:
+                    previous_size = self.log_path.stat().st_size
+                except FileNotFoundError:
+                    previous_size = 0
+                except OSError:
+                    previous_size = None
+                with open(self.log_path, "a", encoding="utf-8") as f:
+                    f.write(serialized_line)
+                self._maybe_rotate_after_append(
+                    self.log_path,
+                    previous_size=previous_size,
+                    appended_size=len(serialized_line.encode("utf-8")),
+                )
+
+            logger.debug("Logged sensitive finding to %s", self.log_path)
+            try:
+                from ai_guardian.violations.counter import ViolationCounter
+
+                ViolationCounter().increment(violation_type)
+            except Exception:
+                logger.warning("Failed to increment sensitive finding counter")
+        except Exception:
+            logger.critical("Failed to persist sensitive finding; details withheld")
+
     def log_violation(
         self,
         violation_type: str,
@@ -112,46 +162,41 @@ class ViolationLogger:
             )
             return
 
+        if violation_type in REDACT_VIOLATION_TYPES:
+            self.log_sensitive_finding(
+                violation_type=violation_type,
+                severity=severity,
+                violation_id=violation_id,
+            )
+            return
+
         try:
             timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            sensitive_violation = violation_type in REDACT_VIOLATION_TYPES
-            entry: Dict[str, Any]
-            if sensitive_violation:
-                entry = {
-                    "id": violation_id,
-                    "timestamp": timestamp,
-                    "violation_type": "sensitive_finding",
-                    "severity": severity,
-                    "resolved": False,
-                    "resolved_at": None,
-                    "resolved_action": None,
-                }
-            else:
-                canonical_decision = safe_policy_decision(policy_decision)
-                if canonical_decision is None:
-                    canonical_decision = PolicyDecision.from_violation(
-                        violation_type,
-                        blocked=blocked,
-                        context=context,
-                        severity=severity,
-                        violation_id=violation_id,
-                        timestamp=timestamp,
-                    ).to_dict()
-                entry = {
-                    "id": violation_id,
-                    "timestamp": timestamp,
-                    "violation_type": violation_type,
-                    "severity": severity,
-                    "blocked": blocked,
-                    "context": context,
-                    "suggestion": suggestion or {},
-                    "policy_decision": canonical_decision,
-                    "resolved": False,
-                    "resolved_at": None,
-                    "resolved_action": None,
-                }
-                if isinstance(allowlist_context, dict) and allowlist_context:
-                    entry["allowlist_context"] = allowlist_context
+            canonical_decision = safe_policy_decision(policy_decision)
+            if canonical_decision is None:
+                canonical_decision = PolicyDecision.from_violation(
+                    violation_type,
+                    blocked=blocked,
+                    context=context,
+                    severity=severity,
+                    violation_id=violation_id,
+                    timestamp=timestamp,
+                ).to_dict()
+            entry = {
+                "id": violation_id,
+                "timestamp": timestamp,
+                "violation_type": violation_type,
+                "severity": severity,
+                "blocked": blocked,
+                "context": context,
+                "suggestion": suggestion or {},
+                "policy_decision": canonical_decision,
+                "resolved": False,
+                "resolved_at": None,
+                "resolved_action": None,
+            }
+            if isinstance(allowlist_context, dict) and allowlist_context:
+                entry["allowlist_context"] = allowlist_context
 
             # Append to JSONL. Rotation state is shared across logger instances so
             # request handlers do not each perform a full scan after every write.

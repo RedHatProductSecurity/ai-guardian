@@ -35,28 +35,36 @@ class TestCategoryViolationRouting:
 
     def test_pii_category_routes_to_pii_detected(self):
         mock_logger = self._call_log_finding("pii", rule_id="pii-ssn")
-        mock_logger.log_violation.assert_called_once()
-        call_kwargs = mock_logger.log_violation.call_args
-        assert call_kwargs.kwargs["violation_type"] == ViolationType.PII_DETECTED
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert (
+            mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"]
+            == "pii_detected"
+        )
+        mock_logger.log_violation.assert_not_called()
 
-    def test_pii_reason_includes_engine_and_rule(self):
+    def test_pii_persistence_omits_engine_and_rule_details(self):
         mock_logger = self._call_log_finding("pii", rule_id="pii-ssn")
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert "toml-patterns" in blocked["reason"]
-        assert "pii-ssn" in blocked["reason"]
-        assert "PII detected" in blocked["reason"]
+        kwargs = mock_logger.log_sensitive_finding.call_args.kwargs
+        assert set(kwargs) == {"violation_type", "severity", "violation_id"}
+        assert "toml-patterns" not in str(kwargs)
+        assert "pii-ssn" not in str(kwargs)
 
     def test_secrets_category_routes_to_secret_detected(self):
         mock_logger = self._call_log_finding("secrets", rule_id="openai-api-key")
-        mock_logger.log_violation.assert_called_once()
-        call_kwargs = mock_logger.log_violation.call_args
-        assert call_kwargs.kwargs["violation_type"] == ViolationType.SECRET_DETECTED
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert (
+            mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"]
+            == "secret_detected"
+        )
+        mock_logger.log_violation.assert_not_called()
 
     def test_none_category_routes_to_secret_detected(self):
         mock_logger = self._call_log_finding(None, rule_id="some-rule")
-        mock_logger.log_violation.assert_called_once()
-        call_kwargs = mock_logger.log_violation.call_args
-        assert call_kwargs.kwargs["violation_type"] == ViolationType.SECRET_DETECTED
+        mock_logger.log_sensitive_finding.assert_called_once()
+        assert (
+            mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"]
+            == "secret_detected"
+        )
 
     def test_prompt_injection_category_routes_correctly(self):
         mock_logger = self._call_log_finding(
@@ -84,19 +92,21 @@ class TestCategoryViolationRouting:
 
     def test_unknown_category_falls_back_to_secret(self):
         mock_logger = self._call_log_finding("unknown_category", rule_id="test")
-        call_kwargs = mock_logger.log_violation.call_args
-        assert call_kwargs.kwargs["violation_type"] == ViolationType.SECRET_DETECTED
+        assert (
+            mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"]
+            == "secret_detected"
+        )
 
 
 class TestSecretDetectionReasonString:
-    """Test that reason string uses engine name instead of hardcoded 'Gitleaks'."""
+    """Test secret records do not persist scanner engine/rule details."""
 
     @pytest.fixture(autouse=True)
     def _patch_logger(self):
         with patch("ai_guardian.scanners.secret_scanning.HAS_VIOLATION_LOGGER", True):
             yield
 
-    def test_reason_uses_engine_name(self):
+    def test_engine_name_is_not_persisted(self):
         from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation
 
         mock_logger = MagicMock()
@@ -104,11 +114,11 @@ class TestSecretDetectionReasonString:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert "toml-patterns" in blocked["reason"]
-        assert "Gitleaks" not in blocked["reason"]
+        kwargs = mock_logger.log_sensitive_finding.call_args.kwargs
+        assert set(kwargs) == {"violation_type", "severity", "violation_id"}
+        assert "toml-patterns" not in str(kwargs)
 
-    def test_reason_defaults_to_gitleaks(self):
+    def test_rule_detail_is_not_persisted(self):
         from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation
 
         mock_logger = MagicMock()
@@ -116,8 +126,8 @@ class TestSecretDetectionReasonString:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        blocked = mock_logger.log_violation.call_args.kwargs["blocked"]
-        assert "Gitleaks" in blocked["reason"]
+        kwargs = mock_logger.log_sensitive_finding.call_args.kwargs
+        assert "Gitleaks" not in str(kwargs)
 
 
 class TestSecretMatchCategory:
