@@ -1,6 +1,7 @@
 """Focused tests for violation JSONL append, retention, and recent reads."""
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -54,6 +55,19 @@ def test_routine_appends_do_not_run_full_rotation(tmp_path, monkeypatch):
 
     lines = log_path.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 20
+
+
+def test_unconfigured_type_diagnostic_does_not_echo_caller_value(tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger=violation_logger_module.logger.name)
+    logger = ViolationLogger(
+        log_path=tmp_path / "violations.jsonl",
+        config={"enabled": True, "log_types": ["tool_permission"]},
+    )
+
+    logger.log_violation("synthetic_unconfigured_category", blocked={}, context={})
+
+    assert "not configured to be logged" in caplog.text
+    assert "synthetic_unconfigured_category" not in caplog.text
 
 
 def test_entry_limit_cleanup_runs_on_a_bounded_append_schedule(tmp_path, monkeypatch):

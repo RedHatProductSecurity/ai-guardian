@@ -255,9 +255,7 @@ class ViolationLogger:
 
         # Check if this violation type should be logged
         if not self._should_log_type(violation_type):
-            logger.debug(
-                f"Violation type {violation_type} is not configured to be logged"
-            )
+            logger.debug("Violation type is not configured to be logged")
             return
 
         try:
@@ -311,7 +309,7 @@ class ViolationLogger:
                     appended_size=len(serialized_line.encode("utf-8")),
                 )
 
-            logger.debug(f"Logged {violation_type} violation to {self.log_path}")
+            logger.debug("Logged violation")
 
             # Increment running counter (independent of log rotation)
             try:

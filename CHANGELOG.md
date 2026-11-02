@@ -271,6 +271,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builds and scanner-version validation.
 
 ### Fixed
+- **Privacy-safe violation diagnostics:** Avoid echoing caller-provided violation
+  categories in logger debug messages; log only fixed diagnostic text.
 - **Violation-log sensitive-data minimization:** Store only an ID, timestamp,
   severity, generic category, and resolution state for secret, image-secret, and
   PII findings. Ask-mode history omits matched input/error text, and CLI scan

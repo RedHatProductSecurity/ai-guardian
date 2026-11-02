@@ -174,6 +174,12 @@
 
 ## Key Learnings
 
+- **2026-11-02 — Violation alert CodeQL/CI follow-up (#2646):** Do not interpolate
+  caller-provided violation categories into logger diagnostics, even debug-level
+  skip messages; keep those messages fixed and value-free. CI tests that assert
+  captured warnings must set the target logger level explicitly because other
+  tests may leave process-wide logger levels changed.
+
 - **2026-11-02 — Violation notification scope (#2634):** Notification preferences
   are machine-level; add `violation_notifications` to `GLOBAL_ONLY_SECTIONS` and
   save Console edits through global scope so project overlays cannot alter them.
