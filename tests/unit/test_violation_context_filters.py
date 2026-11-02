@@ -18,7 +18,7 @@ class TestContextFilters:
             vl = ViolationLogger()
             for v in violations:
                 vl.log_violation(
-                    violation_type=v.get("violation_type", "secret_detected"),
+                    violation_type=v.get("violation_type", "prompt_injection"),
                     blocked=v.get("blocked", {"reason": "test"}),
                     context=v.get("context", {}),
                 )
@@ -105,7 +105,7 @@ class TestContextFilters:
                 tmp,
                 [
                     {
-                        "violation_type": "secret_detected",
+                        "violation_type": "tool_permission",
                         "context": {"tool_use_id": "tu_abc", "session_id": "s1"},
                     },
                     {
@@ -116,10 +116,10 @@ class TestContextFilters:
             )
             with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": tmp}):
                 results = vl.get_recent_violations(
-                    violation_type="secret_detected", session_id="s1"
+                    violation_type="tool_permission", session_id="s1"
                 )
             assert len(results) == 1
-            assert results[0]["violation_type"] == "secret_detected"
+            assert results[0]["violation_type"] == "tool_permission"
 
     def test_no_filters_returns_all(self):
         with tempfile.TemporaryDirectory() as tmp:

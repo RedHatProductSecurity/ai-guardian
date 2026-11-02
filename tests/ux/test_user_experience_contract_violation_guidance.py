@@ -10,7 +10,7 @@ import inspect
 
 import pytest
 
-from ai_guardian.constants import ALL_VIOLATION_TYPES
+from ai_guardian.constants import ALL_VIOLATION_TYPES, VIOLATION_FILTER_TYPES
 from ai_guardian.violations.guidance import (
     IMMUTABLE_VIOLATION_NOTICE,
     get_resolution_instructions,
@@ -46,7 +46,11 @@ def test_every_violation_type_has_user_facing_resolution_guidance(violation_type
     instructions, snippet = get_resolution_instructions(violation)
 
     assert instructions
-    if violation_type not in {"canary_detected", "suspected_password"}:
+    if violation_type not in {
+        "canary_detected",
+        "suspected_password",
+        "sensitive_finding",
+    }:
         assert snippet
     else:
         assert snippet == ""
@@ -76,6 +80,41 @@ def test_heuristic_details_offer_private_review_not_candidate_enrollment():
     )
     assert snippet == ""
     assert "SYNTHETIC_CANDIDATE" not in instructions
+
+
+def test_sensitive_history_entry_explains_details_are_not_retained():
+    """USER EXPERIENCE: sensitive event → generic, privacy-preserving history."""
+    instructions, snippet = get_resolution_instructions(
+        {
+            "violation_type": "sensitive_finding",
+            "blocked": {},
+            "suggestion": {"rule": {"pattern": "must not appear"}},
+        }
+    )
+
+    assert instructions == (
+        "A secret or personal-data finding was recorded. Per-finding details "
+        "are intentionally not retained in violation history for privacy."
+    )
+    assert snippet == ""
+    assert any(
+        label == "Sensitive Finding" and value == "sensitive_finding"
+        for label, value, _ in VIOLATION_FILTER_TYPES
+    )
+
+
+def test_secret_statistics_disclose_aggregate_only_history():
+    """USER EXPERIENCE: statistics show aggregate counts, not lost details.
+
+    Manual check: open Console → Secret Redaction → Redaction Statistics.
+    The page must explain that only aggregate counts remain in history.
+    """
+    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
+    from ai_guardian.web.pages.secret_redaction import create_secret_redaction_page
+
+    source = inspect.getsource(create_secret_redaction_page)
+    assert "Only aggregate counts are retained; per-finding details and " in source
+    assert "secret types are omitted from violation history for privacy." in source
 
 
 def test_tool_permission_details_show_rule_instruction_and_snippet():

@@ -335,7 +335,11 @@ class TestAllKnownTypesHaveInstructions:
             }
             instr, snippet = get_resolution_instructions(v)
             assert instr, f"{vtype} should produce non-empty instructions"
-            if vtype not in {"canary_detected", "suspected_password"}:
+            if vtype not in {
+                "canary_detected",
+                "suspected_password",
+                "sensitive_finding",
+            }:
                 assert snippet, f"{vtype} should produce a config snippet"
             else:
                 assert snippet == "", f"{vtype} must not offer a persistent exception"

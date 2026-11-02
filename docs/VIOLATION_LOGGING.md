@@ -1,11 +1,13 @@
 # Violation Logging
 
-AI Guardian automatically logs all blocked operations in JSON format, providing a complete audit trail for security review and compliance.
+AI Guardian records blocked operations in JSONL for security review. Sensitive
+secret and personal-data findings use a minimal, privacy-preserving audit record;
+other violation types retain their normal event details.
 
 ## What is Violation Logging?
 
 **Violation Logging** automatically records when AI Guardian blocks an operation:
-- 📝 **Complete audit trail** - Every blocked action is logged
+- 📝 **Privacy-aware audit trail** - Blocked actions are logged with sensitive findings minimized
 - 🔍 **Security insights** - Understand attack patterns
 - ✅ **Compliance proof** - Evidence of security controls
 - 🐛 **Debug assistance** - Troubleshoot false positives
@@ -24,7 +26,7 @@ Every time AI Guardian blocks something, it creates a log entry:
 |----------------|-------------------|-------------|
 | **Tool Permission** | Blocked command execution | Command, tool name, policy rule |
 | **Directory Blocking** | Restricted path access | File path, requested operation |
-| **Secret Detected** | Secret found in commit/file | Secret type, file location, line/column number |
+| **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, and timestamp only; no per-finding details |
 | **Secret Redaction** | Secret masked in output | Secret type, masking strategy |
 | **Prompt Injection** | Malicious prompt detected | Pattern matched, confidence score |
 | **SSRF Protection** | Dangerous network request | URL, reason (private IP, metadata, etc.) |
@@ -53,7 +55,7 @@ Each violation is logged as a single JSON object per line (JSONL format).
 
 ### Unified Policy Decision
 
-New entries include a `policy_decision` object. Its versioned schema is defined
+Standard entries include a `policy_decision` object. Its versioned schema is defined
 in `src/ai_guardian/schemas/policy-decision.schema.json` and is shared by hook,
 MCP, SDK, daemon, scanner, and external-inspector paths.
 
@@ -83,10 +85,11 @@ and scanner payloads are excluded by default. The correlation ID uses an
 explicit run ID when available, then the session ID or tool-use ID, so related
 checks can be grouped without copying agent content.
 
-The existing top-level JSONL fields remain unchanged. Consumers that read older
-entries can treat a missing `policy_decision` field as a legacy record; the
-current REST, SDK, SARIF, and OTEL adapters preserve their existing shapes and
-add the normalized record or its safe fields.
+The existing top-level JSONL fields remain unchanged for standard violation
+types; sensitive findings use the minimal record described below. Consumers that
+read older entries can treat a missing `policy_decision` field as a legacy
+record. Current REST, SDK, SARIF, and OTEL adapters preserve their existing
+shapes and add the normalized record or its safe fields.
 
 ### Tool Input Diagnostics
 
@@ -169,32 +172,23 @@ Immutable input failures remain blocked and do not gain override actions.
 
 ```json
 {
-  "timestamp": "2024-04-27T08:35:42Z",
-  "violation_type": "secret_detected",
+  "id": "viol_1234abcd",
+  "timestamp": "2026-11-02T08:35:42Z",
+  "violation_type": "sensitive_finding",
   "severity": "high",
-  "blocked": {
-    "secret_type": "GitHub Personal Token",
-    "file": "config/settings.py",
-    "line": 42,
-    "column": 15,
-    "scanner": "gitleaks"
-  },
-  "context": {
-    "project_path": "/home/user/projects/webapp",
-    "git_branch": "feature/auth",
-    "tool_name": "Write",
-    "source": "PostToolUse",
-    "file_path": "config/settings.py"
-  },
-  "suggestion": {
-    "action": "use_environment_variable",
-    "example": "GITHUB_TOKEN=ghp_... in .env"
-  },
   "resolved": false,
   "resolved_at": null,
   "resolved_action": null
 }
 ```
+
+For `secret_detected`, `image_secret_detected`, and `pii_detected`, JSONL keeps
+only the generic category, ID, timestamp, severity, and resolution state. It does
+not retain source paths/positions, matched values, detector metadata, context,
+suggestions, policy-decision details, or allowlist snippets. The original finding
+remains available to the in-memory caller; the persistent history does not
+distinguish which sensitive type was detected. Aggregate secret counts remain
+available separately.
 
 ### Example Log Entry (Directory Blocked)
 
@@ -561,7 +555,7 @@ Violation logging is **extremely efficient**:
 
 **Violation Logging** provides:
 
-📝 **Complete audit trail** - Every blocked operation is logged with details  
+📝 **Privacy-aware audit trail** - Sensitive finding details are intentionally omitted
 🔍 **Security insights** - Understand attack patterns and trends  
 ✅ **Compliance proof** - Evidence that security controls are active  
 🐛 **Debug assistance** - Troubleshoot false positives easily  

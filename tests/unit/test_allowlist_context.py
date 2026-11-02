@@ -217,16 +217,11 @@ def test_violation_logger_writes_allowlist_context_at_top_level(tmp_path):
     }
 
     logger.log_violation(
-        "secret_detected",
+        "prompt_injection",
         blocked={"file_path": "/tmp/scanner-copy.py", "line_number": 1},
         context={"project_path": "/workspace/project"},
         allowlist_context=metadata,
     )
 
     entry = json.loads(log_path.read_text(encoding="utf-8").strip())
-    assert entry["allowlist_context"] == {
-        "original_file_path": metadata["original_file_path"],
-        "line_content_hash": metadata["line_content_hash"],
-        "git_ref": metadata["git_ref"],
-        "project_path": metadata["project_path"],
-    }
+    assert entry["allowlist_context"] == metadata

@@ -285,22 +285,21 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
     stored = json.loads(serialized)
     assert sensitive_value not in serialized
     assert partial_hint not in serialized
-    assert stored["blocked"]["file_path"] == "/repo/config.txt"
-    assert stored["blocked"]["line_number"] == 17
-    assert "rule_id" not in stored["blocked"]
-    assert "description" not in stored["blocked"]
-    assert "matched_text" not in stored["blocked"]
-    assert "pattern_hint" not in stored["blocked"]
-    assert "matched_text" not in stored["blocked"]["findings"][0]
-    assert "pattern_hint" not in stored["blocked"]["findings"][0]
-    assert stored["context"] == {"tool_use_id": "safe-tool-id"}
-    assert stored["suggestion"] == {}
-    assert stored["allowlist_context"] == {
-        "original_file_path": "/repo/config.txt",
-        "line_content_hash": "a" * 64,
-        "git_ref": "synthetic-ref",
-        "project_path": "/repo",
+    assert stored["id"] is None
+    assert stored["timestamp"]
+    assert stored["violation_type"] == "sensitive_finding"
+    assert stored["severity"] == "warning"
+    assert set(stored) == {
+        "id",
+        "timestamp",
+        "violation_type",
+        "severity",
+        "resolved",
+        "resolved_at",
+        "resolved_action",
     }
+    assert logger.get_recent_violations(violation_type="sensitive_finding")
+    assert not logger.get_recent_violations(violation_type=violation_type)
     # Sanitizing persisted data must not alter the caller's in-memory record.
     assert blocked["matched_text"] == sensitive_value
     assert blocked["pattern_hint"] == partial_hint
