@@ -27,9 +27,6 @@ from ai_guardian.storage import (
     make_private_directory,
 )
 from ai_guardian.violations.decision import PolicyDecision, safe_policy_decision
-from ai_guardian.violations.redact import (
-    REDACT_VIOLATION_TYPES,
-)
 
 logger = logging.getLogger(__name__)
 _MIRRORED_LOG_LOCK = threading.Lock()
@@ -84,7 +81,11 @@ class ViolationLogger:
         violation_id: Optional[str] = None,
     ) -> None:
         """Persist only the minimal audit envelope for a sensitive finding."""
-        if violation_type not in REDACT_VIOLATION_TYPES:
+        if (
+            violation_type != "secret_detected"
+            and violation_type != "image_secret_detected"
+            and violation_type != "pii_detected"
+        ):
             logger.warning("Refusing non-sensitive type in sensitive finding logger")
             return
         if not self._is_logging_enabled() or not self._should_log_type(violation_type):
@@ -92,11 +93,26 @@ class ViolationLogger:
 
         try:
             timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            if severity == "critical":
+                safe_severity = "critical"
+            elif severity == "high":
+                safe_severity = "high"
+            elif severity == "medium":
+                safe_severity = "medium"
+            elif severity == "low":
+                safe_severity = "low"
+            elif severity == "info":
+                safe_severity = "info"
+            elif severity == "error":
+                safe_severity = "error"
+            else:
+                safe_severity = "warning"
+
             entry = {
                 "id": violation_id,
                 "timestamp": timestamp,
                 "violation_type": "sensitive_finding",
-                "severity": severity,
+                "severity": safe_severity,
                 "resolved": False,
                 "resolved_at": None,
                 "resolved_action": None,
@@ -162,7 +178,11 @@ class ViolationLogger:
             )
             return
 
-        if violation_type in REDACT_VIOLATION_TYPES:
+        if (
+            violation_type == "secret_detected"
+            or violation_type == "image_secret_detected"
+            or violation_type == "pii_detected"
+        ):
             self.log_sensitive_finding(
                 violation_type=violation_type,
                 severity=severity,

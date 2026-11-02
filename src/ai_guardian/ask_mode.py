@@ -470,8 +470,6 @@ def _log_ask_decision(
     try:
         from ai_guardian.ui.ask_dialog import AskDecision
 
-        from ai_guardian.violations.redact import REDACT_VIOLATION_TYPES
-
         vlogger = ViolationLogger()
 
         vtype_str = (
@@ -489,7 +487,11 @@ def _log_ask_decision(
         decision_str, action_taken = _DECISION_MAP.get(
             decision, ("allow_once", "allowed")
         )
-        if vtype_str in REDACT_VIOLATION_TYPES:
+        if (
+            vtype_str == "secret_detected"
+            or vtype_str == "image_secret_detected"
+            or vtype_str == "pii_detected"
+        ):
             from ai_guardian.scanners.scan_result import generate_violation_id
 
             vlogger.log_sensitive_finding(

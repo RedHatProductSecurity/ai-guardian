@@ -309,6 +309,29 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
     assert allowlist_context["surrounding_context"] == sensitive_value
 
 
+@pytest.mark.parametrize(
+    ("input_severity", "expected_severity"),
+    [
+        ("critical", "critical"),
+        ("info", "info"),
+        ("scanner supplied label", "warning"),
+    ],
+)
+def test_sensitive_finding_severity_is_limited_to_known_labels(
+    tmp_path, input_severity, expected_severity
+):
+    log_path = tmp_path / "violations.jsonl"
+    logger = _logger(log_path)
+
+    logger.log_sensitive_finding(
+        violation_type="secret_detected",
+        severity=input_severity,
+    )
+
+    stored = json.loads(log_path.read_text(encoding="utf-8"))
+    assert stored["severity"] == expected_severity
+
+
 def test_non_sensitive_violation_storage_keeps_matched_text(tmp_path):
     log_path = tmp_path / "violations.jsonl"
     logger = _logger(log_path)
