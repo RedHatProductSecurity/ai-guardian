@@ -71,7 +71,8 @@ budget_tokens: 1000
   Follow-up tooltip comment:
   https://github.com/RedHatProductSecurity/ai-guardian/issues/2634#issuecomment-6586902395
   DAF progress notes were recorded. PR #2646 is open. The original implementation
-  was pushed on branch `2634`; the follow-up below is local and uncommitted.
+  and logger follow-up are now committed locally on branch `2634` after rebasing
+  onto `origin/main` at `fcabf830`; the rewritten branch has not been pushed.
 
 ### PR #2646 CI/CodeQL follow-up — 2026-11-02
 
@@ -91,8 +92,12 @@ budget_tokens: 1000
   from the previous PR head and has not been rerun; CodeQL must be reevaluated on
   the follow-up commit. Container Build Validation `41520864019` was still running
   at last check.
-- **Next:** user review and `daf complete` outside the active agent session to
-  publish the local follow-up, then verify the new PR checks and CodeQL alert state.
+- Rebase completed successfully with the WSL2 documentation and notification
+  changelog entries preserved. `origin/2634` still points to the pre-rebase history;
+  no push or force-push was performed. The prior CI run is from the previous PR
+  head, so the rebased commits still need fresh CI/CodeQL evaluation after any
+  separately authorized publication.
+- **Next:** user review; no remote refs were changed by this rebase.
 
 ## Issue #2637 implementation — 2026-11-02
 
