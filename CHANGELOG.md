@@ -262,6 +262,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builds and scanner-version validation.
 
 ### Fixed
+- **Sensitive violation history:** Stop persisting raw matched values and
+  partial pattern hints for secret and PII findings, including nested findings.
+  Keep safe location and rule metadata; the in-memory interactive hint remains
+  available to callers.
 - **SSRF destination classification (#2632):** Normalize a terminal DNS root dot,
   block the RFC 2544 benchmarking range and IPv6 unspecified address, and apply
   existing destination policy to IPv4 endpoints embedded in the well-known NAT64

@@ -27,6 +27,10 @@ from ai_guardian.storage import (
     make_private_directory,
 )
 from ai_guardian.violations.decision import PolicyDecision, safe_policy_decision
+from ai_guardian.violations.redact import (
+    REDACT_VIOLATION_TYPES,
+    sanitize_blocked_for_storage,
+)
 
 logger = logging.getLogger(__name__)
 _MIRRORED_LOG_LOCK = threading.Lock()
@@ -121,12 +125,15 @@ class ViolationLogger:
                     violation_id=violation_id,
                     timestamp=timestamp,
                 ).to_dict()
+            persisted_blocked = blocked
+            if violation_type in REDACT_VIOLATION_TYPES:
+                persisted_blocked = sanitize_blocked_for_storage(blocked)
             entry = {
                 "id": violation_id,
                 "timestamp": timestamp,
                 "violation_type": violation_type,
                 "severity": severity,
-                "blocked": blocked,
+                "blocked": persisted_blocked,
                 "context": context,
                 "suggestion": suggestion or {},
                 "policy_decision": canonical_decision,

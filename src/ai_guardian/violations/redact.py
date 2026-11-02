@@ -3,6 +3,7 @@
 REDACT_VIOLATION_TYPES = frozenset(
     {"secret_detected", "image_secret_detected", "pii_detected"}
 )
+_SENSITIVE_TEXT_FIELDS = frozenset({"matched_text", "pattern_hint"})
 
 
 def redact_secret_hint(value):
@@ -56,3 +57,28 @@ def sanitize_blocked_for_secret(blocked_info):
                 if hint:
                     blocked_info["pattern_hint"] = hint
                     break
+
+
+def sanitize_blocked_for_storage(blocked_info):
+    """Copy sensitive violation metadata without persisting values or hints.
+
+    ``pattern_hint`` is useful to an interactive caller, but its fragments still
+    reveal parts of a detected credential/PII value. Persisted violation history
+    therefore omits both it and raw ``matched_text`` at every nested level.
+    """
+
+    def strip_sensitive_text(value):
+        if isinstance(value, dict):
+            return {
+                key: strip_sensitive_text(item)
+                for key, item in value.items()
+                if key not in _SENSITIVE_TEXT_FIELDS
+            }
+        if isinstance(value, list):
+            return [strip_sensitive_text(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(strip_sensitive_text(item) for item in value)
+        return value
+
+    sanitized = strip_sensitive_text(blocked_info)
+    return sanitized if isinstance(sanitized, dict) else {}
