@@ -33,8 +33,16 @@ budget_tokens: 1000
   daemon, Console, and UX tests pass; 462 setup/profile tests pass; Ruff, Black
   (Python 3.10 target), error-level Pylint (10/10), Mypy, and `git diff --check`
   pass.
-- **Next:** user review. Issue #2633 remains open; changes are local and
-  uncommitted. No live multi-daemon environment check was run.
+- The feature commit `30391c8a` is pushed on branch `2633`. CI run
+  `41377665026` failed because the SSH menu test helper constructs a partial tray
+  with `__new__` and did not initialize the new mirror wake Event. The follow-up
+  initializes that Event in `tests/fixtures/ssh_tray.py` and asserts discovery
+  wakes it. **Validation:** 47 SSH menu/mirroring unit and UX tests pass; the
+  focused lint/format/diff checks pass. The fixture follow-up is local and
+  uncommitted; no replacement CI run yet. The failure is unrelated to config
+  schema/profile defaults, which all include the opt-in as false.
+- **Next:** user review/authorization before publishing the CI fixture fix. Issue
+  #2633 remains open. No live multi-daemon environment check was run.
 
 ## Issue #2628 implementation — 2026-11-01
 

@@ -302,6 +302,7 @@ def test_discovery_sorts_before_plugin_binding_and_preserves_selection(remote):
     assert [t.name for t in tray._targets] == ["workstation", "alpha", "Zulu"]
     assert tray._active_target is remote
     tray._plugins._poll_plugins.assert_called_once()
+    assert tray._violation_mirror_wake.is_set()
 
 
 def test_same_count_reorder_rebuilds_descriptors_after_popup_closes(remote):
