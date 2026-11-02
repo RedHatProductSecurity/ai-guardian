@@ -262,10 +262,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builds and scanner-version validation.
 
 ### Fixed
-- **Sensitive violation history:** Store only an ID, timestamp, severity, generic
-  category, and resolution state for secret, image-secret, and PII findings. Omit
-  all per-finding details from JSONL; interactive callers retain their in-memory
-  values, and aggregate secret counts remain available.
+- **Violation-log sensitive-data minimization:** Store only an ID, timestamp,
+  severity, generic category, and resolution state for secret, image-secret, and
+  PII findings. Ask-mode history omits matched input/error text, and CLI scan
+  history omits finding messages/snippets; callers and CLI output retain their
+  original data. Generic records persist recognized type/severity labels only.
 - **SSRF destination classification (#2632):** Normalize a terminal DNS root dot,
   block the RFC 2544 benchmarking range and IPv6 unspecified address, and apply
   existing destination policy to IPv4 endpoints embedded in the well-known NAT64

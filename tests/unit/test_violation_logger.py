@@ -340,7 +340,27 @@ def test_non_sensitive_violation_storage_keeps_matched_text(tmp_path):
         "prompt_injection",
         blocked={"matched_text": "ignore previous instructions"},
         context={},
+        severity="high",
     )
 
     stored = json.loads(log_path.read_text(encoding="utf-8"))
+    assert stored["violation_type"] == "prompt_injection"
+    assert stored["severity"] == "high"
     assert stored["blocked"]["matched_text"] == "ignore previous instructions"
+    assert stored["policy_decision"]["violation_type"] == "prompt_injection"
+
+
+def test_non_sensitive_violation_normalizes_unknown_severity(tmp_path):
+    log_path = tmp_path / "violations.jsonl"
+    logger = _logger(log_path)
+
+    logger.log_violation(
+        "prompt_injection",
+        blocked={},
+        context={},
+        severity="scanner supplied label",
+    )
+
+    stored = json.loads(log_path.read_text(encoding="utf-8"))
+    assert stored["severity"] == "warning"
+    assert stored["policy_decision"]["severity"] == "warning"

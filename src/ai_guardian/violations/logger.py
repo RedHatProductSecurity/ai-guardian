@@ -38,6 +38,78 @@ _ROTATION_INTERVAL_SECONDS = 300.0
 _RECENT_READ_CHUNK_SIZE = 8192
 
 
+def _safe_violation_label(violation_type: str) -> str:
+    """Return a fixed persisted category label for a known violation type."""
+    if (
+        violation_type == "secret_detected"
+        or violation_type == "image_secret_detected"
+        or violation_type == "pii_detected"
+    ):
+        return "sensitive_finding"
+    if violation_type == "sensitive_finding":
+        return "sensitive_finding"
+    if violation_type == "tool_permission":
+        return "tool_permission"
+    if violation_type == "secret_redaction":
+        return "secret_redaction"
+    if violation_type == "suspected_password":
+        return "suspected_password"
+    if violation_type == "directory_blocking":
+        return "directory_blocking"
+    if violation_type == "prompt_injection":
+        return "prompt_injection"
+    if violation_type == "jailbreak_detected":
+        return "jailbreak_detected"
+    if violation_type == "ssrf_blocked":
+        return "ssrf_blocked"
+    if violation_type == "config_file_exfil":
+        return "config_file_exfil"
+    if violation_type == "secret_in_transcript":
+        return "secret_in_transcript"
+    if violation_type == "pii_in_transcript":
+        return "pii_in_transcript"
+    if violation_type == "prompt_injection_in_transcript":
+        return "prompt_injection_in_transcript"
+    if violation_type == "image_pii_detected":
+        return "image_pii_detected"
+    if violation_type == "context_poisoning":
+        return "context_poisoning"
+    if violation_type == "supply_chain":
+        return "supply_chain"
+    if violation_type == "code_security":
+        return "code_security"
+    if violation_type == "offensive_language":
+        return "offensive_language"
+    if violation_type == "canary_detected":
+        return "canary_detected"
+    if violation_type == "exfil_detection":
+        return "exfil_detection"
+    if violation_type == "annotation_suppressed":
+        return "annotation_suppressed"
+    if violation_type == "bash_exfil":
+        return "bash_exfil"
+    return "other"
+
+
+def _safe_severity_label(severity: str) -> str:
+    """Return a fixed severity label, rejecting arbitrary scanner values."""
+    if severity == "critical":
+        return "critical"
+    if severity == "high":
+        return "high"
+    if severity == "medium":
+        return "medium"
+    if severity == "low":
+        return "low"
+    if severity == "info":
+        return "info"
+    if severity == "error":
+        return "error"
+    if severity == "none":
+        return "none"
+    return "warning"
+
+
 @dataclass
 class _LogRotationState:
     """Cheap per-process bookkeeping for append-only violation histories."""
@@ -93,26 +165,11 @@ class ViolationLogger:
 
         try:
             timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            if severity == "critical":
-                safe_severity = "critical"
-            elif severity == "high":
-                safe_severity = "high"
-            elif severity == "medium":
-                safe_severity = "medium"
-            elif severity == "low":
-                safe_severity = "low"
-            elif severity == "info":
-                safe_severity = "info"
-            elif severity == "error":
-                safe_severity = "error"
-            else:
-                safe_severity = "warning"
-
             entry = {
                 "id": violation_id,
                 "timestamp": timestamp,
                 "violation_type": "sensitive_finding",
-                "severity": safe_severity,
+                "severity": _safe_severity_label(severity),
                 "resolved": False,
                 "resolved_at": None,
                 "resolved_action": None,
@@ -192,6 +249,8 @@ class ViolationLogger:
 
         try:
             timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            persisted_type = _safe_violation_label(violation_type)
+            persisted_severity = _safe_severity_label(severity)
             canonical_decision = safe_policy_decision(policy_decision)
             if canonical_decision is None:
                 canonical_decision = PolicyDecision.from_violation(
@@ -202,11 +261,14 @@ class ViolationLogger:
                     violation_id=violation_id,
                     timestamp=timestamp,
                 ).to_dict()
+            if canonical_decision is not None:
+                canonical_decision["violation_type"] = persisted_type
+                canonical_decision["severity"] = persisted_severity
             entry = {
                 "id": violation_id,
                 "timestamp": timestamp,
-                "violation_type": violation_type,
-                "severity": severity,
+                "violation_type": persisted_type,
+                "severity": persisted_severity,
                 "blocked": blocked,
                 "context": context,
                 "suggestion": suggestion or {},

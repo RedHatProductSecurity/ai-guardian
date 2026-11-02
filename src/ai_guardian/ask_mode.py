@@ -501,8 +501,7 @@ def _log_ask_decision(
             )
         else:
             blocked_info = {
-                "description": (error_msg[:200] if error_msg else str(violation_type)),
-                "matched_text": matched_text or "",
+                "description": "Ask-mode decision",
             }
             if file_path:
                 blocked_info["file_path"] = file_path

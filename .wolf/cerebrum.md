@@ -1463,6 +1463,13 @@
   form to that target. Do not show the OpenShell policy action for regular
   container targets.
 
+- **CodeQL JSONL taint (#2639):** An explicit sensitive-type branch does not
+  necessarily sever CodeQL's path to a shared serializer. Inspect the individual
+  source fields and remove raw values from generic persistence paths; persist
+  category/severity through fixed labels, including nested policy metadata. Keep
+  original caller data and CLI output intact when only history needs minimization,
+  then verify with a fresh GitHub analysis rather than relying on local tests.
+
 ## Do-Not-Repeat
 
 - [2026-10-29] `place_tk_window` intentionally applies no geometry when monitor

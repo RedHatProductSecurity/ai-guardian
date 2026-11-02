@@ -228,7 +228,7 @@ class TestLogAskDecisionRedacts:
         mock_logger.log_violation.assert_not_called()
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
-    def test_non_secret_type_keeps_matched_text(self, mock_logger_cls):
+    def test_non_secret_ask_history_omits_matched_text(self, mock_logger_cls):
         from ai_guardian.ask_mode import _log_ask_decision
         from ai_guardian.constants import ViolationType
         from ai_guardian.ui.ask_dialog import AskDecision
@@ -243,7 +243,8 @@ class TestLogAskDecisionRedacts:
         )
         mock_logger.log_violation.assert_called_once()
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert blocked["matched_text"] == "rm -rf /"
+        assert "matched_text" not in blocked
+        assert blocked["description"] == "Ask-mode decision"
 
 
 class TestBuildViolationBlockedRedacts:

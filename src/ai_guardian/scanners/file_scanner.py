@@ -1619,10 +1619,8 @@ def _log_scan_findings(findings: list, args) -> None:
 
             blocked = {
                 "rule_id": finding.get("rule_id", ""),
-                "message": finding.get("message", ""),
                 "file_path": finding.get("file_path", ""),
                 "line_number": finding.get("line_number"),
-                "snippet": finding.get("snippet", ""),
             }
             context = {
                 "ide_type": "cli",
