@@ -251,6 +251,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a separately arranged private channel for confidential diagnostics.
 
 ### Changed
+- **Violation JSONL performance (#2637):** Avoid parsing and rewriting the local
+  history after routine appends; retention and entry-limit cleanup runs when
+  needed or on a bounded schedule. Small local history queries read backward in
+  chunks while preserving newest-first timestamp order, with a full-scan fallback
+  for out-of-order legacy records. Resolve/unresolve still rewrite the file because
+  resolution state is stored in each record.
 - **Betterleaks scanner pin:** Update Betterleaks from 1.3.1 to 1.9.0. The
   upstream release includes the Linux x64 and arm64 assets required by container
   builds and scanner-version validation.

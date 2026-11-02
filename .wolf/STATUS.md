@@ -9,6 +9,32 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2637 implementation — 2026-11-02
+
+- Continued managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2637` on its existing branch `2637` in the
+  real workspace. The initial worktree was clean; no branch switch or temporary
+  clone sync applied.
+- Avoided full-history rotation on routine violation appends. Per-process shared
+  bookkeeping runs retention on first append to an existing file, when the
+  `max_entries` schedule is due, or after five minutes; mirrored-log sync/history
+  reads now use the same bounded maintenance schedule.
+- Recent history reads seek backward in 8-KiB chunks, apply filters during
+  traversal, and return newest-first. Legacy/mirrored records with detected
+  timestamp disorder fall back to the existing full timestamp sort. Resolution
+  and unresolution still rewrite JSONL because their state is stored in each
+  record; this remaining O(n) cost is documented. Corrupt/non-object lines remain
+  skipped during reads and resolution rewrites.
+- Added focused append, retention/limit, recent-order/read-volume, corruption, and
+  resolution tests plus an Unreleased changelog entry. Updated the issue's six
+  acceptance checkboxes and added the `done` label/comment; DAF progress note saved.
+- **Validation:** 461 directly related unit/UX tests pass. Ruff, Black (Python
+  3.10 target), error-level Pylint, changed-module Mypy, JSON parsing, and
+  `git diff --check` pass. Full-package Mypy still reports 14 known errors in
+  untouched `skill_discovery.py` and `secret_validator.py`.
+- No SQLite decision/migration, commit, push, PR, or issue closure. Changes remain
+  local and uncommitted. **Next:** user review, then normal external DAF completion.
+
 ## Issue #2633 implementation — 2026-11-02
 
 - Continued on the existing `2633` branch; no branch switch, commit, push, issue
