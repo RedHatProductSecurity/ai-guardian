@@ -913,8 +913,10 @@ class MultiDaemonClient:
     def _local_violations(limit: int, violation_type: Optional[str]) -> dict:
         from ai_guardian.violations.logger import ViolationLogger
         from ai_guardian.violations.decision import safe_policy_decision
+        from ai_guardian.violations.identity import stable_violation_id
 
         _ALLOWED_FIELDS = {
+            "id",
             "type",
             "violation_type",
             "severity",
@@ -927,12 +929,20 @@ class MultiDaemonClient:
             "session_id",
             "ide_type",
             "policy_decision",
+            "resolved",
+            "resolved_at",
         }
         vl = ViolationLogger()
         entries = vl.get_recent_violations(limit=limit, violation_type=violation_type)
         curated = []
         for entry in entries:
             item = {k: v for k, v in entry.items() if k in _ALLOWED_FIELDS}
+            item["id"] = stable_violation_id(entry)
+            from ai_guardian.violations.utils import safe_mirror_metadata
+
+            mirror = safe_mirror_metadata(entry.get("mirror"))
+            if mirror is not None:
+                item["mirror"] = mirror
             if "policy_decision" in item:
                 item["policy_decision"] = safe_policy_decision(item["policy_decision"])
             curated.append(item)

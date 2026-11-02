@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Opt-in remote violation history mirroring (#2633):** Allow a receiving
+  daemon's tray to import curated summaries from reachable remote daemons into
+  separate per-daemon JSONL files included in the local history view. Mirrored
+  entries retain source identity, deduplicate across
+  polls/restarts, remain read-only, and never copy raw blocked content, context,
+  or suggestions. Disabled by default.
 - **Bundled credential patterns (#2632):** Detect standalone Baseten, Labelbox,
   Recursion, Supabase secret, and typed Tailscale API/auth/OAuth-client/webhook
   credential formats with the built-in TOML engine. Add synthetic scanner and

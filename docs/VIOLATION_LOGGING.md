@@ -235,6 +235,7 @@ Violation logging is enabled by default:
 {
   "violation_logging": {
     "enabled": true,
+    "mirror_remote_violations": false,
     "max_entries": 1000,
     "retention_days": 30,
     "log_types": [
@@ -251,11 +252,48 @@ Violation logging is enabled by default:
 }
 ```
 
+## Remote violation history mirroring
+
+Remote mirroring is **off by default**. Enable the receiving daemon's global
+`violation_logging.mirror_remote_violations` setting in the Web Console's
+**Remote Violation Mirroring** card
+to import summaries from reachable container, Kubernetes, manual, or SSH daemons.
+The tray polls while the option is enabled and violation logging is active.
+
+Only the violation type, severity, timestamp, and available tool/file/action/line
+summary fields are copied. Raw blocked content, tool context, session identifiers,
+policy details, and suggestions are not copied. Each local entry retains the source
+daemon, event ID, and original event timestamp. Each source daemon is stored separately in
+`remote-violations/<sha256-source-key>.jsonl`; the key hashes runtime/endpoint
+identity rather than the display name, so same-named daemons do not collide.
+Native local entries remain in
+`violations.jsonl`. A private local index prevents duplicate imports across polls,
+tray restarts, and violation-log rotation. Mirroring does not alter
+or delete the source record. Local copies are explicitly **read-only**: the Console
+does not offer Always Allow, Ignore File, or Suppress in Source actions for them.
+When the source daemon is available and the source record has an ID, the Console
+links back to its authoritative detail page. Unavailable daemons do not prevent
+other sources from syncing, and existing local mirrors remain visible.
+The Violations page's **Filter by daemon** dropdown can isolate a source; it lists
+the local daemon first, then remote sources by most recent violation. Same-named
+daemons with different endpoint identities are shown as distinct sources, and the
+dropdown is searchable. Each file is rotated independently by the configured
+`max_entries` and `retention_days`; cleanup runs during history reads and tray sync,
+removing an empty source file so inactive daemons age out of the filter list.
+
+Entries older than the receiving daemon's configured retention window are not
+imported. The receiver must also have violation logging enabled. Disable the
+setting at any time to stop future imports; already mirrored records remain in
+local history until ordinary retention or size rotation removes them. Clearing
+violation history removes the local log and all per-daemon mirror logs; the opaque
+dedup index remains so previously cleared remote events are not silently restored.
+
 ### Configuration Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `enabled` | Enable violation logging | `true` |
+| `mirror_remote_violations` | Import curated summaries from reachable remote daemons into this daemon's local history | `false` |
 | `max_entries` | Maximum log entries to keep | `1000` |
 | `retention_days` | Delete entries older than N days | `30` |
 | `log_types` | Which violation types to log | All types |

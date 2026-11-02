@@ -1203,6 +1203,8 @@
   "_comment_violation_logging2": "All scanner findings are written to violations.jsonl for review in the web console",
   "violation_logging": {
     "enabled": true,
+    "mirror_remote_violations": false,
+    "_mirror_remote_violations_note": "Opt in to copying curated remote violation summaries into this host's history. Raw blocked content is not copied; mirrored records are read-only.",
     "max_entries": 1000,
     "_max_entries_note": "Maximum entries in violations.jsonl before oldest are rotated out",
     "retention_days": 30,

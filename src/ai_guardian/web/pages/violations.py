@@ -2,6 +2,7 @@
 
 import json
 from collections import Counter
+from datetime import datetime, timezone
 
 from nicegui import run, ui
 
@@ -17,7 +18,11 @@ from ai_guardian.violations.guidance import (
     get_resolution_instructions,
 )
 from ai_guardian.web.components.header import create_header, create_sidebar
-from ai_guardian.violations.utils import is_immutable_violation, is_temp_path
+from ai_guardian.violations.utils import (
+    is_immutable_violation,
+    is_mirrored_violation,
+    is_temp_path,
+)
 from ai_guardian.tools.input import INPUT_FAILURE_LABELS
 from ai_guardian.violations.tool_diagnostics import (
     INPUT_FAILURE_GUIDANCE,
@@ -318,6 +323,63 @@ def _violation_matches_dir(v: dict, dir_prefix: str) -> bool:
     return file_path.startswith(norm + "/") or file_path == norm
 
 
+def _violation_source_identity(
+    violation: dict, daemon_name: str, *, local_daemon: bool = False
+) -> tuple[str, str]:
+    """Return a stable filter value and display label for a history source."""
+    if is_mirrored_violation(violation):
+        mirror = violation.get("mirror", {})
+        source_key = mirror.get("source_key")
+        source_name = mirror.get("source_daemon")
+        runtime = mirror.get("source_runtime")
+        if (
+            isinstance(source_key, str)
+            and len(source_key) == 64
+            and all(char in "0123456789abcdef" for char in source_key)
+        ):
+            identity = source_key
+        else:
+            identity = f"{runtime or 'remote'}:{source_name or 'unknown'}"
+        label = str(source_name or "remote daemon")
+        if isinstance(runtime, str) and runtime:
+            label = f"{label} · {runtime}"
+        if len(identity) == 64:
+            label = f"{label} · {identity[:8]}"
+        return f"remote:{identity}", label
+
+    label_prefix = "Local" if local_daemon else "Daemon"
+    return f"daemon:{daemon_name}", f"{label_prefix} — {daemon_name}"
+
+
+def _violation_timestamp_rank(violation: dict) -> float:
+    """Return a sortable UTC timestamp, with invalid/missing values last."""
+    timestamp = violation.get("timestamp")
+    if not isinstance(timestamp, str):
+        return 0.0
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    except (OverflowError, OSError, ValueError):
+        return 0.0
+
+
+def _sort_violation_sources(
+    source_counts, source_labels, source_latest, local_key=None
+):
+    """Put the local history first, then sources with newest violations."""
+    return sorted(
+        source_counts,
+        key=lambda key: (
+            key != local_key,
+            -source_latest.get(key, 0.0),
+            source_labels.get(key, "").casefold(),
+            key,
+        ),
+    )
+
+
 def create_violations_page(service, daemon_name: str):
     """Build the violations page with filter tabs and detail modals."""
 
@@ -333,6 +395,8 @@ def create_violations_page(service, daemon_name: str):
 
         active_filter = {"vtype": None}
         active_dir_filter = {"dir": None}
+        active_source_filter = {"source": None}
+        source_context = {"local_daemon": False}
         cached_violations: list = []
 
         filter_options = {label: vtype for label, vtype, _ in FILTER_TABS}
@@ -343,6 +407,17 @@ def create_violations_page(service, daemon_name: str):
                 value="All",
                 label="Filter by type",
             ).classes("w-64")
+
+            source_select = (
+                ui.select(
+                    options={"": "All Sources"},
+                    value="",
+                    label="Filter by daemon",
+                    with_input=True,
+                )
+                .props("clearable")
+                .classes("w-64")
+            )
 
             dir_select = (
                 ui.select(
@@ -389,6 +464,12 @@ def create_violations_page(service, daemon_name: str):
 
         filter_select.on_value_change(on_filter_change)
 
+        async def on_source_filter_change(e):
+            active_source_filter["source"] = e.value or None
+            _render_filtered()
+
+        source_select.on_value_change(on_source_filter_change)
+
         async def on_dir_filter_change(e):
             val = e.value or ""
             active_dir_filter["dir"] = val.strip() if val else None
@@ -412,6 +493,22 @@ def create_violations_page(service, daemon_name: str):
             type_counts = Counter(
                 v.get("violation_type", "") for v in cached_violations
             )
+            source_counts = Counter()
+            source_labels = {}
+            source_latest = {}
+            for violation in cached_violations:
+                source_key, source_label = _violation_source_identity(
+                    violation,
+                    daemon_name,
+                    local_daemon=source_context["local_daemon"],
+                )
+                source_counts[source_key] += 1
+                source_labels[source_key] = source_label
+                source_latest[source_key] = max(
+                    source_latest.get(source_key, 0.0),
+                    _violation_timestamp_rank(violation),
+                )
+
             opts = {"All": f"All ({len(cached_violations)})"}
             for label, vt, _ in FILTER_TABS:
                 if vt is not None:
@@ -422,16 +519,43 @@ def create_violations_page(service, daemon_name: str):
             filter_select.options = sorted_opts
             filter_select.update()
 
+            source_options = {"": f"All Sources ({len(cached_violations)})"}
+            local_key = (
+                f"daemon:{daemon_name}" if source_context["local_daemon"] else None
+            )
+            for key in _sort_violation_sources(
+                source_counts,
+                source_labels,
+                source_latest,
+                local_key=local_key,
+            ):
+                source_options[key] = f"{source_labels[key]} ({source_counts[key]})"
+            source_select.options = source_options
+            if active_source_filter["source"] not in source_counts:
+                active_source_filter["source"] = None
+                source_select.value = ""
+            source_select.update()
+
         def _render_filtered():
             cards_container.clear()
             vtype = active_filter["vtype"]
             dir_filter = active_dir_filter["dir"]
+            source_filter = active_source_filter["source"]
 
             filtered = [
                 v
                 for v in cached_violations
                 if (not vtype or v.get("violation_type") == vtype)
                 and (not dir_filter or _violation_matches_dir(v, dir_filter))
+                and (
+                    not source_filter
+                    or _violation_source_identity(
+                        v,
+                        daemon_name,
+                        local_daemon=source_context["local_daemon"],
+                    )[0]
+                    == source_filter
+                )
             ]
             filtered.sort(key=lambda v: v.get("timestamp", ""), reverse=True)
 
@@ -448,6 +572,7 @@ def create_violations_page(service, daemon_name: str):
         async def load_violations():
             await run.io_bound(service.refresh_targets)
             target = service.get_target_by_name(daemon_name)
+            source_context["local_daemon"] = bool(target and target.runtime == "local")
 
             cached_violations.clear()
             if target:
@@ -517,6 +642,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
         suggestion = {}
     resolved = v.get("resolved", False)
     immutable = is_immutable_violation(v)
+    mirrored = is_mirrored_violation(v)
     context = v.get("context", {})
     if not isinstance(context, dict):
         context = {}
@@ -540,6 +666,12 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
             if daemon:
                 ui.badge(daemon, color="blue-grey").classes("text-xs")
             local_time_label(timestamp).classes("ml-auto")
+
+        from ai_guardian.web.components.violation_mirror import (
+            render_mirror_attribution,
+        )
+
+        render_mirror_attribution(v, service)
 
         fields = DETAIL_FIELDS.get(vtype, [])
         if fields:
@@ -565,13 +697,22 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                             display = display[:97] + "..."
                         ui.label(display).classes("text-xs")
 
-        if not immutable and vtype == "tool_permission" and suggestion.get("rule"):
+        if (
+            not immutable
+            and not mirrored
+            and vtype == "tool_permission"
+            and suggestion.get("rule")
+        ):
             ui.label("Suggested rule:").classes("text-xs text-grey-6 mt-1")
             ui.code(json.dumps(suggestion["rule"], indent=2), language="json").classes(
                 "text-xs"
             )
 
-        if immutable:
+        if mirrored:
+            ui.label("Remote record — read-only in this local history").classes(
+                "text-xs text-grey-6 mt-1"
+            )
+        elif immutable:
             ui.label(IMMUTABLE_VIOLATION_NOTICE).classes("text-xs text-grey-6 mt-1")
         else:
             ui.label("Resolution guidance: open Details").classes(
@@ -607,6 +748,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                     ).classes("max-h-[300px] overflow-auto text-xs")
 
                     with ui.row().classes("gap-2 mt-1"):
+                        render_mirror_attribution(violation, service)
                         ui.button(
                             "Copy JSON",
                             icon="data_object",
@@ -628,7 +770,11 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                         ).props("flat dense size=sm")
 
                     ui.separator()
-                    if is_immutable_violation(violation):
+                    if is_mirrored_violation(violation):
+                        ui.label(
+                            "Remote record — read-only in this local history"
+                        ).classes("font-bold mt-2")
+                    elif is_immutable_violation(violation):
                         ui.label("Protection is enforced").classes("font-bold mt-2")
                         ui.label(IMMUTABLE_VIOLATION_NOTICE).classes("text-sm")
                     else:
@@ -655,7 +801,8 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
 
                     with ui.row().classes("w-full justify-between mt-2"):
                         if (
-                            not is_immutable_violation(violation)
+                            not mirrored
+                            and not is_immutable_violation(violation)
                             and vtype in _ALLOWLIST_TYPES
                             and service is not None
                         ):
@@ -686,8 +833,10 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                             else ""
                         )
                         annotation_target = get_annotation_target(violation)
-                        if not is_immutable_violation(violation) and (
-                            v_file_path or annotation_target
+                        if (
+                            not mirrored
+                            and not is_immutable_violation(violation)
+                            and (v_file_path or annotation_target)
                         ):
                             from ai_guardian.ui.source_annotator import (
                                 get_comment_prefix,
@@ -722,7 +871,11 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                                     "text-xs text-grey-6"
                                 )
 
-                            if v_file_path and vtype not in _NO_SUPPRESSION_TYPES:
+                            if (
+                                not mirrored
+                                and v_file_path
+                                and vtype not in _NO_SUPPRESSION_TYPES
+                            ):
 
                                 def on_ignore_file(viol=violation):
                                     _show_ignore_file_flow(viol)
@@ -769,6 +922,8 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
 
 async def _show_allow_always_flow(parent_dialog, violation, service, daemon_name):
     """Open pattern editor for allowlisting, rescanning file if needed."""
+    if is_mirrored_violation(violation):
+        return
     blocked = violation.get("blocked", {})
     if not isinstance(blocked, dict):
         blocked = {}

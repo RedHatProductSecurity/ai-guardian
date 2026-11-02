@@ -10,7 +10,10 @@ from ai_guardian.violations.guidance import (
     IMMUTABLE_VIOLATION_NOTICE,
     get_resolution_instructions,
 )
-from ai_guardian.violations.utils import is_immutable_violation
+from ai_guardian.violations.utils import (
+    is_immutable_violation,
+    is_mirrored_violation,
+)
 from ai_guardian.violations.tool_diagnostics import diagnostic_safe_violation
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.local_time import (
@@ -115,6 +118,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
         suggestion = {}
     resolved = v.get("resolved", False)
     immutable = is_immutable_violation(v)
+    mirrored = is_mirrored_violation(v)
     context = v.get("context", {})
     if not isinstance(context, dict):
         context = {}
@@ -140,6 +144,10 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
         with ui.row().classes("items-center gap-2 mt-1"):
             ui.label("Time:").classes("text-xs text-grey-6")
             local_time_label(timestamp).classes("text-xs")
+
+    from ai_guardian.web.components.violation_mirror import render_mirror_attribution
+
+    render_mirror_attribution(v, service)
 
     # --- Blocked details ---
     fields = DETAIL_FIELDS.get(vtype, [])
@@ -171,7 +179,12 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
     _render_tool_diagnostics(v)
 
     # --- Suggested rule ---
-    if not immutable and vtype == "tool_permission" and suggestion.get("rule"):
+    if (
+        not immutable
+        and not mirrored
+        and vtype == "tool_permission"
+        and suggestion.get("rule")
+    ):
         with ui.card().classes("w-full"):
             ui.label("Suggested Rule").classes("text-sm font-bold")
             ui.code(json.dumps(suggestion["rule"], indent=2), language="json").classes(
@@ -213,7 +226,11 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
 
     # --- Resolution instructions ---
     with ui.card().classes("w-full"):
-        if immutable:
+        if mirrored:
+            ui.label("Remote record — read-only in this local history").classes(
+                "text-sm mt-1"
+            )
+        elif immutable:
             ui.label("Protection is enforced").classes("text-sm font-bold")
             ui.label(IMMUTABLE_VIOLATION_NOTICE).classes("text-sm mt-1")
         else:
@@ -261,7 +278,12 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
             ),
         ).props("flat dense size=sm")
 
-        if not immutable and vtype in _ALLOWLIST_TYPES and service is not None:
+        if (
+            not immutable
+            and not mirrored
+            and vtype in _ALLOWLIST_TYPES
+            and service is not None
+        ):
 
             async def on_always_allow(viol=v, svc=service, dname=daemon_name):
                 await _show_allow_always_flow(None, viol, svc, dname)
@@ -277,7 +299,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
             blocked_data.get("file_path", "") if isinstance(blocked_data, dict) else ""
         )
         annotation_target = get_annotation_target(v)
-        if not immutable and (v_file_path or annotation_target):
+        if not immutable and not mirrored and (v_file_path or annotation_target):
             from ai_guardian.ui.source_annotator import get_comment_prefix
 
             if (

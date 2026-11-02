@@ -436,6 +436,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
         "_comment_violation_logging": "Log blocked operations for audit and review (NEW in v1.1.0)",
         "violation_logging": {
             "enabled": True,
+            "mirror_remote_violations": False,
             "max_entries": 1000,
             "retention_days": 30,
             "log_types": [

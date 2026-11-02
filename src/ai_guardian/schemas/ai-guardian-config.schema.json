@@ -2012,6 +2012,11 @@
         "enabled": {
           "$ref": "#/definitions/time_based_enabled"
         },
+        "mirror_remote_violations": {
+          "type": "boolean",
+          "description": "Opt in to copying curated summaries of remote daemon violations into this host's local history. Raw blocked content is not copied; mirrored records are read-only.",
+          "default": false
+        },
         "max_entries": {
           "type": "number",
           "description": "Maximum number of log entries to retain",

@@ -848,6 +848,18 @@ jobs:
           print('Unified tracing config: OK')
           "
 
+      - name: Verify remote violation mirroring defaults off
+        run: |
+          export XDG_CONFIG_HOME=$(mktemp -d)
+          ai-guardian setup --create-config
+          python -c "
+          import json, os
+          path = os.path.join(os.environ['XDG_CONFIG_HOME'], 'ai-guardian', 'ai-guardian.json')
+          cfg = json.load(open(path))
+          assert cfg['violation_logging']['mirror_remote_violations'] is False
+          print('Remote violation mirroring default: off')
+          "
+
       - name: Test old permissions list migration
         run: |
           export XDG_CONFIG_HOME=$(mktemp -d)
@@ -889,6 +901,7 @@ jobs:
             python -c "
           import json
           cfg = json.load(open('$CFG_PATH'))
+          assert cfg['violation_logging']['mirror_remote_violations'] is False
           print(f'  Keys: {sorted(cfg.keys())[:5]}...')
           print(f'  Valid JSON: yes')
             "
@@ -896,6 +909,10 @@ jobs:
 
       - name: Install qualification test dependencies
         run: python -m pip install '.[dev]'
+
+      - name: Test remote violation mirroring
+        run: |
+          python -m pytest tests/unit/test_violation_mirroring.py tests/unit/test_violation_logging_types.py tests/unit/test_daemon_rest_api.py tests/unit/test_daemon_multi_client.py tests/unit/test_web_violation_detail.py tests/ux/test_user_experience_contract_violation_mirroring.py -q
 
       - name: Qualify experimental local password-likelihood stage
         run: |

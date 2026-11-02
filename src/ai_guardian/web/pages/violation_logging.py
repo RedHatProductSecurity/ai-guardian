@@ -9,7 +9,7 @@ from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.help_panel import field_help_icon
-from ai_guardian.web.config_helpers import load_web_config
+from ai_guardian.web.config_helpers import load_web_config, load_web_config_global
 
 ALL_LOG_TYPES = [
     ("tool_permission", "Tool Permission — blocked tool/skill invocations"),
@@ -64,7 +64,18 @@ def _save_vlog_config(updates):
     if "violation_logging" not in config:
         config["violation_logging"] = {}
     config["violation_logging"].update(updates)
-    save_web_config(config)
+    return save_web_config(config)
+
+
+def _save_remote_mirroring_config(enabled):
+    """Save the receiver's global mirror opt-in, never a project override."""
+    from ai_guardian.web.config_helpers import load_web_config_global, save_web_config
+
+    config = load_web_config_global()
+    if "violation_logging" not in config:
+        config["violation_logging"] = {}
+    config["violation_logging"]["mirror_remote_violations"] = bool(enabled)
+    return save_web_config(config, scope="global")
 
 
 def _load_local_stats():
@@ -111,7 +122,9 @@ def create_violation_logging_page(service, daemon_name: str):
         async def refresh():
             content.clear()
             config = await run.io_bound(load_web_config)
+            global_config = await run.io_bound(load_web_config_global)
             vlog = config.get("violation_logging", {})
+            global_vlog = global_config.get("violation_logging", {})
 
             enabled_raw = vlog.get("enabled", True)
             is_temp = False
@@ -134,6 +147,9 @@ def create_violation_logging_page(service, daemon_name: str):
             max_entries = vlog.get("max_entries", 1000)
             retention_days = vlog.get("retention_days", 30)
             log_types = vlog.get("log_types", [t for t, _ in ALL_LOG_TYPES])
+            mirror_remote_violations = (
+                global_vlog.get("mirror_remote_violations") is True
+            )
 
             with content:
                 # --- Enable/Disable Toggle ---
@@ -226,6 +242,41 @@ def create_violation_logging_page(service, daemon_name: str):
                                 icon="timer",
                                 on_click=do_temp_disable,
                             ).props("dense size=sm")
+
+                # --- Remote Violation Mirroring ---
+                with ui.card().classes("w-full"):
+                    ui.label("Remote Violation Mirroring").classes("text-lg font-bold")
+                    ui.label(
+                        "When enabled, import curated summaries from reachable remote "
+                        "daemons into this daemon's global local history. Raw blocked content, "
+                        "context, and suggestions are not copied. Mirrored records are "
+                        "read-only and link to the source record when available. "
+                        "Requires violation logging to be enabled."
+                    ).classes("text-xs text-grey-6")
+                    mirror_switch = ui.switch(
+                        "Mirror remote violations",
+                        value=mirror_remote_violations,
+                    )
+
+                    async def save_mirror_setting(e):
+                        saved = await run.io_bound(
+                            _save_remote_mirroring_config,
+                            bool(e.value),
+                        )
+                        if saved:
+                            ui.notify(
+                                "Remote violation mirroring "
+                                + ("enabled" if e.value else "disabled"),
+                                type="positive",
+                            )
+                        else:
+                            ui.notify(
+                                "Could not save remote violation mirroring setting",
+                                type="negative",
+                            )
+                            await refresh()
+
+                    mirror_switch.on_value_change(save_mirror_setting)
 
                 # --- Retention Settings ---
                 with ui.card().classes("w-full"):

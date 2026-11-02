@@ -364,6 +364,11 @@ class DaemonTray:
         self._trace_catchup_done: set = set()
         self._tray_forwarding_token: str = ""
 
+        # Opt-in remote violation mirroring
+        self._violation_mirror_running = False
+        self._violation_mirror_wake = threading.Event()
+        self._VIOLATION_MIRROR_POLL_INTERVAL = 30.0
+
     def start(self):
         """Start tray icon in a background thread.
 
@@ -411,6 +416,8 @@ class DaemonTray:
         self._stats_refresh_running = False
         self._subscriber_running = False
         self._prompt_poll_running = False
+        self._violation_mirror_running = False
+        self._violation_mirror_wake.set()
         self._unregister_wake_handler()
         self._stop_web_console()
         if self._discovery:
@@ -662,6 +669,7 @@ class DaemonTray:
         self._health._on_startup_ide_setup()
         self._start_subscriber()
         self._start_prompt_poll()
+        self._start_remote_violation_mirror_poll()
         self._start_web_console()
         self._register_wake_handler()
         import platform
@@ -1435,6 +1443,7 @@ class DaemonTray:
             logger.info(f"  {t.name} ({t.runtime}) status={t.status} port={t.port}")
         self._register_tray_with_remotes()
         self._catchup_remote_traces()
+        self._violation_mirror_wake.set()
 
     @staticmethod
     def _sort_targets(targets):
@@ -1481,6 +1490,40 @@ class DaemonTray:
             cleanup_stale_cache(retention)
         except Exception:
             logger.debug("Trace catch-up failed for %s", target.name, exc_info=True)
+
+    def _start_remote_violation_mirror_poll(self):
+        """Periodically prune mirror history and import summaries when enabled."""
+        self._violation_mirror_running = True
+
+        def _poll():
+            while self._violation_mirror_running:
+                self._violation_mirror_wake.clear()
+                if not self._violation_mirror_running:
+                    break
+                try:
+                    from ai_guardian.daemon.violation_mirroring import (
+                        mirror_remote_violations,
+                    )
+
+                    targets = [
+                        replace(target) if target.runtime == "ssh" else target
+                        for target in self._targets
+                    ]
+                    imported = mirror_remote_violations(self._multi_client, targets)
+                    if imported:
+                        logger.info(
+                            "Mirrored %d remote violation summary(s) into local history",
+                            imported,
+                        )
+                except Exception:
+                    logger.warning("Remote violation mirror poll failed; continuing")
+                self._violation_mirror_wake.wait(self._VIOLATION_MIRROR_POLL_INTERVAL)
+
+        threading.Thread(
+            target=_poll,
+            daemon=True,
+            name="remote-violation-mirror",
+        ).start()
 
     def _read_trace_cache_retention(self) -> int:
         """Read trace_cache_retention_days from config."""
