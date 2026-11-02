@@ -1,5 +1,6 @@
 """Inspectable tray descriptors with explicit, isolated state and no GUI."""
 
+import threading
 from types import SimpleNamespace
 from unittest import mock
 
@@ -52,6 +53,7 @@ PYSTRAY = SimpleNamespace(Menu=Menu, MenuItem=Item)
 def make_tray(targets):
     tray = DaemonTray.__new__(DaemonTray)
     tray._targets = targets
+    tray._violation_mirror_wake = threading.Event()
     tray._multi_client = mock.Mock()
     tray._refresh_event = mock.Mock()
     tray._ask_forwarding_failed = set()
