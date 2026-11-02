@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from unittest import mock
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -442,6 +443,7 @@ class TestViolationsEndpoint:
                 data = json.loads(resp.read())
         assert data["count"] == 1
         v = data["violations"][0]
+        assert re.fullmatch(r"viol_[0-9a-f]{32}", v["id"])
         assert v["violation_type"] == "secret_detected"
         assert v["severity"] == "high"
         assert v["suggestion"]["text"] == "Remove the secret"

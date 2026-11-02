@@ -5,9 +5,36 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-01 (UTC)
+> Last updated: 2026-11-02 (UTC)
 
 ---
+
+## Issue #2633 implementation — 2026-11-02
+
+- Continued on the existing `2633` branch; no branch switch, commit, push, issue
+  update, or DAF progress/checklist mutation.
+- Added global opt-in `violation_logging.mirror_remote_violations` (default off).
+  The tray mirrors curated remote summaries into one private JSONL per source
+  identity at `remote-violations/<sha256-source-key>.jsonl`; the local daemon's
+  `violations.jsonl` stays separate. Runtime/endpoint identity, not display name,
+  keys files so same-named daemons remain distinct.
+- Added a searchable **Filter by daemon** dropdown; it lists local history first,
+  then remote sources by most recent violation. Same-named remote sources are
+  differentiated by runtime and a short key suffix. Mirrors are read-only, omit
+  raw blocked values/context/session/policy/suggestion data, retain source/event
+  attribution, and link to a source record only when the name maps uniquely to a
+  reachable target with the same identity.
+- Per-file `max_entries`/`retention_days` rotation runs during tray sync and
+  history reads; empty expired source files are deleted, causing inactive sources
+  to age out of the dropdown. A private SQLite index prevents re-import after log
+  rotation or clearing history.
+- Added configuration/schema/profile defaults, docs, changelog, unit and UX
+  contracts, and release-readiness checks. **Validation:** 394 focused violation,
+  daemon, Console, and UX tests pass; 462 setup/profile tests pass; Ruff, Black
+  (Python 3.10 target), error-level Pylint (10/10), Mypy, and `git diff --check`
+  pass.
+- **Next:** user review. Issue #2633 remains open; changes are local and
+  uncommitted. No live multi-daemon environment check was run.
 
 ## Issue #2628 implementation — 2026-11-01
 

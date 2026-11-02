@@ -82,7 +82,9 @@ class TestViolationDetailRoute:
 
         source = inspect.getsource(_render_violation_detail)
         assert "if immutable:" in source
-        assert "if not immutable and vtype in _ALLOWLIST_TYPES" in source
+        assert "not immutable" in source
+        assert "and not mirrored" in source
+        assert "vtype in _ALLOWLIST_TYPES" in source
 
 
 class TestViolationModalOpenAsPage:

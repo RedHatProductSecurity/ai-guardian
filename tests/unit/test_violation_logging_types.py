@@ -40,6 +40,14 @@ class TestViolationLoggerDefaults:
                 defaults = vl._get_default_config()
                 assert "ssrf_blocked" in defaults["log_types"]
 
+    def test_remote_violation_mirroring_defaults_off(self):
+        from ai_guardian.violations.logger import ViolationLogger
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": tmp}):
+                defaults = ViolationLogger()._get_default_config()
+                assert defaults["mirror_remote_violations"] is False
+
     def test_default_config_includes_config_file_exfil(self):
         from ai_guardian.violations.logger import ViolationLogger
 
