@@ -45,6 +45,38 @@ budget_tokens: 1000
   conflict in the generated OpenWolf anatomy index. Re-ran the 43 related unit/UX
   tests successfully after the rebase. No commit or push was created.
 
+## Issue #2653 implementation — 2026-11-03
+
+- Continued managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2653`, native conversation
+  `ses_e5d8151aeffeW90m2DJa5hUOKL`, in the real workspace on its existing branch
+  `2653`. The worktree was clean at initialization. Read the repository-qualified
+  GitHub issue once; no temporary-clone sync or branch change applied. The user
+  authorized implementation with **go** after requesting session initialization.
+- The immutable AI Guardian CLI classifier now fails closed on PowerShell's
+  opaque `-EncodedCommand`, `-e`, and `-ec` startup forms, including `.exe` shell
+  names and supported wrapper recursion. The conservative check is scoped to the
+  AI Guardian CLI boundary; visible unrelated PowerShell commands and documentation
+  mentions remain allowed. Added unit and complete self-protection UX coverage and
+  an Unreleased changelog entry.
+- **Validation:** all 63 tests in `tests/unit/test_tool_patterns.py` and
+  `tests/ux/test_user_experience_contract_cli_self_protection.py` pass. Ruff,
+  Black (Python 3.10 target), error-level Pylint, targeted Mypy for
+  `tools/patterns.py`, buglog JSON parsing, and `git diff --check` pass. Full-package
+  Mypy reports 14 errors in untouched `skill_discovery.py` and
+  `scanners/secret_validator.py`. No live Windows PowerShell runtime was available.
+- Updated all three GitHub acceptance checkboxes, preserved the `bug` and `1.21.0`
+  labels while adding `done`, posted progress comment
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2653#issuecomment-6611874633,
+  and saved a DAF progress note. All acceptance criteria are met locally.
+- On user request, fetched and rebased branch `2653` onto `origin/main` at
+  `ba4f1389`; its prior tip `005968ec` was one commit behind and had no unique
+  branch commits. Autostash restoration conflicted only in STATUS and the generated
+  anatomy index; preserved the upstream #2651 and this #2653 handoff entries, then
+  refreshed the index. Re-ran the 63 focused unit/UX tests and `git diff --check`
+  successfully. Changes remain uncommitted; no commit, push, PR, or issue closure.
+  **Next:** user review and external DAF completion.
+
 ## Issue #2649 implementation — 2026-11-03
 
 - Initialized managed DAF `open` session

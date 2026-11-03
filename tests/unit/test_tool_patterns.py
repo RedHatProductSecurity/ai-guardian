@@ -5,6 +5,8 @@ Split from tool_policy tests (Issue #1494) to validate the extracted
 pattern constants and _strip_bash_heredoc_content utility independently.
 """
 
+import base64
+
 from ai_guardian.tools.patterns import (
     IMMUTABLE_DENY_PATTERNS,
     MIXED_SETTINGS_PATTERNS,
@@ -100,6 +102,31 @@ class TestImmutableDenyPatterns:
     def test_cli_detection_ignores_heredoc_content(self):
         command = "cat <<'EOF'\nai-guardian status\nEOF"
         assert not is_ai_guardian_cli_command(command)
+
+    def test_cli_detection_fails_closed_for_opaque_powershell_payloads(self):
+        encoded_cli = base64.b64encode("ai-guardian status".encode("utf-16le")).decode(
+            "ascii"
+        )
+        commands = (
+            f"powershell.exe -NoProfile -EncodedCommand {encoded_cli}",
+            f"pwsh -e {encoded_cli}",
+            f"pwsh -EC {encoded_cli}",
+            f"bash -lc 'pwsh -EncodedCommand {encoded_cli}'",
+        )
+
+        for command in commands:
+            assert is_ai_guardian_cli_command(command), command
+
+    def test_cli_detection_allows_unrelated_powershell_and_documentation(self):
+        commands = (
+            'pwsh -NoProfile -Command "Write-Output safe"',
+            "pwsh -Command \"Write-Output 'ai-guardian status'\"",
+            "powershell -Command \"Write-Output '-EncodedCommand payload'\"",
+            "printf '%s\\n' 'pwsh -EncodedCommand payload'",
+        )
+
+        for command in commands:
+            assert not is_ai_guardian_cli_command(command), command
 
     def test_host_cli_detection_covers_wrappers_and_paths(self):
         blocked = [
