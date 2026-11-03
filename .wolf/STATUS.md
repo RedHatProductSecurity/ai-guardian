@@ -5,9 +5,24 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-02 (UTC)
+> Last updated: 2026-11-03 (UTC)
 
 ---
+
+## Review since v1.20.0 — 2026-11-03
+
+- Continued the changed-runtime review on `main`; no source files were modified.
+- Existing IPv6 reachability issue #2649 remains confirmed. Filed additional
+  confirmed findings: #2650 (Gist receipt URL validation), #2651 (notifications
+  lost on short-lived direct hooks), #2652 (MCP filters hide consolidated
+  `sensitive_finding` records), #2653 (immutable CLI shell classification misses
+  opaque interpreter payloads), #2654 (manual endpoint/trust changes do not
+  rebuild captured tray actions), and #2655 (non-string manual target names crash
+  sorting).
+- Targeted reproductions confirmed the policy allow, stale menu identity, and
+  sort exception. The worktree was clean before OpenWolf session bookkeeping.
+- **Next:** continue the changed-runtime pass if requested; no tests or full-suite
+  runs were needed because no source changes were made.
 
 ## Issue #2645 implementation — 2026-11-02
 
