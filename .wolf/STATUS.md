@@ -9,6 +9,37 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2655 implementation — 2026-11-03
+
+- Continued managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2655`, native conversation
+  `ses_e5d4cddcfffeZzrglQCeePbX7o`, on its existing branch `2655` in the real
+  workspace. The worktree was clean before implementation; no temporary clone
+  applies. The DAF-managed conversation title was left unchanged.
+- At the user's request, fetched and rebased branch `2655` onto `origin/main` at
+  `3184c78b`; the branch had no unique commits relative to its previous base. The
+  autostash replay conflicted only in generated `.wolf/anatomy.md`; resolved it
+  preserving the updated index and all local work. No source conflicts occurred.
+- `DaemonDiscovery.discover_manual()` now skips manual entries whose explicit
+  names are null, non-string, or blank, logs a warning without echoing the value,
+  and retains valid entries and the existing missing-name fallback. Tray target
+  sorting also orders any malformed names safely after valid names.
+- Added mixed-entry discovery and direct sorting regressions, documented manual
+  target name validation, updated CHANGELOG, and recorded the bug in OpenWolf's
+  buglog. **Validation:** all 620 tests in the directly related discovery and tray
+  unit files pass. Full Ruff, Black (Python 3.10 target), error-level Pylint,
+  package Mypy, buglog JSON parsing, and `git diff --check` pass. The initial
+  pre-rebase tray run emitted an unrelated `PytestUnhandledThreadExceptionWarning`
+  from the existing wake-detection test's mocked monotonic clock; it did not recur
+  in the post-rebase run and was not investigated.
+- Updated all three GitHub acceptance checkboxes, preserved `bug` and `1.21.0`
+  labels while adding `done`, posted progress comment
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2655#issuecomment-6612727741,
+  and saved a DAF progress note plus OpenWolf memory entry. All acceptance
+  criteria are met locally. Changes remain uncommitted on branch `2655`; no push,
+  PR, issue closure, or live daemon/configuration change was performed.
+- **Next:** user review and external DAF completion.
+
 ## Issue #2651 implementation — 2026-11-03
 
 - Initialized and continued managed DAF `open` session
