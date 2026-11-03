@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import queue
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -82,6 +83,102 @@ def test_local_retry_does_not_send_same_channel_twice(tmp_path):
 
     send.assert_called_once()
     assert len(service.store.recent_local_events()) == 1
+
+
+def test_direct_hook_handoff_persists_before_starting_worker(tmp_path, monkeypatch):
+    service = _service(tmp_path / "notifications.sqlite3")
+    spawned = []
+    notification_queue = queue.Queue(maxsize=2)
+
+    def start_worker(event_id):
+        pending = service.store.pending_local_event(event_id)
+        assert pending is not None
+        spawned.append(event_id)
+        return True
+
+    monkeypatch.setattr(
+        ViolationNotificationService,
+        "from_global_config",
+        classmethod(lambda cls, **_kwargs: service),
+    )
+    monkeypatch.setattr(notifications, "_spawn_notification_worker", start_worker)
+    monkeypatch.setattr(notifications, "_NOTIFICATION_QUEUE", notification_queue)
+
+    with notifications.direct_hook_notification_handoff():
+        assert notifications.schedule_violation_notification(
+            "tool_permission", "high", "viol_0123456789abcdef"
+        )
+
+    assert spawned == ["viol_0123456789abcdef"]
+    assert notification_queue.empty()
+    assert service.store.recent_local_events()[0]["delivery"]["desktop"] == "pending"
+
+
+def test_detached_worker_delivers_persisted_event_once(tmp_path):
+    sent = []
+    service = _service(
+        tmp_path / "notifications.sqlite3",
+        desktop_sender=lambda title, message: sent.append((title, message)) or True,
+    )
+    event_id, created, has_pending_channels = service.persist_local(
+        "tool_permission", "high", "viol_0123456789abcdef"
+    )
+
+    assert created is True
+    assert has_pending_channels is True
+    assert service.dispatch_pending_local_event(event_id) is True
+    assert service.dispatch_pending_local_event(event_id) is False
+    assert sent == [
+        (
+            "AI Guardian violation: Tool permission",
+            "Severity: high\nOriginating daemon: local-daemon",
+        )
+    ]
+    assert service.store.recent_local_events()[0]["delivery"]["desktop"] == "delivered"
+
+
+def test_normal_notification_handoff_remains_async(monkeypatch):
+    notification_queue = queue.Queue(maxsize=2)
+    monkeypatch.setattr(notifications, "_NOTIFICATION_QUEUE", notification_queue)
+    monkeypatch.setattr(notifications, "_DISPATCHER_STARTED", True)
+
+    assert notifications.schedule_violation_notification(
+        "tool_permission", "high", "viol_0123456789abcdef"
+    )
+    assert notification_queue.get_nowait() == (
+        "tool_permission",
+        "high",
+        "viol_0123456789abcdef",
+    )
+
+
+def test_notification_worker_launch_is_detached_and_does_not_inherit_hook_pipes(
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        notifications.subprocess,
+        "Popen",
+        lambda command, **options: calls.append((command, options)),
+    )
+
+    assert notifications._spawn_notification_worker("viol_0123456789abcdef")
+
+    command, options = calls[0]
+    assert command[-2:] == [
+        "ai_guardian.violations.notification_worker",
+        "viol_0123456789abcdef",
+    ]
+    assert "-E" in command
+    assert options["stdin"] is notifications.subprocess.DEVNULL
+    assert options["stdout"] is notifications.subprocess.DEVNULL
+    assert options["stderr"] is notifications.subprocess.DEVNULL
+    assert options["close_fds"] is True
+    assert options["cwd"] == str(Path(notifications.__file__).resolve().parents[2])
+    if notifications.os.name == "nt":
+        assert options["creationflags"]
+    else:
+        assert options["start_new_session"] is True
 
 
 def test_notification_outbox_prunes_expired_events_on_read(tmp_path):

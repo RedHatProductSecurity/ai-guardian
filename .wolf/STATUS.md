@@ -9,6 +9,42 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2651 implementation — 2026-11-03
+
+- Initialized and continued managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2651`, native conversation
+  `ses_e5dadbfbbffexZ2Jyf3RrSR2CS`, on existing branch `2651` in the real
+  workspace. Initial worktree was clean; no temporary clone sync or branch change
+  applied. Read the repository-qualified GitHub issue once and preserved the
+  DAF-managed native title.
+- Implemented direct-hook notification handoff: during direct CLI fallback,
+  synchronously commit the minimal privacy-safe event to the private SQLite outbox,
+  then launch a detached worker from the trusted package root with only the opaque
+  event ID. Python `-E` ignores path overrides without disabling user-site installs;
+  redirected standard streams keep IDE pipes from inheriting the worker. It
+  dispatches pending channels without holding the short-lived hook open. The
+  existing long-running daemon queue remains asynchronous and alert registration
+  remains independent of violation-history logging.
+- Added a subprocess regression that exits the direct hook and verifies the
+  outbox event was committed before worker launch, plus worker delivery, detached
+  launch, and daemon-async regressions. Updated violation-logging docs, the full
+  affected notification UX contract, CHANGELOG, and OpenWolf buglog.
+- **Validation:** 43 related unit/UX tests pass. Ruff, repository-wide Black
+  (Python 3.10 target), error-level Pylint, changed-module Mypy, and
+  `git diff --check` pass. Full-package Mypy still reports 14 errors in untouched
+  `skill_discovery.py` and `secret_validator.py`. Tests use isolated outbox state
+  and mocked delivery; no live desktop/email notification was sent.
+- Updated all three GitHub acceptance checkboxes, added `done` without replacing
+  existing labels, posted progress comment
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2651#issuecomment-6610775647,
+  and saved a DAF progress note. Changes remain uncommitted on branch `2651`; no
+  push, PR, or issue closure. Ready for user review and external DAF completion.
+- On user request, fetched and rebased the branch onto `origin/main` at
+  `005968ec` (the prior branch tip was one commit behind and had no unique local
+  commits). Restored all uncommitted implementation files; resolved the sole
+  conflict in the generated OpenWolf anatomy index. Re-ran the 43 related unit/UX
+  tests successfully after the rebase. No commit or push was created.
+
 ## Issue #2649 implementation — 2026-11-03
 
 - Initialized managed DAF `open` session

@@ -11,14 +11,18 @@ import re
 import smtplib
 import sqlite3
 import ssl
+import subprocess
+import sys
 import threading
 import time
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import parseaddr
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from ai_guardian.storage import check_storage_file, make_private_directory
 
@@ -77,6 +81,9 @@ _DELIVERY_SLOTS = threading.BoundedSemaphore(8)
 _NOTIFICATION_QUEUE: queue.Queue[tuple[Any, Any, Any]] = queue.Queue(maxsize=256)
 _DISPATCHER_LOCK = threading.Lock()
 _DISPATCHER_STARTED = False
+_DIRECT_HOOK_HANDOFF: ContextVar[bool] = ContextVar(
+    "direct_hook_notification_handoff", default=False
+)
 
 
 def new_violation_event_id() -> str:
@@ -323,6 +330,44 @@ class NotificationStore:
         except Exception:
             connection.rollback()
             raise
+        finally:
+            connection.close()
+
+    def pending_local_event(
+        self, event_id: str
+    ) -> Optional[tuple[str, dict[str, str], list[str]]]:
+        """Load one local event and its still-pending delivery channels."""
+        if not isinstance(event_id, str) or not _SAFE_EVENT_ID_RE.fullmatch(event_id):
+            return None
+        connection = self._connect()
+        try:
+            row = connection.execute(
+                "SELECT event_key, event_id, occurred_at, category, severity, "
+                "source_daemon FROM notification_events "
+                "WHERE namespace = 'local' AND event_id = ?",
+                (event_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            pending = {
+                delivery["channel"]
+                for delivery in connection.execute(
+                    "SELECT channel FROM notification_deliveries "
+                    "WHERE event_key = ? AND status = 'pending'",
+                    (row["event_key"],),
+                ).fetchall()
+            }
+            pending_channels = [channel for channel in CHANNELS if channel in pending]
+            if not pending_channels:
+                return None
+            event = {
+                "id": row["event_id"],
+                "timestamp": row["occurred_at"],
+                "category": row["category"],
+                "severity": row["severity"],
+                "source_daemon": row["source_daemon"],
+            }
+            return row["event_key"], event, pending_channels
         finally:
             connection.close()
 
@@ -646,6 +691,51 @@ class ViolationNotificationService:
         source_daemon: Any = None,
     ) -> str:
         """Persist a minimal outbox event and schedule enabled delivery channels."""
+        event, event_key, created, statuses = self._register_local_event(
+            violation_type,
+            severity,
+            violation_id,
+            timestamp=timestamp,
+            source_daemon=source_daemon,
+        )
+        if created:
+            for channel, status in statuses.items():
+                if status == "pending":
+                    self._schedule(event_key, channel, event)
+        return event["id"]
+
+    def persist_local(
+        self,
+        violation_type: Any,
+        severity: Any = "warning",
+        violation_id: Any = None,
+        *,
+        timestamp: Any = None,
+        source_daemon: Any = None,
+    ) -> tuple[str, bool, bool]:
+        """Commit the safe outbox event without starting in-process delivery."""
+        event, _event_key, created, statuses = self._register_local_event(
+            violation_type,
+            severity,
+            violation_id,
+            timestamp=timestamp,
+            source_daemon=source_daemon,
+        )
+        return (
+            event["id"],
+            created,
+            any(status == "pending" for status in statuses.values()),
+        )
+
+    def _register_local_event(
+        self,
+        violation_type: Any,
+        severity: Any,
+        violation_id: Any,
+        *,
+        timestamp: Any,
+        source_daemon: Any,
+    ) -> tuple[dict[str, str], str, bool, dict[str, str]]:
         event = self._make_event(
             violation_id,
             _category_label(violation_type),
@@ -655,11 +745,7 @@ class ViolationNotificationService:
         )
         statuses = self._channel_statuses()
         event_key, created = self.store.register_local_event(event, statuses)
-        if created:
-            for channel, status in statuses.items():
-                if status == "pending":
-                    self._schedule(event_key, channel, event)
-        return event["id"]
+        return event, event_key, created, statuses
 
     def relay_remote_event(self, source_key: str, remote_event: Any) -> bool:
         """Apply local settings only to remote channels not known to have sent."""
@@ -773,6 +859,16 @@ class ViolationNotificationService:
         except Exception:
             logger.warning("Could not record violation notification delivery status")
 
+    def dispatch_pending_local_event(self, event_id: str) -> bool:
+        """Deliver pending channels for one durable local outbox event."""
+        pending = self.store.pending_local_event(event_id)
+        if pending is None:
+            return False
+        event_key, event, channels = pending
+        for channel in channels:
+            self._deliver(event_key, channel, event)
+        return True
+
 
 def notify_violation(
     violation_type: Any,
@@ -787,6 +883,67 @@ def notify_violation(
     except Exception:
         logger.warning("Could not queue violation notification; details withheld")
         return None
+
+
+def _spawn_notification_worker(event_id: str) -> bool:
+    """Start a detached worker using only the opaque persisted event ID."""
+    if not _SAFE_EVENT_ID_RE.fullmatch(event_id):
+        return False
+    command = [
+        sys.executable,
+        "-E",
+        "-m",
+        "ai_guardian.violations.notification_worker",
+        event_id,
+    ]
+    options: dict[str, Any] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "close_fds": True,
+        # Do not let a repository's current directory shadow the installed worker.
+        # Keep user-site installs available; isolated mode (-I) disables them.
+        "cwd": str(Path(__file__).resolve().parents[2]),
+    }
+    if os.name == "nt":
+        options["creationflags"] = getattr(
+            subprocess, "DETACHED_PROCESS", getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        )
+    else:
+        options["start_new_session"] = True
+    try:
+        subprocess.Popen(command, **options)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        logger.warning("Could not start detached violation notification worker")
+        return False
+    return True
+
+
+def _persist_and_dispatch_direct_notification(
+    violation_type: Any, severity: Any, violation_id: Any
+) -> bool:
+    """Persist before the short-lived hook exits, then delegate delivery."""
+    try:
+        service = ViolationNotificationService.from_global_config()
+        event_id, created, has_pending_channels = service.persist_local(
+            violation_type, severity, violation_id
+        )
+        if created and has_pending_channels:
+            return _spawn_notification_worker(event_id)
+        return True
+    except Exception:
+        logger.warning("Could not persist direct-hook notification; details withheld")
+        return False
+
+
+@contextmanager
+def direct_hook_notification_handoff() -> Iterator[None]:
+    """Use durable outbox handoff while processing a direct-mode hook."""
+    token = _DIRECT_HOOK_HANDOFF.set(True)
+    try:
+        yield
+    finally:
+        _DIRECT_HOOK_HANDOFF.reset(token)
 
 
 def _notification_dispatch_loop() -> None:
@@ -809,6 +966,11 @@ def schedule_violation_notification(
     violation_id: Any = None,
 ) -> bool:
     """Hand off notification work without blocking scanning or violation logging."""
+    if _DIRECT_HOOK_HANDOFF.get():
+        return _persist_and_dispatch_direct_notification(
+            violation_type, severity, violation_id
+        )
+
     global _DISPATCHER_STARTED
     with _DISPATCHER_LOCK:
         if not _DISPATCHER_STARTED:

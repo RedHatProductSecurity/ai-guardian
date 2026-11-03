@@ -2852,20 +2852,24 @@ def main():
         try:
             # Check persisted pause state before direct-mode fallback (#1319)
             from ai_guardian.daemon.state import DaemonState
+            from ai_guardian.violations.notifications import (
+                direct_hook_notification_handoff,
+            )
 
-            if DaemonState.is_paused_on_disk(cwd=os.getcwd()):
-                logger.info(
-                    "Scanning paused (persisted state), skipping direct fallback"
-                )
-                response = {"output": "{}", "exit_code": 0}
-            elif hook_data is not None:
-                response = process_hook_data(hook_data)
-            elif stdin_consumed:
-                response = build_failure_response(
-                    None, get_on_scan_error_action(_hook_config)
-                )
-            else:
-                response = process_hook_input()
+            with direct_hook_notification_handoff():
+                if DaemonState.is_paused_on_disk(cwd=os.getcwd()):
+                    logger.info(
+                        "Scanning paused (persisted state), skipping direct fallback"
+                    )
+                    response = {"output": "{}", "exit_code": 0}
+                elif hook_data is not None:
+                    response = process_hook_data(hook_data)
+                elif stdin_consumed:
+                    response = build_failure_response(
+                        None, get_on_scan_error_action(_hook_config)
+                    )
+                else:
+                    response = process_hook_input()
         except Exception as e:
             logger.error("Hook fallback failed: %s", e)
             response = build_failure_response(
