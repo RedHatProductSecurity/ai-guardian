@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~19873 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21577 tok)
-- `CHANGELOG.md` — Change log (~81064 tok)
+- `CHANGELOG.md` — Change log (~81119 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -1370,7 +1370,7 @@
 - `diff_provider.py` — DiffProviderError: parse_pr_ref, parse_mr_ref, detect_platform, get_merge_base + 8 more (~3283 tok)
 - `directory_rules.py` — URL patterns: 2 routes (~5244 tok)
 - `input.py` — Native tool argument normalization and value-free input diagnostics. (~2795 tok)
-- `patterns.py` (~12004 tok)
+- `patterns.py` (~12732 tok)
 - `policy.py` — ToolPolicyChecker: is_shell_tool_name (~36342 tok)
 
 ## src/ai_guardian/tray/

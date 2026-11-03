@@ -742,7 +742,44 @@ def _python_code_targets_cli(
 
 def _is_script_shell(token: str) -> bool:
     basename = _command_basename(token)
-    return basename in _SCRIPT_COMMAND_WRAPPERS or basename in {"cmd.exe"}
+    if basename.endswith(".exe"):
+        basename = basename[:-4]
+    return basename in _SCRIPT_COMMAND_WRAPPERS
+
+
+def _is_powershell_shell(token: str) -> bool:
+    basename = _command_basename(token)
+    if basename.endswith(".exe"):
+        basename = basename[:-4]
+    return basename in {"powershell", "pwsh"}
+
+
+def _has_opaque_powershell_command(tokens: List[str], start: int) -> bool:
+    """Fail closed when PowerShell executes a command through an encoded payload."""
+    encoded_command_options = {"-e", "-ec", "-encodedcommand"}
+    command_or_file_options = {
+        "--",
+        "-c",
+        "-cmd",
+        "-command",
+        "-commandwithargs",
+        "-cwa",
+        "-f",
+        "-file",
+    }
+
+    for token in tokens[start:]:
+        value = _clean_command_token(token).lower()
+        option = re.split(r"[=:]", value, maxsplit=1)[0]
+        if option in command_or_file_options:
+            # Remaining arguments are a visible command or a script's arguments,
+            # not PowerShell's own opaque command payload.
+            return False
+        if option in encoded_command_options:
+            # Do not try to decode or interpret this payload. It is an opaque
+            # command boundary and must not inherit agent permission.
+            return True
+    return False
 
 
 def _tokenize_shell_command(command: str, *, posix: bool) -> List[str]:
@@ -902,6 +939,8 @@ def _contains_target_cli_in_tokens(
     target_executables: FrozenSet[str],
     module_prefixes: FrozenSet[str],
     depth: int = 0,
+    *,
+    reject_opaque_powershell: bool = False,
 ) -> bool:
     """Check one shell command segment for a real target CLI invocation."""
     if depth > 8 or not tokens:
@@ -955,10 +994,20 @@ def _contains_target_cli_in_tokens(
         return False
 
     if _is_script_shell(command_token):
+        if (
+            reject_opaque_powershell
+            and _is_powershell_shell(command_token)
+            and _has_opaque_powershell_command(tokens, index + 1)
+        ):
+            return True
         child_index = _script_child_index(tokens, index + 1)
         if child_index is not None:
             return _contains_target_cli_in_command_string(
-                tokens[child_index], target_executables, module_prefixes, depth + 1
+                tokens[child_index],
+                target_executables,
+                module_prefixes,
+                depth + 1,
+                reject_opaque_powershell=reject_opaque_powershell,
             )
         script_index = _script_file_index(tokens, index + 1)
         if script_index is not None:
@@ -969,7 +1018,11 @@ def _contains_target_cli_in_tokens(
         child_index = _launcher_child_index(tokens, index + 1, command)
         if child_index is not None:
             return _contains_target_cli_in_tokens(
-                tokens[child_index:], target_executables, module_prefixes, depth + 1
+                tokens[child_index:],
+                target_executables,
+                module_prefixes,
+                depth + 1,
+                reject_opaque_powershell=reject_opaque_powershell,
             )
         return False
 
@@ -977,19 +1030,31 @@ def _contains_target_cli_in_tokens(
         child_index = _launcher_child_index(tokens, index + 1, command)
         if child_index is not None:
             return _contains_target_cli_in_tokens(
-                tokens[child_index:], target_executables, module_prefixes, depth + 1
+                tokens[child_index:],
+                target_executables,
+                module_prefixes,
+                depth + 1,
+                reject_opaque_powershell=reject_opaque_powershell,
             )
         return False
 
     if command in _SHELL_CONTROL_WORDS:
         return _contains_target_cli_in_tokens(
-            tokens[index + 1 :], target_executables, module_prefixes, depth + 1
+            tokens[index + 1 :],
+            target_executables,
+            module_prefixes,
+            depth + 1,
+            reject_opaque_powershell=reject_opaque_powershell,
         )
 
     if command in {"invoke-expression", "iex", "start-process"}:
         for child_token in tokens[index + 1 :]:
             if _contains_target_cli_in_command_string(
-                child_token, target_executables, module_prefixes, depth + 1
+                child_token,
+                target_executables,
+                module_prefixes,
+                depth + 1,
+                reject_opaque_powershell=reject_opaque_powershell,
             ):
                 return True
         return False
@@ -1002,6 +1067,8 @@ def _contains_target_cli_in_command_string(
     target_executables: FrozenSet[str],
     module_prefixes: FrozenSet[str],
     depth: int,
+    *,
+    reject_opaque_powershell: bool = False,
 ) -> bool:
     """Recursively inspect a command string passed to a shell wrapper."""
     if not isinstance(value, str):
@@ -1010,7 +1077,11 @@ def _contains_target_cli_in_command_string(
         tokens = _tokenize_shell_command(value, posix=posix)
         if any(
             _contains_target_cli_in_tokens(
-                segment, target_executables, module_prefixes, depth
+                segment,
+                target_executables,
+                module_prefixes,
+                depth,
+                reject_opaque_powershell=reject_opaque_powershell,
             )
             for segment in _command_segments(tokens)
         ):
@@ -1036,6 +1107,7 @@ def _is_target_cli_command(
     executables: Iterable[str],
     *,
     module_prefixes: Iterable[str] = (),
+    reject_opaque_powershell: bool = False,
 ) -> bool:
     """Return whether *command* launches one of the target executables."""
     if not isinstance(command, str) or not command.strip():
@@ -1053,7 +1125,12 @@ def _is_target_cli_command(
     for posix in (True, False):
         tokens = _tokenize_shell_command(command, posix=posix)
         if any(
-            _contains_target_cli_in_tokens(segment, target_executables, target_modules)
+            _contains_target_cli_in_tokens(
+                segment,
+                target_executables,
+                target_modules,
+                reject_opaque_powershell=reject_opaque_powershell,
+            )
             for segment in _command_segments(tokens)
         ):
             return True
@@ -1065,13 +1142,15 @@ def is_ai_guardian_cli_command(command: str) -> bool:
 
     Detection is command-position aware. It covers direct and path-qualified
     executables, Python module launches, common environment/package launchers,
-    and shell wrappers while ignoring ordinary arguments and documentation
-    text that merely mentions AI Guardian.
+    and shell wrappers. Opaque PowerShell encoded-command payloads are rejected
+    because their command cannot be established as unrelated; ordinary arguments
+    and documentation text that merely mention AI Guardian remain allowed.
     """
     return _is_target_cli_command(
         command,
         _AI_GUARDIAN_EXECUTABLES,
         module_prefixes=(_AI_GUARDIAN_MODULE_PREFIX,),
+        reject_opaque_powershell=True,
     )
 
 

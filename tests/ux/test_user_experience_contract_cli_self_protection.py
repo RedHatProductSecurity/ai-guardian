@@ -1,5 +1,6 @@
 """UX contracts for immutable agent-originated AI Guardian CLI protection (#2428)."""
 
+import base64
 import json
 from io import StringIO
 from unittest.mock import patch
@@ -134,6 +135,49 @@ def test_immutable_cli_guard_remains_active_when_permissions_are_disabled():
 
     response = json.loads(result["output"])
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_opaque_powershell_cli_payload_is_denied_when_permissions_are_disabled():
+    """
+    USER EXPERIENCE: Opaque PowerShell CLI payload -> immutable denial.
+
+    PowerShell's EncodedCommand payload is not visible to the command tokenizer;
+    the hook rejects that opaque execution form before starting its child.
+    """
+    encoded_cli = base64.b64encode("ai-guardian status".encode("utf-16le")).decode(
+        "ascii"
+    )
+    result = _run_hook(
+        create_hook_data(
+            tool_name="PowerShell",
+            tool_input={
+                "command": f"powershell.exe -NoProfile -EncodedCommand {encoded_cli}"
+            },
+        ),
+        permissions_enabled=False,
+    )
+
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "before the child process started" in response["systemMessage"].lower()
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'pwsh -NoProfile -Command "Write-Output safe"',
+        "pwsh -Command \"Write-Output 'ai-guardian status'\"",
+        "powershell -Command \"Get-Content README.md | Select-String 'ai-guardian status'\"",
+    ],
+)
+def test_unrelated_powershell_and_documentation_mentions_remain_allowed(command):
+    result = _run_hook(
+        create_hook_data(tool_name="PowerShell", tool_input={"command": command}),
+        permissions_enabled=False,
+    )
+
+    response = json.loads(result.get("output") or "{}")
+    assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
 
 
 def test_trusted_developer_session_allows_cli_without_changing_user_experience():

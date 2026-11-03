@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IPv6 daemon REST reachability (#2649):** Resolve daemon endpoints for both
   address families and check each TCP candidate, allowing reachable IPv6 listeners
   to proceed through the existing verified REST transport.
+- **PowerShell CLI self-protection (#2653):** Fail closed on opaque encoded-command
+  payloads, including common PowerShell aliases and `.exe` entrypoints, while
+  preserving ordinary commands and documentation mentions.
 
 ### Added
 - **Experimental WSL2 platform guidance (#2593):** Document Linux-distribution
