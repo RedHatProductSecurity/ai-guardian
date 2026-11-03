@@ -79,7 +79,9 @@ controls.
   ineligible; the shared dispatcher selects isolated Tk → isolated NiceGUI.
   One child/window remains open across actions. Only display snapshots and narrow
   row/action/duration events cross its stdin/stdout channel; credentials and
-  transport objects stay in the tray worker. Row tokens expire on refresh.
+  transport objects stay in the tray worker. Row tokens expire on refresh. Tk
+  maps with a brief topmost hint, clears it after 200 ms, then restores focus once
+  after the tray-menu handoff; topmost is never permanent.
   Dropdowns start at inert placeholders. Selecting a duration pauses that row
   immediately; a paused row instead offers Resume. There is no separate Pause
   button or shared duration selector. The Tk window requests 1200 × 820 within
@@ -372,6 +374,9 @@ project → session rows each have their own duration/Resume dropdown. Exercise 
 duration, timed expiry, an inherited pause and resuming only one layer. Confirm
 in-place refresh, inert initial dropdown values, unavailable/older-daemon rows,
 duplicate session titles with full keys, stale clicks and SSH reconnect/removal.
+On KDE Plasma, record the Plasma version, X11/Wayland session, UI preference and
+actual provider; invoke Pause from the tray and confirm the window is visible and
+foreground after the menu closes, with no persistent topmost state.
 Opening, Refresh, Close and Escape without an action must not change pause state.
 Check that a single-monitor/no-placement-context launch actually applies the
 requested initial geometry within WM limits. Confirm row controls are visible

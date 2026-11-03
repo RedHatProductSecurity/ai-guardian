@@ -9,6 +9,27 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2645 implementation — 2026-11-02
+
+- Continued the managed DAF `open` session on its existing issue branch `2645`;
+  the initial worktree was clean. Read the repository-qualified GitHub issue once.
+- Audited the shared modal dispatch inventory against `ui_provider_order()` and
+  `docs/MODAL_PROVIDERS.md`. Pause remains a complete isolated Tk → NiceGUI form;
+  native simple forms remain ineligible.
+- Updated the Tk Pause window startup to use a brief topmost hint, clear it after
+  200 ms, and restore focus after the tray-menu handoff without changing placement.
+  Added focused unit and complete Pause UX-contract coverage, provider documentation,
+  and an Unreleased changelog entry.
+- **Validation:** 125 related unit/UX tests pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint (10/10), project Mypy, and `git diff --check` pass.
+- **KDE probe:** AI Guardian 1.21.0-dev, Plasma 6.7.4, Wayland session, Tk reports
+  X11 windowing, preference `auto`; an isolated empty Pause window selected Tk and
+  mapped at 1200 × 848. Shell launch did not make it the active window and is not a
+  tray-menu reproduction. No pause/resume action or live daemon state change occurred.
+- **Pending:** invoke Pause from the actual tray menu on KDE and confirm visibility,
+  foreground handoff and temporary-topmost release. Acceptance criteria for live
+  reproduction/fix qualification remain open; changes are local and uncommitted.
+
 ## Issue #2593 implementation — 2026-11-02
 
 - Continued the managed DAF `open` session on its existing branch `2593` in the
