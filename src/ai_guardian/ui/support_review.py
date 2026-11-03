@@ -871,9 +871,9 @@ def show_review(request: dict) -> dict | None:
                 buttons, text="Open Discussion", command=lambda: webbrowser.open(url)
             ).pack(side="left")
         gist_url = request.get("gist_url", "")
-        if isinstance(gist_url, str) and re.fullmatch(
-            r"https://gist\.github\.com/[A-Za-z0-9-]{1,39}/[a-f0-9]{5,64}", gist_url
-        ):
+        from ai_guardian.reporting.github_gist import valid_url
+
+        if valid_url(gist_url):
             import webbrowser
 
             ttk.Button(

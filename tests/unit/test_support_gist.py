@@ -139,6 +139,34 @@ def test_retry_reuses_uploaded_gist_but_requires_fresh_final_public_consent(flow
     assert [request["mode"] for request in flow.requests].count("approve") == 2
 
 
+def test_documented_gist_url_is_verified_and_reused_on_retry(flow):
+    transport = flow.client.gist_request.side_effect
+
+    def documented_url(method, *args, **kwargs):
+        data = transport(method, *args, **kwargs)
+        data["html_url"] = f"https://gist.github.com/{data['id']}"
+        return data
+
+    flow.client.gist_request.side_effect = documented_url
+    flow.client.create.side_effect = gh.GitHubError("Discussion denied.")
+    first = gh.send_discussion("support-owned-gist", flow.bundle)
+    expected_url = f"https://gist.github.com/{'a' * 32}"
+
+    assert first["delivery_status"] == "gist_only"
+    assert first["gist_url"] == expected_url
+    assert gist.receipt(flow.bundle)["url"] == expected_url
+
+    flow.client.create.side_effect = None
+    result = gh.send_discussion("support-owned-gist", flow.bundle)
+
+    assert result["status"] == "sent" and result["gist_url"] == expected_url
+    assert (
+        sum(call.args[0] == "POST" for call in flow.client.gist_request.call_args_list)
+        == 1
+    )
+    assert [request["mode"] for request in flow.requests].count("upload") == 1
+
+
 def test_remote_gist_changes_during_final_consent_prevent_discussion(flow, monkeypatch):
     def dialog(request):
         response = flow.dialog(request)
@@ -378,6 +406,7 @@ def test_network_failure_never_mistaken_for_a_safe_gist_retry():
         "owner_type",
         "owner_missing",
         "url",
+        "url_owner",
         "identifier",
         "public",
         "description",
@@ -407,6 +436,8 @@ def test_unverified_upload_response_blocks_discussion_and_duplicate_gist(flow, c
                 data["owner"][key] = "other"
         elif change == "url":
             data["html_url"] = "https://example.com/unsafe"
+        elif change == "url_owner":
+            data["html_url"] = f"https://gist.github.com/other/{data['id']}"
         elif change == "identifier":
             data["id"] = "../invalid"
         elif change == "public":

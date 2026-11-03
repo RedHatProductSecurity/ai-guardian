@@ -276,6 +276,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builds and scanner-version validation.
 
 ### Fixed
+- **GitHub support Gist receipts (#2650):** Accept GitHub's documented ID-only
+  Gist URL while retaining independent authenticated-owner, unlisted-visibility,
+  description, and exact-file verification. Persist and safely reuse the verified
+  receipt on retry so Discussion publication can continue without another upload.
 - **KDE Pause dialog foreground (#2645):** Map the Tk window with a temporary
   raising hint, clear it after the tray-menu handoff, and restore focus once more.
   Monitor placement and provider eligibility are unchanged.

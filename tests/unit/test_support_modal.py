@@ -1033,6 +1033,7 @@ def test_both_upload_and_discussion_require_fresh_unchecked_consent(
     "url,allowed",
     [
         ("https://gist.github.com/reporter/" + "a" * 32, True),
+        ("https://gist.github.com/" + "a" * 32, True),
         ("https://example.com/reporter/" + "a" * 32, False),
         ("https://gist.github.com/reporter/../../settings", False),
     ],

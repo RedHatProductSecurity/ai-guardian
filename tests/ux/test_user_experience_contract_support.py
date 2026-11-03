@@ -32,9 +32,11 @@ Manual desktop verification:
    sanitized Gist description/filenames/contents. Create Gist starts disabled;
    only its separate unchecked consent box and click authorize upload.
 3. Cancel before upload: no Gist/Discussion exists and the bundle is still local.
-   Approve upload: files go into an unlisted Gist owned by that account. The next
-   dialog shows the actual Gist link in the exact Discussion, not inline files.
-   The original sanitized user message remains in its own section.
+    Approve upload: files go into an unlisted Gist owned by that account. The next
+    dialog shows the actual Gist link in the exact Discussion, not inline files.
+    GitHub documents this API URL as `https://gist.github.com/<gist-id>`; verify
+    the authenticated owner independently rather than requiring a username in it.
+    The original sanitized user message remains in its own section.
 4. Inspect that actual link and exact Discussion. Unlisted is not private.
    Publish publicly starts disabled; the hint explains that explicit consent is
    required. The consent checkbox stays visible above the action buttons,
@@ -574,6 +576,50 @@ def test_user_sees_restricted_category_account_and_exact_publication(
     )
     assert result["discussion_url"] == client.create.return_value
     assert root.exists()
+
+
+def test_documented_gist_url_reaches_discussion_and_is_reused_on_retry(
+    support, monkeypatch
+):
+    """USER EXPERIENCE: The documented ID-only Gist URL remains fully verifiable."""
+    _, bundle, client = support
+    transport = client.gist_request.side_effect
+    stages = []
+
+    def documented_url(method, *args, **kwargs):
+        response = transport(method, *args, **kwargs)
+        response["html_url"] = f"https://gist.github.com/{response['id']}"
+        return response
+
+    def dialog(request):
+        stages.append(request["mode"])
+        if request["mode"] == "edit":
+            return {
+                "request_id": request["request_id"],
+                **request["context"],
+                "include_files": ["diagnostics.txt"],
+            }
+        return {"request_id": request["request_id"], "approved": True}
+
+    client.gist_request.side_effect = documented_url
+    monkeypatch.setattr(gh, "review_dialog", dialog)
+    client.create.side_effect = gh.GitHubError("Discussion temporarily unavailable.")
+    first = gh.send_discussion("support-ux-documented-gist", bundle)
+    expected_url = f"https://gist.github.com/{'a' * 32}"
+
+    assert first["delivery_status"] == "gist_only"
+    assert first["gist_url"] == expected_url
+
+    client.create.side_effect = None
+    result = gh.send_discussion("support-ux-documented-gist", bundle)
+
+    assert result["status"] == "sent" and result["gist_url"] == expected_url
+    assert client.create.call_count == 2
+    assert (
+        sum(call.args[0] == "POST" for call in client.gist_request.call_args_list) == 1
+    )
+    assert stages.count("upload") == 1
+    assert stages.count("approve") == 2
 
 
 def test_unchecked_diagnostics_are_absent_from_public_preview_and_publication(
