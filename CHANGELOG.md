@@ -271,6 +271,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builds and scanner-version validation.
 
 ### Fixed
+- **KDE Pause dialog foreground (#2645):** Map the Tk window with a temporary
+  raising hint, clear it after the tray-menu handoff, and restore focus once more.
+  Monitor placement and provider eligibility are unchanged.
 - **Privacy-safe violation diagnostics:** Avoid echoing caller-provided violation
   categories in logger debug messages; log only fixed diagnostic text.
 - **Violation-log sensitive-data minimization:** Store only an ID, timestamp,

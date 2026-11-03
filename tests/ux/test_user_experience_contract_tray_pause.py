@@ -5,19 +5,25 @@ session rows, per-row duration/Resume dropdowns, inherited state, expiry,
 Refresh/Close/Escape and one persistent window on macOS, Windows and Linux.
 Rows must appear before expanding detailed help. Check initial geometry without
 monitor context, and confirm Show help/Help neither pauses nor opens another UI.
-Mocked contracts do not qualify actual desktop appearance or focus.
+The Tk focus contract uses a temporary topmost hint, clears it, and restores
+focus after the tray-menu handoff. Mocked contracts still do not qualify real
+desktop appearance or focus.
 """
 
 from copy import deepcopy
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.tray.pause import LEGEND, open_pause_controls
 from ai_guardian.ui.modal import UIUnavailable, mark_modal_displayed
-from ai_guardian.ui.pause_controls import _row_choices, _row_placeholder
+from ai_guardian.ui.pause_controls import (
+    _present_tk_window,
+    _row_choices,
+    _row_placeholder,
+)
 from tests.fixtures.tray_pause import row_event
 
 
@@ -87,6 +93,34 @@ def test_open_close_never_changes_pause_state_or_opens_another_provider(pause_ui
         _row_choices(payload, row) == payload["durations"] for row in payload["rows"]
     )
     assert all(_row_placeholder(row) == "Pause for…" for row in payload["rows"])
+
+
+def test_tray_pause_window_restores_focus_after_menu_handoff(pause_ui):
+    """USER EXPERIENCE: KDE tray menu closes -> Pause stays visible, not topmost."""
+    root = Mock()
+    root.winfo_exists.return_value = True
+    tk_error = type("TclError", (Exception,), {})
+    tk = SimpleNamespace(TclError=tk_error)
+
+    def show(provider, _payload, _respond, **_kwargs):
+        assert provider == "tkinter"
+        _present_tk_window(root, tk)
+        assert root.attributes.call_args_list == [call("-topmost", True)]
+        assert root.after.call_args.args[0] == 200
+        root.after_idle.call_args.args[0]()
+        root.after.call_args.args[1]()
+
+    pause_ui.show.side_effect = show
+    open_pause_controls(pause_ui.tray)
+
+    pause_ui.show.assert_called_once()
+    assert root.attributes.call_args_list == [
+        call("-topmost", True),
+        call("-topmost", False),
+    ]
+    assert root.deiconify.call_count == 1
+    assert root.focus_force.call_count == 2
+    pause_ui.tray._multi_client.send_pause.assert_not_called()
 
 
 def test_unavailable_rows_do_not_offer_duration_or_resume_choices(pause_ui):

@@ -28,6 +28,37 @@ def _set_initial_tk_size(window):
     window.geometry(f"{min(1200, max_width)}x{min(820, max_height)}")
 
 
+def _present_tk_window(window, tk):
+    """Raise once, then restore focus after the tray-menu handoff."""
+
+    def focus():
+        try:
+            if window.winfo_exists():
+                window.lift()
+                window.focus_force()
+        except tk.TclError:
+            logger.debug("Pause controls closed before foreground focus")
+
+    def finish_startup():
+        try:
+            if window.winfo_exists():
+                window.attributes("-topmost", False)
+        except tk.TclError:
+            logger.debug("Pause controls temporary raising hint could not be cleared")
+        # Clearing the hint or closing the tray popup can change stacking/focus.
+        focus()
+
+    window.update_idletasks()
+    try:
+        window.attributes("-topmost", True)
+    except tk.TclError:
+        logger.debug("Pause controls window manager does not accept a raising hint")
+    window.deiconify()
+    window.lift()
+    window.after_idle(focus)
+    window.after(200, finish_startup)
+
+
 def run_pause_provider(provider, payload, on_event, *, screen_bounds=None):
     if provider not in {"tkinter", "nicegui"}:
         raise ValueError("Unsupported pause UI provider")
@@ -219,16 +250,7 @@ def _show_tkinter(initial, exchange):
     root.protocol("WM_DELETE_WINDOW", root.destroy)
     root.bind("<Escape>", lambda _event: root.destroy())
     place_tk_window(root, initial.get("screen_bounds"), 1200, 820)
-
-    def foreground():
-        try:
-            root.lift()
-            root.focus_force()
-        except tk.TclError:
-            logger.debug("Pause controls foreground hint unavailable")
-
-    root.deiconify()
-    root.after_idle(foreground)
+    _present_tk_window(root, tk)
     root.mainloop()
     if failure:
         raise RuntimeError("Pause controls channel ended after display")

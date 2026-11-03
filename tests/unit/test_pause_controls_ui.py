@@ -5,7 +5,7 @@ import io
 import json
 from copy import deepcopy
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, call, patch
 import sys
 
 import pytest
@@ -216,6 +216,42 @@ def test_initial_geometry_is_applied_within_window_manager_limits(maximum, geome
     root.maxsize.return_value = maximum
     pause_controls._set_initial_tk_size(root)
     root.geometry.assert_called_once_with(geometry)
+
+
+@pytest.mark.parametrize("topmost_supported", [True, False])
+def test_tk_window_uses_temporary_raise_and_restores_focus(topmost_supported):
+    root = Mock()
+    root.winfo_exists.return_value = True
+    tk_error = type("TclError", (Exception,), {})
+    tk = SimpleNamespace(TclError=tk_error)
+    if not topmost_supported:
+        root.attributes.side_effect = tk_error
+
+    pause_controls._present_tk_window(root, tk)
+
+    assert root.method_calls[:6] == [
+        call.update_idletasks(),
+        call.attributes("-topmost", True),
+        call.deiconify(),
+        call.lift(),
+        call.after_idle(root.after_idle.call_args.args[0]),
+        call.after(200, root.after.call_args.args[1]),
+    ]
+    assert root.attributes.call_args_list == [call("-topmost", True)]
+    focus = root.after_idle.call_args.args[0]
+    finish_startup = root.after.call_args.args[1]
+    assert root.after.call_args.args[0] == 200
+
+    focus()
+    finish_startup()
+
+    assert root.attributes.call_args_list == [
+        call("-topmost", True),
+        call("-topmost", False),
+    ]
+    assert root.deiconify.call_count == 1
+    assert root.lift.call_count == 3
+    assert root.focus_force.call_count == 2
 
 
 @pytest.mark.asyncio
