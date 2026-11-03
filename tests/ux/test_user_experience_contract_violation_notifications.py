@@ -26,6 +26,9 @@ Manual verification:
 5. Generate one violation on a paired remote daemon. Confirm its selected channel
    sends once; make that channel fail and confirm local fallback occurs once.
    Confirm a remotely delivered or uncertain channel does not produce a duplicate.
+6. With the daemon unavailable, trigger a direct-mode hook violation. Confirm the
+   hook returns without waiting for delivery, the privacy-safe event is committed
+   to the outbox before exit, and the detached worker sends the configured alert.
 """
 
 import inspect

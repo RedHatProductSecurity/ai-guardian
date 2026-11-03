@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Direct-hook violation notifications (#2651):** Persist the privacy-safe alert
+  envelope to the outbox before a short-lived direct hook exits, then hand delivery
+  to a detached worker. Daemon-mode notification dispatch remains asynchronous.
 - **IPv6 daemon REST reachability (#2649):** Resolve daemon endpoints for both
   address families and check each TCP candidate, allowing reachable IPv6 listeners
   to proceed through the existing verified REST transport.

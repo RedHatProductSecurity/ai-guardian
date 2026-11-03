@@ -174,6 +174,14 @@
 
 ## Key Learnings
 
+- **2026-11-03 — Direct hook notifications (#2651):** A short-lived CLI must
+  commit the privacy-safe event to the durable outbox before returning; a
+  process-local daemon thread is not a handoff. Deliver outside hook latency with
+  a detached worker, redirect all standard streams so IDE pipes do not stay open,
+  and launch from the trusted package root with Python environment overrides
+  ignored (`-E`) so the hook's project directory cannot shadow the worker while
+  user-site installs remain available. Keep the long-running daemon queue async.
+
 - **2026-11-03 — Daemon IPv6 reachability (#2649):** `socket.socket(AF_INET, ...)`
   cannot connect to IPv6 literals or IPv6-only DNS results. Resolve with
   `getaddrinfo(..., family=AF_UNSPEC, type=SOCK_STREAM)` and connect using each

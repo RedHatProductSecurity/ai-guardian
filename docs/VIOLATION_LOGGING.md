@@ -292,6 +292,11 @@ daemons without a notification outbox, the tray uses a persisted overlapping
 poll cursor and does not alert on the source's pre-existing history at first
 connection.
 
+When a hook falls back to direct processing because the daemon is unavailable,
+it commits the privacy-safe event to the outbox before returning its response.
+A detached worker delivers selected channels without keeping the short-lived IDE
+hook open. Hooks handled by the long-running daemon retain asynchronous dispatch.
+
 ## Remote violation history mirroring
 
 Remote mirroring is **off by default**. Enable the receiving daemon's global
