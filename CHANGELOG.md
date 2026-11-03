@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Manual daemon target discovery (#2655):** Skip entries with null, non-string,
+  or blank names and warn without logging the supplied value. Invalid target names
+  can no longer interrupt sorting or leave the tray with stale discovery results.
 - **Direct-hook violation notifications (#2651):** Persist the privacy-safe alert
   envelope to the outbox before a short-lived direct hook exits, then hand delivery
   to a detached worker. Daemon-mode notification dispatch remains asynchronous.

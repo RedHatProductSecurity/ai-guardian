@@ -1448,15 +1448,27 @@ class DaemonTray:
     @staticmethod
     def _sort_targets(targets):
         """Local first, then case-insensitive daemon names across all transports."""
+
+        def sort_key(target):
+            name = target.name
+            has_string_name = isinstance(name, str)
+            sortable_name = name if has_string_name else ""
+            return (
+                target.runtime != "local",
+                not has_string_name,
+                sortable_name.casefold(),
+                sortable_name,
+                target.runtime,
+                target.ssh_id
+                or target.container_id
+                or target.pod_name
+                or target.url
+                or "",
+            )
+
         return sorted(
             targets,
-            key=lambda t: (
-                t.runtime != "local",
-                t.name.casefold(),
-                t.name,
-                t.runtime,
-                t.ssh_id or t.container_id or t.pod_name or t.url or "",
-            ),
+            key=sort_key,
         )
 
     def _catchup_remote_traces(self):

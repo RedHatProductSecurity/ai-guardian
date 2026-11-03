@@ -629,6 +629,10 @@ Create `~/.config/ai-guardian/tray-targets.json`:
 }
 ```
 
+If `name` is provided, it must be a non-empty string. Entries with `null`,
+non-string, or blank names are skipped with a warning; other valid entries remain
+available. If `name` is omitted, the target keeps the `manual` fallback name.
+
 Use `--no-discover` to skip auto-discovery and only load manual targets:
 
 ```bash

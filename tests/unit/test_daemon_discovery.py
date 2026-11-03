@@ -2400,6 +2400,36 @@ class TestDiscoverManual:
         assert targets[0].port == 63152
         assert targets[0].auth_token == "secret123"
 
+    def test_skips_invalid_names_and_keeps_valid_targets(self, caplog):
+        data = {
+            "daemons": [
+                {"name": None},
+                {"name": 17},
+                {"name": "   "},
+                {"name": "zeta"},
+                {"name": "alpha"},
+                {},
+            ]
+        }
+        d = DaemonDiscovery()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(data, f)
+            f.flush()
+            from pathlib import Path
+
+            with mock.patch(
+                "ai_guardian.daemon.discovery.get_tray_targets_path",
+                return_value=Path(f.name),
+            ):
+                targets = d.discover_manual()
+
+        os.unlink(f.name)
+
+        assert [target.name for target in targets] == ["zeta", "alpha", "manual"]
+        assert all(target.runtime == "manual" for target in targets)
+        assert caplog.text.count("Skipping manual daemon target") == 3
+        assert "name must be a non-empty string" in caplog.text
+
     def test_invalid_json_returns_empty(self):
         d = DaemonDiscovery()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:

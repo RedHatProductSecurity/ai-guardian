@@ -4562,6 +4562,27 @@ class TestVersionMismatchDetection:
                 mock_thread.assert_not_called()
 
 
+class TestDaemonTargetSorting:
+    def test_invalid_names_do_not_crash_sorting(self):
+        targets = [
+            DaemonTarget(name=None, runtime="manual"),
+            DaemonTarget(name="Zulu", runtime="manual"),
+            DaemonTarget(name=17, runtime="manual"),
+            DaemonTarget(name="alpha", runtime="manual"),
+            DaemonTarget(name="local", runtime="local"),
+        ]
+
+        sorted_targets = DaemonTray._sort_targets(targets)
+
+        assert [target.name for target in sorted_targets] == [
+            "local",
+            "alpha",
+            "Zulu",
+            None,
+            17,
+        ]
+
+
 class TestDiscoveryAnimation:
     """Tests for tray icon animation during slow daemon discovery (#743)."""
 

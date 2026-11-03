@@ -1702,8 +1702,16 @@ class DaemonDiscovery:
             ]
 
         targets = []
-        for entry in data.get("daemons", []):
+        for index, entry in enumerate(data.get("daemons", [])):
             name = entry.get("name", "manual")
+            if not isinstance(name, str) or not name.strip():
+                logger.warning(
+                    "Skipping manual daemon target at index %d: "
+                    "name must be a non-empty string",
+                    index,
+                )
+                continue
+
             url = entry.get("url", "")
             token = entry.get("token")
 
