@@ -29,9 +29,18 @@ def valid_url(url) -> bool:
     return (
         isinstance(url, str)
         and re.fullmatch(
-            r"https://gist\.github\.com/[A-Za-z0-9-]{1,39}/[a-f0-9]{5,64}", url
+            r"https://gist\.github\.com/(?:[A-Za-z0-9-]{1,39}/)?[a-f0-9]{5,64}",
+            url,
         )
         is not None
+    )
+
+
+def _matches_gist_url(url, login: str, identifier: str) -> bool:
+    """Accept GitHub's documented ID-only URL and the legacy owner-qualified URL."""
+    return url in (
+        f"https://gist.github.com/{identifier}",
+        f"https://gist.github.com/{login}/{identifier}",
     )
 
 
@@ -50,8 +59,7 @@ def receipt(bundle: dict) -> dict | None:
             or not isinstance(state.get("id"), str)
             or not re.fullmatch(r"[a-f0-9]{5,64}", state["id"])
             or not isinstance(state.get("login"), str)
-            or state.get("url")
-            != f"https://gist.github.com/{state['login']}/{state['id']}"
+            or not _matches_gist_url(state.get("url"), state["login"], state["id"])
             or not valid_url(state.get("url"))
             or not isinstance(state.get("account_id"), str)
             or not isinstance(state.get("fingerprint"), str)
@@ -143,8 +151,7 @@ def validate(
         not isinstance(identifier, str)
         or not re.fullmatch(r"[a-f0-9]{5,64}", identifier)
         or (gist_id and identifier != gist_id)
-        or data.get("html_url")
-        != f"https://gist.github.com/{identity['login']}/{identifier}"
+        or not _matches_gist_url(data.get("html_url"), identity["login"], identifier)
         or not isinstance(owner, dict)
         or owner.get("node_id") != identity["account_id"]
         or owner.get("login") != identity["login"]

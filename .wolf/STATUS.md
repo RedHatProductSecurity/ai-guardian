@@ -43,6 +43,37 @@ budget_tokens: 1000
   remain uncommitted on branch `2649`; no commit or push was made.
 - **Next:** user review and external DAF completion.
 
+## Issue #2650 implementation — 2026-11-03
+
+- Continued the managed DAF `open` session on its existing issue branch `2650` in
+  the real workspace. The worktree was clean at initialization; read the
+  repository-qualified GitHub issue exactly once. No temporary-clone sync or
+  branch change applied.
+- Rebased branch `2650` onto updated `origin/main` at `77d343b9`. Autostash
+  restoration conflicted only in OpenWolf's STATUS/index files; resolved them
+  preserving both the upstream #2649 handoff and this #2650 work. Re-ran all 318
+  related tests successfully, then dropped the redundant autostash. No source
+  conflicts occurred.
+- Gist URL validation now accepts GitHub's documented ID-only URL and the legacy
+  owner-qualified form. Receipt/API URLs remain bound to the Gist ID and, for the
+  qualified form, the authenticated login. API owner/account, unlisted visibility,
+  description, truncation and exact-file checks remain independent. The native
+  **Open Gist** result action uses the shared strict URL validator.
+- Added a unit regression and complete support UX contract for the documented API
+  response, successful Discussion after a failed attempt, and safe retry reuse
+  without a second Gist POST. Added owner-path mismatch coverage and documented the
+  API shape in manual verification and CHANGELOG.
+- **Validation:** 318 related support unit/UX tests pass. Full Ruff, Black (Python
+  3.10 target), error-level Pylint, buglog JSON parsing, and `git diff --check` pass.
+  Full-package Mypy reports 14 existing errors in untouched `skill_discovery.py`
+  and `scanners/secret_validator.py`.
+- Updated issue #2650 acceptance checkboxes, preserved its `bug`/`1.21.0` labels
+  while adding `done`, posted progress comment
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2650#issuecomment-6609558733,
+  and saved a DAF progress note. All acceptance criteria are met locally. No live
+  Gist or Discussion was created; changes remain uncommitted on branch `2650`.
+  **Next:** user review and external DAF completion.
+
 ## Review since v1.20.0 — 2026-11-03
 
 - Continued the changed-runtime review on `main`; no source files were modified.
