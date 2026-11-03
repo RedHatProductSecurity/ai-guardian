@@ -1585,13 +1585,22 @@ class MultiDaemonClient:
         import socket
 
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(timeout)
-            sock.connect((host, port))
-            sock.close()
-            return True
+            addresses = socket.getaddrinfo(
+                host, port, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
+            )
         except (OSError, socket.timeout):
             return False
+
+        for family, socktype, proto, _canonname, sockaddr in addresses:
+            try:
+                with socket.socket(family, socktype, proto) as sock:
+                    sock.settimeout(timeout)
+                    sock.connect(sockaddr)
+                return True
+            except (OSError, socket.timeout):
+                continue
+
+        return False
 
     @staticmethod
     def _rest_request(
