@@ -174,6 +174,15 @@
 
 ## Key Learnings
 
+- **2026-11-03 — Runtime review findings (#2650–#2655):** The Gist receipt
+  validator must match GitHub's API URL shape; sensitive history records use the
+  consolidated `sensitive_finding` category, so old exact-type filters need an
+  explicit compatibility contract. Notification workers are process-local, so
+  direct short-lived hooks need durable handoff. Immutable shell classification
+  needs coverage for opaque interpreter payloads; tray menu identity must track
+  endpoint/trust changes; and discovery must validate manual target names before
+  sorting. See the linked issues for the individual reproductions.
+
 - **2026-11-02 — Violation alert CodeQL/CI follow-up (#2646):** Do not interpolate
   caller-provided violation categories into logger diagnostics, even debug-level
   skip messages; keep those messages fixed and value-free. CI tests that assert
