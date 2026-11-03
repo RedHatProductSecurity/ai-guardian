@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **IPv6 daemon REST reachability (#2649):** Resolve daemon endpoints for both
+  address families and check each TCP candidate, allowing reachable IPv6 listeners
+  to proceed through the existing verified REST transport.
+
 ### Added
 - **Experimental WSL2 platform guidance (#2593):** Document Linux-distribution
   installation and scanner boundaries, browser-console use from Windows, and

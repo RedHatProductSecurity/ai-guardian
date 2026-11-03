@@ -9,6 +9,40 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2649 implementation — 2026-11-03
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2649`, native conversation
+  `ses_e5df9e787ffeWMv94FVRigZ9zn`, in the real workspace on its existing
+  branch `2649`. The worktree was clean. Read the repository-qualified GitHub
+  issue exactly once; no temporary-clone sync or branch change applies. Left the
+  native OpenCode title DAF-managed.
+- Acceptance criteria: support IPv6 literals and IPv6-resolved endpoints in TCP
+  reachability checks; proceed to the verified REST request for reachable IPv6
+  endpoints while rejecting unreachable endpoints; cover IPv6 and IPv4 without
+  regressing transport/TLS verification.
+- DAF config directory is `/home/itdove/.config/devaiflow`; hierarchical context
+  files and skills are absent. `daf assets --dry-run --agent opencode` reports
+  installed DAF skills up to date. The project release skill is unrelated and no
+  OpenCode project skill applies. Read OpenWolf handoff/protocol and cerebrum;
+  buglog search found no existing entry for this reachability failure.
+- At initialization, the user requested session setup only; implementation was
+  subsequently authorized with **go**.
+- Updated `_tcp_reachable()` to resolve with `AF_UNSPEC` and try each address
+  using its returned socket family/sockaddr. `_rest_request()` still delegates to
+  the existing verified REST transport after a successful preflight. Added
+  coverage for IPv4, IPv6 literals, IPv6-resolved names, failed/timed-out connects,
+  and reachable/unreachable IPv6 REST requests. Updated CHANGELOG.
+- **Validation:** 210 daemon-client and TLS tests pass; Ruff, Black (Python 3.10
+  target), error-level Pylint (10/10), changed-module Mypy, and `git diff --check`
+  pass. Full-package Mypy reports 14 errors in untouched `skill_discovery.py` and
+  `secret_validator.py`. Resolver/socket tests are mocked; no live IPv6 endpoint
+  was exercised.
+- Updated the GitHub acceptance checklist, added the `done` label and progress
+  comment, and saved a DAF note. All acceptance criteria are met locally. Changes
+  remain uncommitted on branch `2649`; no commit or push was made.
+- **Next:** user review and external DAF completion.
+
 ## Review since v1.20.0 — 2026-11-03
 
 - Continued the changed-runtime review on `main`; no source files were modified.

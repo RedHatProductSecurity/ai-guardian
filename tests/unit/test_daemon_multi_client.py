@@ -598,29 +598,116 @@ class TestManualRouting:
 class TestTcpReachable:
     """Tests for TCP reachability check (issue #711)."""
 
-    def test_reachable_host_returns_true(self):
-        with mock.patch("socket.socket") as mock_socket_cls:
-            mock_sock = mock.MagicMock()
-            mock_socket_cls.return_value = mock_sock
-            assert MultiDaemonClient._tcp_reachable("127.0.0.1", 63152) is True
-            mock_sock.connect.assert_called_once_with(("127.0.0.1", 63152))
-            mock_sock.close.assert_called_once()
+    @pytest.mark.parametrize(
+        ("host", "family_name", "sockaddr"),
+        [
+            ("127.0.0.1", "AF_INET", ("127.0.0.1", 63152)),
+            ("::1", "AF_INET6", ("::1", 63152, 0, 0)),
+            ("daemon.example", "AF_INET6", ("2001:db8::1", 63152, 0, 0)),
+        ],
+        ids=["ipv4-literal", "ipv6-literal", "ipv6-resolved"],
+    )
+    def test_reachable_addresses_return_true(self, host, family_name, sockaddr):
+        import socket
+
+        family = getattr(socket, family_name)
+        address = (
+            family,
+            socket.SOCK_STREAM,
+            socket.IPPROTO_TCP,
+            "",
+            sockaddr,
+        )
+        with mock.patch("socket.getaddrinfo", return_value=[address]) as getaddrinfo:
+            with mock.patch("socket.socket") as mock_socket_cls:
+                mock_sock = mock_socket_cls.return_value.__enter__.return_value
+                assert MultiDaemonClient._tcp_reachable(host, 63152) is True
+
+        getaddrinfo.assert_called_once_with(
+            host, 63152, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
+        )
+        mock_socket_cls.assert_called_once_with(
+            family, socket.SOCK_STREAM, socket.IPPROTO_TCP
+        )
+        mock_sock.settimeout.assert_called_once_with(2.0)
+        mock_sock.connect.assert_called_once_with(sockaddr)
+        mock_socket_cls.return_value.__exit__.assert_called_once()
+
+    def test_tries_remaining_resolved_addresses_after_connect_failure(self):
+        import socket
+
+        addresses = [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("2001:db8::1", 63152, 0, 0),
+            ),
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("192.0.2.1", 63152),
+            ),
+        ]
+        ipv6_socket = mock.MagicMock()
+        ipv4_socket = mock.MagicMock()
+        ipv6_socket.__enter__.return_value.connect.side_effect = OSError(
+            "Network unreachable"
+        )
+
+        with mock.patch("socket.getaddrinfo", return_value=addresses):
+            with mock.patch(
+                "socket.socket", side_effect=[ipv6_socket, ipv4_socket]
+            ) as mock_socket_cls:
+                assert MultiDaemonClient._tcp_reachable("daemon.example", 63152)
+
+        assert mock_socket_cls.call_args_list == [
+            mock.call(socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP),
+            mock.call(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP),
+        ]
+        ipv6_socket.__enter__.return_value.connect.assert_called_once_with(
+            ("2001:db8::1", 63152, 0, 0)
+        )
+        ipv6_socket.__exit__.assert_called_once()
+        ipv4_socket.__enter__.return_value.connect.assert_called_once_with(
+            ("192.0.2.1", 63152)
+        )
+        ipv4_socket.__exit__.assert_called_once()
 
     def test_unreachable_host_returns_false(self):
+        import socket
+
+        address = (
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+            socket.IPPROTO_TCP,
+            "",
+            ("10.0.0.99", 63152),
+        )
         with mock.patch("socket.socket") as mock_socket_cls:
-            mock_sock = mock.MagicMock()
+            mock_sock = mock_socket_cls.return_value.__enter__.return_value
             mock_sock.connect.side_effect = OSError("Network unreachable")
-            mock_socket_cls.return_value = mock_sock
-            assert MultiDaemonClient._tcp_reachable("10.0.0.99", 63152) is False
+            with mock.patch("socket.getaddrinfo", return_value=[address]):
+                assert MultiDaemonClient._tcp_reachable("10.0.0.99", 63152) is False
 
     def test_timeout_returns_false(self):
         import socket
 
+        address = (
+            socket.AF_INET6,
+            socket.SOCK_STREAM,
+            socket.IPPROTO_TCP,
+            "",
+            ("2001:db8::1", 63152, 0, 0),
+        )
         with mock.patch("socket.socket") as mock_socket_cls:
-            mock_sock = mock.MagicMock()
+            mock_sock = mock_socket_cls.return_value.__enter__.return_value
             mock_sock.connect.side_effect = socket.timeout("timed out")
-            mock_socket_cls.return_value = mock_sock
-            assert MultiDaemonClient._tcp_reachable("10.0.0.99", 63152) is False
+            with mock.patch("socket.getaddrinfo", return_value=[address]):
+                assert MultiDaemonClient._tcp_reachable("2001:db8::1", 63152) is False
 
 
 class TestRestRequestReachabilityCheck:
@@ -658,6 +745,50 @@ class TestRestRequestReachabilityCheck:
         result = MultiDaemonClient._rest_request(target, "GET", "/api/status")
         assert result == {"status": "running"}
         mock_urlopen.assert_called_once()
+
+    @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=False)
+    @mock.patch("ai_guardian.daemon.multi_client.open_daemon_request")
+    def test_skips_request_on_unreachable_ipv6_host(self, mock_urlopen, mock_reachable):
+        target = DaemonTarget(
+            name="local-ipv6",
+            runtime="manual",
+            host="::1",
+            port=63152,
+            url="http://[::1]:63152",
+        )
+
+        result = MultiDaemonClient._rest_request(target, "GET", "/api/status")
+
+        assert result is None
+        mock_reachable.assert_called_once_with("::1", 63152)
+        mock_urlopen.assert_not_called()
+
+    @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=True)
+    @mock.patch("ai_guardian.daemon.multi_client.open_daemon_request")
+    def test_proceeds_to_verified_transport_on_reachable_ipv6_host(
+        self, mock_urlopen, mock_reachable
+    ):
+        mock_resp = mock.MagicMock()
+        mock_resp.read.return_value = b'{"status": "running"}'
+        mock_resp.__enter__ = mock.MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = mock.MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+        target = DaemonTarget(
+            name="remote-ipv6",
+            runtime="manual",
+            host="2001:db8::1",
+            port=63152,
+            url="https://[2001:db8::1]:63152",
+        )
+
+        result = MultiDaemonClient._rest_request(target, "GET", "/api/status")
+
+        assert result == {"status": "running"}
+        mock_reachable.assert_called_once_with("2001:db8::1", 63152)
+        mock_urlopen.assert_called_once()
+        assert mock_urlopen.call_args.args[0].full_url == (
+            "https://[2001:db8::1]:63152/api/status"
+        )
 
 
 class TestOpenShellRouting:

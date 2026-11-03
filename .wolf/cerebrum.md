@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-01
+> Last updated: 2026-11-03
 
 ## User Preferences
 
@@ -173,6 +173,13 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-03 — Daemon IPv6 reachability (#2649):** `socket.socket(AF_INET, ...)`
+  cannot connect to IPv6 literals or IPv6-only DNS results. Resolve with
+  `getaddrinfo(..., family=AF_UNSPEC, type=SOCK_STREAM)` and connect using each
+  returned family-specific sockaddr. This is only a reachability preflight; keep
+  actual REST requests on `open_daemon_request` so TLS identity/CA/pin checks
+  remain authoritative.
 
 - **2026-11-03 — Runtime review findings (#2650–#2655):** The Gist receipt
   validator must match GitHub's API URL shape; sensitive history records use the
