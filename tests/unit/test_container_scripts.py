@@ -147,6 +147,13 @@ def test_container_images_match_project_rapidocr_pin():
         assert "rapidocr==3.9.2" not in contents
 
 
+def test_normal_image_precreates_writable_profile_mount_parent():
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "/sandbox/.config/ai-guardian/profiles" in dockerfile
+    assert "chown -R sandbox:sandbox /sandbox/.claude /sandbox/.config" in dockerfile
+
+
 def test_docs_requirements_pin_mkdocstrings_compatible_pymdown_extensions():
     requirements = (REPO_ROOT / "docs" / "requirements.txt").read_text(encoding="utf-8")
     assert "mkdocstrings[python]==1.0.6" in requirements

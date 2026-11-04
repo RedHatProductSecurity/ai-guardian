@@ -255,6 +255,13 @@ than leaving them implicit.
   or process handling differs. Record unsupported platforms explicitly.
 - [ ] Update the relevant CI jobs, including container build, scenario tests,
   CLI version health, and release-readiness checks.
+- [ ] Keep the real-agent hook smoke matrix in sync when adding/changing a CLI or
+  hook scanner: extend `scripts/agent_cli_test.py` and its local mock-protocol
+  adapter/cases, cover the violation and clean-allow paths in
+  `tests/unit/test_agent_cli_test.py`, and wire the CLI into
+  `.github/workflows/release-readiness.yml`. Use synthetic inputs and a local
+  mock only; preserve explicit ToS/credential gates. If the scanner cannot be
+  exercised through a supported CLI hook, record why this check is not applicable.
 - [ ] Record the tested image digest, CLI versions, provider/model/region,
   gateway version, host OS, and known failures in the issue or pull request.
 
@@ -276,6 +283,6 @@ than leaving them implicit.
 
 For an existing CLI, rerun the applicable sections whenever its command,
 profile, image/base image, version pin, provider, auth bridge, policy, model
-route, or lifecycle behavior changes. Runtime support is not complete until
+route, lifecycle behavior, or real-agent smoke adapter/case changes. Runtime support is not complete until
 the normal container and OpenShell status are both documented, even when one
 of them is explicitly unsupported.

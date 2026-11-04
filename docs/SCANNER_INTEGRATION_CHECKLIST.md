@@ -102,6 +102,12 @@ one causes a broken or incomplete feature.
 
 ### 10. Tests
 - [ ] `tests/unit/test_<scanner>.py` — unit tests: clean input, known-bad input, config options (threshold, allowlist), suppression annotations, robustness (empty input, parse errors)
+- [ ] If the scanner is enforced through a supported agent CLI hook, add a
+  synthetic violation case and a clean control to `scripts/agent_cli_test.py`,
+  update `tests/unit/test_agent_cli_test.py`, and keep the release-readiness
+  matrix in sync. The smoke case must use the local mock provider and must not
+  perform network/file side effects. If no supported CLI hook exercises this
+  scanner, record the reason and retain focused scanner/UX coverage.
 
 ### 11. Help tooltips
 - [ ] `src/ai_guardian/setup/config.py` — add `_comment_*` keys inside the scanner dict in `_get_default_config_template()` for each configurable field so they surface automatically as Web Console tooltips
@@ -111,6 +117,10 @@ one causes a broken or incomplete feature.
 
 ### 12. Don't forget
 - [ ] `.aiguardignore.toml` scanner type — add to `SCANNER_TYPES` in `aiguardignore.py` if file-content based
+- [ ] Real-agent CLI hook smoke — when the scanner is hook-reachable, synchronize
+  `scripts/agent_cli_test.py`, `tests/unit/test_agent_cli_test.py`, and
+  `.github/workflows/release-readiness.yml` as described in the
+  [CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md).
 - [ ] `docs/AGENT_SUPPORT.md` — add row to Violation Type Coverage Matrix
 - [ ] `CHANGELOG.md` — add entry under `[Unreleased]`
 - [ ] `src/ai_guardian/doctor.py` — add `check_<scanner>()` method to verify the scanner's underlying dependency is importable (use `importlib.util.find_spec()`); add it to the `checks` list in `run_all()`; add display name to `_CHECK_DISPLAY_NAMES`; update the check count assertion in `tests/unit/test_doctor.py::TestDoctorRunAll::test_run_all_returns_report`

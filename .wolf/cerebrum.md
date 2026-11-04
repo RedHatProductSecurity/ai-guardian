@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-03
+> Last updated: 2026-11-04
 
 ## User Preferences
 
@@ -173,6 +173,42 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-04 — OpenCode smoke readiness/tool sequencing (#2662):** Container
+  sandbox creation can return before its entrypoint finishes configuring the
+  agent and loading AI Guardian. Wait for both daemon-running and config-loaded
+  status before invoking a CLI. OpenCode may first contact the provider without
+  tool schemas; deterministic mock tool calls must be keyed to the first request
+  that actually offers a command tool, not the first request overall. Keep mock
+  diagnostics aggregate-only and never retain prompts or tool payloads.
+
+- **2026-11-04 — Strict profile for isolated smoke (#2662):** Built-in `@strict`
+  enables violation notifications. Use a temporary copy of the strict profile
+  with notifications disabled for unattended ephemeral smoke runs; do not weaken
+  scanner/policy settings or use the built-in profile if notifications would
+  create unwanted side effects.
+
+- **2026-11-04 — Claude Code local mock smoke (#2662):** Claude Code can be
+  exercised without model-provider billing through its Anthropic Messages API
+  base-URL override and a protocol-native local responder. The mock base URL is
+  the server root (the CLI appends `/v1/messages`); Codex/OpenAI-compatible clients
+  use their `/v1` base. Do not use Claude's `--bare` mode for hook smoke checks,
+  and do not infer proprietary ToS acceptance from host state; require an explicit
+  per-run opt-in and keep CI behind a maintainer-controlled consent variable.
+
+- **2026-11-04 — CLI smoke runner usability (#2662):** Prefer Docker when present,
+  fall back to Podman, and honor `CONTAINER_ENGINE`/`--container-engine`. Keep
+  subprocess output captured for privacy, but print flushed stage and case updates
+  plus periodic heartbeats so image builds, sandbox setup, and model calls do not
+  appear stalled. On failed setup, show bounded captured diagnostics so runtime
+  failures are actionable; do not print successful model responses. OpenCode's
+  `--agent` value must name an installed/configured agent profile such as `build`.
+  Qualify locally generated Podman images as `localhost/name:tag`; an unqualified
+  local tag can invoke interactive registry short-name resolution in a detached,
+  non-TTY create. If the host CLI uses an isolated temporary HOME, preserve
+  `XDG_DATA_HOME` and any custom storage.conf path so Podman build and create use
+  the same rootless image store without exposing the host config directory to the
+  AI Guardian CLI.
 
 - **2026-11-03 — Direct hook notifications (#2651):** A short-lived CLI must
   commit the privacy-safe event to the durable outbox before returning; a
