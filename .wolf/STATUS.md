@@ -29,10 +29,10 @@ budget_tokens: 1000
   runs passed all six cases for Gemini, OpenCode V1 `1.19.0`, and OpenCode V2
   `2.0.24`; no live provider request was made. Release Readiness now executes
   Gemini and both OpenCode generations.
-- Smoke-runner, tray-network, and CI fixes are committed and pushed on branch
-  `2662` through `d85aad6f`; the branch tracks `origin/2662`. CI rerun
-  `41921048728` passed, including all eight Python test matrix jobs. The current
-  OpenCode V1 and Claude smoke follow-ups are local and uncommitted.
+- Smoke-runner, tray-network, CI fixes, and the OpenCode V1/Claude follow-up are
+  committed and pushed on branch `2662` through `53af5747`; the branch tracks
+  `origin/2662`. CI rerun `41921048728` passed, including all eight Python test
+  matrix jobs. CI for `53af5747` is running as `41927850747` (Tests).
 
 - Preserved the existing preview-by-default release command work on branch `2662`
   and implemented the real-agent CLI smoke runner. It uses `ai-guardian sandbox
@@ -90,8 +90,8 @@ budget_tokens: 1000
   was not executed locally because no explicit Anthropic ToS acceptance was given.
 - Related runner tests: 40 passed; Ruff, Black, and error-level Pylint pass. Package
   Mypy still reports 14 errors in the unchanged `skill_discovery.py` and
-  `secret_validator.py` files. Current local smoke/docs/workflow changes are not
-  committed or pushed. Codex and Pi runtime smoke matrices were not run locally.
+  `secret_validator.py` files. Commit `53af5747` contains the smoke/docs/workflow
+  changes. Codex and Pi runtime smoke matrices were not run locally.
 - Preserve the pre-existing `.wolf/anatomy.md` worktree modification. An
   authorized maintainer may separately enable the Claude CI variable only after
   reviewing and accepting Anthropic's terms.
@@ -128,8 +128,8 @@ budget_tokens: 1000
   launching WSL. Local fixes are applied; 124 directly related unit tests plus
   Ruff/Black pass. CI rerun `41921048728` passed the Test matrix and related
   workflows.
-- **Next:** commit and push the local V1/Claude follow-up, then check its CI. The
-  macOS Podman tray REST reachability issue remains unresolved; do not claim
+- **Next:** check CI for `53af5747`. The macOS Podman tray REST reachability issue
+  remains unresolved; do not claim
   cross-platform qualification. Avoid asking the user to shuttle commands/results
   between the Mac terminal and this SSH session.
 
