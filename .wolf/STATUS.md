@@ -29,19 +29,19 @@ budget_tokens: 1000
   runs passed all six cases for Gemini, OpenCode V1 `1.19.0`, and OpenCode V2
   `2.0.24`; no live provider request was made. Release Readiness now executes
   Gemini and both OpenCode generations.
-- Smoke-runner changes are committed and pushed on branch `2662` through
-  `c893f267`; the current branch also includes the anatomy refresh commit
-  `0bd236b3` and tracks `origin/2662`. Source work was clean before this
-  follow-up handoff note.
+- Smoke-runner and tray-network changes are committed and pushed on branch `2662`
+  through `8ec8d9fc`; the branch tracks `origin/2662`. Local-only follow-up
+  changes address OpenCode smoke update-check delays and reported CI test
+  failures; these follow-ups are not committed or pushed.
 
 - Preserved the existing preview-by-default release command work on branch `2662`
   and implemented the real-agent CLI smoke runner. It uses `ai-guardian sandbox
   create`, the current-wheel image, a temporary strict-profile copy with
   notifications disabled, isolated temporary workspaces, and a local deterministic
-  provider; the runner removes inherited provider credentials and disconnects
-  sandbox networking before invoking a CLI. The built-in `@strict` profile keeps
-  notifications enabled, so the derived copy avoids side effects without relaxing
-  scanner or policy settings.
+  provider; the runner removes inherited provider credentials and uses a dedicated
+  internal network to isolate egress while preserving the published REST port. The
+  built-in `@strict` profile keeps notifications enabled, so the derived copy
+  avoids side effects without relaxing scanner or policy settings.
 - Added Anthropic Messages API non-streaming/SSE responses and Claude Code's
   native `ANTHROPIC_BASE_URL` route. Its `--print` invocation keeps hooks enabled;
   the runner does not use `--bare`. CI only installs/runs Claude when the
@@ -84,27 +84,36 @@ budget_tokens: 1000
 
 - The user does not want smoke daemons hidden through a discovery exception;
   preserve ordinary tray discovery and investigate network isolation instead.
-- `scripts/agent_cli_test.py` waits for the daemon, then disconnects every
-  container network before running cases. The mock provider and hook checks are
-  local to the container, so passing smoke cases does not prove host/tray REST
-  reachability.
+- `scripts/agent_cli_test.py` attaches the sandbox to a dedicated internal network
+  before startup. The mock provider and hook checks are local to the container, so
+  passing smoke cases does not prove host/tray REST reachability.
 - Linux Podman probe: a disposable container attached to an `--internal` network
   with a published REST port returned HTTP 200 from the host; disconnecting that
   network made the same host request reset. Probe container/network were removed.
   This shows detached networking explains the REST failure on Linux too; the
-  previous blanket Linux-vs-macOS explanation was incorrect. macOS Podman
-  machine behavior on an internal network remains unverified.
+  previous blanket Linux-vs-macOS explanation was incorrect. The user tested on
+  macOS and reports the smoke daemon appears in tray discovery but remains
+  unreachable; macOS Podman host-port forwarding is still unresolved.
 - Replaced the post-create network disconnect with a dedicated internal network
   created before `sandbox create`; the new `--container-network` option attaches
   the daemon to it from startup while preserving its published REST port and
   ordinary discovery. The runner removes the network with the sandbox, or keeps
   both under `--keep`.
-- **Validation:** 123 related unit tests pass; Ruff, Black (Python 3.10 target),
-  error-level Pylint, package Mypy, and `git diff --check` pass. A Linux Podman
-  OpenCode V2 run passed all six smoke cases on the new network. No external
-  provider was contacted. **Next:** qualify host REST access and egress isolation
-  on macOS Podman before claiming cross-platform behavior. Avoid asking the user
-  to shuttle commands/results between the Mac terminal and this SSH session.
+- The user reported OpenCode smoke cases waiting two minutes or more on both Mac
+  and Linux. Each isolated invocation was attempting an update check over blocked
+  egress. Set `OPENCODE_DISABLE_AUTOUPDATE=true` only for smoke invocations; normal
+  OpenCode auto-upgrade behavior is unchanged. Linux Podman V2 passed all six cases
+  in 44.3 seconds; no provider was contacted.
+- CI run `41914912963`: lint, smoke, integration, and scenario workflows passed,
+  but all eight Python Test matrix jobs failed. Ubuntu failures were the Gemini
+  E2E test helper reading an obsolete hooks-list shape; Windows failures were an
+  OpenCode fixture missing `USERPROFILE` and a Bash-wrapper test accidentally
+  launching WSL. Local fixes are applied; 124 directly related unit tests plus
+  Ruff/Black pass. CI has not yet rerun against these fixes.
+- **Next:** publish the CI fixes and recheck CI; separately diagnose macOS Podman
+  tray REST reachability before claiming the network approach works cross-platform.
+  Avoid asking the user to shuttle commands/results between the Mac terminal and
+  this SSH session.
 
 ## Issue #2663 session initialization — 2026-11-03
 

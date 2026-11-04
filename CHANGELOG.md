@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Agent CLI smoke network isolation:** Keep smoke sandboxes on dedicated
   egress-isolated internal networks while retaining their published daemon REST
   port for ordinary tray discovery.
+- **OpenCode smoke startup:** Disable OpenCode's automatic update check for each
+  isolated smoke invocation, avoiding repeated network timeouts on the internal
+  egress-blocked network.
 - **Podman macOS smoke setup:** Preserve Podman's connection metadata in the
   runner's isolated environment so sandbox creation uses the configured machine
   connection rather than a missing temporary socket.

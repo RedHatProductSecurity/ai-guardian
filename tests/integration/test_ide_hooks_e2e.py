@@ -269,11 +269,8 @@ def _json_event_value(config: Dict[str, Any], ide_type: str, event_name: str) ->
     if ide_type == "copilot":
         return config.get(event_name)
     if ide_type == "gemini":
-        return [
-            entry
-            for entry in config.get("hooks", [])
-            if isinstance(entry, dict) and entry.get("event") == event_name
-        ]
+        hooks = config.get("hooks", {})
+        return hooks.get(event_name) if isinstance(hooks, dict) else None
     if ide_type == "windsurf":
         return config.get("hooks", {}).get(event_name)
     return config.get("hooks", {}).get(event_name)
