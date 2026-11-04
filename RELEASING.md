@@ -64,11 +64,13 @@ scripts/agent-cli-test --cli-name opencode --agent build
 scripts/agent-cli-test --cli-name pi --agent openai
 ```
 
-Claude Code can be tested with `--cli-name claude --agent default`. If Claude Code
-is not already installed in the supplied image, pass
-`--accept-proprietary-tos` only after accepting Anthropic's terms; this explicitly
-passes the container's existing runtime-consent switch. Release Readiness leaves
-the Claude check skipped unless the repository variable
+Claude Code can be tested with `--cli-name claude --agent default`. When the runner
+builds its temporary image, pass `--accept-proprietary-tos` only after accepting
+Anthropic's terms; the runner installs Claude Code into that disposable image
+before creating the egress-isolated sandbox. It does not enable the container's
+runtime installer, which would require external access from inside the sandbox.
+A supplied `--image` must already contain Claude Code. Release Readiness leaves the
+Claude check skipped unless the repository variable
 `AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED` is set to `true` by an authorized maintainer
 after that review. The workflow does not accept terms by default.
 

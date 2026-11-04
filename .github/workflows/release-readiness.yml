@@ -814,7 +814,7 @@ jobs:
         run: |
           scripts/agent-cli-test --cli-name claude --agent default \
             --accept-proprietary-tos \
-            --image ai-guardian-readiness --container-engine docker \
+            --container-engine docker \
             --ai-guardian-command ai-guardian
 
       - name: Explain skipped Claude Code smoke check

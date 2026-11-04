@@ -75,6 +75,27 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
         "hello",
     ]
     assert runner.build_agent_command(
+        "opencode",
+        "build",
+        "hello",
+        opencode_attach_url="http://127.0.0.1:4096",
+    ) == [
+        "opencode",
+        "run",
+        "--attach",
+        "http://127.0.0.1:4096",
+        "--dir",
+        "/sandbox/repo",
+        "--agent",
+        "build",
+        "--auto",
+        "--format",
+        "json",
+        "--model",
+        "ai_guardian_smoke/ag-smoke",
+        "hello",
+    ]
+    assert runner.build_agent_command(
         "opencode", "build", "hello", opencode_v2=True
     ) == [
         "opencode",
@@ -127,6 +148,7 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     assert all("OPENAI_API_KEY=" not in item for item in claude_environment)
     opencode_environment = runner.build_agent_environment("opencode")
     assert "OPENCODE_DISABLE_AUTOUPDATE=true" in opencode_environment
+    assert "OPENCODE_DISABLE_MODELS_FETCH=true" in opencode_environment
     assert "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json" in (
         opencode_environment
     )
@@ -245,6 +267,141 @@ def test_main_creates_internal_network_before_sandbox_and_cleans_up(
     assert bool(network_remove) is not keep
     assert bool(deleted) is not keep
     assert not any(command[1:3] == ["network", "disconnect"] for command in commands)
+
+
+def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_opencode_v1_server")
+    runner._temp_parent = lambda: tmp_path
+    runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
+    monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
+    runner._wait_for_sandbox_ready = lambda *_args, **_kwargs: True
+    runner._configure_agent = lambda *_args, **_kwargs: True
+    runner._start_mock = lambda *_args, **_kwargs: True
+    runner._opencode_uses_v2 = lambda *_args: False
+    server_starts = []
+    runner._start_opencode_v1_server = lambda *args: server_starts.append(args) or True
+    warmups = []
+    runner._warm_opencode_v1_server = lambda *args: warmups.append(args) or True
+    case_calls = []
+    runner._run_case = lambda *args, **kwargs: case_calls.append(kwargs) or True
+
+    def fake_run(command, *_args, **_kwargs):
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    runner._run = fake_run
+    runner._delete_sandbox = lambda *_args: None
+
+    assert (
+        runner.main(
+            [
+                "--cli-name",
+                "opencode",
+                "--agent",
+                "build",
+                "--image",
+                "localhost/smoke:test",
+                "--container-engine",
+                "podman",
+                "--ai-guardian-command",
+                "ai-guardian",
+            ]
+        )
+        == 0
+    )
+
+    assert len(server_starts) == 1
+    assert server_starts[0][0] == "podman"
+    assert len(warmups) == 1
+    assert warmups[0][0] == "podman"
+    assert len(case_calls) == len(runner.CASES)
+    assert all(
+        call["opencode_attach_url"] == runner.OPENCODE_SERVER_URL for call in case_calls
+    )
+
+
+def test_opencode_v1_server_starts_detached_and_waits_for_health(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_server_start")
+    commands = []
+    probes = []
+
+    def fake_run(command, *_args, **_kwargs):
+        commands.append(list(command))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    def fake_exec(engine, name, command, *_args, **_kwargs):
+        probes.append((engine, name, list(command)))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+
+    assert runner._start_opencode_v1_server("podman", "smoke", 30)
+
+    command = commands[0]
+    assert command[:3] == ["podman", "exec", "--detach"]
+    assert "OPENCODE_DISABLE_AUTOUPDATE=true" in command
+    assert "OPENCODE_DISABLE_MODELS_FETCH=true" in command
+    assert command[-6:] == [
+        "opencode",
+        "serve",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        str(runner.OPENCODE_SERVER_PORT),
+    ]
+    assert probes[0][0:2] == ("podman", "smoke")
+    assert probes[0][2][-1] == f"{runner.OPENCODE_SERVER_URL}/global/health"
+
+
+def test_opencode_v1_warmup_uses_clean_case_and_local_provider(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_warmup")
+    violations = iter(({}, {}))
+    requests = iter(({"allowed": 0}, {"allowed": 1}))
+    commands = []
+
+    monkeypatch.setattr(
+        runner, "_violation_counts", lambda *_args, **_kwargs: next(violations)
+    )
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *_args, **_kwargs: next(requests)
+    )
+
+    def fake_exec(_engine, _name, command, *_args, **_kwargs):
+        commands.append(list(command))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+
+    assert runner._warm_opencode_v1_server("podman", "smoke", "build", 30)
+
+    assert commands[0][0:4] == [
+        "opencode",
+        "run",
+        "--attach",
+        runner.OPENCODE_SERVER_URL,
+    ]
+    assert "AGENT_CLI_SMOKE_CASE: allowed" in commands[0][-1]
+
+
+def test_opencode_v1_warmup_fails_if_clean_case_creates_a_violation(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_warmup_violation")
+    violations = iter(({}, {"prompt_injection": 1}))
+    requests = iter(({"allowed": 0}, {"allowed": 1}))
+    monkeypatch.setattr(
+        runner, "_violation_counts", lambda *_args, **_kwargs: next(violations)
+    )
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *_args, **_kwargs: next(requests)
+    )
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda _engine, _name, command, *_args, **_kwargs: subprocess.CompletedProcess(
+            command, 0, stdout="", stderr=""
+        ),
+    )
+
+    assert not runner._warm_opencode_v1_server("podman", "smoke", "build", 30)
 
 
 def test_main_removes_internal_network_when_sandbox_creation_fails(
@@ -490,38 +647,107 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
                 assert runner.MOCK_KEY in json.dumps(config)
 
 
-def test_claude_sandbox_requires_explicit_tos_opt_in_for_runtime_install(tmp_path):
-    runner = _load(RUNNER_PATH, "agent_cli_claude_tos")
-    profile = tmp_path / "strict.json"
-    workspace = tmp_path / "workspace"
-    base = runner.build_create_command(
-        ["ai-guardian"],
-        "docker",
-        "claude",
-        "default",
-        "image",
-        profile,
-        workspace,
-        "ag-cli-smoke-claude-test",
-    )
-    accepted = runner.build_create_command(
-        ["ai-guardian"],
-        "docker",
-        "claude",
-        "default",
-        "image",
-        profile,
-        workspace,
-        "ag-cli-smoke-claude-test",
-        accept_proprietary_tos=True,
+@pytest.mark.parametrize("install_claude_code", (False, True))
+def test_claude_tos_opt_in_preinstalls_only_in_temporary_smoke_image(
+    install_claude_code, tmp_path, monkeypatch
+):
+    runner = _load(RUNNER_PATH, f"agent_cli_claude_image_tos_{install_claude_code}")
+    container_dir = tmp_path / "container"
+    container_dir.mkdir()
+    (container_dir / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    runner.CONTAINER_DIR = container_dir
+    root = tmp_path / "smoke"
+    root.mkdir()
+    wheel = tmp_path / "ai_guardian-1.21.0-py3-none-any.whl"
+    wheel.write_bytes(b"wheel")
+    dockerfiles = []
+
+    def fake_run(command, *_args, **_kwargs):
+        dockerfiles.append(Path(command[-1], "Dockerfile").read_text(encoding="utf-8"))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    runner.build_current_image(
+        "podman",
+        root,
+        wheel,
+        timeout=5,
+        install_claude_code=install_claude_code,
     )
 
-    assert "ACCEPT_PROPRIETARY_TOS=true" not in base
-    assert (
-        accepted[accepted.index("--env") + 1]
-        == "AI_GUARDIAN_STATE_DIR=" + runner.STATE_DIR
+    assert len(dockerfiles) == 1
+    if install_claude_code:
+        assert "https://claude.ai/install.sh" in dockerfiles[0]
+        assert "test -x /sandbox/.local/bin/claude" in dockerfiles[0]
+        assert "USER sandbox" in dockerfiles[0]
+    else:
+        assert "claude.ai/install.sh" not in dockerfiles[0]
+
+
+def test_sandbox_runtime_never_receives_claude_install_consent(tmp_path):
+    runner = _load(RUNNER_PATH, "agent_cli_claude_runtime_tos")
+    profile = tmp_path / "strict.json"
+    workspace = tmp_path / "workspace"
+    command = runner.build_create_command(
+        ["ai-guardian"],
+        "docker",
+        "claude",
+        "default",
+        "image",
+        profile,
+        workspace,
+        "ag-cli-smoke-claude-test",
     )
-    assert "ACCEPT_PROPRIETARY_TOS=true" in accepted
+
+    assert "ACCEPT_PROPRIETARY_TOS=true" not in command
+    assert "AI_GUARDIAN_STATE_DIR=" + runner.STATE_DIR in command
+
+
+@pytest.mark.parametrize("accept_proprietary_tos", (False, True))
+def test_main_builds_claude_image_only_after_explicit_tos_opt_in(
+    accept_proprietary_tos, monkeypatch, tmp_path
+):
+    runner = _load(RUNNER_PATH, f"agent_cli_claude_main_tos_{accept_proprietary_tos}")
+    runner._temp_parent = lambda: tmp_path
+    runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
+    monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
+    runner._wait_for_sandbox_ready = lambda *_args, **_kwargs: True
+    runner._configure_agent = lambda *_args, **_kwargs: True
+    runner._start_mock = lambda *_args, **_kwargs: True
+    runner._run_case = lambda *_args, **_kwargs: True
+    image_options = []
+    runner.build_current_image = (
+        lambda *_args, **kwargs: image_options.append(kwargs["install_claude_code"])
+        or "localhost/claude-smoke:test"
+    )
+    commands = []
+
+    def fake_run(command, *_args, **_kwargs):
+        commands.append(list(command))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    runner._run = fake_run
+    runner._exec = lambda _engine, _name, command, *_args, **_kwargs: (
+        subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+    )
+    runner._delete_sandbox = lambda *_args: None
+    argv = [
+        "--cli-name",
+        "claude",
+        "--agent",
+        "default",
+        "--container-engine",
+        "podman",
+        "--ai-guardian-command",
+        "ai-guardian",
+    ]
+    if accept_proprietary_tos:
+        argv.append("--accept-proprietary-tos")
+
+    assert runner.main(argv) == 0
+
+    assert image_options == [accept_proprietary_tos]
+    assert all("ACCEPT_PROPRIETARY_TOS=true" not in command for command in commands)
 
 
 def test_local_mock_returns_native_tool_calls_for_only_fixed_probe_cases():
@@ -815,6 +1041,7 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
     assert claude_step["if"] == "vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true'"
     assert "--cli-name claude --agent default" in claude_step["run"]
     assert "--accept-proprietary-tos" in claude_step["run"]
+    assert "--image ai-guardian-readiness" not in claude_step["run"]
 
     v2_build = next(
         step
