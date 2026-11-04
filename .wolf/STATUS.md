@@ -40,16 +40,22 @@ budget_tokens: 1000
   read-only profile mounts. The runner waits for sandbox daemon/config readiness
   before starting cases. OpenCode makes an initial provider request without tool
   schemas, so the mock now offers its deterministic command call on the first
-  request that includes a command tool. Use OpenCode `build`, not `smoke`.
-- **Validation:** 108 focused runner/release/container tests pass; changed scripts
+  request that includes a command tool. Claude's permission allow rule now uses
+  the sandbox-owned `~/.claude/settings.json` instead of the mounted repo. Claude
+  also calls `/v1/messages/count_tokens` before inference; the mock now supports
+  that preflight. Failed wheel/image builds and provider configuration print
+  bounded diagnostics. Use OpenCode `build`, not `smoke`.
+- **Validation:** 111 focused runner/release/container tests pass; changed scripts
   pass Ruff, Black (Python 3.10 target), error-level Pylint, and Mypy. A fresh
   Podman/OpenCode `build` sandbox passed all six cases: prompt injection, secret,
-  PII, SSRF, config exfiltration, and clean allow. No live provider request or
-  actual proprietary Claude install was performed.
-- Changes remain uncommitted on branch `2662`; preserved the pre-existing
-  `.wolf/anatomy.md` worktree modification. No other agent's runtime smoke matrix
-  was run locally. An authorized maintainer may separately enable the Claude CI
-  variable after reviewing and accepting Anthropic's terms.
+  PII, SSRF, config exfiltration, and clean allow. A Podman/Claude sandbox also
+  passed all six cases against the local mock after the token-count endpoint fix.
+  No live provider request was made. The Mac build failure was not reproducible
+  here; its underlying stage output is now surfaced for follow-up.
+- Preserved the pre-existing `.wolf/anatomy.md` worktree modification. Codex and
+  Pi runtime smoke matrices were not run locally. An authorized maintainer may
+  separately enable the Claude CI variable after reviewing and accepting
+  Anthropic's terms.
 
 ## Issue #2663 session initialization — 2026-11-03
 

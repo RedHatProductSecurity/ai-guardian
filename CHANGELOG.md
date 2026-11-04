@@ -48,7 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parent for read-only profile mounts so setup can stage its active config. The
   runner waits for daemon/config readiness, and the OpenCode mock accounts for its
   initial provider request before a command tool is available. CLI and scanner
-  integration checklists require keeping this smoke matrix in sync.
+  integration checklists require keeping this smoke matrix in sync. Claude's
+  smoke permission is written to the sandbox user's config rather than the mounted
+  repository, the Anthropic token-count preflight is handled by the local mock,
+  and failed build/configuration stages show bounded diagnostics.
 - **Experimental WSL2 platform guidance (#2593):** Document Linux-distribution
   installation and scanner boundaries, browser-console use from Windows, and
   manual localhost troubleshooting. Clarify that WSL1 and comprehensive WSL2

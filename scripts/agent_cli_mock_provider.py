@@ -273,6 +273,13 @@ def anthropic_response(
     }
 
 
+def anthropic_count_tokens_response(payload: Dict[str, Any]) -> Dict[str, int]:
+    """Return a deterministic estimate for Claude Code's token-count preflight."""
+    counted = {key: payload.get(key) for key in ("system", "messages", "tools")}
+    serialized = json.dumps(counted, ensure_ascii=False)
+    return {"input_tokens": max(1, (len(serialized) + 3) // 4)}
+
+
 def anthropic_events(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     """Build the Anthropic Messages API SSE stream consumed by Claude Code."""
     message = {
@@ -407,10 +414,12 @@ class MockProviderHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        if self.path not in {
+        path = self.path.partition("?")[0]
+        if path not in {
             "/v1/chat/completions",
             "/v1/responses",
             "/v1/messages",
+            "/v1/messages/count_tokens",
         }:
             self._send_json({"error": "not found"}, status=404)
             return
@@ -425,10 +434,14 @@ class MockProviderHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "invalid request"}, status=400)
             return
 
+        if path == "/v1/messages/count_tokens":
+            self._send_json(anthropic_count_tokens_response(payload))
+            return
+
         case = request_case(payload)
         call_number, tool_call_number = _record_request(case, payload)
 
-        if self.path == "/v1/messages":
+        if path == "/v1/messages":
             response = anthropic_response(payload, case, call_number, tool_call_number)
             if payload.get("stream"):
                 self._send_events(anthropic_events(response))
@@ -436,7 +449,7 @@ class MockProviderHandler(BaseHTTPRequestHandler):
                 self._send_json(response)
             return
 
-        if self.path == "/v1/responses":
+        if path == "/v1/responses":
             response = responses_response(payload, case, call_number, tool_call_number)
             if payload.get("stream"):
                 self._send_events(response_events(response))

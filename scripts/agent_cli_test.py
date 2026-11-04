@@ -132,7 +132,7 @@ elif cli == 'pi':
           'contextWindow':8192, 'maxTokens':1024}]}
     path.write_text(json.dumps(cfg), encoding='utf-8')
 elif cli == 'claude':
-    path=Path(workspace)/'.claude'/'settings.local.json'
+    path=Path.home()/'.claude'/'settings.json'
     path.parent.mkdir(parents=True, exist_ok=True); cfg={}
     if path.is_file():
         try: cfg=json.loads(path.read_text(encoding='utf-8'))
@@ -375,8 +375,13 @@ def _build_wheel(output: Path, timeout: int) -> Path:
         cwd=ROOT,
     )
     wheels = sorted(output.glob("ai_guardian-*.whl"))
-    if result.returncode != 0 or len(wheels) != 1:
+    if result.returncode != 0:
+        _report_failure_details("Wheel build", result)
         raise RuntimeError("building the current AI Guardian wheel failed")
+    if len(wheels) != 1:
+        raise RuntimeError(
+            f"wheel build produced {len(wheels)} packages; expected exactly one"
+        )
     return wheels[0]
 
 
@@ -411,6 +416,7 @@ def build_current_image(
         progress="Building the temporary smoke image",
     )
     if result.returncode != 0:
+        _report_failure_details("Smoke image build", result)
         raise RuntimeError("building the current-wheel smoke image failed")
     return image
 
@@ -570,12 +576,11 @@ def _configure_agent(
             "model": MOCK_MODEL,
         }
     )
-    return (
-        _exec(
-            engine, name, ["python3", "-c", _CONFIGURE_AGENT, payload], timeout
-        ).returncode
-        == 0
-    )
+    result = _exec(engine, name, ["python3", "-c", _CONFIGURE_AGENT, payload], timeout)
+    if result.returncode != 0:
+        _report_failure_details("Local mock-provider configuration", result, 1200)
+        return False
+    return True
 
 
 def _counter_read_diagnostic(
@@ -989,8 +994,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "Agent CLI hook smoke test " + ("passed" if passed else "failed") + "."
         )
         return 0 if passed else 1
-    except (OSError, RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError):
-        print("ERROR: agent CLI smoke test could not complete")
+    except subprocess.TimeoutExpired as error:
+        print("ERROR: agent CLI smoke test timed out after " f"{error.timeout} seconds")
+        return 1
+    except RuntimeError as error:
+        print(f"ERROR: agent CLI smoke test could not complete: {error}")
+        return 1
+    except OSError as error:
+        detail = error.strerror or type(error).__name__
+        print(f"ERROR: agent CLI smoke test could not complete: {detail}")
+        return 1
+    except json.JSONDecodeError as error:
+        print(
+            "ERROR: agent CLI smoke test could not complete because JSON could not "
+            f"be parsed at line {error.lineno}, column {error.colno}"
+        )
         return 1
     finally:
         if created and args.keep:
