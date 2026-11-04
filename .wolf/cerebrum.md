@@ -224,6 +224,14 @@
   that actually offers a command tool, not the first request overall. Keep mock
   diagnostics aggregate-only and never retain prompts or tool payloads.
 
+- **2026-11-04 — OpenCode V1 smoke cold starts (#2662):** `opencode run` without
+  `--attach` starts a fresh backend/MCP lifecycle for each case. Start one
+  loopback-only `opencode serve`, attach runs with `--dir /sandbox/repo`, then
+  perform one clean local-mock warm-up before baselining the six cases. The health
+  endpoint alone does not guarantee the first MCP/session initialization is done;
+  compare warm-up violation counters and verify it reached only the local mock.
+  Keep this reuse behavior V1-only; V2 uses standalone runs to isolate its state.
+
 - **2026-11-04 — Strict profile for isolated smoke (#2662):** Built-in `@strict`
   enables violation notifications. Use a temporary copy of the strict profile
   with notifications disabled for unattended ephemeral smoke runs; do not weaken
@@ -237,6 +245,14 @@
   use their `/v1` base. Do not use Claude's `--bare` mode for hook smoke checks,
   and do not infer proprietary ToS acceptance from host state; require an explicit
   per-run opt-in and keep CI behind a maintainer-controlled consent variable.
+
+- **2026-11-04 — Claude smoke install under egress isolation (#2662):** The normal
+  image keeps proprietary CLI installation at runtime after user ToS consent. For
+  the smoke runner only, append an install step to its temporary image after the
+  explicit `--accept-proprietary-tos` opt-in, before the sandbox joins its internal
+  network. Never pass the runtime `ACCEPT_PROPRIETARY_TOS` variable from the smoke
+  runner; otherwise a missing CLI may attempt a `claude.ai` download with blocked
+  egress. A caller-supplied image must already include Claude Code.
 
 - **2026-11-04 — CLI smoke runner usability (#2662):** Prefer Docker when present,
   fall back to Podman, and honor `CONTAINER_ENGINE`/`--container-engine`. Keep

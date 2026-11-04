@@ -11,9 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Agent CLI smoke network isolation:** Keep smoke sandboxes on dedicated
   egress-isolated internal networks while retaining their published daemon REST
   port for ordinary tray discovery.
-- **OpenCode smoke startup:** Disable OpenCode's automatic update check for each
-  isolated smoke invocation, avoiding repeated network timeouts on the internal
-  egress-blocked network.
+- **OpenCode smoke startup:** Disable automatic update checks and remote model
+  catalog fetching for isolated smoke invocations, avoiding repeated network
+  timeouts on the internal egress-blocked network. Normal OpenCode auto-updates
+  remain enabled.
+- **OpenCode V1 smoke runtime:** Reuse one headless server and perform a clean,
+  local-provider warm-up before the six cases so MCP integrations do not incur a
+  fresh cold start for each invocation.
+- **Claude smoke setup:** Install Claude Code in the temporary smoke image only
+  after explicit ToS opt-in, preventing an egress-isolated sandbox from trying to
+  download the CLI from `claude.ai` at runtime.
 - **Podman macOS smoke setup:** Preserve Podman's connection metadata in the
   runner's isolated environment so sandbox creation uses the configured machine
   connection rather than a missing temporary socket.

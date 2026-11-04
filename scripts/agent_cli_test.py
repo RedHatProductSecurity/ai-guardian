@@ -31,6 +31,8 @@ MOCK_GEMINI_MODEL = "gemini-2.5-flash"
 MOCK_URL = f"http://127.0.0.1:{MOCK_PORT}/v1"
 MOCK_ANTHROPIC_BASE_URL = f"http://127.0.0.1:{MOCK_PORT}"
 MOCK_KEY = "ai-guardian-local-smoke-only"
+OPENCODE_SERVER_PORT = 4096
+OPENCODE_SERVER_URL = f"http://127.0.0.1:{OPENCODE_SERVER_PORT}"
 AGENT_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,48}$")
 
 
@@ -184,6 +186,15 @@ with urllib.request.urlopen(sys.argv[1],timeout=2) as r: p=json.loads(r.read())
 print(json.dumps(p.get('requests',{}),sort_keys=True))
 """
 
+_READ_OPENCODE_HEALTH = r"""
+import json,sys,urllib.request
+try:
+  with urllib.request.urlopen(sys.argv[1],timeout=2) as r: p=json.loads(r.read())
+except (OSError,json.JSONDecodeError):
+  raise SystemExit(1)
+raise SystemExit(0 if p.get('healthy') is True else 1)
+"""
+
 
 def _split_command(value: str) -> List[str]:
     command = shlex.split(value)
@@ -239,7 +250,6 @@ def build_create_command(
     profile: Path,
     workspace: Path,
     name: str,
-    accept_proprietary_tos: bool = False,
     container_network: Optional[str] = None,
 ) -> List[str]:
     """Build an AI Guardian sandbox create using a strict profile and image."""
@@ -268,13 +278,16 @@ def build_create_command(
         command.extend(["--container-network", container_network])
     if cli_name == "opencode":
         command.extend(["--agent", agent])
-    if cli_name == "claude" and accept_proprietary_tos:
-        command.extend(["--env", "ACCEPT_PROPRIETARY_TOS=true"])
     return command
 
 
 def build_agent_command(
-    cli_name: str, agent: str, prompt: str, *, opencode_v2: bool = False
+    cli_name: str,
+    agent: str,
+    prompt: str,
+    *,
+    opencode_v2: bool = False,
+    opencode_attach_url: Optional[str] = None,
 ) -> List[str]:
     """Build one non-interactive invocation of the selected installed CLI."""
     if cli_name == "codex":
@@ -293,6 +306,8 @@ def build_agent_command(
             # A private server prevents the V2 CLI from reusing stale state from
             # an earlier case in the same sandbox.
             command.append("--standalone")
+        elif opencode_attach_url:
+            command.extend(["--attach", opencode_attach_url, "--dir", "/sandbox/repo"])
         command.extend(
             [
                 "--agent",
@@ -445,11 +460,30 @@ def _build_wheel(output: Path, timeout: int) -> Path:
 
 
 def build_current_image(
-    engine: str, root: Path, wheel: Optional[Path], timeout: int = 900
+    engine: str,
+    root: Path,
+    wheel: Optional[Path],
+    timeout: int = 900,
+    *,
+    install_claude_code: bool = False,
 ) -> str:
-    """Build a temporary container image containing the current source wheel."""
+    """Build a temporary smoke image, optionally preinstalling Claude after consent."""
     context = root / "image-context"
     shutil.copytree(CONTAINER_DIR, context)
+    if install_claude_code:
+        _progress("Adding Claude Code to the temporary image after ToS opt-in")
+        with (context / "Dockerfile").open("a", encoding="utf-8") as dockerfile:
+            dockerfile.write(
+                "\n"
+                "# Smoke-only install; the explicit runner opt-in is required.\n"
+                "USER sandbox\n"
+                "RUN curl -fsSL https://claude.ai/install.sh "
+                "-o /tmp/claude-install.sh \\\n"
+                "    && bash /tmp/claude-install.sh \\\n"
+                "    && test -x /sandbox/.local/bin/claude \\\n"
+                "    && /sandbox/.local/bin/claude --version \\\n"
+                "    && rm -f /tmp/claude-install.sh\n"
+            )
     vendor = context / "vendor"
     vendor.mkdir(exist_ok=True)
     for old in vendor.glob("ai_guardian-*.whl"):
@@ -809,6 +843,101 @@ def _opencode_uses_v2(engine: str, name: str, timeout: int) -> bool:
     return major >= 2
 
 
+def _start_opencode_v1_server(engine: str, name: str, timeout: int) -> bool:
+    """Start one headless V1 backend so all smoke cases reuse its MCP startup."""
+    command = [engine, "exec", "--detach"]
+    for entry in build_agent_environment("opencode"):
+        command.extend(["--env", entry])
+    command.extend(
+        [
+            "--workdir",
+            "/sandbox/repo",
+            name,
+            "opencode",
+            "serve",
+            "--hostname",
+            "127.0.0.1",
+            "--port",
+            str(OPENCODE_SERVER_PORT),
+        ]
+    )
+    started = _run(command, timeout)
+    if started.returncode != 0:
+        _report_failure_details("OpenCode V1 server start", started)
+        return False
+
+    _progress("Waiting for the persistent OpenCode V1 server")
+    health_url = f"{OPENCODE_SERVER_URL}/global/health"
+    deadline = time.monotonic() + min(timeout, 60)
+    last_heartbeat = time.monotonic()
+    last_result: Optional[subprocess.CompletedProcess] = None
+    while time.monotonic() < deadline:
+        remaining = max(1, int(deadline - time.monotonic()))
+        result = _exec(
+            engine,
+            name,
+            ["python3", "-c", _READ_OPENCODE_HEALTH, health_url],
+            min(3, remaining),
+        )
+        if result.returncode == 0:
+            _progress("Persistent OpenCode V1 server is ready")
+            return True
+        last_result = result
+        elapsed = int(time.monotonic() - last_heartbeat)
+        if elapsed >= 15:
+            _progress(f"OpenCode V1 server is still starting ({elapsed}s elapsed)")
+            last_heartbeat = time.monotonic()
+        time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+
+    if last_result is not None:
+        _report_failure_details("OpenCode V1 server readiness", last_result, 1200)
+    print("FAIL: persistent OpenCode V1 server did not become ready")
+    return False
+
+
+def _warm_opencode_v1_server(engine: str, name: str, agent: str, timeout: int) -> bool:
+    """Pay the first MCP/session startup cost before reporting smoke cases."""
+    case = next(case for case in CASES if case.name == "allowed")
+    before_violations = _violation_counts(engine, name, timeout)
+    before_requests = _provider_stats(engine, name, timeout)
+    if before_violations is None or before_requests is None:
+        print("FAIL: could not read smoke counters before OpenCode warm-up")
+        return False
+
+    invocation = _exec(
+        engine,
+        name,
+        build_agent_command(
+            "opencode",
+            agent,
+            case.prompt,
+            opencode_attach_url=OPENCODE_SERVER_URL,
+        ),
+        timeout,
+        env=build_agent_environment("opencode"),
+        workdir="/sandbox/repo",
+        progress="Warming the OpenCode V1 backend with the local mock provider",
+    )
+    if invocation.returncode != 0:
+        _report_failure_details("OpenCode V1 warm-up", invocation)
+        return False
+
+    after_violations = _violation_counts(engine, name, timeout)
+    after_requests = _provider_stats(engine, name, timeout)
+    if after_violations is None or after_requests is None:
+        print("FAIL: could not read smoke counters after OpenCode warm-up")
+        return False
+    if after_violations != before_violations:
+        print("FAIL: OpenCode warm-up created a security violation")
+        return False
+    if after_requests.get("allowed", 0) <= before_requests.get("allowed", 0):
+        print("FAIL: OpenCode warm-up did not reach the local mock provider")
+        return False
+
+    _progress("OpenCode V1 backend is warmed and ready for smoke cases")
+    return True
+
+
 def _run_case(
     engine: str,
     name: str,
@@ -818,6 +947,7 @@ def _run_case(
     timeout: int,
     *,
     opencode_v2: bool = False,
+    opencode_attach_url: Optional[str] = None,
 ) -> bool:
     diagnostics: List[str] = []
     old_violations = _violation_counts(engine, name, timeout, diagnostics)
@@ -832,7 +962,13 @@ def _run_case(
     invocation = _exec(
         engine,
         name,
-        build_agent_command(cli, agent, case.prompt, opencode_v2=opencode_v2),
+        build_agent_command(
+            cli,
+            agent,
+            case.prompt,
+            opencode_v2=opencode_v2,
+            opencode_attach_url=opencode_attach_url,
+        ),
         timeout,
         env=env,
         workdir="/sandbox/repo",
@@ -890,8 +1026,9 @@ def build_agent_environment(cli: str) -> List[str]:
             [
                 "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json",
                 "OPENCODE_CONFIG_DIR=/sandbox/.config/opencode",
-                # Avoid a network-bound startup check on each isolated case.
+                # Skip network-bound startup checks on the isolated network.
                 "OPENCODE_DISABLE_AUTOUPDATE=true",
+                "OPENCODE_DISABLE_MODELS_FETCH=true",
             ]
         )
     if cli == "pi":
@@ -969,8 +1106,8 @@ def _parser() -> argparse.ArgumentParser:
         "--accept-proprietary-tos",
         action="store_true",
         help=(
-            "Explicitly accept Claude Code's terms for runtime installation in the "
-            "temporary sandbox; never inferred from the host environment"
+            "After accepting Anthropic's terms, explicitly install Claude Code "
+            "in a runner-built temporary image; never inferred from host state"
         ),
     )
     parser.add_argument(
@@ -1037,6 +1174,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.container_engine,
                 root,
                 args.wheel.expanduser().resolve() if args.wheel else None,
+                install_claude_code=(
+                    args.cli_name == "claude" and args.accept_proprietary_tos
+                ),
             )
             built_image = True
         else:
@@ -1057,7 +1197,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             profile,
             workspace,
             name,
-            args.accept_proprietary_tos,
             container_network=network_name,
         )
         create_result = _run(
@@ -1081,9 +1220,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             if installed.returncode != 0:
                 print(
-                    "ERROR: Claude Code is not installed in the sandbox; use an image "
-                    "that already includes it or pass --accept-proprietary-tos after "
-                    "accepting Anthropic's terms"
+                    "ERROR: Claude Code is not installed in the image; supply an image "
+                    "that includes it, or omit --image and pass "
+                    "--accept-proprietary-tos after accepting Anthropic's terms "
+                    "to install it in the temporary image"
                 )
                 return 1
         _progress("Configuring the CLI to use the local mock provider")
@@ -1106,6 +1246,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if args.cli_name == "opencode"
             else False
         )
+        opencode_attach_url = None
+        if args.cli_name == "opencode" and not opencode_v2:
+            _progress("Starting a persistent OpenCode V1 server for all cases")
+            if not _start_opencode_v1_server(args.container_engine, name, args.timeout):
+                return 1
+            opencode_attach_url = OPENCODE_SERVER_URL
+            if not _warm_opencode_v1_server(
+                args.container_engine, name, args.agent, args.timeout
+            ):
+                return 1
         passed = True
         for case in CASES:
             passed = (
@@ -1117,6 +1267,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     case,
                     args.timeout,
                     opencode_v2=opencode_v2,
+                    opencode_attach_url=opencode_attach_url,
                 )
                 and passed
             )

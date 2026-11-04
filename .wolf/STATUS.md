@@ -29,10 +29,10 @@ budget_tokens: 1000
   runs passed all six cases for Gemini, OpenCode V1 `1.19.0`, and OpenCode V2
   `2.0.24`; no live provider request was made. Release Readiness now executes
   Gemini and both OpenCode generations.
-- Smoke-runner and tray-network changes are committed and pushed on branch `2662`
-  through `8ec8d9fc`; the branch tracks `origin/2662`. Local-only follow-up
-  changes address OpenCode smoke update-check delays and reported CI test
-  failures; these follow-ups are not committed or pushed.
+- Smoke-runner, tray-network, and CI fixes are committed and pushed on branch
+  `2662` through `d85aad6f`; the branch tracks `origin/2662`. CI rerun
+  `41921048728` passed, including all eight Python test matrix jobs. The current
+  OpenCode V1 and Claude smoke follow-ups are local and uncommitted.
 
 - Preserved the existing preview-by-default release command work on branch `2662`
   and implemented the real-agent CLI smoke runner. It uses `ai-guardian sandbox
@@ -46,8 +46,9 @@ budget_tokens: 1000
   native `ANTHROPIC_BASE_URL` route. Its `--print` invocation keeps hooks enabled;
   the runner does not use `--bare`. CI only installs/runs Claude when the
   maintainer-controlled `AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED=true` variable is
-  explicitly set. Runtime installation additionally requires the runner's
-  explicit `--accept-proprietary-tos` option; host environment consent is stripped.
+  explicitly set. To avoid runtime `claude.ai` downloads on the isolated network,
+  `--accept-proprietary-tos` now adds Claude only to a runner-built temporary image;
+  it is not passed into the sandbox. A supplied image must already contain Claude.
 - Release Readiness covers Codex, OpenCode, and Pi by default and conditionally
   covers Claude after that consent gate. Updated `RELEASING.md`, CHANGELOG,
   CLI/runtime and scanner integration checklists, `AGENTS.md`, provider/runner
@@ -75,10 +76,25 @@ budget_tokens: 1000
   passed all six cases against the local mock after the token-count endpoint fix.
   No live provider request was made. The Mac build failure was not reproducible
   here; its underlying stage output is now surfaced for follow-up.
-- Preserved the pre-existing `.wolf/anatomy.md` worktree modification. Codex and
-  Pi runtime smoke matrices were not run locally. An authorized maintainer may
-  separately enable the Claude CI variable after reviewing and accepting
-  Anthropic's terms.
+- OpenCode V1 cases previously each cold-started an instance and MCP integration.
+  The runner now starts one `opencode serve` backend and attaches each case. The
+  server health endpoint becomes ready before its first MCP request, so a clean
+  local-mock warm-up runs before the six case counters. Linux Podman V1 run took
+  1m55s total, with the ~75s startup in the warm-up and all six labeled cases
+  passing immediately afterward. OpenCode update/model-fetch suppression remains
+  smoke-only; no live provider was contacted.
+- Claude's earlier `curl` failure came from the entrypoint trying to install the
+  CLI from `claude.ai` after joining the egress-isolated network. The runner now
+  appends an install step only to its temporary image after explicit consent; the
+  runtime sandbox receives no install-consent variable. The Claude image installer
+  was not executed locally because no explicit Anthropic ToS acceptance was given.
+- Related runner tests: 40 passed; Ruff, Black, and error-level Pylint pass. Package
+  Mypy still reports 14 errors in the unchanged `skill_discovery.py` and
+  `secret_validator.py` files. Current local smoke/docs/workflow changes are not
+  committed or pushed. Codex and Pi runtime smoke matrices were not run locally.
+- Preserve the pre-existing `.wolf/anatomy.md` worktree modification. An
+  authorized maintainer may separately enable the Claude CI variable only after
+  reviewing and accepting Anthropic's terms.
 
 ### Tray REST connection for isolated smoke containers — 2026-11-04
 
@@ -100,20 +116,22 @@ budget_tokens: 1000
   ordinary discovery. The runner removes the network with the sandbox, or keeps
   both under `--keep`.
 - The user reported OpenCode smoke cases waiting two minutes or more on both Mac
-  and Linux. Each isolated invocation was attempting an update check over blocked
-  egress. Set `OPENCODE_DISABLE_AUTOUPDATE=true` only for smoke invocations; normal
-  OpenCode auto-upgrade behavior is unchanged. Linux Podman V2 passed all six cases
-  in 44.3 seconds; no provider was contacted.
+  and Linux. Initial investigation found blocked update/model-catalog checks; the
+  V1 runner also cold-started a backend/MCP lifecycle for every case. Disable
+  update/model fetch only in smoke, and use one V1 server plus a clean warm-up.
+  Normal OpenCode auto-upgrade behavior is unchanged. Linux Podman V2 previously
+  passed all six cases in 44.3 seconds; no live provider was contacted.
 - CI run `41914912963`: lint, smoke, integration, and scenario workflows passed,
   but all eight Python Test matrix jobs failed. Ubuntu failures were the Gemini
   E2E test helper reading an obsolete hooks-list shape; Windows failures were an
   OpenCode fixture missing `USERPROFILE` and a Bash-wrapper test accidentally
   launching WSL. Local fixes are applied; 124 directly related unit tests plus
-  Ruff/Black pass. CI has not yet rerun against these fixes.
-- **Next:** publish the CI fixes and recheck CI; separately diagnose macOS Podman
-  tray REST reachability before claiming the network approach works cross-platform.
-  Avoid asking the user to shuttle commands/results between the Mac terminal and
-  this SSH session.
+  Ruff/Black pass. CI rerun `41921048728` passed the Test matrix and related
+  workflows.
+- **Next:** commit and push the local V1/Claude follow-up, then check its CI. The
+  macOS Podman tray REST reachability issue remains unresolved; do not claim
+  cross-platform qualification. Avoid asking the user to shuttle commands/results
+  between the Mac terminal and this SSH session.
 
 ## Issue #2663 session initialization — 2026-11-03
 
