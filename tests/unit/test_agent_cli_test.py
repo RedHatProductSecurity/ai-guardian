@@ -5,8 +5,11 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import urllib.request
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -207,7 +210,7 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
         ("codex", "smoke", Path(".codex/config.toml")),
         ("opencode", "build", Path(".config/opencode/opencode.json")),
         ("pi", "openai", Path(".pi/agent/models.json")),
-        ("claude", "default", Path("workspace/.claude/settings.local.json")),
+        ("claude", "default", Path(".claude/settings.json")),
     )
     for cli_name, agent, expected_path in cases:
         home = tmp_path / cli_name
@@ -251,6 +254,7 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
             config = json.loads(path.read_text(encoding="utf-8"))
             if cli_name == "claude":
                 assert config["permissions"]["allow"] == ["Bash(printf *)"]
+                assert not (workspace / ".claude").exists()
             else:
                 assert runner.MOCK_URL in json.dumps(config)
                 assert runner.MOCK_KEY in json.dumps(config)
@@ -412,6 +416,36 @@ def test_claude_mock_returns_messages_api_tool_calls_and_sse_events():
     assert events[-1]["type"] == "message_stop"
 
 
+def test_claude_mock_supports_messages_count_tokens_preflight():
+    mock = _load(MOCK_PATH, "agent_cli_anthropic_count_tokens_mock")
+    server = mock.ThreadingHTTPServer(("127.0.0.1", 0), mock.MockProviderHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/v1/messages/count_tokens?beta=1"
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(
+                {
+                    "model": "claude-sonnet-4-6",
+                    "messages": [{"role": "user", "content": "local mock probe"}],
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            body = json.loads(response.read())
+
+        assert response.status == 200
+        assert body["input_tokens"] > 0
+        assert mock._stats()["requests"] == {}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_release_readiness_runs_clients_against_the_current_wheel_image():
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["container-images"]["steps"]
@@ -520,6 +554,61 @@ def test_failed_runner_stage_reports_bounded_command_diagnostics(capsys):
     assert "Sandbox creation failed (exit code 2)" in output
     assert "profile mount failed" in output
     assert "container output" in output
+
+
+def test_failed_mock_provider_configuration_reports_diagnostics(monkeypatch, capsys):
+    runner = _load(RUNNER_PATH, "agent_cli_config_diagnostics")
+    failure = subprocess.CompletedProcess(
+        ["podman", "exec"], 1, stdout="", stderr="PermissionError: settings path"
+    )
+    monkeypatch.setattr(runner, "_exec", lambda *args, **kwargs: failure)
+
+    assert not runner._configure_agent("podman", "sandbox", "claude", "default", 5)
+
+    output = capsys.readouterr().out
+    assert "Local mock-provider configuration failed (exit code 1)" in output
+    assert "PermissionError: settings path" in output
+
+
+def test_failed_wheel_build_reports_diagnostics(tmp_path, monkeypatch, capsys):
+    runner = _load(RUNNER_PATH, "agent_cli_wheel_build_diagnostics")
+    failure = subprocess.CompletedProcess(
+        ["uv", "build"], 1, stdout="wheel summary", stderr="wheel failure"
+    )
+    monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/uv")
+    monkeypatch.setattr(runner, "_run", lambda *args, **kwargs: failure)
+
+    with pytest.raises(RuntimeError, match="current AI Guardian wheel"):
+        runner._build_wheel(tmp_path / "wheel-output", timeout=5)
+
+    output = capsys.readouterr().out
+    assert "Wheel build failed (exit code 1)" in output
+    assert "wheel failure" in output
+    assert "wheel summary" in output
+
+
+def test_failed_smoke_image_build_reports_diagnostics(tmp_path, monkeypatch, capsys):
+    runner = _load(RUNNER_PATH, "agent_cli_image_build_diagnostics")
+    container_dir = tmp_path / "container"
+    container_dir.mkdir()
+    (container_dir / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    runner.CONTAINER_DIR = container_dir
+    root = tmp_path / "smoke"
+    root.mkdir()
+    wheel = tmp_path / "ai_guardian-1.21.0-py3-none-any.whl"
+    wheel.write_bytes(b"wheel")
+    failure = subprocess.CompletedProcess(
+        ["podman", "build"], 1, stdout="build summary", stderr="build failure"
+    )
+    monkeypatch.setattr(runner, "_run", lambda *args, **kwargs: failure)
+
+    with pytest.raises(RuntimeError, match="current-wheel smoke image"):
+        runner.build_current_image("podman", root, wheel, timeout=5)
+
+    output = capsys.readouterr().out
+    assert "Smoke image build failed (exit code 1)" in output
+    assert "build failure" in output
+    assert "build summary" in output
 
 
 def test_counter_read_failures_report_bounded_stderr(monkeypatch):

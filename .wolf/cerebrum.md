@@ -174,6 +174,21 @@
 
 ## Key Learnings
 
+- **2026-11-04 — Claude smoke config and API preflight (#2662):** Keep Claude's
+  temporary smoke permission in the sandbox user's `~/.claude/settings.json`, not
+  under the mounted repository; this avoids relying on writable host-volume
+  semantics. Claude Code calls `/v1/messages/count_tokens` before inference, so a
+  local Anthropic mock must return a positive `input_tokens` estimate there or the
+  CLI reports a model/API error before reaching `/v1/messages`. The mock emits
+  each tool probe once per server process; restart it before repeating a retained
+  full matrix.
+
+- **2026-11-04 — Smoke build diagnostics (#2662):** Build and configuration
+  subprocess failures must show bounded captured diagnostics plus the failed
+  stage. A generic top-level error hides platform-specific Podman build failures;
+  avoid printing successful model responses or command arguments that may contain
+  test configuration.
+
 - **2026-11-04 — OpenCode smoke readiness/tool sequencing (#2662):** Container
   sandbox creation can return before its entrypoint finishes configuring the
   agent and loading AI Guardian. Wait for both daemon-running and config-loaded
