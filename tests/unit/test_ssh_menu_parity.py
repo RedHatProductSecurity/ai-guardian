@@ -329,6 +329,141 @@ def test_same_count_reorder_rebuilds_descriptors_after_popup_closes(remote):
     assert tray._icon.menu == "replacement-menu"
 
 
+@pytest.mark.parametrize(
+    "changed_field,value",
+    [
+        ("url", "https://new.invalid:9443/api"),
+        ("host", "new.invalid"),
+        ("port", 9443),
+        ("ca_file", "/etc/ai-guardian/new-ca.pem"),
+        ("server_name", "new.invalid"),
+        ("certificate_sha256", "ab" * 32),
+    ],
+)
+def test_manual_target_menu_identity_tracks_endpoint_and_tls_changes(
+    changed_field, value
+):
+    tls = {
+        "ca_file": "/etc/ai-guardian/ca.pem",
+        "server_name": "daemon.invalid",
+        "certificate_sha256": "cd" * 32,
+    }
+    original = DaemonTarget(
+        "configured",
+        "manual",
+        host="daemon.invalid",
+        port=8443,
+        url="https://daemon.invalid:8443/api",
+        tls=tls,
+    )
+    replacement_values = {
+        "host": original.host,
+        "port": original.port,
+        "url": original.url,
+        "tls": dict(tls),
+    }
+    if changed_field in tls:
+        replacement_values["tls"][changed_field] = value
+    else:
+        replacement_values[changed_field] = value
+    replacement = DaemonTarget("configured", "manual", **replacement_values)
+    tray = make_tray([original])
+    original_identity = tray._target_menu_identity()
+
+    tray._targets = [replacement]
+
+    assert tray._target_menu_identity() != original_identity
+
+
+def test_equivalent_manual_discovery_keeps_menu_identity_stable():
+    def target():
+        return DaemonTarget(
+            "configured",
+            "manual",
+            host="daemon.invalid",
+            port=8443,
+            url="https://daemon.invalid:8443/api",
+            tls={"server_name": "daemon.invalid"},
+        )
+
+    tray = make_tray([target()])
+    original_identity = tray._target_menu_identity()
+
+    tray._targets = [target()]
+
+    assert tray._target_menu_identity() == original_identity
+
+
+def test_ssh_target_menu_identity_tracks_connection_generation(remote):
+    tray = make_tray([remote])
+    original_identity = tray._target_menu_identity()
+    replacement = DaemonTarget(
+        remote.name,
+        "ssh",
+        status=remote.status,
+        ssh_id=remote.ssh_id,
+    )
+
+    tray._targets = [replacement]
+
+    assert tray._target_menu_identity() != original_identity
+
+
+def test_manual_discovery_refresh_rebuilds_actions_for_replacement_target():
+    from ai_guardian.tray.app import DaemonTray
+
+    local = DaemonTarget("workstation", "local", status="running")
+    original = DaemonTarget(
+        "remote",
+        "manual",
+        status="running",
+        host="old.invalid",
+        port=8443,
+        url="https://old.invalid:8443/api",
+        tls={"server_name": "old.invalid"},
+    )
+    replacement = DaemonTarget(
+        "remote",
+        "manual",
+        status="running",
+        host="new.invalid",
+        port=9443,
+        url="https://new.invalid:9443/api",
+        tls={"server_name": "new.invalid", "certificate_sha256": "ef" * 32},
+    )
+    tray = make_tray([local, original])
+    tray._icon = mock.Mock()
+    tray._icon.menu = build(tray)
+    tray._appindicator_menu_open = False
+    tray._menu_target_count = len(tray._targets)
+    tray._menu_target_snapshot = tray._target_menu_identity()
+    tray._menu_stopped_container_count = 0
+    tray._menu_stopped_container_snapshot = ()
+    tray._stopped_container_targets = []
+    tray._status = "running"
+    tray._active_target = local
+    tray._menu._invalidate_stats = mock.Mock()
+    tray._menu._apply_working_dirs = mock.Mock()
+    tray._plugins._poll_plugins = mock.Mock()
+    tray._anim = mock.Mock()
+    tray._anim._refresh_menu_and_clear_discovery_flag.side_effect = lambda: (
+        DaemonTray._refresh_menu(tray)
+    )
+    tray._discovery = mock.Mock(stopped_container_targets=[])
+    tray._register_tray_with_remotes = mock.Mock()
+    tray._catchup_remote_traces = mock.Mock()
+    tray._dispatch_to_main.side_effect = lambda callback: callback()
+    tray._build_tray_menu = mock.Mock(side_effect=lambda: build(tray))
+    tray._schedule_appindicator_menu_watch = mock.Mock()
+
+    tray._on_targets_updated([local, replacement])
+
+    tray._build_tray_menu.assert_called_once_with()
+    remote_menu = visible(tray._icon.menu)[1].submenu
+    find(remote_menu, "Terminal").action(None, None)
+    tray._multi_client.open_shell.assert_called_once_with(replacement)
+
+
 def test_remote_counter_and_mcp_changes_trigger_native_menu_refresh(remote):
     tray = make_tray([remote])
     tray._status = "running"

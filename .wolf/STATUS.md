@@ -66,6 +66,29 @@ budget_tokens: 1000
   PR, issue closure, or live daemon/configuration change was performed.
 - **Next:** user review and external DAF completion.
 
+## Issue #2654 implementation — 2026-11-04
+
+- Continued managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2654` on its existing branch `2654` in the
+  real workspace. The worktree was clean at initialization; read the
+  repository-qualified GitHub issue exactly once. No temporary clone sync or
+  branch change applied. The user authorized implementation with **go**.
+- Tray menu identity now tracks manual endpoint URL, host, port, and the supported
+  TLS CA, server-name, and certificate-pin settings. Equivalent manual targets
+  remain stable across discovery-created objects; SSH object-generation identity
+  and same-count reorder rebuilding remain intact. No credentials were added to
+  logs or display labels.
+- Added independent routing/trust identity cases, stable-manual and SSH-generation
+  regressions, and an end-to-end discovery refresh proving a menu action receives
+  the replacement target. Updated the Unreleased changelog entry.
+- **Validation:** all 523 tests in `test_ssh_menu_parity.py` and
+  `test_daemon_tray.py` pass. Repository-wide Ruff, Black (Python 3.10 target),
+  error-level Pylint, package Mypy, and `git diff --check` pass.
+- Updated all three GitHub acceptance criteria, added the `done` label, posted a
+  progress comment, and saved a DAF note. Changes remain local and uncommitted;
+  no commit, push, PR, or issue closure was performed.
+- **Next:** user review and external DAF completion.
+
 ## Issue #2651 implementation — 2026-11-03
 
 - Initialized and continued managed DAF `open` session
