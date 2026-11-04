@@ -1051,9 +1051,11 @@ Session-scoped controls require a currently active stable hook identity. Use
 the full `session_key` from status, not a display title, raw session ID, directory,
 or an inferred current session. Unknown/expired keys and unsupported session
 requests fail with non-zero status and never fall back to broader control.
-Session pauses clear on timed expiry, resume, SessionEnd, 24 hours of inactivity,
-or daemon restart. Integrations without stable identities are covered only by
-global or directory-wide pauses.
+Session pauses clear on timed expiry, resume, SessionEnd, 30 minutes without hook
+activity, or daemon restart. The 30-minute activity window is the fallback for
+integrations that do not provide a reliable session-end event; it is based on hook
+activity, not IDE process detection. Integrations without stable identities are
+covered only by global or directory-wide pauses.
 
 Resume clears only the selected scope's pause; other pause layers still apply.
 All forms reuse the existing configured daemon and do not auto-start a daemon
@@ -1362,18 +1364,27 @@ through its plugin API, with a 500 ms lookup deadline and a 30-second cache
 name/title metadata; unknown titles keep the ID fallback. No transcript or
 conversation-wide discovery is performed for tray labels.
 
-Session pause
-durations are 5, 15, or 30 minutes, 1 hour, or until resumed/session end. Timed
-pauses expire automatically; every session pause is cleared on a SessionEnd
-event, after 24 hours without hook activity, or when the daemon restarts. Session
-pauses are intentionally not persisted across restarts.
+The Pause scanning modal lists only daemon targets that currently return valid
+pause status (running or globally paused). Offline discovered targets do not get
+individual controls; when none are active, the modal shows one inert
+"No active daemon available" row and a refresh prompt.
+
+Session pause durations are 5, 15, or 30 minutes, 1 hour, or until resumed/session
+end. Timed pauses expire automatically; every session pause is cleared immediately
+on a received SessionEnd event, after 30 minutes without hook activity, or when the
+daemon restarts. Session pauses are intentionally not persisted across restarts.
+The activity timeout is the documented fallback for integrations without a
+reliable end event; it does not detect whether an IDE process is open.
 
 Each **Project** row is the explicit all-sessions-in-directory bulk control. It
-combines explicitly paused directories, session project paths and
-`active_project_dirs`, which records
-recently observed project directories rather than currently open IDE sessions.
-Directory entries remain until the project tracking TTL expires (currently 24
-hours without another request), including while global scanning is paused.
+shows project directories with hook activity in the last 30 minutes, including
+directory-only callers without stable session IDs, and paths for currently active
+sessions. Explicitly paused directories remain available for Resume after activity
+stops or global scanning is paused. The legacy `active_project_dirs` stats field
+continues to retain directories for up to 24 hours; the pause controls use the
+separate liveness-filtered target list when the daemon provides it. For older
+daemons without the `pause_control_*` stats, the tray falls back to legacy fields
+for compatibility; upgrade those daemons to get the same liveness filtering.
 
 After an action, the modal reads authoritative state and updates every level.
 The tray header and **Status** also refresh; no additional hook request,

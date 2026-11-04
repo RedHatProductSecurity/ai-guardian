@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Tray pause target liveness (#2663):** Show sessions and project directories
+  for active daemons using hook activity in the last 30 minutes, remove sessions
+  immediately on `SessionEnd`, and keep explicitly paused directories available for
+  Resume. Documented the inactivity fallback for integrations without reliable
+  end events.
 - **Manual daemon tray actions (#2654):** Rebuild menu descriptors when a
   same-name target's endpoint or TLS trust settings change, so actions use the
   newly discovered target without displaying or logging credentials.

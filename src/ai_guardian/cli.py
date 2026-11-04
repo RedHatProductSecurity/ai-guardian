@@ -190,7 +190,8 @@ def _add_pause_scope_options(parser, operation):
         "Without a selector, control global scanning. Session scope requires a "
         "currently active stable hook identity; global or directory scope also "
         "covers callers without stable hook identities. Session pauses end on "
-        "resume, timed expiry, SessionEnd, 24 hours of inactivity, or daemon restart. "
+        "resume, timed expiry, SessionEnd, 30 minutes without hook activity, or "
+        "daemon restart. "
         "Resume removes only the selected scope's pause; other pauses still apply. "
         "These commands never start a daemon or tray."
     )

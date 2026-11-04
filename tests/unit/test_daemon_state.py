@@ -492,6 +492,72 @@ class TestSessionPause:
         assert state.get_active_sessions() == []
         assert not state.is_session_paused(session_key)
 
+    def test_pause_control_targets_use_recent_activity_without_changing_legacy_stats(
+        self, tmp_path
+    ):
+        from ai_guardian.daemon.state import PAUSE_CONTROL_IDLE_TTL
+
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        recent_project = str(tmp_path / "recent-session")
+        directory_only_project = str(tmp_path / "directory-only")
+        stale_project = str(tmp_path / "stale-session")
+
+        state.check_project_config(recent_project)
+        state.check_project_config(directory_only_project)
+        state.check_project_config(stale_project)
+        recent_key = self._record(state, "recent", recent_project)
+        stale_key = self._record(state, "stale", stale_project)
+        now = time.monotonic()
+        with state._lock:
+            state._active_sessions[stale_key]["last_activity"] = (
+                now - PAUSE_CONTROL_IDLE_TTL - 1
+            )
+            state._project_dir_last_seen[os.path.realpath(stale_project)] = (
+                now - PAUSE_CONTROL_IDLE_TTL - 1
+            )
+
+        stats = state.get_stats()
+
+        assert {item["session_key"] for item in stats["active_sessions"]} == {
+            recent_key,
+            stale_key,
+        }
+        assert [item["session_key"] for item in stats["pause_control_sessions"]] == [
+            recent_key
+        ]
+        assert set(stats["active_project_dirs"]) == {
+            os.path.realpath(recent_project),
+            os.path.realpath(directory_only_project),
+            os.path.realpath(stale_project),
+        }
+        assert set(stats["pause_control_project_dirs"]) == {
+            os.path.realpath(recent_project),
+            os.path.realpath(directory_only_project),
+        }
+
+    def test_inactive_session_pause_expires_and_is_not_reactivated(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr("ai_guardian.daemon.state.PAUSE_CONTROL_IDLE_TTL", 1)
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+        session_key = self._record(state, "inactive", tmp_path)
+        assert state.pause_session(session_key)
+        with state._lock:
+            state._active_sessions[session_key]["last_activity"] = time.monotonic() - 2
+
+        assert not state.is_session_paused(session_key)
+        assert not state.pause_session(session_key)
+        assert not state.resume_session(session_key)
+
+        state.record_session_activity(
+            session_key, "inactive", "Claude Code", project_dir=tmp_path
+        )
+        session = state.get_stats()["active_sessions"][0]
+        assert session["paused"] is False
+        assert [
+            item["session_key"] for item in state.get_stats()["pause_control_sessions"]
+        ] == [session_key]
+
     def test_session_pause_is_not_persisted_across_daemon_restart(self, tmp_path):
         pause_file = tmp_path / "daemon.paused"
         state = DaemonState(

@@ -605,8 +605,47 @@ class TestDaemonStatusCommand:
         assert session_key in output
         assert "Claude Code" in output
         assert "/project" in output
-        assert "paused until resume or session end" in output
+        assert (
+            "paused until resume, SessionEnd, 30 minutes without hook activity, "
+            "or daemon restart"
+        ) in output
         assert "also covers callers without stable IDs" in output
+
+    def test_status_prefers_liveness_filtered_sessions_over_retained_sessions(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        args = mock.MagicMock()
+        args.daemon_command = "status"
+        stats = {
+            "uptime_seconds": 60,
+            "blocked_count": 0,
+            "request_count": 1,
+            "paused": False,
+            "last_config_reload_seconds_ago": None,
+            "active_sessions": [{"session_key": "Adapter:stale-session"}],
+            "pause_control_sessions": [],
+            "paused_dirs": {},
+        }
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_status_request", return_value=stats
+            ),
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert "Active hook sessions with stable IDs: none" in output
+        assert "Adapter:stale-session" not in output
+        assert "recently active stable session" in output
 
     def test_status_not_running(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))

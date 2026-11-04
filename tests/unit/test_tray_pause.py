@@ -172,14 +172,81 @@ def test_hierarchy_has_actions_at_every_level_but_no_connection_secrets(pause_tr
     assert "Resume clears only the selected pause layer" in MESSAGE
 
 
+def test_pause_control_targets_prefer_live_rows_and_keep_paused_directories(
+    pause_tray,
+):
+    tray, stats = pause_tray
+    stats.update(
+        {
+            "active_project_dirs": ["/active-project", "/stale-project"],
+            "paused_dirs": {"/paused-project": 0.0},
+            "active_sessions": [
+                {
+                    "session_key": "Adapter:stale",
+                    "session_id": "stale",
+                    "agent": "OpenCode",
+                    "project_dir": "/stale-project",
+                    "paused": False,
+                }
+            ],
+            "pause_control_project_dirs": [
+                "/active-project",
+                "/directory-only-project",
+            ],
+            "pause_control_sessions": [
+                {
+                    "session_key": "Adapter:current",
+                    "session_id": "current",
+                    "agent": "OpenCode",
+                    "project_dir": "/active-project",
+                    "paused": False,
+                }
+            ],
+        }
+    )
+
+    view = PauseSnapshot(tray).views[0]
+
+    assert {option.identity for option in view.scopes["dir"]} == {
+        "/active-project",
+        "/directory-only-project",
+        "/paused-project",
+    }
+    assert view.find("dir", "/paused-project").paused is True
+    assert [option.identity for option in view.scopes["session"]] == ["Adapter:current"]
+
+
+def test_legacy_daemon_session_rows_use_activity_age_when_available(pause_tray):
+    from ai_guardian.daemon.state import PAUSE_CONTROL_IDLE_TTL
+
+    tray, stats = pause_tray
+    stats["active_sessions"][0]["last_activity_seconds_ago"] = (
+        PAUSE_CONTROL_IDLE_TTL + 1
+    )
+    stats["active_sessions"][1]["last_activity_seconds_ago"] = (
+        PAUSE_CONTROL_IDLE_TTL - 1
+    )
+
+    view = PauseSnapshot(tray).views[0]
+
+    assert [option.identity for option in view.scopes["session"]] == ["Adapter:second"]
+
+
 @pytest.mark.parametrize(
     "stats", [{}, {"paused": False}, {"paused": False, "active_sessions": []}]
 )
-def test_offline_and_older_daemons_have_explicit_unavailable_scopes(pause_tray, stats):
+def test_inactive_and_older_daemons_have_explicit_unavailable_scopes(pause_tray, stats):
     tray, original = pause_tray
     original.clear()
     original.update(stats)
     snapshot = PauseSnapshot(tray)
+    if not stats:
+        assert snapshot.views == []
+        row = snapshot.payload()["rows"][0]
+        assert row["label"] == "○ No active daemon available"
+        assert row["available"] is False
+        return
+
     session_fields = [
         option
         for choices in snapshot.views[0].scopes.values()
@@ -192,6 +259,22 @@ def test_offline_and_older_daemons_have_explicit_unavailable_scopes(pause_tray, 
         assert snapshot.views[0].find("global", "") is not None
     else:
         assert snapshot.views[0].label.startswith("○")
+
+
+def test_only_active_daemons_and_their_targets_are_shown(pause_tray):
+    tray, stats = pause_tray
+    tray._targets = [
+        DaemonTarget("offline", "manual", url="http://offline.invalid"),
+        DaemonTarget("active", "manual", url="http://active.invalid"),
+    ]
+    tray._multi_client.get_status.side_effect = lambda target: (
+        None if target.name == "offline" else deepcopy(stats)
+    )
+
+    snapshot = PauseSnapshot(tray)
+
+    assert [view.target.name for view in snapshot.views] == ["active"]
+    assert all("active" in row["label"] for row in snapshot.payload()["rows"][:1])
 
 
 @pytest.mark.parametrize(
