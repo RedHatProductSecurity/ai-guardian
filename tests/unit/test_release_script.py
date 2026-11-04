@@ -209,8 +209,36 @@ elif program not in ("curl", "git-cliff", "sleep"):
     return run
 
 
-def test_release_script_announces_after_verification_before_dev_bump(release_sandbox):
+def test_release_script_defaults_to_non_mutating_preview(release_sandbox):
     result, commands = release_sandbox()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Release mode: preview only" in result.stdout
+    assert "[dry-run] gh workflow run release-readiness.yml --ref main" in (
+        result.stdout
+    )
+    assert not any(command[:2] == ["gh", "workflow"] for command in commands)
+    assert not any(
+        command[:2] in (["git", "checkout"], ["git", "commit"], ["git", "push"])
+        for command in commands
+    )
+    assert not any(command[:2] == ["pip", "install"] for command in commands)
+
+
+def test_release_script_rejects_conflicting_execution_modes():
+    result = subprocess.run(
+        ["bash", str(RELEASE_SCRIPT), "--execute", "--dry-run", "patch"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "--dry-run and --execute cannot be combined" in result.stderr
+
+
+def test_release_script_announces_after_verification_before_dev_bump(release_sandbox):
+    result, commands = release_sandbox("--execute")
     assert result.returncode == 0, result.stdout + result.stderr
     announcement = next(
         i for i, command in enumerate(commands) if "announce-release" in command
@@ -247,7 +275,7 @@ def test_release_script_announces_after_verification_before_dev_bump(release_san
 def test_release_script_failed_announcement_is_not_success_or_republication(
     outcome, release_sandbox
 ):
-    result, commands = release_sandbox(outcome=outcome, pip_exit=1)
+    result, commands = release_sandbox("--execute", outcome=outcome, pip_exit=1)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "PyPI verification failed" in result.stdout
     assert "Announcement: not confirmed" in result.stdout

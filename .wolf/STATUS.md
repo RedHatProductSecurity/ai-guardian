@@ -9,6 +9,48 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2662 implementation — 2026-11-04
+
+- Preserved the existing preview-by-default release command work on branch `2662`
+  and implemented the real-agent CLI smoke runner. It uses `ai-guardian sandbox
+  create`, the current-wheel image, a temporary strict-profile copy with
+  notifications disabled, isolated temporary workspaces, and a local deterministic
+  provider; the runner removes inherited provider credentials and disconnects
+  sandbox networking before invoking a CLI. The built-in `@strict` profile keeps
+  notifications enabled, so the derived copy avoids side effects without relaxing
+  scanner or policy settings.
+- Added Anthropic Messages API non-streaming/SSE responses and Claude Code's
+  native `ANTHROPIC_BASE_URL` route. Its `--print` invocation keeps hooks enabled;
+  the runner does not use `--bare`. CI only installs/runs Claude when the
+  maintainer-controlled `AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED=true` variable is
+  explicitly set. Runtime installation additionally requires the runner's
+  explicit `--accept-proprietary-tos` option; host environment consent is stripped.
+- Release Readiness covers Codex, OpenCode, and Pi by default and conditionally
+  covers Claude after that consent gate. Updated `RELEASING.md`, CHANGELOG,
+  CLI/runtime and scanner integration checklists, `AGENTS.md`, provider/runner
+  unit contracts, and OpenWolf learning/bug records. After a
+  Podman-only invocation exposed the hard-coded Docker default and sparse output,
+  the runner now auto-detects Docker then Podman (with explicit overrides), prints
+  flushed stage/case updates and periodic long-step heartbeats, and still captures
+  subprocess output. Podman reported short-name resolution for the generated
+  image; references now use `localhost/`. Its next run revealed a second issue:
+  isolated HOME selected a different rootless storage path; the runner now
+  preserves host `XDG_DATA_HOME`/custom `storage.conf` while keeping AI Guardian
+  config isolated. The image pre-creates the writable parent needed for
+  read-only profile mounts. The runner waits for sandbox daemon/config readiness
+  before starting cases. OpenCode makes an initial provider request without tool
+  schemas, so the mock now offers its deterministic command call on the first
+  request that includes a command tool. Use OpenCode `build`, not `smoke`.
+- **Validation:** 108 focused runner/release/container tests pass; changed scripts
+  pass Ruff, Black (Python 3.10 target), error-level Pylint, and Mypy. A fresh
+  Podman/OpenCode `build` sandbox passed all six cases: prompt injection, secret,
+  PII, SSRF, config exfiltration, and clean allow. No live provider request or
+  actual proprietary Claude install was performed.
+- Changes remain uncommitted on branch `2662`; preserved the pre-existing
+  `.wolf/anatomy.md` worktree modification. No other agent's runtime smoke matrix
+  was run locally. An authorized maintainer may separately enable the Claude CI
+  variable after reviewing and accepting Anthropic's terms.
+
 ## Issue #2663 session initialization — 2026-11-03
 
 - Initialized managed DAF `open` session

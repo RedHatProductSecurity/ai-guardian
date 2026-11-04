@@ -33,7 +33,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payloads, including common PowerShell aliases and `.exe` entrypoints, while
   preserving ordinary commands and documentation mentions.
 
+### Changed
+- **Release command safety:** `scripts/release.sh` now previews by default. An
+  explicit `--execute` is required for release mutations and publication.
+
 ### Added
+- **Real-agent CLI hook smoke check:** Release Readiness now runs Codex, OpenCode,
+  and Pi in strict-profile sandboxes built from the current wheel; Claude Code is
+  available when an authorized maintainer enables its explicit CI ToS-consent
+  variable. Native local mock protocols exercise blocked prompt/tool paths and a
+  clean allow path without host credentials or billable provider calls. Generated
+  Podman images use a `localhost/`-qualified reference and preserve rootless
+  storage identity across build/create. The image pre-creates the writable
+  parent for read-only profile mounts so setup can stage its active config. The
+  runner waits for daemon/config readiness, and the OpenCode mock accounts for its
+  initial provider request before a command tool is available. CLI and scanner
+  integration checklists require keeping this smoke matrix in sync.
 - **Experimental WSL2 platform guidance (#2593):** Document Linux-distribution
   installation and scanner boundaries, browser-console use from Windows, and
   manual localhost troubleshooting. Clarify that WSL1 and comprehensive WSL2

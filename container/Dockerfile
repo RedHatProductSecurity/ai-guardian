@@ -254,6 +254,7 @@ COPY --from=builder --chown=sandbox:sandbox /opt/opencode/.opencode /sandbox/.op
 # Prepare config directories
 RUN mkdir -p /sandbox/.claude /sandbox/.config /sandbox/.gemini /sandbox/.codex /sandbox/.grok \
         /sandbox/.kiro /sandbox/.openclaw /sandbox/.pi/agent \
+        /sandbox/.config/ai-guardian/profiles \
     && chown -R sandbox:sandbox /sandbox/.claude /sandbox/.config \
         /sandbox/.gemini /sandbox/.codex /sandbox/.kiro /sandbox/.openclaw \
         /sandbox/.pi

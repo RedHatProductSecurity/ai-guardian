@@ -3,11 +3,9 @@
 # No AI agent required — just gh CLI, python3, git, sed, curl, and git-cliff.
 #
 # Usage:
-#   scripts/release.sh minor              # minor release (X.Y.Z -> X.(Y+1).0)
-#   scripts/release.sh patch              # patch release (X.Y.Z -> X.Y.(Z+1))
-#   scripts/release.sh major              # major release (X.Y.Z -> (X+1).0.0)
-#   scripts/release.sh --dry-run minor    # show commands without executing
-#   scripts/release.sh --skip-cursor patch
+#   scripts/release.sh minor                  # preview (dry-run is the default)
+#   scripts/release.sh --execute minor        # create a minor release
+#   scripts/release.sh --execute --skip-cursor patch
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,7 +14,8 @@ CONTAINER_VERIFIER="${REPO_ROOT}/scripts/verify_container_images.py"
 
 # --- CLI parsing -----------------------------------------------------------
 
-DRY_RUN=false
+DRY_RUN=true
+RELEASE_MODE=""
 SKIP_CURSOR=false
 RELEASE_TYPE=""
 
@@ -25,7 +24,8 @@ usage() {
 Usage: scripts/release.sh [OPTIONS] <minor|patch|major>
 
 Options:
-  --dry-run        Show all commands without executing
+  --dry-run        Preview only (the default)
+  --execute        Execute the release; required for any release mutations
   --skip-cursor    Skip Cursor hook verification
   -h, --help       Show this help message
 
@@ -39,7 +39,24 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --dry-run)  DRY_RUN=true; shift ;;
+        --dry-run)
+            if [[ "$RELEASE_MODE" == "execute" ]]; then
+                echo "Error: --dry-run and --execute cannot be combined" >&2
+                exit 2
+            fi
+            RELEASE_MODE="preview"
+            DRY_RUN=true
+            shift
+            ;;
+        --execute)
+            if [[ "$RELEASE_MODE" == "preview" ]]; then
+                echo "Error: --dry-run and --execute cannot be combined" >&2
+                exit 2
+            fi
+            RELEASE_MODE="execute"
+            DRY_RUN=false
+            shift
+            ;;
         --skip-cursor) SKIP_CURSOR=true; shift ;;
         -h|--help)  usage ;;
         minor|patch|major) RELEASE_TYPE="$1"; shift ;;
@@ -48,6 +65,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -z "$RELEASE_TYPE" ]] && { echo "Error: release type required" >&2; usage; }
+
+if $DRY_RUN; then
+    echo "Release mode: preview only (pass --execute to make changes)"
+else
+    echo "Release mode: execute"
+fi
 
 # --- Helpers ----------------------------------------------------------------
 

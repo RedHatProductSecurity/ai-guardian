@@ -1210,6 +1210,13 @@ When adding any new feature, check:
 - [ ] **Violation type documentation** — Adding a new violation type? → Add a row to the Violation Type Coverage Matrix in `docs/AGENT_SUPPORT.md` and document any agent-specific limitations.
 - [ ] **`.aiguardignore.toml` scanner type** — Adding a new violation/scanner type that scans file content (not URL-based or tool-based)? → Add it to `SCANNER_TYPES` in `src/ai_guardian/aiguardignore.py` so `.aiguardignore.toml` can filter it.
 - [ ] **Scanner integration** — Adding a third-party scanner engine or a built-in security detector? → Follow the [Scanner Integration Checklist](docs/SCANNER_INTEGRATION_CHECKLIST.md).
+- [ ] **Real-agent CLI hook smoke** — Adding/changing a supported CLI or a
+  hook-reachable scanner? → Keep `scripts/agent_cli_test.py`, its local mock
+  adapter/cases, `tests/unit/test_agent_cli_test.py`, and the Release Readiness
+  matrix in sync. Add violation and clean-allow coverage with synthetic inputs;
+  preserve credential and proprietary-ToS consent gates. If not applicable,
+  document why. See the [CLI/Runtime Integration Checklist](docs/CLI_RUNTIME_CHECKLIST.md)
+  and [Scanner Integration Checklist](docs/SCANNER_INTEGRATION_CHECKLIST.md).
 
 ### Web Console
 

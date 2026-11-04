@@ -7,10 +7,10 @@ This document describes the release management process for AI Guardian.
 The fastest way to create a release — no AI agent required:
 
 ```bash
-scripts/release.sh minor              # minor release (X.Y.Z -> X.(Y+1).0)
-scripts/release.sh patch              # patch release (X.Y.Z -> X.Y.(Z+1))
-scripts/release.sh major              # major release (X.Y.Z -> (X+1).0.0)
-scripts/release.sh --dry-run minor    # preview without executing
+scripts/release.sh minor                  # preview only (default)
+scripts/release.sh --execute minor        # create a minor release
+scripts/release.sh --execute patch        # create a patch release
+scripts/release.sh --execute major        # create a major release
 ```
 
 The script automates prerequisite validation, Release Readiness CI, interactive
@@ -23,10 +23,10 @@ issue branch such as `2563`.
 
 Start from a clean `main` synchronized with `origin/main`, with current remote
 production tags. The script calculates the target from the latest local
-production `v*` tag, not the development package version. For the 1.20.0 release,
-preview with `scripts/release.sh --dry-run minor` and confirm `v1.19.0` →
-`1.20.0`, branch `release-1.20`, and next development version `1.21.0-dev`.
-Only then run `scripts/release.sh minor`. A dry run is a plan, not evidence that
+production `v*` tag, not the development package version. Preview with
+`scripts/release.sh minor` (dry-run is the default) and confirm the planned
+release version, branch, and next development version. Only then run
+`scripts/release.sh --execute minor`. A dry run is a plan, not evidence that
 the release gates passed. Complete all six Cursor events when prompted, and
 verify TestPyPI and the reviewed release notes before approving production.
 
@@ -42,6 +42,59 @@ verify every deliverable in the [release checklist](#release-checklist). Keep
 the release issue open until that evidence and the post-release checks exist.
 
 **Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`, `curl`, `git-cliff` (`brew install git-cliff`).
+
+### Real-agent hook smoke test
+
+Release Readiness also invokes the bundled Codex, OpenCode, and Pi CLIs in fresh
+`@strict` sandboxes using the current wheel. Claude Code uses an Anthropic Messages
+API adapter and is run only when an authorized maintainer has explicitly enabled
+the CI ToS-consent variable described below. Clients point at local, loopback-only
+mock providers: malicious prompts must be blocked before reaching the provider,
+tool-call probes must be blocked by the normal client hooks, and a clean prompt
+must be allowed. The sandbox is disconnected from external networks before any
+client/model request, and the runner removes host provider credentials before
+sandbox creation. These checks do not contact a model provider or incur inference
+charges.
+
+Run one client locally with Docker or Podman and the current source checkout:
+
+```bash
+scripts/agent-cli-test --cli-name codex --agent smoke
+scripts/agent-cli-test --cli-name opencode --agent build
+scripts/agent-cli-test --cli-name pi --agent openai
+```
+
+Claude Code can be tested with `--cli-name claude --agent default`. If Claude Code
+is not already installed in the supplied image, pass
+`--accept-proprietary-tos` only after accepting Anthropic's terms; this explicitly
+passes the container's existing runtime-consent switch. Release Readiness leaves
+the Claude check skipped unless the repository variable
+`AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED` is set to `true` by an authorized maintainer
+after that review. The workflow does not accept terms by default.
+
+Without `--image`, the runner builds a temporary support image from the current
+wheel. You can pass `--image` to reuse an image already built from that wheel;
+`--wheel PATH` selects a specific wheel for the temporary image. The `--agent`
+value is a Codex profile, an OpenCode agent profile, or (for Pi) the `openai`
+provider. The strict-profile copy disables desktop notifications only, so test
+violations do not create workstation notifications.
+
+The runner uses Docker when available and falls back to Podman; set
+`CONTAINER_ENGINE` or pass `--container-engine` to choose explicitly.
+Generated Podman images are tagged under `localhost/` to avoid interactive
+short-name resolution in the non-interactive runner. The runner also preserves
+the caller's rootless Podman data/storage configuration while isolating the
+temporary AI Guardian HOME/config paths, so the image remains visible to the
+sandbox-create subprocess.
+It prints flushed stage and per-case updates, with a heartbeat for long-running
+builds, sandbox setup, or CLI invocations. Successful model responses are not
+printed; failed stages show only bounded captured command diagnostics.
+
+This is a protocol adapter, not a universal fake provider: clients need a
+supported local endpoint override and their native tool-call format must be
+implemented. Codex uses the Responses API; OpenCode and Pi use the
+OpenAI-compatible chat API; Claude Code uses the Anthropic Messages API. Other
+clients need their own protocol/configuration adapter before joining the matrix.
 
 ### Production release announcements
 
@@ -190,12 +243,14 @@ Contributors can test locally but cannot push test tags to the repository.
 
 ### Automation Tools
 
-Use `scripts/release.sh` for fully automated releases (no AI agent required):
+Use `scripts/release.sh` for fully automated releases (no AI agent required).
+It previews by default; `--execute` is required to mutate or publish:
 
 ```bash
-scripts/release.sh minor   # Create minor version release
-scripts/release.sh patch   # Create patch version release
-scripts/release.sh major   # Create major version release
+scripts/release.sh minor                 # Preview a minor release
+scripts/release.sh --execute minor       # Create a minor version release
+scripts/release.sh --execute patch       # Create a patch version release
+scripts/release.sh --execute major       # Create a major version release
 ```
 
 The `/release` skill is also available for AI-assisted releases via Claude Code.
