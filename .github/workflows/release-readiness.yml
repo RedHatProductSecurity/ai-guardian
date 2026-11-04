@@ -757,9 +757,23 @@ jobs:
             -t ai-guardian-readiness \
             container/
 
+      - name: Build pinned OpenCode V2 smoke image
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          docker build \
+            --secret id=github_token,env=GITHUB_TOKEN \
+            --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
+            --build-arg OPENCODE_VERSION=2.0.24 \
+            -t ai-guardian-opencode-v2-readiness \
+            container/
+
       - name: Verify normal image Pi CLI and extension setup
         run: |
-          docker run --rm --entrypoint opencode ai-guardian-readiness --version
+          opencode_v1_version="$(docker run --rm --entrypoint opencode ai-guardian-readiness --version)"
+          echo "OpenCode V1: $opencode_v1_version"
+          test "$opencode_v1_version" = "1.19.0"
+          docker run --rm --entrypoint gemini ai-guardian-readiness --version
           docker run --rm --entrypoint pi ai-guardian-readiness --version
           docker run --rm \
             -e AI_GUARDIAN_AGENT=pi \
@@ -768,9 +782,18 @@ jobs:
             ai-guardian-readiness \
             /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts'
 
+      - name: Verify pinned OpenCode V2 smoke image version
+        run: |
+          opencode_v2_version="$(docker run --rm --entrypoint opencode ai-guardian-opencode-v2-readiness --version)"
+          echo "OpenCode V2: $opencode_v2_version"
+          test "$opencode_v2_version" = "2.0.24"
+
       - name: Verify real agent CLI hooks with local mock provider
         run: |
           scripts/agent-cli-test --cli-name codex --agent smoke \
+            --image ai-guardian-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
+          scripts/agent-cli-test --cli-name gemini --agent default \
             --image ai-guardian-readiness --container-engine docker \
             --ai-guardian-command ai-guardian
           scripts/agent-cli-test --cli-name opencode --agent build \
@@ -778,6 +801,12 @@ jobs:
             --ai-guardian-command ai-guardian
           scripts/agent-cli-test --cli-name pi --agent openai \
             --image ai-guardian-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
+
+      - name: Verify OpenCode V2 hooks with local mock provider
+        run: |
+          scripts/agent-cli-test --cli-name opencode --agent build \
+            --image ai-guardian-opencode-v2-readiness --container-engine docker \
             --ai-guardian-command ai-guardian
 
       - name: Verify Claude Code hooks with local mock provider

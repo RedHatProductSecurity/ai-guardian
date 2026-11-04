@@ -174,6 +174,16 @@
 
 ## Key Learnings
 
+- **2026-11-04 — Gemini and OpenCode CLI smoke coverage (#2662):** Gemini CLI
+  accepts `GEMINI_API_KEY` with `GOOGLE_GEMINI_BASE_URL` for a local endpoint;
+  disable `privacy.usageStatisticsEnabled` and retain network isolation in the
+  smoke sandbox. Its REST mock needs native `/v1beta/models/...:countTokens`,
+  `generateContent`, and SSE `streamGenerateContent` routes. Gemini calls its
+  shell tool `run_shell_command`; normalize it to canonical `Bash` or shared
+  shell scanners/policies will not run. OpenCode V1 uses the bundled `1.19.0`
+  image, while V2 `2.0.24` runs only in a separate release-readiness smoke image;
+  do not imply V2 is shipped or deployment-qualified.
+
 - **2026-11-04 — Claude smoke config and API preflight (#2662):** Keep Claude's
   temporary smoke permission in the sandbox user's `~/.claude/settings.json`, not
   under the mounted repository; this avoids relying on writable host-volume

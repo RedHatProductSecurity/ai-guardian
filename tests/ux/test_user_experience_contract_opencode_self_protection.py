@@ -107,6 +107,30 @@ def test_opencode_safe_file_read_remains_allowed():
     assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
 
 
+def test_opencode_v2_native_shell_tool_uses_bash_self_protection():
+    """
+    USER EXPERIENCE: OpenCode V2 shell tool -> canonical Bash self-protection -> deny.
+
+    Scenario:
+    1. OpenCode V2 sends its native ``shell`` tool name with a CLI invocation.
+    2. AI Guardian normalizes the tool to Bash and applies the immutable guard.
+    3. OpenCode receives its native structured deny before shell execution.
+
+    Expected User Experience:
+    - The protected AI Guardian command does not run.
+    - The hook response contains a structured ``permissionDecision: deny``.
+    """
+    result = _run_opencode_hook(
+        "shell",
+        {"command": "ai-guardian status", "workdir": "/tmp/project"},
+        version="2.0.24",
+    )
+
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "blocked" in response["systemMessage"].lower()
+
+
 @pytest.mark.parametrize("key", ["path", "filePath", "file_path"])
 def test_v2_content_scan_uses_same_absolute_target_as_policy(tmp_path, key):
     """USER EXPERIENCE: session-relative read -> policy and content scan agree.

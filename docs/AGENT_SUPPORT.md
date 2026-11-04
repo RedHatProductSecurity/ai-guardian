@@ -186,7 +186,7 @@ integration guides.
 | Grok Build | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported; only PreToolUse can block |
 | OpenAI Codex (CLI + Desktop) | Command hooks | UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported (five managed events) |
 | Windsurf | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
-| Gemini CLI | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| Gemini CLI | Command hooks | SessionStart, BeforeAgent, BeforeTool, AfterTool | Supported |
 | Cline / ZooCode | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | Kiro | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | Augment Code | Command hooks | PreToolUse, PostToolUse | Supported |
@@ -224,7 +224,7 @@ Coverage per agent depends on which hooks are available. This table shows repres
 
 Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
 
-Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus UserPromptSubmit where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
+Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus the equivalent prompt event where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Gemini uses its `BeforeAgent` event for prompt checks. Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
 
 | Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
 |---|---|---|---|---|---|---|
@@ -613,7 +613,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Grok Build | Low | Hook contract and isolated tests are covered; real host and passive-event behavior remain limited |
-| Gemini CLI | Low | Hook format implemented but limited testing |
+| Gemini CLI | Medium | Current grouped settings format and hook enforcement covered by the local-mock real-agent smoke matrix; live provider qualification remains manual |
 | Antigravity CLI | Low | Hook adapter implemented based on documentation; limited real-world testing |
 | Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
 | Windsurf | Low | Hook format implemented but limited testing |

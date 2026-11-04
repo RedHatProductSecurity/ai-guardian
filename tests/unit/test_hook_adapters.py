@@ -384,6 +384,25 @@ class TestAutoDetection:
 class TestNormalization:
     """Test normalize_input() across all adapters."""
 
+    def test_opencode_v2_shell_tool_normalizes_to_bash(self):
+        data = {
+            "opencode_version": "2.0.24",
+            "hook_source": "opencode",
+            "hook_event_name": "tool.execute.before",
+            "tool_use": {
+                "name": "shell",
+                "input": {"command": "printf safe", "workdir": "/tmp/project"},
+            },
+        }
+
+        normalized = OpenCodeAdapter().normalize_input(data)
+
+        assert normalized.tool_name == "Bash"
+        assert normalized.tool_input == {
+            "command": "printf safe",
+            "workdir": "/tmp/project",
+        }
+
     def test_claude_code_pretooluse(self):
         data = {
             "hook_event_name": "PreToolUse",
@@ -598,6 +617,19 @@ class TestNormalization:
         n = GeminiCLIAdapter().normalize_input(data)
         assert n.event == HookEvent.PRE_TOOL_USE
         assert n.transcript_path == "/tmp/t.jsonl"
+
+    def test_gemini_shell_command_uses_canonical_bash_name(self):
+        data = {
+            "hook_event_name": "BeforeTool",
+            "transcript_path": "/tmp/t.jsonl",
+            "tool_name": "run_shell_command",
+            "tool_input": {"command": "printf safe"},
+        }
+
+        normalized = GeminiCLIAdapter().normalize_input(data)
+
+        assert normalized.tool_name == "Bash"
+        assert normalized.tool_input["command"] == "printf safe"
 
     def test_gemini_aftertool(self):
         data = {"hook_event_name": "AfterTool", "transcript_path": "/tmp/t.jsonl"}

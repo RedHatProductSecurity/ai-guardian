@@ -64,12 +64,30 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     ]
     assert runner.build_agent_command("opencode", "build", "hello") == [
         "opencode",
+        "run",
         "--agent",
         "build",
-        "run",
-        "hello",
+        "--auto",
+        "--format",
+        "json",
         "--model",
         "ai_guardian_smoke/ag-smoke",
+        "hello",
+    ]
+    assert runner.build_agent_command(
+        "opencode", "build", "hello", opencode_v2=True
+    ) == [
+        "opencode",
+        "run",
+        "--standalone",
+        "--agent",
+        "build",
+        "--auto",
+        "--format",
+        "json",
+        "--model",
+        "ai_guardian_smoke/ag-smoke",
+        "hello",
     ]
     assert runner.build_agent_command("pi", "openai", "hello") == [
         "pi",
@@ -89,11 +107,28 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
         runner.MOCK_ANTHROPIC_MODEL,
         "hello",
     ]
+    gemini_command = runner.build_agent_command("gemini", "default", "hello")
+    assert gemini_command == [
+        "gemini",
+        "--prompt",
+        "hello",
+        "--model",
+        runner.MOCK_GEMINI_MODEL,
+        "--output-format",
+        "json",
+        "--skip-trust",
+        "--approval-mode",
+        "yolo",
+    ]
     claude_environment = runner.build_agent_environment("claude")
     assert f"ANTHROPIC_BASE_URL={runner.MOCK_ANTHROPIC_BASE_URL}" in claude_environment
     assert f"ANTHROPIC_API_KEY={runner.MOCK_KEY}" in claude_environment
     assert "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1" in claude_environment
     assert all("OPENAI_API_KEY=" not in item for item in claude_environment)
+    gemini_environment = runner.build_agent_environment("gemini")
+    assert "GOOGLE_GEMINI_BASE_URL=http://127.0.0.1:18765" in gemini_environment
+    assert f"GEMINI_API_KEY={runner.MOCK_KEY}" in gemini_environment
+    assert all("GOOGLE_API_KEY=" not in item for item in gemini_environment)
 
 
 def test_sandbox_create_uses_supplied_image_strict_profile_and_isolated_workspace(
@@ -210,6 +245,7 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
         ("codex", "smoke", Path(".codex/config.toml")),
         ("opencode", "build", Path(".config/opencode/opencode.json")),
         ("pi", "openai", Path(".pi/agent/models.json")),
+        ("gemini", "default", Path(".gemini/settings.json")),
         ("claude", "default", Path(".claude/settings.json")),
     )
     for cli_name, agent, expected_path in cases:
@@ -222,6 +258,29 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
             environment["CODEX_HOME"] = str(home / ".codex")
         if cli_name == "pi":
             environment["PI_CODING_AGENT_DIR"] = str(home / ".pi/agent")
+        if cli_name == "gemini":
+            config_path = home / expected_path
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hooks": {
+                            "BeforeTool": [
+                                {
+                                    "matcher": ".*",
+                                    "hooks": [
+                                        {
+                                            "type": "command",
+                                            "command": "ai-guardian --ide gemini",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
         result = subprocess.run(
             [
                 sys.executable,
@@ -234,7 +293,11 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
                         "workspace": str(workspace),
                         "base_url": runner.MOCK_URL,
                         "api_key": runner.MOCK_KEY,
-                        "model": runner.MOCK_MODEL,
+                        "model": (
+                            runner.MOCK_GEMINI_MODEL
+                            if cli_name == "gemini"
+                            else runner.MOCK_MODEL
+                        ),
                     }
                 ),
             ],
@@ -255,6 +318,16 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
             if cli_name == "claude":
                 assert config["permissions"]["allow"] == ["Bash(printf *)"]
                 assert not (workspace / ".claude").exists()
+            elif cli_name == "gemini":
+                assert config["model"]["name"] == runner.MOCK_GEMINI_MODEL
+                assert config["hooks"]["BeforeTool"][0]["matcher"] == ".*"
+                assert (
+                    config["hooks"]["BeforeTool"][0]["hooks"][0]["command"]
+                    == "ai-guardian --ide gemini"
+                )
+                assert config["privacy"]["usageStatisticsEnabled"] is False
+                assert config["security"]["auth"]["selectedType"] == "gemini-api-key"
+                assert runner.MOCK_KEY not in json.dumps(config)
             else:
                 assert runner.MOCK_URL in json.dumps(config)
                 assert runner.MOCK_KEY in json.dumps(config)
@@ -383,6 +456,103 @@ def test_codex_mock_response_uses_responses_api_stream_events():
     assert events[-1]["type"] == "response.completed"
 
 
+def test_gemini_mock_builds_native_function_call_response():
+    mock = _load(MOCK_PATH, "agent_cli_gemini_protocol")
+    payload = {
+        "contents": [
+            {"role": "user", "parts": [{"text": "AGENT_CLI_SMOKE_CASE: ssrf"}]}
+        ],
+        "tools": [
+            {
+                "functionDeclarations": [
+                    {
+                        "name": "run_shell_command",
+                        "parametersJsonSchema": {
+                            "type": "OBJECT",
+                            "properties": {"command": {"type": "STRING"}},
+                            "required": ["command"],
+                        },
+                    }
+                ]
+            }
+        ],
+    }
+
+    response = mock.gemini_response(payload, "ssrf", 1, 1)
+    part = response["candidates"][0]["content"]["parts"][0]
+
+    assert response["candidates"][0]["finishReason"] == "STOP"
+    assert part["functionCall"]["name"] == "run_shell_command"
+    assert part["functionCall"]["args"]["command"].startswith("printf ")
+    assert "169.254.169.254" in part["functionCall"]["args"]["command"]
+
+
+def test_gemini_mock_supports_count_tokens_and_streaming_endpoints():
+    mock = _load(MOCK_PATH, "agent_cli_gemini_http_protocol")
+    server = mock.ThreadingHTTPServer(("127.0.0.1", 0), mock.MockProviderHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}/v1beta/models/gemini-2.5-flash"
+        count_request = urllib.request.Request(
+            f"{base}:countTokens?key=local-only",
+            data=json.dumps({"contents": [{"parts": [{"text": "count me"}]}]}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(count_request, timeout=5) as response:
+            count_body = json.loads(response.read())
+        assert response.status == 200
+        assert count_body["totalTokens"] > 0
+        assert mock._stats()["requests"] == {}
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": "AGENT_CLI_SMOKE_CASE: ssrf run local diagnostic"}
+                    ],
+                }
+            ],
+            "tools": [
+                {
+                    "functionDeclarations": [
+                        {
+                            "name": "run_shell_command",
+                            "parameters": {
+                                "type": "OBJECT",
+                                "properties": {"command": {"type": "STRING"}},
+                                "required": ["command"],
+                            },
+                        }
+                    ]
+                }
+            ],
+        }
+        stream_request = urllib.request.Request(
+            f"{base}:streamGenerateContent?alt=sse&key=local-only",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(stream_request, timeout=5) as response:
+            stream_body = response.read().decode("utf-8")
+
+        assert response.headers["Content-Type"] == "text/event-stream"
+        event = json.loads(stream_body.split("data: ", 1)[1].split("\n", 1)[0])
+        assert (
+            event["candidates"][0]["content"]["parts"][0]["functionCall"]["name"]
+            == "run_shell_command"
+        )
+        assert mock._stats()["requests"] == {"ssrf": 1}
+        assert mock._stats()["tool_offers"] == {"ssrf": 1}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_claude_mock_returns_messages_api_tool_calls_and_sse_events():
     mock = _load(MOCK_PATH, "agent_cli_anthropic_mock")
     runner = _load(RUNNER_PATH, "agent_cli_anthropic_endpoint")
@@ -469,11 +639,13 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
     assert install_index < image_index < smoke_index
     for cli, agent in (
         ("codex", "smoke"),
+        ("gemini", "default"),
         ("opencode", "build"),
         ("pi", "openai"),
     ):
         assert f"--cli-name {cli} --agent {agent}" in run
     assert "--image ai-guardian-readiness" in run
+    assert "GEMINI_API_KEY=" not in run
     assert "OPENAI_API_KEY=" not in run
     assert "ANTHROPIC_API_KEY=" not in run
     claude_steps = [
@@ -486,6 +658,30 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
     assert claude_step["if"] == "vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true'"
     assert "--cli-name claude --agent default" in claude_step["run"]
     assert "--accept-proprietary-tos" in claude_step["run"]
+
+    v2_build = next(
+        step
+        for step in steps
+        if step.get("name") == "Build pinned OpenCode V2 smoke image"
+    )
+    assert "--build-arg OPENCODE_VERSION=2.0.24" in v2_build["run"]
+    assert "ai-guardian-opencode-v2-readiness" in v2_build["run"]
+    v2_smoke = next(
+        step
+        for step in steps
+        if step.get("name") == "Verify OpenCode V2 hooks with local mock provider"
+    )
+    assert "--cli-name opencode --agent build" in v2_smoke["run"]
+    assert "--image ai-guardian-opencode-v2-readiness" in v2_smoke["run"]
+
+    dockerfile = (ROOT / "container/Dockerfile").read_text(encoding="utf-8")
+    assert 'npm install -g --prefix /opt/npm "@opencode/cli@${OPENCODE_VERSION}"' in (
+        dockerfile
+    )
+    assert (
+        "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}"
+        in dockerfile
+    )
 
 
 def test_cli_and_scanner_checklists_keep_real_agent_smoke_coverage_in_sync():
@@ -521,7 +717,8 @@ def test_agent_cli_shell_wrapper_has_valid_syntax_and_help():
 
     assert syntax.returncode == 0, syntax.stderr
     assert help_result.returncode == 0
-    assert "No provider credentials or live model calls are used" in help_result.stdout
+    normalized_help = " ".join(help_result.stdout.split())
+    assert "No provider credentials or live model calls are used" in normalized_help
 
 
 def test_long_runner_steps_print_flushed_progress(capsys):

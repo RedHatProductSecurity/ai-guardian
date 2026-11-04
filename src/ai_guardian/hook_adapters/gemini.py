@@ -32,6 +32,10 @@ class GeminiCLIAdapter(HookAdapter):
     def name(self) -> str:
         return "Google Gemini CLI"
 
+    def get_tool_name_map(self) -> Dict[str, str]:
+        """Map Gemini's native shell command tool to the canonical Bash tool."""
+        return {"run_shell_command": "Bash"}
+
     @classmethod
     def can_handle(cls, hook_data: Dict) -> bool:
         if "transcript_path" not in hook_data:
@@ -58,9 +62,14 @@ class GeminiCLIAdapter(HookAdapter):
         else:
             event = HookEvent.PROMPT
 
+        tool_name = self._extract_tool_name(hook_data)
+        tool_name_map = self.get_tool_name_map()
+        if tool_name in tool_name_map:
+            tool_name = tool_name_map[tool_name]
+
         return NormalizedHookInput(
             event=event,
-            tool_name=self._extract_tool_name(hook_data),
+            tool_name=tool_name,
             tool_input=self._extract_tool_input(hook_data),
             file_path=self._extract_file_path_from_tool_input(hook_data),
             working_dir=hook_data.get("cwd"),

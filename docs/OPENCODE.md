@@ -52,6 +52,10 @@ events expose a mutable `event.result`; failed after-tool events expose
 `event.error` instead. AI Guardian scans both paths and only applies output
 redaction to completed results.
 
+OpenCode V2 reports its built-in command tool as `shell`; AI Guardian normalizes
+that name to canonical `Bash` so shared command scanning, policy, and immutable
+self-protection apply consistently across V1 and V2.
+
 V2 lifecycle events carry the stable session ID in `event.data.sessionID`.
 `session.idle` ends a turn and forwards `Stop`; it does not remove the active
 session or clear a session-scoped pause. `session.deleted` forwards `SessionEnd`
@@ -235,10 +239,12 @@ uv run --extra dev python -m pytest \
   tests/ux/test_user_experience_contract_ide_setup.py -q
 ```
 
-Release readiness validates the normal image's pinned V1 executable; V2 remains
-a host-plugin contract only. V2 doctor status confirms generated files and
-discovery-path configuration, but does not inspect whether a running OpenCode
-server successfully activated the plugin.
+Release readiness validates the normal image's pinned V1 executable and builds a
+separate OpenCode V2 `2.0.24` smoke image for the credential-free local-mock hook
+cases. V2 is not bundled in either support image; this isolated smoke check does
+not qualify a published V2 deployment or a live provider integration. V2 doctor
+status confirms generated files and discovery-path configuration, but does not
+inspect whether a running OpenCode server successfully activated the plugin.
 
 The #2627 regressions exercise the generated V2 plugin/bridge with Node and
 isolated Python policy contexts, including concurrent projects with different
@@ -258,8 +264,9 @@ uv run --extra dev python -m pytest \
   tests/integration/test_ide_hooks_e2e.py -q
 ```
 
-Both support images pin OpenCode V1 to `1.19.0`. Live OpenShell Vertex model
-qualification remains manual.
+Both support images pin OpenCode V1 to `1.19.0`. The release-readiness-only V2
+image pins `2.0.24` in `.github/workflows/release-readiness.yml`. Live OpenShell
+Vertex model qualification remains manual.
 
 A disposable normal-image model-request smoke test, including provider
 authentication, remains a release-environment requirement. It is not claimed

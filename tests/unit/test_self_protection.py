@@ -1205,6 +1205,15 @@ CLI_ADAPTER_PAYLOADS = [
     ),
     pytest.param(
         {
+            "opencode_version": "2.0.24",
+            "hook_source": "opencode",
+            "hook_event_name": "tool.execute.before",
+            "tool_use": {"name": "shell", "input": {"command": "ai-guardian status"}},
+        },
+        id="opencode-v2-shell",
+    ),
+    pytest.param(
+        {
             "pi_version": "1",
             "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
         },
@@ -1233,6 +1242,15 @@ CLI_ADAPTER_PAYLOADS = [
             "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
         },
         id="gemini",
+    ),
+    pytest.param(
+        {
+            "transcript_path": "/tmp/transcript.jsonl",
+            "hook_event_name": "BeforeTool",
+            "tool_name": "run_shell_command",
+            "tool_input": {"command": "ai-guardian status"},
+        },
+        id="gemini-native-shell-tool",
     ),
     pytest.param(
         {

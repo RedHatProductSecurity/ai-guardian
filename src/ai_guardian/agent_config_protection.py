@@ -71,6 +71,7 @@ SHELL_TOOL_NAMES = frozenset(
         "launch-process",
         "execute_command",
         "terminal",
+        "run_shell_command",
         # Grok's native shell tool name; the hook adapter normally maps it to
         # the canonical Bash name before policy evaluation.
         "run_terminal_command",

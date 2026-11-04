@@ -256,6 +256,7 @@ AUGMENT_TOOL_MAP = {
 # canonical representation as Claude-compatible integrations.
 OPENCODE_TOOL_MAP = {
     "bash": "Bash",
+    "shell": "Bash",
     "read": "Read",
     "write": "Write",
     "edit": "Edit",

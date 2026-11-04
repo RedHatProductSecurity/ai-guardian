@@ -1065,11 +1065,7 @@ class TestIDESetupParametrized:
             if config.get("script_based"):
                 configured_events = tuple(config["hook_scripts"])
             elif ide_name == "gemini":
-                configured_events = tuple(
-                    entry["event"]
-                    for entry in config["hooks"]["hooks"]
-                    if isinstance(entry, dict) and entry.get("event")
-                )
+                configured_events = tuple(config["hooks"]["hooks"])
             else:
                 hooks = config["hooks"]
                 if ide_name == "antigravity":
@@ -1158,7 +1154,12 @@ class TestIDESetupParametrized:
             (
                 "gemini",
                 '{"hooks": [{"command": "ai-guardian"}]}',
-                "'hooks' entries must be objects with an event",
+                "'hooks' legacy entries must be objects with an event",
+            ),
+            (
+                "gemini",
+                '{"hooks": {"BeforeTool": [{"matcher": ".*"}]}}',
+                "'hooks.BeforeTool' entries must contain a hooks list",
             ),
             (
                 "antigravity",
@@ -1166,7 +1167,7 @@ class TestIDESetupParametrized:
                 "'ai-guardian.PreToolUse' must be a list",
             ),
         ],
-        ids=["copilot", "gemini", "antigravity"],
+        ids=["copilot", "gemini-legacy-entry", "gemini-entry", "antigravity"],
     )
     def test_verify_hooks_surfaces_adapter_schema_errors(
         self, tmp_path, ide_type, contents, expected
@@ -2507,28 +2508,33 @@ class TestCodexSetup:
 class TestGeminiSetup:
     """Test cases for Gemini CLI setup."""
 
-    def test_gemini_hooks_use_array_format(self):
-        """Verify Gemini hooks use array format with event/matcher/command."""
+    def test_gemini_hooks_use_grouped_event_format(self):
+        """Gemini settings use event maps with grouped command handlers."""
         hooks_config = IDESetup.IDE_CONFIGS["gemini"]["hooks"]
         hooks = hooks_config["hooks"]
-        assert isinstance(hooks, list)
+        assert isinstance(hooks, dict)
         assert len(hooks) == 4
 
-        events = [h["event"] for h in hooks]
+        events = set(hooks)
         assert "SessionStart" in events
         assert "BeforeAgent" in events
         assert "BeforeTool" in events
         assert "AfterTool" in events
 
-        for h in hooks:
-            assert h["command"] == "ai-guardian"
+        for event, definitions in hooks.items():
+            assert len(definitions) == 1
+            handlers = definitions[0]["hooks"]
+            assert len(handlers) == 1
+            assert handlers[0]["command"] == "ai-guardian"
+            assert handlers[0]["type"] == "command"
+            if event in ("BeforeTool", "AfterTool"):
+                assert definitions[0]["matcher"] == ".*"
 
     def test_gemini_tool_hooks_have_matcher(self):
-        """Verify BeforeTool and AfterTool hooks have matcher field."""
+        """Verify tool event groups filter Gemini tools with a matcher."""
         hooks = IDESetup.IDE_CONFIGS["gemini"]["hooks"]["hooks"]
-        for h in hooks:
-            if h["event"] in ("BeforeTool", "AfterTool"):
-                assert h["matcher"] == ".*"
+        for event in ("BeforeTool", "AfterTool"):
+            assert hooks[event][0]["matcher"] == ".*"
 
     def test_merge_hooks_gemini_new(self):
         """Test merging Gemini hooks into empty config."""
@@ -2541,7 +2547,7 @@ class TestGeminiSetup:
         )
 
         assert "hooks" in merged
-        assert isinstance(merged["hooks"], list)
+        assert isinstance(merged["hooks"], dict)
         assert len(merged["hooks"]) == 4
         assert len(warnings) == 0
 
@@ -2549,7 +2555,14 @@ class TestGeminiSetup:
         """Test merging Gemini hooks preserves other hooks."""
         setup = IDESetup()
         existing_config = {
-            "hooks": [{"event": "BeforeTool", "matcher": ".*", "command": "other-tool"}]
+            "hooks": {
+                "BeforeTool": [
+                    {
+                        "matcher": ".*",
+                        "hooks": [{"type": "command", "command": "other-tool"}],
+                    }
+                ]
+            }
         }
         ai_guardian_hooks = IDESetup.IDE_CONFIGS["gemini"]["hooks"]
 
@@ -2557,13 +2570,15 @@ class TestGeminiSetup:
             existing_config, ai_guardian_hooks, "gemini"
         )
 
-        assert len(merged["hooks"]) == 5
-        assert merged["hooks"][0]["command"] == "ai-guardian"
-        assert merged["hooks"][4]["command"] == "other-tool"
+        before_tool = merged["hooks"]["BeforeTool"]
+        assert before_tool[0]["hooks"][0]["command"] == "ai-guardian"
+        assert before_tool[1]["hooks"][0]["command"] == "other-tool"
         assert len(warnings) > 0
 
-    def test_merge_hooks_gemini_replaces_existing_ai_guardian(self):
-        """Test that merging replaces existing ai-guardian hooks."""
+    def test_merge_hooks_gemini_migrates_legacy_entries_and_replaces_owned_hooks(
+        self,
+    ):
+        """Upgrade old flat hooks without losing unrelated command handlers."""
         setup = IDESetup()
         existing_config = {
             "hooks": [
@@ -2577,10 +2592,11 @@ class TestGeminiSetup:
             existing_config, ai_guardian_hooks, "gemini"
         )
 
-        ag_hooks = [h for h in merged["hooks"] if h.get("command") == "ai-guardian"]
-        other_hooks = [h for h in merged["hooks"] if h.get("command") != "ai-guardian"]
-        assert len(ag_hooks) == 4
-        assert len(other_hooks) == 1
+        before_tool = merged["hooks"]["BeforeTool"]
+        commands = [entry["hooks"][0]["command"] for entry in before_tool]
+        assert commands == ["ai-guardian", "other-tool"]
+        assert before_tool[1]["hooks"][0]["type"] == "command"
+        assert warnings
 
 
 class TestClineSetup:
