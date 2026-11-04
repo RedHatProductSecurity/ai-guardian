@@ -240,6 +240,7 @@ def build_create_command(
     workspace: Path,
     name: str,
     accept_proprietary_tos: bool = False,
+    container_network: Optional[str] = None,
 ) -> List[str]:
     """Build an AI Guardian sandbox create using a strict profile and image."""
     command = [
@@ -263,6 +264,8 @@ def build_create_command(
         "--env",
         f"AI_GUARDIAN_STATE_DIR={STATE_DIR}",
     ]
+    if container_network:
+        command.extend(["--container-network", container_network])
     if cli_name == "opencode":
         command.extend(["--agent", agent])
     if cli_name == "claude" and accept_proprietary_tos:
@@ -556,31 +559,52 @@ def _run(
     return subprocess.CompletedProcess(command_list, process.returncode, stdout, stderr)
 
 
-def disconnect_external_networks(engine: str, name: str, timeout: int) -> bool:
-    """Detach the disposable container before any client/model invocation."""
-    inspected = _run(
-        [engine, "inspect", "--format", "{{json .NetworkSettings.Networks}}", name],
+def internal_network_name(container_name: str) -> str:
+    """Return the unique network name paired with a smoke sandbox."""
+    return f"{container_name}-internal"
+
+
+def create_internal_network_command(engine: str, network_name: str) -> List[str]:
+    """Build an engine command for an egress-isolated smoke network."""
+    return [engine, "network", "create", "--internal", network_name]
+
+
+def _create_internal_network(
+    engine: str,
+    network_name: str,
+    timeout: int,
+    env: Dict[str, str],
+) -> bool:
+    """Create an internal network before the smoke sandbox is started."""
+    result = _run(
+        create_internal_network_command(engine, network_name),
         timeout,
+        env,
+        progress="Creating an egress-isolated smoke network",
     )
-    if inspected.returncode != 0:
-        print("FAIL: unable to inspect the smoke container network")
-        return False
-    try:
-        networks = json.loads(inspected.stdout.strip() or "null")
-    except json.JSONDecodeError:
-        print("FAIL: unable to parse the smoke container network")
-        return False
-    names = list(networks) if isinstance(networks, dict) else []
-    for network in names:
-        if network == "none":
-            continue
-        result = _run(
-            [engine, "network", "disconnect", "--force", network, name], timeout
+    if result.returncode != 0:
+        print(
+            "ERROR: unable to create an egress-isolated network for the smoke sandbox"
         )
-        if result.returncode != 0:
-            print("FAIL: unable to isolate the smoke container from external networks")
-            return False
+        _report_failure_details("Internal network creation", result)
+        return False
     return True
+
+
+def _remove_internal_network(
+    engine: str,
+    network_name: str,
+    timeout: int,
+    env: Dict[str, str],
+) -> None:
+    """Remove a smoke network unless it is being kept with its sandbox."""
+    result = _run(
+        [engine, "network", "rm", network_name],
+        timeout,
+        env,
+    )
+    if result.returncode != 0:
+        print("WARNING: unable to remove the temporary smoke network")
 
 
 def _exec(
@@ -990,7 +1014,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     image = args.image
     built_image = False
     name = f"ag-cli-smoke-{args.cli_name}-{uuid.uuid4().hex[:8]}"
+    network_name = internal_network_name(name)
     created = False
+    network_created = False
     keep_files = False
     try:
         _progress(f"Starting {args.cli_name}/{args.agent} smoke check")
@@ -1014,6 +1040,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             _progress("Using the supplied smoke image")
 
+        network_created = _create_internal_network(
+            args.container_engine, network_name, args.timeout, host_env
+        )
+        if not network_created:
+            return 1
+
         command = build_create_command(
             guardian,
             args.container_engine,
@@ -1024,6 +1056,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             workspace,
             name,
             args.accept_proprietary_tos,
+            container_network=network_name,
         )
         create_result = _run(
             command,
@@ -1051,9 +1084,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "accepting Anthropic's terms"
                 )
                 return 1
-        _progress("Disconnecting the sandbox from external networks")
-        if not disconnect_external_networks(args.container_engine, name, args.timeout):
-            return 1
         _progress("Configuring the CLI to use the local mock provider")
         if not _configure_agent(
             args.container_engine,
@@ -1111,6 +1141,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     finally:
         if created and args.keep:
             _progress(f"Keeping temporary sandbox: {name}")
+            _progress(f"Keeping temporary smoke network: {network_name}")
             keep_files = True
         elif created:
             _progress("Removing the temporary sandbox")
@@ -1122,6 +1153,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ):
             _delete_sandbox(
                 guardian, args.container_engine, name, host_env, args.timeout
+            )
+        if network_created and not (created and args.keep):
+            _remove_internal_network(
+                args.container_engine, network_name, args.timeout, host_env
             )
         if built_image and image and not args.keep:
             _run([args.container_engine, "image", "rm", image], args.timeout)

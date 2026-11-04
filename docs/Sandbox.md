@@ -551,6 +551,7 @@ The most useful options are:
 | `--cli NAME` | Select the CLI. OpenShell supports `codex`, `claude`, and `opencode`. |
 | `--repo DIR` | Mount a container repository or upload it to OpenShell. |
 | `--name NAME` | Choose the sandbox name. |
+| `--container-network NAME` | Attach a container sandbox to an existing Docker/Podman network. The caller is responsible for that network's egress and isolation policy. |
 | `--profile PROFILE` | Start with a bundled or custom AI Guardian profile. |
 | `--policy FILE` | Add an OpenShell policy file; repeatable. |
 | `--provider NAME` | Attach an existing OpenShell provider; repeatable. |

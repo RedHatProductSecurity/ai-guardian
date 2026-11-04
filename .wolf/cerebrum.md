@@ -6,6 +6,13 @@
 
 ## User Preferences
 
+- **2026-11-04 — Smoke-container tray visibility:** Do not hide real smoke daemons
+  with a discovery exception. Preserve normal discovery and use an
+  egress-isolated internal network that retains the published REST port. Verify
+  Linux and macOS Podman before claiming cross-platform qualification. Avoid
+  requiring command and output copy/paste between the user's Mac terminal and the
+  remote SSH session.
+
 - **2026-10-30 — OpenCode partial setup repair (#2627):** User approved repairing
   missing MCP registration without forcing replacement of verified healthy hooks.
   An explicit setup/update action is not blanket consent to rewrite healthy

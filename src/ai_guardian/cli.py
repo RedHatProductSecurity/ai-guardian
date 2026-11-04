@@ -1263,6 +1263,14 @@ def main():
             ),
         )
         sandbox_create_parser.add_argument(
+            "--container-network",
+            metavar="NAME",
+            help=(
+                "Attach a container sandbox to an existing Docker/Podman network; "
+                "container runtime only"
+            ),
+        )
+        sandbox_create_parser.add_argument(
             "--image",
             "--base",
             dest="image",

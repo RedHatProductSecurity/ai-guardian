@@ -146,6 +146,7 @@ def test_sandbox_create_uses_supplied_image_strict_profile_and_isolated_workspac
         profile,
         workspace,
         "ag-cli-smoke-opencode-test",
+        container_network="ag-cli-smoke-opencode-test-internal",
     )
 
     assert command[:4] == ["ai-guardian", "sandbox", "create", "--runtime"]
@@ -154,7 +155,133 @@ def test_sandbox_create_uses_supplied_image_strict_profile_and_isolated_workspac
     assert command[command.index("--profile") + 1] == str(profile)
     assert command[command.index("--repo") + 1] == str(workspace)
     assert command[command.index("--agent") + 1] == "build"
+    assert (
+        command[command.index("--container-network") + 1]
+        == "ag-cli-smoke-opencode-test-internal"
+    )
     assert "OPENAI_API_KEY" not in " ".join(command)
+
+
+def test_internal_network_command_requests_runtime_egress_isolation():
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_internal_network")
+
+    assert runner.internal_network_name("ag-cli-smoke-codex-1234abcd") == (
+        "ag-cli-smoke-codex-1234abcd-internal"
+    )
+    assert runner.create_internal_network_command(
+        "podman", "ag-cli-smoke-codex-1234abcd-internal"
+    ) == [
+        "podman",
+        "network",
+        "create",
+        "--internal",
+        "ag-cli-smoke-codex-1234abcd-internal",
+    ]
+
+
+@pytest.mark.parametrize("keep", (False, True))
+def test_main_creates_internal_network_before_sandbox_and_cleans_up(
+    keep, monkeypatch, tmp_path
+):
+    runner = _load(RUNNER_PATH, f"agent_cli_smoke_lifecycle_{keep}")
+    runner._temp_parent = lambda: tmp_path
+    runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
+    monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
+    runner._wait_for_sandbox_ready = lambda *_args, **_kwargs: True
+    runner._configure_agent = lambda *_args, **_kwargs: True
+    runner._start_mock = lambda *_args, **_kwargs: True
+    runner._run_case = lambda *_args, **_kwargs: True
+
+    commands = []
+
+    def fake_run(command, *_args, **_kwargs):
+        commands.append(list(command))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    runner._run = fake_run
+    deleted = []
+    runner._delete_sandbox = lambda *args: deleted.append(args[2])
+
+    argv = [
+        "--cli-name",
+        "codex",
+        "--agent",
+        "smoke",
+        "--image",
+        "localhost/smoke:test",
+        "--container-engine",
+        "podman",
+        "--ai-guardian-command",
+        "ai-guardian",
+    ]
+    if keep:
+        argv.append("--keep")
+
+    assert runner.main(argv) == 0
+
+    network_create = next(
+        index
+        for index, command in enumerate(commands)
+        if command[:4] == ["podman", "network", "create", "--internal"]
+    )
+    sandbox_create = next(
+        index
+        for index, command in enumerate(commands)
+        if command[:3] == ["ai-guardian", "sandbox", "create"]
+    )
+    assert network_create < sandbox_create
+    create_command = commands[sandbox_create]
+    assert create_command[create_command.index("--container-network") + 1].endswith(
+        "-internal"
+    )
+    network_remove = [
+        command for command in commands if command[:3] == ["podman", "network", "rm"]
+    ]
+    assert bool(network_remove) is not keep
+    assert bool(deleted) is not keep
+    assert not any(command[1:3] == ["network", "disconnect"] for command in commands)
+
+
+def test_main_removes_internal_network_when_sandbox_creation_fails(
+    monkeypatch, tmp_path
+):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_network_cleanup_on_failure")
+    runner._temp_parent = lambda: tmp_path
+    runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
+    monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
+    commands = []
+
+    def fake_run(command, *_args, **_kwargs):
+        commands.append(list(command))
+        code = 1 if command[:3] == ["ai-guardian", "sandbox", "create"] else 0
+        if command[:2] == ["podman", "inspect"]:
+            code = 1
+        return subprocess.CompletedProcess(command, code, stdout="", stderr="failed")
+
+    runner._run = fake_run
+    runner._delete_sandbox = lambda *_args: pytest.fail(
+        "a nonexistent sandbox should not be deleted"
+    )
+
+    assert (
+        runner.main(
+            [
+                "--cli-name",
+                "codex",
+                "--agent",
+                "smoke",
+                "--image",
+                "localhost/smoke:test",
+                "--container-engine",
+                "podman",
+                "--ai-guardian-command",
+                "ai-guardian",
+            ]
+        )
+        == 1
+    )
+
+    assert any(command[:3] == ["podman", "network", "rm"] for command in commands)
 
 
 def test_container_engine_prefers_docker_then_falls_back_to_podman(
