@@ -463,7 +463,9 @@ def _handle_daemon_command(args):
                     else:
                         print(f"  {d} (indefinite)")
 
-            active_sessions = stats.get("active_sessions")
+            active_sessions = stats.get(
+                "pause_control_sessions", stats.get("active_sessions")
+            )
             if isinstance(active_sessions, list):
                 if active_sessions:
                     print(
@@ -477,7 +479,10 @@ def _handle_daemon_command(args):
                                 f" (paused {int(remaining // 60)}m "
                                 f"{int(remaining % 60)}s left)"
                                 if remaining > 0
-                                else " (paused until resume or session end)"
+                                else (
+                                    " (paused until resume, SessionEnd, 30 minutes "
+                                    "without hook activity, or daemon restart)"
+                                )
                             )
                         print(
                             f"  {session.get('session_key')} — "
@@ -488,8 +493,8 @@ def _handle_daemon_command(args):
                 else:
                     print("Active hook sessions with stable IDs: none")
                     print(
-                        "Session-scoped pause is unavailable until a hook reports "
-                        "a stable session identity."
+                        "Session-scoped pause is unavailable until a recently active "
+                        "stable session is observed."
                     )
             else:
                 print(

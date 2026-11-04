@@ -5,9 +5,59 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-03 (UTC)
+> Last updated: 2026-11-04 (UTC)
 
 ---
+
+## Issue #2663 session initialization — 2026-11-03
+
+- Initialized managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2663`, native conversation
+  `ses_e5b9a0e22ffeY3t4J6lwV8DK72`, in the real workspace on existing branch
+  `2663`. The worktree is clean; this is not a temporary clone, so no sync or
+  branch change applies. Read the repository-qualified GitHub issue once.
+- Acceptance criteria: define session liveness beyond the general 24-hour
+  retention window; promptly remove ended sessions via supported lifecycle events
+  with a documented fallback; show active/recent project targets while retaining
+  explicitly paused directories and directory-only caller support; cover active,
+  ended, stale, and directory-only targets.
+- Read the DAF workflow, project instructions, OpenWolf handoff/protocol and
+  cerebrum. No configured hierarchical Markdown contexts or hierarchical skills
+  were found; `daf assets --dry-run --agent opencode` reports installed DAF skills
+  up to date. The project release skill is unrelated and no OpenCode project
+  skill applies. Left the native conversation title DAF-managed.
+- The user requested initialization only. No implementation, tests, tracker
+  mutations, DAF progress notes, branch changes, commits, or pushes were made.
+- **Next:** inspect the session/project activity data path and affected pause
+  controls/tests after implementation is authorized; determine the documented
+  fallback for agents without reliable session-end events.
+
+## Issue #2663 implementation — 2026-11-04
+
+- Continued on existing branch `2663` in the real workspace. Preserved the modal
+  pause-control design introduced by PR #2624 and kept legacy daemon stats and
+  their 24-hour retention semantics unchanged.
+- Added separate liveness-filtered `pause_control_sessions` and
+  `pause_control_project_dirs` stats using a 30-minute hook-activity window.
+  Received `SessionEnd` still removes the matching session immediately; stale
+  session pauses expire on that same activity window. Directory-only callers
+  remain represented, and explicitly paused directories remain available for
+  Resume after activity stops. The modal omits inactive/offline daemon targets and
+  shows one inert refresh prompt if no daemon is available. Older daemons retain
+  the legacy-stats fallback.
+- Updated CLI status/help, multi-daemon and agent-support docs, CHANGELOG, and
+  regressions for stale/ended sessions, directories, offline daemons and status
+  compatibility. Added a test for active-daemon-only modal selection.
+- **Validation:** all 1,208 tests across the directly related daemon, tray, CLI,
+  and complete affected pause UX files pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint (10/10), and `git diff --check` pass. Full-package Mypy still
+  reports 14 existing errors in untouched `skill_discovery.py` and
+  `scanners/secret_validator.py`. The test run emitted three GLib/Pillow
+  deprecation warnings.
+- Changes remain uncommitted on branch `2663`; no commit, push, PR, GitHub issue
+  mutation, or DAF status update was performed. `/simplify` is not available in
+  this harness; implementation and tests were reviewed manually.
+- **Next:** user review and any separately authorized tracker/DAF completion.
 
 ## Issue #2652 implementation and rebase — 2026-11-03
 

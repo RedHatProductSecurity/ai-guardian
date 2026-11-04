@@ -198,6 +198,13 @@
   endpoint/trust changes; and discovery must validate manual target names before
   sorting. See the linked issues for the individual reproductions.
 
+- **2026-11-04 — Tray pause target liveness (#2663):** Keep legacy 24-hour
+  telemetry retention separate from UI control eligibility. Add version-tolerant
+  pause-control stats based on recent monotonic hook activity, preserve explicit
+  directory pauses for Resume, and retain a legacy fallback for older daemons.
+  Filter disconnected daemon targets at the modal boundary; a valid pause-status
+  response, including a globally paused daemon, is the availability signal.
+
 - **2026-11-02 — Violation alert CodeQL/CI follow-up (#2646):** Do not interpolate
   caller-provided violation categories into logger diagnostics, even debug-level
   skip messages; keep those messages fixed and value-free. CI tests that assert

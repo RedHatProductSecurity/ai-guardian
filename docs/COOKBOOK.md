@@ -1106,10 +1106,12 @@ existing scope-specific lifetime rules.
 Copy the full stable `session_key` from `ai-guardian daemon status`, not a display
 name, raw session ID, or directory. Unknown, expired, and unsupported session
 keys fail without falling back to a directory-wide or global operation. Session
-pauses expire on their timer, SessionEnd, 24 hours without hook activity, or
-daemon restart. Callers without stable hook identities are covered by global
-and directory pauses, not individual-session controls. Resume removes only the
-requested scope's pause; other global, directory, or session pauses still apply.
+pauses expire on their timer, SessionEnd, 30 minutes without hook activity, or
+daemon restart. The inactivity timeout is the fallback for integrations without a
+reliable session-end event; it reflects hook activity, not whether an IDE process
+is open. Callers without stable hook identities are covered by global and directory
+pauses, not individual-session controls. Resume removes only the requested scope's
+pause; other global, directory, or session pauses still apply.
 
 The older `ai-guardian daemon pause --minutes 15 --dir DIRECTORY` and
 `ai-guardian daemon resume --dir DIRECTORY` forms remain supported, as do their

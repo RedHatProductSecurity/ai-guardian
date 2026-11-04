@@ -17,7 +17,11 @@ from unittest.mock import Mock, call, patch
 import pytest
 
 from ai_guardian.daemon.discovery import DaemonTarget
-from ai_guardian.tray.pause import LEGEND, open_pause_controls
+from ai_guardian.tray.pause import (
+    LEGEND,
+    NO_ACTIVE_DAEMON_MESSAGE,
+    open_pause_controls,
+)
 from ai_guardian.ui.modal import UIUnavailable, mark_modal_displayed
 from ai_guardian.ui.pause_controls import (
     _present_tk_window,
@@ -89,10 +93,71 @@ def test_open_close_never_changes_pause_state_or_opens_another_provider(pause_ui
         "1 hour": 60,
         "Until resume": 0,
     }
+    assert payload["session_lifetime"] == (
+        "Individual-session pauses also end on SessionEnd, after 30 minutes "
+        "without hook activity, or on daemon restart."
+    )
     assert all(
         _row_choices(payload, row) == payload["durations"] for row in payload["rows"]
     )
     assert all(_row_placeholder(row) == "Pause for…" for row in payload["rows"])
+
+
+def test_pause_controls_show_live_targets_and_keep_paused_directory_resumable(
+    pause_ui,
+):
+    """USER EXPERIENCE: stale retention rows hide; recent and paused targets remain."""
+    pause_ui.stats.update(
+        {
+            "active_project_dirs": ["/stale-project"],
+            "active_sessions": [
+                {
+                    "session_key": "Adapter:stale",
+                    "session_id": "stale",
+                    "agent": "OpenCode",
+                    "project_dir": "/stale-project",
+                    "paused": False,
+                }
+            ],
+            "pause_control_project_dirs": [
+                "/active-project",
+                "/directory-only-project",
+            ],
+            "pause_control_sessions": [
+                {
+                    "session_key": "Adapter:current",
+                    "session_id": "current",
+                    "agent": "OpenCode",
+                    "project_dir": "/active-project",
+                    "paused": False,
+                }
+            ],
+            "paused_dirs": {"/paused-project": 0.0},
+        }
+    )
+
+    open_pause_controls(pause_ui.tray)
+
+    rows = pause_ui.show.call_args.args[1]["rows"]
+    project_rows = [row for row in rows if row["scope"] == "dir"]
+    session_rows = [row for row in rows if row["scope"] == "session"]
+    project_labels = [row["label"] for row in project_rows]
+    assert all(
+        any(project in label for label in project_labels)
+        for project in (
+            "/active-project",
+            "/directory-only-project",
+            "/paused-project",
+        )
+    )
+    assert (
+        next(row for row in project_rows if "/paused-project" in row["label"])["action"]
+        == "Resume"
+    )
+    assert len(session_rows) == 1
+    assert "Key: Adapter:current" in session_rows[0]["label"]
+    assert all("stale" not in row["label"] for row in [*project_rows, *session_rows])
+    pause_ui.tray._multi_client.send_pause.assert_not_called()
 
 
 def test_tray_pause_window_restores_focus_after_menu_handoff(pause_ui):
@@ -123,8 +188,29 @@ def test_tray_pause_window_restores_focus_after_menu_handoff(pause_ui):
     pause_ui.tray._multi_client.send_pause.assert_not_called()
 
 
+def test_offline_daemons_are_omitted_from_pause_controls(pause_ui):
+    """USER EXPERIENCE: no responsive daemon -> no inactive per-daemon controls."""
+    pause_ui.stats.clear()
+
+    open_pause_controls(pause_ui.tray)
+
+    payload = pause_ui.show.call_args.args[1]
+    assert payload["message"] == NO_ACTIVE_DAEMON_MESSAGE
+    assert payload["rows"] == [
+        {
+            "id": "unavailable:no-active-daemon",
+            "scope": "global",
+            "label": "○ No active daemon available",
+            "level": 0,
+            "available": False,
+            "action": "Unavailable",
+        }
+    ]
+    pause_ui.tray._multi_client.send_pause.assert_not_called()
+
+
 def test_unavailable_rows_do_not_offer_duration_or_resume_choices(pause_ui):
-    """USER EXPERIENCE: offline/unsupported row -> inert unavailable dropdown."""
+    """USER EXPERIENCE: unsupported scope -> inert unavailable dropdown."""
     open_pause_controls(pause_ui.tray)
     payload = pause_ui.show.call_args.args[1]
     row = {**payload["rows"][0], "available": False}

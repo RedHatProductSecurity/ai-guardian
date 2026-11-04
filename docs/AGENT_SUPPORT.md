@@ -159,6 +159,12 @@ future integrations. For this repository, the main evidence paths are
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
 | Junie | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 
+Tray session-pause controls remove a session immediately when a normalized
+`SessionEnd` event is received. For integrations without a reliable end event,
+hook activity within the last 30 minutes is the documented liveness fallback;
+this does not inspect whether the IDE process is open. Directory-wide controls
+remain available to callers without stable session identities.
+
 The Codex row applies to Codex CLI and desktop Codex mode only. Regular
 ChatGPT mode does not run these Codex lifecycle hooks.
 

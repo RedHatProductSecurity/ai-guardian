@@ -158,7 +158,7 @@ def scoped_tray(isolated_server, active_cli_sessions, run_scoped_cli, monkeypatc
     monkeypatch.setattr("ai_guardian.tray.app.is_mcp_installed", lambda: False)
     monkeypatch.setattr("platform.system", lambda: "Linux")
     client = MultiDaemonClient()
-    # The extra target exercises layout only; no real remote calls are permitted.
+    # The extra target exercises inactive-daemon filtering; no real remote calls.
     monkeypatch.setattr(client, "_rest_request", mock.Mock(return_value={}))
     client.send_pause = mock.Mock(wraps=client.send_pause)
     client.send_resume = mock.Mock(wraps=client.send_resume)
@@ -213,13 +213,22 @@ def scoped_tray(isolated_server, active_cli_sessions, run_scoped_cli, monkeypatc
             return PauseSnapshot(tray)
 
         def control():
-            return snapshot().views[int(multi)].find(scope, identity)
+            current = snapshot()
+            view = next(
+                view for view in current.views if view.target.name == "selected"
+            )
+            return view.find(scope, identity)
 
         def request(action="Pause", minutes=5):
             current = snapshot()
+            selected_index = next(
+                index
+                for index, view in enumerate(current.views)
+                if view.target.name == "selected"
+            )
             values = pause_values(
                 current,
-                daemon=int(multi),
+                daemon=selected_index,
                 scope=scope,
                 identity=identity,
                 action=action,
@@ -405,7 +414,9 @@ def test_older_daemon_retains_directory_and_global_controls(
     tray, _, _, directory, request = scoped_tray(False, "dir")
     get_stats = tray._get_stats
     tray._get_stats = lambda: {
-        key: value for key, value in get_stats().items() if key != "active_sessions"
+        key: value
+        for key, value in get_stats().items()
+        if key not in {"active_sessions", "pause_control_sessions"}
     }
     tray._refresh_menu()
     snapshot = PauseSnapshot(tray)
@@ -679,10 +690,14 @@ def test_opencode_idle_keeps_pause_until_the_session_is_deleted(
         scan.assert_called_once()
         assert server.state.is_session_paused(session_key)
         assert server.state.get_active_sessions()[0]["session_key"] == session_key
+        assert server.state.get_stats()["pause_control_sessions"][0]["session_key"] == (
+            session_key
+        )
 
         server._handle_hook_request({**identity, "hook_event_name": "SessionEnd"})
 
     assert server.state.get_active_sessions() == []
+    assert server.state.get_stats()["pause_control_sessions"] == []
     assert not server.state.is_session_paused(session_key)
 
 

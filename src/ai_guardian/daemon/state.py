@@ -31,6 +31,7 @@ DEFAULT_IDLE_TIMEOUT = 0.0  # disabled — daemon runs until explicit stop or cr
 CONFIG_CHECKSUM_INTERVAL = 60.0  # check checksum every 60s
 SESSION_TTL = 86400  # 24 hours
 PROJECT_CONFIG_TTL = 86400  # 24 hours — prune stale project entries
+PAUSE_CONTROL_IDLE_TTL = 30 * 60  # 30 minutes without hook activity
 PERSIST_DEBOUNCE = 2.0  # seconds before writing to disk
 DAEMON_SESSIONS_FILENAME = "daemon_sessions.json"
 DAEMON_PAUSE_FILENAME = "daemon.paused"
@@ -1228,9 +1229,10 @@ class DaemonState:
         return removed or was_paused
 
     def pause_session(self, session_key, duration_minutes=0):
-        """Pause one currently active hook session; zero means until resume/end.
+        """Pause a recently active hook session; zero means until it goes idle.
 
-        Returns False when the key is not a currently observed stable session.
+        SessionEnd, 30 minutes without hook activity, or daemon restart also clears
+        an indefinite pause. Returns False for unknown or inactive session keys.
         """
         if not isinstance(session_key, str) or not session_key:
             return False
@@ -1245,7 +1247,11 @@ class DaemonState:
         now = time.monotonic()
         with self._lock:
             self._cleanup_stale_sessions_locked(now)
-            if session_key not in self._active_sessions:
+            session = self._active_sessions.get(session_key)
+            if (
+                session is None
+                or now - session["last_activity"] > PAUSE_CONTROL_IDLE_TTL
+            ):
                 return False
             self._paused_sessions[session_key] = (
                 now + duration_minutes * 60 if duration_minutes > 0 else 0.0
@@ -1266,7 +1272,11 @@ class DaemonState:
         now = time.monotonic()
         with self._lock:
             self._cleanup_stale_sessions_locked(now)
-            if session_key not in self._active_sessions:
+            session = self._active_sessions.get(session_key)
+            if (
+                session is None
+                or now - session["last_activity"] > PAUSE_CONTROL_IDLE_TTL
+            ):
                 return False
             was_paused = self._paused_sessions.pop(session_key, None) is not None
         if was_paused:
@@ -1290,12 +1300,12 @@ class DaemonState:
             return True
 
     def get_active_sessions(self):
-        """Return active stable-ID hook sessions for status and tray controls."""
+        """Return stable-ID hook sessions retained for daemon status."""
         with self._lock:
             return self._get_active_sessions_locked()
 
     def _cleanup_stale_sessions_locked(self, now):
-        """Remove sessions and pause entries idle for SESSION_TTL seconds."""
+        """Prune retained sessions and expire pauses using their own lifetimes."""
         stale = [
             key
             for key, session in self._active_sessions.items()
@@ -1306,11 +1316,41 @@ class DaemonState:
             self._paused_sessions.pop(key, None)
 
         for key, until in list(self._paused_sessions.items()):
-            if key not in self._active_sessions or (until > 0 and now >= until):
+            session = self._active_sessions.get(key)
+            if (
+                session is None
+                or now - session["last_activity"] > PAUSE_CONTROL_IDLE_TTL
+                or (until > 0 and now >= until)
+            ):
                 self._paused_sessions.pop(key, None)
 
+    def _get_pause_control_project_dirs_locked(self):
+        """Return project targets with recent hook activity, newest first.
+
+        Directory-only hook callers remain visible without a stable session ID.
+        Explicitly paused directories are merged by the tray so they remain
+        available for Resume after activity stops.
+        """
+        now = time.monotonic()
+        self._cleanup_stale_sessions_locked(now)
+        recent = {
+            project_dir: last_seen
+            for project_dir, last_seen in self._project_dir_last_seen.items()
+            if now - last_seen <= PAUSE_CONTROL_IDLE_TTL
+        }
+        for session in self._active_sessions.values():
+            last_activity = session["last_activity"]
+            project_dir = session.get("project_dir")
+            if (
+                project_dir
+                and now - last_activity <= PAUSE_CONTROL_IDLE_TTL
+                and last_activity > recent.get(project_dir, 0.0)
+            ):
+                recent[project_dir] = last_activity
+        return sorted(recent, key=recent.__getitem__, reverse=True)
+
     def _get_active_sessions_locked(self):
-        """Return active sessions with pause metadata (must hold ``_lock``)."""
+        """Return retained sessions with pause metadata (must hold ``_lock``)."""
         now = time.monotonic()
         self._cleanup_stale_sessions_locked(now)
         sessions = []
@@ -1495,6 +1535,14 @@ class DaemonState:
             if proactive_level not in ("low", "medium", "high", "paused"):
                 proactive_level = "low"
 
+            active_sessions = self._get_active_sessions_locked()
+            pause_control_sessions = [
+                session
+                for session in active_sessions
+                if session["last_activity_seconds_ago"] <= PAUSE_CONTROL_IDLE_TTL
+            ]
+            pause_control_project_dirs = self._get_pause_control_project_dirs_locked()
+
             return {
                 "version": self._get_version(),
                 "uptime_seconds": uptime,
@@ -1528,7 +1576,9 @@ class DaemonState:
                 "mcp_proactive_level": proactive_level,
                 "mcp_enabled": mcp_config.get("enabled", True) is True,
                 "paused_dirs": self._get_paused_dirs_locked(),
-                "active_sessions": self._get_active_sessions_locked(),
+                "active_sessions": active_sessions,
+                "pause_control_sessions": pause_control_sessions,
+                "pause_control_project_dirs": pause_control_project_dirs,
                 "active_project_dirs": sorted(
                     self._project_dir_last_seen.keys(),
                     key=lambda d: self._project_dir_last_seen[d],

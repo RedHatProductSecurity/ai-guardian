@@ -7,12 +7,17 @@ from dataclasses import dataclass
 from typing import Any
 
 from ai_guardian.daemon.multi_client import MultiDaemonClient
+from ai_guardian.daemon.state import PAUSE_CONTROL_IDLE_TTL
 from ai_guardian.sessions.base import resolve_session_title
 from ai_guardian.ui.modal import run_modal
 
 logger = logging.getLogger(__name__)
 
 LEGEND = "● Active   ◐ Partially paused   ☾ Paused   ○ Unavailable / offline"
+NO_ACTIVE_DAEMON_MESSAGE = (
+    "No active daemon is available for pause controls. Refresh after a daemon "
+    "reconnects."
+)
 MESSAGE = (
     "Choose a pause duration from a daemon, project-directory or individual-session "
     "row's dropdown. Selecting a duration pauses that row immediately; rows with their own pause offer Resume. "
@@ -135,18 +140,31 @@ def _read_view(tray, client, source, index):
     globally_paused = stats.get("paused", False)
     paused_dirs = stats.get("paused_dirs")
     paused_dirs = paused_dirs if isinstance(paused_dirs, dict) else {}
-    raw_sessions = stats.get("active_sessions")
-    sessions = (
-        [
-            s
-            for s in raw_sessions
-            if isinstance(s, dict)
-            and isinstance(s.get("session_key"), str)
-            and s["session_key"].strip()
-        ]
-        if isinstance(raw_sessions, list)
-        else []
+    has_pause_control_sessions = "pause_control_sessions" in stats
+    raw_sessions = (
+        stats.get("pause_control_sessions")
+        if has_pause_control_sessions
+        else stats.get("active_sessions")
     )
+    sessions = []
+    if isinstance(raw_sessions, list):
+        for session in raw_sessions:
+            if (
+                not isinstance(session, dict)
+                or not isinstance(session.get("session_key"), str)
+                or not session["session_key"].strip()
+            ):
+                continue
+            if not has_pause_control_sessions:
+                age = session.get("last_activity_seconds_ago")
+                if age is not None and (
+                    type(age) not in (int, float)
+                    or age < 0
+                    or age > PAUSE_CONTROL_IDLE_TTL
+                    or not math.isfinite(age)
+                ):
+                    continue
+            sessions.append(session)
     glyph = (
         "○"
         if not available
@@ -169,7 +187,11 @@ def _read_view(tray, client, source, index):
         "dir": [],
         "session": [],
     }
-    projects = stats.get("active_project_dirs")
+    projects = (
+        stats.get("pause_control_project_dirs")
+        if "pause_control_project_dirs" in stats
+        else stats.get("active_project_dirs")
+    )
     projects = projects if isinstance(projects, list) else []
     directories = sorted(
         {
@@ -269,10 +291,11 @@ class PauseSnapshot:
     def __init__(self, tray, client=None, *, generation=0):
         self.tray = tray
         self.client = client or tray._multi_client or MultiDaemonClient()
-        self.views = [
+        views = [
             _read_view(tray, self.client, target, index)
             for index, target in enumerate(tuple(tray._targets))
         ]
+        self.views = [view for view in views if view.scopes["global"][0].available]
         self.rows = {}
         self._tokens = {}
         for view in self.views:
@@ -314,12 +337,28 @@ class PauseSnapshot:
                 ):
                     append(view, session, 1)
         return {
-            "message": MESSAGE,
+            "message": MESSAGE if self.views else NO_ACTIVE_DAEMON_MESSAGE,
             "legend": LEGEND,
-            "rows": rows,
+            "rows": (
+                rows
+                if rows
+                else [
+                    {
+                        "id": "unavailable:no-active-daemon",
+                        "scope": "global",
+                        "label": "○ No active daemon available",
+                        "level": 0,
+                        "available": False,
+                        "action": "Unavailable",
+                    }
+                ]
+            ),
             "durations": DURATIONS,
             "feedback": feedback,
-            "session_lifetime": "Individual-session pauses also end on SessionEnd, inactivity expiry or daemon restart.",
+            "session_lifetime": (
+                "Individual-session pauses also end on SessionEnd, after 30 minutes "
+                "without hook activity, or on daemon restart."
+            ),
         }
 
     def resolve(self, event):
