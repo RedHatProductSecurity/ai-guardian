@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~19873 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21577 tok)
-- `CHANGELOG.md` — Change log (~81181 tok)
+- `CHANGELOG.md` — Change log (~81243 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -921,7 +921,7 @@
 - `IDE_INTEGRATION_CHECKLIST.md` — IDE/Agent Integration Checklist (~7884 tok)
 - `index.md` — 8<-- "README.md" (~5 tok)
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
-- `MCP_SERVER.md` — MCP Security Advisor Server (~5330 tok)
+- `MCP_SERVER.md` — MCP Security Advisor Server (~5424 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
 - `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~7499 tok)
 - `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~20223 tok)
@@ -939,7 +939,7 @@
 - `Sandbox.md` — Sandbox CLI (~5751 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2669 tok)
 - `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2024 tok)
-- `SDK.md` — AI Guardian SDK (~21559 tok)
+- `SDK.md` — AI Guardian SDK (~21727 tok)
 - `SECURITY_DESIGN.md` — Security Design (~3877 tok)
 - `SUPPORT.md` — Support bundles and public GitHub Discussions (~8241 tok)
 - `TOML_PATTERNS.md` — TOML Pattern Engine (~3843 tok)
@@ -1184,7 +1184,7 @@
 - `__init__.py` — MCP server and audit logging. (~11 tok)
 - `audit.py` — class: discover_servers, in, audit_config (~10482 tok)
 - `identity.py` — Local identity attestation for the built-in AI Guardian MCP server. (~5224 tok)
-- `server.py` — URL configuration (~13377 tok)
+- `server.py` — URL configuration (~13500 tok)
 
 ## src/ai_guardian/middleware/openshell/
 
@@ -1311,7 +1311,7 @@
 
 ## src/ai_guardian/sdk/
 
-- `__init__.py` — URL configuration (~7649 tok)
+- `__init__.py` — URL configuration (~7724 tok)
 - `run_context.py` — RunContext — correlate multiple SDK calls within a program run. (~553 tok)
 
 ## src/ai_guardian/sessions/
@@ -1346,11 +1346,11 @@
 
 ## src/ai_guardian/skills/ai-guardian-security/
 
-- `SKILL.md` — AI Guardian Security Advisor (~3122 tok)
+- `SKILL.md` — AI Guardian Security Advisor (~3180 tok)
 
 ## src/ai_guardian/skills/ai-guardian-security/references/
 
-- `TOOLS.md` — AI Guardian MCP Tools Reference (~1215 tok)
+- `TOOLS.md` — AI Guardian MCP Tools Reference (~1299 tok)
 
 ## src/ai_guardian/templates/profiles/
 

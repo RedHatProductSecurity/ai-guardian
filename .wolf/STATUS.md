@@ -9,6 +9,32 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2652 implementation and rebase — 2026-11-03
+
+- Continued managed DAF `open` session `RedHatProductSecurity-ai-guardian-2652`
+  on existing branch `2652` in the real workspace. The user authorized
+  implementation with **go**.
+- Sensitive history filters now accept `secret_detected`,
+  `image_secret_detected`, and `pii_detected` as compatibility aliases for
+  consolidated `sensitive_finding` records. The canonical filter also finds
+  older type-specific history; the privacy-safe persisted envelope remains
+  unchanged. Updated MCP/SDK descriptions, security-tool guidance, docs, and
+  CHANGELOG; added logger, SDK, MCP, and complete MCP UX regression coverage.
+- **Validation:** 293 related unit/UX tests pass; Ruff, Black (Python 3.10),
+  error-level Pylint, changed-module Mypy, JSON parsing, and `git diff --check`
+  pass. Full-package Mypy retains 14 errors in untouched
+  `skill_discovery.py` and `scanners/secret_validator.py`.
+- Updated all three GitHub acceptance checkboxes, preserved `bug` and `1.21.0`
+  while adding `done`, posted progress comment
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2652#issuecomment-6618043549,
+  and saved a DAF progress note.
+- Rebased branch `2652` onto `origin/main` at `a1c6d35d`. Autostash reapplication
+  conflicted only in CHANGELOG and the generated anatomy index; both were
+  resolved preserving upstream and local changes. Re-ran the 293 related tests
+  successfully. The autostash remains as a backup. Changes are uncommitted; no
+  commit, push, or PR was created.
+- **Next:** user review and external DAF completion.
+
 ## Issue #2655 implementation — 2026-11-03
 
 - Continued managed DAF `open` session

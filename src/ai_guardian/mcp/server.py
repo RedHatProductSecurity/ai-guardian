@@ -656,7 +656,17 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         violation_type: Optional[str] = None,
         limit: int = 20,
     ) -> Dict[str, Any]:
-        """Get recent security violations. Filter by type (secret_detected, prompt_injection, directory_blocking, tool_permission, ssrf_blocked, config_file_exfil, pii_detected, jailbreak_detected)."""
+        """Get recent security violations, optionally filtered by type.
+
+        Other common filters include ``prompt_injection``, ``jailbreak_detected``,
+        ``tool_permission``, ``directory_blocking``, ``ssrf_blocked``, and
+        ``config_file_exfil``.
+        Sensitive records use the consolidated ``sensitive_finding`` category.
+        The legacy filters ``secret_detected``, ``image_secret_detected``, and
+        ``pii_detected`` remain aliases for that category. Because the persisted
+        record omits the original subtype and finding details, these filters may
+        return any sensitive finding.
+        """
         try:
             from ai_guardian.violations.logger import ViolationLogger
             from ai_guardian.violations.decision import safe_policy_decision

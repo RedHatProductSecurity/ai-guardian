@@ -42,7 +42,13 @@ advisory result only; the direct hook remains authoritative.
 
 ## Violation Types for get_violations
 
-`secret_detected`, `prompt_injection`, `jailbreak_detected`, `tool_permission`, `directory_blocking`, `ssrf_blocked`, `config_file_exfil`, `pii_detected`
+`sensitive_finding`, `prompt_injection`, `jailbreak_detected`, `tool_permission`, `directory_blocking`, `ssrf_blocked`, `config_file_exfil`, `image_pii_detected`
+
+The legacy filters `secret_detected`, `image_secret_detected`, and `pii_detected`
+remain aliases for `sensitive_finding`. Current sensitive records intentionally
+omit the original subtype, so these aliases can return any sensitive finding;
+the canonical filter also includes type-specific sensitive records from older
+history.
 
 ## Support Bundle
 

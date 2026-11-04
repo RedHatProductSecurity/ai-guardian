@@ -854,6 +854,15 @@ class TestCheckAnnotations:
 class TestGetViolations:
     """Test get_violations tool."""
 
+    def test_description_documents_sensitive_filter_aliases(self):
+        tool = create_server()._tool_manager._tools["get_violations"]
+
+        assert "sensitive_finding" in tool.description
+        assert "secret_detected" in tool.description
+        assert "image_secret_detected" in tool.description
+        assert "pii_detected" in tool.description
+        assert "original subtype" in tool.description
+
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_returns_filtered_violations(self, mock_vl_cls):
         mock_vl = MagicMock()
