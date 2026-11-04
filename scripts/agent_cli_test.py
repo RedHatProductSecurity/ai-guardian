@@ -881,7 +881,7 @@ def _run_case(
 
 
 def build_agent_environment(cli: str) -> List[str]:
-    """Return synthetic endpoint/auth settings for the requested CLI only."""
+    """Return synthetic endpoint/auth and smoke-only settings for the CLI."""
     env: List[str] = []
     if cli in {"codex", "pi"}:
         env.append(f"OPENAI_API_KEY={MOCK_KEY}")
@@ -890,6 +890,8 @@ def build_agent_environment(cli: str) -> List[str]:
             [
                 "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json",
                 "OPENCODE_CONFIG_DIR=/sandbox/.config/opencode",
+                # Avoid a network-bound startup check on each isolated case.
+                "OPENCODE_DISABLE_AUTOUPDATE=true",
             ]
         )
     if cli == "pi":

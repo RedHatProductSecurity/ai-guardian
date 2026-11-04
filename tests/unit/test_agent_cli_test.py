@@ -125,6 +125,11 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     assert f"ANTHROPIC_API_KEY={runner.MOCK_KEY}" in claude_environment
     assert "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1" in claude_environment
     assert all("OPENAI_API_KEY=" not in item for item in claude_environment)
+    opencode_environment = runner.build_agent_environment("opencode")
+    assert "OPENCODE_DISABLE_AUTOUPDATE=true" in opencode_environment
+    assert "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json" in (
+        opencode_environment
+    )
     gemini_environment = runner.build_agent_environment("gemini")
     assert "GOOGLE_GEMINI_BASE_URL=http://127.0.0.1:18765" in gemini_environment
     assert f"GEMINI_API_KEY={runner.MOCK_KEY}" in gemini_environment
@@ -400,7 +405,12 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
         home.mkdir()
         workspace = home / "workspace"
         workspace.mkdir()
-        environment = {**os.environ, "HOME": str(home)}
+        environment = {
+            **os.environ,
+            "HOME": str(home),
+            # pathlib.Path.home() uses USERPROFILE on Windows rather than HOME.
+            "USERPROFILE": str(home),
+        }
         if cli_name == "codex":
             environment["CODEX_HOME"] = str(home / ".codex")
         if cli_name == "pi":
@@ -850,11 +860,20 @@ def test_cli_and_scanner_checklists_keep_real_agent_smoke_coverage_in_sync():
     assert "synthetic" in scanner_checklist.lower()
 
 
-def test_agent_cli_shell_wrapper_has_valid_syntax_and_help():
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="agent-cli-test is a POSIX shell wrapper; Windows uses PowerShell",
+)
+def test_agent_cli_shell_wrapper_has_valid_syntax():
     wrapper = ROOT / "scripts" / "agent-cli-test"
     syntax = subprocess.run(
         ["bash", "-n", str(wrapper)], capture_output=True, text=True, check=False
     )
+
+    assert syntax.returncode == 0, syntax.stderr
+
+
+def test_agent_cli_runner_help():
     help_result = subprocess.run(
         [sys.executable, str(RUNNER_PATH), "--help"],
         capture_output=True,
@@ -862,7 +881,6 @@ def test_agent_cli_shell_wrapper_has_valid_syntax_and_help():
         check=False,
     )
 
-    assert syntax.returncode == 0, syntax.stderr
     assert help_result.returncode == 0
     normalized_help = " ".join(help_result.stdout.split())
     assert "No provider credentials or live model calls are used" in normalized_help

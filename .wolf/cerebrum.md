@@ -13,6 +13,16 @@
   requiring command and output copy/paste between the user's Mac terminal and the
   remote SSH session.
 
+- **2026-11-04 — OpenCode smoke auto-update:** Keep OpenCode auto-upgrade enabled
+  for normal use. It may be disabled only in the disposable, egress-isolated smoke
+  invocations to avoid a network timeout on every test case; make the scope clear.
+
+- **2026-11-04 — Windows smoke CI:** Isolate both `HOME` and `USERPROFILE` in
+  subprocess tests that call `Path.home()`. Do not invoke Bash-only wrapper tests
+  on Windows (where `bash.exe` may launch WSL); keep portable CLI help coverage
+  active separately. Gemini's current generated hook config uses an event-keyed
+  `hooks` mapping, not the old list-of-events test shape.
+
 - **2026-10-30 — OpenCode partial setup repair (#2627):** User approved repairing
   missing MCP registration without forcing replacement of verified healthy hooks.
   An explicit setup/update action is not blanket consent to rewrite healthy
