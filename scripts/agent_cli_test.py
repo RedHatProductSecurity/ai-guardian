@@ -332,13 +332,14 @@ def build_agent_command(
 
 
 def sanitized_host_environment(home: Path) -> Dict[str, str]:
-    """Remove host credentials/config discovery before creating the sandbox."""
+    """Remove host credentials while retaining engine connection state."""
     env = os.environ.copy()
     host_home = Path(env.get("HOME") or Path.home()).expanduser()
     host_xdg_config = Path(
         env.get("XDG_CONFIG_HOME") or host_home / ".config"
     ).expanduser()
     host_xdg_data = env.get("XDG_DATA_HOME") or str(host_home / ".local" / "share")
+    podman_connections = host_xdg_config / "containers" / "podman-connections.json"
     podman_storage_config = env.get("CONTAINERS_STORAGE_CONF")
     if not podman_storage_config:
         candidate = host_xdg_config / "containers" / "storage.conf"
@@ -385,6 +386,16 @@ def sanitized_host_environment(home: Path) -> Dict[str, str]:
     env.pop("ACCEPT_PROPRIETARY_TOS", None)
     env["HOME"] = str(home)
     env["XDG_CONFIG_HOME"] = str(home / ".config")
+    if podman_connections.is_file():
+        # Podman machine connections live under XDG_CONFIG_HOME. Keep that
+        # connection metadata available when the sandbox command runs with its
+        # isolated HOME; otherwise Podman falls back to a nonexistent local
+        # socket instead of the configured machine's SSH connection.
+        isolated_connections = (
+            Path(env["XDG_CONFIG_HOME"]) / "containers" / "podman-connections.json"
+        )
+        isolated_connections.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(podman_connections, isolated_connections)
     # Podman stores rootless images under XDG_DATA_HOME (or HOME when it is
     # unset). Keep its storage identity aligned with the image-build process
     # while the AI Guardian CLI uses an isolated HOME/config directory.

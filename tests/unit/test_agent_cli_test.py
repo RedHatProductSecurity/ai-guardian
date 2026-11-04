@@ -211,6 +211,19 @@ def test_sandbox_create_environment_strips_provider_secrets_and_host_config(
     storage_config = host_config / "containers" / "storage.conf"
     storage_config.parent.mkdir(parents=True)
     storage_config.write_text("[storage]\n", encoding="utf-8")
+    podman_connections = host_config / "containers" / "podman-connections.json"
+    connection_config = {
+        "connection": {
+            "podman-machine-default-root": {
+                "uri": "ssh://root@127.0.0.1:63919/run/podman/podman.sock",
+                "identity": str(
+                    host_home / ".local/share/containers/podman/machine/machine"
+                ),
+            }
+        },
+        "default": "podman-machine-default-root",
+    }
+    podman_connections.write_text(json.dumps(connection_config), encoding="utf-8")
     monkeypatch.setenv("HOME", str(host_home))
     monkeypatch.setenv("OPENAI_API_KEY", "synthetic-host-value")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-host-value")
@@ -231,6 +244,13 @@ def test_sandbox_create_environment_strips_provider_secrets_and_host_config(
     assert environment["XDG_CONFIG_HOME"] == str(tmp_path / "clean-home" / ".config")
     assert environment["XDG_DATA_HOME"] == str(host_home / ".local" / "share")
     assert environment["CONTAINERS_STORAGE_CONF"] == str(storage_config)
+    isolated_connections = (
+        tmp_path / "clean-home" / ".config" / "containers" / "podman-connections.json"
+    )
+    assert (
+        json.loads(isolated_connections.read_text(encoding="utf-8"))
+        == connection_config
+    )
 
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "custom-data"))
     customized = runner.sanitized_host_environment(tmp_path / "clean-home-2")
