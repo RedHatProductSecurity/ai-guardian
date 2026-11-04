@@ -29,8 +29,10 @@ budget_tokens: 1000
   runs passed all six cases for Gemini, OpenCode V1 `1.19.0`, and OpenCode V2
   `2.0.24`; no live provider request was made. Release Readiness now executes
   Gemini and both OpenCode generations.
-- Changes are uncommitted on branch `2662`; no commit or push. Preserved the
-  existing `.wolf/anatomy.md` worktree change.
+- Smoke-runner changes are committed and pushed on branch `2662` through
+  `c893f267`; the current branch also includes the anatomy refresh commit
+  `0bd236b3` and tracks `origin/2662`. Source work was clean before this
+  follow-up handoff note.
 
 - Preserved the existing preview-by-default release command work on branch `2662`
   and implemented the real-agent CLI smoke runner. It uses `ai-guardian sandbox
@@ -77,6 +79,32 @@ budget_tokens: 1000
   Pi runtime smoke matrices were not run locally. An authorized maintainer may
   separately enable the Claude CI variable after reviewing and accepting
   Anthropic's terms.
+
+### Tray REST connection for isolated smoke containers — 2026-11-04
+
+- The user does not want smoke daemons hidden through a discovery exception;
+  preserve ordinary tray discovery and investigate network isolation instead.
+- `scripts/agent_cli_test.py` waits for the daemon, then disconnects every
+  container network before running cases. The mock provider and hook checks are
+  local to the container, so passing smoke cases does not prove host/tray REST
+  reachability.
+- Linux Podman probe: a disposable container attached to an `--internal` network
+  with a published REST port returned HTTP 200 from the host; disconnecting that
+  network made the same host request reset. Probe container/network were removed.
+  This shows detached networking explains the REST failure on Linux too; the
+  previous blanket Linux-vs-macOS explanation was incorrect. macOS Podman
+  machine behavior on an internal network remains unverified.
+- Replaced the post-create network disconnect with a dedicated internal network
+  created before `sandbox create`; the new `--container-network` option attaches
+  the daemon to it from startup while preserving its published REST port and
+  ordinary discovery. The runner removes the network with the sandbox, or keeps
+  both under `--keep`.
+- **Validation:** 123 related unit tests pass; Ruff, Black (Python 3.10 target),
+  error-level Pylint, package Mypy, and `git diff --check` pass. A Linux Podman
+  OpenCode V2 run passed all six smoke cases on the new network. No external
+  provider was contacted. **Next:** qualify host REST access and egress isolation
+  on macOS Podman before claiming cross-platform behavior. Avoid asking the user
+  to shuttle commands/results between the Mac terminal and this SSH session.
 
 ## Issue #2663 session initialization — 2026-11-03
 

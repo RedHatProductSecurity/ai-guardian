@@ -2331,6 +2331,10 @@ def _container_create(args) -> Tuple[List[str], Optional[Dict[str, str]]]:
     else:
         command.extend(["--publish", f"{port}:{DEFAULT_REST_PORT}"])
 
+    container_network = getattr(args, "container_network", None)
+    if container_network:
+        command.extend(["--network", container_network])
+
     child_env = os.environ.copy()
     _add_container_environment(command, args, child_env=child_env)
     _config_mount_args(command, args)
@@ -2731,6 +2735,14 @@ def _validate_create_options(args) -> None:
     """Validate create-only options before touching a runtime."""
     runtime = _requested_runtime(args) or _runtime(args)
     openshell_mode = _openshell_mode(args) if runtime == OPENSHELL_RUNTIME else None
+    container_network = getattr(args, "container_network", None)
+    if container_network is not None:
+        if not isinstance(container_network, str) or not container_network.strip():
+            raise ValueError("--container-network requires a non-empty network name")
+        if runtime != CONTAINER_RUNTIME:
+            raise ValueError(
+                "--container-network is supported for container sandboxes only"
+            )
     _validate_image_reference(getattr(args, "image", None))
     policy = getattr(args, "policy", None) or []
     providers = getattr(args, "provider", None) or []

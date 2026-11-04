@@ -63,6 +63,7 @@ def _args(**overrides):
         "model": None,
         "openshell_auth": None,
         "openshell_mode": "ai-guardian",
+        "container_network": None,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -674,6 +675,7 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
         config_dir=str(config_dir),
         repo=str(repo),
         port=8123,
+        container_network="smoke-internal",
         image="example/ai-guardian:test",
         api_key=None,
         environment=[],
@@ -704,12 +706,66 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
     assert "--userns=keep-id" in command
     assert "--publish" in command
     assert command[command.index("--publish") + 1] == "8123:63152"
+    assert command[command.index("--network") + 1] == "smoke-internal"
     assert f"{config_path}:/sandbox/.config/ai-guardian.host.json:ro,z" in command
     assert (
         "AI_GUARDIAN_HOST_CONFIG_PATH=/sandbox/.config/ai-guardian.host.json" in command
     )
     assert f"{repo}:/sandbox/repo" in command
     assert command[-3:] == ["example/ai-guardian:test", "bash", "-l"]
+
+
+def test_sandbox_create_rejects_container_network_for_openshell():
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        container_network="smoke-internal",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="--container-network is supported for container sandboxes only",
+    ):
+        _validate_create_options(args)
+
+
+def test_sandbox_create_rejects_empty_container_network():
+    args = _args(
+        sandbox_command="create",
+        runtime="container",
+        container_network=" ",
+    )
+
+    with pytest.raises(
+        ValueError, match="--container-network requires a non-empty network name"
+    ):
+        _validate_create_options(args)
+
+
+def test_sandbox_cli_parses_container_network():
+    from ai_guardian.cli import main
+
+    handled = []
+    argv = [
+        "ai-guardian",
+        "sandbox",
+        "create",
+        "--runtime",
+        "container",
+        "--container-network",
+        "smoke-internal",
+    ]
+
+    with (
+        patch("sys.argv", argv),
+        patch(
+            "ai_guardian.cli.handle_sandbox_command",
+            side_effect=lambda args: handled.append(args) or 0,
+        ),
+    ):
+        assert main() == 0
+
+    assert handled[0].container_network == "smoke-internal"
 
 
 def test_container_create_uses_timestamped_name_after_collision():
@@ -743,6 +799,7 @@ def test_container_create_uses_timestamped_name_after_collision():
     assert args.name == expected_name
     assert command[command.index("--name") + 1] == expected_name
     assert f"ai-guardian.name={expected_name}" in command
+    assert "--network" not in command
     assert "already in use" in "".join(output)
 
 

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Agent CLI smoke network isolation:** Keep smoke sandboxes on dedicated
+  egress-isolated internal networks while retaining their published daemon REST
+  port for ordinary tray discovery.
 - **Podman macOS smoke setup:** Preserve Podman's connection metadata in the
   runner's isolated environment so sandbox creation uses the configured machine
   connection rather than a missing temporary socket.
