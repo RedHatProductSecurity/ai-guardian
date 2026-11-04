@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Manual daemon tray actions (#2654):** Rebuild menu descriptors when a
+  same-name target's endpoint or TLS trust settings change, so actions use the
+  newly discovered target without displaying or logging credentials.
 - **Manual daemon target discovery (#2655):** Skip entries with null, non-string,
   or blank names and warn without logging the supplied value. Invalid target names
   can no longer interrupt sorting or leave the tray with stale discovery results.

@@ -1005,7 +1005,7 @@ class DaemonTray:
                     pass  # intentionally silent — best-effort operation
 
     def _target_menu_identity(self):
-        """Rebuild for replacement/reordering even when target count is unchanged."""
+        """Rebuild when targets reorder or their menu-bound identity changes."""
         return tuple(
             (
                 t.runtime,
@@ -1015,6 +1015,27 @@ class DaemonTray:
                 t.namespace,
                 t.ssh_id,
                 id(t) if t.runtime == "ssh" else None,
+                (
+                    (
+                        (
+                            t.url,
+                            t.host,
+                            t.port,
+                            tuple(
+                                (key, t.tls.get(key, ""))
+                                for key in (
+                                    "ca_file",
+                                    "server_name",
+                                    "certificate_sha256",
+                                )
+                            ),
+                        )
+                        if isinstance(t.tls, dict)
+                        else (t.url, t.host, t.port, type(t.tls).__qualname__)
+                    )
+                    if t.runtime == "manual"
+                    else None
+                ),
             )
             for t in self._targets
         )
