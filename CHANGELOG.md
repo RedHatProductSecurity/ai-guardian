@@ -32,26 +32,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PowerShell CLI self-protection (#2653):** Fail closed on opaque encoded-command
   payloads, including common PowerShell aliases and `.exe` entrypoints, while
   preserving ordinary commands and documentation mentions.
+- **OpenCode V2 shell enforcement:** Normalize OpenCode's native `shell` tool to
+  canonical `Bash`, so shared command scanners, permissions, and immutable CLI
+  self-protection run before V2 shell execution.
 
 ### Changed
 - **Release command safety:** `scripts/release.sh` now previews by default. An
   explicit `--execute` is required for release mutations and publication.
 
 ### Added
-- **Real-agent CLI hook smoke check:** Release Readiness now runs Codex, OpenCode,
-  and Pi in strict-profile sandboxes built from the current wheel; Claude Code is
-  available when an authorized maintainer enables its explicit CI ToS-consent
-  variable. Native local mock protocols exercise blocked prompt/tool paths and a
-  clean allow path without host credentials or billable provider calls. Generated
-  Podman images use a `localhost/`-qualified reference and preserve rootless
-  storage identity across build/create. The image pre-creates the writable
-  parent for read-only profile mounts so setup can stage its active config. The
-  runner waits for daemon/config readiness, and the OpenCode mock accounts for its
-  initial provider request before a command tool is available. CLI and scanner
-  integration checklists require keeping this smoke matrix in sync. Claude's
-  smoke permission is written to the sandbox user's config rather than the mounted
-  repository, the Anthropic token-count preflight is handled by the local mock,
-  and failed build/configuration stages show bounded diagnostics.
+- **Real-agent CLI hook smoke check:** Release Readiness runs Codex, Gemini CLI,
+  OpenCode, and Pi in strict-profile sandboxes built from the current wheel;
+  Claude Code remains behind its explicit CI ToS-consent variable. Native local
+  mock protocols exercise blocked prompt/tool paths and a clean allow path without
+  host credentials or billable provider calls. OpenCode is checked with bundled
+  V1 `1.19.0` and a separate V2 `2.0.24` smoke-only image. The V2 CLI is installed
+  from its pinned npm package and uses an isolated standalone run per case. Gemini's
+  mock supports the native GenerateContent/countTokens protocol, and its native
+  `run_shell_command` hook name now maps to canonical Bash scanning/policy. The
+  runner retains rootless Podman storage identity, waits for sandbox readiness,
+  and reports bounded build/configuration diagnostics. Claude's permission is
+  written to sandbox-owned settings, and its Anthropic token-count preflight is
+  handled locally.
 - **Experimental WSL2 platform guidance (#2593):** Document Linux-distribution
   installation and scanner boundaries, browser-console use from Windows, and
   manual localhost troubleshooting. Clarify that WSL1 and comprehensive WSL2

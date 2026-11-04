@@ -97,6 +97,9 @@ _SHELL_TOOL_NAMES = frozenset(
         "launch-process",
         "execute_command",
         "terminal",
+        # Gemini CLI's native shell command tool is normalized by its adapter
+        # before shared policy/scanner processing.
+        "run_shell_command",
         # Grok's native shell tool name reaches direct policy callers before
         # the adapter-normalized "Bash" name is available.
         "run_terminal_command",

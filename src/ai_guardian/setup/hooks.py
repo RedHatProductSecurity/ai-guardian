@@ -118,8 +118,22 @@ def _hook_config_schema_error(
 
     hooks = config["hooks"]
     if ide_type == "gemini":
-        expected = "a list"
-        valid = isinstance(hooks, list)
+        if isinstance(hooks, list):
+            if all(
+                isinstance(entry, dict)
+                and isinstance(entry.get("event"), str)
+                and bool(entry["event"])
+                for entry in hooks
+            ):
+                # The former flat format is accepted here only so explicit
+                # setup can migrate it to Gemini's current grouped structure.
+                return None
+            return (
+                f"Invalid {format_name} schema in {config_path}: 'hooks' legacy "
+                "entries must be objects with an event"
+            )
+        expected = "an object/mapping"
+        valid = isinstance(hooks, dict)
     else:
         expected = "an object/mapping"
         valid = isinstance(hooks, dict)
@@ -127,14 +141,6 @@ def _hook_config_schema_error(
         return (
             f"Invalid {format_name} schema in "
             f"{config_path}: 'hooks' must be {expected}"
-        )
-
-    if ide_type == "gemini" and any(
-        not isinstance(entry, dict) or not entry.get("event") for entry in hooks
-    ):
-        return (
-            f"Invalid {format_name} schema in {config_path}: "
-            "'hooks' entries must be objects with an event"
         )
 
     hook_path = "hooks"
@@ -156,6 +162,19 @@ def _hook_config_schema_error(
                     f"Invalid {format_name} schema in {config_path}: "
                     f"'{hook_path}.{event_name}' must be a list"
                 )
+        if ide_type == "gemini":
+            for event_name, entries in hooks.items():
+                if not isinstance(entries, list):
+                    continue
+                if any(
+                    not isinstance(entry, dict)
+                    or not isinstance(entry.get("hooks"), list)
+                    for entry in entries
+                ):
+                    return (
+                        f"Invalid {format_name} schema in {config_path}: "
+                        f"'hooks.{event_name}' entries must contain a hooks list"
+                    )
     return None
 
 
@@ -543,15 +562,54 @@ class IDESetup:
             "config_dir_env_var": "GEMINI_CLI_HOME",
             "config_filename": "settings.json",
             "hooks": {
-                "hooks": [
-                    {
-                        "event": HookEvent.SESSION_START.display_name,
-                        "command": "ai-guardian",
-                    },
-                    {"event": "BeforeAgent", "command": "ai-guardian"},
-                    {"event": "BeforeTool", "matcher": ".*", "command": "ai-guardian"},
-                    {"event": "AfterTool", "matcher": ".*", "command": "ai-guardian"},
-                ]
+                "hooks": {
+                    HookEvent.SESSION_START.display_name: [
+                        {
+                            "hooks": [
+                                {
+                                    "name": "ai-guardian",
+                                    "type": "command",
+                                    "command": "ai-guardian",
+                                }
+                            ]
+                        }
+                    ],
+                    "BeforeAgent": [
+                        {
+                            "hooks": [
+                                {
+                                    "name": "ai-guardian",
+                                    "type": "command",
+                                    "command": "ai-guardian",
+                                }
+                            ]
+                        }
+                    ],
+                    "BeforeTool": [
+                        {
+                            "matcher": ".*",
+                            "hooks": [
+                                {
+                                    "name": "ai-guardian",
+                                    "type": "command",
+                                    "command": "ai-guardian",
+                                }
+                            ],
+                        }
+                    ],
+                    "AfterTool": [
+                        {
+                            "matcher": ".*",
+                            "hooks": [
+                                {
+                                    "name": "ai-guardian",
+                                    "type": "command",
+                                    "command": "ai-guardian",
+                                }
+                            ],
+                        }
+                    ],
+                }
             },
         },
         "antigravity": {
@@ -1169,13 +1227,10 @@ class IDESetup:
         if ide_type in ("windsurf", "augment", "crush"):
             hooks = hooks.get("hooks", hooks)
         if ide_type == "gemini":
-            return {
-                str(entry.get("event")): "event"
-                for entry in (
-                    hooks if isinstance(hooks, list) else hooks.get("hooks", hooks)
-                )
-                if isinstance(entry, dict) and entry.get("event")
-            }
+            gemini_hooks = hooks.get("hooks", hooks)
+            if isinstance(gemini_hooks, dict):
+                return {str(event): "event" for event in gemini_hooks if event}
+            return {}
         return {
             str(name): "event"
             for name in hooks
@@ -1224,12 +1279,9 @@ class IDESetup:
         if ide_type == "copilot":
             installed_hooks = config
         elif ide_type == "gemini":
-            entries = installed_hooks if isinstance(installed_hooks, list) else []
-            installed_hooks = {
-                str(entry.get("event")): entry
-                for entry in entries
-                if isinstance(entry, dict) and entry.get("event")
-            }
+            installed_hooks = (
+                installed_hooks if isinstance(installed_hooks, dict) else {}
+            )
         elif ide_type in ("windsurf", "augment", "crush"):
             if isinstance(installed_hooks, dict):
                 installed_hooks = installed_hooks.get("hooks", installed_hooks)
@@ -1475,6 +1527,10 @@ class IDESetup:
             schema_error = _hook_config_schema_error(installed, path, ide_type)
             if schema_error:
                 result["diagnostics"].append(schema_error)
+            elif ide_type == "gemini" and isinstance(installed.get("hooks"), list):
+                result["diagnostics"].append(
+                    "Gemini hook settings use the legacy flat format; run setup to migrate them"
+                )
 
         installed_hooks = self._installed_hook_map(installed, ide_type)
 
@@ -2361,39 +2417,83 @@ class IDESetup:
             return existing_config, warnings
 
         elif ide_type == "gemini":
-            if "hooks" not in existing_config:
-                existing_config["hooks"] = []
+            current_hooks = existing_config.get("hooks", {})
+            if isinstance(current_hooks, list):
+                # Migrate the former flat event/command entries while keeping
+                # unrelated command hooks intact in Gemini's current grouped
+                # event format.
+                migrated_hooks: Dict[str, List[Dict[str, Any]]] = {}
+                for legacy in current_hooks:
+                    if not isinstance(legacy, dict) or not isinstance(
+                        legacy.get("event"), str
+                    ):
+                        warnings.append(
+                            "⚠️  A legacy Gemini hook entry without an event "
+                            "could not be migrated."
+                        )
+                        continue
+                    if _is_ai_guardian_command(legacy.get("command", "")):
+                        continue
+                    event_name = legacy["event"]
+                    hook_definition: Dict[str, Any] = {}
+                    for key in ("matcher", "sequential"):
+                        if key in legacy:
+                            hook_definition[key] = deepcopy(legacy[key])
+                    handler = {
+                        key: deepcopy(legacy[key])
+                        for key in ("type", "command", "name", "timeout", "description")
+                        if key in legacy
+                    }
+                    if isinstance(handler.get("command"), str):
+                        handler.setdefault("type", "command")
+                    hook_definition["hooks"] = [handler] if handler else []
+                    migrated_hooks.setdefault(event_name, []).append(hook_definition)
+                current_hooks = migrated_hooks
+            elif not isinstance(current_hooks, dict):
+                warnings.append(
+                    "⚠️  The existing Gemini hooks value was not an object; "
+                    "AI Guardian hooks were installed in a new event map."
+                )
+                current_hooks = {}
+            existing_config["hooks"] = current_hooks
 
             managed_events = set(self.expected_hook_manifest("gemini"))
-            template_hooks = [
-                hook
-                for hook in ai_guardian_hooks.get("hooks", [])
-                if isinstance(hook, dict) and hook.get("event") in managed_events
-            ]
-
-            other_hooks = [
-                h
-                for h in existing_config["hooks"]
-                if not (
-                    isinstance(h, dict)
-                    and _is_ai_guardian_command(h.get("command", ""))
+            template_hooks = ai_guardian_hooks.get("hooks", {})
+            if not isinstance(template_hooks, dict):
+                template_hooks = {}
+            for event_name in managed_events:
+                template_entries = template_hooks.get(event_name, [])
+                if not isinstance(template_entries, list):
+                    continue
+                current_entries = existing_config["hooks"].get(event_name, [])
+                if not isinstance(current_entries, list):
+                    current_entries = []
+                other_entries = []
+                for entry in current_entries:
+                    if isinstance(entry, dict) and isinstance(entry.get("hooks"), list):
+                        remaining_handlers = [
+                            handler
+                            for handler in entry["hooks"]
+                            if not self._contains_owned_command(handler)
+                        ]
+                        if len(remaining_handlers) != len(entry["hooks"]):
+                            if not remaining_handlers:
+                                continue
+                            cleaned_entry = deepcopy(entry)
+                            cleaned_entry["hooks"] = remaining_handlers
+                            other_entries.append(cleaned_entry)
+                            continue
+                    cleaned = self._remove_owned_commands(entry)
+                    if cleaned is not None:
+                        other_entries.append(cleaned)
+                if other_entries:
+                    warnings.append(
+                        f"⚠️  {event_name}: Found other hooks. ai-guardian has been "
+                        "placed first to ensure warnings display correctly."
+                    )
+                existing_config["hooks"][event_name] = (
+                    deepcopy(template_entries) + other_entries
                 )
-            ]
-
-            ag_events = {h.get("event") for h in template_hooks if isinstance(h, dict)}
-            other_same_event = [
-                h
-                for h in other_hooks
-                if isinstance(h, dict) and h.get("event") in ag_events
-            ]
-            if other_same_event:
-                hook_names = [h.get("command", "unknown") for h in other_same_event]
-                warnings.append(
-                    f"⚠️  Found other hooks for same events [{', '.join(hook_names)}]. "
-                    f"ai-guardian has been placed first to ensure warnings display correctly."
-                )
-
-            existing_config["hooks"] = template_hooks + other_hooks
             return existing_config, warnings
 
         elif ide_type == "augment":

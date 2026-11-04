@@ -126,22 +126,33 @@ RUN npm install -g --prefix /opt/npm \
     && (PATH="/opt/npm/bin:$PATH" openclaw --version 2>/dev/null || echo "OpenClaw installed") \
     && (PATH="/opt/npm/bin:$PATH" pi --version 2>/dev/null || echo "Pi ${PI_VERSION} installed")
 
-# OpenCode (pinned Linux archive — avoid the mutable install script)
-RUN case "$(uname -m)" in \
-        x86_64) OPENCODE_ARCH=x64 ;; \
-        aarch64|arm64) OPENCODE_ARCH=arm64 ;; \
-        *) echo "Unsupported OpenCode architecture: $(uname -m)" >&2; exit 1 ;; \
+# OpenCode V1 publishes Linux archives; V2 publishes platform packages on npm.
+# Keep both generations at the same runtime path for the support image and smoke
+# runner, while pinning the selected distribution to OPENCODE_VERSION.
+RUN mkdir -p /opt/opencode/.opencode/bin \
+    && case "${OPENCODE_VERSION%%.*}" in \
+        1) \
+            case "$(uname -m)" in \
+                x86_64) OPENCODE_ARCH=x64 ;; \
+                aarch64|arm64) OPENCODE_ARCH=arm64 ;; \
+                *) echo "Unsupported OpenCode architecture: $(uname -m)" >&2; exit 1 ;; \
+            esac \
+            && if [ "$OPENCODE_ARCH" = "x64" ] \
+                && ! grep -qwi avx2 /proc/cpuinfo 2>/dev/null; then \
+                OPENCODE_ARCH=x64-baseline; \
+            fi \
+            && OPENCODE_ARCHIVE="/tmp/opencode-linux-${OPENCODE_ARCH}.tar.gz" \
+            && curl -fsSL --retry 3 -o "$OPENCODE_ARCHIVE" \
+                "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OPENCODE_ARCH}.tar.gz" \
+            && tar -xzf "$OPENCODE_ARCHIVE" -C /opt/opencode/.opencode/bin \
+            && rm "$OPENCODE_ARCHIVE" ;; \
+        2) \
+            npm install -g --prefix /opt/npm "@opencode/cli@${OPENCODE_VERSION}" \
+            && install -m 0755 \
+                /opt/npm/lib/node_modules/@opencode/cli/bin/opencode.exe \
+                /opt/opencode/.opencode/bin/opencode ;; \
+        *) echo "Unsupported OpenCode generation: ${OPENCODE_VERSION}" >&2; exit 1 ;; \
     esac \
-    && if [ "$OPENCODE_ARCH" = "x64" ] \
-        && ! grep -qwi avx2 /proc/cpuinfo 2>/dev/null; then \
-        OPENCODE_ARCH=x64-baseline; \
-    fi \
-    && OPENCODE_ARCHIVE="/tmp/opencode-linux-${OPENCODE_ARCH}.tar.gz" \
-    && curl -fsSL --retry 3 -o "$OPENCODE_ARCHIVE" \
-        "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OPENCODE_ARCH}.tar.gz" \
-    && mkdir -p /opt/opencode/.opencode/bin \
-    && tar -xzf "$OPENCODE_ARCHIVE" -C /opt/opencode/.opencode/bin \
-    && rm "$OPENCODE_ARCHIVE" \
     && test -x /opt/opencode/.opencode/bin/opencode \
     && (/opt/opencode/.opencode/bin/opencode --version 2>/dev/null \
         || echo "OpenCode ${OPENCODE_VERSION} installed")

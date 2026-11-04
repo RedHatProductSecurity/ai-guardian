@@ -11,6 +11,27 @@ budget_tokens: 1000
 
 ## Issue #2662 implementation — 2026-11-04
 
+### Gemini and OpenCode generation smoke coverage — 2026-11-04
+
+- Added Gemini CLI to the real-agent smoke runner using a synthetic
+  `GEMINI_API_KEY`, loopback-only `GOOGLE_GEMINI_BASE_URL`, local GenerateContent,
+  streamGenerateContent, and countTokens responses, with usage statistics disabled
+  in the sandbox user's Gemini settings. The mock offers only fixed, harmless
+  `printf` tool calls for the SSRF/config-exfil hook probes.
+- Gemini names its native command tool `run_shell_command`; its adapter now maps
+  that to canonical `Bash`, so shell policy/scanners and immutable CLI protection
+  apply. Added direct unit and complete Gemini hook UX coverage.
+- Release Readiness runs Gemini on the normal image and OpenCode V1 `1.19.0` plus
+  a separate smoke-only V2 `2.0.24` image. V2 is not bundled in either support
+  image and this local-mock run does not claim live-provider qualification.
+- **Validation:** 1,040 related unit and UX tests pass; Ruff, Black (Python 3.10
+  target), error-level Pylint, and package Mypy pass. Current-wheel Podman smoke
+  runs passed all six cases for Gemini, OpenCode V1 `1.19.0`, and OpenCode V2
+  `2.0.24`; no live provider request was made. Release Readiness now executes
+  Gemini and both OpenCode generations.
+- Changes are uncommitted on branch `2662`; no commit or push. Preserved the
+  existing `.wolf/anatomy.md` worktree change.
+
 - Preserved the existing preview-by-default release command work on branch `2662`
   and implemented the real-agent CLI smoke runner. It uses `ai-guardian sandbox
   create`, the current-wheel image, a temporary strict-profile copy with

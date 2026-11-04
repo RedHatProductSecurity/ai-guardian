@@ -262,6 +262,10 @@ than leaving them implicit.
   `.github/workflows/release-readiness.yml`. Use synthetic inputs and a local
   mock only; preserve explicit ToS/credential gates. If the scanner cannot be
   exercised through a supported CLI hook, record why this check is not applicable.
+- [ ] Keep release-readiness runtime coverage explicit about image/version lanes:
+  Gemini CLI runs in the normal support image; OpenCode runs against the bundled
+  V1 image and a separate V2 smoke-only image. The V2 image must not be described
+  as bundled or deployment-qualified without a separate support decision.
 - [ ] Record the tested image digest, CLI versions, provider/model/region,
   gateway version, host OS, and known failures in the issue or pull request.
 
