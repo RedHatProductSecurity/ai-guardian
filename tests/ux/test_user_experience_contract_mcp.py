@@ -666,12 +666,13 @@ class MCPBlockReasonUXTest(TestCase):
         Scenario:
         1. User asks Claude: "Read /tmp/test.txt"
         2. Claude tries Read tool on /tmp/test.txt
-        3. ai-guardian PreToolUse hook blocks it (secret detected in file)
+        3. ai-guardian PreToolUse hook blocks it and stores a generic sensitive finding
         4. Claude sees hook error
 
         Expected AI Behavior (per skill instructions):
         ✅ AI calls get_violations(limit=1) to get actual reason
-        ✅ AI reports: "The file was blocked because a secret was detected"
+        ✅ AI reports the consolidated sensitive-finding category
+        ❌ AI does not infer the secret/PII subtype from privacy-safe history
         ❌ AI does NOT guess: "outside allowed project directories"
         ❌ AI does NOT suggest: "! cat /tmp/test.txt"
 
@@ -728,16 +729,17 @@ class MCPBlockReasonUXTest(TestCase):
 
     def test_violations_provide_actual_block_reason(self):
         """
-        USER EXPERIENCE: get_violations() returns the actual block reason
+        USER EXPERIENCE: sensitive findings use the privacy-safe generic category
 
-        This test verifies that when a secret is detected, get_violations()
-        returns violation_type="secret_detected" so the AI can report the
-        real reason instead of guessing.
+        Sensitive history intentionally does not preserve the scanner subtype,
+        source content, location, or per-finding details. The MCP response must
+        report the consolidated category instead of implying a more specific
+        reason than the stored record supports.
 
         Expected:
-        ✅ Violation type is "secret_detected" (not "directory_blocking")
-        ✅ File path is included for context
-        ✅ AI can use this to report: "blocked because a secret was detected"
+        ✅ Violation type is "sensitive_finding"
+        ✅ Severity remains available
+        ❌ No original subtype, finding ID, file path, or line is exposed
         """
         from unittest.mock import MagicMock, patch
         from ai_guardian.mcp.server import create_server
@@ -747,19 +749,8 @@ class MCPBlockReasonUXTest(TestCase):
             mock_vl.get_recent_violations.return_value = [
                 {
                     "timestamp": "2026-05-13T10:00:00Z",
-                    "violation_type": "secret_detected",
+                    "violation_type": "sensitive_finding",
                     "severity": "critical",
-                    "blocked": {
-                        "file_path": "/tmp/test.txt",
-                        "line_number": 3,
-                    },
-                    "context": {"tool_name": "Read"},
-                    "policy_decision": {
-                        "decision": "block",
-                        "reason": "secret detected",
-                        "source": "secret_scanning",
-                        "agent": "claude_code",
-                    },
                 }
             ]
             mock_vl_cls.return_value = mock_vl
@@ -770,14 +761,66 @@ class MCPBlockReasonUXTest(TestCase):
 
             assert result["count"] == 1
             violation = result["violations"][0]
-            assert (
-                violation["type"] == "secret_detected"
-            ), "Violation type must be 'secret_detected', not guessed from error"
-            assert (
-                violation["file"] == "/tmp/test.txt"
-            ), "File path must be included for context"
-            assert violation["line"] == 3, "Line number must be included when available"
-            assert violation["policy_decision"]["decision"] == "block"
+            assert violation["type"] == "sensitive_finding"
+            assert violation["severity"] == "critical"
+            assert not violation["file"]
+            assert "line" not in violation
+            assert "id" not in violation
+            assert "policy_decision" not in violation
+
+    def test_legacy_sensitive_filters_return_consolidated_history(self):
+        """
+        USER EXPERIENCE: legacy sensitive filters still find consolidated records
+
+        The persisted envelope contains only the generic category and safe
+        metadata. Old filters remain useful for existing callers but cannot
+        identify whether a consolidated record came from a secret or PII scan.
+        """
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+
+        from ai_guardian.mcp.server import create_server
+        from ai_guardian.violations.logger import ViolationLogger
+
+        with TemporaryDirectory() as temporary_directory:
+            history = ViolationLogger(
+                log_path=Path(temporary_directory) / "violations.jsonl",
+                config={"enabled": True, "log_types": []},
+            )
+            with (
+                patch.object(history, "_notify_violation"),
+                patch("ai_guardian.violations.counter.ViolationCounter.increment"),
+            ):
+                history.log_sensitive_finding(
+                    "secret_detected",
+                    severity="critical",
+                    violation_id="private-event-id",
+                )
+
+            with patch(
+                "ai_guardian.violations.logger.ViolationLogger",
+                return_value=history,
+            ):
+                tool = create_server()._tool_manager._tools["get_violations"]
+                results = [
+                    tool.fn(violation_type=legacy_type, limit=1)
+                    for legacy_type in (
+                        "secret_detected",
+                        "image_secret_detected",
+                        "pii_detected",
+                    )
+                ]
+                results.append(tool.fn(limit=1))
+
+        for result in results:
+            assert result["count"] == 1
+            violation = result["violations"][0]
+            assert violation["type"] == "sensitive_finding"
+            assert violation["severity"] == "critical"
+            assert "private-event-id" not in str(violation)
+            assert "id" not in violation
+            assert "line" not in violation
 
     def test_file_content_prompt_injection_reports_scanned_path(self):
         """
@@ -833,12 +876,12 @@ class MCPBlockReasonUXTest(TestCase):
         ==============================
         1. User asks Claude to read /tmp/test.txt
         2. Claude calls Read tool
-        3. ai-guardian hook blocks it (aws-access-token detected)
+        3. ai-guardian records a privacy-safe sensitive finding
         4. Claude sees block error from hook
         5. Claude calls get_violations(limit=1)
-        6. get_violations returns: type=secret_detected, file=/tmp/test.txt
-        7. Claude tells user: "The read was blocked — a secret (aws-access-token)
-           was detected in /tmp/test.txt"
+        6. get_violations returns: type=sensitive_finding
+        7. Claude reports that a sensitive finding was recorded without guessing
+           its subtype or claiming a file location the history does not retain
 
         INCORRECT Flow (before fix):
         ============================

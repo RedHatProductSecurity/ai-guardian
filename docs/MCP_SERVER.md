@@ -206,6 +206,12 @@ also be returned. An MCP startup failure reports `startup_failure` or
 | `get_metrics` | `since_days?` | stats by type/severity | Violation statistics |
 | `doctor` | — | check results with fix hints | Health check |
 
+Use `sensitive_finding` to query the consolidated, privacy-safe sensitive
+category. The legacy filters `secret_detected`, `image_secret_detected`, and
+`pii_detected` remain supported and match consolidated records; a current record
+does not retain which sensitive subtype produced it. The canonical filter also
+includes type-specific sensitive records from older history.
+
 Tool-permission entries can include `input_diagnostics` with fixed validation
 subreasons and schema-recognized argument names/types, never payload values or
 arbitrary key strings. Available `id`, `session_id`, `tool_use_id`, `message_id`,

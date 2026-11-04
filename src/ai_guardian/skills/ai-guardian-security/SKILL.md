@@ -106,6 +106,10 @@ Security config can change at any time (via Console, tray, CLI, or file edit). W
 
 ### Presenting violation details
 
+Sensitive history records are reported as `sensitive_finding` and intentionally
+do not retain whether the finding was a secret, PII, or image-secret finding.
+Report that consolidated category; do not infer a more specific subtype.
+
 When showing violations to the user, always include the file path and line number when the response contains them. This helps the user locate exactly where the issue was detected.
 
 - If the violation has `file` and `line` fields, show them as `file:line` (e.g., `src/config.py:42`)

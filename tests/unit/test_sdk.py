@@ -805,6 +805,40 @@ class TestDirectSessionGetViolations:
             session_id="sess_1",
         )
 
+    def test_sensitive_legacy_filter_returns_consolidated_finding(
+        self, tmp_path, monkeypatch
+    ):
+        from ai_guardian.violations.logger import ViolationLogger
+
+        logger = ViolationLogger(
+            log_path=tmp_path / "violations.jsonl",
+            config={"enabled": True, "log_types": []},
+        )
+        with (
+            patch.object(logger, "_notify_violation"),
+            patch("ai_guardian.violations.counter.ViolationCounter.increment"),
+        ):
+            logger.log_sensitive_finding("secret_detected", severity="high")
+        monkeypatch.setattr(
+            "ai_guardian.violations.logger.ViolationLogger",
+            lambda config=None: logger,
+        )
+
+        with (
+            patch.object(_DirectSession, "_ensure_config"),
+            patch.object(_DirectSession, "_register_project_with_daemon"),
+        ):
+            session = _DirectSession(config={})
+
+        filtered = session.get_violations(violation_type="secret_detected")
+        unfiltered = session.get_violations()
+
+        assert [entry["violation_type"] for entry in filtered] == ["sensitive_finding"]
+        assert [entry["violation_type"] for entry in unfiltered] == [
+            "sensitive_finding"
+        ]
+        assert "id" not in filtered[0]
+
     @patch("ai_guardian.sdk._DirectSession._ensure_config")
     @patch("ai_guardian.violations.logger.ViolationLogger.get_recent_violations")
     def test_empty_violations(self, mock_get_violations, mock_config):

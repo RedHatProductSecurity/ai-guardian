@@ -36,17 +36,15 @@ _LOG_ROTATION_STATES: Dict[str, "_LogRotationState"] = {}
 _ROTATION_BATCH_SIZE = 64
 _ROTATION_INTERVAL_SECONDS = 300.0
 _RECENT_READ_CHUNK_SIZE = 8192
+_SENSITIVE_FINDING_FILTER_ALIASES = frozenset(
+    {"secret_detected", "image_secret_detected", "pii_detected"}
+)
+_SENSITIVE_FINDING_TYPES = _SENSITIVE_FINDING_FILTER_ALIASES | {"sensitive_finding"}
 
 
 def _safe_violation_label(violation_type: str) -> str:
     """Return a fixed persisted category label for a known violation type."""
-    if (
-        violation_type == "secret_detected"
-        or violation_type == "image_secret_detected"
-        or violation_type == "pii_detected"
-    ):
-        return "sensitive_finding"
-    if violation_type == "sensitive_finding":
+    if violation_type in _SENSITIVE_FINDING_TYPES:
         return "sensitive_finding"
     if violation_type == "tool_permission":
         return "tool_permission"
@@ -159,11 +157,7 @@ class ViolationLogger:
         violation_id: Optional[str] = None,
     ) -> None:
         """Persist only the minimal audit envelope for a sensitive finding."""
-        if (
-            violation_type != "secret_detected"
-            and violation_type != "image_secret_detected"
-            and violation_type != "pii_detected"
-        ):
+        if violation_type not in _SENSITIVE_FINDING_FILTER_ALIASES:
             logger.warning("Refusing non-sensitive type in sensitive finding logger")
             return
         self._notify_violation(violation_type, severity, violation_id)
@@ -230,11 +224,7 @@ class ViolationLogger:
             allowlist_context: Safe source metadata for deferred annotation.
             policy_decision: Optional safe, versioned policy decision metadata.
         """
-        if (
-            violation_type == "secret_detected"
-            or violation_type == "image_secret_detected"
-            or violation_type == "pii_detected"
-        ):
+        if violation_type in _SENSITIVE_FINDING_FILTER_ALIASES:
             self.log_sensitive_finding(
                 violation_type=violation_type,
                 severity=severity,
@@ -362,7 +352,10 @@ class ViolationLogger:
 
         Args:
             limit: Maximum number of violations to return
-            violation_type: Optional filter by violation type
+            violation_type: Optional filter by violation type. The legacy sensitive
+                types ``secret_detected``, ``image_secret_detected``, and
+                ``pii_detected`` match consolidated ``sensitive_finding`` records.
+                The canonical filter also matches legacy type-specific records.
             resolved: Optional filter by resolved status (True/False/None for all)
             tool_use_id: Optional filter by context.tool_use_id
             session_id: Optional filter by context.session_id
@@ -862,8 +855,16 @@ class ViolationLogger:
         tool_use_id: Optional[str],
         session_id: Optional[str],
     ) -> bool:
-        if violation_type is not None and entry.get("violation_type") != violation_type:
-            return False
+        if violation_type is not None:
+            stored_type = entry.get("violation_type")
+            if violation_type == "sensitive_finding":
+                if stored_type not in _SENSITIVE_FINDING_TYPES:
+                    return False
+            elif violation_type in _SENSITIVE_FINDING_FILTER_ALIASES:
+                if stored_type not in {violation_type, "sensitive_finding"}:
+                    return False
+            elif stored_type != violation_type:
+                return False
         if resolved is not None and entry.get("resolved", False) != resolved:
             return False
 

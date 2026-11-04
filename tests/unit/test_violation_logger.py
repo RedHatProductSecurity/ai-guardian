@@ -313,7 +313,13 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
         "resolved_action",
     }
     assert logger.get_recent_violations(violation_type="sensitive_finding")
-    assert not logger.get_recent_violations(violation_type=violation_type)
+    for filtered in (
+        logger.get_recent_violations(),
+        logger.get_recent_violations(violation_type="sensitive_finding"),
+        logger.get_recent_violations(violation_type=violation_type),
+    ):
+        assert len(filtered) == 1
+        assert filtered[0]["violation_type"] == "sensitive_finding"
     # Sanitizing persisted data must not alter the caller's in-memory record.
     assert blocked["matched_text"] == sensitive_value
     assert blocked["pattern_hint"] == partial_hint
@@ -321,6 +327,41 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
     assert context["raw_input"] == sensitive_value
     assert suggestion["warning"] == sensitive_value
     assert allowlist_context["surrounding_context"] == sensitive_value
+
+
+@pytest.mark.parametrize(
+    "legacy_type",
+    ["secret_detected", "image_secret_detected", "pii_detected"],
+)
+def test_sensitive_finding_filters_include_legacy_history(tmp_path, legacy_type):
+    log_path = tmp_path / "violations.jsonl"
+    legacy_types = ["secret_detected", "image_secret_detected", "pii_detected"]
+    entries = [
+        {"timestamp": "2026-01-01T00:00:00Z", "violation_type": "sensitive_finding"},
+        *[
+            {"timestamp": f"2026-01-01T00:00:0{index + 1}Z", "violation_type": vtype}
+            for index, vtype in enumerate(legacy_types)
+        ],
+        {"timestamp": "2026-01-01T00:00:04Z", "violation_type": "tool_permission"},
+    ]
+    log_path.write_text(
+        "".join(json.dumps(entry) + "\n" for entry in entries), encoding="utf-8"
+    )
+    logger = _logger(log_path)
+
+    legacy_filtered = logger.get_recent_violations(limit=10, violation_type=legacy_type)
+    consolidated_filtered = logger.get_recent_violations(
+        limit=10, violation_type="sensitive_finding"
+    )
+
+    assert {entry["violation_type"] for entry in legacy_filtered} == {
+        "sensitive_finding",
+        legacy_type,
+    }
+    assert {entry["violation_type"] for entry in consolidated_filtered} == {
+        "sensitive_finding",
+        *legacy_types,
+    }
 
 
 @pytest.mark.parametrize(

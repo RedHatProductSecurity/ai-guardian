@@ -1672,6 +1672,18 @@ Returns a dict:
 }
 ```
 
+### `session.get_violations(*, tool_use_id=None, session_id=None, violation_type=None, limit=50)`
+
+Returns recent hook-triggered violation records as a list. Results are sanitized
+before returning and include `violation_type`, `message`, `tool_name`,
+`tool_use_id`, `session_id`, `timestamp`, and `severity`.
+
+Use `sensitive_finding` to filter the consolidated, privacy-safe sensitive
+category. For compatibility, `secret_detected`, `image_secret_detected`, and
+`pii_detected` remain aliases and match consolidated records; these records do
+not retain the original sensitive subtype. The canonical filter also includes
+type-specific sensitive records from older history.
+
 ### `session.results`
 
 Property that returns all `CheckResult` objects collected during the session.

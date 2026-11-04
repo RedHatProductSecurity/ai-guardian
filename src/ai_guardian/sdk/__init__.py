@@ -182,7 +182,10 @@ class GuardSession:
         Args:
             tool_use_id: Filter by tool_use_id from hook context
             session_id: Filter by session_id from hook context
-            violation_type: Filter by violation type
+            violation_type: Filter by violation type. The legacy sensitive types
+                ``secret_detected``, ``image_secret_detected``, and
+                ``pii_detected`` match consolidated ``sensitive_finding`` records;
+                that privacy-safe category does not retain the original subtype.
             limit: Maximum number of violations to return
 
         Returns:
