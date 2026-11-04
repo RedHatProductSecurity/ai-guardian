@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Podman macOS smoke setup:** Preserve Podman's connection metadata in the
+  runner's isolated environment so sandbox creation uses the configured machine
+  connection rather than a missing temporary socket.
 - **Tray pause target liveness (#2663):** Show sessions and project directories
   for active daemons using hook activity in the last 30 minutes, remove sessions
   immediately on `SessionEnd`, and keep explicitly paused directories available for
