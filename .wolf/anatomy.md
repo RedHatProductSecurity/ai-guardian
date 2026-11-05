@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-10-30T18:14:36.659Z
-> Files: 1295 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1297 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~20012 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21577 tok)
-- `CHANGELOG.md` — Change log (~82229 tok)
+- `CHANGELOG.md` — Change log (~83237 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -27,7 +27,7 @@
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2605 tok)
 - `README.md` — Project documentation (~10885 tok)
-- `RELEASING.md` — Release Management Process (~11174 tok)
+- `RELEASING.md` — Release Management Process (~13171 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
 - `uninstall.ps1` — Declares and (~994 tok)
@@ -157,7 +157,7 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~13932 tok)
+- `release-readiness.yml` — CI: Release Readiness (~14339 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~7340 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -904,12 +904,12 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~16589 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~16884 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
 - `AUDIT_LOGGING.md` — Compliance Audit Logging (~1442 tok)
-- `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4268 tok)
+- `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4392 tok)
 - `CONFIGURATION.md` — Configuration Guide (~7811 tok)
 - `CONSOLE.md` — AI Guardian Console Guide (~1583 tok)
 - `COOKBOOK.md` — Configuration Cookbook (~15549 tok)
@@ -928,7 +928,7 @@
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9506 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
 - `OBSERVABILITY.md` — Observability (~3569 tok)
-- `OPENCODE.md` — OpenCode Support (~4001 tok)
+- `OPENCODE.md` — OpenCode Support (~4141 tok)
 - `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~8431 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
@@ -938,7 +938,7 @@
 - `requirements.txt` — Python dependencies (~59 tok)
 - `Sandbox.md` — Sandbox CLI (~5794 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2669 tok)
-- `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2209 tok)
+- `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2268 tok)
 - `SDK.md` — AI Guardian SDK (~21727 tok)
 - `SECURITY_DESIGN.md` — Security Design (~3877 tok)
 - `SUPPORT.md` — Support bundles and public GitHub Discussions (~8241 tok)
@@ -1036,8 +1036,10 @@
 
 ## scripts/
 
-- `agent_cli_mock_provider.py` — Credential-free local model protocols for the agent CLI hook smoke test. (~6407 tok)
-- `agent_cli_test.py` — Run actual agent CLI hooks in a strict, credential-free sandbox. (~14200 tok)
+- `agent_cli_mock_provider.py` — Credential-free local model protocols for the agent CLI hook smoke test. (~8187 tok)
+- `agent_cli_smoke_firewall.py` — Trusted one-shot nftables setup, only in a smoke sandbox's network namespace. (~390 tok)
+- `agent_cli_smoke_gate.py` — Do not start smoke setup, daemon or agents until trusted firewall setup succeeds. (~556 tok)
+- `agent_cli_test.py` — Run actual agent CLI hooks in a credential-free, strict-derived smoke sandbox. (~21244 tok)
 - `agent-cli-test` (~36 tok)
 - `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~9012 tok)
 - `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2778 tok)
@@ -1076,7 +1078,7 @@
 - `git_workflow.py` — Git workflow helpers for init-project --annotate. (~1960 tok)
 - `help_content.py` — Centralized help content for all AI Guardian scanner pages. (~9568 tok)
 - `hook_context.py` — HookContextManager: save_pretool_context, get_pretool_context, cleanup_session, cleanup (~2346 tok)
-- `hook_processing.py` — URL configuration (~38515 tok)
+- `hook_processing.py` — URL configuration (~39013 tok)
 - `ide_paths.py` — Canonical path resolution for supported IDE and agent integrations. (~3451 tok)
 - `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4408 tok)
 - `logging_utils.py` — Shared logging utilities. (~254 tok)
@@ -1148,12 +1150,12 @@
 - `crush.py` — Charmbracelet Crush hook adapter. (~482 tok)
 - `cursor.py` — Cursor IDE hook adapter. (~3093 tok)
 - `dummy_agent.py` — Dummy Agent hook adapter. (~283 tok)
-- `gemini.py` — Google Gemini CLI hook adapter. (~1481 tok)
+- `gemini.py` — Google Gemini CLI hook adapter. (~1534 tok)
 - `grok.py` — xAI Grok Build hook adapter. (~1581 tok)
 - `junie.py` — Junie (JetBrains) hook adapter. (~480 tok)
 - `kiro.py` — Kiro (AWS) hook adapter. (~1095 tok)
 - `opencode.py` — OpenCode hook adapter. (~656 tok)
-- `pi.py` — Pi hook adapter. (~252 tok)
+- `pi.py` — Pi hook adapter. (~300 tok)
 - `windsurf.py` — Windsurf hook adapter. (~1198 tok)
 
 ## src/ai_guardian/hook_events/
@@ -1294,14 +1296,14 @@
 - `aiderdesk.py` — AiderDesk transcript adapter — Markdown chat history files. (~1428 tok)
 - `base.py` — TranscriptAdapter ABC — polymorphic interface for per-IDE transcript scanning. (~560 tok)
 - `cline.py` — Cline / ZooCode transcript adapter — JSON array task files. (~2062 tok)
-- `common.py` — Shared transcript scanning utilities. (~7444 tok)
+- `common.py` — Shared transcript scanning utilities. (~7467 tok)
 - `copilot_chat.py` — GitHub Copilot Chat (VS Code) transcript adapter — JSONL delta journal files. (~2110 tok)
 - `cursor.py` — Cursor IDE transcript adapter — SQLite state.vscdb database. (~2383 tok)
 - `jsonl.py` — JSONL transcript adapter — Claude Code, Copilot CLI, Codex. (~1522 tok)
 - `kiro.py` — Kiro (AWS) transcript adapter — JSONL session files. (~1435 tok)
 - `openclaw.py` — OpenClaw transcript adapter — JSONL transcript files. (~1825 tok)
 - `opencode.py` — OpenCode transcript adapter — SQLite session database. (~3029 tok)
-- `pi.py` — Pi transcript adapter for JSONL session files. (~1254 tok)
+- `pi.py` — Pi transcript adapter for JSONL session files. (~1446 tok)
 - `windsurf.py` — Windsurf (Devin Desktop) transcript adapter — JSONL step files. (~1104 tok)
 
 ## src/ai_guardian/schemas/
@@ -1340,7 +1342,7 @@
 - `aiderdesk-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~928 tok)
 - `openclaw-plugin.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~470 tok)
 - `opencode-plugin-v1.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~1106 tok)
-- `opencode-plugin-v2.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~2837 tok)
+- `opencode-plugin-v2.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~2972 tok)
 - `pi-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~3203 tok)
 
 ## src/ai_guardian/skills/

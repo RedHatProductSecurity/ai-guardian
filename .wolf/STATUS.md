@@ -11,6 +11,418 @@ budget_tokens: 1000
 
 ## Issue #2662 implementation — 2026-11-04
 
+### Current Gemini / Pi native smoke qualification — 2026-11-05
+
+- **Authorization expanded:** user selected "Fix both (Recommended)" for shared
+  Gemini native-output scanning/fail-closed refusal and Pi lazy-first-transcript
+  lifecycle fixes. Subsequently selected "Include Pi fix (Recommended)" for its
+  exact lowercase native-shell mapping, regressions and full Pi retry. The user
+  then explicitly requested commit/push: **published as `0e87601b` on `origin/2662`**.
+  All 14 source/test/doc files are committed; local OpenWolf records stay excluded.
+- Initial standard-image runs (`e0dbea2f7f`) were Gemini **7/9** and Pi **3/9**.
+  Gemini's `tool_response.llmContent` was not extracted; its AfterTool consumer
+  ignores `updatedToolOutput`. Pi advertises a session path before persisting the
+  first assistant; initial `getsize()` raised FileNotFoundError before reader
+  handling. These are confirmed shared integration defects, not auth/network.
+- Implemented string/structured Gemini extraction preserving real text-part
+  boundaries; unsupported sanitization now returns native `decision: deny`, not
+  best-effort replacement or appended warnings. Pi initializes expected absent
+  first history at byte zero without fabricating a file, scans eventual content,
+  preserves existing baselines and other I/O scan-error handling.
+- Fresh standard fixed-source image `localhost/ai-guardian-agent-cli-smoke:fb10d7b60c`
+  was explicitly reused for both matrices: **Gemini 0.67.0 9/9 PASS; Pi 0.86.0
+  7/9 PASS.** Both clients passed container and authenticated published-host REST
+  plus firewall setup; both retry sandboxes were automatically removed. Gemini
+  sensitive PASS proves native refusal/containment, not sanitized-result delivery.
+- Remaining Pi SSRF/config cases recorded post-tool events and no findings.
+  Focused red regressions confirmed native `bash` was not canonical `Bash`, so
+  shell checks were missed. Added only the exact mapping in `hook_adapters/pi.py`;
+  custom/MCP names remain unchanged. Both real prepared-policy command scanner
+  regressions now deny and log their expected categories; canonical permissions,
+  clean output and sensitive-output replacement regressions also pass. Policy-deny
+  response metadata remains `tool_permission`; specific categories are in records.
+- Latest validation: **1090 related unit/complete UX tests PASS, 2 skipped**;
+  Ruff, Black py310, error-level Pylint, package Mypy and diff checks pass. All
+  **25/25 added executable source lines covered**; focused module coverage is 62%,
+  not package-wide coverage. Coverage data: `/tmp/opencode/2662-gemini-pi-native.coverage`.
+  Manual simplification/privacy review completed; /simplify is unavailable.
+- **Final fresh retry: Gemini 0.67.0 9/9 PASS; Pi 0.86.0 9/9 PASS.** Standard
+  current-source image `localhost/ai-guardian-agent-cli-smoke:b55081b8a9` was built
+  once after the exact Pi mapping fix, with policy prepared before build, then
+  explicitly reused for both matrices. Pi's two pre-tool failures are resolved;
+  clean and both sensitive-output cases also pass. Both clients again pass container
+  and authenticated published-host REST plus IPv4/IPv6 namespace-firewall setup.
+  Both new test sandboxes were automatically removed. No hidden rebuild, image
+  deletion, cache-strategy change, hot patch, real-provider call or weakened check.
+  Build context/image reference: `/tmp/opencode/2662-pi-native-fc9jh10j/image.txt`.
+- **User-requested cleanup completed:** removed the two retained initial failure
+  sandboxes `ag-cli-smoke-gemini-ea80dfb3` and `ag-cli-smoke-pi-6c3fd28e` through
+  the normal container sandbox-delete lifecycle. The engine escalated each stop
+  after its normal grace period, then removed it successfully. A final filtered
+  Podman list shows no remaining `ag-cli-smoke-*` containers. Images/build contexts
+  and unrelated containers are untouched; no host firewall or global engine edit.
+- Fetch confirmed no divergence before commit. Commit/push `0e87601b` updates
+  PR #2670; remote-head verification and 0/0 tracking counts confirm sync. Only
+  pre-existing/local OpenWolf files remain modified. CI for this commit not checked.
+- **User-requested follow-up created:** #2673, "Extend real-agent smoke checks to
+  remaining supported CLIs": Copilot, Grok Build, Antigravity, Kiro, OpenClaw and
+  Crush. Compared the canonical CLI registry, normal-container selector and actual
+  runner/Release Readiness matrix; checked for existing matching open issues.
+  The issue requires capability/consent/provider audits, real native evidence,
+  explicit partial/observation-only limitations and unchanged isolation/assertions.
+  This creates planning scope, not implementation or new runtime qualification.
+- Diagnostics stay aggregate-only. A prior code-search result was withheld during
+  diagnosis, not smoke execution; the latest violation record did not establish
+  its precise cause. User asked to retry after pausing; effective proactive level
+  is paused and the same scoped searches now succeed. Hooks remain active.
+- Preserve IPv4/IPv6 egress blocking, loopback mocks, normal discovery/REST/tray,
+  shared sandbox lifecycle, native trust and all hook/execution/identity/raw-delivery
+  and successful clean-exit assertions. External negative-egress, interactive tray,
+  macOS, Codex hook approval and unmodified-strict Claude output remain separate
+  qualification gaps. Other clients were not requalified in this phase. Local DAF
+  notes and bug/learning records are updated. Next: review current PR/CI and plan
+  #2673 as requested. No remaining Gemini/Pi nine-case failures on tested Linux.
+
+### Current clean-tool continuation / compaction hypothesis — 2026-11-05
+
+- The user's next retry reports **PASS tool_output_secret, tool_output_pii and
+  allowed** after the shared V2 fix. Clean still fails with exit 1, four provider
+  requests, no findings, one prompt/pre/post hook each and one execution/offer.
+  Sensitive PASS confirms the reported containment checks, not zero CLI exits:
+  expected-violation cases intentionally allow nonzero exits. OS/exact V2 patch
+  were not included. JSON-result decoding alone did not resolve this clean failure.
+- Found the smoke OpenCode model advertises only **8192 context tokens**. Published
+  MIT 2.0.24 code estimates the whole request when the mock reports zero token usage;
+  native/MCP descriptions can exceed its compaction ceiling. V2 summary compaction
+  tries a summary and then one nudge; the mock's fixed OK reply fails both templates.
+  Initial title + native tool request + two summaries fits the observed four-request
+  signature, but **the actual runtime error/body was not captured**, so this remains
+  a source-backed hypothesis rather than a confirmed cause of the user's exit 1.
+- Changed only the disposable OpenCode mock model to **128000 context tokens**;
+  output limit remains 1024. Preserve existing plugin/MCP, compaction, update and
+  unrelated provider settings. Do not disable compaction, fabricate usage, accept
+  summary echoes as native evidence, or change normal/global client behavior.
+- Nonzero case diagnostics now classify structured CLI errors to a fixed
+  `compaction_failed` or `unclassified` category without printing their bodies.
+  This is diagnostic only; all existing raw-delivery, identity, exact clean text,
+  hook, execution-witness and clean zero-exit requirements remain unchanged.
+- Added real isolated configuration-snippet/idempotence coverage, fixed-category
+  error/privacy tests, summary-not-native evidence regression and a complete UX
+  contract for the reported four-request failure. Red tests caught the old 8K
+  value and missing diagnostic; **402 related unit/complete UX tests pass**. Ruff,
+  Black (py310), error-level Pylint, package/script Mypy and diff checks pass.
+  Runner/mock coverage remains 79%/78%, combined 79%; manual simplification done.
+- Updated RELEASING/CHANGELOG and local handoff/bug notes. **Published at the
+  user's explicit request** as `6190e42a` on `origin/2662`, including the V2 result
+  correction below. Eleven source/test/doc files committed; pre-existing/local
+  OpenWolf records remain excluded. Fetch showed no remote divergence before
+  commit/push; remote-head verification and 0/0 tracking counts confirm sync.
+  No new containers, images, firewall state, native trust or real providers used.
+- Next: retry the same pinned V2 smoke with the updated runner. Require clean
+  native continuation and exit 0; if it fails, use the fixed category to confirm
+  or reject compaction before further changes. Do not claim the 128K correction
+  runtime-qualified or request private output. Other clients/Mac tray/negative
+  egress/Codex approval and CI qualification remain separate.
+
+### Current OpenCode V2 result-containment correction — 2026-11-05
+
+- After `e1c81262`, the user reports V2 native execution and prompt/pre/post hooks
+  now occur, but clean output is not recognized and both sensitive-output probes
+  reach the mock. All three tool-output cases report CLI exit code 1; raw-delivery
+  counters increase twice for each sensitive probe. Exact reporter patch version
+  is not established. Keep these as failures, not protection qualification.
+- Published MIT `@opencode/plugin`, `schema`, `core` and `ai` 2.0.24 contracts show
+  completed results can carry structured `output`, text/file `content` and
+  metadata together. A synthetic Node probe confirmed the shared plugin replaced
+  only `output`, leaving raw model-visible `content` intact and assigning a shared
+  Claude Bash object to the unrelated native shell output schema.
+- **Scope explicitly expanded by the user:** selected “Fix V2 plugin” after being
+  asked to authorize the shared V2 plugin plus structured-result regressions.
+  This is not approval for the separate Claude adapter gap or other shared runtime,
+  tray, sandbox, firewall, build/cache or trust changes.
+- The plugin now replaces the complete result with valid content-only V2 text,
+  discarding raw output, attachments and metadata. Bash stdout/stderr and native
+  text/content replacements become text, not `[object Object]`. Completed blocked
+  results are cleared before notification/throw. Clean allowed results are unchanged.
+- Separately reproduced a mock clean-evidence false negative for JSON-encoded
+  native output. Decode one JSON text layer only inside a result correlated to an
+  issued native tool ID. Exact clean marker/output, native hooks, execution witness
+  and successful CLI exit remain mandatory; whole-request raw detection is unchanged.
+  This is not yet proven to explain the reporter's clean failure; exit code 1 is
+  still undiagnosed and cannot be accepted as a clean pass.
+- **Validation:** both red regressions failed before the fixes. All **394** related
+  unit tests and both complete affected UX files pass, including executable Node
+  structured-result/block/refusal tests. Runner/mock coverage is 79%/78%, combined
+  79%. Ruff, Black (py310), error-level Pylint, package/scripts Mypy (337 files),
+  and diff checks pass. Manual simplification/privacy review completed; `/simplify`
+  is unavailable. Published SDK types were inspected, not compiled (`tsc` absent).
+- **Published with the continuation correction above:** the user requested push,
+  and all eleven source/test/doc files are in `6190e42a` on `origin/2662`.
+  Local OpenWolf records remain excluded. No containers, images, firewall state
+  or real providers used to publish. New CI has not been checked.
+- Next: retry the pinned V2 nine-case local-mock smoke with the new package and
+  runner. Obtain only aggregate counters/exit status.
+  If clean still exits 1, diagnose without exposing private CLI/provider bodies or
+  weakening assertions. Live V1/V2, negative egress, tray UI and Codex approval
+  qualification remain separate; CI for `e1c81262` has not been checked.
+
+### Current smoke CLI version selection — 2026-11-05
+
+- User asks for separate OpenCode generation names or a version option. Added
+  `--cli-name opencode --cli-version 1.19.0` / `--cli-version 2.0.24`, keeping one
+  CLI identity. Accept exact stable 1.x.y/2.x.y only. Omission retains the existing
+  image default; no host install or normal auto-update/default changes.
+- The runner forwards the pin through the existing OPENCODE_VERSION build arg
+  only for its temporary image. Reject other clients, --image and diagnostics
+  combinations before side effects; --wheel remains compatible. Verify the exact
+  installed version before V1 warm-up/any cases, including rejecting same-core
+  prerelease/build variants. Unknown/mismatched versions cannot qualify a pass.
+- Docker/Podman build command, cache options, prepared policy, firewall/bootstrap,
+  REST, hooks and trust gates remain unchanged. CI keeps its prebuilt images;
+  added a build-free help/conflict check and unit test executing that CI snippet.
+- Validation: all **258 related unit/complete smoke UX tests pass**; runner 79%,
+  mock 78%, combined script coverage 79%. Ruff, Black (py310), error-level Pylint,
+  package/scripts Mypy and diff checks pass. Manual simplification/privacy review
+  completed (/simplify unavailable). No containers/images/firewalls/providers used.
+- **Published at the user's explicit request:** this option and the native-tool
+  routing fix below are committed/pushed as `e1c81262` on `2662` (PR #2670).
+  Fetch confirmed no remote divergence before publication; after push, HEAD and
+  origin/2662 agree. Eight source/test/doc/CI files were committed; pre-existing
+  local OpenWolf bookkeeping stays excluded. CI has not yet been checked.
+- Real OpenCode Linux/macOS retry remains pending. Version selection supersedes
+  the manual retained-context/rebuild workaround previously suggested. No image,
+  container, firewall or trust change was made to publish this commit.
+
+### Current OpenCode native-tool routing correction — 2026-11-05
+
+- User reports missing pre-tool events in all five tool cases on Linux, then
+  confirms the same on macOS; they identify the CLI as OpenCode (version not
+  supplied). A later log confirms the V1 path and a completed ~75-second one-time
+  warm-up, not another failure; exact CLI version remains unspecified. The user
+  also asks how to test V2. SSRF/config-exfil findings occur, but only prompt hooks and a tool
+  offer are recorded; clean/sensitive probes have no execution evidence. These
+  must remain failures, not an expected Linux condition or a qualified pass.
+- Found a concrete smoke-mock routing defect matching this signature: the mock
+  selected the first schema with command/cmd/input, including the advisory MCP
+  command checker. A synthetic catalog with that checker before native bash
+  reproduced selection of the checker. The checker can log SSRF/config findings
+  without executing the intended shell probe. This is not evidence of broken
+  native hooks or an OS/network/config-policy issue.
+- Fixed only the mock selector: require an advertised, exact supported native
+  shell name, still with a usable command schema. Cover OpenCode bash/shell,
+  Claude Bash, Codex shell/exec_command/shell_command and Gemini run_shell_command.
+  MCP/custom tools cannot count as native offers, and advisory-only preflights do
+  not consume the later real offer. Unknown/missing native tools fail closed.
+- Added cross-protocol/all-five-case regressions and complete affected smoke UX
+  contracts. Findings without pre-tool evidence still fail. All existing event,
+  execution-witness, raw-delivery and privacy assertions remain unchanged. No
+  shared hook/adapter, prepared config, image recipe, firewall or trust change.
+- **Validation:** red regression selected the advisory checker before the fix;
+  all 222 related unit/complete smoke UX tests pass afterward. Focused script
+  coverage: runner 77%, mock 78%, combined 78%. Full Ruff/Black (py310), error-level
+  Pylint, package/script Mypy and diff checks pass. Manual simplification review
+  completed (/simplify unavailable); no containers, images or real providers used.
+- **Published with version selection above:** the initially local five-file
+  routing correction is included in `e1c81262`; OpenWolf work stays local. The
+  actual OpenCode Linux/macOS outcome still needs a retry; do not claim live
+  qualification from the synthetic catalog regression.
+  The previously reported Mac/Claude prepared-config success remains separate.
+- Next: check CI and obtain aggregate OpenCode results without copying private
+  request bodies or relaxing policy/hook evidence.
+  The initial retained-context/rebuild workaround for selecting V2 is superseded
+  by the new --cli-version option above. No such build was run locally.
+
+### Current prepared smoke configuration — 2026-11-05
+
+- The user proposed adapting the smoke policy before runtime (preferably at build
+  time) or preparing a config directory for `sandbox create --config-dir`, to avoid
+  live/read-only config edits. This supersedes the earlier unchanged-strict smoke
+  requirement, not the smoke-only implementation boundary. No shared adapter fix
+  or bundled-profile change was authorized or made.
+- Verified the normal config-dir path stages a source read-only **beside** the
+  active config; the original entrypoint copies it to a writable sandbox-owned
+  file before daemon startup. No extra image layer/build strategy is needed.
+  The runner now prepares `smoke-config/ai-guardian.json` before any build/create.
+  Docker passes `--config-dir`; Podman's gated smoke creation uses the same staged
+  host-config input contract without touching normal creation or firewall logic.
+- The strict-derived disposable config requests secret/PII output sanitization,
+  retains strict prompt/pre-tool denial, notification suppression and hook-event
+  telemetry. Logs/help/docs explicitly distinguish it from unmodified @strict.
+  Raw-delivery checks, all nine cases, native trust and ToS gates are unchanged.
+  The unmodified strict Claude post-tool containment gap below remains unresolved;
+  a redaction-enabled smoke pass must not be claimed as fixing/qualifying it.
+- **Validation:** 178 related unit/complete smoke UX tests pass. Real handler tests
+  using only fake config/offline fixtures request output replacement for both
+  synthetic probes and retain sensitive-prompt/file-read denial. Tests cover config
+  preparation before builds/creation, supplied images and staging away from the
+  active path. Focused coverage: runner/provider 77%, combined smoke scripts 78%.
+  Full Ruff, Black (py310), error-level Pylint, package/script Mypy and diff checks
+  pass. Manual simplification/privacy review performed; /simplify is unavailable.
+- **Published:** the user explicitly requested push; the seven source/test/doc/
+  CI-comment files are committed/pushed as `54c3b5d0` on `2662`. Fetch confirmed
+  no remote divergence first. Pre-existing OpenWolf work stays local/excluded.
+  CI for this commit has not been checked. No container, image or firewall was
+  changed or started locally. The user's subsequent Mac/Claude retry reports
+  **all nine cases PASS**, including both sensitive-output probes, plus internal,
+  published and authenticated host REST checks. This qualifies the reported run
+  with the prepared smoke config, not unmodified @strict post-tool blocking.
+  Tray UI, negative egress qualification and Codex hook approval remain separate.
+- Next: check new CI and qualify remaining clients/platforms with approved hooks;
+  retain failures rather than masking client/schema limits. No further source
+  change was needed after the user's successful retry.
+
+### Current Claude post-tool containment finding — 2026-11-05
+
+- After published reader fix `4c376f52`, the user's reported run passes internal
+  health, published health and authenticated host stats. Firewall bootstrap and
+  daemon setup complete. Seven cases pass (three prompt probes, two pre-tool
+  probes, clean-tool execution and allowed). The two sensitive-output cases fail:
+  real execution and pre/post/prompt events occur, a sensitive finding is logged,
+  but the mock receives original synthetic output. Preserve these failures.
+- Confirmed a real Claude adapter response gap with an aggregate-only local
+  formatter probe: both secret/PII PostToolUse block responses return exit 0 and
+  `decision: block` **without `updatedToolOutput`**. In
+  `src/ai_guardian/hook_adapters/base_agent.py`, `_block_response` only adds feedback;
+  the output replacement branch is reached only for allowed modified output.
+- Current official Claude hook docs explicitly say PostToolUse `decision: block`
+  adds feedback next to the original result; it does not withhold output. A
+  schema-valid `updatedToolOutput` is needed. Bash's documented shape includes
+  stdout/stderr/interrupted/isImage. Source:
+  https://code.claude.com/docs/en/hooks#posttooluse-decision-control
+  Do not blame this strict-branch failure on blanket upstream rewrite inability.
+  `docs/AGENT_SUPPORT.md` has misleading old guidance suggesting block mode can
+  prevent exposure after execution; review it with the eventual runtime fix.
+- **No runtime/source change was made for this finding.** The user previously
+  restricted this remedy to smoke-only code, so changing the shared Claude adapter
+  requires separate approval. Proposed next step: strict-mode output withholding
+  via the correctly shaped Claude response, preserving block policy and failed
+  provider-boundary assertions—not switching on warn/redaction or skipping cases.
+  Review shared adapter inheritance and affected unit/complete UX contracts.
+  The user's later smoke-config approach is implemented above instead; this
+  runtime adapter gap has not been repaired or qualified by that policy change.
+- No real credentials, model calls, containers or firewall state were accessed.
+  Host REST succeeds in the reported run; tray UI and negative egress qualification
+  are not established by this log. Overall Claude containment remains unqualified.
+
+### Current REST diagnostic reader correction — 2026-11-05
+
+- User's classic-image/Claude smoke build completed firewall installation and
+  daemon readiness, then failed `could not read private sandbox diagnostics`.
+  They reiterated the intended design: classic container image, add the smoke-only
+  egress firewall, run the tests—not another image/network redesign.
+- Found a concrete smoke-only interpreter bug: the reader imports `ai_guardian`
+  using system `python3`, but the classic Dockerfile installs the wheel only in
+  `/opt/uv-tools/ai-guardian`. Readiness uses the working `ai-guardian` executable.
+  Changed only this reader to `/opt/uv-tools/ai-guardian/bin/python3`; no image,
+  entrypoint, bridge routing, shared lifecycle or firewall behavior was changed.
+- A new isolated subprocess regression executes the real reader with fake IPC/HTTP
+  and private temporary state. It reproduced the exact generic failure first and
+  passes with the tool interpreter. No real daemon token is read or printed.
+- **Validation:** 170 related unit/complete smoke UX tests pass; focused script
+  coverage remains 77%. Full Ruff, Black (py310), error-level Pylint, package/script
+  Mypy and diff checks pass. No containers/images/firewalls were changed or started.
+  The user explicitly requested push; the four source/test/doc files are now
+  **committed/pushed as `4c376f52` on `2662`**. Pre-existing OpenWolf bookkeeping
+  remains local/excluded. CI for this commit has not been checked. Actual Mac
+  A subsequent user retry passes internal/published/authenticated REST checks;
+  the next failure is Claude output containment, documented above. Tray UI and
+  negative egress checks still require separate evidence.
+- Next: check new CI and resolve the separately scoped Claude adapter finding
+  without relaxing isolation or copying private logs.
+
+### Current hook-stage evidence extension — 2026-11-05
+
+- The user accepted adding clean-tool execution and sensitive tool-output coverage,
+  then explicitly requested publication. Committed/pushed as **`b400ba8a` on `2662`**
+  in the smoke runner/mock, related
+  unit/complete UX tests, release-readiness comments and docs. The matrix now has
+  nine cases, adding `clean_tool`, `tool_output_secret`, and `tool_output_pii`.
+- Derived smoke profiles retain strict security policy, suppress notifications,
+  and enable existing latency telemetry for normalized hook-event counters.
+  Prompt cases require prompt events; pre-tool probes require native offers and
+  pre-tool events without post-tool events. Output cases require pre/post events
+  and a value-free execution witness published only after output is flushed.
+  The clean case also needs a correlated native tool result received by the mock.
+- Sensitive probes use scanner-verified public synthetic values generated only
+  inside the tool; a finding alone cannot pass. The mock inspects all request
+  bodies, including token-count preflights, and exports only counters. Any raw
+  delivery fails; a prior failure cannot be baselined away. Strict blocks output;
+  this does **not** qualify warn-mode redaction. Native trust is never changed.
+- **Validation:** all 169 related smoke unit/complete UX tests pass; focused
+  script coverage is 77%. Full Ruff, Black (py310), error-level Pylint and
+  package/script Mypy pass. Manual simplification/privacy review completed
+  (`/simplify` is unavailable). No containers, images or firewall state were changed.
+  New real-CLI/Linux/macOS runtime qualification remains pending; do not claim
+  that any client has passed the expanded matrix yet.
+- Published Windows correction `436bc54e` is now confirmed green: Tests run
+  `42021950052` passed all eight OS/Python matrix jobs. All companion workflows
+  on that commit passed too. This CI result does not cover the new extension.
+  The ten feature/test/doc files were published; pre-existing OpenWolf bookkeeping
+  changes remain local and were excluded. CI for `b400ba8a` has not been checked.
+- Next: check new CI, then qualify the nine cases with legitimately approved
+  native hooks. Mac REST/tray qualification and the
+  separate Codex hook-approval prerequisite remain unresolved.
+
+### Current smoke-only firewall and CI follow-up — 2026-11-05
+
+- The user explicitly approved **nftables** (GPL-2.0-only external executable) in
+  the generated temporary Podman smoke image and a short-lived `NET_ADMIN`
+  namespace helper. This supersedes the earlier design-only/approval-pending
+  notes below. Keep the remedy smoke-only; do not change shared runtime behavior.
+- Implemented normal-bridge Podman creation, an atomic IPv4/IPv6 egress policy,
+  and a startup gate before the original entrypoint. Loopback and replies to
+  inbound connections are allowed; new non-loopback egress is dropped. The agent
+  container is non-root with **all capabilities dropped** and no-new-privileges,
+  including later execs. Only the read-only, one-shot helper gets NET_ADMIN and
+  joins the selected sandbox network namespace. No host mounts or host PID use.
+- Added `scripts/agent_cli_smoke_firewall.py`, `agent_cli_smoke_gate.py`, runner
+  integration, related unit/UX contracts, and RELEASING/CHANGELOG documentation.
+  The normal container sources are unchanged. Docker retains its internal
+  network. Supplied Podman images without the bootstrap fail before creation,
+  without hidden rebuilds; the runner explicitly selects the gate entrypoint.
+  Helper failure/timeout never releases setup and stops even a kept sandbox.
+  Success with `--keep` retains the firewall. Helper cleanup uses only its recorded
+  container ID. Readiness is atomically published after its complete write.
+- Completed private internal/host REST diagnostics and read-only retained-sandbox
+  `--diagnose-sandbox`. Output contains fixed categories, never auth values,
+  response bodies or agent output; stats probes allow bounded larger snapshots.
+- Inspected CI on published `8140dd53`: the Tests workflow `41956962417` failed
+  in eight matrix jobs. Sampled Linux and Windows logs both show the same **21**
+  `test_sandbox_tray.py` failures. Tests still assumed native callbacks fetched
+  remote stats. Updated only fixtures/expectations to seed worker snapshots and
+  explicitly exercise asynchronous worker refreshes; no tray runtime was edited.
+  All 194 tests in that unit file pass. Other latest workflows were successful.
+- **Validation:** 375 directly related unit/complete UX tests pass. Smoke-only
+  coverage run: 99 tests; runner 73%, firewall helper 93%, gate 92% (74% combined).
+  Full Ruff, Black (py310), error-level Pylint, package/script Mypy and diff checks
+  pass. `/simplify` is unavailable; manually reviewed bootstrap/order/privacy.
+- **Pending:** the new rootless-Podman helper and Mac REST/tray behavior have not
+  been runtime-qualified. No containers, images, routes, capabilities or firewall
+  state were changed during this implementation/CI follow-up. Do not call this a
+  proven Mac fix. The separate older Release Readiness failure `41951306169`
+  predates the published Codex profile fix; legitimate native hook approval still
+  blocks Codex protection qualification. No trust state was changed.
+- The user explicitly authorized **push**. Committed the nine smoke/CI-test/doc
+  files as `9f93dc9e` and pushed `2662` to `origin/2662`; fetch confirmed no new
+  remote commits first. Pre-existing OpenWolf changes, including the
+  hook-maintained anatomy edit, remain local and were excluded from the commit.
+  Tests run `42016467216` passed all five Linux jobs but failed all three Windows
+  jobs on the same new test: raw marker bytes are CRLF on Windows, not LF.
+  Reproduced that failure locally with simulated Windows text writes. The test now
+  reads text like the actual gate, retaining the atomic-publication assertion and
+  native Windows coverage. All 100 directly related smoke unit/UX tests and full
+  linters pass. No container/firewall runtime code was changed for this correction.
+  Lint, smoke, integration, scenarios and wheel checks on `9f93dc9e` passed.
+  The test-only Windows correction is committed/pushed as `436bc54e`; new Tests
+   run `42021950052` and all companion workflows subsequently passed, including
+   all three native Windows jobs (confirmed 2026-11-05).
+  The user asked about hook-stage coverage: prompts and intended pre-tool block
+  probes are present, but the runner has no explicit successful-tool/PostToolUse
+  redaction case or event-specific assertions. The clean case avoids tools. This
+   was the baseline coverage finding. The user subsequently accepted the extension
+   documented above. Linux/macOS Podman runtime qualification and Codex native
+   approval still need separate follow-up.
+
 ### Gemini and OpenCode generation smoke coverage — 2026-11-04
 
 - Added Gemini CLI to the real-agent smoke runner using a synthetic
@@ -176,7 +588,7 @@ budget_tokens: 1000
   diagnostics to existing branch `2662`. Keep the pre-existing
   `.wolf/anatomy.md` edit out of the commit.
 - Published the tray fix and aggregate smoke diagnostics as `ea2790d6` on `2662`;
-  Release Readiness run `41951306169` is in progress. Its container smoke job
+  Release Readiness run `41951306169` completed with failure. Its container smoke job
   `126995637199` failed: all six Codex invocations returned exit code 1 with zero
   provider requests and zero new violations. This is earlier than the prior CI
   failure and indicates failure before observable hook/provider activity.
@@ -186,8 +598,11 @@ budget_tokens: 1000
   native profiles use `smoke.config.toml` with top-level settings. Local code now
   writes the model/provider overlay there, preserving base MCP and hooks byte for
   byte and remaining idempotent. The updated regression failed before the fix;
-  all 45 runner tests, Ruff, Black, error-level Pylint, script Mypy, and whitespace
-  checks now pass. This code is not committed/pushed yet.
+  all 50 runner tests, Ruff, Black, error-level Pylint, script Mypy, and whitespace
+  checks now pass. The profile fix and live build-output change are published as
+  `8140dd53` on `2662`, following the user's explicit push request. Remote branch
+  verification and `git push origin 2662` confirm it is synchronized. The commit
+  appeared during validation; no existing work was reverted or overwritten.
 - A full real-Codex smoke rerun after the profile fix passes the clean case, but
   all five protection cases still fail with no recorded violations. Native
   `hooks/list` via Codex app-server confirms five loaded hooks, zero load errors,
@@ -204,23 +619,64 @@ budget_tokens: 1000
   temporary smoke image** and was restarted; no Mac smoke/tray runtime result is
   available yet. The image build timeout is 900 seconds, independent of the
   default 180-second runtime-operation timeout. Builds use the full support-image
-  recipe, plus Claude installation only after explicit ToS opt-in. Captured build
-  output does not identify the currently executing step in live progress. No
-  image deletion, build/cache strategy, or networking change is authorized here.
+  recipe, plus Claude installation only after explicit ToS opt-in. At the user's
+  request, builds now inherit normal live Docker/Podman stdout/stderr; CLI output
+  remains captured. Tests cover both engines, successful/failed build output,
+  timeout/environment preservation, and captured-output defaults. Build commands,
+  cache strategy, image contents, and runtime networking are unchanged.
 - The restarted Mac build subsequently exceeded 450 seconds. The user also
   reports slow container creation from the tray, apparently around image fetch or
   startup. This affects two paths using the same Podman backend; VM resource
   contention, storage operations, and machine health are possibilities, not
   established causes. Image fetch completion and container startup are unconfirmed.
-  Build-step progress reporting was inspected/planned but has not been implemented;
-  pause that work while checking the shared backend.
+  The user subsequently confirmed that normal containers work on the Mac while
+  smoke still does not. Do not assume a generally broken Podman machine; the
+  smoke-specific failure and exact failing build step remain unconfirmed. The
+  published live-output change is diagnostic visibility, not a proven Mac fix.
 - The user is recreating the Mac Podman machine themselves; the agent did not run
   any Mac machine or image changes. The first subsequent build has a cold cache;
   Mac smoke/tray verification remains pending. Do not claim qualification.
-- **Next:** obtain approval for a supported native hook policy confined to
-  disposable Codex smoke containers; do not skip native trust verification to
-  make CI green. Then validate all six cases before publishing the local profile
-  fix. Await the Mac smoke/tray result separately; no copied logs by default.
+- The Mac retry now gets past the earlier problem (user: "it worked now"), but
+  the tray status is still wrong/unavailable. The user first described stopped,
+  selected "Another container" when asked which entry, then clarified REST error
+  during the smoke run and disconnected after keeping the container with
+  `--keep`. They suspect the special network. Do not equate these messages with a
+  stopped daemon or assume which other container is affected without evidence.
+- Source inspection confirms `_wait_for_sandbox_ready` only runs `daemon status`
+  through container exec; neither this nor the smoke cases verifies published
+  REST access from the Mac host. `--keep` retains the same route-less network.
+  The missing-default-route/VM forwarding return path is a plausible hypothesis,
+  not a confirmed root cause. Authentication, listener health and the host port
+  still need distinguishing. No networking, firewall, image, or container
+  operations have been performed during this investigation.
+- Local **unfinished/unpublished** diagnostic changes now add an internal REST
+  health/auth-token snapshot (captured privately), fixed-category host health and
+  authenticated stats probes, a pre-case REST gate, and read-only
+  `--diagnose-sandbox NAME` for retained smoke sandboxes. Twelve new regressions
+  were shown failing first; all 62 runner unit tests, Ruff and script Mypy pass.
+  Formatting, deeper probe/error/privacy tests, affected UX coverage, docs,
+  simplification and final validation remain unfinished. Do not ship this WIP as
+  a Mac networking fix. No raw credentials or agent output were logged.
+- The user suggests keeping normal Podman routing and using an in-container
+  egress firewall instead. This is a valid architecture to evaluate, not yet
+  authorization to alter host firewall, image dependencies, capabilities or
+  networking. Allow loopback/local mocks and established replies to inbound REST;
+  deny new non-loopback IPv4/IPv6 egress. The agent must not retain NET_ADMIN or a
+  means to remove policy. A separate trusted setup helper sharing the target
+  namespace may be safer than granting the agent container that capability,
+  especially because later engine execs inherit the container capability spec.
+- **Next:** discuss/test the firewall design's rootless-Podman feasibility and
+  fail-closed bootstrap before further routing changes. Diagnostic work is paused
+  for that decision. Do not build images/change cache strategy or privilege
+  settings without approval. Request only aggregate Mac probe outcomes, not
+  copied logs. Separately obtain approval for a supported native Codex hook
+  policy, then validate all six cases; CI and Mac qualification remain unresolved.
+- **Explicit scope clarification:** the next remedy must be smoke-only: runner,
+  smoke-specific helper/generated temporary image, and related tests/docs. Do not
+  change shared tray/discovery, normal sandbox creation, daemon runtime, host
+  firewall or global Podman settings to fix this case. Existing published tray
+  responsiveness work is not implicitly authorized for reversion. Propose any
+  temporary-image dependency or privilege requirements before implementing them.
 
 ## Issue #2663 session initialization — 2026-11-03
 
