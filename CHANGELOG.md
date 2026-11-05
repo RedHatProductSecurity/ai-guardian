@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Gemini native output containment:** Scan `AfterTool`'s model-visible
+  `llmContent`, preserving text-part boundaries. Refuse results requiring
+  sanitization through Gemini's native deny decision instead of returning an
+  unsupported replacement field that leaves raw output visible.
+- **Pi first-session transcript:** Handle the expected not-yet-persisted first
+  transcript without blocking clean prompts. Start at byte zero so the first
+  persisted content is scanned; other initial I/O failures retain scan-error policy.
+- **Pi native shell checks:** Normalize the exact native `bash` tool to canonical
+  `Bash` so shell permissions, SSRF and configuration-exfiltration checks run before
+  execution. Custom and MCP tool names remain unchanged.
 - **OpenCode smoke continuation budget:** Give only the disposable mock model a
   128K context window instead of 8K, leaving room for native/MCP tools and their
   result continuation without disabling compaction. Add fixed-category CLI error

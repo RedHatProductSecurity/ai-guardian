@@ -1110,6 +1110,40 @@ def extract_tool_result(hook_data):
                 return output, tool_name
 
             if isinstance(tool_response, dict):
+                # Gemini AfterTool carries the model-visible result in llmContent.
+                # Scan every structured part, not its separate display/metadata or
+                # a conventional sibling field that could hide native content.
+                if "llmContent" in tool_response:
+
+                    def _gemini_content_text(content):
+                        if isinstance(content, str):
+                            return content
+                        if isinstance(content, list):
+                            return "\n".join(
+                                _gemini_content_text(part) for part in content
+                            )
+                        if isinstance(content, dict) and isinstance(
+                            content.get("text"), str
+                        ):
+                            # Preserve real newlines/boundaries for PII detection;
+                            # JSON-escaped text can conceal otherwise valid matches.
+                            rest = {
+                                key: value
+                                for key, value in content.items()
+                                if key != "text"
+                            }
+                            return content["text"] + (
+                                "\n" + json.dumps(rest, ensure_ascii=False)
+                                if rest
+                                else ""
+                            )
+                        return (
+                            json.dumps(content, ensure_ascii=False)
+                            if content is not None
+                            else ""
+                        )
+
+                    return _gemini_content_text(tool_response["llmContent"]), tool_name
 
                 # Try common output field names
                 output = (

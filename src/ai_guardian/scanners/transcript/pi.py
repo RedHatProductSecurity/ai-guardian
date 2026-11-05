@@ -81,6 +81,15 @@ def _extract_text_from_pi_entry(entry: dict) -> str:
     return ""
 
 
+def _initial_pi_transcript_position(transcript_path: str) -> int:
+    """Pi advertises its session path before persisting its first assistant turn."""
+    try:
+        return os.path.getsize(transcript_path)
+    except FileNotFoundError:
+        logger.debug("Pi transcript not persisted yet; starting at byte zero")
+        return 0
+
+
 def scan_pi_transcript_incremental(
     transcript_path: str,
     secret_config: Optional[Dict] = None,
@@ -98,6 +107,10 @@ def scan_pi_transcript_incremental(
         pii_config=pii_config,
         hook_context=hook_context,
         allowed_findings=allowed_findings,
+        # Remember zero for the expected lazy first write, so its eventual content
+        # is scanned rather than skipped as an already-existing initial baseline.
+        # Permission and other unexpected I/O failures still reach scan-error policy.
+        init_position_fn=lambda: _initial_pi_transcript_position(transcript_path),
     )
 
 

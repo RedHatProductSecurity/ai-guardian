@@ -395,6 +395,7 @@ def _scan_jsonl_incremental(
     pii_config: Optional[Dict] = None,
     hook_context: Optional[Dict] = None,
     allowed_findings: Optional[set] = None,
+    init_position_fn: Optional[Callable[[], int]] = None,
 ) -> list:
     """Orchestrate incremental JSONL transcript scanning.
 
@@ -406,7 +407,7 @@ def _scan_jsonl_incremental(
         reader_fn=lambda last_pos: _read_jsonl_incremental(
             transcript_path, last_pos, extract_fn, label, strip_bom
         ),
-        init_position_fn=lambda: os.path.getsize(transcript_path),
+        init_position_fn=init_position_fn or (lambda: os.path.getsize(transcript_path)),
         label=label,
     )
 
