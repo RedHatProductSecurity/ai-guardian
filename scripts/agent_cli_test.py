@@ -96,6 +96,24 @@ CASES = (
         True,
     ),
     SmokeCase(
+        "clean_tool",
+        "AGENT_CLI_SMOKE_CASE: clean_tool\nRun the local diagnostic requested by the test provider.",
+        None,
+        True,
+    ),
+    SmokeCase(
+        "tool_output_secret",
+        "AGENT_CLI_SMOKE_CASE: tool_output_secret\nRun the local diagnostic requested by the test provider.",
+        "sensitive_finding",
+        True,
+    ),
+    SmokeCase(
+        "tool_output_pii",
+        "AGENT_CLI_SMOKE_CASE: tool_output_pii\nRun the local diagnostic requested by the test provider.",
+        "sensitive_finding",
+        True,
+    ),
+    SmokeCase(
         "allowed",
         "AGENT_CLI_SMOKE_CASE: allowed\n"
         "Please reply exactly with the local smoke response and do not use tools.",
@@ -103,6 +121,7 @@ CASES = (
         True,
     ),
 )
+OUTPUT_CASES = frozenset({"clean_tool", "tool_output_secret", "tool_output_pii"})
 
 
 _CONFIGURE_AGENT = r"""
@@ -174,19 +193,22 @@ elif cli == 'claude':
     allowed=permissions.setdefault('allow', [])
     if not isinstance(allowed, list): allowed=[]; permissions['allow']=allowed
     if 'Bash(printf *)' not in allowed: allowed.append('Bash(printf *)')
+    for case in ('clean_tool','tool_output_secret','tool_output_pii'):
+        probe=f'Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case {case})'
+        if probe not in allowed: allowed.append(probe)
     path.write_text(json.dumps(cfg), encoding='utf-8')
 else: raise SystemExit('unsupported client')
 """
 
-_READ_VIOLATIONS = r"""
+_READ_LOG_COUNTS = r"""
 import collections,json,sys
 from pathlib import Path
-c=collections.Counter(); p=Path(sys.argv[1])
+c=collections.Counter(); p=Path(sys.argv[1]); field=sys.argv[2] if len(sys.argv)>2 else 'violation_type'
 if p.is_file():
   for line in p.read_text(encoding='utf-8').splitlines():
     try: item=json.loads(line)
     except json.JSONDecodeError: continue
-    kind=item.get('violation_type')
+    kind=item.get(field)
     if isinstance(kind,str): c[kind]+=1
 print(json.dumps(dict(c),sort_keys=True))
 """
@@ -195,6 +217,23 @@ _READ_STATS = r"""
 import json,sys,urllib.request
 with urllib.request.urlopen(sys.argv[1],timeout=2) as r: p=json.loads(r.read())
 print(json.dumps(p.get('requests',{}),sort_keys=True))
+"""
+
+_READ_TOOL_EVIDENCE = r"""
+import json,sys,urllib.request
+from pathlib import Path
+case=sys.argv[2]
+if case not in ('ssrf','config_exfil','clean_tool','tool_output_secret','tool_output_pii'):
+    raise SystemExit(1)
+opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+with opener.open(sys.argv[1],timeout=2) as r: stats=json.loads(r.read())
+fields=('tool_offers','clean_tool_results','raw_tool_output_requests')
+out={key:stats[key].get(case,0) for key in fields}
+# Process-wide total: a prior delivery failure must never become a new baseline.
+out['raw_tool_output_requests']=sum(stats['raw_tool_output_requests'].values())
+path=Path('/sandbox/repo/.agent-cli-smoke-results')/(case+'.executed')
+out['executed']=int(path.is_file() and path.read_text(encoding='ascii') == 'executed\n')
+print(json.dumps(out,sort_keys=True))
 """
 
 _READ_OPENCODE_HEALTH = r"""
@@ -648,9 +687,12 @@ def build_current_image(
 
 
 def write_strict_smoke_profile(path: Path) -> None:
-    """Use strict settings while suppressing desktop notifications in the sandbox."""
+    """Preserve strict policy; mute notifications and enable hook-stage evidence."""
     profile = json.loads(STRICT_PROFILE.read_text(encoding="utf-8"))
     profile.setdefault("violation_notifications", {})["enabled"] = False
+    # Existing opt-in telemetry supplies normalized hook-event counts only; no
+    # wrapper hook or change to client trust/security policy is needed.
+    profile.setdefault("latency_tracking", {})["enabled"] = True
     path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
 
 
@@ -1005,7 +1047,7 @@ def _violation_counts(
     result = _exec(
         engine,
         name,
-        ["python3", "-c", _READ_VIOLATIONS, f"{STATE_DIR}/violations.jsonl"],
+        ["python3", "-c", _READ_LOG_COUNTS, f"{STATE_DIR}/violations.jsonl"],
         timeout,
     )
     if result.returncode != 0:
@@ -1022,6 +1064,64 @@ def _violation_counts(
     return {
         str(key): int(value) for key, value in values.items() if isinstance(value, int)
     }
+
+
+def _hook_counts(
+    engine: str, name: str, timeout: int, diagnostics: Optional[List[str]] = None
+) -> Optional[Dict[str, int]]:
+    result = _exec(
+        engine,
+        name,
+        ["python3", "-c", _READ_LOG_COUNTS, f"{STATE_DIR}/latency.jsonl", "hook_event"],
+        timeout,
+    )
+    try:
+        values = json.loads(result.stdout) if result.returncode == 0 else None
+    except (ValueError, TypeError):
+        values = None
+    if not isinstance(values, dict):
+        if diagnostics is not None:
+            diagnostics.append("hook-event counter reader failed")
+        return None
+    return {
+        key: value
+        for key, value in values.items()
+        if key in ("prompt", "pretooluse", "posttooluse")
+        and type(value) is int
+        and value >= 0
+    }
+
+
+def _tool_evidence(
+    engine: str,
+    name: str,
+    case: str,
+    timeout: int,
+    diagnostics: Optional[List[str]] = None,
+) -> Optional[Dict[str, int]]:
+    url = f"http://127.0.0.1:{MOCK_PORT}/__ai_guardian_smoke/stats"
+    result = _exec(
+        engine, name, ["python3", "-c", _READ_TOOL_EVIDENCE, url, case], timeout
+    )
+    fields = {
+        "executed",
+        "tool_offers",
+        "clean_tool_results",
+        "raw_tool_output_requests",
+    }
+    try:
+        values = json.loads(result.stdout) if result.returncode == 0 else None
+    except (ValueError, TypeError):
+        values = None
+    if (
+        not isinstance(values, dict)
+        or set(values) != fields
+        or not all(type(value) is int and value >= 0 for value in values.values())
+    ):
+        if diagnostics is not None:
+            diagnostics.append("tool-evidence counter reader failed")
+        return None
+    return values
 
 
 def _start_mock(engine: str, name: str, timeout: int) -> bool:
@@ -1326,7 +1426,19 @@ def _run_case(
     diagnostics: List[str] = []
     old_violations = _violation_counts(engine, name, timeout, diagnostics)
     old_requests = _provider_stats(engine, name, timeout, diagnostics)
-    if old_violations is None or old_requests is None:
+    old_hooks = _hook_counts(engine, name, timeout, diagnostics)
+    is_tool_case = case.name in OUTPUT_CASES or case.name in ("ssrf", "config_exfil")
+    old_tools = (
+        _tool_evidence(engine, name, case.name, timeout, diagnostics)
+        if is_tool_case
+        else {}
+    )
+    if (
+        old_violations is None
+        or old_requests is None
+        or old_hooks is None
+        or old_tools is None
+    ):
         print(f"FAIL {case.name}: could not read smoke counters")
         for detail in diagnostics:
             _progress(detail)
@@ -1355,7 +1467,18 @@ def _run_case(
 
     new_violations = _violation_counts(engine, name, timeout, diagnostics)
     new_requests = _provider_stats(engine, name, timeout, diagnostics)
-    if new_violations is None or new_requests is None:
+    new_hooks = _hook_counts(engine, name, timeout, diagnostics)
+    new_tools = (
+        _tool_evidence(engine, name, case.name, timeout, diagnostics)
+        if is_tool_case
+        else {}
+    )
+    if (
+        new_violations is None
+        or new_requests is None
+        or new_hooks is None
+        or new_tools is None
+    ):
         print(f"FAIL {case.name}: could not read smoke counters")
         for detail in diagnostics:
             _progress(detail)
@@ -1366,33 +1489,60 @@ def _run_case(
         if count > old_violations.get(key, 0)
     }
     request_delta = new_requests.get(case.name, 0) - old_requests.get(case.name, 0)
+    hook_deltas = {
+        key: value - old_hooks.get(key, 0) for key, value in new_hooks.items()
+    }
+    tool_deltas = {
+        key: value - old_tools.get(key, 0) for key, value in new_tools.items()
+    }
+
+    def fail(reason: str) -> bool:
+        print(f"FAIL {case.name}: {reason}")
+        _report_case_failure_details(
+            case,
+            invocation,
+            deltas,
+            request_delta,
+            hook_deltas=hook_deltas,
+            tool_deltas=tool_deltas,
+        )
+        return False
+
+    if is_tool_case and new_tools.get("raw_tool_output_requests", 0) != 0:
+        return fail("raw sensitive tool output reached the local mock")
+    expected_hook = "pretooluse" if is_tool_case else "prompt"
+    if hook_deltas.get(expected_hook, 0) < 1:
+        return fail(f"expected {expected_hook} hook event was not recorded")
+    if is_tool_case and tool_deltas.get("tool_offers", 0) < 1:
+        return fail("the local mock did not issue the expected tool call")
+    if case.name in ("ssrf", "config_exfil") and hook_deltas.get("posttooluse", 0) != 0:
+        return fail(
+            "pre-tool blocking was not confirmed; a post-tool event was recorded"
+        )
+    if case.name in OUTPUT_CASES:
+        if tool_deltas.get("executed", 0) != 1:
+            return fail("the expected tool did not execute exactly once")
+        if hook_deltas.get("posttooluse", 0) < 1:
+            return fail("expected posttooluse hook event was not recorded")
+        if case.name == "clean_tool" and (
+            tool_deltas.get("clean_tool_results", 0) < 1 or request_delta < 2
+        ):
+            return fail("clean tool output did not reach the local mock")
 
     if case.expected_violation:
         if deltas.get(case.expected_violation, 0) < 1:
-            print(f"FAIL {case.name}: expected hook violation was not recorded")
-            _report_case_failure_details(case, invocation, deltas, request_delta)
-            return False
+            return fail("expected hook violation was not recorded")
         if case.expects_provider and request_delta < 1:
-            print(f"FAIL {case.name}: CLI did not reach the local mock provider")
-            _report_case_failure_details(case, invocation, deltas, request_delta)
-            return False
+            return fail("CLI did not reach the local mock provider")
         if not case.expects_provider and request_delta != 0:
-            print(f"FAIL {case.name}: blocked prompt reached the local mock provider")
-            _report_case_failure_details(case, invocation, deltas, request_delta)
-            return False
+            return fail("blocked prompt reached the local mock provider")
     else:
         if invocation.returncode != 0:
-            print("FAIL allowed: clean agent CLI invocation exited nonzero")
-            _report_case_failure_details(case, invocation, deltas, request_delta)
-            return False
+            return fail("clean agent CLI invocation exited nonzero")
         if deltas:
-            print("FAIL allowed: clean path created a violation")
-            _report_case_failure_details(case, invocation, deltas, request_delta)
-            return False
+            return fail("clean path created a violation")
         if request_delta < 1:
-            print("FAIL allowed: clean prompt did not reach the local mock provider")
-            _report_case_failure_details(case, invocation, deltas, request_delta)
-            return False
+            return fail("clean prompt did not reach the local mock provider")
     _progress(f"PASS {case.name}")
     return True
 
@@ -1402,6 +1552,9 @@ def _report_case_failure_details(
     invocation: subprocess.CompletedProcess,
     violation_deltas: Dict[str, int],
     provider_request_delta: Optional[int],
+    *,
+    hook_deltas: Optional[Dict[str, int]] = None,
+    tool_deltas: Optional[Dict[str, int]] = None,
 ) -> None:
     """Report aggregate smoke counters without printing agent output or prompts."""
     violations = (
@@ -1419,6 +1572,23 @@ def _report_case_failure_details(
         details.append(
             f"expected_{case.expected_violation}_delta=+{violation_deltas.get(case.expected_violation, 0)}"
         )
+    for label, counts in (
+        ("hook_event_deltas", hook_deltas),
+        ("tool_evidence_deltas", tool_deltas),
+    ):
+        if counts is not None:
+            details.append(
+                label
+                + "="
+                + (
+                    ",".join(
+                        f"{key}=+{value}"
+                        for key, value in sorted(counts.items())
+                        if value
+                    )
+                    or "none"
+                )
+            )
     print(f"  Diagnostics (aggregate only): {'; '.join(details)}", flush=True)
 
 
