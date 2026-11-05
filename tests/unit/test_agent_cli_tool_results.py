@@ -262,6 +262,39 @@ def test_clean_tool_requires_a_correlated_result_not_a_tool_offer(provider, prot
 
 
 @pytest.mark.parametrize("protocol", ("chat", "responses", "anthropic", "gemini"))
+def test_json_encoded_native_result_retains_exact_clean_evidence(provider, protocol):
+    output = json.dumps(
+        {"exit": 0, "output": provider.tool_output("clean_tool"), "truncated": False}
+    )
+    payload = result_payload(provider, protocol, "clean_tool", output)
+    provider._observe_request(payload)
+    assert provider._stats()["clean_tool_results"] == {"clean_tool": 1}
+    assert output not in json.dumps(provider._stats())
+    provider.TOOL_IDENTITIES.clear()
+    provider.GEMINI_TOOL_CASES.clear()
+    provider.CLEAN_TOOL_RESULT_COUNTS.clear()
+    provider._observe_request(payload)
+    assert provider._stats()["clean_tool_results"] == {}
+
+
+def test_json_encoded_prompt_cannot_impersonate_a_native_result(provider):
+    output = json.dumps({"output": provider.tool_output("clean_tool")})
+    provider._observe_request({"messages": [{"role": "user", "content": output}]})
+    assert provider._stats()["clean_tool_results"] == {}
+
+
+def test_clean_output_flattened_into_a_summary_is_not_native_result_evidence(provider):
+    payload = result_payload(
+        provider, "chat", "clean_tool", provider.tool_output("clean_tool")
+    )
+    identity = payload["messages"][0]["tool_call_id"]
+    payload["messages"][0]["role"] = "user"
+    provider._observe_request(payload)
+    assert provider._known_tool_case(identity) == "clean_tool"
+    assert provider._stats()["clean_tool_results"] == {}
+
+
+@pytest.mark.parametrize("protocol", ("chat", "responses", "anthropic", "gemini"))
 @pytest.mark.parametrize("case", ("tool_output_secret", "tool_output_pii"))
 def test_mock_detects_raw_sensitive_tool_results_without_retaining_them(
     provider, protocol, case, capsys

@@ -27,6 +27,12 @@ function contentText(value: unknown): string {
   const record = value as JsonRecord;
   if (typeof record.output === 'string') return record.output;
   if (typeof record.text === 'string') return record.text;
+  if (typeof record.stdout === 'string' || typeof record.stderr === 'string') {
+    return [record.stdout, record.stderr]
+      .filter((part): part is string => typeof part === 'string' && part.length > 0)
+      .join('\n');
+  }
+  if (typeof record.content === 'string') return record.content;
   if (Array.isArray(record.content)) {
     return record.content
       .map((part) => {
@@ -56,20 +62,12 @@ function hookData(
   };
 }
 
-function resultWithReplacement(original: unknown, replacement: unknown): unknown {
-  if (original && typeof original === 'object' && !Array.isArray(original)) {
-    const record = original as JsonRecord;
-    if ('output' in record) {
-      return { ...record, output: replacement };
-    }
-    if ('content' in record) {
-      return {
-        ...record,
-        content: [{ type: 'text', text: textValue(replacement) }],
-      };
-    }
-  }
-  return { output: replacement };
+function resultWithReplacement(replacement: unknown): JsonRecord {
+  // V2 results can carry both structured output and model-visible content.
+  // Replace the entire result: copying either surface or metadata can retain raw
+  // values. Content-only is a valid Tool.Result and avoids assigning a Claude
+  // Bash response object to another tool's structured output schema.
+  return { content: [{ type: 'text', text: contentText(replacement) }] };
 }
 
 export default {
@@ -216,6 +214,10 @@ export default {
         message_id: event.messageID,
       }));
       if (result.blocked) {
+        if (event.status === 'completed') {
+          // Clear the owned result before any notification or exception path.
+          event.result = resultWithReplacement(POST_TOOL_REFUSAL_NOTICE) as typeof event.result;
+        }
         await recordRefusalNotice(
           event.sessionID,
           event.id,
@@ -228,7 +230,6 @@ export default {
       }
       if (event.status === 'completed' && result.updatedOutput !== undefined) {
         event.result = resultWithReplacement(
-          event.result,
           result.updatedOutput,
         ) as typeof event.result;
       }

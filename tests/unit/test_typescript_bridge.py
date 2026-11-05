@@ -287,6 +287,8 @@ if (mode === 'allow') {
   process.stdout.write(JSON.stringify({output: JSON.stringify({decision: 'block', reason: 'blocked response'})}));
 } else if (mode === 'redaction') {
   process.stdout.write(JSON.stringify({output: JSON.stringify({hookSpecificOutput: {updatedToolOutput: '[REDACTED]'}})}));
+} else if (mode === 'redaction-bash') {
+  process.stdout.write(JSON.stringify({output: JSON.stringify({hookSpecificOutput: {updatedToolOutput: {stdout: '[REDACTED]', stderr: '', interrupted: false}}})}));
 } else if (mode === 'blocked-process') {
   process.stderr.write('blocked process');
   process.exit(2);
@@ -327,6 +329,17 @@ console.log(JSON.stringify(bridge.run({ source: 'unit-test', ...(process.env.BRI
         ("allow", {"blocked": False}),
         ("nested-block", {"blocked": True, "error": "blocked response"}),
         ("redaction", {"blocked": False, "updatedOutput": "[REDACTED]"}),
+        (
+            "redaction-bash",
+            {
+                "blocked": False,
+                "updatedOutput": {
+                    "stdout": "[REDACTED]",
+                    "stderr": "",
+                    "interrupted": False,
+                },
+            },
+        ),
         ("blocked-process", {"blocked": True, "error": "blocked process"}),
         ("failed-process", {"blocked": False}),
         ("timeout", {"blocked": False}),
@@ -883,6 +896,96 @@ def test_opencode_bridge_unknown_or_unusable_workspace_fails_closed(
     not _node_supports_type_stripping(),
     reason="Node.js with TypeScript type stripping is required",
 )
+@pytest.mark.parametrize(
+    "shape", ("shell", "output", "content-string", "content-array")
+)
+@pytest.mark.parametrize("replacement", ("text", "bash", "bash-stderr", "content"))
+def test_opencode_v2_redaction_replaces_every_native_result_surface(
+    tmp_path, shape, replacement
+):
+    """V2 2.0.24 can carry structured output and model content simultaneously."""
+    _write_opencode_plugin_runtime(tmp_path)
+    runner = tmp_path / "run-result-redaction.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import plugin from './ai-guardian-plugin/index.ts';
+const original = 'SYNTHETIC_ORIGINAL_RESULT';
+const safe = 'SYNTHETIC_SANITIZED_RESULT';
+const outputs = {
+  shell: {
+    output: { exit: 0, truncated: false, output: original, status: 'completed' },
+    content: [{ type: 'text', text: original }],
+    metadata: { preview: original },
+  },
+  output: { output: original },
+  'content-string': { content: original },
+  'content-array': { content: [
+    { type: 'text', text: original },
+    { type: 'file', uri: `file:///${original}`, mime: 'text/plain' },
+  ] },
+};
+const replacements = {
+  text: safe,
+  bash: { stdout: safe, stderr: '', interrupted: false },
+  'bash-stderr': { stdout: safe, stderr: 'SANITIZED_STDERR', interrupted: false },
+  content: { content: [{ type: 'text', text: safe }] },
+};
+globalThis.guardianCalls = [];
+globalThis.guardianResponses = [
+  { blocked: false },
+  { blocked: false, updatedOutput: replacements[process.env.REPLACEMENT] },
+];
+const hooks = {};
+const cleanup = await plugin.setup({
+  location: { directory: process.cwd() }, app: { version: '2.0.24' },
+  session: {
+    hook: async () => {},
+    get: async () => ({ location: { directory: process.cwd() } }),
+  },
+  tool: { hook: async (name, handler) => { hooks[name] = handler; } },
+  event: { async *subscribe() {} },
+});
+const makeEvent = () => ({
+  sessionID: 'synthetic-session', messageID: 'synthetic-message', id: 'synthetic-call',
+  tool: 'shell', input: {}, status: 'completed',
+  result: structuredClone(outputs[process.env.SHAPE]),
+});
+const allowed = makeEvent();
+const unchanged = allowed.result;
+await hooks['execute.after'](allowed);
+assert.equal(allowed.result, unchanged);
+assert.ok(JSON.stringify(allowed.result).includes(original));
+const redacted = makeEvent();
+await hooks['execute.after'](redacted);
+// Content-only is valid Tool.Result; retaining output/metadata can retain raw copies
+// or apply a Claude Bash object to a different native tool's structured schema.
+const expected = process.env.REPLACEMENT === 'bash-stderr' ? `${safe}\nSANITIZED_STDERR` : safe;
+assert.deepEqual(redacted.result, { content: [{ type: 'text', text: expected }] });
+assert.equal(JSON.stringify(redacted.result).includes(original), false);
+assert.equal(JSON.stringify(redacted.result).includes('[object Object]'), false);
+assert.equal(globalThis.guardianCalls[0].tool_response.output, original);
+cleanup();
+console.log(JSON.stringify({ checked: true }));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        env={**os.environ, "SHAPE": shape, "REPLACEMENT": replacement},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"checked": True}
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
 def test_opencode_v2_tool_refusals_do_not_forward_private_errors_or_results(tmp_path):
     _write_opencode_plugin_runtime(tmp_path)
     runner = tmp_path / "run-tool-refusals.mjs"
@@ -906,7 +1009,14 @@ const cleanup = await plugin.setup({
 const input = {path: 'PRIVATE_INPUT'};
 const base = {sessionID: 'ses_2627test', messageID: 'msg_2627test', id: 'call_2627test', tool: 'read', input};
 await assert.rejects(hooks['execute.before'](base), {message: 'AI Guardian blocked this tool call before execution'});
-await assert.rejects(hooks['execute.after']({...base, status: 'completed', result: {output: 'PRIVATE_RESULT'}}), {message: 'AI Guardian blocked this tool result after execution; result withheld'});
+const completed = {...base, status: 'completed', result: {
+  output: {exit: 0, truncated: false, output: 'PRIVATE_RESULT'},
+  content: [{type: 'text', text: 'PRIVATE_RESULT'}],
+  metadata: {preview: 'PRIVATE_RESULT'},
+}};
+await assert.rejects(hooks['execute.after'](completed), {message: 'AI Guardian blocked this tool result after execution; result withheld'});
+assert.equal(JSON.stringify(completed.result).includes('PRIVATE_RESULT'), false);
+assert.deepEqual(completed.result, {content: [{type: 'text', text: 'AI Guardian blocked a tool result after execution. The tool ran, but its result was withheld from the model. Do not infer or repeat the result. Tell the user it was blocked and wait for a new instruction.'}]});
 assert.equal(notices.length, 2);
 assert.ok(notices[0].text.includes('The tool did not run.'));
 assert.ok(notices[1].text.includes('The tool ran, but its result was withheld'));
