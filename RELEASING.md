@@ -45,16 +45,37 @@ the release issue open until that evidence and the post-release checks exist.
 
 ### Real-agent hook smoke test
 
-Release Readiness also invokes the bundled Codex, OpenCode, and Pi CLIs in fresh
-`@strict` sandboxes using the current wheel. Claude Code uses an Anthropic Messages
+Release Readiness also invokes the bundled Codex, Gemini, OpenCode, and Pi CLIs in
+fresh `@strict` sandboxes using the current wheel. Claude Code uses an Anthropic Messages
 API adapter and is run only when an authorized maintainer has explicitly enabled
 the CI ToS-consent variable described below. Clients point at local, loopback-only
 mock providers: malicious prompts must be blocked before reaching the provider,
-tool-call probes must be blocked by the normal client hooks, and a clean prompt
-must be allowed. The sandbox is disconnected from external networks before any
-client/model request, and the runner removes host provider credentials before
-sandbox creation. These checks do not contact a model provider or incur inference
-charges.
+tool-call probes must be blocked by the normal client hooks, and clean prompts
+and tool output must be allowed. Runtime egress is blocked before any client/model
+request, and the runner removes host provider credentials before sandbox creation.
+These checks do not contact a model provider or incur inference
+charges. Each invocation runs all nine cases:
+
+| Cases | Required evidence |
+| --- | --- |
+| `prompt_injection`, `secret`, `pii` | Prompt hook event, expected finding, no provider request |
+| `ssrf`, `config_exfil` | Native tool offer, pre-tool hook and expected finding, no post-tool event |
+| `clean_tool` | Real execution witness, pre/post-tool hooks, clean correlated tool result received by the mock, no violation and successful CLI exit |
+| `tool_output_secret`, `tool_output_pii` | Real execution witness, pre/post-tool hooks, `sensitive_finding`, no original synthetic value in any mock request |
+| `allowed` | Prompt hook, successful CLI exit, provider request and no violation |
+
+The output probes generate public synthetic test data inside a harmless local
+Python tool; neither their prompts nor tool commands contain the values. The
+execution witness contains only a fixed status, not tool output. The mock inspects
+all incoming request bodies in memory, including token-count preflights, and
+exports aggregate counters only. It also correlates native tool-result IDs (or
+Gemini function responses) so a tool offer or echoed prompt cannot prove execution.
+
+Strict policy is unchanged: sensitive output is **blocked**, not a qualification
+of warn-mode redaction. A client that logs a finding but still sends the original
+value to the mock fails; upstream limitations are not converted to passes or skips.
+Missing or unapproved native hooks also fail the evidence checks. The runner does
+not approve hooks or change their trust state.
 
 Podman smoke uses normal bridge routing with a **smoke-only namespace firewall**,
 so the host's published daemon REST port keeps its normal return route. A trusted,
@@ -98,8 +119,10 @@ Without `--image`, the runner builds a temporary support image from the current
 wheel. You can pass `--image` to reuse an image already built from that wheel;
 `--wheel PATH` selects a specific wheel for the temporary image. The `--agent`
 value is a Codex profile, an OpenCode agent profile, or (for Pi) the `openai`
-provider. The strict-profile copy disables desktop notifications only, so test
-violations do not create workstation notifications.
+provider. The strict-profile copy preserves all security settings, suppresses
+desktop notifications, and enables existing hook-latency telemetry for normalized
+event counts. Only aggregate counts are returned to the runner; latency log
+contents, model output and prompts are not exported.
 
 The runner uses Docker when available and falls back to Podman; set
 `CONTAINER_ENGINE` or pass `--container-engine` to choose explicitly.
@@ -132,8 +155,9 @@ macOS Podman still requires a real desktop retry to qualify tray connectivity.
 This is a protocol adapter, not a universal fake provider: clients need a
 supported local endpoint override and their native tool-call format must be
 implemented. Codex uses the Responses API; OpenCode and Pi use the
-OpenAI-compatible chat API; Claude Code uses the Anthropic Messages API. Other
-clients need their own protocol/configuration adapter before joining the matrix.
+OpenAI-compatible chat API; Claude Code uses the Anthropic Messages API; Gemini
+uses GenerateContent/countTokens. Other clients need their own protocol/configuration
+adapter before joining the matrix.
 
 ### Production release announcements
 

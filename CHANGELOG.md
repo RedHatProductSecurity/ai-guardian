@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timeouts on the internal egress-blocked network. Normal OpenCode auto-updates
   remain enabled.
 - **OpenCode V1 smoke runtime:** Reuse one headless server and perform a clean,
-  local-provider warm-up before the six cases so MCP integrations do not incur a
+  local-provider warm-up before the smoke cases so MCP integrations do not incur a
   fresh cold start for each invocation.
 - **Claude smoke setup:** Install Claude Code in the temporary smoke image only
   after explicit ToS opt-in, preventing an egress-isolated sandbox from trying to
@@ -75,6 +75,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit `--execute` is required for release mutations and publication.
 
 ### Added
+- **Real-agent hook-stage evidence:** Add clean tool execution and synthetic secret/
+  PII output cases. Require normalized pre/post-tool events and an execution witness;
+  verify clean results reach the local mock and sensitive values do not, including
+  token-count requests. A logged finding or offered tool alone cannot pass. Keep
+  strict blocking policy, egress isolation, native trust and ToS gates unchanged;
+  report only aggregate evidence, not model/tool output.
 - **Real-agent CLI hook smoke check:** Release Readiness runs Codex, Gemini CLI,
   OpenCode, and Pi in strict-profile sandboxes built from the current wheel;
   Claude Code remains behind its explicit CI ToS-consent variable. Native local

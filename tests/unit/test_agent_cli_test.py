@@ -37,14 +37,24 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
         "pii",
         "ssrf",
         "config_exfil",
+        "clean_tool",
+        "tool_output_secret",
+        "tool_output_pii",
         "allowed",
     }
-    assert all(case.expected_violation for case in runner.CASES[:-1])
+    assert all(
+        case.expected_violation
+        for case in runner.CASES
+        if case.name not in ("allowed", "clean_tool")
+    )
     assert runner.CASES[-1].expected_violation is None
     assert [case.expects_provider for case in runner.CASES] == [
         False,
         False,
         False,
+        True,
+        True,
+        True,
         True,
         True,
         True,
@@ -543,7 +553,7 @@ def test_temporary_podman_image_names_are_qualified_as_local():
     )
 
 
-def test_sandbox_profile_is_strict_and_disables_only_desktop_notifications(tmp_path):
+def test_sandbox_profile_preserves_strict_policy_and_enables_hook_evidence(tmp_path):
     runner = _load(RUNNER_PATH, "agent_cli_smoke_profile")
     profile_path = tmp_path / "strict-smoke.json"
     runner.write_strict_smoke_profile(profile_path)
@@ -553,8 +563,14 @@ def test_sandbox_profile_is_strict_and_disables_only_desktop_notifications(tmp_p
     assert profile["secret_scanning"] == strict["secret_scanning"]
     assert profile["prompt_injection"] == strict["prompt_injection"]
     assert profile["ssrf_protection"] == strict["ssrf_protection"]
+    assert profile["secret_redaction"] == strict["secret_redaction"]
+    assert profile["scan_pii"] == strict["scan_pii"]
+    assert profile["latency_tracking"]["enabled"] is True
     assert profile["violation_notifications"]["enabled"] is False
     assert strict["violation_notifications"]["enabled"] is True
+    strict["violation_notifications"]["enabled"] = False
+    strict.setdefault("latency_tracking", {})["enabled"] = True
+    assert profile == strict
 
 
 def test_sandbox_create_environment_strips_provider_secrets_and_host_config(
@@ -730,7 +746,17 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
         else:
             config = json.loads(path.read_text(encoding="utf-8"))
             if cli_name == "claude":
-                assert config["permissions"]["allow"] == ["Bash(printf *)"]
+                assert config["permissions"]["allow"] == [
+                    "Bash(printf *)",
+                    *[
+                        f"Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case {case})"
+                        for case in (
+                            "clean_tool",
+                            "tool_output_secret",
+                            "tool_output_pii",
+                        )
+                    ],
+                ]
                 assert not (workspace / ".claude").exists()
             elif cli_name == "gemini":
                 assert config["model"]["name"] == runner.MOCK_GEMINI_MODEL
@@ -933,6 +959,8 @@ def test_local_mock_stats_report_tool_availability_without_payloads():
         "requests": {"ssrf": 2},
         "command_tool_requests": {"ssrf": 1},
         "tool_offers": {"ssrf": 1},
+        "clean_tool_results": {},
+        "raw_tool_output_requests": {},
     }
     assert "curl" not in json.dumps(stats)
 
@@ -1448,6 +1476,10 @@ def test_agent_case_failures_report_only_aggregate_diagnostics(
     case = next(case for case in runner.CASES if case.name == case_name)
     violation_reads = iter(({}, {}))
     provider_reads = iter(({case_name: 0}, {case_name: 1}))
+    hook_reads = iter(
+        ({}, {"pretooluse" if case_name == "config_exfil" else "prompt": 1})
+    )
+    tool_reads = iter(({}, {"tool_offers": 1}))
     invocation = subprocess.CompletedProcess(
         ["codex", "exec"],
         exit_code,
@@ -1461,6 +1493,12 @@ def test_agent_case_failures_report_only_aggregate_diagnostics(
         runner, "_provider_stats", lambda *_args, **_kwargs: next(provider_reads)
     )
     monkeypatch.setattr(runner, "_exec", lambda *_args, **_kwargs: invocation)
+    monkeypatch.setattr(
+        runner, "_hook_counts", lambda *_args, **_kwargs: next(hook_reads)
+    )
+    monkeypatch.setattr(
+        runner, "_tool_evidence", lambda *_args, **_kwargs: next(tool_reads)
+    )
 
     assert not runner._run_case("docker", "sandbox", "codex", "smoke", case, 30)
 

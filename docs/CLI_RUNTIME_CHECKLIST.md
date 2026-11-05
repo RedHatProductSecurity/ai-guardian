@@ -258,10 +258,16 @@ than leaving them implicit.
 - [ ] Keep the real-agent hook smoke matrix in sync when adding/changing a CLI or
   hook scanner: extend `scripts/agent_cli_test.py` and its local mock-protocol
   adapter/cases, cover the violation and clean-allow paths in
-  `tests/unit/test_agent_cli_test.py`, and wire the CLI into
-  `.github/workflows/release-readiness.yml`. Use synthetic inputs and a local
+  `tests/unit/test_agent_cli_test.py` and `test_agent_cli_tool_results.py`, and wire
+  the CLI into `.github/workflows/release-readiness.yml`. Use synthetic inputs and a local
   mock only; preserve explicit ToS/credential gates. If the scanner cannot be
   exercised through a supported CLI hook, record why this check is not applicable.
+- [ ] Verify hook stages, not just findings: prompt probes need prompt events;
+  pre-tool deny probes need native tool offers and pre-tool events; output probes
+  need real execution, pre/post events, and provider-boundary containment. Require
+  a correlated clean tool result too. Cover the smoke UX contract in
+  `tests/ux/test_user_experience_contract_agent_cli_smoke.py`; client limitations
+  and unapproved hooks must fail rather than silently qualify.
 - [ ] Keep release-readiness runtime coverage explicit about image/version lanes:
   Gemini CLI runs in the normal support image; OpenCode runs against the bundled
   V1 image and a separate V2 smoke-only image. The V2 image must not be described

@@ -7,6 +7,10 @@ Manual qualification on Linux/macOS Podman:
 4. With a controlled external listener, confirm new IPv4/IPv6 egress is denied
    while local mock cases work; never send provider credentials or prompts.
 5. Use --diagnose-sandbox NAME to repeat REST checks without rebuilding anything.
+6. Require clean_tool, tool_output_secret and tool_output_pii to pass with real
+   tool execution and normalized pre/post hook evidence. A tool offer alone fails.
+7. Sensitive output must not reach even the mock's token-count endpoint. A client
+   ignoring its post-tool response must FAIL, not become a skipped/qualified pass.
 """
 
 import importlib.util
@@ -145,3 +149,109 @@ def test_unprotected_bootstrap_never_starts_daemon_or_agent(
     monkeypatch.setattr(gate.os, "execv", lambda *args: pytest.fail("setup started"))
     assert gate.main() == 1
     assert capsys.readouterr().out.strip() == message
+
+
+def stub_tool_case(runner, monkeypatch, case_name, *, post_hook=1, executed=1, raw=0):
+    case = next(case for case in runner.CASES if case.name == case_name)
+    readings = {
+        "_hook_counts": {"pretooluse": 1, "posttooluse": post_hook},
+        "_violation_counts": (
+            {case.expected_violation: 1} if case.expected_violation else {}
+        ),
+        "_provider_stats": {case_name: 2},
+        "_tool_evidence": {
+            "executed": executed,
+            "tool_offers": 1,
+            "clean_tool_results": int(case_name == "clean_tool"),
+            "raw_tool_output_requests": raw,
+        },
+    }
+    for method, after in readings.items():
+        values = iter(({}, after))
+        monkeypatch.setattr(
+            runner, method, lambda *args, values=values, **kwargs: next(values)
+        )
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, "private model output", "private stderr"
+        ),
+    )
+    return case
+
+
+@pytest.mark.parametrize(
+    "case_name", ("clean_tool", "tool_output_secret", "tool_output_pii")
+)
+def test_success_requires_real_tool_execution_and_post_tool_hook(
+    runner, monkeypatch, capsys, case_name
+):
+    """USER EXPERIENCE: all three output cases run under unchanged strict policy.
+
+    Manual verification: run the smoke runner with a supported CLI. Clean output
+    must be delivered through a correlated native tool result; sensitive output
+    must cause a finding without delivering its original synthetic value.
+    """
+    case = stub_tool_case(runner, monkeypatch, case_name)
+    assert runner._run_case("docker", "smoke", "opencode", "build", case, 30)
+    output = capsys.readouterr().out
+    assert f"PASS {case_name}" in output
+    assert "private" not in output
+    assert case.prompt not in output
+
+
+@pytest.mark.parametrize(
+    ("post_hook", "executed", "message"),
+    (
+        (0, 1, "expected posttooluse hook event was not recorded"),
+        (1, 0, "the expected tool did not execute exactly once"),
+    ),
+)
+def test_tool_offers_and_violation_logs_alone_never_qualify_output_protection(
+    runner, monkeypatch, capsys, post_hook, executed, message
+):
+    """USER EXPERIENCE: an unexecuted/unfinished probe fails rather than passing."""
+    case = stub_tool_case(
+        runner,
+        monkeypatch,
+        "tool_output_secret",
+        post_hook=post_hook,
+        executed=executed,
+    )
+    assert not runner._run_case("docker", "smoke", "opencode", "build", case, 30)
+    output = capsys.readouterr().out
+    assert f"FAIL tool_output_secret: {message}" in output
+    assert "Diagnostics (aggregate only):" in output
+    assert "private" not in output
+
+
+@pytest.mark.parametrize(
+    ("cli", "agent"),
+    (
+        ("codex", "smoke"),
+        ("opencode", "build"),
+        ("pi", "openai"),
+        ("gemini", "default"),
+        ("claude", "default"),
+    ),
+)
+def test_clients_ignoring_post_tool_protection_fail_without_dumping_output(
+    runner, monkeypatch, capsys, cli, agent
+):
+    """USER EXPERIENCE: detection is not containment; upstream limits stay failures.
+
+    Scenario: the post-tool hook ran and logged a finding, but the client forwarded
+    the original synthetic output anyway. No client-specific skip may turn this
+    into a pass, and diagnostics must never echo model/tool output or prompts.
+    """
+    case = stub_tool_case(runner, monkeypatch, "tool_output_secret", raw=1)
+    assert not runner._run_case("docker", "smoke", cli, agent, case, 30)
+    output = capsys.readouterr().out
+    assert (
+        "FAIL tool_output_secret: raw sensitive tool output reached the local mock"
+        in output
+    )
+    assert "PASS" not in output
+    assert "private" not in output
+    assert case.prompt not in output

@@ -104,9 +104,12 @@ one causes a broken or incomplete feature.
 - [ ] `tests/unit/test_<scanner>.py` — unit tests: clean input, known-bad input, config options (threshold, allowlist), suppression annotations, robustness (empty input, parse errors)
 - [ ] If the scanner is enforced through a supported agent CLI hook, add a
   synthetic violation case and a clean control to `scripts/agent_cli_test.py`,
-  update `tests/unit/test_agent_cli_test.py`, and keep the release-readiness
-  matrix in sync. The smoke case must use the local mock provider and must not
-  perform network/file side effects. If no supported CLI hook exercises this
+  update `tests/unit/test_agent_cli_test.py` and `test_agent_cli_tool_results.py`,
+  and keep the release-readiness matrix in sync. The smoke case must use the local
+  mock provider, never read user files or contact external endpoints. A value-free
+  execution witness in the disposable smoke workspace is allowed. Output cases
+  must verify pre/post hook events and containment at the mock boundary, not just
+  finding counts. If no supported CLI hook exercises this
   scanner, record the reason and retain focused scanner/UX coverage.
 
 ### 11. Help tooltips
