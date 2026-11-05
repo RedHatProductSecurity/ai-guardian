@@ -1935,3 +1935,82 @@ def test_private_rest_state_failures_never_leak_subprocess_output(
     output = capsys.readouterr().out
     assert "private sandbox diagnostics" in output
     assert "private-auth-value" not in output
+
+
+def test_private_rest_reader_uses_the_installed_tool_environment(
+    tmp_path, monkeypatch, capsys
+):
+    """System Python has no AI Guardian; only the image's tool venv can import it.
+
+    Execute the real reader with isolated paths and fake IPC/HTTP responses. Do
+    not read a real daemon token, start a daemon, or run a container/network probe.
+    """
+    runner = _load(RUNNER_PATH, "agent_cli_rest_tool_python")
+    pid_path = tmp_path / "daemon.pid"
+    token_path = tmp_path / "daemon.token"
+    pid_path.write_text(json.dumps({"rest_port": 63152}), encoding="utf-8")
+    token_path.write_text("private-reader-test-token\n", encoding="utf-8")
+    bootstrap = """
+import io, sys, urllib.request
+from pathlib import Path
+import ai_guardian.daemon as daemon
+from ai_guardian.daemon import client
+daemon.get_pid_path = lambda: Path(sys.argv[2])
+daemon.get_auth_token_path = lambda: Path(sys.argv[3])
+client.send_status_request = lambda timeout: {'rest_port': 63152}
+class LocalOpener:
+    def open(self, url, timeout):
+        assert url == 'http://127.0.0.1:63152/api/health'
+        return io.BytesIO(b'{"status":"ok"}')
+urllib.request.build_opener = lambda *handlers: LocalOpener()
+exec(sys.argv[1])
+"""
+    commands = []
+
+    def fake_exec(_engine, _name, command, timeout):
+        commands.append(list(command))
+        # Emulate the image's bare system interpreter versus its installed uv
+        # tool environment. -I prevents accidental imports from this checkout.
+        options = ["-I", "-S"] if command[0] == "python3" else ["-I"]
+        assert command[1] == "-c"
+        environment = dict(os.environ)
+        for variable in (
+            "HOME",
+            "USERPROFILE",
+            "AI_GUARDIAN_HOME",
+            "AI_GUARDIAN_CONFIG_DIR",
+            "AI_GUARDIAN_STATE_DIR",
+        ):
+            environment[variable] = str(tmp_path)
+        return subprocess.run(
+            [
+                sys.executable,
+                *options,
+                "-c",
+                bootstrap,
+                command[2],
+                str(pid_path),
+                str(token_path),
+            ],
+            env=environment,
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda *args: subprocess.CompletedProcess(args, 0, "127.0.0.1:45678\n", ""),
+    )
+    monkeypatch.setattr(runner, "_probe_rest", lambda *args, **kwargs: "healthy")
+
+    assert runner._check_sandbox_rest("podman", "smoke", 30)
+    assert commands[0][0] == "/opt/uv-tools/ai-guardian/bin/python3"
+    output = capsys.readouterr()
+    assert "authenticated host access work" in output.out
+    assert "private-reader-test-token" not in output.out + output.err
+    assert "Traceback" not in output.out + output.err
