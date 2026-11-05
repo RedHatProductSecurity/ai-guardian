@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Smoke output policy:** Prepare a disposable strict-derived configuration before
+  sandbox creation and stage it through the existing config snapshot-copy path,
+  leaving the active config writable. Exercise secret/PII output sanitization
+  while retaining prompt/pre-tool blocking and raw-delivery failure assertions.
+  Announce that this is not unmodified `@strict` post-tool qualification; bundled
+  profiles, runtime adapters, normal images and the smoke firewall are unchanged.
 - **Smoke REST diagnostics:** Run the private diagnostic reader with the classic
   image's installed AI Guardian Python environment, not system Python, preventing
   an import failure after daemon readiness. Image startup, bridge routing and the
@@ -83,10 +89,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PII output cases. Require normalized pre/post-tool events and an execution witness;
   verify clean results reach the local mock and sensitive values do not, including
   token-count requests. A logged finding or offered tool alone cannot pass. Keep
-  strict blocking policy, egress isolation, native trust and ToS gates unchanged;
+  prompt/pre-tool blocking, egress isolation, native trust and ToS gates unchanged;
   report only aggregate evidence, not model/tool output.
 - **Real-agent CLI hook smoke check:** Release Readiness runs Codex, Gemini CLI,
-  OpenCode, and Pi in strict-profile sandboxes built from the current wheel;
+  OpenCode, and Pi in strict-derived smoke sandboxes built from the current wheel;
   Claude Code remains behind its explicit CI ToS-consent variable. Native local
   mock protocols exercise blocked prompt/tool paths and a clean allow path without
   host credentials or billable provider calls. OpenCode is checked with bundled

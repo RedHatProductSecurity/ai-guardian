@@ -292,6 +292,83 @@ def test_output_fixtures_are_detectable_but_prompts_and_commands_are_clean(provi
     assert not pii.redact(provider.tool_output("clean_tool"))["redactions"]
 
 
+@pytest.fixture
+def smoke_config(tmp_path, monkeypatch):
+    from ai_guardian.config import loaders
+
+    runner = load_script("agent_cli_test")
+    config_dir = tmp_path / "smoke-config"
+    runner.write_smoke_config(config_dir)
+    config = json.loads((config_dir / "ai-guardian.json").read_text(encoding="utf-8"))
+    # All config loaders consume only this disposable smoke config, not the host's
+    # policy. No external scanners, pattern downloads or daemon are required.
+    monkeypatch.setattr(loaders, "_load_config_file", lambda: (config, None))
+    monkeypatch.setattr(loaders, "_load_pattern_server_config", lambda: (None, None))
+    return config
+
+
+@pytest.mark.parametrize("case", ("tool_output_secret", "tool_output_pii"))
+def test_prepared_smoke_config_requests_sanitized_post_tool_output(
+    provider, smoke_config, monkeypatch, tmp_path, case
+):
+    from ai_guardian import process_hook_data
+
+    monkeypatch.setattr(
+        "ai_guardian.scanners.secret_scanning.check_secrets",
+        lambda *args, **kwargs: (
+            case == "tool_output_secret",
+            "Synthetic secret detected" if case == "tool_output_secret" else None,
+        ),
+    )
+    result = process_hook_data(
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_use_id": "smoke-config-fixture",
+            "session_id": "smoke-config-fixture",
+            "cwd": str(tmp_path),
+            "tool_input": {"command": provider.TOOL_COMMANDS[case]},
+            "tool_response": {"stdout": provider.tool_output(case), "stderr": ""},
+        }
+    )
+    payload = json.loads(result["output"])
+    replacement = payload["hookSpecificOutput"]["updatedToolOutput"]
+    assert replacement["stdout"]
+    assert provider.sensitive_value(case) not in json.dumps(payload)
+    assert payload.get("decision") != "block"
+    assert result["exit_code"] == 0
+
+
+@pytest.mark.parametrize("event", ("UserPromptSubmit", "PreToolUse"))
+@pytest.mark.parametrize("case_name", ("secret", "pii"))
+def test_prepared_smoke_config_keeps_sensitive_input_blocked(
+    smoke_config, monkeypatch, tmp_path, event, case_name
+):
+    from ai_guardian import process_hook_data
+
+    runner = load_script("agent_cli_test")
+    case = next(case for case in runner.CASES if case.name == case_name)
+    monkeypatch.setattr(
+        "ai_guardian.scanners.secret_scanning.check_secrets",
+        lambda *args, **kwargs: (
+            case_name == "secret",
+            "Synthetic secret detected" if case_name == "secret" else None,
+        ),
+    )
+    hook_data = {"hook_event_name": event, "cwd": str(tmp_path)}
+    if event == "UserPromptSubmit":
+        hook_data["prompt"] = case.prompt
+    else:
+        fixture = tmp_path / "synthetic-input.txt"
+        fixture.write_text(case.prompt, encoding="utf-8")
+        hook_data.update(tool_name="Read", tool_input={"file_path": str(fixture)})
+    payload = json.loads(process_hook_data(hook_data)["output"])
+    if event == "UserPromptSubmit":
+        assert payload["decision"] == "block"
+    else:
+        assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
 def configure_case(
     monkeypatch, case_name, *, event_counts=None, observation=None, violations=None
 ):

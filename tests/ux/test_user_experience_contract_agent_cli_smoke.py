@@ -11,6 +11,10 @@ Manual qualification on Linux/macOS Podman:
    tool execution and normalized pre/post hook evidence. A tool offer alone fails.
 7. Sensitive output must not reach even the mock's token-count endpoint. A client
    ignoring its post-tool response must FAIL, not become a skipped/qualified pass.
+8. Confirm the runner announces strict-derived input blocking/output sanitization,
+   not unmodified @strict. Its prepared config is copied before daemon startup;
+   the source is read-only, the active copy is writable and no live policy edit
+   is required. Normal @strict and other containers retain their own policies.
 """
 
 import importlib.util
@@ -187,7 +191,7 @@ def stub_tool_case(runner, monkeypatch, case_name, *, post_hook=1, executed=1, r
 def test_success_requires_real_tool_execution_and_post_tool_hook(
     runner, monkeypatch, capsys, case_name
 ):
-    """USER EXPERIENCE: all three output cases run under unchanged strict policy.
+    """USER EXPERIENCE: strict-derived smoke config sanitizes sensitive output.
 
     Manual verification: run the smoke runner with a supported CLI. Clean output
     must be delivered through a correlated native tool result; sensitive output
@@ -199,6 +203,48 @@ def test_success_requires_real_tool_execution_and_post_tool_hook(
     assert f"PASS {case_name}" in output
     assert "private" not in output
     assert case.prompt not in output
+
+
+@pytest.mark.parametrize("engine", ("docker", "podman"))
+def test_smoke_config_is_prepared_before_startup_without_a_read_only_active_file(
+    runner, tmp_path, engine
+):
+    """USER EXPERIENCE: prepared snapshot input, not a live policy rewrite.
+
+    Only the disposable smoke config opts into output sanitization. Prompts and
+    pre-tool file reads remain blocked; a successful run does not qualify the
+    unmodified strict profile's post-tool block behavior.
+    """
+    original = runner.STRICT_PROFILE.read_bytes()
+    config_dir = tmp_path / "smoke-config"
+    runner.write_smoke_config(config_dir)
+    config = json.loads((config_dir / "ai-guardian.json").read_text(encoding="utf-8"))
+    assert config["secret_scanning"]["enabled"] is True
+    assert config["secret_redaction"]["enabled"] is True
+    assert config["scan_pii"]["action"] == "redact"
+    assert runner.STRICT_PROFILE.read_bytes() == original
+    args = (
+        "claude",
+        "default",
+        "smoke-image",
+        config_dir,
+        tmp_path / "workspace",
+        "smoke",
+    )
+    if engine == "docker":
+        command = runner.build_create_command(["ai-guardian"], engine, *args)
+        assert command[command.index("--config-dir") + 1] == str(config_dir)
+        assert "--profile" not in command
+    else:
+        command = runner.build_podman_create_command(engine, *args)
+        assert (
+            f"{config_dir / 'ai-guardian.json'}:"
+            "/sandbox/.config/ai-guardian.host.json:ro,z"
+        ) in command
+        assert not any(
+            ":/sandbox/.config/ai-guardian/ai-guardian.json:" in value
+            for value in command
+        )
 
 
 @pytest.mark.parametrize(

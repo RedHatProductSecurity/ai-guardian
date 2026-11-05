@@ -169,11 +169,11 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     assert all("GOOGLE_API_KEY=" not in item for item in gemini_environment)
 
 
-def test_sandbox_create_uses_supplied_image_strict_profile_and_isolated_workspace(
+def test_sandbox_create_uses_supplied_image_prepared_config_and_isolated_workspace(
     tmp_path,
 ):
     runner = _load(RUNNER_PATH, "agent_cli_smoke_create")
-    profile = tmp_path / "strict.json"
+    config_dir = tmp_path / "smoke-config"
     workspace = tmp_path / "workspace"
     command = runner.build_create_command(
         ["ai-guardian"],
@@ -181,7 +181,7 @@ def test_sandbox_create_uses_supplied_image_strict_profile_and_isolated_workspac
         "opencode",
         "build",
         "ai-guardian-current-wheel",
-        profile,
+        config_dir,
         workspace,
         "ag-cli-smoke-opencode-test",
         container_network="ag-cli-smoke-opencode-test-internal",
@@ -190,7 +190,8 @@ def test_sandbox_create_uses_supplied_image_strict_profile_and_isolated_workspac
     assert command[:4] == ["ai-guardian", "sandbox", "create", "--runtime"]
     assert "container" in command
     assert command[command.index("--image") + 1] == "ai-guardian-current-wheel"
-    assert command[command.index("--profile") + 1] == str(profile)
+    assert command[command.index("--config-dir") + 1] == str(config_dir)
+    assert "--profile" not in command
     assert command[command.index("--repo") + 1] == str(workspace)
     assert command[command.index("--agent") + 1] == "build"
     assert (
@@ -224,7 +225,7 @@ def test_podman_smoke_uses_normal_bridge_without_agent_capabilities(tmp_path):
         "opencode",
         "build",
         "localhost/smoke:test",
-        tmp_path / "strict.json",
+        tmp_path / "smoke-config",
         tmp_path / "workspace",
         "ag-cli-smoke-opencode-1234abcd",
     )
@@ -244,6 +245,18 @@ def test_podman_smoke_uses_normal_bridge_without_agent_capabilities(tmp_path):
     assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
     assert f"AI_GUARDIAN_STATE_DIR={runner.STATE_DIR}" in command
     assert "ai-guardian.daemon=true" in command
+    assert (
+        f"{tmp_path / 'smoke-config' / 'ai-guardian.json'}:"
+        "/sandbox/.config/ai-guardian.host.json:ro,z"
+    ) in command
+    assert "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true" in command
+    assert (
+        "AI_GUARDIAN_HOST_CONFIG_PATH=/sandbox/.config/ai-guardian.host.json" in command
+    )
+    assert not any(value.startswith("AI_GUARDIAN_PROFILE=") for value in command)
+    assert not any(
+        ":/sandbox/.config/ai-guardian/ai-guardian.json:" in value for value in command
+    )
     assert "OPENAI_API_KEY" not in " ".join(command)
     assert runner._is_podman_engine("podman")
     assert runner._is_podman_engine("/usr/bin/podman")
@@ -256,7 +269,7 @@ def test_podman_smoke_uses_normal_bridge_without_agent_capabilities(tmp_path):
     (("podman", True), ("docker", False)),
 )
 def test_main_sets_up_smoke_isolation_and_cleans_up(
-    engine, uses_firewall, keep, monkeypatch, tmp_path
+    engine, uses_firewall, keep, monkeypatch, tmp_path, capsys
 ):
     runner = _load(RUNNER_PATH, f"agent_cli_smoke_lifecycle_{engine}_{keep}")
     runner._temp_parent = lambda: tmp_path
@@ -272,8 +285,24 @@ def test_main_sets_up_smoke_isolation_and_cleans_up(
     runner._setup_podman_firewall = lambda *args: firewall_calls.append(args) or True
 
     commands = []
+    stages = []
 
-    def fake_run(command, *_args, **_kwargs):
+    def fake_run(command, *_args, **kwargs):
+        stages.append(kwargs.get("progress"))
+        # Preparation must precede creation, even for supplied images. Nothing
+        # updates the running daemon's policy to make an individual case pass.
+        if command[:2] == [engine, "run"] or command[:3] == [
+            "ai-guardian",
+            "sandbox",
+            "create",
+        ]:
+            root = next(tmp_path.glob("ai-guardian-agent-cli-*"))
+            config_dir = root / "smoke-config"
+            config = json.loads((config_dir / "ai-guardian.json").read_text())
+            assert config["secret_redaction"]["enabled"] is True
+            assert config["scan_pii"]["action"] == "redact"
+            if not uses_firewall:
+                assert command[command.index("--config-dir") + 1] == str(config_dir)
         commands.append(list(command))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
@@ -297,6 +326,12 @@ def test_main_sets_up_smoke_isolation_and_cleans_up(
         argv.append("--keep")
 
     assert runner.main(argv) == 0
+    output = capsys.readouterr().out
+    assert (
+        "Smoke policy: strict-derived input blocking and output sanitization; "
+        "not unmodified @strict"
+    ) in output
+    assert "Creating the sandbox with the prepared smoke configuration" in stages
 
     if uses_firewall:
         assert not any(command[1:2] == ["network"] for command in commands)
@@ -553,23 +588,32 @@ def test_temporary_podman_image_names_are_qualified_as_local():
     )
 
 
-def test_sandbox_profile_preserves_strict_policy_and_enables_hook_evidence(tmp_path):
+def test_smoke_config_derives_from_strict_with_explicit_output_sanitization(tmp_path):
     runner = _load(RUNNER_PATH, "agent_cli_smoke_profile")
-    profile_path = tmp_path / "strict-smoke.json"
-    runner.write_strict_smoke_profile(profile_path)
-    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    config_dir = tmp_path / "smoke-config"
+    original_strict = runner.STRICT_PROFILE.read_bytes()
+    runner.write_smoke_config(config_dir)
+    profile = json.loads((config_dir / "ai-guardian.json").read_text(encoding="utf-8"))
     strict = json.loads(runner.STRICT_PROFILE.read_text(encoding="utf-8"))
 
     assert profile["secret_scanning"] == strict["secret_scanning"]
     assert profile["prompt_injection"] == strict["prompt_injection"]
     assert profile["ssrf_protection"] == strict["ssrf_protection"]
-    assert profile["secret_redaction"] == strict["secret_redaction"]
-    assert profile["scan_pii"] == strict["scan_pii"]
+    assert profile["secret_redaction"]["enabled"] is True
+    assert profile["scan_pii"]["action"] == "redact"
     assert profile["latency_tracking"]["enabled"] is True
     assert profile["violation_notifications"]["enabled"] is False
     assert strict["violation_notifications"]["enabled"] is True
+    assert strict["secret_redaction"]["enabled"] is False
+    assert strict["scan_pii"]["action"] == "block"
+    assert runner.STRICT_PROFILE.read_bytes() == original_strict
     strict["violation_notifications"]["enabled"] = False
     strict.setdefault("latency_tracking", {})["enabled"] = True
+    strict["secret_redaction"]["enabled"] = True
+    strict["scan_pii"]["action"] = "redact"
+    strict["_comment_secret_redaction"] = (
+        "Smoke-only: sanitize sensitive tool output; this is not unmodified @strict."
+    )
     assert profile == strict
 
 
@@ -838,7 +882,7 @@ def test_claude_tos_opt_in_preinstalls_only_in_temporary_smoke_image(
 
 def test_sandbox_runtime_never_receives_claude_install_consent(tmp_path):
     runner = _load(RUNNER_PATH, "agent_cli_claude_runtime_tos")
-    profile = tmp_path / "strict.json"
+    config_dir = tmp_path / "smoke-config"
     workspace = tmp_path / "workspace"
     command = runner.build_create_command(
         ["ai-guardian"],
@@ -846,7 +890,7 @@ def test_sandbox_runtime_never_receives_claude_install_consent(tmp_path):
         "claude",
         "default",
         "image",
-        profile,
+        config_dir,
         workspace,
         "ag-cli-smoke-claude-test",
     )
@@ -871,10 +915,17 @@ def test_main_builds_claude_image_only_after_explicit_tos_opt_in(
     runner._setup_podman_firewall = lambda *_args: True
     runner._run_case = lambda *_args, **_kwargs: True
     image_options = []
-    runner.build_current_image = (
-        lambda *_args, **kwargs: image_options.append(kwargs["install_claude_code"])
-        or "localhost/claude-smoke:test"
-    )
+
+    def build_image(_engine, root, _wheel, **kwargs):
+        config = json.loads(
+            (root / "smoke-config" / "ai-guardian.json").read_text(encoding="utf-8")
+        )
+        assert config["secret_redaction"]["enabled"] is True
+        assert config["scan_pii"]["action"] == "redact"
+        image_options.append(kwargs["install_claude_code"])
+        return "localhost/claude-smoke:test"
+
+    runner.build_current_image = build_image
     commands = []
 
     def fake_run(command, *_args, **_kwargs):
