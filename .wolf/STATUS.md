@@ -100,21 +100,21 @@ budget_tokens: 1000
 
 - The user does not want smoke daemons hidden through a discovery exception;
   preserve ordinary tray discovery and investigate network isolation instead.
-- `scripts/agent_cli_test.py` attaches the sandbox to a dedicated internal network
-  before startup. The mock provider and hook checks are local to the container, so
-  passing smoke cases does not prove host/tray REST reachability.
-- Linux Podman probe: a disposable container attached to an `--internal` network
-  with a published REST port returned HTTP 200 from the host; disconnecting that
-  network made the same host request reset. Probe container/network were removed.
-  This shows detached networking explains the REST failure on Linux too; the
-  previous blanket Linux-vs-macOS explanation was incorrect. The user tested on
-  macOS and reports the smoke daemon appears in tray discovery but remains
-  unreachable; macOS Podman host-port forwarding is still unresolved.
-- Replaced the post-create network disconnect with a dedicated internal network
-  created before `sandbox create`; the new `--container-network` option attaches
-  the daemon to it from startup while preserving its published REST port and
-  ordinary discovery. The runner removes the network with the sandbox, or keeps
-  both under `--keep`.
+- Podman internal-network port forwarding varies by networking backend; upstream
+  issue #29792 reports rootless `pasta` forwarding failures. The earlier Linux
+  probe passed with its installed rootless port forwarder, but that did not
+  validate macOS Podman. The mock provider and hook checks are local to the
+  container, so smoke cases alone do not prove host/tray REST access.
+- `scripts/agent_cli_test.py` now keeps the dedicated `--internal` network and,
+  for Podman, creates a second DNS-disabled bridge with `no_default_route=true`.
+  It attaches this bridge after sandbox creation so Podman publishes the daemon
+  REST port through it. The container has no default IPv4 route; ordinary egress
+  is not restored. Both networks are removed with the sandbox, or retained under
+  `--keep`.
+- Local Podman 5.8.4 validated the two-network path: host HTTP 200, no default
+  IPv4 route, and successful cleanup. The real OpenCode V1 smoke then passed all
+  six cases with the no-default-route network. macOS Podman itself is not
+  accessible from this SSH session, so Mac qualification remains unconfirmed.
 - The user reported OpenCode smoke cases waiting two minutes or more on both Mac
   and Linux. Initial investigation found blocked update/model-catalog checks; the
   V1 runner also cold-started a backend/MCP lifecycle for every case. Disable
@@ -128,10 +128,13 @@ budget_tokens: 1000
   launching WSL. Local fixes are applied; 124 directly related unit tests plus
   Ruff/Black pass. CI rerun `41921048728` passed the Test matrix and related
   workflows.
-- **Next:** check CI for `53af5747`. The macOS Podman tray REST reachability issue
-  remains unresolved; do not claim
-  cross-platform qualification. Avoid asking the user to shuttle commands/results
-  between the Mac terminal and this SSH session.
+- CI run `41927995470` completed successfully, including all eight Python Test
+  matrix jobs. The focused runner/contract file passes 43 tests; Ruff, Black,
+  error-level Pylint pass. Package Mypy still reports 14 errors in the unchanged
+  `skill_discovery.py` and `scanners/secret_validator.py`.
+- **Next:** the user can rerun the normal Mac Podman smoke to confirm gvproxy host
+  forwarding with the new route-less bridge. Do not claim Mac qualification before
+  that run, and avoid asking the user to shuttle command output to this SSH session.
 
 ## Issue #2663 session initialization — 2026-11-03
 

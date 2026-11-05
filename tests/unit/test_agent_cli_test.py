@@ -206,11 +206,45 @@ def test_internal_network_command_requests_runtime_egress_isolation():
     ]
 
 
+def test_podman_published_port_network_has_no_default_route():
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_published_port_network")
+
+    assert runner.published_port_network_name("ag-cli-smoke-codex-1234abcd") == (
+        "ag-cli-smoke-codex-1234abcd-port"
+    )
+    assert runner.create_published_port_network_command(
+        "podman", "ag-cli-smoke-codex-1234abcd-port"
+    ) == [
+        "podman",
+        "network",
+        "create",
+        "--disable-dns",
+        "--opt",
+        "no_default_route=true",
+        "ag-cli-smoke-codex-1234abcd-port",
+    ]
+    assert runner.connect_published_port_network_command(
+        "podman", "ag-cli-smoke-codex-1234abcd-port", "ag-cli-smoke-codex-1234abcd"
+    ) == [
+        "podman",
+        "network",
+        "connect",
+        "ag-cli-smoke-codex-1234abcd-port",
+        "ag-cli-smoke-codex-1234abcd",
+    ]
+    assert runner._is_podman_engine("podman")
+    assert runner._is_podman_engine("/usr/bin/podman")
+    assert not runner._is_podman_engine("docker")
+
+
 @pytest.mark.parametrize("keep", (False, True))
-def test_main_creates_internal_network_before_sandbox_and_cleans_up(
-    keep, monkeypatch, tmp_path
+@pytest.mark.parametrize(
+    ("engine", "uses_port_network"), (("podman", True), ("docker", False))
+)
+def test_main_sets_up_egress_isolated_networks_and_cleans_up(
+    engine, uses_port_network, keep, monkeypatch, tmp_path
 ):
-    runner = _load(RUNNER_PATH, f"agent_cli_smoke_lifecycle_{keep}")
+    runner = _load(RUNNER_PATH, f"agent_cli_smoke_lifecycle_{engine}_{keep}")
     runner._temp_parent = lambda: tmp_path
     runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
     monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
@@ -237,7 +271,7 @@ def test_main_creates_internal_network_before_sandbox_and_cleans_up(
         "--image",
         "localhost/smoke:test",
         "--container-engine",
-        "podman",
+        engine,
         "--ai-guardian-command",
         "ai-guardian",
     ]
@@ -249,7 +283,7 @@ def test_main_creates_internal_network_before_sandbox_and_cleans_up(
     network_create = next(
         index
         for index, command in enumerate(commands)
-        if command[:4] == ["podman", "network", "create", "--internal"]
+        if command[:4] == [engine, "network", "create", "--internal"]
     )
     sandbox_create = next(
         index
@@ -261,10 +295,27 @@ def test_main_creates_internal_network_before_sandbox_and_cleans_up(
     assert create_command[create_command.index("--container-network") + 1].endswith(
         "-internal"
     )
-    network_remove = [
-        command for command in commands if command[:3] == ["podman", "network", "rm"]
+    port_network_creates = [
+        (index, command)
+        for index, command in enumerate(commands)
+        if command[:3] == [engine, "network", "create"]
+        and "no_default_route=true" in command
     ]
-    assert bool(network_remove) is not keep
+    port_network_connects = [
+        (index, command)
+        for index, command in enumerate(commands)
+        if command[:3] == [engine, "network", "connect"]
+    ]
+    assert bool(port_network_creates) is uses_port_network
+    assert bool(port_network_connects) is uses_port_network
+    if uses_port_network:
+        assert network_create < port_network_creates[0][0] < sandbox_create
+        assert sandbox_create < port_network_connects[0][0]
+        assert port_network_connects[0][1][3].endswith("-port")
+    network_remove = [
+        command for command in commands if command[:3] == [engine, "network", "rm"]
+    ]
+    assert len(network_remove) == (0 if keep else 1 + int(uses_port_network))
     assert bool(deleted) is not keep
     assert not any(command[1:3] == ["network", "disconnect"] for command in commands)
 
@@ -404,9 +455,7 @@ def test_opencode_v1_warmup_fails_if_clean_case_creates_a_violation(monkeypatch)
     assert not runner._warm_opencode_v1_server("podman", "smoke", "build", 30)
 
 
-def test_main_removes_internal_network_when_sandbox_creation_fails(
-    monkeypatch, tmp_path
-):
+def test_main_removes_smoke_networks_when_sandbox_creation_fails(monkeypatch, tmp_path):
     runner = _load(RUNNER_PATH, "agent_cli_smoke_network_cleanup_on_failure")
     runner._temp_parent = lambda: tmp_path
     runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
@@ -443,7 +492,16 @@ def test_main_removes_internal_network_when_sandbox_creation_fails(
         == 1
     )
 
-    assert any(command[:3] == ["podman", "network", "rm"] for command in commands)
+    assert (
+        len(
+            [
+                command
+                for command in commands
+                if command[:3] == ["podman", "network", "rm"]
+            ]
+        )
+        == 2
+    )
 
 
 def test_container_engine_prefers_docker_then_falls_back_to_podman(

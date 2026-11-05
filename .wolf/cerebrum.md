@@ -268,6 +268,14 @@
   the same rootless image store without exposing the host config directory to the
   AI Guardian CLI.
 
+- **2026-11-04 — Podman smoke REST publishing (#2662):** Port forwarding from
+  internal networks varies by Podman networking backend (upstream #29792 reports
+  rootless `pasta` failures). Keep the internal network, then attach a
+  DNS-disabled bridge with `no_default_route=true` after container creation so
+  the published REST port has a non-internal network while the container has no
+  default IPv4 route. A Linux Podman probe validated the route table and host HTTP
+  path; this does not qualify macOS gvproxy without a Mac run.
+
 - **2026-11-03 — Direct hook notifications (#2651):** A short-lived CLI must
   commit the privacy-safe event to the durable outbox before returning; a
   process-local daemon thread is not a handoff. Deliver outside hook latency with
