@@ -1698,8 +1698,11 @@ def test_firewall_gate_opens_only_after_successful_helper(
     assert events == (["helper", "release_gate"] if helper_code == 0 else ["helper"])
 
 
+@pytest.mark.parametrize(
+    "windows_newlines", (False, True), ids=("native", "windows-newlines")
+)
 def test_firewall_readiness_marker_is_published_after_complete_write(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, windows_newlines
 ):
     runner = _load(RUNNER_PATH, "agent_cli_firewall_atomic_readiness")
     ready = tmp_path / "ready"
@@ -1714,6 +1717,9 @@ def test_firewall_readiness_marker_is_published_after_complete_write(
 
     def checked_write(fd, data):
         assert not ready.exists(), "startup gate can observe an incomplete marker"
+        if windows_newlines and sys.platform != "win32":
+            # Windows already translates text-mode descriptors natively.
+            data = data.replace(b"\n", b"\r\n")
         return write(fd, data)
 
     def release_gate(engine, name, command, timeout):
@@ -1733,7 +1739,8 @@ def test_firewall_readiness_marker_is_published_after_complete_write(
         30,
         {},
     )
-    assert ready.read_bytes() == b"installed\n"
+    # Match the gate's universal-newline text read, not host-specific raw bytes.
+    assert ready.read_text(encoding="ascii") == "installed\n"
 
 
 def test_supplied_podman_images_without_bootstrap_are_not_rebuilt(monkeypatch, capsys):
