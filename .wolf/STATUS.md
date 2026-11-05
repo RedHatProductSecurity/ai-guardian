@@ -5,7 +5,7 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-04 (UTC)
+> Last updated: 2026-11-05 (UTC)
 
 ---
 
@@ -100,21 +100,18 @@ budget_tokens: 1000
 
 - The user does not want smoke daemons hidden through a discovery exception;
   preserve ordinary tray discovery and investigate network isolation instead.
-- Podman internal-network port forwarding varies by networking backend; upstream
-  issue #29792 reports rootless `pasta` forwarding failures. The earlier Linux
-  probe passed with its installed rootless port forwarder, but that did not
-  validate macOS Podman. The mock provider and hook checks are local to the
-  container, so smoke cases alone do not prove host/tray REST access.
-- `scripts/agent_cli_test.py` now keeps the dedicated `--internal` network and,
-  for Podman, creates a second DNS-disabled bridge with `no_default_route=true`.
-  It attaches this bridge after sandbox creation so Podman publishes the daemon
-  REST port through it. The container has no default IPv4 route; ordinary egress
-  is not restored. Both networks are removed with the sandbox, or retained under
-  `--keep`.
-- Local Podman 5.8.4 validated the two-network path: host HTTP 200, no default
-  IPv4 route, and successful cleanup. The real OpenCode V1 smoke then passed all
-  six cases with the no-default-route network. macOS Podman itself is not
-  accessible from this SSH session, so Mac qualification remains unconfirmed.
+- The first Podman workaround kept an `--internal` network and attached a
+  no-default-route bridge after sandbox creation. The user tested Claude on macOS
+  and still saw a Daemon REST error; that approach did not solve Mac reachability.
+- Upstream Podman issue #11396 records that macOS published-port forwarding works
+  with a bridge network. The runner now uses a single DNS-disabled bridge with
+  `no_default_route=true` for Podman and attaches it at container creation, so
+  port forwarding is established on the initial network. Docker retains its
+  internal-only network. No default IPv4 or IPv6 route is added, and there is no
+  post-start network connection.
+- Local Podman 5.8.4 validated the single-network path: host HTTP 200, no default
+  IPv4/IPv6 routes, and the real OpenCode V1 smoke passed all six cases. This still
+  does not qualify macOS gvproxy; the updated path needs a Mac run.
 - The user reported OpenCode smoke cases waiting two minutes or more on both Mac
   and Linux. Initial investigation found blocked update/model-catalog checks; the
   V1 runner also cold-started a backend/MCP lifecycle for every case. Disable
@@ -132,9 +129,19 @@ budget_tokens: 1000
   matrix jobs. The focused runner/contract file passes 43 tests; Ruff, Black,
   error-level Pylint pass. Package Mypy still reports 14 errors in the unchanged
   `skill_discovery.py` and `scanners/secret_validator.py`.
-- **Next:** the user can rerun the normal Mac Podman smoke to confirm gvproxy host
-  forwarding with the new route-less bridge. Do not claim Mac qualification before
-  that run, and avoid asking the user to shuttle command output to this SSH session.
+- CI run `41938697614` is still in progress. Its `Container Images (real-agent
+  smoke checks)` job failed at the pinned OpenCode V2 version assertion because
+  the CLI reports `opencode v2.0.24`, not bare `2.0.24`. The release-readiness
+  check now strips that display prefix before comparing; the related unit contract
+  asserts normalization. The old run's completed companion jobs were green at
+  last inspection; this workflow correction will be validated on the next run.
+- The simplified Podman runner passes all 43 focused tests, Ruff, Black, and
+  error-level Pylint. A local Podman 5.8.4 probe returned HTTP 200 with no default
+  IPv4/IPv6 routes, and OpenCode V1 passed all six smoke cases on this setup.
+- **Next:** push the single-network change and workflow fix; ask for one Mac retry
+  against that updated branch. Do not claim Mac qualification until it succeeds.
+  Avoid requesting copied output unless it helps distinguish a tray REST failure
+  from a runner smoke failure.
 
 ## Issue #2663 session initialization — 2026-11-03
 

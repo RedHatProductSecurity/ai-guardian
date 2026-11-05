@@ -56,12 +56,11 @@ client/model request, and the runner removes host provider credentials before
 sandbox creation. These checks do not contact a model provider or incur inference
 charges.
 
-On Podman, the runner keeps the sandbox on its dedicated internal network and
-attaches a second DNS-disabled bridge with `no_default_route=true` for host-published
-REST traffic. Port forwarding from an internal-only network varies by Podman
-networking backend; the additional bridge preserves normal tray discovery without
-adding a default route to external networks. Docker remains on its existing
-internal-only path; the Podman-specific route-less bridge is not applied to Docker.
+On Podman, the runner creates a dedicated DNS-disabled bridge with
+`no_default_route=true` and attaches the sandbox to it at startup. This allows
+Podman to publish the REST port on the bridge from container creation, without
+adding a default route to external networks. Docker continues to use its
+internal-only network.
 
 Run one client locally with Docker or Podman and the current source checkout:
 
