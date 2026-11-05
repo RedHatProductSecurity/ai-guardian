@@ -785,6 +785,7 @@ jobs:
       - name: Verify pinned OpenCode V2 smoke image version
         run: |
           opencode_v2_version="$(docker run --rm --entrypoint opencode ai-guardian-opencode-v2-readiness --version)"
+          opencode_v2_version="${opencode_v2_version#opencode v}"
           echo "OpenCode V2: $opencode_v2_version"
           test "$opencode_v2_version" = "2.0.24"
 

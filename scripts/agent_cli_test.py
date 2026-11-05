@@ -598,9 +598,9 @@ def internal_network_name(container_name: str) -> str:
     return f"{container_name}-internal"
 
 
-def published_port_network_name(container_name: str) -> str:
-    """Return the Podman bridge used only for the published REST port."""
-    return f"{container_name}-port"
+def no_default_route_network_name(container_name: str) -> str:
+    """Return the Podman bridge used for the isolated smoke sandbox."""
+    return f"{container_name}-isolated"
 
 
 def _is_podman_engine(engine: str) -> bool:
@@ -613,8 +613,10 @@ def create_internal_network_command(engine: str, network_name: str) -> List[str]
     return [engine, "network", "create", "--internal", network_name]
 
 
-def create_published_port_network_command(engine: str, network_name: str) -> List[str]:
-    """Create a DNS-disabled bridge without a default route for port forwarding."""
+def create_no_default_route_network_command(
+    engine: str, network_name: str
+) -> List[str]:
+    """Create a DNS-disabled Podman bridge without a default route."""
     return [
         engine,
         "network",
@@ -624,13 +626,6 @@ def create_published_port_network_command(engine: str, network_name: str) -> Lis
         "no_default_route=true",
         network_name,
     ]
-
-
-def connect_published_port_network_command(
-    engine: str, network_name: str, container_name: str
-) -> List[str]:
-    """Attach the route-less bridge after creation so Podman publishes the port."""
-    return [engine, "network", "connect", network_name, container_name]
 
 
 def _create_internal_network(
@@ -655,43 +650,22 @@ def _create_internal_network(
     return True
 
 
-def _create_published_port_network(
+def _create_no_default_route_network(
     engine: str,
     network_name: str,
     timeout: int,
     env: Dict[str, str],
 ) -> bool:
-    """Create the Podman-only bridge that carries host-published REST traffic."""
+    """Create the Podman-only egress-restricted network before the sandbox."""
     result = _run(
-        create_published_port_network_command(engine, network_name),
+        create_no_default_route_network_command(engine, network_name),
         timeout,
         env,
-        progress="Creating a no-default-route published-port network",
+        progress="Creating a no-default-route smoke network",
     )
     if result.returncode != 0:
-        print("ERROR: unable to create the route-less published-port network")
-        _report_failure_details("Published-port network creation", result)
-        return False
-    return True
-
-
-def _connect_published_port_network(
-    engine: str,
-    network_name: str,
-    container_name: str,
-    timeout: int,
-    env: Dict[str, str],
-) -> bool:
-    """Attach the Podman port-forward network without adding an egress route."""
-    result = _run(
-        connect_published_port_network_command(engine, network_name, container_name),
-        timeout,
-        env,
-        progress="Attaching the no-default-route published-port network",
-    )
-    if result.returncode != 0:
-        print("ERROR: unable to attach the route-less published-port network")
-        _report_failure_details("Published-port network attachment", result)
+        print("ERROR: unable to create the no-default-route smoke network")
+        _report_failure_details("Route-less network creation", result)
         return False
     return True
 
@@ -1224,11 +1198,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     image = args.image
     built_image = False
     name = f"ag-cli-smoke-{args.cli_name}-{uuid.uuid4().hex[:8]}"
-    network_name = internal_network_name(name)
-    published_network_name = (
-        published_port_network_name(name)
-        if _is_podman_engine(args.container_engine)
-        else None
+    podman_engine = _is_podman_engine(args.container_engine)
+    network_name = (
+        no_default_route_network_name(name)
+        if podman_engine
+        else internal_network_name(name)
+    )
+    create_network = (
+        _create_no_default_route_network if podman_engine else _create_internal_network
     )
     created = False
     created_networks: List[str] = []
@@ -1258,21 +1235,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             _progress("Using the supplied smoke image")
 
-        if not _create_internal_network(
+        if not create_network(
             args.container_engine, network_name, args.timeout, host_env
         ):
             return 1
         created_networks.append(network_name)
-
-        if published_network_name:
-            if not _create_published_port_network(
-                args.container_engine,
-                published_network_name,
-                args.timeout,
-                host_env,
-            ):
-                return 1
-            created_networks.append(published_network_name)
 
         command = build_create_command(
             guardian,
@@ -1295,14 +1262,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if not created:
             print("ERROR: AI Guardian could not create the temporary sandbox")
             _report_failure_details("Sandbox creation", create_result)
-            return 1
-        if published_network_name and not _connect_published_port_network(
-            args.container_engine,
-            published_network_name,
-            name,
-            args.timeout,
-            host_env,
-        ):
             return 1
         if not _wait_for_sandbox_ready(args.container_engine, name, args.timeout):
             print("ERROR: temporary sandbox setup did not become ready")

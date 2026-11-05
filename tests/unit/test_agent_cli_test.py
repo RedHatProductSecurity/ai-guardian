@@ -196,9 +196,9 @@ def test_internal_network_command_requests_runtime_egress_isolation():
         "ag-cli-smoke-codex-1234abcd-internal"
     )
     assert runner.create_internal_network_command(
-        "podman", "ag-cli-smoke-codex-1234abcd-internal"
+        "docker", "ag-cli-smoke-codex-1234abcd-internal"
     ) == [
-        "podman",
+        "docker",
         "network",
         "create",
         "--internal",
@@ -206,14 +206,14 @@ def test_internal_network_command_requests_runtime_egress_isolation():
     ]
 
 
-def test_podman_published_port_network_has_no_default_route():
-    runner = _load(RUNNER_PATH, "agent_cli_smoke_published_port_network")
+def test_podman_smoke_network_has_no_default_route():
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_no_default_route_network")
 
-    assert runner.published_port_network_name("ag-cli-smoke-codex-1234abcd") == (
-        "ag-cli-smoke-codex-1234abcd-port"
+    assert runner.no_default_route_network_name("ag-cli-smoke-codex-1234abcd") == (
+        "ag-cli-smoke-codex-1234abcd-isolated"
     )
-    assert runner.create_published_port_network_command(
-        "podman", "ag-cli-smoke-codex-1234abcd-port"
+    assert runner.create_no_default_route_network_command(
+        "podman", "ag-cli-smoke-codex-1234abcd-isolated"
     ) == [
         "podman",
         "network",
@@ -221,16 +221,7 @@ def test_podman_published_port_network_has_no_default_route():
         "--disable-dns",
         "--opt",
         "no_default_route=true",
-        "ag-cli-smoke-codex-1234abcd-port",
-    ]
-    assert runner.connect_published_port_network_command(
-        "podman", "ag-cli-smoke-codex-1234abcd-port", "ag-cli-smoke-codex-1234abcd"
-    ) == [
-        "podman",
-        "network",
-        "connect",
-        "ag-cli-smoke-codex-1234abcd-port",
-        "ag-cli-smoke-codex-1234abcd",
+        "ag-cli-smoke-codex-1234abcd-isolated",
     ]
     assert runner._is_podman_engine("podman")
     assert runner._is_podman_engine("/usr/bin/podman")
@@ -239,10 +230,11 @@ def test_podman_published_port_network_has_no_default_route():
 
 @pytest.mark.parametrize("keep", (False, True))
 @pytest.mark.parametrize(
-    ("engine", "uses_port_network"), (("podman", True), ("docker", False))
+    ("engine", "uses_no_default_route_network"),
+    (("podman", True), ("docker", False)),
 )
 def test_main_sets_up_egress_isolated_networks_and_cleans_up(
-    engine, uses_port_network, keep, monkeypatch, tmp_path
+    engine, uses_no_default_route_network, keep, monkeypatch, tmp_path
 ):
     runner = _load(RUNNER_PATH, f"agent_cli_smoke_lifecycle_{engine}_{keep}")
     runner._temp_parent = lambda: tmp_path
@@ -283,7 +275,7 @@ def test_main_sets_up_egress_isolated_networks_and_cleans_up(
     network_create = next(
         index
         for index, command in enumerate(commands)
-        if command[:4] == [engine, "network", "create", "--internal"]
+        if command[:3] == [engine, "network", "create"]
     )
     sandbox_create = next(
         index
@@ -292,32 +284,33 @@ def test_main_sets_up_egress_isolated_networks_and_cleans_up(
     )
     assert network_create < sandbox_create
     create_command = commands[sandbox_create]
-    assert create_command[create_command.index("--container-network") + 1].endswith(
-        "-internal"
-    )
-    port_network_creates = [
-        (index, command)
-        for index, command in enumerate(commands)
-        if command[:3] == [engine, "network", "create"]
-        and "no_default_route=true" in command
-    ]
-    port_network_connects = [
-        (index, command)
-        for index, command in enumerate(commands)
-        if command[:3] == [engine, "network", "connect"]
-    ]
-    assert bool(port_network_creates) is uses_port_network
-    assert bool(port_network_connects) is uses_port_network
-    if uses_port_network:
-        assert network_create < port_network_creates[0][0] < sandbox_create
-        assert sandbox_create < port_network_connects[0][0]
-        assert port_network_connects[0][1][3].endswith("-port")
+    sandbox_network = create_command[create_command.index("--container-network") + 1]
+    if uses_no_default_route_network:
+        assert commands[network_create] == [
+            engine,
+            "network",
+            "create",
+            "--disable-dns",
+            "--opt",
+            "no_default_route=true",
+            sandbox_network,
+        ]
+        assert sandbox_network.endswith("-isolated")
+    else:
+        assert commands[network_create] == [
+            engine,
+            "network",
+            "create",
+            "--internal",
+            sandbox_network,
+        ]
+        assert sandbox_network.endswith("-internal")
     network_remove = [
         command for command in commands if command[:3] == [engine, "network", "rm"]
     ]
-    assert len(network_remove) == (0 if keep else 1 + int(uses_port_network))
+    assert len(network_remove) == (0 if keep else 1)
     assert bool(deleted) is not keep
-    assert not any(command[1:3] == ["network", "disconnect"] for command in commands)
+    assert not any(command[1:3] == ["network", "connect"] for command in commands)
 
 
 def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path):
@@ -455,7 +448,7 @@ def test_opencode_v1_warmup_fails_if_clean_case_creates_a_violation(monkeypatch)
     assert not runner._warm_opencode_v1_server("podman", "smoke", "build", 30)
 
 
-def test_main_removes_smoke_networks_when_sandbox_creation_fails(monkeypatch, tmp_path):
+def test_main_removes_smoke_network_when_sandbox_creation_fails(monkeypatch, tmp_path):
     runner = _load(RUNNER_PATH, "agent_cli_smoke_network_cleanup_on_failure")
     runner._temp_parent = lambda: tmp_path
     runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
@@ -500,7 +493,7 @@ def test_main_removes_smoke_networks_when_sandbox_creation_fails(monkeypatch, tm
                 if command[:3] == ["podman", "network", "rm"]
             ]
         )
-        == 2
+        == 1
     )
 
 
@@ -1108,6 +1101,14 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
     )
     assert "--build-arg OPENCODE_VERSION=2.0.24" in v2_build["run"]
     assert "ai-guardian-opencode-v2-readiness" in v2_build["run"]
+    v2_version_check = next(
+        step
+        for step in steps
+        if step.get("name") == "Verify pinned OpenCode V2 smoke image version"
+    )
+    assert 'opencode_v2_version="${opencode_v2_version#opencode v}"' in (
+        v2_version_check["run"]
+    )
     v2_smoke = next(
         step
         for step in steps
