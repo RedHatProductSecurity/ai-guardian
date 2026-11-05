@@ -1233,7 +1233,14 @@ def _probe_rest(
 
 def _check_sandbox_rest(engine: str, name: str, timeout: int) -> bool:
     """Distinguish daemon/listener health, published-port forwarding and auth."""
-    result = _exec(engine, name, ["python3", "-c", _READ_REST_STATE], min(timeout, 5))
+    # The classic image installs AI Guardian in a uv tool environment, not in
+    # system python3. Only this package-importing reader needs that interpreter.
+    result = _exec(
+        engine,
+        name,
+        ["/opt/uv-tools/ai-guardian/bin/python3", "-c", _READ_REST_STATE],
+        min(timeout, 5),
+    )
     # This result contains a daemon credential. Never report stdout/stderr,
     # including when parsing or the container-side command fails.
     try:

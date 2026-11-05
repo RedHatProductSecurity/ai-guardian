@@ -142,6 +142,9 @@ host-published health/authenticated stats endpoints. Failures identify internal
 startup, missing port publication, host forwarding, or authentication separately;
 they do not imply that an unreachable daemon process stopped. Diagnostic output
 contains fixed status categories and port numbers, never credentials or bodies.
+The private reader uses the classic image's AI Guardian tool interpreter; system
+Python does not contain the installed package. This check does not alter image
+startup, normal bridge routing or the smoke egress firewall.
 Repeat these read-only checks on a retained smoke sandbox without rebuilding or
 changing its firewall:
 

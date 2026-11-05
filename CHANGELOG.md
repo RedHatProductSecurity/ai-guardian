@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Smoke REST diagnostics:** Run the private diagnostic reader with the classic
+  image's installed AI Guardian Python environment, not system Python, preventing
+  an import failure after daemon readiness. Image startup, bridge routing and the
+  smoke egress firewall are unchanged.
 - **Agent CLI smoke network isolation:** Podman smoke uses normal bridge routing
   and a smoke-only IPv4/IPv6 egress firewall, preserving the published daemon REST
   return path. A short-lived namespace helper installs the policy before setup;
