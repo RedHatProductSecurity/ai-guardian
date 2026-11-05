@@ -1103,14 +1103,28 @@ class TestModifiedOutputDelivery:
         data = json.loads(result["output"])
         assert data["modifiedResult"] == "redacted content"
 
-    def test_gemini_modified_output(self):
+    @pytest.mark.parametrize("replacement", ("redacted content", "", "[REDACTED]"))
+    def test_gemini_modified_output_requires_native_refusal(self, replacement):
         result = GeminiCLIAdapter().format_response(
             has_secrets=False,
             hook_event=HookEvent.POST_TOOL_USE,
-            modified_output="redacted content",
+            modified_output=replacement,
         )
         data = json.loads(result["output"])
-        assert data["hookSpecificOutput"]["updatedToolOutput"] == "redacted content"
+        assert data["decision"] == "deny"
+        assert data["reason"] == (
+            "AI Guardian blocked this tool result because Gemini CLI does not "
+            "support safe output replacement."
+        )
+        assert "updatedToolOutput" not in json.dumps(data)
+        assert result["_blocked"] is True
+
+    def test_gemini_clean_result_has_no_replacement_or_refusal(self):
+        result = GeminiCLIAdapter().format_response(
+            has_secrets=False, hook_event=HookEvent.POST_TOOL_USE
+        )
+        assert json.loads(result["output"]) == {}
+        assert not result.get("_blocked")
 
     def test_modified_output_not_set_on_pretooluse(self):
         """modified_output should only apply to PostToolUse events."""

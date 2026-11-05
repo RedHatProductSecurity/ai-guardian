@@ -94,7 +94,20 @@ class GeminiCLIAdapter(HookAdapter):
         tool_name: Optional[str] = None,
     ) -> Dict:
         response: Dict[str, Any]
-        if has_secrets and error_message:
+        if hook_event == HookEvent.POST_TOOL_USE and modified_output is not None:
+            # Gemini does not consume updatedToolOutput. A best-effort field or
+            # additionalContext leaves the original result visible to the model.
+            # Its native AfterTool denial replaces both model and display output.
+            reason = (
+                "AI Guardian blocked this tool result because Gemini CLI does not "
+                "support safe output replacement."
+            )
+            logger.info(
+                "Gemini tool result denied: safe output replacement unsupported"
+            )
+            response = {"decision": "deny", "reason": reason}
+            has_secrets = True
+        elif has_secrets and error_message:
             final_error = self._combine_error_messages(error_message, warning_message)
             response = {
                 "decision": "deny",
@@ -120,16 +133,6 @@ class GeminiCLIAdapter(HookAdapter):
                     response["hookSpecificOutput"] = {
                         "additionalContext": agent_ctx or combined
                     }
-            if hook_event == HookEvent.POST_TOOL_USE and modified_output is not None:
-                logger.warning(
-                    "%s: modified_output provided but output replacement "
-                    "may not be supported — redacted content sent as best-effort",
-                    self.name,
-                )
-                if "hookSpecificOutput" not in response:
-                    response["hookSpecificOutput"] = {}
-                response["hookSpecificOutput"]["updatedToolOutput"] = modified_output
-
         return self._add_metadata(
             {"output": json.dumps(response), "exit_code": 0},
             has_secrets,

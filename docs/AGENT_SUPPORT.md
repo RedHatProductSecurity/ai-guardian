@@ -224,7 +224,7 @@ Coverage per agent depends on which hooks are available. This table shows repres
 
 Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
 
-Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus the equivalent prompt event where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Gemini uses its `BeforeAgent` event for prompt checks. Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
+Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus the equivalent prompt event where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Gemini uses its `BeforeAgent` event for prompt checks; sensitive tool output is refused rather than replaced (see below). Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
 
 | Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
 |---|---|---|---|---|---|---|
@@ -255,6 +255,16 @@ Agents with full hook support not shown individually (Windsurf, Gemini CLI, Clin
 - **No** — not supported
 
 ## Known Limitations
+
+### Gemini CLI — sensitive tool results are refused, not replaced
+
+Gemini's native `AfterTool` payload exposes model-visible output as
+`tool_response.llmContent`, including structured text parts. AI Guardian scans
+that content, not just its separate display text. Gemini CLI 0.67.0 ignores
+`updatedToolOutput`, so requests to redact/sanitize a result instead return a
+native `decision: deny`. Gemini replaces the original model and display results
+with a fixed refusal. Clean results are unchanged; this is containment through
+refusal, not delivery of sanitized output.
 
 ### Password-likelihood boundary qualification
 
@@ -538,6 +548,16 @@ registers the existing signed identity manifest; server startup still performs
 the existing nonce attestation, and a failed attestation registers no MCP tools.
 If npm is unavailable or the install fails, setup leaves the extension in place
 and reports the retry command.
+
+Pi can advertise its session transcript path before creating the file. AI Guardian
+records byte zero for this expected initial absence without creating a fabricated
+transcript, then scans the first persisted content when it appears. Other initial
+I/O errors still follow the configured scan-error policy; existing transcript
+baselines are unchanged.
+
+Pi's exact native `bash` tool is normalized to canonical `Bash` for shell permissions,
+SSRF and configuration-exfiltration checks before execution. Custom and MCP tool
+names are not rewritten.
 
 This is agent-level protection for activity routed through a user-controlled Pi
 process. It does not enforce policy on activity outside that process; OpenShell

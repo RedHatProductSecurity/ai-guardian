@@ -1380,6 +1380,45 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         self.assertEqual(output, "File content here")
         self.assertEqual(tool_name, "Read")
 
+    def test_extract_gemini_native_model_content_instead_of_display_or_legacy_fields(
+        self,
+    ):
+        for content in (
+            "synthetic native output",
+            [{"text": "synthetic native output"}, {"text": "second part"}],
+            {"text": "synthetic native output"},
+        ):
+            with self.subTest(content=content):
+                output, _ = ai_guardian.extract_tool_result(
+                    {
+                        "tool_name": "run_shell_command",
+                        "tool_response": {
+                            "llmContent": content,
+                            "returnDisplay": "display only",
+                            "output": "legacy output must not hide native content",
+                        },
+                    }
+                )
+                self.assertIsInstance(output, str)
+                self.assertIn("synthetic native output", output)
+                if isinstance(content, list):
+                    self.assertIn("second part", output)
+                self.assertNotIn("display only", output)
+
+    def test_extract_gemini_empty_native_content_does_not_scan_display_metadata(self):
+        for content in (None, "", []):
+            with self.subTest(content=content):
+                output, _ = ai_guardian.extract_tool_result(
+                    {
+                        "tool_name": "run_shell_command",
+                        "tool_response": {
+                            "llmContent": content,
+                            "returnDisplay": "display only",
+                        },
+                    }
+                )
+                self.assertNotIn("display only", output or "")
+
     def test_extract_tool_result_write_skipped(self):
         """Test Write tool response is skipped (no scanning needed)"""
         hook_data = {

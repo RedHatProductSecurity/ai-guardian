@@ -7,6 +7,7 @@ import sys
 import threading
 import urllib.request
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -530,6 +531,48 @@ def test_prepared_smoke_config_requests_sanitized_post_tool_output(
     assert result["exit_code"] == 0
 
 
+@pytest.mark.parametrize(
+    "case", ("clean_tool", "tool_output_secret", "tool_output_pii")
+)
+@pytest.mark.parametrize("structured", (False, True))
+def test_gemini_native_smoke_output_is_clean_or_natively_denied(
+    provider, smoke_config, monkeypatch, tmp_path, case, structured
+):
+    from ai_guardian import process_hook_data
+
+    monkeypatch.setattr(
+        "ai_guardian.scanners.secret_scanning.check_secrets",
+        lambda *args, **kwargs: (
+            case == "tool_output_secret",
+            "Synthetic secret detected" if case == "tool_output_secret" else None,
+        ),
+    )
+    text = provider.tool_output(case)
+    result = process_hook_data(
+        {
+            "hook_event_name": "AfterTool",
+            "tool_name": "run_shell_command",
+            "transcript_path": str(tmp_path / "gemini-session.jsonl"),
+            "cwd": str(tmp_path),
+            "session_id": "gemini-native-output",
+            "tool_input": {"command": provider.TOOL_COMMANDS[case]},
+            "tool_response": {
+                "llmContent": [{"text": text}] if structured else text,
+                "returnDisplay": text,
+            },
+        }
+    )
+    response = json.loads(result["output"])
+    if case == "clean_tool":
+        assert response.get("decision") != "deny"
+        assert not result.get("_blocked")
+    else:
+        assert response["decision"] == "deny"
+        assert result["_blocked"] is True
+        assert provider.sensitive_value(case) not in json.dumps(response)
+        assert "updatedToolOutput" not in json.dumps(response)
+
+
 @pytest.mark.parametrize("event", ("UserPromptSubmit", "PreToolUse"))
 @pytest.mark.parametrize("case_name", ("secret", "pii"))
 def test_prepared_smoke_config_keeps_sensitive_input_blocked(
@@ -558,6 +601,87 @@ def test_prepared_smoke_config_keeps_sensitive_input_blocked(
         assert payload["decision"] == "block"
     else:
         assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize("case_name", ("ssrf", "config_exfil"))
+def test_pi_native_shell_runs_the_real_smoke_command_scanners(
+    provider, smoke_config, monkeypatch, tmp_path, case_name
+):
+    from ai_guardian import process_hook_data
+
+    runner = load_script("agent_cli_test")
+    case = next(case for case in runner.CASES if case.name == case_name)
+    log = Mock(return_value="pi-native-finding")
+    monkeypatch.setattr(
+        "ai_guardian.violations.logger.ViolationLogger.log_violation", log
+    )
+    result = process_hook_data(
+        {
+            "hook_event_name": "PreToolUse",
+            "pi_version": "0.86.0",
+            "hook_source": "pi",
+            "tool_name": "bash",
+            "tool_use": {
+                "name": "bash",
+                "input": {"command": provider.TOOL_COMMANDS[case_name]},
+            },
+            "tool_use_id": "pi-native-pre-tool",
+            "session_id": "pi-command-scanner",
+            "cwd": str(tmp_path),
+        }
+    )
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert result["_blocked"] is True
+    assert result["_violation_type"] == "tool_permission"
+    assert any(
+        call.kwargs.get("violation_type") == case.expected_violation
+        for call in log.call_args_list
+    )
+
+
+@pytest.mark.parametrize(
+    "case", ("clean_tool", "tool_output_secret", "tool_output_pii")
+)
+def test_pi_native_shell_preserves_clean_output_and_safe_replacement(
+    provider, smoke_config, monkeypatch, tmp_path, case
+):
+    from ai_guardian import process_hook_data
+
+    monkeypatch.setattr(
+        "ai_guardian.scanners.secret_scanning.check_secrets",
+        lambda *args, **kwargs: (
+            case == "tool_output_secret",
+            "Synthetic secret detected" if case == "tool_output_secret" else None,
+        ),
+    )
+    result = process_hook_data(
+        {
+            "hook_event_name": "PostToolUse",
+            "hook_source": "pi",
+            "pi_version": "0.86.0",
+            "tool_name": "bash",
+            "tool_use": {
+                "name": "bash",
+                "input": {"command": provider.TOOL_COMMANDS[case]},
+            },
+            "tool_use_id": "pi-native-output",
+            "session_id": "pi-native-output",
+            "cwd": str(tmp_path),
+            "tool_response": {"output": provider.tool_output(case)},
+        }
+    )
+    response = json.loads(result["output"])
+    assert not result.get("_blocked")
+    assert result["exit_code"] == 0
+    if case == "clean_tool":
+        assert "updatedToolOutput" not in response.get("hookSpecificOutput", {})
+    else:
+        replacement = response["hookSpecificOutput"]["updatedToolOutput"]
+        # Post-tool extraction retains Pi's native name; its extension accepts
+        # this text replacement without requiring Claude's Bash result wrapper.
+        assert isinstance(replacement, str) and replacement
+        assert provider.sensitive_value(case) not in json.dumps(response)
 
 
 def configure_case(

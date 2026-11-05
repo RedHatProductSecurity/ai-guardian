@@ -25,6 +25,10 @@ class PiAdapter(BaseAgentAdapter):
     def ide_type(self):
         return IDEType.PI
 
+    def get_tool_name_map(self) -> Dict[str, str]:
+        """Map Pi's native shell tool to canonical shell checks and policies."""
+        return {"bash": "Bash"}
+
     @classmethod
     def can_handle(cls, hook_data: Dict) -> bool:
         if hook_data.get("pi_version"):

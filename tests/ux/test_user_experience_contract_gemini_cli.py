@@ -4,9 +4,50 @@ import json
 from contextlib import ExitStack
 from unittest.mock import patch
 
+import pytest
+
+from ai_guardian.constants import HookEvent
+from ai_guardian.hook_adapters.gemini import GeminiCLIAdapter
 from ai_guardian.hook_processing import process_hook_data
 from ai_guardian.setup import IDESetup
 from ai_guardian.tools.policy import ToolPolicyChecker
+
+
+@pytest.mark.parametrize("replacement", ("[REDACTED]", ""))
+def test_gemini_unsupported_sanitization_refuses_the_original_result(replacement):
+    """USER EXPERIENCE: sanitization requested -> native AfterTool deny, not a leak.
+
+    Gemini 0.67.0 ignores updatedToolOutput and appends additionalContext instead
+    of replacing the original. The deny reason must be fixed and safe: the CLI
+    replaces both llmContent and returnDisplay with its blocked-result message.
+
+    Manual verification: run all nine Gemini local-mock cases. Clean output must
+    arrive unchanged; sensitive output must execute, trigger a finding and both
+    native hooks, but never reach the mock, including token-count requests.
+    """
+    result = GeminiCLIAdapter().format_response(
+        has_secrets=False,
+        hook_event=HookEvent.POST_TOOL_USE,
+        modified_output=replacement,
+        warning_message="private output must not be forwarded",
+        violation_type="secret_redaction",
+    )
+    assert json.loads(result["output"]) == {
+        "decision": "deny",
+        "reason": "AI Guardian blocked this tool result because Gemini CLI does not support safe output replacement.",
+    }
+    assert result["_blocked"] is True
+    assert "private output" not in result["output"]
+    assert "updatedToolOutput" not in result["output"]
+
+
+def test_gemini_clean_aftertool_does_not_request_a_replacement_or_denial():
+    """USER EXPERIENCE: clean results are not blocked due to host limitations."""
+    result = GeminiCLIAdapter().format_response(
+        has_secrets=False, hook_event=HookEvent.POST_TOOL_USE
+    )
+    assert json.loads(result["output"]) == {}
+    assert not result.get("_blocked")
 
 
 def test_gemini_native_shell_tool_uses_bash_policy_and_returns_deny():

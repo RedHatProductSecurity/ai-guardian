@@ -97,6 +97,16 @@ to the mock fails; upstream limitations are not converted to passes or skips.
 Missing or unapproved native hooks also fail the evidence checks. The runner does
 not approve hooks or change their trust state.
 
+Gemini's native `AfterTool` output is scanned through `llmContent`. Since Gemini
+CLI 0.67.0 does not support safe output replacement, requested sanitization uses
+native result refusal instead; a pass proves containment, not sanitized delivery.
+Pi's first transcript may not exist until the first assistant message. This
+expected initial absence starts tracking at byte zero; subsequent persisted
+content must still be scanned, and other initial I/O errors remain fail-closed
+under the smoke policy. Its exact native `bash` tool is mapped to canonical `Bash`
+so SSRF/configuration-exfiltration probes must be denied before execution; a finding
+without that native pre-tool evidence is not a pass.
+
 Podman smoke uses normal bridge routing with a **smoke-only namespace firewall**,
 so the host's published daemon REST port keeps its normal return route. A trusted,
 short-lived helper installs an atomic nftables policy covering IPv4 and IPv6:

@@ -13,6 +13,7 @@ from ai_guardian.response_format import IDEType
 from ai_guardian.scanners.transcript.pi import (
     PiTranscriptAdapter,
     _extract_text_from_pi_entry,
+    scan_pi_transcript_incremental,
 )
 from ai_guardian.sessions.adapters import PiSessionAdapter
 from ai_guardian.setup.hooks import (
@@ -87,6 +88,31 @@ def test_pi_normalizes_shared_pascal_case_events():
     assert pre_tool.tool_use_id == "tool-1"
     assert post_tool.event is HookEvent.POST_TOOL_USE
     assert post_tool.tool_response == {"output": "hello"}
+
+
+@pytest.mark.parametrize("event", ("PreToolUse", "PostToolUse"))
+def test_pi_normalizes_its_exact_native_shell_name(event):
+    arguments = {"command": "printf hello"}
+    normalized = PiAdapter().normalize_input(
+        {
+            "hook_event_name": event,
+            "pi_version": "0.86.0",
+            "tool_name": "bash",
+            "tool_use": {"name": "bash", "input": arguments},
+            "tool_use_id": "pi-native-shell",
+        }
+    )
+    assert normalized.tool_name == "Bash"
+    assert normalized.tool_input == arguments
+    assert normalized.tool_use_id == "pi-native-shell"
+
+
+@pytest.mark.parametrize("name", ("Bash", "custom_bash", "mcp__example__bash"))
+def test_pi_shell_mapping_does_not_rename_other_tools(name):
+    normalized = PiAdapter().normalize_input(
+        {"hook_event_name": "PreToolUse", "pi_version": "0.86.0", "tool_name": name}
+    )
+    assert normalized.tool_name == name
 
 
 def test_pi_uses_shared_response_contract():
@@ -562,6 +588,91 @@ def test_pi_transcript_adapter_requires_pi_adapter():
     transcript = PiTranscriptAdapter()
     assert transcript.can_scan({}, PiAdapter()) is True
     assert transcript.can_scan({}, None) is False
+
+
+def test_pi_missing_first_transcript_starts_at_zero_and_scans_when_persisted(tmp_path):
+    path = tmp_path / "lazy-session.jsonl"
+    positions = {}
+    key = f"pi:{path}"
+    with (
+        mock.patch(
+            "ai_guardian.scanners.transcript.common._load_transcript_positions",
+            return_value=positions,
+        ),
+        mock.patch(
+            "ai_guardian.scanners.transcript.common._save_transcript_positions"
+        ) as save,
+        mock.patch(
+            "ai_guardian.scanners.transcript.common._scan_transcript_text",
+            return_value=["synthetic finding"],
+        ) as scan,
+    ):
+        assert scan_pi_transcript_incremental(str(path), {}, {}) == []
+        assert positions == {key: 0}
+        assert not path.exists()
+        assert scan_pi_transcript_incremental(str(path), {}, {}) == []
+        assert save.call_count == 1
+        scan.assert_not_called()
+
+        path.write_text(
+            json.dumps(
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "text", "text": "first persisted content"}
+                        ],
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        assert scan_pi_transcript_incremental(str(path), {}, {}) == [
+            "synthetic finding"
+        ]
+        assert scan.call_args.args[:2] == ("first persisted content", key)
+        assert positions[key] == path.stat().st_size
+
+
+def test_pi_existing_transcript_retains_initial_baseline(tmp_path):
+    path = tmp_path / "existing-session.jsonl"
+    path.write_text('{"type":"session"}\n', encoding="utf-8")
+    positions = {}
+    with (
+        mock.patch(
+            "ai_guardian.scanners.transcript.common._load_transcript_positions",
+            return_value=positions,
+        ),
+        mock.patch("ai_guardian.scanners.transcript.common._save_transcript_positions"),
+    ):
+        assert scan_pi_transcript_incremental(str(path), {}, {}) == []
+    assert positions[f"pi:{path}"] == path.stat().st_size
+
+
+@pytest.mark.parametrize(
+    "failure",
+    (PermissionError("unreadable transcript"), OSError("transcript storage failure")),
+)
+def test_pi_first_transcript_unexpected_io_error_is_not_suppressed(failure):
+    positions = {}
+    with (
+        mock.patch(
+            "ai_guardian.scanners.transcript.common._load_transcript_positions",
+            return_value=positions,
+        ),
+        mock.patch(
+            "ai_guardian.scanners.transcript.common._save_transcript_positions"
+        ) as save,
+        mock.patch(
+            "ai_guardian.scanners.transcript.pi.os.path.getsize", side_effect=failure
+        ),
+        pytest.raises(type(failure)),
+    ):
+        scan_pi_transcript_incremental("synthetic-session.jsonl", {}, {})
+    assert positions == {}
+    save.assert_not_called()
 
 
 def test_pi_session_adapter_reads_tree_shaped_jsonl(tmp_path, monkeypatch):
