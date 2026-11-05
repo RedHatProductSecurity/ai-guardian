@@ -747,6 +747,30 @@ jobs:
       - name: Install current wheel for sandbox lifecycle
         run: python -m pip install dist/*.whl
 
+      # Check the local version-selection interface without changing the existing
+      # prebuilt-image/cache strategy or passing a build pin with --image below.
+      - name: Verify smoke CLI version selection arguments
+        run: |
+          python - <<'PY'
+          import subprocess
+          import sys
+
+          command = [sys.executable, "scripts/agent_cli_test.py"]
+          help_result = subprocess.run(
+              [*command, "--help"], check=True, capture_output=True, text=True
+          )
+          if "--cli-version VERSION" not in help_result.stdout:
+              raise SystemExit("Smoke runner is missing --cli-version help")
+          result = subprocess.run(
+              [*command, "--cli-name", "opencode", "--agent", "build",
+               "--cli-version", "2.0.24", "--image", "ai-guardian-readiness"],
+              capture_output=True, text=True,
+          )
+          if result.returncode != 2 or "--cli-version and --image cannot be combined" not in result.stderr:
+              raise SystemExit("Smoke version/image conflict did not fail closed")
+          print("PASS smoke CLI version help and supplied-image guard")
+          PY
+
       - name: Build normal support image
         env:
           GITHUB_TOKEN: ${{ github.token }}

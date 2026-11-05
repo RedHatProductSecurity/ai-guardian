@@ -27,6 +27,164 @@ def provider():
     return load_script("agent_cli_mock_provider")
 
 
+def command_catalog(protocol, tools):
+    """Wrap synthetic name/schema pairs in each supported provider catalog."""
+    if protocol == "chat":
+        return {
+            "tools": [
+                {"type": "function", "function": {"name": name, "parameters": schema}}
+                for name, schema in tools
+            ]
+        }
+    if protocol == "responses":
+        return {
+            "tools": [
+                {"type": "function", "name": name, "parameters": schema}
+                for name, schema in tools
+            ]
+        }
+    if protocol == "anthropic":
+        return {
+            "tools": [{"name": name, "input_schema": schema} for name, schema in tools]
+        }
+    return {
+        "tools": [
+            {
+                "functionDeclarations": [
+                    {"name": name, "parameters": schema} for name, schema in tools
+                ]
+            }
+        ]
+    }
+
+
+def offered_command(provider, protocol, payload, case, request_numbers):
+    """Return the offered tool name/arguments, or None for a final text reply."""
+    response = getattr(provider, f"{protocol}_response")(
+        payload, case, *request_numbers
+    )
+    if protocol == "chat":
+        calls = response["choices"][0]["message"].get("tool_calls", [])
+        if calls:
+            call = calls[0]["function"]
+            return call["name"], json.loads(call["arguments"])
+    elif protocol == "responses":
+        call = response["output"][0]
+        if call["type"] == "function_call":
+            return call["name"], json.loads(call["arguments"])
+    elif protocol == "anthropic":
+        call = response["content"][0]
+        if call["type"] == "tool_use":
+            return call["name"], call["input"]
+    else:
+        call = response["candidates"][0]["content"]["parts"][0].get("functionCall")
+        if call:
+            return call["name"], call["args"]
+    return None
+
+
+@pytest.mark.parametrize(
+    ("protocol", "native_name", "argument", "field_type"),
+    (
+        ("chat", "bash", "command", "string"),
+        ("chat", "shell", "command", "string"),
+        ("anthropic", "Bash", "command", "string"),
+        ("responses", "shell", "command", "array"),
+        ("responses", "exec_command", "cmd", "string"),
+        ("responses", "shell_command", "command", "string"),
+        ("gemini", "run_shell_command", "command", "string"),
+    ),
+)
+@pytest.mark.parametrize(
+    "case",
+    ("ssrf", "config_exfil", "clean_tool", "tool_output_secret", "tool_output_pii"),
+)
+def test_mock_selects_native_shell_instead_of_an_earlier_advisory_checker(
+    provider, protocol, native_name, argument, field_type, case
+):
+    command_schema = {
+        "type": "object",
+        "properties": {"command": {"type": "string"}},
+        "required": ["command"],
+    }
+    native_schema = {
+        "type": "object",
+        "properties": {argument: {"type": field_type}},
+        "required": [argument],
+    }
+    payload = command_catalog(
+        protocol,
+        [
+            ("ai-guardian_check_command", command_schema),
+            ("mcp__other__shell", command_schema),
+            ("custom_command_helper", command_schema),
+            (native_name, native_schema),
+        ],
+    )
+    request_numbers = provider._record_request(case, payload)
+    assert request_numbers == (1, 1)
+    name, arguments = offered_command(
+        provider, protocol, payload, case, request_numbers
+    )
+    assert name == native_name
+    expected = provider.TOOL_COMMANDS[case]
+    if field_type == "array":
+        expected = ["bash", "-lc", expected]
+    assert arguments[argument] == expected
+    stats = provider._stats()
+    assert stats["tool_offers"] == {case: 1}
+    assert all(
+        tool_name not in json.dumps(stats)
+        for tool_name in (
+            "ai-guardian_check_command",
+            "mcp__other__shell",
+            "custom_command_helper",
+        )
+    )
+
+
+@pytest.mark.parametrize("protocol", ("chat", "responses", "anthropic", "gemini"))
+def test_advisory_or_unknown_command_tools_never_count_as_a_native_tool_offer(
+    provider, protocol
+):
+    schema = {"type": "object", "properties": {"command": {"type": "string"}}}
+    payload = command_catalog(
+        protocol,
+        [
+            (name, schema)
+            for name in (
+                "ai-guardian_check_command",
+                "mcp__other__bash",
+                "custom_command_helper",
+            )
+        ],
+    )
+    assert provider._find_command_tool(payload) is None
+    request_numbers = provider._record_request("clean_tool", payload)
+    assert request_numbers == (1, 0)
+    assert (
+        offered_command(provider, protocol, payload, "clean_tool", request_numbers)
+        is None
+    )
+    assert provider._stats()["tool_offers"] == {}
+    assert provider._stats()["command_tool_requests"] == {}
+    assert provider.TOOL_IDENTITIES == {}
+    assert provider.GEMINI_TOOL_CASES == {}
+
+
+def test_an_advisory_only_preflight_does_not_consume_the_native_tool_offer(provider):
+    schema = {"type": "object", "properties": {"command": {"type": "string"}}}
+    advisory = command_catalog("chat", [("ai-guardian_check_command", schema)])
+    assert provider._record_request("clean_tool", advisory) == (1, 0)
+    native = command_catalog(
+        "chat", [("ai-guardian_check_command", schema), ("bash", schema)]
+    )
+    numbers = provider._record_request("clean_tool", native)
+    assert numbers == (2, 1)
+    name, _arguments = offered_command(provider, "chat", native, "clean_tool", numbers)
+    assert name == "bash"
+
+
 def result_payload(provider, protocol, case, output):
     tool = {
         "name": "bash",

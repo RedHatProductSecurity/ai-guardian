@@ -70,6 +70,11 @@ execution witness contains only a fixed status, not tool output. The mock inspec
 all incoming request bodies in memory, including token-count preflights, and
 exports aggregate counters only. It also correlates native tool-result IDs (or
 Gemini function responses) so a tool offer or echoed prompt cannot prove execution.
+Command probes select only advertised native shell tools (including OpenCode's
+`bash`/`shell`), never advisory MCP checkers or arbitrary command-shaped tools.
+Catalog ordering must not turn a command check into an execution probe: an
+SSRF/config-exfil finding without native pre-tool evidence still fails. This
+selection is shared across hosts; it is not a Linux/macOS policy difference.
 
 The disposable smoke config retains strict prompt/pre-tool blocking, but enables
 secret output redaction and PII output masking. PII's redact action still blocks
@@ -109,6 +114,28 @@ scripts/agent-cli-test --cli-name codex --agent smoke
 scripts/agent-cli-test --cli-name opencode --agent build
 scripts/agent-cli-test --cli-name pi --agent openai
 ```
+
+To select OpenCode V1 or V2, pin its exact stable version when building a
+temporary smoke image:
+
+```bash
+scripts/agent-cli-test --cli-name opencode --agent build --cli-version 1.19.0
+scripts/agent-cli-test --cli-name opencode --agent build --cli-version 2.0.24
+```
+
+`--cli-version` currently supports only OpenCode and requires `1.x.y` or `2.x.y`
+(no `v` prefix, major-only selector, prerelease or `latest` tag). It passes the
+existing `OPENCODE_VERSION` build argument to the temporary image; omitting it
+preserves the Dockerfile default. The installed CLI must match the requested
+version before any warm-up or smoke case. V1 warms one persistent backend before
+the cases; V2 uses `--standalone` private servers and no V1 warm-up.
+This does not change host OpenCode, normal image defaults or normal auto-updates.
+Add `--container-engine podman` to either command to use the existing smoke-only
+firewall/bootstrap. Image build/cache behavior is otherwise unchanged.
+`--wheel PATH` may be combined with the pin, but `--image` and read-only diagnostics
+may not: supplied images are detected as installed, never silently rebuilt or
+modified to satisfy a version request. Other clients reject `--cli-version`
+rather than silently ignoring it.
 
 Claude Code can be tested with `--cli-name claude --agent default`. When the runner
 builds its temporary image, pass `--accept-proprietary-tos` only after accepting

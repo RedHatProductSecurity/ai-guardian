@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Smoke native tool routing:** Select an advertised native shell rather than the
+  first tool with a command-shaped input, which could be an advisory MCP checker
+  in OpenCode. Checker findings never substitute for native hook/execution evidence.
+  Shared hooks, policy, egress isolation and raw-delivery assertions are unchanged.
 - **Smoke output policy:** Prepare a disposable strict-derived configuration before
   sandbox creation and stage it through the existing config snapshot-copy path,
   leaving the active config writable. Exercise secret/PII output sanitization
@@ -85,6 +89,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit `--execute` is required for release mutations and publication.
 
 ### Added
+- **Smoke CLI version selection:** Use `--cli-name opencode --cli-version 1.19.0`
+  or `--cli-version 2.0.24` to pin OpenCode in a temporary smoke image and verify
+  the installed version before testing. Omission keeps the image default;
+  supplied images and other clients reject the option. Normal OpenCode installs,
+  image defaults, build/cache behavior and smoke isolation remain unchanged.
 - **Real-agent hook-stage evidence:** Add clean tool execution and synthetic secret/
   PII output cases. Require normalized pre/post-tool events and an execution witness;
   verify clean results reach the local mock and sensitive values do not, including
