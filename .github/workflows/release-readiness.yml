@@ -789,8 +789,9 @@ jobs:
           echo "OpenCode V2: $opencode_v2_version"
           test "$opencode_v2_version" = "2.0.24"
 
-      # Each runner invocation includes prompt, pre-tool deny, clean-tool and
-      # sensitive post-tool output cases. Native hook trust is never auto-approved.
+      # Each invocation prepares a strict-derived config before creation: prompt /
+      # pre-tool deny, clean-tool and sensitive-output sanitization cases. This is
+      # not unmodified @strict post-tool qualification. Trust is never auto-approved.
       - name: Verify real agent CLI hooks with local mock provider
         run: |
           scripts/agent-cli-test --cli-name codex --agent smoke \

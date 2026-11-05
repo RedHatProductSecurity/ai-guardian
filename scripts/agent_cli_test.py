@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run actual agent CLI hooks in a strict, credential-free sandbox."""
+"""Run actual agent CLI hooks in a credential-free, strict-derived smoke sandbox."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ MOCK_PROVIDER = Path(__file__).with_name("agent_cli_mock_provider.py")
 SMOKE_FIREWALL = Path(__file__).with_name("agent_cli_smoke_firewall.py")
 SMOKE_GATE = Path(__file__).with_name("agent_cli_smoke_gate.py")
 FIREWALL_IMAGE_LABEL = "nftables-v1"
+SMOKE_CONFIG_INPUT = "/sandbox/.config/ai-guardian.host.json"
 STATE_DIR = "/tmp/ai-guardian-agent-cli-smoke-state"
 MOCK_PORT = 18765
 MOCK_MODEL = "ag-smoke"
@@ -324,12 +325,12 @@ def build_create_command(
     cli_name: str,
     agent: str,
     image: str,
-    profile: Path,
+    config_dir: Path,
     workspace: Path,
     name: str,
     container_network: Optional[str] = None,
 ) -> List[str]:
-    """Build an AI Guardian sandbox create using a strict profile and image."""
+    """Stage the prepared smoke config using the normal snapshot-copy path."""
     command = [
         *ai_guardian,
         "sandbox",
@@ -344,8 +345,8 @@ def build_create_command(
         image,
         "--cli",
         cli_name,
-        "--profile",
-        str(profile),
+        "--config-dir",
+        str(config_dir),
         "--repo",
         str(workspace),
         "--env",
@@ -363,7 +364,7 @@ def build_podman_create_command(
     cli_name: str,
     agent: str,
     image: str,
-    profile: Path,
+    config_dir: Path,
     workspace: Path,
     name: str,
 ) -> List[str]:
@@ -413,8 +414,8 @@ def build_podman_create_command(
         "AI_GUARDIAN_CONFIG_DIR=/sandbox/.config/ai-guardian",
         "AI_GUARDIAN_HOME=/sandbox/.config/ai-guardian",
         "AI_GUARDIAN_SETUP_SCOPE=selected",
-        "AI_GUARDIAN_HOST_CONFIG_MOUNTED=false",
-        "AI_GUARDIAN_PROFILE=/tmp/ai-guardian-smoke-profile.json",
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true",
+        f"AI_GUARDIAN_HOST_CONFIG_PATH={SMOKE_CONFIG_INPUT}",
         f"AI_GUARDIAN_STATE_DIR={STATE_DIR}",
     ):
         command.extend(["--env", value])
@@ -423,7 +424,7 @@ def build_podman_create_command(
     command.extend(
         [
             "--volume",
-            f"{profile}:/tmp/ai-guardian-smoke-profile.json:ro,z",
+            f"{config_dir / 'ai-guardian.json'}:{SMOKE_CONFIG_INPUT}:ro,z",
             "--volume",
             f"{workspace}:/sandbox/repo:z",
             image,
@@ -686,14 +687,28 @@ def build_current_image(
     return image
 
 
-def write_strict_smoke_profile(path: Path) -> None:
-    """Preserve strict policy; mute notifications and enable hook-stage evidence."""
+def write_smoke_config(config_dir: Path) -> None:
+    """Prepare strict-derived input blocking plus output sanitization before startup.
+
+    This is intentionally not unmodified @strict: its post-tool block response
+    alone cannot prove output containment. Keep the raw-delivery failure checks
+    and exercise the existing redaction path without changing shared hooks.
+    """
     profile = json.loads(STRICT_PROFILE.read_text(encoding="utf-8"))
+    profile["secret_redaction"]["enabled"] = True
+    # PII redact still blocks prompts and pre-tool inputs; only output is masked.
+    profile["scan_pii"]["action"] = "redact"
+    profile["_comment_secret_redaction"] = (
+        "Smoke-only: sanitize sensitive tool output; this is not unmodified @strict."
+    )
     profile.setdefault("violation_notifications", {})["enabled"] = False
     # Existing opt-in telemetry supplies normalized hook-event counts only; no
-    # wrapper hook or change to client trust/security policy is needed.
+    # wrapper hook or change to client trust is needed.
     profile.setdefault("latency_tracking", {})["enabled"] = True
-    path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "ai-guardian.json").write_text(
+        json.dumps(profile, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def _progress(message: str) -> None:
@@ -1659,7 +1674,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Run Claude, Codex, Gemini, OpenCode, or Pi against a local mock provider in a fresh "
-            "strict-profile sandbox. No provider credentials or live model calls are used."
+            "strict-derived sandbox with output sanitization. "
+            "No provider credentials or live model calls are used."
         )
     )
     parser.add_argument(
@@ -1761,8 +1777,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "Temporary clean workspace for an AI Guardian CLI smoke test.\n",
         encoding="utf-8",
     )
-    profile = root / "strict-agent-cli-smoke.json"
-    write_strict_smoke_profile(profile)
+    config_dir = root / "smoke-config"
+    write_smoke_config(config_dir)
     host_env = sanitized_host_environment(home)
 
     image = args.image
@@ -1777,6 +1793,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     keep_files = False
     try:
         _progress(f"Starting {args.cli_name}/{args.agent} smoke check")
+        _progress(
+            "Smoke policy: strict-derived input blocking and output sanitization; "
+            "not unmodified @strict"
+        )
         if (
             _run(
                 [args.container_engine, "info"],
@@ -1810,7 +1830,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.cli_name,
                 args.agent,
                 image,
-                profile,
+                config_dir,
                 workspace,
                 name,
             )
@@ -1826,7 +1846,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.cli_name,
                 args.agent,
                 image,
-                profile,
+                config_dir,
                 workspace,
                 name,
                 container_network=network_name,
@@ -1836,7 +1856,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             command,
             args.timeout,
             host_env,
-            progress="Creating the strict-profile sandbox",
+            progress="Creating the sandbox with the prepared smoke configuration",
         )
         created = create_result.returncode == 0
         if not created:

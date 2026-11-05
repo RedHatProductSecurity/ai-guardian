@@ -46,8 +46,8 @@ the release issue open until that evidence and the post-release checks exist.
 ### Real-agent hook smoke test
 
 Release Readiness also invokes the bundled Codex, Gemini, OpenCode, and Pi CLIs in
-fresh `@strict` sandboxes using the current wheel. Claude Code uses an Anthropic Messages
-API adapter and is run only when an authorized maintainer has explicitly enabled
+fresh, strict-derived smoke sandboxes using the current wheel. Claude Code uses an
+Anthropic Messages API adapter and is run only when an authorized maintainer has explicitly enabled
 the CI ToS-consent variable described below. Clients point at local, loopback-only
 mock providers: malicious prompts must be blocked before reaching the provider,
 tool-call probes must be blocked by the normal client hooks, and clean prompts
@@ -71,9 +71,14 @@ all incoming request bodies in memory, including token-count preflights, and
 exports aggregate counters only. It also correlates native tool-result IDs (or
 Gemini function responses) so a tool offer or echoed prompt cannot prove execution.
 
-Strict policy is unchanged: sensitive output is **blocked**, not a qualification
-of warn-mode redaction. A client that logs a finding but still sends the original
-value to the mock fails; upstream limitations are not converted to passes or skips.
+The disposable smoke config retains strict prompt/pre-tool blocking, but enables
+secret output redaction and PII output masking. PII's redact action still blocks
+prompts and pre-tool file reads. This exercises the existing output-replacement
+path, not unmodified `@strict` post-tool blocking: Claude's post-tool
+`decision: block` is feedback and does not remove the original tool result.
+A pass with this config must not be reported as qualification of that strict
+block behavior. A client that logs a finding but still sends the original value
+to the mock fails; upstream limitations are not converted to passes or skips.
 Missing or unapproved native hooks also fail the evidence checks. The runner does
 not approve hooks or change their trust state.
 
@@ -119,10 +124,18 @@ Without `--image`, the runner builds a temporary support image from the current
 wheel. You can pass `--image` to reuse an image already built from that wheel;
 `--wheel PATH` selects a specific wheel for the temporary image. The `--agent`
 value is a Codex profile, an OpenCode agent profile, or (for Pi) the `openai`
-provider. The strict-profile copy preserves all security settings, suppresses
-desktop notifications, and enables existing hook-latency telemetry for normalized
-event counts. Only aggregate counts are returned to the runner; latency log
-contents, model output and prompts are not exported.
+provider. Before building or creating the sandbox, the runner prepares a complete
+`smoke-config/ai-guardian.json` from the bundled strict profile with the output
+sanitization changes above, desktop notifications suppressed, and existing
+hook-latency telemetry enabled. Docker uses `sandbox create --config-dir`;
+Podman's smoke-only creation stages the same file using the normal entrypoint's
+host-config input contract. The source is mounted read-only beside, not over, the
+active config. The entrypoint copies it to a sandbox-owned writable file before
+starting the daemon. No per-case or live policy edit is needed, and supplied
+images receive the same prepared config without a rebuild or extra image layer.
+The runner announces that this is not unmodified `@strict`; the bundled profile
+and normal sandbox behavior are unchanged. Only aggregate counts are returned;
+latency log contents, model output and prompts are not exported.
 
 The runner uses Docker when available and falls back to Podman; set
 `CONTAINER_ENGINE` or pass `--container-engine` to choose explicitly.
