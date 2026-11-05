@@ -16,13 +16,19 @@ import tempfile
 import time
 import uuid
 from dataclasses import dataclass
+from http.client import HTTPException
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
+from urllib.error import HTTPError, URLError
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTAINER_DIR = ROOT / "container"
 STRICT_PROFILE = ROOT / "src/ai_guardian/templates/profiles/strict.json"
 MOCK_PROVIDER = Path(__file__).with_name("agent_cli_mock_provider.py")
+SMOKE_FIREWALL = Path(__file__).with_name("agent_cli_smoke_firewall.py")
+SMOKE_GATE = Path(__file__).with_name("agent_cli_smoke_gate.py")
+FIREWALL_IMAGE_LABEL = "nftables-v1"
 STATE_DIR = "/tmp/ai-guardian-agent-cli-smoke-state"
 MOCK_PORT = 18765
 MOCK_MODEL = "ag-smoke"
@@ -34,6 +40,9 @@ MOCK_KEY = "ai-guardian-local-smoke-only"
 OPENCODE_SERVER_PORT = 4096
 OPENCODE_SERVER_URL = f"http://127.0.0.1:{OPENCODE_SERVER_PORT}"
 AGENT_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,48}$")
+SMOKE_SANDBOX_PATTERN = re.compile(
+    r"^ag-cli-smoke-(?:claude|codex|gemini|opencode|pi)-[a-f0-9]{8}$"
+)
 
 
 @dataclass(frozen=True)
@@ -197,6 +206,33 @@ except (OSError,json.JSONDecodeError):
 raise SystemExit(0 if p.get('healthy') is True else 1)
 """
 
+_READ_REST_STATE = r"""
+import json, urllib.request
+from ai_guardian.daemon import get_auth_token_path, get_pid_path
+from ai_guardian.daemon.client import send_status_request
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+stats=send_status_request(timeout=2) or {}
+try: pid=json.loads(get_pid_path().read_text(encoding='utf-8'))
+except (OSError, ValueError): pid={}
+port=stats.get('rest_port', pid.get('rest_port', 0))
+scheme=pid.get('rest_scheme', 'http')
+try: token=get_auth_token_path().read_text(encoding='utf-8').strip()
+except OSError: token=''
+healthy=False
+if type(port) is int and 0 < port < 65536 and scheme in ('http', 'https'):
+    try:
+        opener=urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        with opener.open(f'{scheme}://127.0.0.1:{port}/api/health', timeout=2) as response:
+            health=json.loads(response.read(4097))
+        healthy=isinstance(health, dict) and health.get('status') == 'ok'
+    except (OSError, ValueError): healthy=False
+# Captured privately by the host runner; never sent to a terminal or log.
+print(json.dumps({'ipc': bool(stats), 'rest_port': port, 'rest_scheme': scheme,
+                  'internal_health': healthy, 'auth_token': token}))
+"""
+
 
 def _split_command(value: str) -> List[str]:
     command = shlex.split(value)
@@ -280,6 +316,82 @@ def build_create_command(
         command.extend(["--container-network", container_network])
     if cli_name == "opencode":
         command.extend(["--agent", agent])
+    return command
+
+
+def build_podman_create_command(
+    engine: str,
+    cli_name: str,
+    agent: str,
+    image: str,
+    profile: Path,
+    workspace: Path,
+    name: str,
+) -> List[str]:
+    """Smoke-only creation: normal routing, gated bootstrap, no agent capabilities.
+
+    Keep these test-specific restrictions out of the normal sandbox lifecycle.
+    Explicit UID mapping preserves temporary bind-mount ownership on rootless
+    Podman, while the image's sandbox user remains unprivileged on every host.
+    """
+    command = [
+        engine,
+        "run",
+        "--detach",
+        "--interactive",
+        "--tty",
+        "--pull=never",
+        "--name",
+        name,
+        "--network",
+        "bridge",
+        "--userns",
+        "keep-id:uid=1000,gid=1000",
+        "--user",
+        "1000:1000",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--entrypoint",
+        "/usr/local/bin/agent_cli_smoke_gate.py",
+        "--http-proxy=false",
+        "--publish",
+        "127.0.0.1::63152",
+        "--label",
+        "ai-guardian.managed=true",
+        "--label",
+        "ai-guardian.daemon=true",
+        "--label",
+        "ai-guardian.runtime=container",
+        "--label",
+        f"ai-guardian.name={name}",
+    ]
+    for value in (
+        f"AI_GUARDIAN_AGENT={cli_name}",
+        f"AI_GUARDIAN_IDE={cli_name}",
+        "AI_GUARDIAN_REST_PORT=63152",
+        "AI_GUARDIAN_CONFIG_DIR=/sandbox/.config/ai-guardian",
+        "AI_GUARDIAN_HOME=/sandbox/.config/ai-guardian",
+        "AI_GUARDIAN_SETUP_SCOPE=selected",
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED=false",
+        "AI_GUARDIAN_PROFILE=/tmp/ai-guardian-smoke-profile.json",
+        f"AI_GUARDIAN_STATE_DIR={STATE_DIR}",
+    ):
+        command.extend(["--env", value])
+    if cli_name == "opencode":
+        command.extend(["--env", f"AI_GUARDIAN_OPENCODE_AGENT={agent}"])
+    command.extend(
+        [
+            "--volume",
+            f"{profile}:/tmp/ai-guardian-smoke-profile.json:ro,z",
+            "--volume",
+            f"{workspace}:/sandbox/repo:z",
+            image,
+            "bash",
+            "-l",
+        ]
+    )
     return command
 
 
@@ -472,6 +584,24 @@ def build_current_image(
     """Build a temporary smoke image, optionally preinstalling Claude after consent."""
     context = root / "image-context"
     shutil.copytree(CONTAINER_DIR, context)
+    if _is_podman_engine(engine):
+        _progress(
+            "Adding smoke-only nftables (GPL-2.0-only external tool) and startup gate"
+        )
+        shutil.copy2(SMOKE_FIREWALL, context / SMOKE_FIREWALL.name)
+        shutil.copy2(SMOKE_GATE, context / SMOKE_GATE.name)
+        with (context / "Dockerfile").open("a", encoding="utf-8") as dockerfile:
+            dockerfile.write(
+                "\n# Podman smoke only; the normal support image is unchanged.\n"
+                "USER root\n"
+                "RUN microdnf install -y --nodocs nftables && microdnf clean all\n"
+                "COPY agent_cli_smoke_firewall.py /usr/local/bin/agent_cli_smoke_firewall.py\n"
+                "COPY agent_cli_smoke_gate.py /usr/local/bin/agent_cli_smoke_gate.py\n"
+                "RUN chmod 0755 /usr/local/bin/agent_cli_smoke_gate.py\n"
+                f"LABEL ai-guardian.smoke-firewall={FIREWALL_IMAGE_LABEL}\n"
+                "USER sandbox\n"
+                'ENTRYPOINT ["/usr/local/bin/agent_cli_smoke_gate.py"]\n'
+            )
     if install_claude_code:
         _progress("Adding Claude Code to the temporary image after ToS opt-in")
         with (context / "Dockerfile").open("a", encoding="utf-8") as dockerfile:
@@ -605,11 +735,6 @@ def internal_network_name(container_name: str) -> str:
     return f"{container_name}-internal"
 
 
-def no_default_route_network_name(container_name: str) -> str:
-    """Return the Podman bridge used for the isolated smoke sandbox."""
-    return f"{container_name}-isolated"
-
-
 def _is_podman_engine(engine: str) -> bool:
     """Identify Podman executables, including absolute paths."""
     return Path(engine).name.lower().startswith("podman")
@@ -618,21 +743,6 @@ def _is_podman_engine(engine: str) -> bool:
 def create_internal_network_command(engine: str, network_name: str) -> List[str]:
     """Build an engine command for an egress-isolated smoke network."""
     return [engine, "network", "create", "--internal", network_name]
-
-
-def create_no_default_route_network_command(
-    engine: str, network_name: str
-) -> List[str]:
-    """Create a DNS-disabled Podman bridge without a default route."""
-    return [
-        engine,
-        "network",
-        "create",
-        "--disable-dns",
-        "--opt",
-        "no_default_route=true",
-        network_name,
-    ]
 
 
 def _create_internal_network(
@@ -657,24 +767,117 @@ def _create_internal_network(
     return True
 
 
-def _create_no_default_route_network(
-    engine: str,
-    network_name: str,
-    timeout: int,
-    env: Dict[str, str],
-) -> bool:
-    """Create the Podman-only egress-restricted network before the sandbox."""
+def _check_podman_smoke_image(engine: str, image: str, timeout: int) -> bool:
     result = _run(
-        create_no_default_route_network_command(engine, network_name),
+        [
+            engine,
+            "image",
+            "inspect",
+            "--format",
+            '{{index .Config.Labels "ai-guardian.smoke-firewall"}}',
+            image,
+        ],
         timeout,
-        env,
-        progress="Creating a no-default-route smoke network",
     )
-    if result.returncode != 0:
-        print("ERROR: unable to create the no-default-route smoke network")
-        _report_failure_details("Route-less network creation", result)
-        return False
-    return True
+    if result.returncode == 0 and (result.stdout or "").strip() == FIREWALL_IMAGE_LABEL:
+        return True
+    print(
+        "ERROR: Podman smoke image lacks the firewall bootstrap; omit --image to build a compatible temporary image. No image was rebuilt."
+    )
+    return False
+
+
+def build_firewall_command(
+    engine: str, name: str, image: str, cidfile: Path
+) -> List[str]:
+    """A trusted one-shot helper can administer only the selected network namespace.
+
+    The rootless engine's user namespace is an ancestor of the keep-id namespace,
+    so NET_ADMIN also covers networks created before the OCI user mapping. The
+    helper has no SYS_ADMIN, host PID namespace or host mounts with which to
+    switch to another network namespace. The agent container gets no capabilities.
+    """
+    return [
+        engine,
+        "run",
+        "--rm",
+        "--pull=never",
+        "--cidfile",
+        str(cidfile),
+        "--network",
+        f"container:{name}",
+        "--userns",
+        "host",
+        "--user",
+        "0:0",
+        "--cap-drop",
+        "ALL",
+        "--cap-add",
+        "NET_ADMIN",
+        "--security-opt",
+        "no-new-privileges",
+        "--read-only",
+        "--http-proxy=false",
+        "--label",
+        "ai-guardian.daemon=false",
+        "--label",
+        "ai-guardian.managed=false",
+        "--entrypoint",
+        "python3",
+        image,
+        "/usr/local/bin/agent_cli_smoke_firewall.py",
+    ]
+
+
+def _setup_podman_firewall(
+    engine: str, name: str, image: str, root: Path, timeout: int, env: Dict[str, str]
+) -> bool:
+    cidfile = root / "firewall-helper.cid"
+    try:
+        result = _run(
+            build_firewall_command(engine, name, image, cidfile),
+            timeout,
+            env,
+            progress="Installing the smoke-only IPv4/IPv6 egress firewall",
+        )
+        if result.returncode:
+            _report_failure_details("Smoke firewall setup", result)
+            return False
+        # This is the first operation allowed to release the image's startup gate.
+        ready = _exec(
+            engine,
+            name,
+            [
+                "python3",
+                "-c",
+                "import os; path='/tmp/ai-guardian-smoke-firewall-ready'; "
+                "fd=os.open(path+'.pending', "
+                "os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600); "
+                "os.write(fd, b'installed\\n'); os.close(fd); "
+                "os.rename(path+'.pending', path)",
+            ],
+            timeout,
+        )
+        if ready.returncode:
+            _report_failure_details("Smoke firewall startup gate", ready)
+            return False
+        return True
+    finally:
+        # A timed-out engine client can leave its helper running. Remove only the
+        # exact ID recorded for this invocation, never a name or broad selector.
+        if cidfile.is_file():
+            try:
+                cid = cidfile.read_text(encoding="ascii").strip()
+            except (OSError, UnicodeError):
+                cid = ""
+                _progress("WARNING: temporary firewall helper ID could not be read")
+            if re.fullmatch(r"[a-f0-9]{12,64}", cid):
+                try:
+                    _run([engine, "rm", "--force", cid], min(timeout, 10), env)
+                except (OSError, subprocess.TimeoutExpired):
+                    _progress(
+                        "WARNING: temporary firewall helper cleanup did not complete"
+                    )
 
 
 def _remove_smoke_network(
@@ -875,6 +1078,125 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
             _progress(f"Sandbox setup is still running ({elapsed}s elapsed)")
             last_heartbeat = time.monotonic()
         time.sleep(min(1, max(0, deadline - time.monotonic())))
+    return False
+
+
+class _NoRESTRedirect(HTTPRedirectHandler):
+    """Health probes must never redirect outside the loopback daemon endpoint."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def _probe_rest(
+    port: int, path: str, token: Optional[str] = None, *, scheme: str = "http"
+) -> str:
+    """Probe only local daemon endpoints; return fixed categories, never bodies."""
+    if (
+        type(port) is not int
+        or not 0 < port < 65536
+        or path not in ("/api/health", "/api/stats")
+        or scheme not in ("http", "https")
+    ):
+        return "invalid_endpoint"
+    request = Request(f"{scheme}://127.0.0.1:{port}{path}")
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    opener = build_opener(ProxyHandler({}), _NoRESTRedirect())
+    limit = 4096 if path == "/api/health" else 1024 * 1024
+    try:
+        with opener.open(request, timeout=3) as response:
+            raw = response.read(limit + 1)
+        if len(raw) > limit:
+            return "invalid_response"
+        result = json.loads(raw)
+        valid = isinstance(result, dict) and (
+            result.get("status") == "ok"
+            if path == "/api/health"
+            else "request_count" in result
+        )
+        return "healthy" if valid else "invalid_response"
+    except HTTPError as error:
+        error.close()
+        return f"http_{error.code}"
+    except URLError as error:
+        return (
+            "timeout" if isinstance(error.reason, TimeoutError) else "connection_failed"
+        )
+    except TimeoutError:
+        return "timeout"
+    except OSError:
+        return "connection_failed"
+    except (ValueError, UnicodeError, HTTPException):
+        return "invalid_response"
+
+
+def _check_sandbox_rest(engine: str, name: str, timeout: int) -> bool:
+    """Distinguish daemon/listener health, published-port forwarding and auth."""
+    result = _exec(engine, name, ["python3", "-c", _READ_REST_STATE], min(timeout, 5))
+    # This result contains a daemon credential. Never report stdout/stderr,
+    # including when parsing or the container-side command fails.
+    try:
+        state = json.loads(result.stdout) if result.returncode == 0 else None
+    except (ValueError, TypeError):
+        state = None
+    if not isinstance(state, dict):
+        print("FAIL daemon REST: could not read private sandbox diagnostics.")
+        return False
+
+    ipc = state.get("ipc") is True
+    internal = state.get("internal_health") is True
+    port = state.get("rest_port")
+    scheme = state.get("rest_scheme", "http")
+    published = "not_checked"
+    authenticated = "not_checked"
+    host_port = 0
+    if ipc and internal and type(port) is int and 0 < port < 65536:
+        bindings = _run([engine, "port", name, f"{port}/tcp"], min(timeout, 5))
+        if bindings.returncode == 0:
+            for line in (bindings.stdout or "").splitlines():
+                match = re.fullmatch(r"[^\s]+:([0-9]{1,5})", line.strip())
+                if match and 0 < int(match[1]) < 65536:
+                    host_port = int(match[1])
+                    break
+        if host_port:
+            options = {"scheme": scheme} if scheme != "http" else {}
+            published = _probe_rest(host_port, "/api/health", **options)
+            token = state.get("auth_token")
+            if published == "healthy" and isinstance(token, str) and token:
+                authenticated = _probe_rest(host_port, "/api/stats", token, **options)
+        else:
+            published = "not_published"
+
+    _progress(
+        f"REST diagnostics: ipc={'running' if ipc else 'unavailable'}; "
+        f"container_health={'healthy' if internal else 'unreachable'}; "
+        f"host_port={host_port}; published_health={published}; "
+        f"authenticated_stats={authenticated}"
+    )
+    if not ipc:
+        print(
+            "FAIL daemon REST: daemon IPC is unavailable; network failure is unconfirmed."
+        )
+    elif not internal:
+        print(
+            "FAIL daemon REST: health failed inside the sandbox; check daemon startup before host routing."
+        )
+    elif not host_port:
+        print("FAIL daemon REST: the daemon's REST port is not published to the host.")
+    elif published != "healthy":
+        print(
+            "FAIL daemon REST: internal health passes, but published health fails; check the published-port/VM forwarding path."
+        )
+    elif authenticated != "healthy":
+        print(
+            "FAIL daemon REST: published health works, but authenticated stats failed; check daemon authentication rather than changing network isolation."
+        )
+    else:
+        _progress(
+            "PASS daemon REST: container health and authenticated host access work."
+        )
+        return True
     return False
 
 
@@ -1165,12 +1487,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--cli-name",
-        required=True,
         choices=("claude", "codex", "gemini", "opencode", "pi"),
     )
     parser.add_argument(
         "--agent",
-        required=True,
         help=(
             "Claude/Gemini label ('default'), Codex profile, OpenCode agent, "
             "or Pi provider"
@@ -1197,6 +1517,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--keep", action="store_true", help="Keep sandbox/files for inspection"
     )
+    parser.add_argument(
+        "--diagnose-sandbox",
+        metavar="NAME",
+        help="Read-only REST checks for a kept smoke sandbox; no build, run, or cleanup",
+    )
     return parser
 
 
@@ -1205,6 +1530,35 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
+    if args.diagnose_sandbox:
+        if not SMOKE_SANDBOX_PATTERN.fullmatch(args.diagnose_sandbox):
+            parser.error(
+                "--diagnose-sandbox requires a runner-generated smoke sandbox name"
+            )
+        if (
+            args.cli_name
+            or args.agent
+            or args.image
+            or args.wheel
+            or args.keep
+            or args.accept_proprietary_tos
+        ):
+            parser.error("--diagnose-sandbox cannot be combined with smoke-run options")
+        try:
+            return (
+                0
+                if _check_sandbox_rest(
+                    args.container_engine, args.diagnose_sandbox, args.timeout
+                )
+                else 1
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            print("FAIL daemon REST: container engine diagnostics could not complete.")
+            return 1
+    if not args.cli_name or not args.agent:
+        parser.error(
+            "--cli-name and --agent are required unless --diagnose-sandbox is used"
+        )
     if args.image and args.wheel:
         parser.error("--image and --wheel cannot be combined")
     if args.accept_proprietary_tos and args.cli_name != "claude":
@@ -1238,15 +1592,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     built_image = False
     name = f"ag-cli-smoke-{args.cli_name}-{uuid.uuid4().hex[:8]}"
     podman_engine = _is_podman_engine(args.container_engine)
-    network_name = (
-        no_default_route_network_name(name)
-        if podman_engine
-        else internal_network_name(name)
-    )
-    create_network = (
-        _create_no_default_route_network if podman_engine else _create_internal_network
-    )
+    network_name = internal_network_name(name)
     created = False
+    creation_attempted = False
+    firewall_ready = False
     created_networks: List[str] = []
     keep_files = False
     try:
@@ -1274,23 +1623,38 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             _progress("Using the supplied smoke image")
 
-        if not create_network(
-            args.container_engine, network_name, args.timeout, host_env
-        ):
-            return 1
-        created_networks.append(network_name)
-
-        command = build_create_command(
-            guardian,
-            args.container_engine,
-            args.cli_name,
-            args.agent,
-            image,
-            profile,
-            workspace,
-            name,
-            container_network=network_name,
-        )
+        if podman_engine:
+            if not _check_podman_smoke_image(
+                args.container_engine, image, args.timeout
+            ):
+                return 1
+            command = build_podman_create_command(
+                args.container_engine,
+                args.cli_name,
+                args.agent,
+                image,
+                profile,
+                workspace,
+                name,
+            )
+        else:
+            if not _create_internal_network(
+                args.container_engine, network_name, args.timeout, host_env
+            ):
+                return 1
+            created_networks.append(network_name)
+            command = build_create_command(
+                guardian,
+                args.container_engine,
+                args.cli_name,
+                args.agent,
+                image,
+                profile,
+                workspace,
+                name,
+                container_network=network_name,
+            )
+        creation_attempted = True
         create_result = _run(
             command,
             args.timeout,
@@ -1302,8 +1666,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print("ERROR: AI Guardian could not create the temporary sandbox")
             _report_failure_details("Sandbox creation", create_result)
             return 1
+        if podman_engine:
+            firewall_ready = _setup_podman_firewall(
+                args.container_engine, name, image, root, args.timeout, host_env
+            )
+            if not firewall_ready:
+                return 1
         if not _wait_for_sandbox_ready(args.container_engine, name, args.timeout):
             print("ERROR: temporary sandbox setup did not become ready")
+            return 1
+        if not _check_sandbox_rest(args.container_engine, name, args.timeout):
             return 1
         if args.cli_name == "claude":
             _progress("Verifying Claude Code is installed")
@@ -1384,6 +1756,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 1
     finally:
+        if created and podman_engine and not firewall_ready:
+            _progress(
+                "Stopping the smoke sandbox because firewall setup did not complete"
+            )
+            try:
+                _run(
+                    [args.container_engine, "stop", "--time", "1", name],
+                    min(args.timeout, 10),
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                _progress(
+                    "WARNING: smoke sandbox stop did not complete; its startup gate remains closed"
+                )
         if created and args.keep:
             _progress(f"Keeping temporary sandbox: {name}")
             for kept_network in created_networks:
@@ -1394,7 +1779,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             _delete_sandbox(
                 guardian, args.container_engine, name, host_env, args.timeout
             )
-        elif (
+        elif creation_attempted and (
             _run([args.container_engine, "inspect", name], args.timeout).returncode == 0
         ):
             _delete_sandbox(

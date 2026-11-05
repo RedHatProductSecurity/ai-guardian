@@ -56,11 +56,25 @@ client/model request, and the runner removes host provider credentials before
 sandbox creation. These checks do not contact a model provider or incur inference
 charges.
 
-On Podman, the runner creates a dedicated DNS-disabled bridge with
-`no_default_route=true` and attaches the sandbox to it at startup. This allows
-Podman to publish the REST port on the bridge from container creation, without
-adding a default route to external networks. Docker continues to use its
-internal-only network.
+Podman smoke uses normal bridge routing with a **smoke-only namespace firewall**,
+so the host's published daemon REST port keeps its normal return route. A trusted,
+short-lived helper installs an atomic nftables policy covering IPv4 and IPv6:
+loopback/local mocks and replies to inbound connections are allowed; new
+non-loopback outbound traffic is dropped. The temporary image gates its original
+entrypoint until installation succeeds. The agent runs as a non-root user with
+all capabilities dropped and no-new-privileges; only the helper receives
+`NET_ADMIN` in the selected sandbox network namespace. Failed setup never starts
+the daemon/agent and stops even a `--keep` sandbox. No host firewall, global
+Podman settings, normal images, tray/discovery, or shared sandbox behavior is
+changed. Docker continues to use its internal-only network.
+With `--keep`, the installed firewall policy remains with the retained sandbox.
+
+The Podman temporary image adds **nftables** as an external executable, not an
+embedded library ([GPL-2.0-only package license](https://packages.fedoraproject.org/pkgs/nftables/nftables/)).
+The runner announces this smoke-only dependency before building; the normal
+support-image recipe is not edited. A supplied Podman `--image` must be a
+previously runner-built smoke image with the firewall bootstrap. An unprepared
+image is rejected before sandbox creation, without a hidden overlay build.
 
 Run one client locally with Docker or Podman and the current source checkout:
 
@@ -99,6 +113,21 @@ and download/install progress. The 15-minute build timeout and engine build/cach
 options are unchanged. Sandbox setup and CLI invocations retain stage updates and
 heartbeats with captured output; model responses are not printed. Failed captured
 stages show bounded diagnostics; streamed build logs are already visible.
+
+Before running CLI cases, the runner checks internal daemon REST health and the
+host-published health/authenticated stats endpoints. Failures identify internal
+startup, missing port publication, host forwarding, or authentication separately;
+they do not imply that an unreachable daemon process stopped. Diagnostic output
+contains fixed status categories and port numbers, never credentials or bodies.
+Repeat these read-only checks on a retained smoke sandbox without rebuilding or
+changing its firewall:
+
+```bash
+scripts/agent-cli-test --diagnose-sandbox NAME --container-engine podman
+```
+
+Replace `NAME` with the runner-generated `ag-cli-smoke-…` name printed by `--keep`.
+macOS Podman still requires a real desktop retry to qualify tray connectivity.
 
 This is a protocol adapter, not a universal fake provider: clients need a
 supported local endpoint override and their native tool-call format must be
