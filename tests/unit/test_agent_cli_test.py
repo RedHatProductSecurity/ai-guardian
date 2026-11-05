@@ -2041,6 +2041,177 @@ def test_rest_diagnostics_report_missing_publication_without_network_access(
     assert "REST port is not published" in capsys.readouterr().out
 
 
+def test_docker_internal_network_uses_private_host_route_when_port_is_not_published(
+    monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_docker_internal_rest")
+    name = "ag-cli-smoke-codex-1234abcd"
+    private_token = "private-docker-rest-token"
+    address = "172.29.0.4"
+    state = {
+        "ipc": True,
+        "rest_port": 63152,
+        "internal_health": True,
+        "auth_token": private_token,
+    }
+    commands = []
+    requests = []
+
+    def fake_run(command, *_args, **_kwargs):
+        commands.append(command)
+        if command[1] == "context":
+            if command[2] == "show":
+                return subprocess.CompletedProcess(command, 0, "default\n", "")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                json.dumps(
+                    [{"Endpoints": {"docker": {"Host": "unix:///var/run/docker.sock"}}}]
+                ),
+                "",
+            )
+        if command[1] == "port":
+            return subprocess.CompletedProcess(command, 0, "", "")
+        assert command[1:3] == ["inspect", "--format"]
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps(
+                {
+                    "other-network": {"IPAddress": "172.29.0.5"},
+                    runner.internal_network_name(name): {"IPAddress": address},
+                }
+            ),
+            "private inspect stderr",
+        )
+
+    def probe(port, path, token=None, *, scheme="http", host="127.0.0.1"):
+        requests.append((port, path, token, scheme, host))
+        return "healthy"
+
+    monkeypatch.setattr(runner, "RUNNER_HOST_IS_LINUX", True)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args: subprocess.CompletedProcess(args, 0, json.dumps(state), ""),
+    )
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_probe_rest", probe)
+
+    assert runner._check_sandbox_rest("docker", name, 30)
+    output = capsys.readouterr().out
+    assert "published_health=not_published" in output
+    assert "docker_internal_host_health=healthy" in output
+    assert "host_route=internal_network" in output
+    assert "authenticated_stats=healthy" in output
+    assert "host access work" in output
+    assert address not in output
+    assert private_token not in output
+    assert "private inspect stderr" not in output
+    assert requests == [
+        (63152, "/api/health", None, "http", address),
+        (63152, "/api/stats", private_token, "http", address),
+    ]
+    assert [command[1] for command in commands] == [
+        "port",
+        "context",
+        "context",
+        "inspect",
+    ]
+
+
+@pytest.mark.parametrize(
+    "address", ("8.8.8.8", "127.0.0.1", "169.254.1.1", "not-an-ip")
+)
+def test_docker_internal_host_route_rejects_nonprivate_addresses(address, monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_docker_internal_address_validation")
+    name = "ag-cli-smoke-codex-1234abcd"
+    monkeypatch.setattr(runner, "RUNNER_HOST_IS_LINUX", True)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+
+    def fake_run(command, *_args):
+        if command[1] == "context":
+            if command[2] == "show":
+                return subprocess.CompletedProcess(command, 0, "default\n", "")
+            output = json.dumps(
+                [{"Endpoints": {"docker": {"Host": "unix:///var/run/docker.sock"}}}]
+            )
+        else:
+            output = json.dumps(
+                {runner.internal_network_name(name): {"IPAddress": address}}
+            )
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    assert runner._docker_internal_network_ip("docker", name, 30) is None
+    assert runner._docker_internal_network_ip("podman", name, 30) is None
+
+
+@pytest.mark.parametrize(
+    ("linux_host", "override"),
+    ((False, None), (True, "DOCKER_HOST"), (True, "DOCKER_CONTEXT")),
+)
+def test_docker_internal_host_route_rejects_unsupported_or_overridden_contexts(
+    linux_host, override, monkeypatch
+):
+    runner = _load(RUNNER_PATH, "agent_cli_docker_context_validation")
+    name = "ag-cli-smoke-codex-1234abcd"
+    monkeypatch.setattr(runner, "RUNNER_HOST_IS_LINUX", linux_host)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+    if override:
+        monkeypatch.setenv(override, "ssh://remote.example")
+    commands = []
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda command, *_args: commands.append(command)
+        or subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps(
+                [{"Endpoints": {"docker": {"Host": "unix:///var/run/docker.sock"}}}]
+            ),
+            "",
+        ),
+    )
+
+    assert runner._docker_internal_network_ip("docker", name, 30) is None
+    assert commands == []
+
+
+def test_docker_internal_host_route_rejects_remote_context(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_docker_remote_context")
+    name = "ag-cli-smoke-codex-1234abcd"
+    monkeypatch.setattr(runner, "RUNNER_HOST_IS_LINUX", True)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+    commands = []
+
+    def fake_run(command, *_args):
+        commands.append(command)
+        if command[2] == "show":
+            return subprocess.CompletedProcess(command, 0, "remote\n", "")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps([{"Endpoints": {"docker": {"Host": "ssh://remote.example"}}}]),
+            "",
+        )
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    assert runner._docker_internal_network_ip("docker", name, 30) is None
+    assert [command[1:] for command in commands] == [
+        ["context", "show"],
+        ["context", "inspect", "remote"],
+    ]
+
+
 def test_diagnose_existing_sandbox_never_builds_creates_or_removes(monkeypatch):
     runner = _load(RUNNER_PATH, "agent_cli_rest_read_only_mode")
     monkeypatch.setattr(runner.shutil, "which", lambda name: f"/usr/bin/{name}")
@@ -2316,6 +2487,29 @@ def test_rest_probe_uses_no_proxy_no_redirects_and_never_emits_bodies(
     assert handlers[0].proxies == {}
     assert handlers[1].redirect_request(None, None, None, None, None, None) is None
     assert capsys.readouterr().out == ""
+
+
+def test_rest_probe_accepts_literal_internal_ip_and_rejects_hostnames(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_rest_literal_host")
+    requests = []
+
+    class Opener:
+        def open(self, request, timeout):
+            requests.append((request.full_url, timeout))
+            return io.BytesIO(b'{"status":"ok"}')
+
+    monkeypatch.setattr(runner, "build_opener", lambda *args: Opener())
+
+    assert runner._probe_rest(63152, "/api/health", host="172.29.0.4") == "healthy"
+    assert requests == [("http://172.29.0.4:63152/api/health", 3)]
+    assert (
+        runner._probe_rest(63152, "/api/health", host="daemon.internal/path")
+        == "invalid_endpoint"
+    )
+    assert (
+        runner._probe_rest(63152, "/api/health", host="8.8.8.8") == "invalid_endpoint"
+    )
+    assert len(requests) == 1
 
 
 @pytest.mark.parametrize("payload", ("not-json private-auth-value", "[]", "{}"))

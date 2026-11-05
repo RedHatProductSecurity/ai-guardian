@@ -118,6 +118,12 @@ all capabilities dropped and no-new-privileges; only the helper receives
 the daemon/agent and stops even a `--keep` sandbox. No host firewall, global
 Podman settings, normal images, tray/discovery, or shared sandbox behavior is
 changed. Docker continues to use its internal-only network.
+Docker may not publish a container port when a container is attached only to an
+internal bridge. In that case, the Linux smoke runner checks authenticated host REST
+through the sandbox's private address on that exact internal network. It does not
+attach an external network or report the address/token; if the host cannot reach the
+private route, the preflight fails closed. This fallback does not qualify Docker
+Desktop or remote Docker contexts.
 With `--keep`, the installed firewall policy remains with the retained sandbox.
 
 The Podman temporary image adds **nftables** as an external executable, not an

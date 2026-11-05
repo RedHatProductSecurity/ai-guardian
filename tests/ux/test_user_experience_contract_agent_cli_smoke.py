@@ -27,6 +27,10 @@ Manual qualification on Linux/macOS Podman:
     an artificial 8K window that forces summary turns. Existing compaction and
     update settings stay untouched. A compaction error reports only a fixed
     category; private errors and summary echoes never qualify a clean pass.
+13. Docker's `--internal` smoke network can omit published port bindings. On Linux,
+    the host REST preflight may use only the private IPv4 address from that exact
+    isolated network; it still authenticates stats and never attaches an external
+    route. Diagnostics report route/status categories, not the address or token.
 """
 
 import importlib.util
@@ -77,7 +81,7 @@ def runner():
             "healthy",
             "http_401",
             False,
-            "FAIL daemon REST: published health works, but authenticated stats failed; check daemon authentication rather than changing network isolation.",
+            "FAIL daemon REST: host health works, but authenticated stats failed; check daemon authentication rather than changing network isolation.",
         ),
     ),
 )
@@ -118,6 +122,80 @@ def test_rest_path_errors_are_actionable_without_exposing_credentials(
     assert message in output
     assert "private" not in output
     assert "stopped" not in output
+
+
+def test_docker_internal_network_keeps_egress_isolated_and_checks_host_rest(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: Docker host REST works without publishing an internal-net port.
+
+    Docker does not publish bindings for a container attached only to an internal
+    bridge. The Linux host can still reach that container's private bridge address.
+    The runner must verify health and authenticated stats over that exact route,
+    without adding a non-internal network or exposing the address/token.
+    """
+    name = "ag-cli-smoke-codex-1234abcd"
+    address = "172.29.0.4"
+    token = "private-smoke-credential"
+    state = {
+        "ipc": True,
+        "rest_port": 63152,
+        "internal_health": True,
+        "auth_token": token,
+    }
+    requests = []
+
+    def fake_run(command, *_args, **_kwargs):
+        if command[1] == "context":
+            if command[2] == "show":
+                return subprocess.CompletedProcess(command, 0, "default\n", "")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                json.dumps(
+                    [{"Endpoints": {"docker": {"Host": "unix:///var/run/docker.sock"}}}]
+                ),
+                "",
+            )
+        if command[1] == "port":
+            return subprocess.CompletedProcess(command, 0, "", "")
+        assert command[1:3] == ["inspect", "--format"]
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps({runner.internal_network_name(name): {"IPAddress": address}}),
+            "private stderr",
+        )
+
+    def probe(port, path, auth=None, *, scheme="http", host="127.0.0.1"):
+        requests.append((port, path, auth, host))
+        return "healthy"
+
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args: subprocess.CompletedProcess(args, 0, json.dumps(state), ""),
+    )
+    monkeypatch.setattr(runner, "RUNNER_HOST_IS_LINUX", True)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_probe_rest", probe)
+
+    assert runner._check_sandbox_rest("docker", name, 30)
+    output = capsys.readouterr().out
+    assert "published_health=not_published" in output
+    assert "docker_internal_host_health=healthy" in output
+    assert "host_route=internal_network" in output
+    assert "authenticated_stats=healthy" in output
+    assert "authenticated host access work" in output
+    assert address not in output
+    assert token not in output
+    assert "private stderr" not in output
+    assert requests == [
+        (63152, "/api/health", None, address),
+        (63152, "/api/stats", token, address),
+    ]
 
 
 def test_unprepared_images_fail_closed_without_hidden_builds(
