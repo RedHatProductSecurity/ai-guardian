@@ -6,9 +6,49 @@
 
 ## User Preferences
 
+- **2026-11-05 — Gemini/Pi shared correction approval:** User selected "Fix both"
+  for Gemini native-output scanning/refusal and Pi lazy-first-transcript handling,
+  then "Include Pi fix" for exact `bash` -> `Bash` mapping plus regressions and
+  fresh full Pi smoke. This supersedes the prior smoke-only restriction for those
+  narrow defects, not sandbox/discovery/tray, policy, firewall, native trust or
+  image/cache changes. The user subsequently explicitly requested commit/push;
+  published all 14 source/test/doc files as `0e87601b` to `origin/2662`, excluding
+  local OpenWolf records. They also requested follow-up #2673 for the six missing
+  CLI-capable integrations and cleanup of this session's test containers. Remove
+  only owned test containers; preserve images and unrelated resources.
+
+- **2026-11-05 — V2 plugin scope exception:** After a synthetic probe reproduced
+  raw content surviving output replacement, the user explicitly selected “Fix V2
+  plugin” with structured-result regressions. This authorizes that shared V2
+  template correction and continued smoke clean-result diagnosis, not the separate
+  Claude adapter fix or changes to shared sandbox/tray/discovery/daemon behavior,
+  firewall, native trust, image/cache strategy or publication without a request.
+
+- **2026-11-05 — Explicit OpenCode smoke version:** User requests generation
+  selection via opencode_v1/opencode_v2 names or --cli-version. Keep one OpenCode
+  CLI identity and provide an exact build-time version pin; reject --image rather
+  than silently rebuilding or modifying it. This supersedes the manual retained
+  build-context instructions, not the smoke-only/firewall/cache boundaries.
+
+- **2026-11-05 — Prepared smoke config:** After the strict Claude output failure,
+  the user proposes a smoke-only policy adaptation before running the sandbox,
+  preferably prepared at build time or supplied via `sandbox create --config-dir`.
+  This supersedes the earlier unchanged-strict smoke-policy requirement. Prepare
+  the config before build/create and use the normal writable-snapshot startup
+  path instead of editing the live/read-only config. Keep bundled @strict, shared
+  adapters, normal image recipe and firewall unchanged. Identify the run as
+  strict-derived/output sanitization, not unmodified-strict qualification; never
+  relax raw-delivery checks to manufacture a pass.
+
+- **2026-11-05 — Classic smoke image:** The user reiterated the intended flow:
+  classic container image, add the smoke-only firewall to block egress, run tests.
+  Do not reinterpret a REST diagnostic failure as authorization for another image,
+  network or shared lifecycle redesign. The normal bridge is transport; firewall
+  rules enforce Podman smoke egress isolation.
+
 - **2026-11-04 — Smoke-container tray visibility:** Do not hide real smoke daemons
   with a discovery exception. Preserve normal discovery and use an
-  egress-isolated internal network that retains the published REST port. Verify
+  egress-isolated smoke runtime that retains the published REST port. Verify
   Linux and macOS Podman before claiming cross-platform qualification. Avoid
   requiring command and output copy/paste between the user's Mac terminal and the
   remote SSH session.
@@ -22,6 +62,29 @@
 - **2026-11-05 — Real-agent smoke failure reports:** Keep provider and violation
   diagnostics aggregate-only. Do not print model prompts or raw CLI output into
   CI logs; preserve strict egress isolation while diagnosing failures.
+
+- **2026-11-05 — Mac smoke build visibility:** The user wants normal live
+  Docker/Podman build output, not just elapsed-time heartbeats. Scope streaming
+  to image builds; keep agent output captured and preserve build/cache strategy.
+  Normal Mac containers work while smoke still fails, so do not assume general
+  Podman failure or call improved build visibility a runtime fix.
+
+- **2026-11-05 — Smoke firewall alternative:** The user proposes preserving
+  normal Podman routing while enforcing runtime egress with a container-namespace
+  firewall. Evaluate that valid alternative rather than assuming more route
+  tweaks are preferable. Keep loopback and established REST replies working,
+  block new IPv4/IPv6 egress, and do not grant the agent durable NET_ADMIN.
+  The user subsequently explicitly approved nftables in the generated temporary
+  smoke image and a short-lived NET_ADMIN setup helper. This does not authorize
+  host firewall, shared runtime/global Podman, image deletion or cache-strategy
+  changes. Supplied images without the bootstrap must fail closed, not rebuild.
+
+- **2026-11-05 — Smoke-only remediation scope:** The user explicitly wants the
+  Mac workaround isolated to the smoke test. Confine further implementation to
+  the runner, smoke-only helpers/generated temporary image, and related tests and
+  docs. Do not modify normal sandbox/container creation, shared tray/discovery,
+  daemon behavior, host firewall or global Podman configuration to accommodate
+  this case. Do not automatically revert already-published unrelated fixes.
 
 - **2026-11-04 — OpenCode smoke auto-update:** Keep OpenCode auto-upgrade enabled
   for normal use. It may be disabled only in the disposable, egress-isolated smoke
@@ -201,6 +264,195 @@
 
 ## Key Learnings
 
+- **2026-11-05 — Real Gemini/Pi smoke gaps (#2662), approved corrections:** Gemini
+  0.67.0 sends `tool_response.llmContent`, not conventional output fields, and ignores
+  `updatedToolOutput`. Preserve real newlines between structured text parts (JSON
+  escapes can conceal PII) and use native AfterTool refusal for required sanitization.
+  It now passes 9/9 on fresh image `fb10d7b60c`, proving containment, not redacted
+  delivery. Pi 0.86.0 advertises its session path before writing its first assistant;
+  allow only expected initial FileNotFoundError by tracking byte zero, never a fake
+  file or changed scan-error policy. That raises Pi from 3/9 to 7/9. Its remaining
+  pre-tool cases expose an independent missing native `bash` -> canonical `Bash`
+  alias: red regressions reproduce the missed shell scans. User separately approved
+  the exact adapter mapping; real scanner/permission regressions pass and custom/MCP
+  names stay unchanged. Policy-deny metadata is `tool_permission`, with specific
+  SSRF/config categories in logged records. Post-tool extraction still uses Pi's
+  native name and text replacements, which the extension already supports; do not
+  require Claude's Bash wrapper or expand shared response changes unnecessarily.
+  Latest 1090 unit/complete UX tests and linters pass. Final standard source image
+  `b55081b8a9` was explicitly reused: **both Pi 0.86.0 and Gemini 0.67.0 pass 9/9**,
+  plus container/authenticated published-host REST and firewall setup. Both new
+  sandboxes were removed, images retained, no private output disclosed. These are
+  Linux strict-derived local-mock checks, not external negative-egress, tray/macOS,
+  other-client or unmodified-strict Claude qualification. Subsequently published
+  at the user's request as `0e87601b` on `2662`; remote sync verified. Follow-up
+  #2673 inventories Copilot, Grok Build, Antigravity, Kiro, OpenClaw and Crush from
+  canonical CLI metadata versus runner/CI, without claiming their partial hooks
+  can enforce unsupported stages. User-requested cleanup removed the two retained
+  initial smoke containers; no `ag-cli-smoke-*` containers remain, images untouched.
+
+- **2026-11-05 — V2 8K mock budget / four-request clean failure (#2662):** The
+  user's retry passes both sensitive-output checks but clean still exits 1 with
+  four provider requests, complete native hooks and one execution. Sensitive PASS
+  does not imply exit 0 (expected-violation cases permit nonzero exits). The smoke
+  model's 8192 context and zero usage can force V2 to estimate all native/MCP
+  schemas and enter compaction after a tool. Published 2.0.24 tries a summary and
+  one nudge, rejecting the mock's fixed OK reply: title + tool + two summaries
+  matches the signature, but is not confirmed without a native error category.
+  Give only the disposable mock a 128K window, preserving compaction/update/MCP
+  settings. Emit only fixed structured-error categories, never private CLI bodies.
+  Summary echoes must not qualify native result evidence; retain clean exit 0.
+  All 402 related unit/complete UX tests and linters pass; real 128K retry pending.
+  The user subsequently requested publication: committed/pushed all eleven
+  source/test/doc files as `6190e42a` to `origin/2662`, with remote sync verified.
+  Local OpenWolf records were excluded; no runtime or image changes for publication.
+
+- **2026-11-05 — V2 dual-surface results / smoke JSON evidence (#2662):** Published
+  MIT 2.0.24 Tool.Result has optional structured output, content and metadata;
+  core normalizes the after-hook's content/output after mutation. Updating only
+  output leaves a raw content copy, and shared Claude Bash replacements have a
+  different schema from native shell output. Replace the whole result with valid
+  content-only text during sanitization, including stdout/stderr conversion, and
+  clear completed blocked results before async notice/throw. Leave clean results
+  untouched. Native results can also reach the provider as JSON text with escaped
+  newlines: decode one layer only after issued-tool correlation to recognize the
+  complete clean marker/output. Do not normalize away whole-request sensitive
+  delivery or accept nonzero clean exits. Red regressions reproduced both defects;
+  394 related unit/complete UX tests and all linters pass. The reporter's exit 1
+  remains undiagnosed, and no new live V2 run or publication has occurred.
+
+- **2026-11-05 — Smoke --cli-version contract (#2662):** Exact stable OpenCode
+  1.x.y/2.x.y pins flow through the existing OPENCODE_VERSION Dockerfile argument
+  only in temporary-image builds. Unspecified leaves defaults intact. Reject other
+  clients, supplied images and read-only diagnosis combinations before side effects;
+  --wheel is compatible. Verify the installed full version before warm-up/cases,
+  not just its major/core: 2.0.24-beta.1 or +build.1 must not satisfy a 2.0.24 pin.
+  Keep CI's prebuilt/cache flow, adding only build-free CLI guard validation.
+  Argument parsing computes defaults via shutil.which before validation, so a
+  fixture that treats executable discovery as a forbidden side effect fails before
+  reaching the option under test. Stub discovery; guard actual build/run/temp work.
+  All 258 related unit/UX tests pass; live V1/V2 qualification remains separate.
+
+- **2026-11-05 — OpenCode V1 warm-up / V2 smoke selection (#2662):** A reported
+  V1 warm-up that reaches 'warmed and ready' after ~75 seconds matches the known
+  first-session/MCP startup cost, not a hang; it runs once before the cases.
+  The CLI version inside the image controls the runner path, not the host's
+  installation. The normal Dockerfile defaults to 1.19.0 and supports the existing
+  OPENCODE_VERSION build argument; CI pins V2 to 2.0.24. Before the subsequently
+  added --cli-version option, the local Podman V2 workaround was to rebuild the
+  generated image-context retained by --keep with that build argument and its
+  existing wheel filename, then supply the result with --image. A plain support
+  Dockerfile build lacks Podman's required smoke firewall bootstrap; do not
+  recommend it as interchangeable or silently rebuild an unprepared supplied image.
+
+- **2026-11-05 — OpenCode smoke advisory/native tool confusion (#2662):** The
+  user reports the same missing pre-tool/execution evidence on Linux and macOS,
+  with SSRF/config-exfil findings but only prompt events. The mock's generic
+  command-property selector can pick an advisory MCP checker before native
+  bash/shell; a synthetic catalog regression reproduces that exact selection.
+  Advisory findings are not proof of native hook delivery or execution. Select
+  only advertised supported native shell names, never a command-shaped MCP/custom
+  tool or a name-suffix match. Advisory-only requests must not consume the later
+  native offer. Keep missing evidence and raw delivery as failures. This is a
+  smoke-only fix, not a shared-hook/policy/trust change; actual client version was
+  not supplied and real OpenCode retry evidence remains necessary on both hosts.
+
+- **2026-11-05 — Reported Mac/Claude smoke success (#2662):** After published
+  prepared-config change `54c3b5d0`, the user's retry passes all nine cases,
+  including both sensitive-output containment probes, and internal/published/
+  authenticated host REST. Attribute this evidence to the strict-derived smoke
+  config's output-sanitization path only. It does not repair/qualify unmodified
+  @strict post-tool blocking, establish tray responsiveness or negative egress
+  enforcement, or qualify other clients/platforms. No further source fix is needed
+  for the reported Claude run.
+
+- **2026-11-05 — Smoke config-dir staging (#2662):** Normal container creation
+  stages `ai-guardian.json` at `/sandbox/.config/ai-guardian.host.json` read-only,
+  outside the active config. The original entrypoint copies it into its writable
+  config before setup/daemon startup. Docker smoke can use --config-dir; the
+  gated Podman smoke path mirrors this input contract. No image-baked config,
+  runtime policy edit or extra image layer is necessary. A strict-derived config
+  with output sanitization selects the existing replacement branch; PII redact
+  still denies prompts and pre-tool file reads. Real handler tests verify those
+  semantics with isolated config and synthetic fixtures; real client replacement
+  still requires a runtime retry. Raw shell constants are not a substitute for a
+  pre-tool file-content fixture. A fake _run also suppresses progress rendering,
+  so assert the recorded progress argument rather than nonexistent captured output.
+
+- **2026-11-05 — Claude strict PostToolUse containment (#2662):** The user's
+  expanded smoke run now passes REST and seven cases, but both sensitive output
+  cases expose raw synthetic values despite logged findings and pre/post events.
+  This is a concrete adapter gap: BaseAgentAdapter strict blocks emit only
+  `decision: block`, without `updatedToolOutput`. An aggregate-only formatter
+  probe confirms it for secrets and PII. Current official Claude documentation
+  says post-tool block is feedback, not output suppression; schema-valid output
+  replacement is supported (Bash shape includes stdout/stderr/interrupted/isImage).
+  Do not treat the older blanket upstream-redaction limitation or block-mode
+  workaround in AGENT_SUPPORT.md as current proof. Fixing this requires a separately
+  approved runtime adapter correction outside the user's smoke-only scope. The
+  user's later strict-derived smoke-config choice leaves this runtime gap open;
+  keep leak assertions and synthetic-only probes, and do not skip failures or
+  describe the new config as unmodified-strict post-tool qualification.
+
+- **2026-11-05 — Smoke REST reader Python (#2662):** The classic support image
+  installs AI Guardian only in `/opt/uv-tools/ai-guardian` via `uv tool install`;
+  system `python3` is suitable for stdlib-only helpers, not package imports. The
+  original REST reader used the wrong interpreter after successful CLI readiness.
+  A real reader subprocess with isolated system/tool import contexts reproduces
+  the private diagnostic failure; JSON-only `_exec` mocks had missed it. Use the
+  image's tool interpreter only for this reader. Keep test state private and fake
+  IPC/HTTP; do not read the real daemon credential or change firewall/routing.
+
+- **2026-11-05 — Smoke output evidence extension (#2662):** The user accepted
+  extending the baseline six cases. The local nine-case matrix now requires
+  normalized latency-hook counters plus real tool witnesses and correlated clean
+  provider results. Strict disables secret redaction, so test block/containment
+  without changing policy or claiming warn-mode redaction coverage. Verify generated
+  fixtures using the bundled secret/PII detectors: repeating a four-digit card
+  group does not necessarily produce a Luhn-valid payment test number. Keep raw
+  output detection process-wide and include token-count preflights/all message
+  roles. Gemini reuses tool names and may omit IDs/original prompts, so remember
+  the most recently issued case for each Gemini function. Write the completed
+  execution witness only after stdout is flushed. New assertions are locally
+  validated, not runtime-qualified; native hook trust/consent gates are unchanged.
+
+- **2026-11-05 — Real-agent hook stage coverage (#2662):** The CLI smoke runner
+  has prompt injection/secret/PII cases and intended pre-tool SSRF/config-exfil
+  probes emitted as native shell-tool calls by the local mock. The clean case
+  explicitly avoids tools. There is no explicit successful-tool/PostToolUse
+  redaction case, and `_run_case` asserts violation categories/provider counts,
+  not the originating hook event. Do not claim full pre/post tool qualification
+  from these six cases; tool offers also do not prove successful tool execution.
+  This was the baseline discovery; the accepted local extension is described above.
+
+- **2026-11-05 — Windows smoke marker CI (#2662):** Executing the Linux
+  bootstrap snippet directly in a Windows unit test opens a text-mode descriptor,
+  so `os.write(..., b'installed\n')` writes CRLF. A raw-byte LF assertion failed
+  all three Windows CI jobs despite all five Linux jobs passing. Compare text
+  using the gate's `Path.read_text(encoding='ascii')` semantics and simulate CRLF
+  on Linux too; retain the atomic-publication assertion and do not skip Windows
+  or change the Linux-only production bootstrap to satisfy the host-side test.
+
+- **2026-11-05 — Smoke bootstrap and CI fixtures (#2662):** A gate polling a
+  readiness file can observe its empty contents between open and write; publish a
+  completely written private staging file with atomic rename. Force the smoke
+  gate entrypoint in the engine spec as well as the generated image, and drop
+  agent capabilities there so later engine execs cannot inherit NET_ADMIN.
+  REST stats snapshots can exceed a health endpoint's 4 KiB response bound;
+  retain per-endpoint bounds and fixed-category output. Native tray test fixtures
+  must populate `target.stats` through the background snapshot worker and refresh
+  that worker before expecting remote header changes; do not restore GUI-thread
+  REST requests to satisfy obsolete synchronous expectations. The 21 CI failures
+  in `test_sandbox_tray.py` were reproduced and fixed in tests only.
+
+- **2026-11-05 — Smoke health versus Mac tray reachability (#2662):** The smoke
+  readiness check uses container exec and local daemon IPC, not the published
+  host REST endpoint. Successful in-container cases do not qualify Mac tray REST
+  access; `--keep` preserves the same isolated network. Compare internal REST
+  health and host `/api/health` before attributing disconnected/error to a stopped
+  process or changing routes. The Mac forwarding return path is only a hypothesis
+  until measured. Preserve egress isolation and normal daemon discovery.
+
 - **2026-11-05 — Current Codex smoke prerequisites (#2662):** Codex >= 0.134 uses
   `<name>.config.toml` native profile overlays; legacy `[profiles.<name>]` in its
   base config can make `codex exec --profile` fail before hooks/provider calls.
@@ -290,11 +542,11 @@
 - **2026-11-05 — Podman smoke REST publishing (#2662):** A post-start
   `podman network connect` to a route-less bridge did not fix macOS tray REST
   reachability. Upstream Podman #11396 records Mac published-port forwarding
-  working with a bridge network. Prefer one DNS-disabled bridge with
-  `no_default_route=true` attached at container creation; it blocks default-route
-  egress while letting Podman configure published ports on the initial network.
-  Linux Podman passes host HTTP and all six smoke cases, but Mac gvproxy still
-  needs qualification.
+  working with a bridge network. The subsequent single no-default-route bridge
+  passed Linux probes but still did not qualify Mac tray connectivity. The user
+  approved replacing that smoke-only network with normal bridge routing plus a
+  fail-closed namespace firewall; Linux/rootless helper and Mac gvproxy runtime
+  qualification of the new approach remain pending.
 
 - **2026-11-03 — Direct hook notifications (#2651):** A short-lived CLI must
   commit the privacy-safe event to the durable outbox before returning; a
