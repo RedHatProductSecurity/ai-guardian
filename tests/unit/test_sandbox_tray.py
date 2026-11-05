@@ -320,6 +320,8 @@ class TestScopedPauseMenuState:
         tray._dispatch_to_main = lambda callback: callback()
         tray._schedule_appindicator_menu_watch = mock.Mock()
         tray._defer_appindicator_menu_close = mock.Mock()
+        # Remote menu callbacks consume worker-populated snapshots, never REST.
+        tray._build_stats_snapshot()
         if multi:
             header = tray._menu._build_multi_daemon_menu_items()[1]
             items = header.action.items
@@ -359,6 +361,7 @@ class TestScopedPauseMenuState:
     ):
         tray, target, stats, header = self._menu("container", False)
         stats.update(name="configured-name", mcp_installed=True, version="1.19.0")
+        tray._refresh_menu_if_changed()
         header.label(None)
         assert target.name == "configured-name"
         key = (target.name, target.runtime)
@@ -367,6 +370,7 @@ class TestScopedPauseMenuState:
         del stats["mcp_installed"]
         del stats["version"]
         isolated_menu.return_value += 3
+        tray._refresh_menu_if_changed()
         header.label(None)
         assert tray._mcp_installed_per_daemon[key] is True
         assert tray._health._daemon_versions[key] == "1.19.0"
@@ -388,7 +392,7 @@ class TestScopedPauseMenuState:
     @pytest.mark.parametrize("multi", [False, True])
     @pytest.mark.parametrize("scope", ["session", "dir"])
     @pytest.mark.parametrize("minutes", [0, 5])
-    def test_success_exposes_resume_immediately_within_cache_window(
+    def test_success_exposes_resume_after_worker_refresh_within_cache_window(
         self, runtime, multi, scope, minutes
     ):
         tray, target, stats, header = self._menu(runtime, multi)
@@ -423,22 +427,24 @@ class TestScopedPauseMenuState:
         pause_method.assert_called_once_with(target, identity, minutes)
         assert self._option(tray, scope).label.startswith("☾")
         assert self._option(tray, scope).paused is True
+        tray._refresh_menu_if_changed()
         assert header.label(None).startswith("◐")
         assert stats["paused"] is False
         assert tray._refresh_event.is_set()
-        tray._icon.update_menu.assert_called_once()
+        assert tray._icon.update_menu.call_count == 2
 
         snapshot, selection = self._selection(tray, scope, resume=True)
         assert "confirmed" in snapshot.request(*selection)
         resume_method.assert_called_once_with(target, identity)
         assert self._option(tray, scope).label.startswith("●")
         assert self._option(tray, scope).paused is False
+        tray._refresh_menu_if_changed()
         assert header.label(None).startswith("●")
-        assert tray._icon.update_menu.call_count == 2
+        assert tray._icon.update_menu.call_count == 4
 
     @pytest.mark.parametrize("multi", [False, True])
     @pytest.mark.parametrize("scope", ["session", "dir"])
-    def test_header_status_share_cache_and_modal_reads_fresh_snapshot(
+    def test_header_status_share_worker_cache_and_modal_reads_fresh_snapshot(
         self, multi, scope
     ):
         tray, _, stats, header = self._menu("container", multi)
@@ -450,7 +456,7 @@ class TestScopedPauseMenuState:
         assert header.label(None).startswith("●")
         assert tray._menu._daemon_status_details(int(multi))[1] == "● Running"
         assert self._option(tray, scope).label.startswith("☾")
-        tray._refresh_menu()
+        tray._refresh_menu_if_changed()
         assert header.label(None).startswith("◐")
         assert tray._menu._daemon_status_details(int(multi))[1] == "◐ Partially paused"
 

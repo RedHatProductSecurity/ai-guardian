@@ -1,6 +1,7 @@
 """Contracts for the credential-free real-agent CLI hook smoke check."""
 
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -206,23 +207,34 @@ def test_internal_network_command_requests_runtime_egress_isolation():
     ]
 
 
-def test_podman_smoke_network_has_no_default_route():
-    runner = _load(RUNNER_PATH, "agent_cli_smoke_no_default_route_network")
-
-    assert runner.no_default_route_network_name("ag-cli-smoke-codex-1234abcd") == (
-        "ag-cli-smoke-codex-1234abcd-isolated"
-    )
-    assert runner.create_no_default_route_network_command(
-        "podman", "ag-cli-smoke-codex-1234abcd-isolated"
-    ) == [
+def test_podman_smoke_uses_normal_bridge_without_agent_capabilities(tmp_path):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_firewall_container")
+    command = runner.build_podman_create_command(
         "podman",
-        "network",
-        "create",
-        "--disable-dns",
-        "--opt",
-        "no_default_route=true",
-        "ag-cli-smoke-codex-1234abcd-isolated",
-    ]
+        "opencode",
+        "build",
+        "localhost/smoke:test",
+        tmp_path / "strict.json",
+        tmp_path / "workspace",
+        "ag-cli-smoke-opencode-1234abcd",
+    )
+    assert command[:2] == ["podman", "run"]
+    assert command[command.index("--network") + 1] == "bridge"
+    assert command[command.index("--userns") + 1] == "keep-id:uid=1000,gid=1000"
+    assert command[command.index("--user") + 1] == "1000:1000"
+    assert command[command.index("--cap-drop") + 1] == "ALL"
+    assert "--cap-add" not in command
+    assert "--privileged" not in command
+    assert "no-new-privileges" in command
+    assert (
+        command[command.index("--entrypoint") + 1]
+        == "/usr/local/bin/agent_cli_smoke_gate.py"
+    )
+    assert "127.0.0.1::63152" in command
+    assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
+    assert f"AI_GUARDIAN_STATE_DIR={runner.STATE_DIR}" in command
+    assert "ai-guardian.daemon=true" in command
+    assert "OPENAI_API_KEY" not in " ".join(command)
     assert runner._is_podman_engine("podman")
     assert runner._is_podman_engine("/usr/bin/podman")
     assert not runner._is_podman_engine("docker")
@@ -230,20 +242,24 @@ def test_podman_smoke_network_has_no_default_route():
 
 @pytest.mark.parametrize("keep", (False, True))
 @pytest.mark.parametrize(
-    ("engine", "uses_no_default_route_network"),
+    ("engine", "uses_firewall"),
     (("podman", True), ("docker", False)),
 )
-def test_main_sets_up_egress_isolated_networks_and_cleans_up(
-    engine, uses_no_default_route_network, keep, monkeypatch, tmp_path
+def test_main_sets_up_smoke_isolation_and_cleans_up(
+    engine, uses_firewall, keep, monkeypatch, tmp_path
 ):
     runner = _load(RUNNER_PATH, f"agent_cli_smoke_lifecycle_{engine}_{keep}")
     runner._temp_parent = lambda: tmp_path
     runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
     monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
     runner._wait_for_sandbox_ready = lambda *_args, **_kwargs: True
+    runner._check_sandbox_rest = lambda *_args, **_kwargs: True
     runner._configure_agent = lambda *_args, **_kwargs: True
     runner._start_mock = lambda *_args, **_kwargs: True
     runner._run_case = lambda *_args, **_kwargs: True
+    runner._check_podman_smoke_image = lambda *_args, **_kwargs: True
+    firewall_calls = []
+    runner._setup_podman_firewall = lambda *args: firewall_calls.append(args) or True
 
     commands = []
 
@@ -272,31 +288,26 @@ def test_main_sets_up_egress_isolated_networks_and_cleans_up(
 
     assert runner.main(argv) == 0
 
-    network_create = next(
-        index
-        for index, command in enumerate(commands)
-        if command[:3] == [engine, "network", "create"]
-    )
-    sandbox_create = next(
-        index
-        for index, command in enumerate(commands)
-        if command[:3] == ["ai-guardian", "sandbox", "create"]
-    )
-    assert network_create < sandbox_create
-    create_command = commands[sandbox_create]
-    sandbox_network = create_command[create_command.index("--container-network") + 1]
-    if uses_no_default_route_network:
-        assert commands[network_create] == [
-            engine,
-            "network",
-            "create",
-            "--disable-dns",
-            "--opt",
-            "no_default_route=true",
-            sandbox_network,
-        ]
-        assert sandbox_network.endswith("-isolated")
+    if uses_firewall:
+        assert not any(command[1:2] == ["network"] for command in commands)
+        assert any(command[:2] == [engine, "run"] for command in commands)
+        assert len(firewall_calls) == 1
     else:
+        network_create = next(
+            index
+            for index, command in enumerate(commands)
+            if command[:3] == [engine, "network", "create"]
+        )
+        sandbox_create = next(
+            index
+            for index, command in enumerate(commands)
+            if command[:3] == ["ai-guardian", "sandbox", "create"]
+        )
+        assert network_create < sandbox_create
+        create_command = commands[sandbox_create]
+        sandbox_network = create_command[
+            create_command.index("--container-network") + 1
+        ]
         assert commands[network_create] == [
             engine,
             "network",
@@ -305,10 +316,11 @@ def test_main_sets_up_egress_isolated_networks_and_cleans_up(
             sandbox_network,
         ]
         assert sandbox_network.endswith("-internal")
+        assert firewall_calls == []
     network_remove = [
         command for command in commands if command[:3] == [engine, "network", "rm"]
     ]
-    assert len(network_remove) == (0 if keep else 1)
+    assert len(network_remove) == (0 if keep or uses_firewall else 1)
     assert bool(deleted) is not keep
     assert not any(command[1:3] == ["network", "connect"] for command in commands)
 
@@ -319,9 +331,12 @@ def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path)
     runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
     monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
     runner._wait_for_sandbox_ready = lambda *_args, **_kwargs: True
+    runner._check_sandbox_rest = lambda *_args, **_kwargs: True
     runner._configure_agent = lambda *_args, **_kwargs: True
     runner._start_mock = lambda *_args, **_kwargs: True
     runner._opencode_uses_v2 = lambda *_args: False
+    runner._check_podman_smoke_image = lambda *_args: True
+    runner._setup_podman_firewall = lambda *_args: True
     server_starts = []
     runner._start_opencode_v1_server = lambda *args: server_starts.append(args) or True
     warmups = []
@@ -458,7 +473,7 @@ def test_main_removes_smoke_network_when_sandbox_creation_fails(monkeypatch, tmp
     def fake_run(command, *_args, **_kwargs):
         commands.append(list(command))
         code = 1 if command[:3] == ["ai-guardian", "sandbox", "create"] else 0
-        if command[:2] == ["podman", "inspect"]:
+        if command[:2] == ["docker", "inspect"]:
             code = 1
         return subprocess.CompletedProcess(command, code, stdout="", stderr="failed")
 
@@ -477,7 +492,7 @@ def test_main_removes_smoke_network_when_sandbox_creation_fails(monkeypatch, tmp
                 "--image",
                 "localhost/smoke:test",
                 "--container-engine",
-                "podman",
+                "docker",
                 "--ai-guardian-command",
                 "ai-guardian",
             ]
@@ -490,7 +505,7 @@ def test_main_removes_smoke_network_when_sandbox_creation_fails(monkeypatch, tmp
             [
                 command
                 for command in commands
-                if command[:3] == ["podman", "network", "rm"]
+                if command[:3] == ["docker", "network", "rm"]
             ]
         )
         == 1
@@ -777,6 +792,16 @@ def test_claude_tos_opt_in_preinstalls_only_in_temporary_smoke_image(
         str(root / "image-context"),
     ]
     assert kwargs["stream_output"] is True
+    assert ("microdnf install -y --nodocs nftables" in dockerfiles[0]) is (
+        engine == "podman"
+    )
+    assert ("ai-guardian.smoke-firewall=nftables-v1" in dockerfiles[0]) is (
+        engine == "podman"
+    )
+    assert (container_dir / "Dockerfile").read_text(
+        encoding="utf-8"
+    ) == "FROM scratch\n"
+    assert not (container_dir / "agent_cli_smoke_gate.py").exists()
     if install_claude_code:
         assert "https://claude.ai/install.sh" in dockerfiles[0]
         assert "test -x /sandbox/.local/bin/claude" in dockerfiles[0]
@@ -813,8 +838,11 @@ def test_main_builds_claude_image_only_after_explicit_tos_opt_in(
     runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
     monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
     runner._wait_for_sandbox_ready = lambda *_args, **_kwargs: True
+    runner._check_sandbox_rest = lambda *_args, **_kwargs: True
     runner._configure_agent = lambda *_args, **_kwargs: True
     runner._start_mock = lambda *_args, **_kwargs: True
+    runner._check_podman_smoke_image = lambda *_args: True
+    runner._setup_podman_firewall = lambda *_args: True
     runner._run_case = lambda *_args, **_kwargs: True
     image_options = []
     runner.build_current_image = (
@@ -1468,3 +1496,397 @@ def test_sandbox_readiness_waits_for_loaded_daemon(monkeypatch, capsys):
     assert len(calls) == 2
     assert calls[0][0][2] == ["ai-guardian", "daemon", "status"]
     assert "Sandbox setup and daemon are ready" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("container_healthy", "published_health", "stats_health", "expected", "message"),
+    (
+        (True, "healthy", "healthy", True, "authenticated host access work"),
+        (False, "not_checked", "not_checked", False, "health failed inside"),
+        (
+            True,
+            "connection_failed",
+            "not_checked",
+            False,
+            "published-port/VM forwarding",
+        ),
+        (
+            True,
+            "healthy",
+            "http_401",
+            False,
+            "authentication rather than changing network",
+        ),
+    ),
+)
+def test_rest_diagnostics_distinguish_listener_forwarding_and_authentication(
+    container_healthy,
+    published_health,
+    stats_health,
+    expected,
+    message,
+    monkeypatch,
+    capsys,
+):
+    runner = _load(RUNNER_PATH, "agent_cli_rest_diagnostics")
+    private_token = "private-smoke-auth-value"
+    state = {
+        "ipc": True,
+        "rest_port": 63152,
+        "internal_health": container_healthy,
+        "auth_token": private_token,
+    }
+    commands = []
+
+    def fake_exec(engine, name, command, timeout):
+        commands.append((engine, name, command, timeout))
+        return subprocess.CompletedProcess(
+            command, 0, json.dumps(state), "private stderr"
+        )
+
+    def fake_run(command, *_args, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(
+            command, 0, "0.0.0.0:45678\n[::]:45678\n", ""
+        )
+
+    requests = []
+
+    def probe(port, path, token=None):
+        requests.append((port, path, token))
+        return published_health if path == "/api/health" else stats_health
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_probe_rest", probe)
+
+    assert (
+        runner._check_sandbox_rest("podman", "ag-cli-smoke-codex-1234abcd", 30)
+        is expected
+    )
+    output = capsys.readouterr().out
+    assert message in output
+    assert private_token not in output
+    assert "private stderr" not in output
+    assert f"published_health={published_health}" in output
+    assert f"authenticated_stats={stats_health}" in output
+    assert all(request[0] == 45678 for request in requests)
+    if stats_health != "not_checked":
+        assert requests == [
+            (45678, "/api/health", None),
+            (45678, "/api/stats", private_token),
+        ]
+    assert not any(private_token in str(command) for command in commands)
+
+
+@pytest.mark.parametrize(
+    "port_output", ("", "0.0.0.0:0\n", "0.0.0.0:70000\n", "invalid")
+)
+def test_rest_diagnostics_report_missing_publication_without_network_access(
+    port_output, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_rest_missing_port")
+    state = {"ipc": True, "rest_port": 63152, "internal_health": True}
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args: subprocess.CompletedProcess(args, 0, json.dumps(state), ""),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda *args: subprocess.CompletedProcess(args, 0, port_output, ""),
+    )
+    requests = []
+    monkeypatch.setattr(runner, "_probe_rest", lambda *args: requests.append(args))
+    assert not runner._check_sandbox_rest("podman", "ag-cli-smoke-codex-1234abcd", 30)
+    assert requests == []
+    assert "REST port is not published" in capsys.readouterr().out
+
+
+def test_diagnose_existing_sandbox_never_builds_creates_or_removes(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_rest_read_only_mode")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: f"/usr/bin/{name}")
+    calls = []
+    monkeypatch.setattr(
+        runner, "_check_sandbox_rest", lambda *args: calls.append(args) or True
+    )
+
+    def unexpected(*args, **kwargs):
+        pytest.fail(
+            "Read-only diagnostics must not create files, build images, or mutate sandboxes"
+        )
+
+    monkeypatch.setattr(runner.tempfile, "mkdtemp", unexpected)
+    monkeypatch.setattr(runner, "build_current_image", unexpected)
+    monkeypatch.setattr(runner, "_run", unexpected)
+    monkeypatch.setattr(runner, "_delete_sandbox", unexpected)
+    assert (
+        runner.main(
+            [
+                "--diagnose-sandbox",
+                "ag-cli-smoke-codex-1234abcd",
+                "--container-engine",
+                "podman",
+            ]
+        )
+        == 0
+    )
+    assert calls == [("podman", "ag-cli-smoke-codex-1234abcd", 180)]
+
+
+@pytest.mark.parametrize("name", ("ordinary-sandbox", "--all", "ag-cli-smoke-../other"))
+def test_read_only_diagnostics_reject_non_smoke_names(name, monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_rest_invalid_sandbox")
+    calls = []
+    monkeypatch.setattr(runner, "_check_sandbox_rest", lambda *args: calls.append(args))
+    with pytest.raises(SystemExit) as error:
+        runner.main([f"--diagnose-sandbox={name}"])
+    assert error.value.code == 2
+    assert calls == []
+
+
+def test_podman_firewall_helper_is_short_lived_and_namespace_scoped(tmp_path):
+    runner = _load(RUNNER_PATH, "agent_cli_firewall_helper_command")
+    command = runner.build_firewall_command(
+        "podman",
+        "ag-cli-smoke-codex-1234abcd",
+        "localhost/smoke:test",
+        tmp_path / "helper.cid",
+    )
+    assert command[:3] == ["podman", "run", "--rm"]
+    assert (
+        command[command.index("--network") + 1]
+        == "container:ag-cli-smoke-codex-1234abcd"
+    )
+    assert command[command.index("--cap-drop") + 1] == "ALL"
+    assert command[command.index("--cap-add") + 1] == "NET_ADMIN"
+    assert command.count("--cap-add") == 1
+    assert "--privileged" not in command
+    assert "--volume" not in command
+    assert "--pid" not in command
+    assert "--read-only" in command
+    assert "--pull=never" in command
+    assert "ai-guardian.daemon=false" in command
+
+
+@pytest.mark.parametrize("helper_code", (0, 1))
+def test_firewall_gate_opens_only_after_successful_helper(
+    helper_code, tmp_path, monkeypatch
+):
+    runner = _load(RUNNER_PATH, "agent_cli_firewall_bootstrap_order")
+    events = []
+
+    def fake_run(command, *_args, **_kwargs):
+        events.append("helper")
+        return subprocess.CompletedProcess(command, helper_code, "", "")
+
+    def fake_exec(engine, name, command, timeout):
+        events.append("release_gate")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    assert runner._setup_podman_firewall(
+        "podman",
+        "ag-cli-smoke-codex-1234abcd",
+        "localhost/smoke:test",
+        tmp_path,
+        30,
+        {},
+    ) is (helper_code == 0)
+    assert events == (["helper", "release_gate"] if helper_code == 0 else ["helper"])
+
+
+def test_firewall_readiness_marker_is_published_after_complete_write(
+    tmp_path, monkeypatch
+):
+    runner = _load(RUNNER_PATH, "agent_cli_firewall_atomic_readiness")
+    ready = tmp_path / "ready"
+    write = os.write
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda command, *args, **kwargs: subprocess.CompletedProcess(
+            command, 0, "", ""
+        ),
+    )
+
+    def checked_write(fd, data):
+        assert not ready.exists(), "startup gate can observe an incomplete marker"
+        return write(fd, data)
+
+    def release_gate(engine, name, command, timeout):
+        code = command[2].replace(
+            "/tmp/ai-guardian-smoke-firewall-ready", str(ready).replace("\\", "/")
+        )
+        exec(compile(code, "<smoke-readiness>", "exec"))
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(os, "write", checked_write)
+    monkeypatch.setattr(runner, "_exec", release_gate)
+    assert runner._setup_podman_firewall(
+        "podman",
+        "ag-cli-smoke-codex-1234abcd",
+        "localhost/smoke:test",
+        tmp_path,
+        30,
+        {},
+    )
+    assert ready.read_bytes() == b"installed\n"
+
+
+def test_supplied_podman_images_without_bootstrap_are_not_rebuilt(monkeypatch, capsys):
+    runner = _load(RUNNER_PATH, "agent_cli_firewall_supplied_image")
+    commands = []
+
+    def fake_run(command, *_args, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    assert not runner._check_podman_smoke_image("podman", "localhost/normal:test", 30)
+    assert len(commands) == 1
+    assert commands[0][:3] == ["podman", "image", "inspect"]
+    assert "omit --image" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("keep", (False, True))
+def test_firewall_failure_stops_sandbox_without_starting_agents(
+    keep, tmp_path, monkeypatch
+):
+    runner = _load(RUNNER_PATH, "agent_cli_firewall_fail_closed")
+    runner._temp_parent = lambda: tmp_path
+    monkeypatch.setattr(runner.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(runner, "_check_podman_smoke_image", lambda *args: True)
+    monkeypatch.setattr(runner, "_setup_podman_firewall", lambda *args: False)
+    monkeypatch.setattr(
+        runner,
+        "_wait_for_sandbox_ready",
+        lambda *args: pytest.fail("bootstrap was not protected"),
+    )
+    commands = []
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda command, *args, **kwargs: commands.append(command)
+        or subprocess.CompletedProcess(command, 0, "", ""),
+    )
+    removed = []
+    monkeypatch.setattr(runner, "_delete_sandbox", lambda *args: removed.append(args))
+    argv = [
+        "--cli-name",
+        "opencode",
+        "--agent",
+        "build",
+        "--image",
+        "localhost/smoke:test",
+        "--container-engine",
+        "podman",
+        "--ai-guardian-command",
+        "ai-guardian",
+    ]
+    if keep:
+        argv.append("--keep")
+    assert runner.main(argv) == 1
+    assert any(command[:4] == ["podman", "stop", "--time", "1"] for command in commands)
+    assert bool(removed) is not keep
+    assert not any(command[1:2] == ["network"] for command in commands)
+
+
+def test_firewall_timeout_removes_only_recorded_helper_id(tmp_path, monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_firewall_timeout_cleanup")
+    container_id = "a" * 64
+    commands = []
+
+    def run(command, *args, **kwargs):
+        commands.append(command)
+        if command[1] == "run":
+            Path(command[command.index("--cidfile") + 1]).write_text(container_id)
+            raise subprocess.TimeoutExpired(command, 30)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_run", run)
+    monkeypatch.setattr(
+        runner, "_exec", lambda *args: pytest.fail("gate released after timeout")
+    )
+    with pytest.raises(subprocess.TimeoutExpired):
+        runner._setup_podman_firewall(
+            "podman",
+            "ag-cli-smoke-codex-1234abcd",
+            "localhost/smoke:test",
+            tmp_path,
+            30,
+            {},
+        )
+    assert commands[-1] == ["podman", "rm", "--force", container_id]
+
+
+@pytest.mark.parametrize(
+    ("body", "path", "expected"),
+    (
+        (b'{"status":"ok"}', "/api/health", "healthy"),
+        (b'{"request_count":1}', "/api/stats", "healthy"),
+        (
+            json.dumps({"request_count": 1, "sessions": "x" * 8192}).encode(),
+            "/api/stats",
+            "healthy",
+        ),
+        (b"[]", "/api/health", "invalid_response"),
+        (b'{"private":"do not emit"}', "/api/stats", "invalid_response"),
+        (b"not json", "/api/health", "invalid_response"),
+        (b"x" * 4097, "/api/health", "invalid_response"),
+        (b"x" * (1024 * 1024 + 1), "/api/stats", "invalid_response"),
+    ),
+    ids=(
+        "health",
+        "stats",
+        "larger-stats",
+        "list",
+        "missing-stats",
+        "invalid-json",
+        "oversized-health",
+        "oversized-stats",
+    ),
+)
+def test_rest_probe_uses_no_proxy_no_redirects_and_never_emits_bodies(
+    body, path, expected, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_rest_private_probe")
+    handlers = []
+    requests = []
+
+    class Opener:
+        def open(self, request, timeout):
+            requests.append((request, timeout))
+            return io.BytesIO(body)
+
+    monkeypatch.setattr(
+        runner, "build_opener", lambda *args: handlers.extend(args) or Opener()
+    )
+    assert runner._probe_rest(45678, path, "private-auth-value") == expected
+    request, timeout = requests[0]
+    assert request.full_url == f"http://127.0.0.1:45678{path}"
+    assert request.get_header("Authorization") == "Bearer private-auth-value"
+    assert timeout == 3
+    assert handlers[0].proxies == {}
+    assert handlers[1].redirect_request(None, None, None, None, None, None) is None
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("payload", ("not-json private-auth-value", "[]", "{}"))
+def test_private_rest_state_failures_never_leak_subprocess_output(
+    payload, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_rest_private_failure")
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args: subprocess.CompletedProcess(
+            args, 1, payload, "private-auth-value"
+        ),
+    )
+    assert not runner._check_sandbox_rest("podman", "ag-cli-smoke-codex-1234abcd", 30)
+    output = capsys.readouterr().out
+    assert "private sandbox diagnostics" in output
+    assert "private-auth-value" not in output

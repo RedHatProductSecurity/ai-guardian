@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **Agent CLI smoke network isolation:** Keep smoke sandboxes on dedicated
-  egress-isolated networks. Podman uses a DNS-disabled bridge with no default
-  route from container startup, preserving the published daemon REST port without
-  ordinary outbound routing; Docker retains its internal network.
+- **Agent CLI smoke network isolation:** Podman smoke uses normal bridge routing
+  and a smoke-only IPv4/IPv6 egress firewall, preserving the published daemon REST
+  return path. A short-lived namespace helper installs the policy before setup;
+  agents remain unprivileged and cannot remove it. Normal containers, shared
+  lifecycle code and the host firewall are unchanged; Docker retains its internal
+  network. The temporary Podman smoke image adds the GPL-2.0-only nftables external
+  tool; supplied images without the bootstrap fail closed without hidden rebuilds.
 - **OpenCode smoke startup:** Disable automatic update checks and remote model
   catalog fetching for isolated smoke invocations, avoiding repeated network
   timeouts on the internal egress-blocked network. Normal OpenCode auto-updates
@@ -30,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   callbacks, keeping an unreachable container from freezing the macOS tray.
 - **Real-agent smoke diagnostics:** Report aggregate provider-request and violation
   deltas when a CLI case fails, without emitting agent prompts or raw output.
+  Check internal and published REST health/authentication before running cases;
+  retained smoke sandboxes support read-only `--diagnose-sandbox` checks without
+  exposing credentials or response bodies.
 - **Codex smoke profile compatibility:** Write the local mock provider into Codex's
   native named-profile file instead of a rejected legacy profile table, preserving
   the base MCP and hook configuration.
