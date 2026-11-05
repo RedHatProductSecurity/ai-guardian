@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   callbacks, keeping an unreachable container from freezing the macOS tray.
 - **Real-agent smoke diagnostics:** Report aggregate provider-request and violation
   deltas when a CLI case fails, without emitting agent prompts or raw output.
+- **Codex smoke profile compatibility:** Write the local mock provider into Codex's
+  native named-profile file instead of a rejected legacy profile table, preserving
+  the base MCP and hook configuration.
+- **Smoke image build visibility:** Stream normal Docker/Podman build output live
+  instead of hiding build steps behind generic elapsed-time messages. Agent
+  invocation output remains captured; build commands and caching are unchanged.
 - **Tray pause target liveness (#2663):** Show sessions and project directories
   for active daemons using hook activity in the last 30 minutes, remove sessions
   immediately on `SessionEnd`, and keep explicitly paused directories available for

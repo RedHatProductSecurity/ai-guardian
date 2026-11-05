@@ -94,9 +94,11 @@ short-name resolution in the non-interactive runner. The runner also preserves
 the caller's rootless Podman data/storage configuration while isolating the
 temporary AI Guardian HOME/config paths, so the image remains visible to the
 sandbox-create subprocess.
-It prints flushed stage and per-case updates, with a heartbeat for long-running
-builds, sandbox setup, or CLI invocations. Successful model responses are not
-printed; failed stages show only bounded captured command diagnostics.
+Image builds stream the normal Docker/Podman output live, including build steps
+and download/install progress. The 15-minute build timeout and engine build/cache
+options are unchanged. Sandbox setup and CLI invocations retain stage updates and
+heartbeats with captured output; model responses are not printed. Failed captured
+stages show bounded diagnostics; streamed build logs are already visible.
 
 This is a protocol adapter, not a universal fake provider: clients need a
 supported local endpoint override and their native tool-call format must be

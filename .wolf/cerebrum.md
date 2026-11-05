@@ -201,6 +201,15 @@
 
 ## Key Learnings
 
+- **2026-11-05 — Current Codex smoke prerequisites (#2662):** Codex >= 0.134 uses
+  `<name>.config.toml` native profile overlays; legacy `[profiles.<name>]` in its
+  base config can make `codex exec --profile` fail before hooks/provider calls.
+  Keep temporary provider settings in that overlay and preserve base MCP/hooks.
+  Codex 0.166 also lists discovered hooks as untrusted until native approval;
+  `hooks/list` is a read-only way to distinguish discovery from approval. Do not
+  confuse successful configuration discovery with enforcement or skip trust
+  verification to make smoke qualification pass.
+
 - **2026-11-04 — Gemini and OpenCode CLI smoke coverage (#2662):** Gemini CLI
   accepts `GEMINI_API_KEY` with `GOOGLE_GEMINI_BASE_URL` for a local endpoint;
   disable `privacy.usageStatisticsEnabled` and retain network isolation in the

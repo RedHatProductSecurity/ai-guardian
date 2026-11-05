@@ -104,11 +104,13 @@ url=p['base_url']; key=p['api_key']; model=p['model']
 if cli == 'codex':
     home=Path(os.environ.get('CODEX_HOME', Path.home()/'.codex'))
     home.mkdir(parents=True, exist_ok=True)
-    text=(f'\n[model_providers.ai_guardian_smoke]\nname = "AI Guardian local mock"\n'
-          f'base_url = "{url}"\nwire_api = "responses"\nenv_key = "OPENAI_API_KEY"\n\n'
-          f'[profiles.{agent}]\nmodel = "{model}"\nmodel_provider = "ai_guardian_smoke"\n'
-          'approval_policy = "never"\nsandbox_mode = "workspace-write"\n')
-    with (home/'config.toml').open('a', encoding='utf-8') as f: f.write(text)
+    # Codex >= 0.134 overlays <name>.config.toml on its base MCP/hook config.
+    # Legacy [profiles.<name>] tables make current CLI startup fail.
+    text=(f'model = "{model}"\nmodel_provider = "ai_guardian_smoke"\n'
+          'approval_policy = "never"\nsandbox_mode = "workspace-write"\n\n'
+          '[model_providers.ai_guardian_smoke]\nname = "AI Guardian local mock"\n'
+          f'base_url = "{url}"\nwire_api = "responses"\nenv_key = "OPENAI_API_KEY"\n')
+    (home/f'{agent}.config.toml').write_text(text, encoding='utf-8')
 elif cli == 'opencode':
     d=Path.home()/'.config'/'opencode'; d.mkdir(parents=True, exist_ok=True)
     path=d/'opencode.json'; cfg={}
@@ -507,6 +509,7 @@ def build_current_image(
         ],
         timeout,
         progress="Building the temporary smoke image",
+        stream_output=True,
     )
     if result.returncode != 0:
         _report_failure_details("Smoke image build", result)
@@ -551,14 +554,18 @@ def _run(
     env: Optional[Dict[str, str]] = None,
     progress: Optional[str] = None,
     cwd: Optional[Path] = None,
+    stream_output: bool = False,
 ) -> subprocess.CompletedProcess:
+    """Capture output by default; let image builds inherit native terminal output."""
     command_list = list(command)
-    if progress is None:
+    if progress is None or stream_output:
+        if progress:
+            _progress(progress)
         return subprocess.run(
             command_list,
             check=False,
             stdin=subprocess.DEVNULL,
-            capture_output=True,
+            capture_output=not stream_output,
             text=True,
             timeout=timeout,
             env=env,
