@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Agent CLI smoke network isolation:** Keep smoke sandboxes on dedicated
-  egress-isolated internal networks while retaining their published daemon REST
-  port for ordinary tray discovery.
+  egress-isolated internal networks. Podman additionally attaches a DNS-disabled
+  bridge with no default route for its published daemon REST port, preserving
+  ordinary tray discovery without adding a default egress route.
 - **OpenCode smoke startup:** Disable automatic update checks and remote model
   catalog fetching for isolated smoke invocations, avoiding repeated network
   timeouts on the internal egress-blocked network. Normal OpenCode auto-updates

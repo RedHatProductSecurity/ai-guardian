@@ -598,9 +598,39 @@ def internal_network_name(container_name: str) -> str:
     return f"{container_name}-internal"
 
 
+def published_port_network_name(container_name: str) -> str:
+    """Return the Podman bridge used only for the published REST port."""
+    return f"{container_name}-port"
+
+
+def _is_podman_engine(engine: str) -> bool:
+    """Identify Podman executables, including absolute paths."""
+    return Path(engine).name.lower().startswith("podman")
+
+
 def create_internal_network_command(engine: str, network_name: str) -> List[str]:
     """Build an engine command for an egress-isolated smoke network."""
     return [engine, "network", "create", "--internal", network_name]
+
+
+def create_published_port_network_command(engine: str, network_name: str) -> List[str]:
+    """Create a DNS-disabled bridge without a default route for port forwarding."""
+    return [
+        engine,
+        "network",
+        "create",
+        "--disable-dns",
+        "--opt",
+        "no_default_route=true",
+        network_name,
+    ]
+
+
+def connect_published_port_network_command(
+    engine: str, network_name: str, container_name: str
+) -> List[str]:
+    """Attach the route-less bridge after creation so Podman publishes the port."""
+    return [engine, "network", "connect", network_name, container_name]
 
 
 def _create_internal_network(
@@ -625,7 +655,48 @@ def _create_internal_network(
     return True
 
 
-def _remove_internal_network(
+def _create_published_port_network(
+    engine: str,
+    network_name: str,
+    timeout: int,
+    env: Dict[str, str],
+) -> bool:
+    """Create the Podman-only bridge that carries host-published REST traffic."""
+    result = _run(
+        create_published_port_network_command(engine, network_name),
+        timeout,
+        env,
+        progress="Creating a no-default-route published-port network",
+    )
+    if result.returncode != 0:
+        print("ERROR: unable to create the route-less published-port network")
+        _report_failure_details("Published-port network creation", result)
+        return False
+    return True
+
+
+def _connect_published_port_network(
+    engine: str,
+    network_name: str,
+    container_name: str,
+    timeout: int,
+    env: Dict[str, str],
+) -> bool:
+    """Attach the Podman port-forward network without adding an egress route."""
+    result = _run(
+        connect_published_port_network_command(engine, network_name, container_name),
+        timeout,
+        env,
+        progress="Attaching the no-default-route published-port network",
+    )
+    if result.returncode != 0:
+        print("ERROR: unable to attach the route-less published-port network")
+        _report_failure_details("Published-port network attachment", result)
+        return False
+    return True
+
+
+def _remove_smoke_network(
     engine: str,
     network_name: str,
     timeout: int,
@@ -1154,8 +1225,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     built_image = False
     name = f"ag-cli-smoke-{args.cli_name}-{uuid.uuid4().hex[:8]}"
     network_name = internal_network_name(name)
+    published_network_name = (
+        published_port_network_name(name)
+        if _is_podman_engine(args.container_engine)
+        else None
+    )
     created = False
-    network_created = False
+    created_networks: List[str] = []
     keep_files = False
     try:
         _progress(f"Starting {args.cli_name}/{args.agent} smoke check")
@@ -1182,11 +1258,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             _progress("Using the supplied smoke image")
 
-        network_created = _create_internal_network(
+        if not _create_internal_network(
             args.container_engine, network_name, args.timeout, host_env
-        )
-        if not network_created:
+        ):
             return 1
+        created_networks.append(network_name)
+
+        if published_network_name:
+            if not _create_published_port_network(
+                args.container_engine,
+                published_network_name,
+                args.timeout,
+                host_env,
+            ):
+                return 1
+            created_networks.append(published_network_name)
 
         command = build_create_command(
             guardian,
@@ -1209,6 +1295,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if not created:
             print("ERROR: AI Guardian could not create the temporary sandbox")
             _report_failure_details("Sandbox creation", create_result)
+            return 1
+        if published_network_name and not _connect_published_port_network(
+            args.container_engine,
+            published_network_name,
+            name,
+            args.timeout,
+            host_env,
+        ):
             return 1
         if not _wait_for_sandbox_ready(args.container_engine, name, args.timeout):
             print("ERROR: temporary sandbox setup did not become ready")
@@ -1294,7 +1388,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     finally:
         if created and args.keep:
             _progress(f"Keeping temporary sandbox: {name}")
-            _progress(f"Keeping temporary smoke network: {network_name}")
+            for kept_network in created_networks:
+                _progress(f"Keeping temporary smoke network: {kept_network}")
             keep_files = True
         elif created:
             _progress("Removing the temporary sandbox")
@@ -1307,10 +1402,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             _delete_sandbox(
                 guardian, args.container_engine, name, host_env, args.timeout
             )
-        if network_created and not (created and args.keep):
-            _remove_internal_network(
-                args.container_engine, network_name, args.timeout, host_env
-            )
+        if created_networks and not (created and args.keep):
+            for created_network in reversed(created_networks):
+                _remove_smoke_network(
+                    args.container_engine, created_network, args.timeout, host_env
+                )
         if built_image and image and not args.keep:
             _run([args.container_engine, "image", "rm", image], args.timeout)
         if args.keep:
