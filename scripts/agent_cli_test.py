@@ -150,7 +150,9 @@ elif cli == 'opencode':
         'npm':'@ai-sdk/openai-compatible', 'name':'AI Guardian local mock',
         'options':{'baseURL':url, 'apiKey':key},
         'models':{model:{'name':'AI Guardian local mock', 'tool_call':True,
-          'limit':{'context':8192, 'output':1024},
+          # Native/MCP schemas can exceed an 8K window. Leave room for the real
+          # tool-result continuation instead of forcing unsupported mock summaries.
+          'limit':{'context':128000, 'output':1024},
           'modalities':{'input':['text'], 'output':['text']}}}}
     cfg['model']=f'ai_guardian_smoke/{model}'
     path.write_text(json.dumps(cfg), encoding='utf-8')
@@ -1577,6 +1579,28 @@ def _run_case(
     return True
 
 
+def _agent_error_category(invocation: subprocess.CompletedProcess) -> str:
+    """Classify structured CLI errors without releasing their private bodies."""
+    for stream in (invocation.stdout, invocation.stderr):
+        if not isinstance(stream, str):
+            continue
+        for line in stream.splitlines():
+            try:
+                event = json.loads(line)
+            except (ValueError, RecursionError):
+                continue
+            pending = [event]
+            while pending:
+                value = pending.pop()
+                if isinstance(value, dict):
+                    if value.get("type") == "compaction.failed":
+                        return "compaction_failed"
+                    pending.extend(value.values())
+                elif isinstance(value, list):
+                    pending.extend(value)
+    return "unclassified"
+
+
 def _report_case_failure_details(
     case: SmokeCase,
     invocation: subprocess.CompletedProcess,
@@ -1598,6 +1622,8 @@ def _report_case_failure_details(
         f"provider_request_delta={provider_request_delta if provider_request_delta is not None else 'unavailable'}",
         f"violation_deltas={violations}",
     ]
+    if invocation.returncode != 0:
+        details.append(f"agent_error_category={_agent_error_category(invocation)}")
     if case.expected_violation:
         details.append(
             f"expected_{case.expected_violation}_delta=+{violation_deltas.get(case.expected_violation, 0)}"

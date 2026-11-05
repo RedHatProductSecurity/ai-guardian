@@ -893,6 +893,55 @@ def test_sandbox_create_environment_strips_provider_secrets_and_host_config(
     assert customized["XDG_DATA_HOME"] == str(tmp_path / "custom-data")
 
 
+def test_opencode_mock_window_preserves_native_continuations_and_existing_settings(
+    tmp_path, monkeypatch
+):
+    """An 8K fake window can trigger unsupported V2 summary turns after a tool."""
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_context_budget")
+    path = tmp_path / ".config" / "opencode" / "opencode.json"
+    path.parent.mkdir(parents=True)
+    original = {
+        "plugins": ["/synthetic/guardian-plugin"],
+        "mcp": {
+            "servers": {
+                "guardian": {"type": "local", "command": ["synthetic-guardian"]}
+            }
+        },
+        "compaction": {"auto": True},
+        "update": "auto",
+        "provider": {
+            "unrelated": {"models": {"unchanged": {"limit": {"context": 32768}}}}
+        },
+    }
+    path.write_text(json.dumps(original), encoding="utf-8")
+
+    def execute_config(_engine, _name, command, _timeout):
+        return subprocess.run(
+            [sys.executable, *command[1:]],
+            env={**os.environ, "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    monkeypatch.setattr(runner, "_exec", execute_config)
+    assert runner._configure_agent("podman", "synthetic", "opencode", "build", 5)
+    config = json.loads(path.read_text(encoding="utf-8"))
+    model = config["provider"]["ai_guardian_smoke"]["models"][runner.MOCK_MODEL]
+    assert model["limit"] == {"context": 128000, "output": 1024}
+    for key in ("plugins", "mcp", "compaction", "update"):
+        assert config[key] == original[key]
+    assert config["provider"]["unrelated"] == original["provider"]["unrelated"]
+    assert config["model"] == f"ai_guardian_smoke/{runner.MOCK_MODEL}"
+    assert model["tool_call"] is True
+    assert (
+        config["provider"]["ai_guardian_smoke"]["options"]["baseURL"] == runner.MOCK_URL
+    )
+    first = path.read_bytes()
+    assert runner._configure_agent("podman", "synthetic", "opencode", "build", 5)
+    assert path.read_bytes() == first
+
+
 def test_mock_provider_configuration_is_written_to_each_clients_native_config(
     tmp_path,
 ):
@@ -1802,6 +1851,60 @@ def test_agent_case_failures_report_only_aggregate_diagnostics(
     assert expected_diagnostic in output
     assert "agent output must not be printed" not in output
     assert "agent error must not be printed" not in output
+
+
+@pytest.mark.parametrize(
+    ("stream", "event", "category"),
+    (
+        (
+            "stdout",
+            {
+                "type": "error",
+                "error": {
+                    "type": "compaction.failed",
+                    "message": "private diagnostic body",
+                },
+            },
+            "compaction_failed",
+        ),
+        (
+            "stderr",
+            {
+                "type": "session.compaction.failed",
+                "data": {
+                    "error": {
+                        "type": "compaction.failed",
+                        "message": "private diagnostic body",
+                    }
+                },
+            },
+            "compaction_failed",
+        ),
+        (
+            "stdout",
+            {
+                "type": "error",
+                "error": {"type": "private-error-code", "message": "compaction.failed"},
+            },
+            "unclassified",
+        ),
+        ("stdout", "private invalid output compaction.failed", "unclassified"),
+        ("stdout", None, "unclassified"),
+    ),
+)
+def test_cli_failure_classification_exposes_only_a_fixed_category(
+    stream, event, category, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_fixed_error_category")
+    value = json.dumps(event) if isinstance(event, dict) else event
+    invocation = subprocess.CompletedProcess(["opencode", "run"], 1, **{stream: value})
+    assert runner._agent_error_category(invocation) == category
+    case = next(case for case in runner.CASES if case.name == "clean_tool")
+    runner._report_case_failure_details(case, invocation, {}, 4)
+    output = capsys.readouterr().out
+    assert f"agent_error_category={category}" in output
+    assert "private" not in output
+    assert "diagnostic body" not in output
 
 
 def test_sandbox_readiness_waits_for_loaded_daemon(monkeypatch, capsys):

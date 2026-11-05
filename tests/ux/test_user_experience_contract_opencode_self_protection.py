@@ -288,7 +288,10 @@ def test_opencode_v2_pre_and_post_tool_blocks_reach_transcript_and_model():
     - After-tool notice says the tool ran but its result was withheld.
     - The model receives a safe tool failure and later sees the refusal notice.
     - Post-tool blocking does not claim to undo the tool's side effects.
-    - Redacted, allowed results still replace the original tool output.
+    - Redacted, allowed results replace the entire native result with sanitized
+      text content; raw structured output, attachments and metadata are not copied.
+    - Completed blocked results are cleared before notifying or raising an error.
+    - Clean, allowed results retain their native structured shape unchanged.
 
     Manual verification with OpenCode V2:
     1. Configure a tool-input policy that denies a test tool call.
@@ -316,6 +319,13 @@ def test_opencode_v2_pre_and_post_tool_blocks_reach_transcript_and_model():
     assert "result.error" not in before_hook
     assert "result.error" not in after_hook
     assert "event.result = resultWithReplacement(" in after_hook
+    assert "resultWithReplacement(POST_TOOL_REFUSAL_NOTICE)" in after_hook
+    replacement = _OPENCODE_PLUGIN_V2_TS.split(
+        "function resultWithReplacement(", maxsplit=1
+    )[1].split("export default", maxsplit=1)[0]
+    assert "content: [{ type: 'text', text: contentText(replacement) }]" in replacement
+    assert "...record" not in replacement
+    assert "output: replacement" not in replacement
     notice_helper = _OPENCODE_PLUGIN_V2_TS.split(
         "const recordRefusalNotice = async", maxsplit=1
     )[1].split("await ctx.session.hook('prompt'", maxsplit=1)[0]

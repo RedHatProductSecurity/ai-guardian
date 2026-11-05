@@ -20,6 +20,13 @@ Manual qualification on Linux/macOS Podman:
 10. Use --cli-name opencode --cli-version 1.19.0 or --cli-version 2.0.24 to
     pin a temporary image. Confirm the installed version before cases; V1 warms
     one backend, V2 uses private servers. --image cannot be combined with the pin.
+11. JSON-encoded native results count only with the issued native tool identity
+    and exact clean marker/output. Prompt echoes, missing hooks/execution and
+    nonzero clean-case exits still fail; raw-delivery assertions are unchanged.
+12. The OpenCode mock model has room for native/MCP tools and a continuation, not
+    an artificial 8K window that forces summary turns. Existing compaction and
+    update settings stay untouched. A compaction error reports only a fixed
+    category; private errors and summary echoes never qualify a clean pass.
 """
 
 import importlib.util
@@ -310,6 +317,64 @@ def test_success_requires_real_tool_execution_and_post_tool_hook(
     assert f"PASS {case_name}" in output
     assert "private" not in output
     assert case.prompt not in output
+
+
+def test_clean_compaction_failure_stays_failed_without_disclosing_private_output(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: the reported four-request failure is diagnosed, not waived.
+
+    Manual verification: retry the pinned V2 smoke. Clean native tool output must
+    reach the mock with its issued identity and exit zero. If compaction fails,
+    see a fixed category, never the CLI's private error body or tool output.
+    """
+    case = stub_tool_case(runner, monkeypatch, "clean_tool")
+    tools = iter(
+        (
+            {},
+            {
+                "executed": 1,
+                "tool_offers": 1,
+                "clean_tool_results": 0,
+                "raw_tool_output_requests": 0,
+            },
+        )
+    )
+    requests = iter(({}, {"clean_tool": 4}))
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *args, **kwargs: next(tools))
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *args, **kwargs: next(requests)
+    )
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args,
+            1,
+            json.dumps(
+                {
+                    "type": "error",
+                    "error": {
+                        "type": "compaction.failed",
+                        "message": "private tool/model output",
+                    },
+                }
+            ),
+            "private diagnostic body",
+        ),
+    )
+    assert not runner._run_case(
+        "podman", "smoke", "opencode", "build", case, 30, opencode_v2=True
+    )
+    output = capsys.readouterr().out
+    assert "FAIL clean_tool: clean tool output did not reach the local mock" in output
+    assert "agent_exit_code=1" in output
+    assert "provider_request_delta=4" in output
+    assert "agent_error_category=compaction_failed" in output
+    assert "executed=+1" in output
+    assert "posttooluse=+1" in output
+    assert "PASS" not in output
+    assert "private" not in output
 
 
 @pytest.mark.parametrize("engine", ("docker", "podman"))

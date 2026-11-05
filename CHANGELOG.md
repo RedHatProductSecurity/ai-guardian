@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **OpenCode smoke continuation budget:** Give only the disposable mock model a
+  128K context window instead of 8K, leaving room for native/MCP tools and their
+  result continuation without disabling compaction. Add fixed-category CLI error
+  diagnostics without exposing private output; clean native-result and zero-exit
+  requirements remain unchanged.
+- **OpenCode V2 result containment:** Replace the complete native result during
+  output redaction, removing duplicate raw content/structured output/metadata.
+  Convert shared Bash replacements to valid V2 text content and clear completed
+  blocked results before the refusal path. Clean results stay unchanged. The smoke
+  mock also recognizes JSON-encoded correlated clean results without weakening
+  execution, hook, successful-exit or raw-delivery requirements.
 - **Smoke native tool routing:** Select an advertised native shell rather than the
   first tool with a command-shaped input, which could be an advisory MCP checker
   in OpenCode. Checker findings never substitute for native hook/execution evidence.

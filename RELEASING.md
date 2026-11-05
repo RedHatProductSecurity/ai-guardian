@@ -70,6 +70,16 @@ execution witness contains only a fixed status, not tool output. The mock inspec
 all incoming request bodies in memory, including token-count preflights, and
 exports aggregate counters only. It also correlates native tool-result IDs (or
 Gemini function responses) so a tool offer or echoed prompt cannot prove execution.
+One JSON text layer in a correlated native result is decoded before matching the
+exact clean output; this supports structured results without accepting prompt
+echoes or unissued tool IDs. Clean CLI exits must still succeed. Sensitive-output
+checks inspect every raw request as before; JSON normalization does not hide leaks.
+The disposable OpenCode mock model advertises a 128K context window so native/MCP
+tool descriptions do not force compaction before the tool-result continuation.
+Existing compaction/update settings and all hook/containment checks are unchanged.
+Nonzero CLI exits include only a fixed error category (`compaction_failed` when
+present in structured CLI events, otherwise `unclassified`), never private errors
+or model/tool output. A summary echo does not qualify as native clean-result evidence.
 Command probes select only advertised native shell tools (including OpenCode's
 `bash`/`shell`), never advisory MCP checkers or arbitrary command-shaped tools.
 Catalog ordering must not turn a command check into an execution probe: an

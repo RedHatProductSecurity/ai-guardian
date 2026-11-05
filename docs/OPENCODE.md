@@ -52,6 +52,14 @@ events expose a mutable `event.result`; failed after-tool events expose
 `event.error` instead. AI Guardian scans both paths and only applies output
 redaction to completed results.
 
+V2 results can include both structured `output` and model-visible `content`.
+Redaction replaces the **whole result** with a valid content-only `Tool.Result`,
+not just one of those fields. Original structured data, attachments and metadata
+are discarded on replacement so duplicate raw values cannot survive. Claude-style
+`stdout`/`stderr` replacements are converted to text, never assigned to V2's
+different native shell output schema. Completed blocked results are likewise
+cleared before the fixed refusal/error path. Clean, allowed results are unchanged.
+
 OpenCode V2 reports its built-in command tool as `shell`; AI Guardian normalizes
 that name to canonical `Bash` so shared command scanning, policy, and immutable
 self-protection apply consistently across V1 and V2.

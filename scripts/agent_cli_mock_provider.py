@@ -168,6 +168,17 @@ def _tool_results(payload: Dict[str, Any]) -> Iterable[Tuple[str, Any]]:
             yield names[name], output
 
 
+def _tool_result_strings(value: Any) -> Iterable[str]:
+    """Decode one JSON text layer only inside an already-correlated tool result."""
+    for text in _strings(value):
+        yield text
+        try:
+            decoded = json.loads(text)
+        except ValueError:
+            continue
+        yield from _strings(decoded)
+
+
 def _observe_request(payload: Dict[str, Any]) -> None:
     """Inspect the provider boundary in memory; persist only fixed-case counts.
 
@@ -184,7 +195,7 @@ def _observe_request(payload: Dict[str, Any]) -> None:
         1
         for case, output in _tool_results(payload)
         if case == "clean_tool"
-        and tool_output(case).strip() in "\n".join(_strings(output))
+        and tool_output(case).strip() in "\n".join(_tool_result_strings(output))
     )
     with COUNTS_LOCK:
         for case in raw_cases:
