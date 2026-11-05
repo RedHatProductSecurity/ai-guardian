@@ -602,7 +602,7 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
 ):
     runner = _load(RUNNER_PATH, "agent_cli_smoke_config")
     cases = (
-        ("codex", "smoke", Path(".codex/config.toml")),
+        ("codex", "smoke", Path(".codex/smoke.config.toml")),
         ("opencode", "build", Path(".config/opencode/opencode.json")),
         ("pi", "openai", Path(".pi/agent/models.json")),
         ("gemini", "default", Path(".gemini/settings.json")),
@@ -621,6 +621,15 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
         }
         if cli_name == "codex":
             environment["CODEX_HOME"] = str(home / ".codex")
+            codex_home = home / ".codex"
+            codex_home.mkdir()
+            base_config = (
+                '[mcp_servers.ai-guardian]\ncommand = "ai-guardian"\n'
+                'args = ["mcp-server"]\n'
+            )
+            (codex_home / "config.toml").write_text(base_config, encoding="utf-8")
+            hooks_config = '{"hooks": {"UserPromptSubmit": []}}\n'
+            (codex_home / "hooks.json").write_text(hooks_config, encoding="utf-8")
         if cli_name == "pi":
             environment["PI_CODING_AGENT_DIR"] = str(home / ".pi/agent")
         if cli_name == "gemini":
@@ -676,8 +685,33 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
         assert path.is_file()
         if cli_name == "codex":
             config = path.read_text(encoding="utf-8")
+            assert config.startswith(f'model = "{runner.MOCK_MODEL}"\n')
+            assert 'model_provider = "ai_guardian_smoke"' in config
             assert f'base_url = "{runner.MOCK_URL}"' in config
             assert 'wire_api = "responses"' in config
+            assert 'approval_policy = "never"' in config
+            assert 'sandbox_mode = "workspace-write"' in config
+            assert "[profiles." not in config
+            assert runner.MOCK_KEY not in config
+            # Native profile overlays must preserve the base MCP/hook setup.
+            assert (codex_home / "config.toml").read_text(
+                encoding="utf-8"
+            ) == base_config
+            assert (codex_home / "hooks.json").read_text(
+                encoding="utf-8"
+            ) == hooks_config
+            repeated = subprocess.run(
+                result.args,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert repeated.returncode == 0, repeated.stderr
+            assert path.read_text(encoding="utf-8") == config
+            assert (codex_home / "config.toml").read_text(
+                encoding="utf-8"
+            ) == base_config
         else:
             config = json.loads(path.read_text(encoding="utf-8"))
             if cli_name == "claude":
@@ -699,10 +733,13 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
 
 
 @pytest.mark.parametrize("install_claude_code", (False, True))
+@pytest.mark.parametrize("engine", ("docker", "podman"))
 def test_claude_tos_opt_in_preinstalls_only_in_temporary_smoke_image(
-    install_claude_code, tmp_path, monkeypatch
+    install_claude_code, engine, tmp_path, monkeypatch
 ):
-    runner = _load(RUNNER_PATH, f"agent_cli_claude_image_tos_{install_claude_code}")
+    runner = _load(
+        RUNNER_PATH, f"agent_cli_claude_image_tos_{engine}_{install_claude_code}"
+    )
     container_dir = tmp_path / "container"
     container_dir.mkdir()
     (container_dir / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
@@ -712,14 +749,16 @@ def test_claude_tos_opt_in_preinstalls_only_in_temporary_smoke_image(
     wheel = tmp_path / "ai_guardian-1.21.0-py3-none-any.whl"
     wheel.write_bytes(b"wheel")
     dockerfiles = []
+    build_calls = []
 
-    def fake_run(command, *_args, **_kwargs):
+    def fake_run(command, *_args, **kwargs):
         dockerfiles.append(Path(command[-1], "Dockerfile").read_text(encoding="utf-8"))
+        build_calls.append((command, kwargs))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(runner, "_run", fake_run)
-    runner.build_current_image(
-        "podman",
+    image = runner.build_current_image(
+        engine,
         root,
         wheel,
         timeout=5,
@@ -727,6 +766,17 @@ def test_claude_tos_opt_in_preinstalls_only_in_temporary_smoke_image(
     )
 
     assert len(dockerfiles) == 1
+    command, kwargs = build_calls[0]
+    assert command == [
+        engine,
+        "build",
+        "--build-arg",
+        f"AI_GUARDIAN_VERSION={wheel.name}",
+        "--tag",
+        image,
+        str(root / "image-context"),
+    ]
+    assert kwargs["stream_output"] is True
     if install_claude_code:
         assert "https://claude.ai/install.sh" in dockerfiles[0]
         assert "test -x /sandbox/.local/bin/claude" in dockerfiles[0]
@@ -1182,9 +1232,66 @@ def test_long_runner_steps_print_flushed_progress(capsys):
 
     assert result.returncode == 0
     assert result.stdout.strip() == "child output"
-    assert (
-        "[agent-cli-test] Building the temporary smoke image" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "[agent-cli-test] Building the temporary smoke image" in output
+    assert "child output" not in output
+
+
+@pytest.mark.parametrize("exit_code", (0, 2))
+def test_streamed_build_output_is_visible_without_retaining_it(capfd, exit_code):
+    runner = _load(RUNNER_PATH, f"agent_cli_streamed_build_{exit_code}")
+    result = runner._run(
+        [
+            sys.executable,
+            "-u",
+            "-c",
+            "import sys; print('native build stdout'); "
+            "print('native build stderr', file=sys.stderr); "
+            f"sys.exit({exit_code})",
+        ],
+        timeout=5,
+        progress="Building the temporary smoke image",
+        stream_output=True,
     )
+
+    visible = capfd.readouterr()
+    assert "Building the temporary smoke image" in visible.out
+    assert "native build stdout" in visible.out
+    assert "native build stderr" in visible.err
+    assert result.returncode == exit_code
+    assert result.stdout is None
+    assert result.stderr is None
+
+
+def test_streamed_build_keeps_timeout_and_process_environment(monkeypatch, tmp_path):
+    runner = _load(RUNNER_PATH, "agent_cli_streamed_build_timeout")
+    calls = []
+    environment = {"SMOKE_BUILD_TEST": "present"}
+
+    def timeout_run(command, **kwargs):
+        calls.append((command, kwargs))
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(runner.subprocess, "run", timeout_run)
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        runner._run(
+            ["podman", "build", "."],
+            timeout=900,
+            env=environment,
+            cwd=tmp_path,
+            progress="Building the temporary smoke image",
+            stream_output=True,
+        )
+
+    command, kwargs = calls[0]
+    assert command == ["podman", "build", "."]
+    assert kwargs["timeout"] == 900
+    assert kwargs["env"] is environment
+    assert kwargs["cwd"] == tmp_path
+    assert kwargs["capture_output"] is False
+    assert kwargs["stdin"] == subprocess.DEVNULL
+    assert kwargs["check"] is False
 
 
 def test_failed_runner_stage_reports_bounded_command_diagnostics(capsys):

@@ -175,10 +175,52 @@ budget_tokens: 1000
 - The user authorized committing and pushing the tray fix and aggregate smoke
   diagnostics to existing branch `2662`. Keep the pre-existing
   `.wolf/anatomy.md` edit out of the commit.
-- **Next:** rerun Release Readiness on the updated branch, inspect Codex's aggregate
-  diagnostics if it fails, and request one Mac retry. Restart the updated tray
-  before retrying; a pass/fail report is enough. Do not claim macOS qualification
-  until that retry succeeds or ask for copied logs by default.
+- Published the tray fix and aggregate smoke diagnostics as `ea2790d6` on `2662`;
+  Release Readiness run `41951306169` is in progress. Its container smoke job
+  `126995637199` failed: all six Codex invocations returned exit code 1 with zero
+  provider requests and zero new violations. This is earlier than the prior CI
+  failure and indicates failure before observable hook/provider activity.
+- Reproduced the startup failure with the existing source-built Podman image
+  (`localhost/ai-guardian-agent-cli-smoke:4f620d6c0e`, Codex `0.166.0`) without
+  rebuilding it. Codex rejects legacy `[profiles.smoke]` in `config.toml`; current
+  native profiles use `smoke.config.toml` with top-level settings. Local code now
+  writes the model/provider overlay there, preserving base MCP and hooks byte for
+  byte and remaining idempotent. The updated regression failed before the fix;
+  all 45 runner tests, Ruff, Black, error-level Pylint, script Mypy, and whitespace
+  checks now pass. This code is not committed/pushed yet.
+- A full real-Codex smoke rerun after the profile fix passes the clean case, but
+  all five protection cases still fail with no recorded violations. Native
+  `hooks/list` via Codex app-server confirms five loaded hooks, zero load errors,
+  and **all five untrusted**. The hooks feature is enabled. This is a separate
+  native approval prerequisite; no trust bypass, trust-state edits, or managed
+  policy changes have been made. Unattended qualification needs an explicitly
+  approved supported policy for the exact smoke hooks. The earlier partial
+  failure in run `41943090396` is not proven to have the same cause.
+- Only the temporary Linux diagnostic container
+  `ag-cli-smoke-codex-213b9469` and its route-less network were removed. No images
+  were built, retagged, or deleted; runtime egress isolation is unchanged.
+- The user reports the Linux smoke retry succeeded after an approximately
+  150-second image build. The Mac attempt exceeded 330 seconds at **Building the
+  temporary smoke image** and was restarted; no Mac smoke/tray runtime result is
+  available yet. The image build timeout is 900 seconds, independent of the
+  default 180-second runtime-operation timeout. Builds use the full support-image
+  recipe, plus Claude installation only after explicit ToS opt-in. Captured build
+  output does not identify the currently executing step in live progress. No
+  image deletion, build/cache strategy, or networking change is authorized here.
+- The restarted Mac build subsequently exceeded 450 seconds. The user also
+  reports slow container creation from the tray, apparently around image fetch or
+  startup. This affects two paths using the same Podman backend; VM resource
+  contention, storage operations, and machine health are possibilities, not
+  established causes. Image fetch completion and container startup are unconfirmed.
+  Build-step progress reporting was inspected/planned but has not been implemented;
+  pause that work while checking the shared backend.
+- The user is recreating the Mac Podman machine themselves; the agent did not run
+  any Mac machine or image changes. The first subsequent build has a cold cache;
+  Mac smoke/tray verification remains pending. Do not claim qualification.
+- **Next:** obtain approval for a supported native hook policy confined to
+  disposable Codex smoke containers; do not skip native trust verification to
+  make CI green. Then validate all six cases before publishing the local profile
+  fix. Await the Mac smoke/tray result separately; no copied logs by default.
 
 ## Issue #2663 session initialization — 2026-11-03
 
