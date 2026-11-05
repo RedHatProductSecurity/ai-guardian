@@ -620,8 +620,9 @@ def build_current_image(
     timeout: int = 900,
     *,
     install_claude_code: bool = False,
+    opencode_version: Optional[str] = None,
 ) -> str:
-    """Build a temporary smoke image, optionally preinstalling Claude after consent."""
+    """Build a temporary image with an optional OpenCode pin or consented Claude."""
     context = root / "image-context"
     shutil.copytree(CONTAINER_DIR, context)
     if _is_podman_engine(engine):
@@ -667,16 +668,13 @@ def build_current_image(
     target = vendor / selected.name
     shutil.copy2(selected, target)
     image = temporary_image_reference(engine, uuid.uuid4().hex[:10])
+    command = [engine, "build", "--build-arg", f"AI_GUARDIAN_VERSION={target.name}"]
+    if opencode_version is not None:
+        _progress(f"Pinning OpenCode {opencode_version} in the temporary smoke image")
+        command.extend(["--build-arg", f"OPENCODE_VERSION={opencode_version}"])
+    command.extend(["--tag", image, str(context)])
     result = _run(
-        [
-            engine,
-            "build",
-            "--build-arg",
-            f"AI_GUARDIAN_VERSION={target.name}",
-            "--tag",
-            image,
-            str(context),
-        ],
+        command,
         timeout,
         progress="Building the temporary smoke image",
         stream_output=True,
@@ -1322,20 +1320,30 @@ def _check_sandbox_rest(engine: str, name: str, timeout: int) -> bool:
     return False
 
 
-def _opencode_uses_v2(engine: str, name: str, timeout: int) -> bool:
-    """Detect the installed OpenCode generation without starting a model session."""
+def _opencode_uses_v2(
+    engine: str, name: str, timeout: int, *, expected_version: Optional[str] = None
+) -> bool:
+    """Verify any requested pin and detect the generation without a model session."""
     result = _exec(engine, name, ["opencode", "--version"], timeout)
     if result.returncode != 0:
         _report_failure_details("OpenCode version check", result)
         raise RuntimeError("could not determine the installed OpenCode generation")
     version_output = f"{result.stdout}\n{result.stderr}"
-    match = re.search(r"\bv?(\d+)\.(\d+)\.(\d+)\b", version_output)
+    match = re.search(
+        r"\bv?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)(?![\w.+-])",
+        version_output,
+    )
     if not match:
         _report_failure_details("OpenCode version check", result)
         raise RuntimeError("OpenCode returned an unrecognized version")
-    major = int(match.group(1))
+    version = match.group(1)
+    if expected_version is not None and version != expected_version:
+        raise RuntimeError(
+            f"installed OpenCode version does not match --cli-version {expected_version}"
+        )
+    major = int(version.split(".", 1)[0])
     generation = "V2" if major >= 2 else "V1"
-    _progress(f"Detected OpenCode {generation}: {match.group(0).lstrip('v')}")
+    _progress(f"Detected OpenCode {generation}: {version}")
     return major >= 2
 
 
@@ -1683,6 +1691,14 @@ def _parser() -> argparse.ArgumentParser:
         choices=("claude", "codex", "gemini", "opencode", "pi"),
     )
     parser.add_argument(
+        "--cli-version",
+        metavar="VERSION",
+        help=(
+            "Exact OpenCode version (1.x.y or 2.x.y) for a temporary image; "
+            "omit to use the image default; cannot be combined with --image"
+        ),
+    )
+    parser.add_argument(
         "--agent",
         help=(
             "Claude/Gemini label ('default'), Codex profile, OpenCode agent, "
@@ -1730,6 +1746,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         if (
             args.cli_name
+            or args.cli_version is not None
             or args.agent
             or args.image
             or args.wheel
@@ -1754,6 +1771,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
     if args.image and args.wheel:
         parser.error("--image and --wheel cannot be combined")
+    if args.cli_version is not None:
+        if args.cli_name != "opencode":
+            parser.error("--cli-version applies only to --cli-name opencode")
+        if args.image:
+            parser.error("--cli-version and --image cannot be combined")
+        if not re.fullmatch(
+            r"[12]\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", args.cli_version
+        ):
+            parser.error(
+                "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version"
+            )
     if args.accept_proprietary_tos and args.cli_name != "claude":
         parser.error("--accept-proprietary-tos applies only to --cli-name claude")
     try:
@@ -1815,6 +1843,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 install_claude_code=(
                     args.cli_name == "claude" and args.accept_proprietary_tos
                 ),
+                opencode_version=args.cli_version,
             )
             built_image = True
         else:
@@ -1903,7 +1932,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
 
         opencode_v2 = (
-            _opencode_uses_v2(args.container_engine, name, args.timeout)
+            _opencode_uses_v2(
+                args.container_engine,
+                name,
+                args.timeout,
+                expected_version=args.cli_version,
+            )
             if args.cli_name == "opencode"
             else False
         )

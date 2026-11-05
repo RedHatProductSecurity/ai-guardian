@@ -379,7 +379,7 @@ def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path)
     runner._check_sandbox_rest = lambda *_args, **_kwargs: True
     runner._configure_agent = lambda *_args, **_kwargs: True
     runner._start_mock = lambda *_args, **_kwargs: True
-    runner._opencode_uses_v2 = lambda *_args: False
+    runner._opencode_uses_v2 = lambda *_args, **_kwargs: False
     runner._check_podman_smoke_image = lambda *_args: True
     runner._setup_podman_firewall = lambda *_args: True
     server_starts = []
@@ -421,6 +421,227 @@ def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path)
     assert all(
         call["opencode_attach_url"] == runner.OPENCODE_SERVER_URL for call in case_calls
     )
+
+
+@pytest.mark.parametrize("engine", ("docker", "podman"))
+@pytest.mark.parametrize("version", (None, "1.19.0", "2.0.24"))
+def test_cli_version_pins_only_the_temporary_smoke_image(
+    engine, version, tmp_path, monkeypatch
+):
+    runner = _load(RUNNER_PATH, "agent_cli_version_image")
+    container = tmp_path / "container"
+    container.mkdir()
+    original = "FROM scratch\nARG OPENCODE_VERSION=1.19.0\n"
+    (container / "Dockerfile").write_text(original, encoding="utf-8")
+    runner.CONTAINER_DIR = container
+    root = tmp_path / "smoke"
+    wheel = tmp_path / "ai_guardian-1.21.0-py3-none-any.whl"
+    wheel.write_bytes(b"wheel")
+    calls = []
+
+    def fake_run(command, *args, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    image = runner.build_current_image(engine, root, wheel, opencode_version=version)
+    command, options = calls[0]
+    assert command == [
+        engine,
+        "build",
+        "--build-arg",
+        f"AI_GUARDIAN_VERSION={wheel.name}",
+        *(["--build-arg", f"OPENCODE_VERSION={version}"] if version else []),
+        "--tag",
+        image,
+        str(root / "image-context"),
+    ]
+    assert len(calls) == 1
+    assert options["stream_output"] is True
+    assert (container / "Dockerfile").read_text(encoding="utf-8") == original
+    generated = (root / "image-context" / "Dockerfile").read_text(encoding="utf-8")
+    assert ("ai-guardian.smoke-firewall=nftables-v1" in generated) is (
+        engine == "podman"
+    )
+    assert "claude.ai/install.sh" not in generated
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    (
+        (
+            ["--cli-name", "codex", "--cli-version", "2.0.24"],
+            "--cli-version applies only to --cli-name opencode",
+        ),
+        (
+            [
+                "--cli-name",
+                "opencode",
+                "--cli-version",
+                "2.0.24",
+                "--image",
+                "localhost/prebuilt:test",
+            ],
+            "--cli-version and --image cannot be combined",
+        ),
+        (
+            ["--cli-name", "opencode", "--cli-version", "2"],
+            "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version",
+        ),
+        (
+            ["--cli-name", "opencode", "--cli-version", "latest"],
+            "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version",
+        ),
+        (
+            ["--cli-name", "opencode", "--cli-version", "v2.0.24"],
+            "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version",
+        ),
+        (
+            ["--cli-name", "opencode", "--cli-version", "2.0.24-beta.1"],
+            "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version",
+        ),
+        (
+            ["--cli-name", "opencode", "--cli-version", "3.0.0"],
+            "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version",
+        ),
+        (
+            ["--cli-name", "opencode", "--cli-version", "2.00.24"],
+            "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version",
+        ),
+        (
+            ["--cli-name", "opencode", "--cli-version", "2.0.24;echo invalid"],
+            "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version",
+        ),
+        (
+            ["--cli-name", "opencode", "--cli-version="],
+            "--cli-version must be an exact OpenCode 1.x.y or 2.x.y version",
+        ),
+        (
+            [
+                "--diagnose-sandbox",
+                "ag-cli-smoke-opencode-1234abcd",
+                "--cli-version",
+                "2.0.24",
+            ],
+            "--diagnose-sandbox cannot be combined with smoke-run options",
+        ),
+    ),
+)
+def test_cli_version_errors_precede_all_builds_and_runtime_actions(
+    options, message, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_version_validation")
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("invalid version options reached a side effect")
+
+    monkeypatch.setattr(runner, "_run", unexpected)
+    monkeypatch.setattr(runner, "_temp_parent", unexpected)
+    monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
+    argv = (
+        options if "--diagnose-sandbox" in options else ["--agent", "build", *options]
+    )
+    with pytest.raises(SystemExit) as error:
+        runner.main(argv)
+    assert error.value.code == 2
+    assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("engine", ("docker", "podman"))
+@pytest.mark.parametrize(
+    ("requested", "installed", "exit_code"),
+    (
+        (None, "1.19.0", 0),
+        (None, "2.0.24", 0),
+        ("1.19.0", "1.19.0", 0),
+        ("2.0.24", "2.0.24", 0),
+        ("2.0.24", "1.19.0", 1),
+        ("2.0.24", "2.0.25", 1),
+        ("2.0.24", "2.0.24-beta.1", 1),
+        ("2.0.24", "2.0.24+build.1", 1),
+    ),
+)
+def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
+    engine, requested, installed, exit_code, monkeypatch, tmp_path, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_version_lifecycle")
+    runner._temp_parent = lambda: tmp_path
+    runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
+    monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
+    for method in (
+        "_wait_for_sandbox_ready",
+        "_check_sandbox_rest",
+        "_configure_agent",
+        "_start_mock",
+        "_check_podman_smoke_image",
+        "_setup_podman_firewall",
+    ):
+        monkeypatch.setattr(runner, method, lambda *args, **kwargs: True)
+    builds = []
+    wheel = tmp_path / "ai_guardian-1.21.0-py3-none-any.whl"
+    wheel.write_bytes(b"wheel")
+
+    def build_image(actual_engine, root, actual_wheel, **kwargs):
+        assert actual_engine == engine
+        assert actual_wheel == wheel
+        assert (root / "smoke-config" / "ai-guardian.json").is_file()
+        builds.append(kwargs)
+        return "localhost/versioned-smoke:test"
+
+    monkeypatch.setattr(runner, "build_current_image", build_image)
+    commands = []
+
+    def fake_run(command, *args, **kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+
+    def fake_exec(_engine, _name, command, _timeout):
+        assert command == ["opencode", "--version"]
+        return subprocess.CompletedProcess(command, 0, f"opencode v{installed}\n", "")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner, "_delete_sandbox", lambda *args: None)
+    starts, warmups, cases = [], [], []
+    runner._start_opencode_v1_server = lambda *args: starts.append(args) or True
+    runner._warm_opencode_v1_server = lambda *args: warmups.append(args) or True
+    runner._run_case = lambda *args, **kwargs: cases.append(kwargs) or True
+    argv = [
+        "--cli-name",
+        "opencode",
+        "--agent",
+        "build",
+        "--wheel",
+        str(wheel),
+        "--container-engine",
+        engine,
+        "--ai-guardian-command",
+        "ai-guardian",
+    ]
+    if requested is not None:
+        argv.extend(["--cli-version", requested])
+    assert runner.main(argv) == exit_code
+    assert builds == [{"install_claude_code": False, "opencode_version": requested}]
+    output = capsys.readouterr().out
+    if exit_code:
+        assert not starts and not warmups and not cases
+        assert (
+            f"installed OpenCode version does not match --cli-version {requested}"
+            in output
+        )
+        assert "smoke test passed" not in output
+    else:
+        v2 = installed.startswith("2.")
+        assert len(starts) == len(warmups) == (0 if v2 else 1)
+        assert len(cases) == len(runner.CASES)
+        assert all(call["opencode_v2"] is v2 for call in cases)
+        assert all(
+            call["opencode_attach_url"] == (None if v2 else runner.OPENCODE_SERVER_URL)
+            for call in cases
+        )
+        assert f"Detected OpenCode {'V2' if v2 else 'V1'}: {installed}" in output
+    assert [engine, "image", "rm", "localhost/versioned-smoke:test"] in commands
 
 
 def test_opencode_v1_server_starts_detached_and_waits_for_health(monkeypatch):
@@ -1303,6 +1524,27 @@ def test_cli_and_scanner_checklists_keep_real_agent_smoke_coverage_in_sync():
     assert "synthetic" in scanner_checklist.lower()
 
 
+def test_release_readiness_checks_cli_version_without_changing_image_builds():
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    step = next(
+        step
+        for step in workflow["jobs"]["container-images"]["steps"]
+        if step.get("name") == "Verify smoke CLI version selection arguments"
+    )
+    script = step["run"].removeprefix("python - <<'PY'\n").removesuffix("PY\n")
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert (
+        result.stdout.strip() == "PASS smoke CLI version help and supplied-image guard"
+    )
+
+
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="agent-cli-test is a POSIX shell wrapper; Windows uses PowerShell",
@@ -1327,6 +1569,9 @@ def test_agent_cli_runner_help():
     assert help_result.returncode == 0
     normalized_help = " ".join(help_result.stdout.split())
     assert "No provider credentials or live model calls are used" in normalized_help
+    assert "--cli-version VERSION" in normalized_help
+    assert "Exact OpenCode version (1.x.y or 2.x.y)" in normalized_help
+    assert "cannot be combined with --image" in normalized_help
 
 
 def test_long_runner_steps_print_flushed_progress(capsys):

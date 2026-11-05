@@ -20,6 +20,11 @@ ANTHROPIC_MODEL = "claude-sonnet-4-6"
 GEMINI_MODEL = "gemini-2.5-flash"
 OUTPUT_CASES = {"clean_tool", "tool_output_secret", "tool_output_pii"}
 TOOL_CASES = {"ssrf", "config_exfil", *OUTPUT_CASES}
+# Exact native names used by the supported CLIs. A command-shaped MCP/custom
+# tool is not execution evidence, even if it logs the expected security finding.
+NATIVE_COMMAND_TOOLS = frozenset(
+    {"bash", "shell", "exec_command", "shell_command", "run_shell_command"}
+)
 TOOL_WITNESS_DIR = Path("/sandbox/repo/.agent-cli-smoke-results")
 TOOL_COMMANDS = {
     # Both commands only print text; neither performs network or file I/O.
@@ -192,6 +197,8 @@ def _command_tool(tool: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
     function_value = tool.get("function")
     function = function_value if isinstance(function_value, dict) else {}
     name = tool.get("name") or function.get("name")
+    if not isinstance(name, str) or name.casefold() not in NATIVE_COMMAND_TOOLS:
+        return None, {}
     schema = (
         tool.get("input_schema")
         or tool.get("parametersJsonSchema")
@@ -210,12 +217,13 @@ def _command_tool(tool: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
     properties = schema.get("properties", {})
     if not isinstance(properties, dict):
         return None, {}
-    if isinstance(name, str) and {"command", "cmd", "input"}.intersection(properties):
+    if {"command", "cmd", "input"}.intersection(properties):
         return name, schema
     return None, {}
 
 
 def _find_command_tool(payload: Dict[str, Any]) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Select an advertised native shell, never an advisory MCP/custom tool."""
     tools = payload.get("tools", [])
     tool_entries = tools if isinstance(tools, list) else [tools]
     for tool in tool_entries:
@@ -237,7 +245,7 @@ def _find_command_tool(payload: Dict[str, Any]) -> Optional[Tuple[str, Dict[str,
 
 
 def _record_request(case: str, payload: Dict[str, Any]) -> Tuple[int, int]:
-    """Track request and tool-schema counts without retaining prompt contents."""
+    """Track request and native-shell schema counts without retaining payloads."""
     has_command_tool = _find_command_tool(payload) is not None
     with COUNTS_LOCK:
         REQUEST_COUNTS[case] += 1

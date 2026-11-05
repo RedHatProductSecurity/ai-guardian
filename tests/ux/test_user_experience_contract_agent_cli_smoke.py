@@ -15,6 +15,11 @@ Manual qualification on Linux/macOS Podman:
    not unmodified @strict. Its prepared config is copied before daemon startup;
    the source is read-only, the active copy is writable and no live policy edit
    is required. Normal @strict and other containers retain their own policies.
+9. Command probes must target an advertised native shell, not an advisory MCP
+   checker. Findings from a checker do not qualify native pre/post-tool delivery.
+10. Use --cli-name opencode --cli-version 1.19.0 or --cli-version 2.0.24 to
+    pin a temporary image. Confirm the installed version before cases; V1 warms
+    one backend, V2 uses private servers. --image cannot be combined with the pin.
 """
 
 import importlib.util
@@ -127,6 +132,59 @@ def test_unprepared_images_fail_closed_without_hidden_builds(
     assert len(calls) == 1
 
 
+def test_cli_version_cannot_silently_replace_a_supplied_image(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: version selection is build-time only; --image stays explicit.
+
+    For a local V2 test, omit --image and pass --cli-version 2.0.24. Reusing a
+    prepared image instead must not trigger another image build or runtime install.
+    """
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("a supplied image was accessed or rebuilt")
+
+    monkeypatch.setattr(runner, "_run", unexpected)
+    monkeypatch.setattr(runner, "build_current_image", unexpected)
+    monkeypatch.setattr(runner, "_temp_parent", unexpected)
+    with pytest.raises(SystemExit) as error:
+        runner.main(
+            [
+                "--cli-name",
+                "opencode",
+                "--agent",
+                "build",
+                "--cli-version",
+                "2.0.24",
+                "--image",
+                "localhost/prepared:test",
+            ]
+        )
+    assert error.value.code == 2
+    assert "--cli-version and --image cannot be combined" in capsys.readouterr().err
+
+
+def test_requested_version_mismatch_is_a_failure_not_different_generation_coverage(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: a V2 pin cannot silently run the V1 smoke path instead."""
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args: subprocess.CompletedProcess(
+            args, 0, "1.19.0\n", "private diagnostic body"
+        ),
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="installed OpenCode version does not match --cli-version 2.0.24",
+    ):
+        runner._opencode_uses_v2("podman", "smoke", 30, expected_version="2.0.24")
+    output = capsys.readouterr().out
+    assert "private" not in output
+    assert "PASS" not in output
+
+
 @pytest.mark.parametrize(
     ("uid", "ready", "message"),
     (
@@ -155,10 +213,12 @@ def test_unprotected_bootstrap_never_starts_daemon_or_agent(
     assert capsys.readouterr().out.strip() == message
 
 
-def stub_tool_case(runner, monkeypatch, case_name, *, post_hook=1, executed=1, raw=0):
+def stub_tool_case(
+    runner, monkeypatch, case_name, *, pre_hook=1, post_hook=1, executed=1, raw=0
+):
     case = next(case for case in runner.CASES if case.name == case_name)
     readings = {
-        "_hook_counts": {"pretooluse": 1, "posttooluse": post_hook},
+        "_hook_counts": {"prompt": 1, "pretooluse": pre_hook, "posttooluse": post_hook},
         "_violation_counts": (
             {case.expected_violation: 1} if case.expected_violation else {}
         ),
@@ -183,6 +243,53 @@ def stub_tool_case(runner, monkeypatch, case_name, *, post_hook=1, executed=1, r
         ),
     )
     return case
+
+
+@pytest.mark.parametrize("native_name", ("bash", "shell"))
+def test_opencode_smoke_uses_native_execution_not_an_advisory_mcp_check(native_name):
+    """USER EXPERIENCE: catalog order cannot replace the real tool-hook path.
+
+    OpenCode may advertise the advisory command checker before its native shell.
+    The mock must still offer native execution, on Linux and macOS alike, without
+    disabling MCP, altering the plugin or loosening the smoke evidence checks.
+    """
+    path = (
+        Path(__file__).resolve().parents[2] / "scripts" / "agent_cli_mock_provider.py"
+    )
+    spec = importlib.util.spec_from_file_location("smoke_native_tool_ux", path)
+    provider = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(provider)
+    schema = {"type": "object", "properties": {"command": {"type": "string"}}}
+    payload = {
+        "tools": [
+            {"type": "function", "function": {"name": name, "parameters": schema}}
+            for name in ("ai-guardian_check_command", native_name)
+        ]
+    }
+    numbers = provider._record_request("clean_tool", payload)
+    response = provider.chat_response(payload, "clean_tool", *numbers)
+    call = response["choices"][0]["message"]["tool_calls"][0]
+    assert call["function"]["name"] == native_name
+    assert provider._stats()["tool_offers"] == {"clean_tool": 1}
+
+
+@pytest.mark.parametrize("case_name", ("ssrf", "config_exfil"))
+def test_advisory_findings_without_native_pre_tool_events_remain_failures(
+    runner, monkeypatch, capsys, case_name
+):
+    """USER EXPERIENCE: an advisory finding plus a tool offer is not hook coverage."""
+    case = stub_tool_case(
+        runner, monkeypatch, case_name, pre_hook=0, post_hook=0, executed=0
+    )
+    assert not runner._run_case("podman", "smoke", "opencode", "build", case, 30)
+    output = capsys.readouterr().out
+    assert (
+        f"FAIL {case_name}: expected pretooluse hook event was not recorded" in output
+    )
+    assert f"expected_{case.expected_violation}_delta=+1" in output
+    assert "hook_event_deltas=prompt=+1" in output
+    assert "PASS" not in output
+    assert "private" not in output
 
 
 @pytest.mark.parametrize(
