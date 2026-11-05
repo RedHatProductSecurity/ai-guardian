@@ -1290,6 +1290,51 @@ def test_counter_read_diagnostics_truncate_stderr():
     assert diagnostics[0].endswith("x" * 1200)
 
 
+@pytest.mark.parametrize(
+    "case_name,exit_code,expected_diagnostic",
+    [
+        (
+            "config_exfil",
+            0,
+            "provider_request_delta=1; violation_deltas=none; "
+            "expected_config_file_exfil_delta=+0",
+        ),
+        (
+            "allowed",
+            2,
+            "provider_request_delta=1; violation_deltas=none",
+        ),
+    ],
+)
+def test_agent_case_failures_report_only_aggregate_diagnostics(
+    monkeypatch, capsys, case_name, exit_code, expected_diagnostic
+):
+    runner = _load(RUNNER_PATH, f"agent_cli_case_diagnostics_{case_name}")
+    case = next(case for case in runner.CASES if case.name == case_name)
+    violation_reads = iter(({}, {}))
+    provider_reads = iter(({case_name: 0}, {case_name: 1}))
+    invocation = subprocess.CompletedProcess(
+        ["codex", "exec"],
+        exit_code,
+        stdout="agent output must not be printed",
+        stderr="agent error must not be printed",
+    )
+    monkeypatch.setattr(
+        runner, "_violation_counts", lambda *_args, **_kwargs: next(violation_reads)
+    )
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *_args, **_kwargs: next(provider_reads)
+    )
+    monkeypatch.setattr(runner, "_exec", lambda *_args, **_kwargs: invocation)
+
+    assert not runner._run_case("docker", "sandbox", "codex", "smoke", case, 30)
+
+    output = capsys.readouterr().out
+    assert expected_diagnostic in output
+    assert "agent output must not be printed" not in output
+    assert "agent error must not be printed" not in output
+
+
 def test_sandbox_readiness_waits_for_loaded_daemon(monkeypatch, capsys):
     runner = _load(RUNNER_PATH, "agent_cli_sandbox_readiness")
     results = [

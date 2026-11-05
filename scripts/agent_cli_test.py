@@ -1021,6 +1021,7 @@ def _run_case(
     )
     if invocation.returncode == 124:
         print(f"FAIL {case.name}: agent CLI timed out")
+        _report_case_failure_details(case, invocation, {}, None)
         return False
 
     new_violations = _violation_counts(engine, name, timeout, diagnostics)
@@ -1040,25 +1041,56 @@ def _run_case(
     if case.expected_violation:
         if deltas.get(case.expected_violation, 0) < 1:
             print(f"FAIL {case.name}: expected hook violation was not recorded")
+            _report_case_failure_details(case, invocation, deltas, request_delta)
             return False
         if case.expects_provider and request_delta < 1:
             print(f"FAIL {case.name}: CLI did not reach the local mock provider")
+            _report_case_failure_details(case, invocation, deltas, request_delta)
             return False
         if not case.expects_provider and request_delta != 0:
             print(f"FAIL {case.name}: blocked prompt reached the local mock provider")
+            _report_case_failure_details(case, invocation, deltas, request_delta)
             return False
     else:
         if invocation.returncode != 0:
             print("FAIL allowed: clean agent CLI invocation exited nonzero")
+            _report_case_failure_details(case, invocation, deltas, request_delta)
             return False
         if deltas:
             print("FAIL allowed: clean path created a violation")
+            _report_case_failure_details(case, invocation, deltas, request_delta)
             return False
         if request_delta < 1:
             print("FAIL allowed: clean prompt did not reach the local mock provider")
+            _report_case_failure_details(case, invocation, deltas, request_delta)
             return False
     _progress(f"PASS {case.name}")
     return True
+
+
+def _report_case_failure_details(
+    case: SmokeCase,
+    invocation: subprocess.CompletedProcess,
+    violation_deltas: Dict[str, int],
+    provider_request_delta: Optional[int],
+) -> None:
+    """Report aggregate smoke counters without printing agent output or prompts."""
+    violations = (
+        ", ".join(
+            f"{name}=+{count}" for name, count in sorted(violation_deltas.items())
+        )
+        or "none"
+    )
+    details = [
+        f"agent_exit_code={invocation.returncode}",
+        f"provider_request_delta={provider_request_delta if provider_request_delta is not None else 'unavailable'}",
+        f"violation_deltas={violations}",
+    ]
+    if case.expected_violation:
+        details.append(
+            f"expected_{case.expected_violation}_delta=+{violation_deltas.get(case.expected_violation, 0)}"
+        )
+    print(f"  Diagnostics (aggregate only): {'; '.join(details)}", flush=True)
 
 
 def build_agent_environment(cli: str) -> List[str]:

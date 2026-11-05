@@ -138,10 +138,47 @@ budget_tokens: 1000
 - The simplified Podman runner passes all 43 focused tests, Ruff, Black, and
   error-level Pylint. A local Podman 5.8.4 probe returned HTTP 200 with no default
   IPv4/IPv6 routes, and OpenCode V1 passed all six smoke cases on this setup.
-- **Next:** push the single-network change and workflow fix; ask for one Mac retry
-  against that updated branch. Do not claim Mac qualification until it succeeds.
-  Avoid requesting copied output unless it helps distinguish a tray REST failure
-  from a runner smoke failure.
+- The user reports the macOS tray becomes unusable only while the discovered
+  `agent-cli-test` daemon is running; unrelated containers do not cause it. The
+  menu path synchronously requested remote `/api/stats` from native callbacks and
+  the periodic refresh dispatched its remote snapshot work to Cocoa's main thread.
+  Snapshot polling now runs on the stats worker and dispatches only native menu
+  updates. Remote menu labels, partial-pause checks, and tray pause synchronization
+  use the latest `target.stats` instead of making REST requests on the GUI thread.
+  Normal discovery and the egress-isolated network are unchanged. Regression
+  covers the empty pre-refresh state, cached stats, and worker-thread refresh.
+  **Validation:** 489 `test_daemon_tray.py` tests plus 132 SSH-menu/pause tests pass;
+  Ruff, Black, error-level Pylint, changed-module Mypy, and `git diff --check` pass.
+  Full-package Mypy still has 14 errors in untouched `skill_discovery.py` and
+  `scanners/secret_validator.py`. No Mac runtime verification has been performed.
+- CI run `41943090396` uses pre-tray-fix head `71e0c21fe2b98ea823c4b55e42558a32d11b7879`.
+  The linked `Container Images (real-agent smoke checks)` job failed at
+  `codex/smoke`: `config_exfil` did not record its expected hook violation, then
+  the clean `allowed` invocation exited nonzero. Image builds and the pinned
+  OpenCode V2 version check passed. The overall workflow completed with failure.
+  The job log did not include agent stdout/stderr.
+- A local source-built-image attempt failed all Codex cases; a kept container
+  confirmed Codex `0.166.0` and completed daemon setup, but provided no invocation
+  output. Retrying the pre-existing support image with the installed
+  `ai-guardian` command failed before sandbox creation because that host entrypoint
+  lacks `ai_guardian_hook_runtime`; using the source module instead timed out during
+  sandbox readiness, before Codex ran. None is an apples-to-apples reproduction of
+  CI, so the cause remains unresolved and is not attributed to tray/network changes.
+  Temporary container/network from the retained run were removed; no images were
+  deleted.
+- The smoke runner now prints aggregate-only failure diagnostics (agent exit code,
+  mock-provider request delta, violation deltas), never prompts or raw agent
+  stdout/stderr. The two new failure-reporting tests pass; all 45
+  `test_agent_cli_test.py` tests pass. Tray validation remains 489 daemon-tray tests
+  plus 132 SSH-menu/pause tests; Ruff, Black, error-level Pylint, changed-module
+  Mypy, and diff checks pass. No Mac runtime verification has been performed.
+- The user authorized committing and pushing the tray fix and aggregate smoke
+  diagnostics to existing branch `2662`. Keep the pre-existing
+  `.wolf/anatomy.md` edit out of the commit.
+- **Next:** rerun Release Readiness on the updated branch, inspect Codex's aggregate
+  diagnostics if it fails, and request one Mac retry. Restart the updated tray
+  before retrying; a pass/fail report is enough. Do not claim macOS qualification
+  until that retry succeeds or ask for copied logs by default.
 
 ## Issue #2663 session initialization — 2026-11-03
 

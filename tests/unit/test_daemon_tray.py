@@ -1650,11 +1650,16 @@ class TestFormatDaemonListPauseIcons:
             pause_callback=lambda mins: None,
             multi_client=mc,
         )
-        t = DaemonTarget(name="host-a", runtime="container", status="running")
+        t = DaemonTarget(
+            name="host-a",
+            runtime="container",
+            status="running",
+            stats={"paused_dirs": {"/proj": 0}},
+        )
         tray._targets = [t]
-        mc.get_status.return_value = {"paused_dirs": {"/proj": 0}}
         result = tray._menu._format_daemon_list()
         assert "◐" in result
+        mc.get_status.assert_not_called()
 
     def test_format_shows_running_icon_no_paused_dirs(self):
         mc = mock.MagicMock()
@@ -1758,7 +1763,12 @@ class TestUntilResumePauseOption:
         )
         tray._targets = [
             DaemonTarget(name="local", runtime="local", status="running"),
-            DaemonTarget(name="remote", runtime="container", status="running"),
+            DaemonTarget(
+                name="remote",
+                runtime="container",
+                status="running",
+                stats={"paused": False},
+            ),
         ]
         mc.get_stats.return_value = {}
         with (
@@ -1870,7 +1880,12 @@ class TestUntilResumePauseOption:
         )
         tray._targets = [
             DaemonTarget(name="local", runtime="local", status="running"),
-            DaemonTarget(name="remote", runtime="container", status="running"),
+            DaemonTarget(
+                name="remote",
+                runtime="container",
+                status="running",
+                stats={"paused": False},
+            ),
         ]
         mc.get_status.side_effect = lambda t: (
             {"paused": True} if t.name == "local" else {"paused": False}
@@ -1889,7 +1904,12 @@ class TestUntilResumePauseOption:
         )
         tray._targets = [
             DaemonTarget(name="local", runtime="local", status="running"),
-            DaemonTarget(name="remote", runtime="container", status="running"),
+            DaemonTarget(
+                name="remote",
+                runtime="container",
+                status="running",
+                stats={"paused": True},
+            ),
         ]
         mc.get_status.return_value = {"paused": True}
         tray._update_global_pause_status()
@@ -2056,7 +2076,10 @@ class TestLinuxPauseMenuStability:
         stats = {"paused": False, "pause_remaining_seconds": 0}
         tray = self._make_tray(stats)
         tray._icon = mock.MagicMock()
-        with mock.patch("platform.system", return_value="Linux"):
+        with (
+            mock.patch("platform.system", return_value="Linux"),
+            mock.patch.object(tray, "_dispatch_to_main", side_effect=lambda fn: fn()),
+        ):
             tray._last_stats_snapshot = tray._build_stats_snapshot()
             stats["paused"] = True
             tray._refresh_menu_if_changed()
@@ -2270,6 +2293,46 @@ class TestAppIndicatorMenuRefreshStability:
         assert second_root.callback == tray._on_appindicator_menu_event
 
 
+class TestRemoteMenuStatsCache:
+    """Native menu callbacks must not make synchronous remote REST requests."""
+
+    def test_remote_menu_stats_use_background_snapshot(self):
+        remote_stats = {
+            "paused": False,
+            "request_count": 7,
+            "active_project_dirs": ["/workspace"],
+        }
+        multi_client = mock.Mock()
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda _: None,
+            multi_client=multi_client,
+        )
+        target = DaemonTarget(name="smoke", runtime="container", status="running")
+        tray._targets = [target]
+
+        # Before the background worker has fetched stats, opening the menu is
+        # still non-blocking and shows the available empty snapshot.
+        assert tray._menu._get_menu_stats(target) == {}
+        assert not tray._target_has_paused_dirs(target)
+        multi_client.get_status.assert_not_called()
+
+        # The background refresh stores the fetched result on the target. Later
+        # menu rendering consumes it without asking the REST client again.
+        multi_client.get_status.return_value = remote_stats
+        tray._build_stats_snapshot()
+        assert target.stats == remote_stats
+        tray._menu._invalidate_stats(target)
+        multi_client.get_status.reset_mock()
+        multi_client.get_status.side_effect = AssertionError(
+            "menu rendering must not perform remote REST requests"
+        )
+
+        assert tray._menu._get_menu_stats(target) == remote_stats
+        multi_client.get_status.assert_not_called()
+
+
 class TestProjectDirectoryMenuRefresh:
     """Refresh directory pause menus when daemon project tracking changes."""
 
@@ -2286,7 +2349,10 @@ class TestProjectDirectoryMenuRefresh:
         tray = self._make_tray(stats)
         tray._targets = [DaemonTarget(name="local", runtime="local")]
 
-        with mock.patch.object(tray, "_refresh_menu") as refresh_menu:
+        with (
+            mock.patch.object(tray, "_refresh_menu") as refresh_menu,
+            mock.patch.object(tray, "_dispatch_to_main", side_effect=lambda fn: fn()),
+        ):
             tray._last_stats_snapshot = tray._build_stats_snapshot()
             stats["active_project_dirs"].append("/project-b")
             tray._refresh_menu_if_changed()
@@ -2301,7 +2367,10 @@ class TestProjectDirectoryMenuRefresh:
         tray = self._make_tray(local_stats, multi_client=multi_client)
         tray._targets = [DaemonTarget(name="remote", runtime="container")]
 
-        with mock.patch.object(tray, "_refresh_menu") as refresh_menu:
+        with (
+            mock.patch.object(tray, "_refresh_menu") as refresh_menu,
+            mock.patch.object(tray, "_dispatch_to_main", side_effect=lambda fn: fn()),
+        ):
             tray._last_stats_snapshot = tray._build_stats_snapshot()
             remote_stats["active_project_dirs"].append("/project-b")
             tray._refresh_menu_if_changed()
@@ -2319,7 +2388,10 @@ class TestProjectDirectoryMenuRefresh:
         tray._targets = [DaemonTarget(name="local", runtime="local", status="paused")]
         tray._status = "paused"
 
-        with mock.patch.object(tray, "_refresh_menu") as refresh_menu:
+        with (
+            mock.patch.object(tray, "_refresh_menu") as refresh_menu,
+            mock.patch.object(tray, "_dispatch_to_main", side_effect=lambda fn: fn()),
+        ):
             tray._last_stats_snapshot = tray._build_stats_snapshot()
             stats["active_project_dirs"].append("/project-b")
             tray._refresh_menu_if_changed()
@@ -2343,10 +2415,16 @@ class TestScopedPauseMenuRefresh:
             lambda _: None,
             multi_client=client,
         )
-        target = DaemonTarget(name="selected", runtime=runtime, status="running")
+        target = DaemonTarget(
+            name="selected",
+            runtime=runtime,
+            status="running",
+            stats={"paused": paused},
+        )
         tray._targets = [target]
         with mock.patch.object(tray, "update_status") as update:
             tray._sync_pause_state()
+        client.get_status.assert_not_called()
         assert target.status == ("paused" if paused else "running")
         if paused:
             update.assert_called_once_with("paused")
@@ -2400,6 +2478,7 @@ class TestScopedPauseMenuRefresh:
         with (
             mock.patch("platform.system", return_value="Linux"),
             mock.patch.object(tray, "_refresh_menu") as refresh,
+            mock.patch.object(tray, "_dispatch_to_main", side_effect=lambda fn: fn()),
         ):
             tray._last_stats_snapshot = tray._build_stats_snapshot()
             session = stats["active_sessions"][0]
@@ -2442,6 +2521,7 @@ class TestScopedPauseMenuRefresh:
         with (
             mock.patch("platform.system", return_value=platform),
             mock.patch.object(tray, "_refresh_menu") as refresh,
+            mock.patch.object(tray, "_dispatch_to_main", side_effect=lambda fn: fn()),
         ):
             tray._last_stats_snapshot = tray._build_stats_snapshot()
             stats["paused_dirs"]["/project"] = 50
@@ -2462,9 +2542,13 @@ class TestWakeDetection:
             pause_callback=lambda mins: None,
         )
         tray._icon = mock.MagicMock()
+        refresh_threads = []
 
         def stop_after_check(*_args, **_kwargs):
             tray._stats_refresh_running = False
+
+        def observe_refresh_thread():
+            refresh_threads.append(threading.current_thread().name)
 
         with (
             mock.patch.object(tray._refresh_event, "wait", return_value=False),
@@ -2473,7 +2557,10 @@ class TestWakeDetection:
                 "_start_ide_setup_check",
                 side_effect=stop_after_check,
             ) as start_check,
-            mock.patch.object(tray, "_dispatch_to_main"),
+            mock.patch.object(tray, "_dispatch_to_main") as dispatch,
+            mock.patch.object(
+                tray, "_refresh_menu_if_changed", side_effect=observe_refresh_thread
+            ) as refresh_snapshot,
             mock.patch.object(tray._health, "_check_config_error_notification"),
             mock.patch.object(tray._health, "_check_version_mismatch"),
             mock.patch.object(tray._health, "_check_stale_code"),
@@ -2495,6 +2582,9 @@ class TestWakeDetection:
             manual=False,
             name="ide-setup-periodic-check",
         )
+        refresh_snapshot.assert_called_once_with()
+        assert refresh_threads == ["stats-refresh"]
+        dispatch.assert_called_once_with(tray._sync_pause_state)
 
     def test_rebuild_tray_refreshes_icon_and_menu(self):
         tray = DaemonTray(
