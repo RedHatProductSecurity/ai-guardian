@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-04
+> Last updated: 2026-11-05
 
 ## User Preferences
 
@@ -12,6 +12,16 @@
   Linux and macOS Podman before claiming cross-platform qualification. Avoid
   requiring command and output copy/paste between the user's Mac terminal and the
   remote SSH session.
+
+- **2026-11-05 — Smoke-container tray responsiveness:** The user confirmed the
+  menu hang is specific to the discovered `agent-cli-test` daemon; unrelated
+  containers do not trigger it. Keep normal daemon discovery, but do not perform
+  remote REST requests in native menu callbacks. Render cached stats refreshed by
+  the background worker, and do not claim macOS qualification before a Mac retry.
+
+- **2026-11-05 — Real-agent smoke failure reports:** Keep provider and violation
+  diagnostics aggregate-only. Do not print model prompts or raw CLI output into
+  CI logs; preserve strict egress isolation while diagnosing failures.
 
 - **2026-11-04 — OpenCode smoke auto-update:** Keep OpenCode auto-upgrade enabled
   for normal use. It may be disabled only in the disposable, egress-isolated smoke

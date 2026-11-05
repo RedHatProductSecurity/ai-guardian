@@ -384,7 +384,14 @@ class TrayMenuBuilder:
         cached = self._stats_cache.get(id(target))
         if cached is not None and cached[0] is target and now - cached[1] < 2.0:
             return cached[2]
-        stats = self._tray._get_target_stats(target) or {}
+        # Native menu callbacks run on the GUI thread (the Cocoa main thread on
+        # macOS). Remote REST requests here can freeze the tray, so remote targets
+        # use the most recent snapshot fetched by the background stats refresh.
+        stats = (
+            self._tray._get_target_stats(target) or {}
+            if target.runtime == "local"
+            else target.stats or {}
+        )
         if stats and should_update_target_name(target, stats.get("name")):
             target.name = stats["name"]
         if "paused" in stats and target.status in ("running", "paused"):

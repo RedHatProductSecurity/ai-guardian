@@ -1140,13 +1140,14 @@ class DaemonTray:
 
         GNOME's AppIndicator rebuilds the entire DBus menu tree on
         update_menu(), causing a visible blank flash.  Skip the call
-        when nothing has changed.
+        when nothing has changed. This method runs on the stats worker; only
+        the native menu update is dispatched to the GUI thread.
         """
         snapshot = self._build_stats_snapshot()
         if snapshot == self._last_stats_snapshot:
             return
         self._last_stats_snapshot = snapshot
-        self._refresh_menu()
+        self._dispatch_to_main(self._refresh_menu)
 
     def _build_stats_snapshot(self):
         """Build a hashable snapshot of menu-relevant state."""
@@ -1160,6 +1161,8 @@ class DaemonTray:
                     if target.runtime == "local"
                     else self._get_target_stats(target)
                 ) or {}
+                if target.runtime not in ("local", "ssh") and target_stats:
+                    target.stats = target_stats
                 target_scope_snapshots.append(
                     (
                         target.name,
@@ -1264,9 +1267,10 @@ class DaemonTray:
         if self._is_multi_daemon():
             self._update_global_pause_status()
             return
+        target = self._targets[0] if self._targets else None
         stats = (
-            self._get_target_stats(self._targets[0])
-            if self._targets
+            (target.stats or {})
+            if target is not None and target.runtime != "local"
             else self._get_stats()
         )
         if not stats:
@@ -1287,12 +1291,10 @@ class DaemonTray:
         for t in self._targets:
             if t.status not in ("running", "paused"):
                 continue
-            if self._multi_client:
-                stats = (
-                    (t.stats or {})
-                    if t.runtime == "ssh"
-                    else (self._multi_client.get_status(t) or {})
-                )
+            if t.runtime != "local":
+                stats = t.stats or {}
+            elif self._multi_client:
+                stats = self._multi_client.get_status(t) or {}
             else:
                 stats = self._get_stats()
             target_paused = stats.get("paused", False)
@@ -1369,7 +1371,6 @@ class DaemonTray:
 
                 if self._stats_refresh_running and self._icon:
                     try:
-                        self._dispatch_to_main(self._sync_pause_state)
                         self._health._check_config_error_notification()
                         self._health._check_version_mismatch()
                         self._health._check_stale_code()
@@ -1382,7 +1383,8 @@ class DaemonTray:
                         self._plugins._poll_plugins()
                         self._anim._request_discovery_refresh(wait=False)
                         self._register_tray_with_remotes()
-                        self._dispatch_to_main(self._refresh_menu_if_changed)
+                        self._refresh_menu_if_changed()
+                        self._dispatch_to_main(self._sync_pause_state)
                     except Exception:
                         logger.debug("Stats refresh tick failed", exc_info=True)
 
@@ -1885,7 +1887,11 @@ class DaemonTray:
 
     def _target_has_paused_dirs(self, target):
         """Check whether any session or project directory is partially paused."""
-        stats = self._get_target_stats(target)
+        stats = (
+            self._get_target_stats(target)
+            if target.runtime == "local"
+            else target.stats or {}
+        )
         sessions = stats.get("active_sessions") or []
         return bool(stats.get("paused_dirs")) or any(
             session.get("paused") for session in sessions if isinstance(session, dict)
