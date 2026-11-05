@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import ipaddress
 import json
 import os
 import re
@@ -23,6 +24,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNNER_HOST_IS_LINUX = sys.platform.startswith("linux")
 CONTAINER_DIR = ROOT / "container"
 STRICT_PROFILE = ROOT / "src/ai_guardian/templates/profiles/strict.json"
 MOCK_PROVIDER = Path(__file__).with_name("agent_cli_mock_provider.py")
@@ -1197,16 +1199,21 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
 
 
 class _NoRESTRedirect(HTTPRedirectHandler):
-    """Health probes must never redirect outside the loopback daemon endpoint."""
+    """Health probes must never redirect away from the checked daemon endpoint."""
 
     def redirect_request(self, *args, **kwargs):
         return None
 
 
 def _probe_rest(
-    port: int, path: str, token: Optional[str] = None, *, scheme: str = "http"
+    port: int,
+    path: str,
+    token: Optional[str] = None,
+    *,
+    scheme: str = "http",
+    host: str = "127.0.0.1",
 ) -> str:
-    """Probe only local daemon endpoints; return fixed categories, never bodies."""
+    """Probe a numeric local/container endpoint; return categories, never bodies."""
     if (
         type(port) is not int
         or not 0 < port < 65536
@@ -1214,7 +1221,21 @@ def _probe_rest(
         or scheme not in ("http", "https")
     ):
         return "invalid_endpoint"
-    request = Request(f"{scheme}://127.0.0.1:{port}{path}")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return "invalid_endpoint"
+    if (
+        not (address.is_loopback or address.is_private)
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_unspecified
+    ):
+        return "invalid_endpoint"
+    host_literal = (
+        f"[{address.compressed}]" if address.version == 6 else address.compressed
+    )
+    request = Request(f"{scheme}://{host_literal}:{port}{path}")
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     opener = build_opener(ProxyHandler({}), _NoRESTRedirect())
@@ -1246,8 +1267,79 @@ def _probe_rest(
         return "invalid_response"
 
 
+def _docker_context_is_local(engine: str, timeout: int) -> bool:
+    """Allow private-IP REST fallback only for Docker's local Unix-socket context."""
+    current = _run([engine, "context", "show"], min(timeout, 5))
+    context_name = (current.stdout or "").strip()
+    if (
+        current.returncode != 0
+        or not context_name
+        or any(character.isspace() for character in context_name)
+    ):
+        return False
+    inspected = _run([engine, "context", "inspect", context_name], min(timeout, 5))
+    if inspected.returncode != 0:
+        return False
+    try:
+        contexts = json.loads(inspected.stdout)
+    except (ValueError, TypeError):
+        return False
+    if not isinstance(contexts, list) or len(contexts) != 1:
+        return False
+    endpoints = contexts[0].get("Endpoints") if isinstance(contexts[0], dict) else None
+    docker_endpoint = endpoints.get("docker") if isinstance(endpoints, dict) else None
+    endpoint = (
+        docker_endpoint.get("Host") if isinstance(docker_endpoint, dict) else None
+    )
+    return isinstance(endpoint, str) and endpoint.startswith("unix:///")
+
+
+def _docker_internal_network_ip(engine: str, name: str, timeout: int) -> Optional[str]:
+    """Resolve only this smoke container's private IP on its isolated network."""
+    if (
+        not RUNNER_HOST_IS_LINUX
+        or Path(engine).name.lower() not in ("docker", "docker.exe")
+        or os.environ.get("DOCKER_HOST")
+        or os.environ.get("DOCKER_CONTEXT")
+        or not _docker_context_is_local(engine, timeout)
+    ):
+        return None
+    result = _run(
+        [engine, "inspect", "--format", "{{json .NetworkSettings.Networks}}", name],
+        min(timeout, 5),
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        networks = json.loads(result.stdout)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(networks, dict):
+        return None
+    network = networks.get(internal_network_name(name))
+    if not isinstance(network, dict):
+        return None
+    value = network.get("IPAddress")
+    if not isinstance(value, str):
+        return None
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return None
+    if (
+        address.version != 4
+        or not address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_unspecified
+    ):
+        return None
+    return address.compressed
+
+
 def _check_sandbox_rest(engine: str, name: str, timeout: int) -> bool:
-    """Distinguish daemon/listener health, published-port forwarding and auth."""
+    """Check container health and an authenticated host route without weakening egress."""
     # The classic image installs AI Guardian in a uv tool environment, not in
     # system python3. Only this package-importing reader needs that interpreter.
     result = _exec(
@@ -1271,8 +1363,10 @@ def _check_sandbox_rest(engine: str, name: str, timeout: int) -> bool:
     port = state.get("rest_port")
     scheme = state.get("rest_scheme", "http")
     published = "not_checked"
+    docker_internal_host = "not_checked"
     authenticated = "not_checked"
     host_port = 0
+    host_route = "unavailable"
     if ipc and internal and type(port) is int and 0 < port < 65536:
         bindings = _run([engine, "port", name, f"{port}/tcp"], min(timeout, 5))
         if bindings.returncode == 0:
@@ -1282,6 +1376,7 @@ def _check_sandbox_rest(engine: str, name: str, timeout: int) -> bool:
                     host_port = int(match[1])
                     break
         if host_port:
+            host_route = "published"
             options = {"scheme": scheme} if scheme != "http" else {}
             published = _probe_rest(host_port, "/api/health", **options)
             token = state.get("auth_token")
@@ -1289,11 +1384,25 @@ def _check_sandbox_rest(engine: str, name: str, timeout: int) -> bool:
                 authenticated = _probe_rest(host_port, "/api/stats", token, **options)
         else:
             published = "not_published"
+            container_ip = _docker_internal_network_ip(engine, name, timeout)
+            if container_ip:
+                host_route = "internal_network"
+                options = {"scheme": scheme, "host": container_ip}
+                docker_internal_host = _probe_rest(port, "/api/health", **options)
+                token = state.get("auth_token")
+                if (
+                    docker_internal_host == "healthy"
+                    and isinstance(token, str)
+                    and token
+                ):
+                    authenticated = _probe_rest(port, "/api/stats", token, **options)
 
     _progress(
         f"REST diagnostics: ipc={'running' if ipc else 'unavailable'}; "
         f"container_health={'healthy' if internal else 'unreachable'}; "
         f"host_port={host_port}; published_health={published}; "
+        f"docker_internal_host_health={docker_internal_host}; "
+        f"host_route={host_route}; "
         f"authenticated_stats={authenticated}"
     )
     if not ipc:
@@ -1304,15 +1413,27 @@ def _check_sandbox_rest(engine: str, name: str, timeout: int) -> bool:
         print(
             "FAIL daemon REST: health failed inside the sandbox; check daemon startup before host routing."
         )
-    elif not host_port:
+    elif (
+        not host_port
+        and host_route == "unavailable"
+        and Path(engine).name.lower()
+        not in (
+            "docker",
+            "docker.exe",
+        )
+    ):
         print("FAIL daemon REST: the daemon's REST port is not published to the host.")
-    elif published != "healthy":
+    elif host_port and published != "healthy":
         print(
             "FAIL daemon REST: internal health passes, but published health fails; check the published-port/VM forwarding path."
         )
+    elif not host_port and docker_internal_host != "healthy":
+        print(
+            "FAIL daemon REST: Docker's isolated network has no reachable host REST route; egress isolation remains enabled."
+        )
     elif authenticated != "healthy":
         print(
-            "FAIL daemon REST: published health works, but authenticated stats failed; check daemon authentication rather than changing network isolation."
+            "FAIL daemon REST: host health works, but authenticated stats failed; check daemon authentication rather than changing network isolation."
         )
     else:
         _progress(
