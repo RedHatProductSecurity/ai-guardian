@@ -3330,6 +3330,30 @@ class TestSandboxDialogFallback:
         assert root.bind.call_args_list[-1].args[0] == "<Control-Return>"
         assert ttk_module.Button.call_args_list[-1].kwargs["text"] == "Replace policy"
 
+    def test_tk_sandbox_form_restores_focus_once_after_menu_handoff(self):
+        from ai_guardian.tray.sandbox_dialog import _present_tk_sandbox_form
+
+        root = mock.MagicMock()
+        root.winfo_exists.return_value = True
+        tk = SimpleNamespace(TclError=type("TclError", (Exception,), {}))
+
+        _present_tk_sandbox_form(root, tk)
+
+        assert root.attributes.call_args_list == [mock.call("-topmost", True)]
+        assert root.focus_force.call_count == 1
+        delay, finish_startup = root.after.call_args.args
+        assert delay == 200
+
+        finish_startup()
+
+        assert root.attributes.call_args_list == [
+            mock.call("-topmost", True),
+            mock.call("-topmost", False),
+        ]
+        assert root.lift.call_count == 2
+        assert root.focus_force.call_count == 2
+        root.after.assert_called_once()
+
     def test_confirmation_returns_false_when_ui_is_headless(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_confirmation
 

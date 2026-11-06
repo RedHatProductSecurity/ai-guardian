@@ -9,6 +9,23 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2667 KDE tray sandbox form focus — 2026-11-06
+
+- On the existing managed DAF `open` session and branch `2667`, added a one-shot
+  Tk focus restoration 200 ms after sandbox-form startup. It clears the temporary
+  topmost hint first, checks that the window still exists, and does not schedule
+  recurring focus grabs. Provider dispatch and complete form controls are unchanged.
+- Added a unit regression and modal UX contracts for the KDE handoff, startup-only
+  fallback, cancellation/post-display terminal behavior, headless handling and the
+  NiceGUI field path. Updated `docs/MODAL_PROVIDERS.md` and CHANGELOG.
+- Validation: `tests/unit/test_sandbox_tray.py` **195 passed**; complete affected
+  modal/sandbox/monitor/SSH UX contracts **102 passed**; Ruff, Black (py310),
+  error-level Pylint, package Mypy (**335 source files**) and `git diff --check`
+  pass.
+- Manual verification on the reporter's KDE session remains pending because the
+  distro, Plasma version and X11/Wayland session were not provided. Changes are
+  local and uncommitted; preserve branch `2667` and use external `daf complete`.
+
 ## Issue #2669 implementation — 2026-11-06
 
 - Continued managed DAF `open` session
