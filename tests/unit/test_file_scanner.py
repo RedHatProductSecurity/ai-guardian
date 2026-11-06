@@ -708,6 +708,24 @@ class TestFileScannerScanFiles:
 
         secret_findings = [f for f in findings if f["rule_id"] == "SECRET-001"]
         assert len(secret_findings) >= 1
+        assert scanner._finding_paths == ["secret.py"]
+
+    def test_absolute_path_under_home_is_displayed_with_home_marker(
+        self, tmp_path, monkeypatch
+    ):
+        home = tmp_path / "home"
+        file_path = home / ".config" / "agent" / "settings.json"
+        file_path.parent.mkdir(parents=True)
+        file_path.touch()
+        project = tmp_path / "project"
+        project.mkdir()
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+
+        scanner = FileScanner(config={})
+        scanner.findings.append({"file_path": str(file_path)})
+        scanner._record_finding_path(file_path, project, findings_before=0)
+
+        assert scanner._finding_paths == ["$HOME/.config/agent/settings.json"]
 
 
 class TestFileScannerAnnotationSuppression:

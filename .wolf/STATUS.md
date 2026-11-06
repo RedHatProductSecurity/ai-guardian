@@ -51,16 +51,20 @@ budget_tokens: 1000
   PR #2677; publication uses a lease-checked branch update.
 - **Post-rebase validation:** 430 related tests pass, 1 skipped, with 3 existing
   dependency deprecation warnings. Ruff, Black (Python 3.10 target), error-level
-  Pylint, package Mypy, and `git diff --check` pass. CI and CodeQL have not rerun.
-- **Next:** verify CI/CodeQL on the updated PR. No container image build or live
-  cloud scan was run.
-- CodeQL check `128145447260` on `fa0ff0c9` reported four clear-text findings in
-  the default `ai-guardian scan` text renderer (`message`, source positions, and
-  snippets). The CLI now reports finding counts and affected paths only; explicit
-  JSON/SARIF reports retain details and are documented as sensitive. Added a
-  complete output UX contract and confirmed JSON details remain available. **83**
-  related tests pass; Ruff, Black, error-level Pylint, package Mypy and diff checks
-  pass. These additional changes are local; the CodeQL check has not rerun.
+  Pylint, package Mypy, and `git diff --check` pass.
+- CodeQL check `128145447260` reported four clear-text findings for scanner
+  messages, positions and snippets. The first follow-up removed those fields, but
+  check `128166162972` on `2fb58beb` still flagged a list-derived finding index and
+  raw `finding.file_path` in terminal output. The current local fix keeps the
+  actionable path: it tracks path metadata independently, displays paths relative
+  to the scan root, and substitutes `$HOME` for home prefixes on external absolute
+  paths. No CodeQL exception was added.
+- Added unit coverage for relative and `$HOME` paths and updated the scan-output UX
+  contract. **84 related tests pass**; Ruff, Black, error-level Pylint, package
+  Mypy, JSON validation and diff checks pass. The follow-up is committed and pushed
+  to PR #2677; fresh CI/CodeQL checks are running.
+- **Next:** review the fresh CodeQL result. No container image build or live cloud
+  scan was run.
 
 ## Issue #2669 implementation — 2026-11-06
 

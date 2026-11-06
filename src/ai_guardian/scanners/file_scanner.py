@@ -215,6 +215,7 @@ class FileScanner:
         self.config: Dict[str, Any] = config
         self.verbose = verbose
         self.findings: List[Dict[str, Any]] = []
+        self._finding_paths: List[str] = []
 
         # Initialize scanners with feature-specific sub-configs.
         # Force action to "block" — scanner must never trigger interactive
@@ -305,6 +306,7 @@ class FileScanner:
             List of findings (partial if cancelled)
         """
         self.findings = []
+        self._finding_paths = []
         scan_path = Path(path).resolve()
 
         if not scan_path.exists():
@@ -314,10 +316,12 @@ class FileScanner:
         if scan_path.is_file():
             if progress_callback:
                 progress_callback(str(scan_path), 1, 1)
+            findings_before = len(self.findings)
             if self._is_scannable_image(scan_path):
                 self._scan_image_file(scan_path, scan_path.parent)
             else:
                 self._scan_file(scan_path, scan_path.parent)
+            self._record_finding_path(scan_path, scan_path.parent, findings_before)
         else:
             files_to_scan = self._discover_files(
                 scan_path,
@@ -336,6 +340,7 @@ class FileScanner:
                     break
                 if progress_callback:
                     progress_callback(str(file_path), i + 1, total)
+                findings_before = len(self.findings)
                 if self._is_scannable_image(file_path):
                     self._scan_image_file(file_path, scan_path)
                 else:
@@ -345,6 +350,7 @@ class FileScanner:
                     skip = getattr(finding_filter, "skip_rules", None)
                     if skip is not None:
                         self._skip_rules = skip
+                self._record_finding_path(file_path, scan_path, findings_before)
 
         return self.findings
 
@@ -366,7 +372,8 @@ class FileScanner:
             List of findings
         """
         self.findings = []
-        base = base_path or Path.cwd()
+        self._finding_paths = []
+        base = (base_path or Path.cwd()).resolve()
 
         if self.verbose:
             print(f"Scanning {len(file_paths)} files...")
@@ -377,10 +384,12 @@ class FileScanner:
                 if self.verbose:
                     logger.warning(f"File not found, skipping: {file_path}")
                 continue
+            findings_before = len(self.findings)
             if self._is_scannable_image(resolved):
                 self._scan_image_file(resolved, base)
             else:
                 self._scan_file(resolved, base)
+            self._record_finding_path(resolved, base, findings_before)
 
         return self.findings
 
@@ -403,6 +412,7 @@ class FileScanner:
             List of findings
         """
         self.findings = []
+        self._finding_paths = []
 
         if not text.strip():
             return self.findings
@@ -417,6 +427,9 @@ class FileScanner:
 
             self._scan_file(tmp_path, tmp_path.parent)
 
+            if self.findings:
+                self._finding_paths = [source_label]
+
             for finding in self.findings:
                 fp = finding.get("file_path", "")
                 if tmp_path_str in fp or tmp_path.name in fp:
@@ -428,6 +441,40 @@ class FileScanner:
                 pass  # intentionally silent — best-effort operation
 
         return self.findings
+
+    def _record_finding_path(
+        self, file_path: Path, base_path: Path, findings_before: int
+    ) -> None:
+        """Track relative paths separately from source-derived finding objects."""
+        if len(self.findings) <= findings_before:
+            return
+
+        file_path = file_path.resolve()
+        base_path = base_path.resolve()
+        try:
+            relative_file = file_path.relative_to(base_path)
+        except ValueError:
+            try:
+                relative_file = Path("$HOME") / file_path.relative_to(Path.home())
+            except ValueError:
+                try:
+                    relative_file = Path(
+                        os.path.relpath(str(file_path), str(base_path))
+                    )
+                except (OSError, ValueError):
+                    relative_file = Path(file_path.name)
+        except (OSError, TypeError):
+            relative_file = Path(file_path.name)
+
+        relative_path = relative_file.as_posix()
+
+        # Prevent control characters in filenames from injecting terminal output.
+        relative_path = "".join(
+            char if char.isprintable() and char not in "\x1b" else "_"
+            for char in relative_path
+        )
+        if relative_path not in self._finding_paths:
+            self._finding_paths.append(relative_path)
 
     def _discover_files(
         self,
@@ -1294,7 +1341,9 @@ class FileScanner:
                 with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
                 if content.strip():
+                    findings_before = len(self.findings)
                     self._check_supply_chain(fpath, content)
+                    self._record_finding_path(Path(fpath), Path.cwd(), findings_before)
             except Exception as e:
                 if self.verbose:
                     logger.warning(f"Could not read {fpath}: {e}")
@@ -1539,11 +1588,8 @@ def scan_command(args) -> int:
                 "Use --json-output or --sarif-output for a detailed report; "
                 "treat report files as sensitive.\n"
             )
-            for i, finding in enumerate(findings, 1):
-                print(f"{i}. Security finding detected")
-                if finding.get("file_path"):
-                    print(f"   File: {finding['file_path']}")
-                print()
+            for relative_path in getattr(scanner, "_finding_paths", []):
+                print(f"   File: {relative_path}")
         else:
             if code_inspector_msg:
                 print("✅ No other security issues detected")
