@@ -61,8 +61,15 @@ budget_tokens: 1000
   paths. No CodeQL exception was added.
 - Added unit coverage for relative and `$HOME` paths and updated the scan-output UX
   contract. **84 related tests pass**; Ruff, Black, error-level Pylint, package
-  Mypy, JSON validation and diff checks pass. The follow-up is committed and pushed
-  to PR #2677; fresh CI/CodeQL checks are running.
+  Mypy, JSON validation and diff checks pass. The follow-up was committed and
+  pushed, but CodeQL check `128178708709` on `b0718c82` reported two
+  uncontrolled-data path-expression alerts on `Path.resolve()` in the display-path
+  helper.
+- Replaced filesystem-resolving calls with lexical `os.path.abspath()` to preserve
+  relative paths and `$HOME` display without dereferencing user-controlled paths.
+  Added a lexical `..` path regression. **85 related tests pass**; Ruff, Black,
+  error-level Pylint, package Mypy, JSON validation and diff checks pass. The fix
+  is committed and pushed to PR #2677; fresh CI/CodeQL checks are running.
 - **Next:** review the fresh CodeQL result. No container image build or live cloud
   scan was run.
 

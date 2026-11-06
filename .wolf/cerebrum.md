@@ -321,9 +321,12 @@
   show them as relative paths (replace an absolute `$HOME` prefix with the literal
   `$HOME`) and keep them in independent scan-path metadata rather than reading
   them back from tainted finding objects. Even an enumeration index from a tainted
-  findings list can be flagged by CodeQL. Explicit JSON/SARIF reports remain
-  detailed only when requested and must be described as sensitive. Add an affected
-  UX contract and rely on a fresh GitHub CodeQL run; do not suppress the alert.
+  findings list can be flagged by CodeQL. Normalize paths lexically with
+  `os.path.abspath`; do not use `Path.resolve()` for display paths because it
+  dereferences untrusted input and triggers path-injection alerts. Explicit
+  JSON/SARIF reports remain detailed only when requested and must be described as
+  sensitive. Add an affected UX contract and rely on a fresh GitHub CodeQL run; do
+  not suppress the alert.
 
 - **2026-11-06 — Docker CLI smoke witness permissions:** The readiness image runs
   as `sandbox` UID 1000, while the smoke runner's bind-mounted workspace is created
