@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-10-30T18:14:36.659Z
-> Files: 1297 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1298 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~20012 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21577 tok)
-- `CHANGELOG.md` — Change log (~83237 tok)
+- `CHANGELOG.md` — Change log (~83972 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -23,11 +23,11 @@
 - `install.sh` (~8726 tok)
 - `LICENSE` — Project license (~196 tok)
 - `Makefile` — Make build targets (~62 tok)
-- `mkdocs.yml` (~1244 tok)
+- `mkdocs.yml` (~1260 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2605 tok)
 - `README.md` — Project documentation (~10885 tok)
-- `RELEASING.md` — Release Management Process (~13171 tok)
+- `RELEASING.md` — Release Management Process (~13424 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
 - `uninstall.ps1` — Declares and (~994 tok)
@@ -157,7 +157,7 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~14339 tok)
+- `release-readiness.yml` — CI: Release Readiness (~15174 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~7340 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -904,12 +904,13 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~16884 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~16940 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
 - `AUDIT_LOGGING.md` — Compliance Audit Logging (~1442 tok)
 - `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4392 tok)
+- `CODEX_SANDBOX_RUNTIME.md` — Codex Linux sandbox runtime troubleshooting (~793 tok)
 - `CONFIGURATION.md` — Configuration Guide (~7811 tok)
 - `CONSOLE.md` — AI Guardian Console Guide (~1583 tok)
 - `COOKBOOK.md` — Configuration Cookbook (~15549 tok)
@@ -934,7 +935,7 @@
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `POTENTIAL_INTEGRATIONS.md` — Potential Integrations (~507 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
-- `README.md` — Project documentation (~1738 tok)
+- `README.md` — Project documentation (~1774 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
 - `Sandbox.md` — Sandbox CLI (~5794 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2669 tok)
@@ -1036,10 +1037,10 @@
 
 ## scripts/
 
-- `agent_cli_mock_provider.py` — Credential-free local model protocols for the agent CLI hook smoke test. (~8187 tok)
+- `agent_cli_mock_provider.py` — Credential-free local model protocols for the agent CLI hook smoke test. (~9751 tok)
 - `agent_cli_smoke_firewall.py` — Trusted one-shot nftables setup, only in a smoke sandbox's network namespace. (~390 tok)
-- `agent_cli_smoke_gate.py` — Do not start smoke setup, daemon or agents until trusted firewall setup succeeds. (~556 tok)
-- `agent_cli_test.py` — Run actual agent CLI hooks in a credential-free, strict-derived smoke sandbox. (~21244 tok)
+- `agent_cli_smoke_gate.py` — Do not start smoke setup, daemon or agents until trusted firewall setup succeeds. (~618 tok)
+- `agent_cli_test.py` — Run actual agent CLI hooks in a credential-free, strict-derived smoke sandbox. (~26890 tok)
 - `agent-cli-test` (~36 tok)
 - `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~9012 tok)
 - `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2778 tok)
@@ -1080,7 +1081,7 @@
 - `hook_context.py` — HookContextManager: save_pretool_context, get_pretool_context, cleanup_session, cleanup (~2346 tok)
 - `hook_processing.py` — URL configuration (~39013 tok)
 - `ide_paths.py` — Canonical path resolution for supported IDE and agent integrations. (~3451 tok)
-- `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4408 tok)
+- `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4444 tok)
 - `logging_utils.py` — Shared logging utilities. (~254 tok)
 - `opencode_support.py` — OpenCode runtime generation and version helpers. (~909 tok)
 - `openshell_policy.py` — OpenShell policy discovery and validation helpers. (~3025 tok)
@@ -1145,7 +1146,7 @@
 - `base_agent.py` — Base agent adapter (default response format). (~2407 tok)
 - `base.py` — that: ide_type, name, can_handle, normalize_input + 3 more (~4890 tok)
 - `cline.py` — Cline / ZooCode hook adapter. (~1160 tok)
-- `codex.py` — OpenAI Codex (CLI + Desktop) hook adapter. (~1133 tok)
+- `codex.py` — OpenAI Codex (CLI + Desktop) hook adapter. (~1442 tok)
 - `copilot.py` — GitHub Copilot hook adapter. (~1897 tok)
 - `crush.py` — Charmbracelet Crush hook adapter. (~482 tok)
 - `cursor.py` — Cursor IDE hook adapter. (~3093 tok)
