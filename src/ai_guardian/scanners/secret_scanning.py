@@ -136,15 +136,13 @@ def _format_secret_scanner_failure(errors) -> str:
     error_lower = error_text.lower()
     is_gitguardian = "gitguardian" in error_lower
 
-    engine_names = {}
-    for match in re.finditer(r"(?:^|;\s*)([A-Za-z0-9_-]+):", error_text):
-        engine_name = match.group(1)
-        engine_names[engine_name.lower()] = engine_name
-    if is_gitguardian:
-        engine_names["gitguardian"] = "GitGuardian"
-    if not engine_names:
-        engine_names["configured"] = "configured scanner"
-    engine_summary = ", ".join(sorted(engine_names.values(), key=str.lower))
+    # Error text can include provider output or other sensitive diagnostics. Never
+    # copy an engine label from it into a user-visible warning.
+    engine_summary = (
+        "configured scanner(s), including GitGuardian"
+        if is_gitguardian
+        else "configured scanner(s)"
+    )
 
     if any(keyword in error_lower for keyword in _QUOTA_ERROR_KEYWORDS):
         if is_gitguardian:
@@ -1208,7 +1206,12 @@ def check_secrets(
                     )
                     if scanner_failure_warning:
                         logger.warning("Configured secret-scanning engine failed")
-                        print(scanner_failure_warning, file=sys.stderr)
+                        print(
+                            "WARNING: Secret scanning coverage is incomplete; "
+                            "the hook response contains the configured "
+                            "on_scan_error outcome.",
+                            file=sys.stderr,
+                        )
 
                     if strategy_result.has_secrets and strategy_result.secrets:
                         # Apply allowlist filtering

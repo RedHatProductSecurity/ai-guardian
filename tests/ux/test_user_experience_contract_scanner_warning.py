@@ -282,7 +282,10 @@ class TestGitGuardianCloudFailureContract(TestCase):
                     has_secrets=False,
                     secrets=[],
                     engine="gitguardian",
-                    error="GitGuardian cloud scan quota exhausted or rate-limited",
+                    error=(
+                        "GitGuardian cloud scan quota exhausted or rate-limited; "
+                        "diagnostic=synthetic-private-marker"
+                    ),
                 )
             return ScanResult(has_secrets=False, secrets=[], engine="gitleaks")
 
@@ -295,6 +298,7 @@ class TestGitGuardianCloudFailureContract(TestCase):
             "hook_event_name": "UserPromptSubmit",
             "prompt": "Please continue with the task.",
         }
+        stderr = StringIO()
 
         with (
             patch(
@@ -327,6 +331,7 @@ class TestGitGuardianCloudFailureContract(TestCase):
             ),
             patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True),
             patch("sys.stdin", StringIO(json.dumps(hook_data))),
+            patch("sys.stderr", stderr),
         ):
             result = ai_guardian.process_hook_input()
 
@@ -336,9 +341,14 @@ class TestGitGuardianCloudFailureContract(TestCase):
         assert result["exit_code"] == 0
         assert response.get("decision") != "block"
         assert "coverage is incomplete" in warning
+        assert "configured scanner(s), including GitGuardian" in warning
         assert "quota or rate limit was reached" in warning
         assert "Check workspace usage" in warning
         assert "GITGUARDIAN_API_KEY" not in warning
+        assert "synthetic-private-marker" not in warning
+        assert "coverage is incomplete" in stderr.getvalue()
+        assert "synthetic-private-marker" not in stderr.getvalue()
+        assert "quota or rate limit was reached" not in stderr.getvalue()
         assert called_engines == ["gitguardian", "gitleaks"]
 
     def test_consent_credentials_and_service_errors_are_distinguished(self):
@@ -366,6 +376,22 @@ class TestGitGuardianCloudFailureContract(TestCase):
                 self.assertIn(expected_message, warning)
                 self.assertNotIn("synthetic-secret-value", warning)
                 self.assertIn("coverage is incomplete", warning)
+
+    def test_failure_warning_does_not_echo_untrusted_engine_labels_or_diagnostics(self):
+        from ai_guardian.scanners.secret_scanning import (
+            _format_secret_scanner_failure,
+        )
+
+        error = (
+            "synthetic-private-engine: scanner failed; "
+            "diagnostic=synthetic-private-marker"
+        )
+
+        warning = _format_secret_scanner_failure(error)
+
+        self.assertIn("configured scanner(s)", warning)
+        self.assertNotIn("synthetic-private-engine", warning)
+        self.assertNotIn("synthetic-private-marker", warning)
 
     def test_default_container_without_gitguardian_keeps_local_scan_and_warns(self):
         from ai_guardian.scanners.strategies import ScanResult

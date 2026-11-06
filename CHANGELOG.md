@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--exit-zero` JSON output, retain per-engine failures across first-match,
   any-match, and consensus results, and preserve consensus thresholds. Report cloud
   quota, credentials, consent, and service failures as incomplete scan coverage
-  under `on_scan_error` without exposing credential values.
+  under `on_scan_error` without exposing credential values. Scanner diagnostics
+  are not echoed to stderr; the hook warning uses fixed engine labels and safe
+  summaries.
 - **Codex PreToolUse denials:** Include Codex's required non-empty
   `permissionDecisionReason` using the existing sanitized violation label, so the
   CLI accepts denials instead of treating them as invalid hook output.

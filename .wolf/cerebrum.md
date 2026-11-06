@@ -307,6 +307,14 @@
   consensus thresholds do not silently change. A missing unselected local
   alternative is not an incomplete scan when another local engine completed.
 
+- **2026-11-06 — #2671 PR CI and CodeQL follow-up:** When all configured engines
+  fail, `FirstMatchStrategy` returns the attempted engine failures; the old
+  `No scanners available` assertion only applies when no engines were selected.
+  Scanner diagnostics can contain sensitive provider output, so never copy an
+  error-derived engine label into a warning or print detailed warnings to stderr.
+  Keep returned warnings actionable using fixed labels and print only a fixed
+  incomplete-coverage summary.
+
 - **2026-11-06 — Docker CLI smoke witness permissions:** The readiness image runs
   as `sandbox` UID 1000, while the smoke runner's bind-mounted workspace is created
   host-owned with default `0755`. The mock tool creates its execution witness

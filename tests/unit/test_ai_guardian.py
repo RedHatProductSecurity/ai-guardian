@@ -251,14 +251,14 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
             str(call[0][0]) for call in mock_stderr.write.call_args_list
         )
         self.assertIn(
-            "SECRET SCANNING WARNING", stderr_output, "Should show warning header"
-        )
-        self.assertIn(
-            "network or service issue",
-            stderr_output.lower(),
-            "Should mention network issue",
+            "coverage is incomplete", stderr_output, "Should show a fixed warning"
         )
         self.assertIn("on_scan_error", stderr_output)
+        self.assertNotIn(
+            "network or service issue",
+            stderr_output.lower(),
+            "stderr must not echo scanner diagnostics",
+        )
 
     @patch(
         "ai_guardian.scanners.secret_scanning._load_pattern_server_config",
