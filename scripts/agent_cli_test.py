@@ -2331,6 +2331,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "Temporary clean workspace for an AI Guardian CLI smoke test.\n",
         encoding="utf-8",
     )
+    witness_directory = workspace / ".agent-cli-smoke-results"
+    witness_directory.mkdir(mode=0o700)
+    if os.name == "posix":
+        # The container image runs as UID 1000, which may differ from the host
+        # owner (notably on GitHub's Docker runners). Grant write/search only on
+        # this disposable evidence directory; keep the workspace non-writable
+        # to other users and its temporary parent private.
+        os.chmod(witness_directory, 0o733)
     config_dir = root / "smoke-config"
     write_smoke_config(config_dir)
     host_env = sanitized_host_environment(home)
