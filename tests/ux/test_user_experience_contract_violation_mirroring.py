@@ -18,9 +18,15 @@ Manual verification:
 2. Generate a remote violation, then refresh the receiving daemon's Violations page.
 3. Confirm source attribution and the source-record link; stop the source daemon
    and confirm the mirrored copy remains visible without a source link.
-4. Use "Filter by daemon" to isolate the remote source; confirm same-named sources
+4. Type a partial source name in "Filter by daemon" and confirm matching is
+   case-insensitive and composes with the type and directory filters.
+5. Clear the daemon search and confirm All Sources returns without changing the
+   type or directory filters. Choose an exact source and confirm same-named sources
    remain distinguishable.
-5. Confirm Always Allow, Ignore File, and Suppress in Source are absent for the
+6. Refresh and confirm each source shows Running, Paused, Offline, or Unknown based
+   on current discovery/status; an undiscoverable historical source is Unknown.
+   Confirm availability refresh does not clear the selected filters.
+7. Confirm Always Allow, Ignore File, and Suppress in Source are absent for the
    mirrored record, and that disabling the setting stops further imports.
 """
 
@@ -72,18 +78,47 @@ def test_console_exposes_read_only_attribution_and_conditional_source_link():
     assert "Suppress in Source..." in list_source
 
 
-def test_violation_page_filters_sources_without_collapsing_same_names():
-    """USER EXPERIENCE: the source filter distinguishes remote daemon identities."""
+def test_violation_page_supports_typed_search_and_exact_source_selection():
+    """USER EXPERIENCE: typed search and exact selection filter distinct sources."""
     page_source = inspect.getsource(violations.create_violations_page)
     identity_source = inspect.getsource(violations._violation_source_identity)
+    filter_source = inspect.getsource(violations._violation_matches_source_filter)
 
     assert 'label="Filter by daemon"' in page_source
+    assert 'label="Select exact source"' in page_source
+    assert "ui.input(" in page_source
+    assert "on_value_change(on_source_query_change)" in page_source
+    assert 'active_source_query["query"]' in page_source
     assert "with_input=True" in page_source
+    assert '.props("clearable")' in page_source
     assert "active_source_filter" in page_source
-    assert "source_filter" in page_source
+    assert "selected_source=source_filter" in page_source
+    assert 'v.get("violation_type") == vtype' in page_source
+    assert "_violation_matches_dir(v, dir_filter)" in page_source
+    assert "casefold()" in filter_source
     assert 'source_key = mirror.get("source_key")' in identity_source
     assert "identity[:8]" in identity_source
     assert "_sort_violation_sources" in page_source
+
+
+def test_source_availability_is_refreshed_and_unknown_stays_distinct():
+    """USER EXPERIENCE: options show refreshed status without guessing offline."""
+    page_source = inspect.getsource(violations.create_violations_page)
+    availability_source = inspect.getsource(violations._daemon_source_availability)
+    mapping_source = inspect.getsource(violations._source_availability_by_identity)
+
+    assert "service.refresh_targets" in page_source
+    assert "service.get_all_daemon_status" in page_source
+    assert 'source_availability.get(key, "Unknown")' in page_source
+    assert '"Running"' in availability_source
+    assert '"Paused"' in availability_source
+    assert '"Offline"' in availability_source
+    assert '"Unknown"' in availability_source
+    assert "_source_key(target)" in mapping_source
+    assert 'source_select.value = selected_source or ""' in page_source
+    assert 'active_source_filter["source"] not in source_counts' not in page_source
+    assert 'active_source_filter["source"] = None' in page_source
+    assert "if not query:" in page_source
 
 
 def test_console_setting_explains_summary_only_copying_and_opt_in():

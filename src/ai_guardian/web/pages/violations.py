@@ -351,6 +351,68 @@ def _violation_source_identity(
     return f"daemon:{daemon_name}", f"{label_prefix} — {daemon_name}"
 
 
+def _violation_matches_source_filter(
+    violation: dict,
+    daemon_name: str,
+    *,
+    local_daemon: bool,
+    selected_source: str | None,
+    query: str,
+) -> bool:
+    """Match an exact source identity and/or a case-insensitive label query."""
+    source_key, source_label = _violation_source_identity(
+        violation, daemon_name, local_daemon=local_daemon
+    )
+    normalized_query = (query or "").strip().casefold()
+    return (not selected_source or source_key == selected_source) and (
+        not normalized_query or normalized_query in source_label.casefold()
+    )
+
+
+def _daemon_source_availability(target, status) -> str:
+    """Return only confirmed daemon availability; missing status stays unknown."""
+    target_status = getattr(target, "status", None)
+    offline_states = {"error", "offline", "stopped"}
+    status_name = status.get("status") if isinstance(status, dict) else None
+
+    if isinstance(status, dict):
+        if status.get("paused") is True or status_name == "paused":
+            return "Paused"
+        if status.get("running") is True or status_name == "running":
+            return "Running"
+        if status.get("running") is False or (
+            isinstance(status_name, str) and status_name in offline_states
+        ):
+            return "Offline"
+
+    if isinstance(target_status, str) and target_status in offline_states:
+        return "Offline"
+    if status is None and target_status in ("running", "paused"):
+        return "Offline"
+    return "Unknown"
+
+
+def _source_availability_by_identity(
+    status_entries, *, current_target, daemon_name: str
+) -> dict[str, str]:
+    """Map current status to stable filter identities, not display names."""
+    from ai_guardian.daemon.violation_mirroring import _source_key
+
+    availability = {}
+    for entry in status_entries or []:
+        if not isinstance(entry, dict):
+            continue
+        target = entry.get("target")
+        if target is None:
+            continue
+
+        label = _daemon_source_availability(target, entry.get("status"))
+        if target is current_target:
+            availability[f"daemon:{daemon_name}"] = label
+        availability[f"remote:{_source_key(target)}"] = label
+    return availability
+
+
 def _violation_timestamp_rank(violation: dict) -> float:
     """Return a sortable UTC timestamp, with invalid/missing values last."""
     timestamp = violation.get("timestamp")
@@ -396,7 +458,10 @@ def create_violations_page(service, daemon_name: str):
         active_filter = {"vtype": None}
         active_dir_filter = {"dir": None}
         active_source_filter = {"source": None}
+        active_source_query = {"query": ""}
         source_context = {"local_daemon": False}
+        source_availability: dict[str, str] = {}
+        source_label_cache: dict[str, str] = {}
         cached_violations: list = []
 
         filter_options = {label: vtype for label, vtype, _ in FILTER_TABS}
@@ -408,15 +473,24 @@ def create_violations_page(service, daemon_name: str):
                 label="Filter by type",
             ).classes("w-64")
 
+            source_query_input = (
+                ui.input(
+                    label="Filter by daemon",
+                    placeholder="Type a daemon/source name",
+                )
+                .props("clearable")
+                .classes("w-64")
+            )
+
             source_select = (
                 ui.select(
                     options={"": "All Sources"},
                     value="",
-                    label="Filter by daemon",
+                    label="Select exact source",
                     with_input=True,
                 )
                 .props("clearable")
-                .classes("w-64")
+                .classes("w-80")
             )
 
             dir_select = (
@@ -470,6 +544,17 @@ def create_violations_page(service, daemon_name: str):
 
         source_select.on_value_change(on_source_filter_change)
 
+        async def on_source_query_change(e):
+            query = str(e.value or "").strip()
+            active_source_query["query"] = query
+            if not query:
+                active_source_filter["source"] = None
+                source_select.value = ""
+                source_select.update()
+            _render_filtered()
+
+        source_query_input.on_value_change(on_source_query_change)
+
         async def on_dir_filter_change(e):
             val = e.value or ""
             active_dir_filter["dir"] = val.strip() if val else None
@@ -519,21 +604,31 @@ def create_violations_page(service, daemon_name: str):
             filter_select.options = sorted_opts
             filter_select.update()
 
+            source_label_cache.update(source_labels)
             source_options = {"": f"All Sources ({len(cached_violations)})"}
             local_key = (
                 f"daemon:{daemon_name}" if source_context["local_daemon"] else None
             )
+            option_counts = Counter(source_counts)
+            option_labels = dict(source_labels)
+            selected_source = active_source_filter["source"]
+            if selected_source and selected_source not in option_labels:
+                cached_label = source_label_cache.get(selected_source)
+                if cached_label:
+                    option_labels[selected_source] = cached_label
+                    option_counts.setdefault(selected_source, 0)
             for key in _sort_violation_sources(
-                source_counts,
-                source_labels,
+                option_counts,
+                option_labels,
                 source_latest,
                 local_key=local_key,
             ):
-                source_options[key] = f"{source_labels[key]} ({source_counts[key]})"
+                availability = source_availability.get(key, "Unknown")
+                source_options[key] = (
+                    f"{option_labels[key]} · {availability} ({option_counts[key]})"
+                )
             source_select.options = source_options
-            if active_source_filter["source"] not in source_counts:
-                active_source_filter["source"] = None
-                source_select.value = ""
+            source_select.value = selected_source or ""
             source_select.update()
 
         def _render_filtered():
@@ -547,14 +642,12 @@ def create_violations_page(service, daemon_name: str):
                 for v in cached_violations
                 if (not vtype or v.get("violation_type") == vtype)
                 and (not dir_filter or _violation_matches_dir(v, dir_filter))
-                and (
-                    not source_filter
-                    or _violation_source_identity(
-                        v,
-                        daemon_name,
-                        local_daemon=source_context["local_daemon"],
-                    )[0]
-                    == source_filter
+                and _violation_matches_source_filter(
+                    v,
+                    daemon_name,
+                    local_daemon=source_context["local_daemon"],
+                    selected_source=source_filter,
+                    query=active_source_query["query"],
                 )
             ]
             filtered.sort(key=lambda v: v.get("timestamp", ""), reverse=True)
@@ -573,6 +666,15 @@ def create_violations_page(service, daemon_name: str):
             await run.io_bound(service.refresh_targets)
             target = service.get_target_by_name(daemon_name)
             source_context["local_daemon"] = bool(target and target.runtime == "local")
+            statuses = await run.io_bound(service.get_all_daemon_status)
+            source_availability.clear()
+            source_availability.update(
+                _source_availability_by_identity(
+                    statuses,
+                    current_target=target,
+                    daemon_name=daemon_name,
+                )
+            )
 
             cached_violations.clear()
             if target:
