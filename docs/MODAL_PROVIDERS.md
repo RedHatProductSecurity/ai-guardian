@@ -384,3 +384,12 @@ before expanding help, and Show help/Help changes no pause state.
 Repeat startup-only fallback, post-display failure, exclusive preferences,
 headless and physical-monitor checks; never change a live security configuration
 just to simulate failure.
+
+For **Create sandbox** on KDE Plasma, record the Linux distribution, Plasma
+version, X11/Wayland session, UI preference and actual provider. Open the form from
+the tray and confirm it remains visible and usable in the foreground after the
+menu closes. After startup, switch to another application and confirm the form is
+not always-on-top and does not reclaim focus; repeat several opens to check for
+one-time restoration only. Repeat with the other eligible provider where available
+and confirm its behavior and full controls are unchanged. Mocked tests do not
+qualify this desktop check; record the reporter-session result separately.

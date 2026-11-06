@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **KDE tray sandbox form focus:** Restore foreground focus once after the tray
+  menu handoff and clear the temporary topmost hint; the form does not remain
+  always-on-top or repeatedly reclaim focus.
 - **Codex PreToolUse denials:** Include Codex's required non-empty
   `permissionDecisionReason` using the existing sanitized violation label, so the
   CLI accepts denials instead of treating them as invalid hook output.

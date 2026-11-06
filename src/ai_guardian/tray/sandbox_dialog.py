@@ -685,6 +685,39 @@ class _TkTextVariable:
             self.widget.insert("1.0", str(value))
 
 
+def _present_tk_sandbox_form(root, tk) -> None:
+    """Raise the form briefly, then restore focus after the tray menu closes."""
+
+    def finish_startup() -> None:
+        try:
+            if not root.winfo_exists():
+                return
+            try:
+                root.attributes("-topmost", False)
+            except tk.TclError:
+                logger.debug("Sandbox form temporary raising hint could not be cleared")
+            root.lift()
+            root.focus_force()
+        except tk.TclError:
+            logger.debug("Sandbox form closed before foreground focus was restored")
+
+    root.lift()
+    root.focus_force()
+    try:
+        root.grab_set()
+        root.attributes("-topmost", True)
+    except tk.TclError:
+        logger.debug("Sandbox form window manager rejected the modal raising hint")
+
+    try:
+        # KDE/XWayland may close the tray popup after this child maps. Restore
+        # focus once after that handoff, without keeping the form always-on-top.
+        root.after(200, finish_startup)
+    except tk.TclError:
+        logger.debug("Sandbox form closed before startup focus could be scheduled")
+        finish_startup()
+
+
 def _show_tkinter_form(
     title: str,
     message: str,
@@ -1027,16 +1060,7 @@ def _show_tkinter_form(
         else "<Return>"
     )
     root.bind(submit_key, lambda _event: submit())
-    root.lift()
-    root.focus_force()
-    try:
-        root.grab_set()
-        root.attributes("-topmost", True)
-        root.after(150, lambda: root.attributes("-topmost", False))
-    except tk.TclError:
-        # Some desktop environments reject transient/topmost hints.  The form
-        # remains usable as an ordinary modal window in that case.
-        pass
+    _present_tk_sandbox_form(root, tk)
     root.mainloop()
     return result or None
 
