@@ -8,7 +8,7 @@ on:
 
 jobs:
   fresh-install:
-    name: Fresh Install (Python ${{ matrix.python-version }})
+    name: Fresh Install, CLI, Config & Pattern Checks (Python ${{ matrix.python-version }})
     runs-on: ubuntu-26.04
 
     strategy:
@@ -167,7 +167,7 @@ jobs:
           "
 
   upgrade-from-previous:
-    name: Upgrade from Previous Stable
+    name: Stable Upgrade & Legacy Config Migration
     runs-on: ubuntu-26.04
 
     steps:
@@ -291,7 +291,7 @@ jobs:
           PYEOF
 
   multi-agent-setup:
-    name: Multi-Agent IDE Setup
+    name: IDE Registry, Setup & Documentation Parity
     runs-on: ubuntu-26.04
 
     steps:
@@ -396,7 +396,7 @@ jobs:
           test -f docs/SCANNER_INTEGRATION_CHECKLIST.md
 
   ide-hook-e2e:
-    name: IDE Hook E2E (${{ matrix.ide }})
+    name: IDE Hook Integration E2E (${{ matrix.ide }})
     runs-on: ubuntu-26.04
 
     strategy:
@@ -466,7 +466,7 @@ jobs:
         run: python -m pytest tests/integration/test_ide_hooks_e2e.py -q
 
   daemon-lifecycle:
-    name: Daemon Lifecycle
+    name: Daemon, REST, SSH, Tray, Support & Release Checks
     runs-on: ubuntu-26.04
 
     steps:
@@ -709,21 +709,21 @@ jobs:
           PY
 
   smoke-tests:
-    name: Smoke Tests
+    name: Detection, Hook, False-Positive, Initialization & Lifecycle Smokes
     # Includes the shared Linux/macOS/native-Windows orphan-recovery gate.
     uses: ./.github/workflows/smoke-tests.yml
 
   scenario-tests:
-    name: Scenario Tests
+    name: Container Agent Scenarios (minimal, standard, strict)
     uses: ./.github/workflows/scenario-tests.yml
 
   container-build-validation:
-    name: Container Build Validation
+    name: Container Smoke, Scenarios & Multi-Arch Builds
     needs: fresh-install
     uses: ./.github/workflows/container-build-validation.yml
 
   container-images:
-    name: Container Images (real-agent smoke checks)
+    name: Real CLI Smoke Matrix & OpenShell Image Validation
     runs-on: ubuntu-26.04
 
     steps:
@@ -792,7 +792,7 @@ jobs:
             -t ai-guardian-opencode-v2-readiness \
             container/
 
-      - name: Verify normal image Pi CLI and extension setup
+      - name: Verify standard image CLIs and Pi extension (OpenCode V1, Gemini, Pi)
         run: |
           opencode_v1_version="$(docker run --rm --entrypoint opencode ai-guardian-readiness --version)"
           echo "OpenCode V1: $opencode_v1_version"
@@ -807,6 +807,7 @@ jobs:
             /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts'
 
       - name: Verify pinned OpenCode V2 smoke image version
+        id: smoke_prerequisites
         run: |
           opencode_v2_version="$(docker run --rm --entrypoint opencode ai-guardian-opencode-v2-readiness --version)"
           opencode_v2_version="${opencode_v2_version#opencode v}"
@@ -815,44 +816,67 @@ jobs:
 
       # Each invocation prepares a strict-derived config before creation: prompt /
       # pre-tool deny, clean-tool and sensitive-output sanitization cases. This is
-      # not unmodified @strict post-tool qualification. Codex's invocation-only
+      # not unmodified @strict post-tool qualification. Keep each client in its own
+      # named step and continue after an individual failure so all results are
+      # visible; a failed client still fails this job. Codex's invocation-only
       # hook-trust override is used only after the runner verifies its exact isolated
       # AI Guardian hook set; no persistent Codex trust state is written.
-      - name: Verify real agent CLI hooks with local mock provider
+      - name: Codex CLI Smoke (local mock provider)
+        id: codex_smoke
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
         run: |
           scripts/agent-cli-test --cli-name codex --agent smoke \
             --image ai-guardian-readiness --container-engine docker \
             --ai-guardian-command ai-guardian
+
+      - name: Gemini CLI Smoke (local mock provider)
+        id: gemini_smoke
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
+        run: |
           scripts/agent-cli-test --cli-name gemini --agent default \
             --image ai-guardian-readiness --container-engine docker \
             --ai-guardian-command ai-guardian
+
+      - name: OpenCode V1 CLI Smoke (local mock provider)
+        id: opencode_v1_smoke
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
+        run: |
           scripts/agent-cli-test --cli-name opencode --agent build \
             --image ai-guardian-readiness --container-engine docker \
             --ai-guardian-command ai-guardian
+
+      - name: Pi CLI Smoke (local mock provider)
+        id: pi_smoke
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
+        run: |
           scripts/agent-cli-test --cli-name pi --agent openai \
             --image ai-guardian-readiness --container-engine docker \
             --ai-guardian-command ai-guardian
 
-      - name: Verify OpenCode V2 hooks with local mock provider
+      - name: OpenCode V2 CLI Smoke (local mock provider)
+        id: opencode_v2_smoke
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
         run: |
           scripts/agent-cli-test --cli-name opencode --agent build \
             --image ai-guardian-opencode-v2-readiness --container-engine docker \
             --ai-guardian-command ai-guardian
 
-      - name: Verify Claude Code hooks with local mock provider
-        if: vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true'
+      - name: Claude Code CLI Smoke (local mock provider)
+        id: claude_smoke
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' && vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true' }}
         run: |
           scripts/agent-cli-test --cli-name claude --agent default \
-            --accept-proprietary-tos \
-            --container-engine docker \
+            --accept-proprietary-tos --container-engine docker \
             --ai-guardian-command ai-guardian
 
       - name: Explain skipped Claude Code smoke check
-        if: vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED != 'true'
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' && vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED != 'true' }}
         run: |
           echo "::notice::Claude Code smoke check was not run. Set the repository variable AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED=true only after an authorized maintainer accepts Anthropic's terms for CI installation."
 
       - name: Build OpenShell support image
+        id: build_openshell_image
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -864,6 +888,7 @@ jobs:
             container/
 
       - name: Verify OpenShell image Codex and OpenCode CLI setup
+        if: ${{ !cancelled() && steps.build_openshell_image.outcome == 'success' }}
         run: |
           docker run --rm --entrypoint codex ai-guardian-openshell-readiness --version
           docker run --rm --entrypoint opencode ai-guardian-openshell-readiness --version
@@ -875,6 +900,7 @@ jobs:
             /bin/bash -lc 'test -x "$(command -v codex)" && test -x "$(command -v opencode)"'
 
       - name: Verify OpenShell compatibility metadata
+        if: ${{ !cancelled() && steps.build_openshell_image.outcome == 'success' }}
         run: |
           test "$(docker inspect --format='{{index .Config.Labels "ai-guardian.compatibility-report-schema"}}' ai-guardian-openshell-readiness)" = "2"
           test "$(docker inspect --format='{{index .Config.Labels "ai-guardian.openshell.base-image"}}' ai-guardian-openshell-readiness)" = "nvcr.io/nvidia/base/ubuntu@sha256:c280ee89f8bfcbdaba6179ad4347f60c509e841cbe63eb93002f01bf70e0819c"
@@ -882,7 +908,7 @@ jobs:
           test -n "$(docker inspect --format='{{index .Config.Labels "ai-guardian.openshell.opencode-version"}}' ai-guardian-openshell-readiness)"
 
   config-validation:
-    name: Config Validation
+    name: Configuration, Migration & Security Feature Qualification
     runs-on: ubuntu-26.04
 
     steps:
@@ -1066,7 +1092,7 @@ jobs:
           "
 
   install-script:
-    name: Install Script (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    name: POSIX Install Tests (Linux/macOS, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -1108,7 +1134,7 @@ jobs:
           echo "Venv install: OK"
 
   mcp-server:
-    name: MCP Server
+    name: MCP Initialize & get_config JSON-RPC Calls
     runs-on: ubuntu-26.04
 
     steps:
@@ -1228,7 +1254,7 @@ jobs:
           PYEOF
 
   openshell-middleware-runtime:
-    name: OpenShell Supervisor Middleware
+    name: OpenShell Middleware Compatibility & Runtime Tests
     runs-on: ubuntu-26.04
 
     steps:
