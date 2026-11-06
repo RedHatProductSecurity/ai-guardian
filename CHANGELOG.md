@@ -149,6 +149,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source remains undetermined, so execution is not qualified.
 
 ### Added
+- **Violations page daemon filtering:** Apply case-insensitive partial source
+  searches while retaining exact, identity-based source selection. Show refreshed
+  Running, Paused, Offline, or Unknown availability labels; refresh and clearing
+  preserve unrelated violation filters.
 - **Smoke CLI version selection:** Use `--cli-name opencode --cli-version 1.19.0`
   or `--cli-version 2.0.24` to pin OpenCode in a temporary smoke image and verify
   the installed version before testing. Omission keeps the image default;

@@ -9,6 +9,29 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2669 implementation — 2026-11-06
+
+- Continued managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2669` on its existing issue branch `2669` in
+  the real workspace. Preserved the pre-existing local OpenWolf edits; no branch
+  sync or branch change applied.
+- The Violations page now has a live, case-insensitive **Filter by daemon** text
+  search plus a separate exact-source selector. Exact identity keys continue to
+  distinguish same-named mirrored sources. Options show Running, Paused, Offline,
+  or Unknown from refreshed daemon status; undiscoverable historical sources stay
+  Unknown. Refresh preserves selected filters, and clearing the text search resets
+  the source selection without changing type/directory filters.
+- Updated the complete affected violation-mirroring UX contract, related unit
+  coverage, `docs/VIOLATION_LOGGING.md`, and CHANGELOG. All seven issue acceptance
+  criteria are checked in GitHub; added the `done` label, a progress comment and a
+  DAF note.
+- **Validation:** 9 directly affected unit/UX tests pass. Full Ruff, Black
+  (Python 3.10 target), error-level Pylint, targeted Mypy, JSON validation for the
+  buglog, and `git diff --check` pass. Full-package Mypy still reports 14 errors in
+  untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+- Changes remain local and uncommitted; no commit, push, or PR was created.
+  **Next:** user review and external `daf complete`.
+
 ## Codex PreToolUse denial smoke correction — 2026-11-06
 
 - Release Readiness run `42151399090` passed the exact isolated Codex hook-scope
@@ -150,9 +173,13 @@ budget_tokens: 1000
   All **150** tests in `tests/unit/test_agent_cli_test.py` pass; Black, Ruff and
   `git diff --check` pass. Committed the workflow/docs/changelog/test changes as
   `48edef4e`, pushed to `2662`, and dispatched Release Readiness run
-  `42252905253`; it is running. OpenWolf state remains uncommitted. Next, verify
-  that the Codex failure is explicitly reported as unqualified while the job and
-  later checks continue, without masking failures from other steps.
+  `42252905253`; it completed successfully. The Real CLI Smoke Matrix job passed;
+  Codex's smoke itself still failed `clean_tool`, `tool_output_secret`, and
+  `tool_output_pii` with no execution witness and the prior aggregate
+  `permission_reference`/failed-command evidence. The report step emitted the
+  warning and job-summary exception text. Gemini, OpenCode V1, Pi, OpenCode V2,
+  OpenShell checks, and all other readiness jobs passed. This unblocks the workflow
+  but does not qualify Codex. OpenWolf state remains uncommitted.
 - Preserve Codex `workspace-write`, approval, firewall, rootless profile,
   admin-capability gate, hooks, execution witness, raw-output checks and clean exit.
   Do not switch to `danger-full-access`, install setuid bwrap, unconfine AppArmor,

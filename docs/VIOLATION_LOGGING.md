@@ -319,10 +319,17 @@ does not offer Always Allow, Ignore File, or Suppress in Source actions for them
 When the source daemon is available and the source record has an ID, the Console
 links back to its authoritative detail page. Unavailable daemons do not prevent
 other sources from syncing, and existing local mirrors remain visible.
-The Violations page's **Filter by daemon** dropdown can isolate a source; it lists
-the local daemon first, then remote sources by most recent violation. Same-named
-daemons with different endpoint identities are shown as distinct sources, and the
-dropdown is searchable. Each file is rotated independently by the configured
+The Violations page's **Filter by daemon** field filters the displayed history as
+you type, matching source labels case-insensitively alongside the type and directory
+filters. **Select exact source** retains the source options for identity-specific
+selection; same-named daemons with different endpoint identities remain distinct.
+Options show current **Running**, **Paused**, or **Offline** availability. A source
+that is not currently discoverable, or whose status cannot be confirmed, is shown as
+**Unknown** rather than inferred offline from its historical records. Refreshing
+source/status information keeps the selected filters. Clearing the daemon search
+returns to **All Sources** without resetting the type or directory filters. Sources
+are listed with the local daemon first, then remote sources by most recent violation.
+Each file is rotated independently by the configured
 `max_entries` and `retention_days`; cleanup runs during history reads and tray sync,
 removing an empty source file so inactive daemons age out of the filter list.
 

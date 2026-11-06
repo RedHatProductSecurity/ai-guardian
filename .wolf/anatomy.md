@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~20012 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21577 tok)
-- `CHANGELOG.md` — Change log (~83972 tok)
+- `CHANGELOG.md` — Change log (~84042 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -948,7 +948,7 @@
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7666 tok)
 - `UBUNTU_VM.md` — Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release) (~8328 tok)
 - `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3729 tok)
-- `VIOLATION_LOGGING.md` — Violation Logging (~5346 tok)
+- `VIOLATION_LOGGING.md` — Violation Logging (~5487 tok)
 
 ## docs/api/
 

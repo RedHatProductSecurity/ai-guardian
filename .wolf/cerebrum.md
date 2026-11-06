@@ -291,6 +291,13 @@
 
 ## Key Learnings
 
+- **2026-11-06 — Violations source filter (#2669):** Keep free-form daemon-name
+  search separate from the identity-valued exact-source selector. Apply the
+  case-folded query to source labels while preserving hashed source identity for
+  same-named remotes. On refresh, retain an exact selection even if its current
+  history count drops to zero; display refreshed availability or `Unknown` without
+  resetting the type, directory, or text filters.
+
 - **2026-11-06 — Docker CLI smoke witness permissions:** The readiness image runs
   as `sandbox` UID 1000, while the smoke runner's bind-mounted workspace is created
   host-owned with default `0755`. The mock tool creates its execution witness
@@ -306,7 +313,9 @@
   only this Codex step to use temporary `continue-on-error` for release readiness:
   retain the failed outcome, emit a warning/job summary, and do not call it a pass.
   Keep other failures blocking and do not infer that Codex shares local Podman's
-  Bubblewrap/devpts cause.
+  Bubblewrap/devpts cause. Run `42252905253` confirms this works: Codex remains
+  failed/unqualified, the warning/summary executes, and the readiness workflow is
+  successful because all other checks pass.
 
 - **2026-11-06 — Do not conflate Codex CI and local Podman failures:** Release
   Readiness run `42229172707` passed Codex's five denial cases and clean prompt,
