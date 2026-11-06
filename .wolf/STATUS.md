@@ -45,11 +45,15 @@ budget_tokens: 1000
 - Follow-up changes update the test to assert the retained engine error, use fixed
   engine labels, and print only a fixed incomplete-coverage summary to stderr;
   the returned hook warning remains actionable and credential-safe.
-- **Follow-up validation:** 199 related tests pass, 1 skipped. Ruff, Black
-  (Python 3.10 target), error-level Pylint, package Mypy, and `git diff --check`
-  pass. Follow-up changes are local and uncommitted; CI and CodeQL have not rerun.
-- **Next:** user review; publish the follow-up only if requested, then verify PR
-  matrix and CodeQL. No container image build or live cloud scan was run.
+- The branch was rebased locally onto `origin/main` at `90a02be2`. Conflict
+  resolution preserved both the main-branch KDE entry and #2671's changelog/status
+  entries. The user authorized committing and pushing the rebased history to
+  PR #2677; publication uses a lease-checked branch update.
+- **Post-rebase validation:** 430 related tests pass, 1 skipped, with 3 existing
+  dependency deprecation warnings. Ruff, Black (Python 3.10 target), error-level
+  Pylint, package Mypy, and `git diff --check` pass. CI and CodeQL have not rerun.
+- **Next:** verify CI/CodeQL on the updated PR. No container image build or live
+  cloud scan was run.
 - CodeQL check `128145447260` on `fa0ff0c9` reported four clear-text findings in
   the default `ai-guardian scan` text renderer (`message`, source positions, and
   snippets). The CLI now reports finding counts and affected paths only; explicit
