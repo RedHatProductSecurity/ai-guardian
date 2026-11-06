@@ -20,7 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Codex event/item types, fixed error/output categories, native tool-name counts,
   correlated function-output counts/shapes, and numeric statuses/exit codes. The
   local mock emits function calls as in-progress until argument deltas complete,
-  then reports the completed item.
+  then reports the completed item. A detected Bubblewrap permission denial now
+  prints a fixed explanation linking to `docs/CODEX_SANDBOX_RUNTIME.md`; the case
+  remains failed and no sandbox requirement is relaxed.
 - **Gemini native output containment:** Scan `AfterTool`'s model-visible
   `llmContent`, preserving text-part boundaries. Refuse results requiring
   sanitization through Gemini's native deny decision instead of returning an

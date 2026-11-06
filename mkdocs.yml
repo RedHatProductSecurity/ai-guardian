@@ -117,6 +117,7 @@ nav:
       - Pre-commit: PRE_COMMIT.md
   - Operations:
       - Sandbox CLI: Sandbox.md
+      - Codex Sandbox Runtime: CODEX_SANDBOX_RUNTIME.md
       - CLI/Runtime Integration Checklist: CLI_RUNTIME_CHECKLIST.md
       - Scanner Integration Checklist: SCANNER_INTEGRATION_CHECKLIST.md
       - Kubernetes: kubernetes.md

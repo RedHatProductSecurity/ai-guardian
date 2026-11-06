@@ -100,6 +100,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | Document | Description |
 |----------|-------------|
 | [Sandbox CLI](Sandbox.md) | Named Docker/Podman and OpenShell sandbox lifecycle management and native command mappings |
+| [Codex sandbox runtime](CODEX_SANDBOX_RUNTIME.md) | Diagnose Bubblewrap permission failures without weakening Codex or container isolation |
 | [CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md) | Onboarding and validation checklist for container and OpenShell CLI support |
 | [Container Image](../container/README.md) | UBI-based image with supported agent integrations, published to quay.io |
 
