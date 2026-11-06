@@ -220,6 +220,8 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("BeforeTool", ("allow", "block")),
             ("AfterTool", ("post",)),
         ),
+        post_output_transform=False,
+        platform_contract="Gemini AfterTool supports denial, not safe output replacement",
         cli_capable=True,
         cli_executables=("gemini",),
         agent_type_aliases=("gemini_cli",),
