@@ -316,6 +316,30 @@ opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with opener.open(sys.argv[1],timeout=2) as r: stats=json.loads(r.read())
 fields=('tool_offers','clean_tool_results','raw_tool_output_requests')
 out={key:stats[key].get(case,0) for key in fields}
+for key in ('function_call_outputs','known_function_call_outputs',
+            'unknown_function_call_outputs'):
+    values=stats.get(key,{})
+    out[key]=values.get(case,0) if isinstance(values,dict) else 0
+shapes=stats.get('function_call_output_shapes',{}).get(case,{})
+if not isinstance(shapes,dict): shapes={}
+for shape in ('string','object_success','object_other','array','null','scalar'):
+    value=shapes.get(shape,0)
+    out['function_call_output_'+shape]=value if type(value) is int and value >= 0 else 0
+categories=stats.get('function_call_output_categories',{}).get(case,{})
+if not isinstance(categories,dict): categories={}
+for category in ('expected_probe_output','unresolved_tool','unsupported_tool',
+                 'invalid_arguments','hook_blocked','approval_policy_rejected',
+                 'approval_reference','permission_denied','permission_denied_bwrap',
+                 'permission_denied_namespace','operation_not_permitted',
+                 'permission_reference','sandbox_reference','policy_reference',
+                 'timeout','error_text','other_text','empty'):
+    value=categories.get(category,0)
+    out['function_call_output_category_'+category]=value if type(value) is int and value >= 0 else 0
+tool_names=stats.get('command_tool_names',{}).get(case,{})
+if not isinstance(tool_names,dict): tool_names={}
+for name in ('bash','shell','exec_command','shell_command','run_shell_command'):
+    value=tool_names.get(name,0)
+    out['native_tool_name_'+name]=value if type(value) is int and value >= 0 else 0
 # Process-wide total: a prior delivery failure must never become a new baseline.
 out['raw_tool_output_requests']=sum(stats['raw_tool_output_requests'].values())
 path=Path('/sandbox/repo/.agent-cli-smoke-results')/(case+'.executed')
@@ -456,11 +480,12 @@ def build_podman_create_command(
     workspace: Path,
     name: str,
 ) -> List[str]:
-    """Smoke-only creation: normal routing, gated bootstrap, no agent capabilities.
+    """Smoke-only creation: normal rootless profile and gated firewall bootstrap.
 
-    Keep these test-specific restrictions out of the normal sandbox lifecycle.
-    Explicit UID mapping preserves temporary bind-mount ownership on rootless
-    Podman, while the image's sandbox user remains unprivileged on every host.
+    Keep these test-specific network/startup controls out of the normal sandbox
+    lifecycle. Match the managed container's keep-id mapping and image-defined
+    non-root user so Codex gets the same Podman user-namespace setup. The startup
+    gate rejects SYS_ADMIN and NET_ADMIN before setup begins.
     """
     command = [
         engine,
@@ -471,16 +496,7 @@ def build_podman_create_command(
         "--pull=never",
         "--name",
         name,
-        "--network",
-        "bridge",
-        "--userns",
-        "keep-id:uid=1000,gid=1000",
-        "--user",
-        "1000:1000",
-        "--cap-drop",
-        "ALL",
-        "--security-opt",
-        "no-new-privileges",
+        "--userns=keep-id",
         "--entrypoint",
         "/usr/local/bin/agent_cli_smoke_gate.py",
         "--http-proxy=false",
@@ -944,7 +960,8 @@ def build_firewall_command(
     The rootless engine's user namespace is an ancestor of the keep-id namespace,
     so NET_ADMIN also covers networks created before the OCI user mapping. The
     helper has no SYS_ADMIN, host PID namespace or host mounts with which to
-    switch to another network namespace. The agent container gets no capabilities.
+    switch to another network namespace. The agent keeps Podman's normal rootless
+    capability profile; the bootstrap gate rejects SYS_ADMIN and NET_ADMIN.
     """
     return [
         engine,
@@ -1289,6 +1306,38 @@ def _tool_evidence(
         "tool_offers",
         "clean_tool_results",
         "raw_tool_output_requests",
+        "function_call_outputs",
+        "known_function_call_outputs",
+        "unknown_function_call_outputs",
+        "function_call_output_string",
+        "function_call_output_object_success",
+        "function_call_output_object_other",
+        "function_call_output_array",
+        "function_call_output_null",
+        "function_call_output_scalar",
+        "function_call_output_category_expected_probe_output",
+        "function_call_output_category_unresolved_tool",
+        "function_call_output_category_unsupported_tool",
+        "function_call_output_category_invalid_arguments",
+        "function_call_output_category_hook_blocked",
+        "function_call_output_category_approval_policy_rejected",
+        "function_call_output_category_approval_reference",
+        "function_call_output_category_permission_denied",
+        "function_call_output_category_permission_denied_bwrap",
+        "function_call_output_category_permission_denied_namespace",
+        "function_call_output_category_operation_not_permitted",
+        "function_call_output_category_permission_reference",
+        "function_call_output_category_sandbox_reference",
+        "function_call_output_category_policy_reference",
+        "function_call_output_category_timeout",
+        "function_call_output_category_error_text",
+        "function_call_output_category_other_text",
+        "function_call_output_category_empty",
+        "native_tool_name_bash",
+        "native_tool_name_shell",
+        "native_tool_name_exec_command",
+        "native_tool_name_shell_command",
+        "native_tool_name_run_shell_command",
     }
     try:
         values = json.loads(result.stdout) if result.returncode == 0 else None
@@ -1779,7 +1828,7 @@ def _run_case(
     )
     if invocation.returncode == 124:
         print(f"FAIL {case.name}: agent CLI timed out")
-        _report_case_failure_details(case, invocation, {}, None)
+        _report_case_failure_details(case, invocation, {}, None, cli=cli)
         return False
 
     new_violations = _violation_counts(engine, name, timeout, diagnostics)
@@ -1822,6 +1871,7 @@ def _run_case(
             request_delta,
             hook_deltas=hook_deltas,
             tool_deltas=tool_deltas,
+            cli=cli,
         )
         return False
 
@@ -1886,6 +1936,154 @@ def _agent_error_category(invocation: subprocess.CompletedProcess) -> str:
     return "unclassified"
 
 
+def _codex_safe_error_category(message: object) -> str:
+    """Classify Codex error text with fixed labels; never return its content."""
+    if not isinstance(message, str):
+        return "no_message"
+    normalized = message.casefold()
+    if any(word in normalized for word in ("permission", "approval", "sandbox")):
+        return "policy_or_sandbox"
+    if any(word in normalized for word in ("unsupported", "not supported")):
+        return "unsupported_tool"
+    if any(word in normalized for word in ("not found", "no function", "unknown tool")):
+        return "unresolved_tool"
+    if any(word in normalized for word in ("invalid", "malformed", "parse error")):
+        return "invalid_response"
+    if any(word in normalized for word in ("missing", "required field")):
+        return "missing_field"
+    if any(word in normalized for word in ("argument", "parameter", "schema")):
+        return "argument_schema"
+    if "function" in normalized or "function_call" in normalized:
+        return "function_call"
+    if "local_shell" in normalized or "shell" in normalized:
+        return "shell_tool"
+    if "tool" in normalized:
+        return "tool"
+    if any(word in normalized for word in ("response", "request", "protocol")):
+        return "wire_protocol"
+    if "timeout" in normalized or "timed out" in normalized:
+        return "timeout"
+    if any(word in normalized for word in ("network", "connection", "http ")):
+        return "transport"
+    if any(word in normalized for word in ("command", "execution", "shell")):
+        return "execution"
+    return "other"
+
+
+def _codex_event_summary(invocation: subprocess.CompletedProcess) -> str:
+    """Summarize Codex event types/statuses without exposing content fields."""
+    started = 0
+    completed = 0
+    statuses: Dict[str, int] = {}
+    exit_codes: Dict[int, int] = {}
+    event_counts: Dict[str, int] = {}
+    item_type_counts: Dict[str, int] = {}
+    error_categories: Dict[str, int] = {}
+    known_events = {
+        "thread.started",
+        "turn.started",
+        "turn.completed",
+        "turn.failed",
+        "item.started",
+        "item.updated",
+        "item.completed",
+        "error",
+    }
+    known_items = {
+        "agent_message",
+        "reasoning",
+        "command_execution",
+        "file_change",
+        "mcp_tool_call",
+        "collab_tool_call",
+        "web_search",
+        "todo_list",
+        "error",
+        "local_shell_call",
+        "function_call",
+        "function_call_output",
+    }
+    for stream in (invocation.stdout, invocation.stderr):
+        if not isinstance(stream, str):
+            continue
+        for line in stream.splitlines():
+            try:
+                event = json.loads(line)
+            except (ValueError, RecursionError):
+                continue
+            if not isinstance(event, dict):
+                continue
+            raw_event_type = event.get("type")
+            event_type = (
+                raw_event_type
+                if isinstance(raw_event_type, str) and raw_event_type in known_events
+                else "other"
+            )
+            event_counts[event_type] = event_counts.get(event_type, 0) + 1
+            item = event.get("item")
+            if not isinstance(item, dict):
+                continue
+            raw_item_type = item.get("type")
+            item_type = (
+                raw_item_type
+                if isinstance(raw_item_type, str) and raw_item_type in known_items
+                else "other"
+            )
+            item_type_counts[item_type] = item_type_counts.get(item_type, 0) + 1
+            if item_type == "error":
+                category = _codex_safe_error_category(item.get("message"))
+                error_categories[category] = error_categories.get(category, 0) + 1
+            if item_type != "command_execution":
+                continue
+            if event_type == "item.started":
+                started += 1
+            elif event_type == "item.completed":
+                completed += 1
+                status = item.get("status")
+                if isinstance(status, str) and status in {
+                    "completed",
+                    "failed",
+                    "declined",
+                }:
+                    statuses[status] = statuses.get(status, 0) + 1
+                exit_code = item.get("exit_code")
+                if type(exit_code) is int:
+                    exit_codes[exit_code] = exit_codes.get(exit_code, 0) + 1
+
+    if not event_counts:
+        event_summary = "codex_event_stream=none"
+    else:
+        events = ",".join(
+            f"{event}:{count}" for event, count in sorted(event_counts.items())
+        )
+        items = (
+            ",".join(
+                f"{item}:{count}" for item, count in sorted(item_type_counts.items())
+            )
+            or "none"
+        )
+        event_summary = f"codex_event_stream=events[{events}],items[{items}]"
+    if error_categories:
+        errors = ",".join(
+            f"{category}:{count}"
+            for category, count in sorted(error_categories.items())
+        )
+        event_summary += f",codex_error_categories[{errors}]"
+
+    command_summary = [f"started:{started}", f"completed:{completed}"]
+    command_summary.extend(
+        f"status_{status}:{count}" for status, count in sorted(statuses.items())
+    )
+    command_summary.extend(
+        f"exit_code_{code}:{count}" for code, count in sorted(exit_codes.items())
+    )
+    if not started and not completed:
+        command_execution = "codex_command_execution=none"
+    else:
+        command_execution = "codex_command_execution=" + ",".join(command_summary)
+    return f"{event_summary}; {command_execution}"
+
+
 def _report_case_failure_details(
     case: SmokeCase,
     invocation: subprocess.CompletedProcess,
@@ -1894,6 +2092,7 @@ def _report_case_failure_details(
     *,
     hook_deltas: Optional[Dict[str, int]] = None,
     tool_deltas: Optional[Dict[str, int]] = None,
+    cli: Optional[str] = None,
 ) -> None:
     """Report aggregate smoke counters without printing agent output or prompts."""
     violations = (
@@ -1930,6 +2129,8 @@ def _report_case_failure_details(
                     or "none"
                 )
             )
+    if cli == "codex":
+        details.append(_codex_event_summary(invocation))
     print(f"  Diagnostics (aggregate only): {'; '.join(details)}", flush=True)
 
 

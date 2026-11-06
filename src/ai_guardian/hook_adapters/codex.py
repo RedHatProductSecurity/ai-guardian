@@ -1,7 +1,8 @@
 """OpenAI Codex (CLI + Desktop) hook adapter.
 
-Codex uses the same PascalCase format and JSON response structure as
-Claude Code, so this adapter extends BaseAgentAdapter.
+Codex uses PascalCase event names and mostly Claude-compatible responses, so
+this adapter extends BaseAgentAdapter. Its PreToolUse deny response also requires
+a sanitized, non-empty ``permissionDecisionReason``.
 
 Codex stores JSONL transcripts at:
     ~/.codex/sessions/YYYY/MM/DD/*.jsonl
@@ -9,9 +10,9 @@ Codex stores JSONL transcripts at:
 
 import glob
 import os
-from typing import ClassVar, Dict, FrozenSet, List
+from typing import ClassVar, Dict, FrozenSet, List, Optional
 
-from ai_guardian.constants import CODEX_DISPLAY_NAME
+from ai_guardian.constants import CODEX_DISPLAY_NAME, HookEvent
 from ai_guardian.hook_adapters.base_agent import BaseAgentAdapter
 from ai_guardian.ide_paths import get_ide_home
 
@@ -19,10 +20,11 @@ from ai_guardian.ide_paths import get_ide_home
 class CodexAdapter(BaseAgentAdapter):
     """Adapter for OpenAI Codex (CLI + Desktop).
 
-    Codex shares Claude Code's hook format (PascalCase events, same
-    JSON response structure). Codex command hooks include the documented
-    ``model`` field, while explicit ``_ide_type``/environment metadata is
-    also supported for forwarded or older payloads.
+    Codex shares Claude Code's PascalCase event names and command-hook envelope.
+    Its PreToolUse deny response requires ``permissionDecisionReason``. Codex
+    command hooks include the documented ``model`` field, while explicit
+    ``_ide_type``/environment metadata is also supported for forwarded or older
+    payloads.
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["codex"]
@@ -87,6 +89,27 @@ class CodexAdapter(BaseAgentAdapter):
         # permission_mode alone is intentionally not sufficient because it is
         # also present in Claude-style tool payloads.
         return any(key in hook_data for key in ("model", "turn_id"))
+
+    def _block_response(
+        self,
+        hook_event: HookEvent,
+        error_message: str,
+        violation_type: Optional[str] = None,
+        redacted_output: Optional[str] = None,
+    ) -> Dict:
+        """Add Codex's required reason to PreToolUse deny responses."""
+        response = super()._block_response(
+            hook_event, error_message, violation_type, redacted_output
+        )
+        if hook_event == HookEvent.PRE_TOOL_USE:
+            hook_specific_output = response.get("hookSpecificOutput")
+            if isinstance(hook_specific_output, dict):
+                # Keep the reason generic; matched input and secret values must
+                # never be copied into Codex's required decision-reason field.
+                hook_specific_output["permissionDecisionReason"] = (
+                    self._sanitize_block_reason(violation_type)
+                )
+        return response
 
     def get_default_transcript_paths(self) -> List[str]:
         """Return Codex JSONL transcript paths that exist on disk.

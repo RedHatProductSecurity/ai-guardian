@@ -34,8 +34,19 @@ Manual qualification on Linux/macOS Podman:
 14. Codex smoke uses the invocation-only hook-trust override only after the runner
     verifies a fresh `CODEX_HOME` contains exactly the canonical AI Guardian hooks,
     with no project/system/plugin or inline hook sources. It does not write trust
-    state. Ordinary Codex runs still require native review; every smoke event,
-    execution, raw-output and clean-exit assertion remains mandatory.
+    state or alter Codex's `workspace-write` sandbox/approval policy. Ordinary
+    Codex runs still require native review; every smoke event, execution,
+    raw-output and clean-exit assertion remains mandatory.
+15. Codex failure diagnostics may summarize allowlisted event/item types, fixed
+    error categories, counts of fixed native tool-name labels, and numeric
+    status/exit-code counts, plus fixed-label correlated function-output counts and
+    output-shape and fixed approval/permission/bwrap/sandbox/policy categories,
+    but never expose command, tool output, prompts, provider payloads, or error text.
+16. Podman smoke matches the normal rootless network, `keep-id` user namespace,
+    and capability defaults so Codex's `workspace-write` Bubblewrap sandbox gets
+    the same runtime setup. The gate rejects root, `SYS_ADMIN`, and `NET_ADMIN`;
+    the firewall helper alone receives `NET_ADMIN`. The firewall and every hook,
+    execution, raw-output and clean-exit assertion remain mandatory.
 """
 
 import importlib.util
@@ -276,31 +287,67 @@ def test_requested_version_mismatch_is_a_failure_not_different_generation_covera
 
 
 @pytest.mark.parametrize(
-    ("uid", "ready", "message"),
+    ("uid", "status", "ready", "message"),
     (
-        (0, True, "ERROR: smoke sandbox must be unprivileged with no-new-privileges."),
+        (
+            0,
+            "NoNewPrivs: 0\nCapEff: 0\nCapPrm: 0\nCapBnd: 00000000a80425fb\nCapAmb: 0\n",
+            True,
+            "ERROR: smoke sandbox requires a non-root user without SYS_ADMIN or NET_ADMIN.",
+        ),
         (
             1000,
+            "NoNewPrivs: 0\nCapEff: 1000\nCapPrm: 0\nCapBnd: 00000000a80425fb\nCapAmb: 0\n",
+            True,
+            "ERROR: smoke sandbox requires a non-root user without SYS_ADMIN or NET_ADMIN.",
+        ),
+        (
+            1000,
+            "NoNewPrivs: 0\nCapEff: 0\nCapPrm: 0\nCapBnd: 00000000a80425fb\nCapAmb: 0\n",
             False,
             "ERROR: smoke firewall readiness was not established; setup was not started.",
         ),
     ),
 )
 def test_unprotected_bootstrap_never_starts_daemon_or_agent(
-    uid, ready, message, monkeypatch, capsys
+    uid, status, ready, message, monkeypatch, capsys
 ):
-    """USER EXPERIENCE: missing firewall or retained agent privilege stops setup."""
+    """USER EXPERIENCE: root/admin capabilities or missing firewall stop setup."""
     path = Path(__file__).resolve().parents[2] / "scripts" / "agent_cli_smoke_gate.py"
     spec = importlib.util.spec_from_file_location("smoke_gate_ux", path)
     gate = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gate)
-    status = "NoNewPrivs: 1\nCapEff: 0\nCapPrm: 0\nCapBnd: 0\nCapAmb: 0\n"
     monkeypatch.setattr(gate.Path, "read_text", lambda *args, **kwargs: status)
     monkeypatch.setattr(gate.os, "geteuid", lambda: uid, raising=False)
     monkeypatch.setattr(gate, "wait_for_firewall", lambda: ready)
     monkeypatch.setattr(gate.os, "execv", lambda *args: pytest.fail("setup started"))
     assert gate.main() == 1
     assert capsys.readouterr().out.strip() == message
+
+
+def test_normal_rootless_profile_reaches_setup_after_firewall(monkeypatch, capsys):
+    """USER EXPERIENCE: normal Podman defaults are accepted after firewall setup."""
+    path = Path(__file__).resolve().parents[2] / "scripts" / "agent_cli_smoke_gate.py"
+    spec = importlib.util.spec_from_file_location("smoke_gate_default_profile_ux", path)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    status = "NoNewPrivs: 0\nCapEff: 2000\nCapPrm: 2000\nCapBnd: 00000000a80425fb\nCapAmb: 0\n"
+    monkeypatch.setattr(gate.sys, "argv", ["gate"])
+    monkeypatch.setattr(gate.Path, "read_text", lambda *args, **kwargs: status)
+    monkeypatch.setattr(gate.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(gate, "wait_for_firewall", lambda: True)
+    calls = []
+
+    def exec_entrypoint(*args):
+        calls.append(args)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(gate.os, "execv", exec_entrypoint)
+    with pytest.raises(SystemExit) as result:
+        gate.main()
+    assert result.value.code == 0
+    assert calls == [("/usr/local/bin/entrypoint.sh", ["entrypoint.sh"])]
+    assert capsys.readouterr().out == ""
 
 
 def stub_tool_case(
@@ -369,12 +416,14 @@ def test_codex_smoke_trust_override_is_one_invocation_and_hook_scoped(
     """USER EXPERIENCE: only verified disposable Codex hooks get the one-shot override.
 
     The runner must verify the exact AI Guardian hook set before invocation. The
-    override must not persist trust or relax Codex's command approval/sandbox mode;
-    all existing hook, execution, raw-delivery and clean-exit checks remain required.
+    hook-trust override is one-invocation only; it must not change Codex's
+    workspace-write sandbox or approval policy. All hook, execution, raw-delivery
+    and clean-exit checks remain required.
     """
     codex_command = runner.build_agent_command("codex", "smoke", "synthetic prompt")
 
     assert codex_command.count("--dangerously-bypass-hook-trust") == 1
+    assert "--sandbox" not in codex_command
     assert "--dangerously-bypass-approvals-and-sandbox" not in codex_command
     assert "--yolo" not in codex_command
     assert "--dangerously-bypass-hook-trust" not in runner.build_agent_command(
@@ -562,6 +611,39 @@ def test_tool_offers_and_violation_logs_alone_never_qualify_output_protection(
     output = capsys.readouterr().out
     assert f"FAIL tool_output_secret: {message}" in output
     assert "Diagnostics (aggregate only):" in output
+    assert "private" not in output
+
+
+def test_codex_failure_diagnostics_exclude_command_and_output(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: Codex diagnostics classify execution without dumping data."""
+    case = stub_tool_case(runner, monkeypatch, "clean_tool", post_hook=1, executed=0)
+    event = {
+        "type": "item.completed",
+        "item": {
+            "type": "command_execution",
+            "command": "private-command-sentinel",
+            "aggregated_output": "private-output-sentinel",
+            "status": "failed",
+            "exit_code": 127,
+        },
+    }
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, json.dumps(event), ""
+        ),
+    )
+
+    assert not runner._run_case("podman", "smoke", "codex", "smoke", case, 30)
+    output = capsys.readouterr().out
+    assert "FAIL clean_tool: the expected tool did not execute exactly once" in output
+    assert (
+        "codex_command_execution=started:0,completed:1,status_failed:1,exit_code_127:1"
+        in output
+    )
     assert "private" not in output
 
 

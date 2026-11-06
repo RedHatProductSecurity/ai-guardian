@@ -243,6 +243,9 @@ def test_codex_smoke_creation_uses_a_dedicated_codex_home(tmp_path):
 
     assert "CODEX_HOME=/sandbox/.codex" in docker
     assert "CODEX_HOME=/sandbox/.codex" in podman
+    assert not any(
+        value.startswith("AI_GUARDIAN_CODEX_SANDBOX_MODE=") for value in podman
+    )
 
 
 def test_codex_hook_scope_probe_accepts_only_generated_ai_guardian_hooks(tmp_path):
@@ -470,7 +473,7 @@ def test_internal_network_command_requests_runtime_egress_isolation():
     ]
 
 
-def test_podman_smoke_uses_normal_bridge_without_agent_capabilities(tmp_path):
+def test_podman_smoke_matches_normal_rootless_container_profile(tmp_path):
     runner = _load(RUNNER_PATH, "agent_cli_smoke_firewall_container")
     command = runner.build_podman_create_command(
         "podman",
@@ -482,13 +485,13 @@ def test_podman_smoke_uses_normal_bridge_without_agent_capabilities(tmp_path):
         "ag-cli-smoke-opencode-1234abcd",
     )
     assert command[:2] == ["podman", "run"]
-    assert command[command.index("--network") + 1] == "bridge"
-    assert command[command.index("--userns") + 1] == "keep-id:uid=1000,gid=1000"
-    assert command[command.index("--user") + 1] == "1000:1000"
-    assert command[command.index("--cap-drop") + 1] == "ALL"
+    assert "--network" not in command
+    assert "--userns=keep-id" in command
+    assert "--user" not in command
+    assert "--cap-drop" not in command
     assert "--cap-add" not in command
     assert "--privileged" not in command
-    assert "no-new-privileges" in command
+    assert "--security-opt" not in command
     assert (
         command[command.index("--entrypoint") + 1]
         == "/usr/local/bin/agent_cli_smoke_gate.py"
@@ -1533,8 +1536,14 @@ def test_local_mock_stats_report_tool_availability_without_payloads():
         "requests": {"ssrf": 2},
         "command_tool_requests": {"ssrf": 1},
         "tool_offers": {"ssrf": 1},
+        "command_tool_names": {"ssrf": {"bash": 1}},
         "clean_tool_results": {},
         "raw_tool_output_requests": {},
+        "function_call_outputs": {},
+        "known_function_call_outputs": {},
+        "unknown_function_call_outputs": {},
+        "function_call_output_shapes": {},
+        "function_call_output_categories": {},
     }
     assert "curl" not in json.dumps(stats)
 
@@ -1542,6 +1551,64 @@ def test_local_mock_stats_report_tool_availability_without_payloads():
         {"tools": tools}, "ssrf", call_number=2, tool_call_number=1
     )
     assert response["choices"][0]["finish_reason"] == "tool_calls"
+
+
+def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_tool_name_evidence")
+    expected = {
+        "executed": 1,
+        "tool_offers": 1,
+        "clean_tool_results": 0,
+        "raw_tool_output_requests": 0,
+        "function_call_outputs": 0,
+        "known_function_call_outputs": 0,
+        "unknown_function_call_outputs": 0,
+        "function_call_output_string": 0,
+        "function_call_output_object_success": 0,
+        "function_call_output_object_other": 0,
+        "function_call_output_array": 0,
+        "function_call_output_null": 0,
+        "function_call_output_scalar": 0,
+        "function_call_output_category_expected_probe_output": 0,
+        "function_call_output_category_unresolved_tool": 0,
+        "function_call_output_category_unsupported_tool": 0,
+        "function_call_output_category_invalid_arguments": 0,
+        "function_call_output_category_hook_blocked": 0,
+        "function_call_output_category_approval_policy_rejected": 0,
+        "function_call_output_category_approval_reference": 0,
+        "function_call_output_category_permission_denied": 0,
+        "function_call_output_category_permission_denied_bwrap": 0,
+        "function_call_output_category_permission_denied_namespace": 0,
+        "function_call_output_category_operation_not_permitted": 0,
+        "function_call_output_category_permission_reference": 0,
+        "function_call_output_category_sandbox_reference": 0,
+        "function_call_output_category_policy_reference": 0,
+        "function_call_output_category_timeout": 0,
+        "function_call_output_category_error_text": 0,
+        "function_call_output_category_other_text": 0,
+        "function_call_output_category_empty": 0,
+        "native_tool_name_bash": 0,
+        "native_tool_name_shell": 1,
+        "native_tool_name_exec_command": 0,
+        "native_tool_name_shell_command": 0,
+        "native_tool_name_run_shell_command": 0,
+    }
+    calls = {}
+
+    def fake_exec(_engine, _name, command, _timeout, diagnostics=None):
+        del diagnostics
+        calls["reader"] = command[2]
+        return subprocess.CompletedProcess(command, 0, json.dumps(expected), "")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+
+    assert runner._tool_evidence("podman", "sandbox", "clean_tool", 30) == expected
+    for name in ("bash", "shell", "exec_command", "shell_command", "run_shell_command"):
+        assert f"'{name}'" in calls["reader"]
+    assert "out['native_tool_name_'+name]" in calls["reader"]
+    assert "out['function_call_output_'+shape]" in calls["reader"]
+    assert "out['function_call_output_category_'+category]" in calls["reader"]
+    assert "private-tool-name" not in calls["reader"]
 
 
 def test_codex_mock_response_uses_responses_api_stream_events():
@@ -1561,13 +1628,40 @@ def test_codex_mock_response_uses_responses_api_stream_events():
     events = list(mock.response_events(response))
     call = response["output"][0]
     arguments = json.loads(call["arguments"])
+    added_call = next(
+        event["item"]
+        for event in events
+        if event["type"] == "response.output_item.added"
+    )
+    completed_call = next(
+        event["item"]
+        for event in events
+        if event["type"] == "response.output_item.done"
+    )
 
     assert call["type"] == "function_call"
     assert arguments["command"][:2] == ["bash", "-lc"]
+    assert added_call["status"] == "in_progress"
+    assert added_call["arguments"] == ""
+    assert completed_call["status"] == "completed"
+    assert completed_call["arguments"] == call["arguments"]
     assert any(
         event["type"] == "response.function_call_arguments.delta" for event in events
     )
     assert events[-1]["type"] == "response.completed"
+
+    final_response = mock.responses_response({"tools": tools}, "allowed", 2)
+    message_events = list(mock.response_events(final_response))
+    added_message = next(
+        event["item"]
+        for event in message_events
+        if event["type"] == "response.output_item.added"
+    )
+    assert added_message["status"] == "in_progress"
+    assert added_message["content"] == []
+    assert any(
+        event["type"] == "response.content_part.done" for event in message_events
+    )
 
 
 def test_gemini_mock_builds_native_function_call_response():
@@ -2077,7 +2171,12 @@ def test_agent_case_failures_report_only_aggregate_diagnostics(
     hook_reads = iter(
         ({}, {"pretooluse" if case_name == "config_exfil" else "prompt": 1})
     )
-    tool_reads = iter(({}, {"tool_offers": 1}))
+    tool_reads = iter(
+        (
+            {},
+            {"tool_offers": 1, "native_tool_name_shell": 1},
+        )
+    )
     invocation = subprocess.CompletedProcess(
         ["codex", "exec"],
         exit_code,
@@ -2102,6 +2201,8 @@ def test_agent_case_failures_report_only_aggregate_diagnostics(
 
     output = capsys.readouterr().out
     assert expected_diagnostic in output
+    if case_name == "config_exfil":
+        assert "native_tool_name_shell=+1,tool_offers=+1" in output
     assert "agent output must not be printed" not in output
     assert "agent error must not be printed" not in output
 
@@ -2158,6 +2259,77 @@ def test_cli_failure_classification_exposes_only_a_fixed_category(
     assert f"agent_error_category={category}" in output
     assert "private" not in output
     assert "diagnostic body" not in output
+
+
+def test_codex_event_summary_omits_command_and_output_content():
+    runner = _load(RUNNER_PATH, "agent_cli_codex_event_summary")
+    invocation = subprocess.CompletedProcess(
+        ["codex", "exec", "--json"],
+        0,
+        stdout="\n".join(
+            (
+                json.dumps(
+                    {
+                        "type": "item.started",
+                        "item": {
+                            "type": "command_execution",
+                            "command": "private-command-sentinel",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "command_execution",
+                            "command": "private-command-sentinel",
+                            "aggregated_output": "private-output-sentinel",
+                            "status": "failed",
+                            "exit_code": 127,
+                        },
+                    }
+                ),
+            )
+        ),
+        stderr=json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "local_shell_call",
+                    "command": "private-command-sentinel",
+                    "output": "private-output-sentinel",
+                    "status": "completed",
+                },
+            }
+        ),
+    )
+
+    summary = runner._codex_event_summary(invocation)
+
+    assert summary == (
+        "codex_event_stream=events[item.completed:2,item.started:1],"
+        "items[command_execution:2,local_shell_call:1]; "
+        "codex_command_execution=started:1,completed:1,status_failed:1,exit_code_127:1"
+    )
+    assert "private" not in summary
+
+
+def test_codex_error_categories_use_fixed_labels_only():
+    runner = _load(RUNNER_PATH, "agent_cli_codex_safe_error_category")
+
+    assert (
+        runner._codex_safe_error_category(
+            "Unsupported shell tool private-error-sentinel"
+        )
+        == "unsupported_tool"
+    )
+    assert (
+        runner._codex_safe_error_category("local_shell request failed") == "shell_tool"
+    )
+    assert (
+        runner._codex_safe_error_category("invalid function_call") == "invalid_response"
+    )
+    assert runner._codex_safe_error_category(None) == "no_message"
 
 
 def test_sandbox_readiness_waits_for_loaded_daemon(monkeypatch, capsys):

@@ -693,6 +693,27 @@ class TestNormalization:
         assert adapter.ide_type == IDEType.CLAUDE_CODE
         assert adapter.agent_type == "codex"
 
+    def test_codex_pretool_deny_includes_required_sanitized_reason(self):
+        response = CodexAdapter()._block_response(
+            HookEvent.PRE_TOOL_USE,
+            "Raw command details must not be included",
+            violation_type="secret_detected",
+        )
+
+        hook_output = response["hookSpecificOutput"]
+        assert hook_output["permissionDecision"] == "deny"
+        assert hook_output["permissionDecisionReason"] == (
+            "Operation blocked by ai-guardian: secret detected"
+        )
+        assert "Raw command details" not in hook_output["permissionDecisionReason"]
+
+    def test_codex_clean_pretool_does_not_add_a_permission_decision(self):
+        response = CodexAdapter().format_response(
+            has_secrets=False, hook_event=HookEvent.PRE_TOOL_USE
+        )
+
+        assert json.loads(response["output"]) == {}
+
 
 # ── Shared Response Methods (#1527) ────────────────────────────────────
 

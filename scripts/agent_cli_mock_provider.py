@@ -40,13 +40,26 @@ TOOL_COMMANDS.update(
         for case in OUTPUT_CASES
     }
 )
+NATIVE_COMMAND_TOOL_NAMES = (
+    "bash",
+    "shell",
+    "exec_command",
+    "shell_command",
+    "run_shell_command",
+)
 CASE_MARKER = re.compile(r"AGENT_CLI_SMOKE_CASE: ([a-z0-9_]+)")
 RESULT_MARKER = re.compile(r"AGENT_CLI_SMOKE_TOOL_RESULT: ([a-z0-9_]+)")
 REQUEST_COUNTS: Counter = Counter()
 COMMAND_TOOL_REQUEST_COUNTS: Counter = Counter()
 TOOL_OFFER_COUNTS: Counter = Counter()
+COMMAND_TOOL_NAME_COUNTS: Dict[str, Counter] = {}
 CLEAN_TOOL_RESULT_COUNTS: Counter = Counter()
 RAW_TOOL_OUTPUT_COUNTS: Counter = Counter()
+FUNCTION_CALL_OUTPUT_COUNTS: Counter = Counter()
+KNOWN_FUNCTION_CALL_OUTPUT_COUNTS: Counter = Counter()
+UNKNOWN_FUNCTION_CALL_OUTPUT_COUNTS: Counter = Counter()
+FUNCTION_CALL_OUTPUT_SHAPE_COUNTS: Dict[str, Counter] = {}
+FUNCTION_CALL_OUTPUT_CATEGORY_COUNTS: Dict[str, Counter] = {}
 TOOL_IDENTITIES: Dict[str, str] = {}
 GEMINI_TOOL_CASES: Dict[str, str] = {}
 COUNTS_LOCK = threading.Lock()
@@ -179,6 +192,50 @@ def _tool_result_strings(value: Any) -> Iterable[str]:
         yield from _strings(decoded)
 
 
+def _function_call_output_category(case: str, output: Any) -> str:
+    """Classify tool-result content to fixed labels without retaining its text."""
+    texts = list(_tool_result_strings(output))
+    text = " ".join(texts).casefold()
+    if case in OUTPUT_CASES and tool_output(case).strip() in text:
+        return "expected_probe_output"
+    if not text.strip():
+        return "empty"
+    if any(
+        marker in text
+        for marker in ("no function found", "unknown tool", "tool not found")
+    ):
+        return "unresolved_tool"
+    if any(marker in text for marker in ("unsupported call", "unsupported tool")):
+        return "unsupported_tool"
+    if "invalid arguments" in text or "argument parse" in text:
+        return "invalid_arguments"
+    if "pretooluse" in text and any(marker in text for marker in ("blocked", "denied")):
+        return "hook_blocked"
+    if "approval policy" in text and "reject command" in text:
+        return "approval_policy_rejected"
+    if "permission denied" in text:
+        if "bwrap" in text or "bubblewrap" in text:
+            return "permission_denied_bwrap"
+        if "namespace" in text or "uid map" in text:
+            return "permission_denied_namespace"
+        return "permission_denied"
+    if "operation not permitted" in text:
+        return "operation_not_permitted"
+    if "approval" in text:
+        return "approval_reference"
+    if "permission" in text:
+        return "permission_reference"
+    if "sandbox" in text:
+        return "sandbox_reference"
+    if "policy" in text:
+        return "policy_reference"
+    if any(marker in text for marker in ("timeout", "timed out")):
+        return "timeout"
+    if any(marker in text for marker in ("failed", "failure", "error")):
+        return "error_text"
+    return "other_text"
+
+
 def _observe_request(payload: Dict[str, Any]) -> None:
     """Inspect the provider boundary in memory; persist only fixed-case counts.
 
@@ -197,11 +254,54 @@ def _observe_request(payload: Dict[str, Any]) -> None:
         if case == "clean_tool"
         and tool_output(case).strip() in "\n".join(_tool_result_strings(output))
     )
+    case = request_case(payload)
+    function_call_outputs = [
+        item
+        for item in _objects(payload.get("input"))
+        if item.get("type") == "function_call_output"
+    ]
+    correlated_outputs = sum(
+        1
+        for item in function_call_outputs
+        if _known_tool_case(item.get("call_id")) is not None
+    )
+    output_shapes: Counter = Counter()
+    output_categories: Counter = Counter()
+    for item in function_call_outputs:
+        output = item.get("output")
+        output_categories[_function_call_output_category(case, output)] += 1
+        if isinstance(output, str):
+            shape = "string"
+        elif isinstance(output, dict):
+            shape = (
+                "object_success"
+                if type(output.get("success")) is bool
+                else "object_other"
+            )
+        elif isinstance(output, list):
+            shape = "array"
+        elif output is None:
+            shape = "null"
+        else:
+            shape = "scalar"
+        output_shapes[shape] += 1
     with COUNTS_LOCK:
         for case in raw_cases:
             RAW_TOOL_OUTPUT_COUNTS[case] += 1
         if clean_results:
             CLEAN_TOOL_RESULT_COUNTS["clean_tool"] += clean_results
+        if function_call_outputs:
+            FUNCTION_CALL_OUTPUT_COUNTS[case] += len(function_call_outputs)
+            KNOWN_FUNCTION_CALL_OUTPUT_COUNTS[case] += correlated_outputs
+            UNKNOWN_FUNCTION_CALL_OUTPUT_COUNTS[case] += (
+                len(function_call_outputs) - correlated_outputs
+            )
+            shape_counts = FUNCTION_CALL_OUTPUT_SHAPE_COUNTS.setdefault(case, Counter())
+            shape_counts.update(output_shapes)
+            category_counts = FUNCTION_CALL_OUTPUT_CATEGORY_COUNTS.setdefault(
+                case, Counter()
+            )
+            category_counts.update(output_categories)
 
 
 def _command_tool(tool: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
@@ -257,7 +357,8 @@ def _find_command_tool(payload: Dict[str, Any]) -> Optional[Tuple[str, Dict[str,
 
 def _record_request(case: str, payload: Dict[str, Any]) -> Tuple[int, int]:
     """Track request and native-shell schema counts without retaining payloads."""
-    has_command_tool = _find_command_tool(payload) is not None
+    command_tool = _find_command_tool(payload)
+    has_command_tool = command_tool is not None
     with COUNTS_LOCK:
         REQUEST_COUNTS[case] += 1
         call_number = REQUEST_COUNTS[case]
@@ -267,6 +368,10 @@ def _record_request(case: str, payload: Dict[str, Any]) -> Tuple[int, int]:
             tool_call_number = COMMAND_TOOL_REQUEST_COUNTS[case]
             if case in TOOL_CASES and tool_call_number == 1:
                 TOOL_OFFER_COUNTS[case] += 1
+                assert command_tool is not None
+                name = command_tool[0].casefold()
+                if name in NATIVE_COMMAND_TOOL_NAMES:
+                    COMMAND_TOOL_NAME_COUNTS.setdefault(case, Counter())[name] += 1
     return call_number, tool_call_number
 
 
@@ -277,8 +382,22 @@ def _stats() -> Dict[str, Dict[str, int]]:
             "requests": dict(REQUEST_COUNTS),
             "command_tool_requests": dict(COMMAND_TOOL_REQUEST_COUNTS),
             "tool_offers": dict(TOOL_OFFER_COUNTS),
+            "command_tool_names": {
+                case: dict(counts) for case, counts in COMMAND_TOOL_NAME_COUNTS.items()
+            },
             "clean_tool_results": dict(CLEAN_TOOL_RESULT_COUNTS),
             "raw_tool_output_requests": dict(RAW_TOOL_OUTPUT_COUNTS),
+            "function_call_outputs": dict(FUNCTION_CALL_OUTPUT_COUNTS),
+            "known_function_call_outputs": dict(KNOWN_FUNCTION_CALL_OUTPUT_COUNTS),
+            "unknown_function_call_outputs": dict(UNKNOWN_FUNCTION_CALL_OUTPUT_COUNTS),
+            "function_call_output_shapes": {
+                case: dict(counts)
+                for case, counts in FUNCTION_CALL_OUTPUT_SHAPE_COUNTS.items()
+            },
+            "function_call_output_categories": {
+                case: dict(counts)
+                for case, counts in FUNCTION_CALL_OUTPUT_CATEGORY_COUNTS.items()
+            },
         }
 
 
@@ -560,8 +679,13 @@ def response_events(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
         "type": "response.created",
         "response": {**response, "status": "in_progress", "output": []},
     }
-    yield {"type": "response.output_item.added", "output_index": 0, "item": item}
     if item["type"] == "function_call":
+        added_item = {**item, "status": "in_progress", "arguments": ""}
+        yield {
+            "type": "response.output_item.added",
+            "output_index": 0,
+            "item": added_item,
+        }
         yield {
             "type": "response.function_call_arguments.delta",
             "item_id": item["id"],
@@ -575,6 +699,12 @@ def response_events(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
             "arguments": item["arguments"],
         }
     else:
+        added_item = {**item, "status": "in_progress", "content": []}
+        yield {
+            "type": "response.output_item.added",
+            "output_index": 0,
+            "item": added_item,
+        }
         content = item["content"][0]
         yield {
             "type": "response.content_part.added",
@@ -596,6 +726,13 @@ def response_events(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
             "output_index": 0,
             "content_index": 0,
             "text": content["text"],
+        }
+        yield {
+            "type": "response.content_part.done",
+            "item_id": item["id"],
+            "output_index": 0,
+            "content_index": 0,
+            "part": content,
         }
     yield {"type": "response.output_item.done", "output_index": 0, "item": item}
     yield {"type": "response.completed", "response": response}

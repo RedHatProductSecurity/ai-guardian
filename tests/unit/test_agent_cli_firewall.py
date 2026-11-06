@@ -18,12 +18,14 @@ def load_script(name):
     return module
 
 
-def restricted_status(**changes):
+def rootless_default_status(**changes):
     fields = {
-        "NoNewPrivs": "1",
+        "NoNewPrivs": "0",
         "CapEff": "0",
         "CapPrm": "0",
-        "CapBnd": "0",
+        # Representative rootless-container defaults; neither SYS_ADMIN nor
+        # NET_ADMIN is available, while the bounding set is not empty.
+        "CapBnd": "00000000a80425fb",
         "CapAmb": "0",
     }
     fields.update(changes)
@@ -69,16 +71,18 @@ def test_firewall_setup_fails_closed(failure, monkeypatch):
     assert firewall.main() == 1
 
 
-def test_agent_requires_no_capabilities_and_no_new_privileges():
+def test_agent_accepts_rootless_defaults_but_rejects_admin_capabilities():
     gate = load_script("agent_cli_smoke_gate")
-    assert gate.agent_privileges_are_restricted(restricted_status())
-    for key in ("NoNewPrivs", "CapEff", "CapPrm", "CapBnd", "CapAmb"):
-        value = "0" if key == "NoNewPrivs" else "1000"
-        assert not gate.agent_privileges_are_restricted(
-            restricted_status(**{key: value})
-        )
-    assert not gate.agent_privileges_are_restricted("")
-    assert not gate.agent_privileges_are_restricted(restricted_status(CapBnd="invalid"))
+    assert gate.agent_has_no_container_admin_capabilities(rootless_default_status())
+    for key in gate.CAPABILITY_FIELDS:
+        for bit in (12, 21):
+            assert not gate.agent_has_no_container_admin_capabilities(
+                rootless_default_status(**{key: f"{1 << bit:x}"})
+            )
+    assert not gate.agent_has_no_container_admin_capabilities("")
+    assert not gate.agent_has_no_container_admin_capabilities(
+        rootless_default_status(CapBnd="invalid")
+    )
 
 
 @pytest.mark.skipif(
@@ -129,7 +133,7 @@ def test_gate_rejects_unreadable_marker(tmp_path, monkeypatch):
 def test_missing_firewall_never_starts_setup(monkeypatch):
     gate = load_script("agent_cli_smoke_gate")
     monkeypatch.setattr(
-        gate.Path, "read_text", lambda *args, **kwargs: restricted_status()
+        gate.Path, "read_text", lambda *args, **kwargs: rootless_default_status()
     )
     monkeypatch.setattr(gate.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(gate, "wait_for_firewall", lambda: False)
@@ -142,7 +146,7 @@ def test_missing_firewall_never_starts_setup(monkeypatch):
 def test_gate_starts_original_entrypoint_only_after_readiness(monkeypatch):
     gate = load_script("agent_cli_smoke_gate")
     monkeypatch.setattr(
-        gate.Path, "read_text", lambda *args, **kwargs: restricted_status()
+        gate.Path, "read_text", lambda *args, **kwargs: rootless_default_status()
     )
     monkeypatch.setattr(gate.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(gate, "wait_for_firewall", lambda: True)
