@@ -553,6 +553,13 @@ def test_main_sets_up_smoke_isolation_and_cleans_up(
             "create",
         ]:
             root = next(tmp_path.glob("ai-guardian-agent-cli-*"))
+            workspace = root / "workspace"
+            witness_directory = workspace / ".agent-cli-smoke-results"
+            assert witness_directory.is_dir()
+            if os.name == "posix":
+                assert os.stat(root).st_mode & 0o077 == 0
+                assert os.stat(workspace).st_mode & 0o022 == 0
+                assert os.stat(witness_directory).st_mode & 0o003 == 0o003
             config_dir = root / "smoke-config"
             config = json.loads((config_dir / "ai-guardian.json").read_text())
             assert config["secret_redaction"]["enabled"] is True

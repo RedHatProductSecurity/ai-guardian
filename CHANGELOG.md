@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   named step and continue to remaining clients after an individual smoke failure,
   while keeping prerequisites, cancellation, Claude consent, and job failure
   behavior intact. Rename jobs to describe their test coverage.
+- **CLI smoke execution witness:** Prepare only the disposable witness directory
+  as writable by the container user on POSIX hosts, so Docker UID mismatches do not
+  prevent native tool execution. Keep the rest of the workspace non-writable to
+  other users and retain all execution-evidence checks.
 - **Gemini native output containment:** Scan `AfterTool`'s model-visible
   `llmContent`, preserving text-part boundaries. Refuse results requiring
   sanitization through Gemini's native deny decision instead of returning an
