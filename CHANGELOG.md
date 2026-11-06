@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   then reports the completed item. A detected Bubblewrap permission denial now
   prints a fixed explanation linking to `docs/CODEX_SANDBOX_RUNTIME.md`; the case
   remains failed and no sandbox requirement is relaxed.
+- **Release Readiness CLI reporting:** Give each configured CLI smoke its own
+  named step and continue to remaining clients after an individual smoke failure,
+  while keeping prerequisites, cancellation, Claude consent, and job failure
+  behavior intact. Rename jobs to describe their test coverage.
 - **Gemini native output containment:** Scan `AfterTool`'s model-visible
   `llmContent`, preserving text-part boundaries. Refuse results requiring
   sanitization through Gemini's native deny decision instead of returning an
