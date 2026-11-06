@@ -1534,21 +1534,15 @@ def scan_command(args) -> int:
         if findings:
             print("\n🛡️ AI Guardian Scan Results\n")
             print(f"Found {len(findings)} security issue(s):\n")
+            print("Finding details are withheld from terminal output.")
+            print(
+                "Use --json-output or --sarif-output for a detailed report; "
+                "treat report files as sensitive.\n"
+            )
             for i, finding in enumerate(findings, 1):
-                print(f"{i}. [{finding['rule_id']}] {finding['message']}")
+                print(f"{i}. Security finding detected")
                 if finding.get("file_path"):
-                    print(f"   File: {finding['file_path']}", end="")
-                    if finding.get("line_number"):
-                        if finding.get("start_column") is not None:
-                            print(
-                                f":{finding['line_number']}:{finding['start_column'] + 1}"
-                            )
-                        else:
-                            print(f":{finding['line_number']}")
-                    else:
-                        print()
-                if finding.get("snippet"):
-                    print(f"   Code: {finding['snippet']}")
+                    print(f"   File: {finding['file_path']}")
                 print()
         else:
             if code_inspector_msg:

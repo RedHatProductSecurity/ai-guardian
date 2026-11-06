@@ -315,6 +315,13 @@
   Keep returned warnings actionable using fixed labels and print only a fixed
   incomplete-coverage summary.
 
+- **2026-11-06 — #2677 scan-output CodeQL alerts:** The default CLI text renderer
+  must not echo finding messages, source positions, or snippets: these may contain
+  secrets or other scanned content. Keep the terminal summary to counts and file
+  paths. Explicit JSON/SARIF reports remain detailed only when requested and must
+  be described as sensitive. Add an affected UX contract and rely on a fresh
+  GitHub CodeQL run to establish that the alert is resolved; do not suppress it.
+
 - **2026-11-06 — Docker CLI smoke witness permissions:** The readiness image runs
   as `sandbox` UID 1000, while the smoke runner's bind-mounted workspace is created
   host-owned with default `0755`. The mock tool creates its execution witness
