@@ -37,11 +37,20 @@ budget_tokens: 1000
   are unchanged. Safe cloud failure/readiness warnings follow `on_scan_error`.
 - Updated container/scanner docs, CHANGELOG, unit tests and the complete scanner
   warning UX contract. Added DAF progress note and GitHub progress comment.
-- **Validation:** 461 related tests pass, 1 skipped. Ruff, Black (Python 3.10
-  target), error-level Pylint, package Mypy, buglog JSON validation, and
-  `git diff --check` pass. No container image build or live cloud scan was run.
-- Changes remain local and uncommitted; no commit, push or PR was created.
-  **Next:** user review and external `daf complete`.
+- The implementation was committed as `1e93f38e` on branch `2671` and pushed to
+  PR #2677. PR CI failed all eight Python matrix jobs on one outdated assertion:
+  `FirstMatchStrategy` now returns attempted engine failures, not the old generic
+  no-scanners message. CodeQL also flagged the detailed scanner warning printed to
+  stderr.
+- Follow-up changes update the test to assert the retained engine error, use fixed
+  engine labels, and print only a fixed incomplete-coverage summary to stderr;
+  the returned hook warning remains actionable and credential-safe.
+- **Follow-up validation:** 199 related tests pass, 1 skipped. Ruff, Black
+  (Python 3.10 target), error-level Pylint, package Mypy, and `git diff --check`
+  pass. Follow-up changes are local and uncommitted; CI and CodeQL have not rerun.
+- **Next:** user review; publish the follow-up only if requested, then verify PR
+  matrix and CodeQL. No container image build or live cloud scan was run.
+
 ## Issue #2669 implementation — 2026-11-06
 
 - Continued managed DAF `open` session

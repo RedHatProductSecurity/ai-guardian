@@ -96,7 +96,7 @@ class TestFirstMatchStrategyExecute(unittest.TestCase):
         self.assertFalse(result.has_secrets)
         self.assertEqual(result.engine, "trufflehog")
 
-    def test_no_engines_available(self):
+    def test_reports_error_when_all_engines_are_unavailable(self):
         engines = [_make_engine("gitleaks")]
         scanner_fn = _make_scanner_fn(
             {
@@ -113,7 +113,8 @@ class TestFirstMatchStrategyExecute(unittest.TestCase):
         result = strategy.execute(engines, scanner_fn, "/tmp/src", "/tmp/report")
 
         self.assertFalse(result.has_secrets)
-        self.assertIn("No scanners available", result.error)
+        self.assertEqual(result.engine, "first-match")
+        self.assertIn("gitleaks: Binary not found: gitleaks", result.error)
 
 
 class TestFirstMatchFallthroughBehavior(unittest.TestCase):
