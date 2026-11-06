@@ -94,8 +94,13 @@ path, not unmodified `@strict` post-tool blocking: Claude's post-tool
 A pass with this config must not be reported as qualification of that strict
 block behavior. A client that logs a finding but still sends the original value
 to the mock fails; upstream limitations are not converted to passes or skips.
-Missing or unapproved native hooks also fail the evidence checks. The runner does
-not approve hooks or change their trust state.
+Missing native hooks still fail the evidence checks. The Codex smoke runner uses
+Codex's documented invocation-only hook-trust override only after verifying that
+its disposable `CODEX_HOME` contains exactly the canonical AI Guardian hook set,
+with no project, system, plugin, or inline hook sources. The override is not
+persisted and does not change Codex trust state; ordinary Codex sessions still
+require native review. All prompt, tool execution, hook, raw-output, and successful
+clean-exit evidence remains mandatory.
 
 Gemini's native `AfterTool` output is scanned through `llmContent`. Since Gemini
 CLI 0.67.0 does not support safe output replacement, requested sanitization uses

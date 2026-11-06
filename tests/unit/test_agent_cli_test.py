@@ -28,6 +28,18 @@ def _load(path: Path, name: str):
     return module
 
 
+def _codex_scope_hook_documents():
+    from ai_guardian.setup.hooks import IDESetup
+
+    expected = IDESetup.IDE_CONFIGS["codex"]["hooks"]
+    installed = json.loads(json.dumps(expected))
+    for event_groups in installed.values():
+        for group in event_groups:
+            for handler in group.get("hooks", []):
+                handler["command"] = "/usr/local/bin/ai-guardian --ide codex"
+    return expected, installed
+
+
 def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
     runner = _load(RUNNER_PATH, "agent_cli_smoke_runner")
 
@@ -71,6 +83,7 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
         "smoke",
         "--json",
         "--skip-git-repo-check",
+        "--dangerously-bypass-hook-trust",
         "hello",
     ]
     assert runner.build_agent_command("opencode", "build", "hello") == [
@@ -157,6 +170,9 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     assert f"ANTHROPIC_API_KEY={runner.MOCK_KEY}" in claude_environment
     assert "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1" in claude_environment
     assert all("OPENAI_API_KEY=" not in item for item in claude_environment)
+    codex_environment = runner.build_agent_environment("codex")
+    assert "CODEX_HOME=/sandbox/.codex" in codex_environment
+    assert f"OPENAI_API_KEY={runner.MOCK_KEY}" in codex_environment
     opencode_environment = runner.build_agent_environment("opencode")
     assert "OPENCODE_DISABLE_AUTOUPDATE=true" in opencode_environment
     assert "OPENCODE_DISABLE_MODELS_FETCH=true" in opencode_environment
@@ -199,6 +215,226 @@ def test_sandbox_create_uses_supplied_image_prepared_config_and_isolated_workspa
         == "ag-cli-smoke-opencode-test-internal"
     )
     assert "OPENAI_API_KEY" not in " ".join(command)
+
+
+def test_codex_smoke_creation_uses_a_dedicated_codex_home(tmp_path):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_codex_home")
+    config_dir = tmp_path / "smoke-config"
+    workspace = tmp_path / "workspace"
+    docker = runner.build_create_command(
+        ["ai-guardian"],
+        "docker",
+        "codex",
+        "smoke",
+        "smoke-image",
+        config_dir,
+        workspace,
+        "ag-cli-smoke-codex-test",
+    )
+    podman = runner.build_podman_create_command(
+        "podman",
+        "codex",
+        "smoke",
+        "smoke-image",
+        config_dir,
+        workspace,
+        "ag-cli-smoke-codex-test",
+    )
+
+    assert "CODEX_HOME=/sandbox/.codex" in docker
+    assert "CODEX_HOME=/sandbox/.codex" in podman
+
+
+def test_codex_hook_scope_probe_accepts_only_generated_ai_guardian_hooks(tmp_path):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_codex_hook_scope")
+    home = tmp_path / "codex"
+    workspace = tmp_path / "workspace"
+    system_codex = tmp_path / "system-codex"
+    system_etc = tmp_path / "system-etc-codex"
+    home.mkdir()
+    workspace.mkdir()
+    expected, installed = _codex_scope_hook_documents()
+    (home / "hooks.json").write_text(json.dumps({"hooks": installed}), encoding="utf-8")
+    (home / "smoke.config.toml").write_text('model = "ag-smoke"\n', encoding="utf-8")
+    env = {**os.environ, "CODEX_HOME": str(home)}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            runner._CODEX_HOOK_SCOPE_PROBE,
+            str(home),
+            str(workspace),
+            json.dumps([str(system_codex), str(system_etc)]),
+            json.dumps(expected),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "PASS: exact isolated AI Guardian Codex hook set"
+    assert "private" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "extra_source",
+    (
+        "foreign-hook",
+        "project-layer",
+        "inline-hook",
+        "system-requirements",
+        "plugin-directory",
+    ),
+)
+def test_codex_hook_scope_probe_rejects_additional_hook_sources(tmp_path, extra_source):
+    runner = _load(RUNNER_PATH, f"agent_cli_smoke_codex_scope_{extra_source}")
+    home = tmp_path / "codex"
+    workspace = tmp_path / "workspace"
+    system_codex = tmp_path / "system-codex"
+    system_etc = tmp_path / "system-etc-codex"
+    home.mkdir()
+    workspace.mkdir()
+    expected, installed = _codex_scope_hook_documents()
+    if extra_source == "foreign-hook":
+        event = next(iter(installed))
+        installed[event].append(
+            {"hooks": [{"type": "command", "command": "/tmp/foreign-hook"}]}
+        )
+    elif extra_source == "project-layer":
+        project_codex = workspace / ".codex"
+        project_codex.mkdir()
+        (project_codex / "hooks.json").write_text("{}", encoding="utf-8")
+    else:
+        if extra_source == "inline-hook":
+            (home / "smoke.config.toml").write_text(
+                "[hooks.UserPromptSubmit]\n", encoding="utf-8"
+            )
+        elif extra_source == "system-requirements":
+            system_codex.mkdir()
+            (system_codex / "requirements.toml").write_text(
+                "[hooks]\n", encoding="utf-8"
+            )
+        else:
+            plugins = home / "plugins"
+            plugins.mkdir()
+            (plugins / "installed-plugin").mkdir()
+    (home / "hooks.json").write_text(json.dumps({"hooks": installed}), encoding="utf-8")
+    env = {**os.environ, "CODEX_HOME": str(home)}
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            runner._CODEX_HOOK_SCOPE_PROBE,
+            str(home),
+            str(workspace),
+            json.dumps([str(system_codex), str(system_etc)]),
+            json.dumps(expected),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode != 0
+    assert result.stdout.strip() == (
+        "FAIL: Codex hook sources are not limited to the generated smoke hooks"
+    )
+    assert str(tmp_path) not in result.stdout + result.stderr
+
+
+def test_codex_hook_scope_preflight_requires_supported_cli_flag_and_probe(
+    monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_codex_scope_preflight")
+    calls = []
+
+    def fake_exec(_engine, _name, command, _timeout, **_kwargs):
+        calls.append(command)
+        if command[:3] == ["codex", "exec", "--help"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout="--dangerously-bypass-hook-trust",
+                stderr="",
+            )
+        if command[:3] == ["codex", "plugin", "list"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout='{"installed": [], "available": []}',
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="PASS: exact isolated AI Guardian Codex hook set\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+
+    assert runner._verify_codex_smoke_hook_scope("docker", "sandbox", 30)
+    assert len(calls) == 3
+    assert calls[1][:3] == ["codex", "plugin", "list"]
+    assert calls[2][1] == "-c"
+    assert "PASS Codex hook scope: exact generated hooks" in capsys.readouterr().out
+
+
+def test_codex_hook_scope_preflight_fails_closed_without_supported_cli_flag(
+    monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_codex_scope_missing_flag")
+    calls = []
+
+    def fake_exec(_engine, _name, command, _timeout, **_kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="help", stderr="")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+
+    assert not runner._verify_codex_smoke_hook_scope("docker", "sandbox", 30)
+    assert len(calls) == 1
+    assert "FAIL Codex hook scope: installed CLI lacks" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "plugin_inventory",
+    (
+        '{"installed": [{"name": "extra", "enabled": true}], "available": []}',
+        "not-json",
+        '{"available": []}',
+    ),
+)
+def test_codex_hook_scope_preflight_rejects_plugins_or_unverifiable_inventory(
+    monkeypatch, capsys, plugin_inventory
+):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_codex_scope_plugin_inventory")
+    calls = []
+
+    def fake_exec(_engine, _name, command, _timeout, **_kwargs):
+        calls.append(command)
+        if command[:3] == ["codex", "exec", "--help"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout="--dangerously-bypass-hook-trust",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            command, 0, stdout=plugin_inventory, stderr=""
+        )
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+
+    assert not runner._verify_codex_smoke_hook_scope("docker", "sandbox", 30)
+    assert len(calls) == 2
+    output = capsys.readouterr().out
+    assert "FAIL Codex hook scope: plugin inventory unavailable" in output
+    assert plugin_inventory not in output
 
 
 def test_internal_network_command_requests_runtime_egress_isolation():
@@ -278,6 +514,7 @@ def test_main_sets_up_smoke_isolation_and_cleans_up(
     runner._wait_for_sandbox_ready = lambda *_args, **_kwargs: True
     runner._check_sandbox_rest = lambda *_args, **_kwargs: True
     runner._configure_agent = lambda *_args, **_kwargs: True
+    runner._verify_codex_smoke_hook_scope = lambda *_args, **_kwargs: True
     runner._start_mock = lambda *_args, **_kwargs: True
     runner._run_case = lambda *_args, **_kwargs: True
     runner._check_podman_smoke_image = lambda *_args, **_kwargs: True

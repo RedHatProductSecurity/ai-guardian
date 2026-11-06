@@ -205,6 +205,88 @@ elif cli == 'claude':
 else: raise SystemExit('unsupported client')
 """
 
+_CODEX_HOOK_SCOPE_PROBE = r"""
+import json, os, shlex, sys
+from pathlib import Path
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+
+home=Path(sys.argv[1])
+workspace=Path(sys.argv[2])
+system_dirs=json.loads(sys.argv[3])
+expected=json.loads(sys.argv[4])
+
+def fail():
+    print('FAIL: Codex hook sources are not limited to the generated smoke hooks')
+    raise SystemExit(1)
+
+if Path(os.environ.get('CODEX_HOME', '')).resolve() != home.resolve():
+    fail()
+
+hooks_path=home/'hooks.json'
+try:
+    document=json.loads(hooks_path.read_text(encoding='utf-8'))
+except (OSError, UnicodeError, json.JSONDecodeError):
+    fail()
+if not isinstance(document, dict) or set(document) != {'hooks'}:
+    fail()
+
+def normalize(value):
+    if isinstance(value, dict):
+        result={}
+        for key, item in value.items():
+            if key == 'command':
+                if not isinstance(item, str):
+                    fail()
+                try:
+                    parts=shlex.split(item)
+                except ValueError:
+                    fail()
+                valid_binary=(
+                    len(parts) == 3
+                    and Path(parts[0]).name in ('ai-guardian', 'ai-guardian.exe')
+                    and parts[1:] == ['--ide', 'codex']
+                )
+                valid_module=(
+                    len(parts) == 5
+                    and Path(parts[0]).name.startswith(('python', 'pythonw'))
+                    and parts[1:] == ['-m', 'ai_guardian', '--ide', 'codex']
+                )
+                if not (valid_binary or valid_module):
+                    fail()
+                result[key]='ai-guardian'
+            else:
+                result[key]=normalize(item)
+        return result
+    if isinstance(value, list):
+        return [normalize(item) for item in value]
+    return value
+
+if normalize(document['hooks']) != expected:
+    fail()
+
+if (workspace/'.codex').exists():
+    fail()
+for system_dir in map(Path, system_dirs):
+    if any((system_dir/name).exists() for name in ('hooks.json', 'config.toml', 'requirements.toml')):
+        fail()
+for config_path in (home/'config.toml', home/'smoke.config.toml'):
+    if not config_path.is_file():
+        continue
+    try:
+        config=tomllib.loads(config_path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeError, ValueError):
+        fail()
+    if 'hooks' in config:
+        fail()
+plugins=home/'plugins'
+if plugins.is_dir() and any(plugins.iterdir()):
+    fail()
+print('PASS: exact isolated AI Guardian Codex hook set')
+"""
+
 _READ_LOG_COUNTS = r"""
 import collections,json,sys
 from pathlib import Path
@@ -358,6 +440,8 @@ def build_create_command(
     ]
     if container_network:
         command.extend(["--container-network", container_network])
+    if cli_name == "codex":
+        command.extend(["--env", "CODEX_HOME=/sandbox/.codex"])
     if cli_name == "opencode":
         command.extend(["--agent", agent])
     return command
@@ -425,6 +509,8 @@ def build_podman_create_command(
         command.extend(["--env", value])
     if cli_name == "opencode":
         command.extend(["--env", f"AI_GUARDIAN_OPENCODE_AGENT={agent}"])
+    if cli_name == "codex":
+        command.extend(["--env", "CODEX_HOME=/sandbox/.codex"])
     command.extend(
         [
             "--volume",
@@ -456,6 +542,10 @@ def build_agent_command(
             agent,
             "--json",
             "--skip-git-repo-check",
+            # This runner uses a one-invocation override only after verifying
+            # the disposable home contains exactly the generated smoke hooks.
+            # It does not persist Codex hook trust state.
+            "--dangerously-bypass-hook-trust",
             prompt,
         ]
     if cli_name == "opencode":
@@ -1008,6 +1098,82 @@ def _configure_agent(
     if result.returncode != 0:
         _report_failure_details("Local mock-provider configuration", result, 1200)
         return False
+    return True
+
+
+def _verify_codex_smoke_hook_scope(engine: str, name: str, timeout: int) -> bool:
+    """Verify the isolated Codex home has only this runner's generated hooks."""
+    try:
+        from ai_guardian.setup.hooks import IDESetup
+
+        expected = IDESetup.IDE_CONFIGS["codex"]["hooks"]
+        expected_json = json.dumps(expected, separators=(",", ":"))
+    except (ImportError, KeyError, TypeError):
+        print("FAIL Codex hook scope: canonical AI Guardian hook manifest unavailable")
+        return False
+
+    cli_help = _exec(
+        engine,
+        name,
+        ["codex", "exec", "--help"],
+        timeout,
+        env=("CODEX_HOME=/sandbox/.codex",),
+        workdir="/sandbox/repo",
+    )
+    if (
+        cli_help.returncode != 0
+        or "--dangerously-bypass-hook-trust"
+        not in f"{cli_help.stdout}\n{cli_help.stderr}"
+    ):
+        print("FAIL Codex hook scope: installed CLI lacks the documented scoped option")
+        return False
+
+    plugin_inventory = _exec(
+        engine,
+        name,
+        ["codex", "plugin", "list", "--json"],
+        timeout,
+        env=("CODEX_HOME=/sandbox/.codex",),
+        workdir="/sandbox/repo",
+    )
+    try:
+        plugins = json.loads(plugin_inventory.stdout)
+    except (json.JSONDecodeError, TypeError):
+        plugins = None
+    if (
+        plugin_inventory.returncode != 0
+        or not isinstance(plugins, dict)
+        or not isinstance(plugins.get("installed"), list)
+        or plugins["installed"]
+    ):
+        print(
+            "FAIL Codex hook scope: plugin inventory unavailable or contains installed plugins"
+        )
+        return False
+
+    result = _exec(
+        engine,
+        name,
+        [
+            "python3",
+            "-c",
+            _CODEX_HOOK_SCOPE_PROBE,
+            "/sandbox/.codex",
+            "/sandbox/repo",
+            json.dumps(["/.codex", "/etc/codex"]),
+            expected_json,
+        ],
+        timeout,
+        env=("CODEX_HOME=/sandbox/.codex",),
+        workdir="/sandbox/repo",
+    )
+    if (
+        result.returncode != 0
+        or result.stdout.strip() != "PASS: exact isolated AI Guardian Codex hook set"
+    ):
+        print("FAIL Codex hook scope: unexpected or additional hook source detected")
+        return False
+    _progress("PASS Codex hook scope: exact generated hooks in disposable CODEX_HOME")
     return True
 
 
@@ -1772,7 +1938,9 @@ def _report_case_failure_details(
 def build_agent_environment(cli: str) -> List[str]:
     """Return synthetic endpoint/auth and smoke-only settings for the CLI."""
     env: List[str] = []
-    if cli in {"codex", "pi"}:
+    if cli == "codex":
+        env.extend(["CODEX_HOME=/sandbox/.codex", f"OPENAI_API_KEY={MOCK_KEY}"])
+    elif cli == "pi":
         env.append(f"OPENAI_API_KEY={MOCK_KEY}")
     if cli == "opencode":
         env.extend(
@@ -2073,6 +2241,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "/sandbox/repo",
         ):
             print("ERROR: could not configure the local mock provider")
+            return 1
+        if args.cli_name == "codex" and not _verify_codex_smoke_hook_scope(
+            args.container_engine, name, args.timeout
+        ):
             return 1
         _progress("Starting the local mock provider")
         if not _start_mock(args.container_engine, name, args.timeout):

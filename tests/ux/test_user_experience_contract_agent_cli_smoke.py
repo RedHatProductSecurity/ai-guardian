@@ -31,6 +31,11 @@ Manual qualification on Linux/macOS Podman:
     the host REST preflight may use only the private IPv4 address from that exact
     isolated network; it still authenticates stats and never attaches an external
     route. Diagnostics report route/status categories, not the address or token.
+14. Codex smoke uses the invocation-only hook-trust override only after the runner
+    verifies a fresh `CODEX_HOME` contains exactly the canonical AI Guardian hooks,
+    with no project/system/plugin or inline hook sources. It does not write trust
+    state. Ordinary Codex runs still require native review; every smoke event,
+    execution, raw-output and clean-exit assertion remains mandatory.
 """
 
 import importlib.util
@@ -356,6 +361,24 @@ def test_opencode_smoke_uses_native_execution_not_an_advisory_mcp_check(native_n
     call = response["choices"][0]["message"]["tool_calls"][0]
     assert call["function"]["name"] == native_name
     assert provider._stats()["tool_offers"] == {"clean_tool": 1}
+
+
+def test_codex_smoke_trust_override_is_one_invocation_and_hook_scoped(runner):
+    """USER EXPERIENCE: only verified disposable Codex hooks get the one-shot override.
+
+    The runner must verify the exact AI Guardian hook set before invocation. The
+    override must not persist trust or relax Codex's command approval/sandbox mode;
+    all existing hook, execution, raw-delivery and clean-exit checks remain required.
+    """
+    codex_command = runner.build_agent_command("codex", "smoke", "synthetic prompt")
+
+    assert codex_command.count("--dangerously-bypass-hook-trust") == 1
+    assert "--dangerously-bypass-approvals-and-sandbox" not in codex_command
+    assert "--yolo" not in codex_command
+    assert "--dangerously-bypass-hook-trust" not in runner.build_agent_command(
+        "gemini", "default", "synthetic prompt"
+    )
+    assert runner._CODEX_HOOK_SCOPE_PROBE.startswith("\nimport json, os, shlex, sys")
 
 
 @pytest.mark.parametrize("case_name", ("ssrf", "config_exfil"))
