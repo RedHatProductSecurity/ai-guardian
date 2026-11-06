@@ -1112,20 +1112,18 @@ def _verify_codex_smoke_hook_scope(engine: str, name: str, timeout: int) -> bool
         print("FAIL Codex hook scope: canonical AI Guardian hook manifest unavailable")
         return False
 
-    cli_help = _exec(
+    trust_option_check = _exec(
         engine,
         name,
-        ["codex", "exec", "--help"],
+        ["codex", "exec", "--dangerously-bypass-hook-trust", "--help"],
         timeout,
         env=("CODEX_HOME=/sandbox/.codex",),
         workdir="/sandbox/repo",
     )
-    if (
-        cli_help.returncode != 0
-        or "--dangerously-bypass-hook-trust"
-        not in f"{cli_help.stdout}\n{cli_help.stderr}"
-    ):
-        print("FAIL Codex hook scope: installed CLI lacks the documented scoped option")
+    if trust_option_check.returncode != 0:
+        print(
+            "FAIL Codex hook scope: installed CLI rejected the invocation-only scoped option"
+        )
         return False
 
     plugin_inventory = _exec(
