@@ -125,6 +125,11 @@ CASES = (
     ),
 )
 OUTPUT_CASES = frozenset({"clean_tool", "tool_output_secret", "tool_output_pii"})
+CODEX_BWRAP_PERMISSION_GUIDANCE = (
+    "Codex reported a Bubblewrap permission denial; this case remains failed and "
+    "tool execution was not verified. Keep `workspace-write` and the smoke "
+    "isolation. See docs/CODEX_SANDBOX_RUNTIME.md for platform troubleshooting."
+)
 
 
 _CONFIGURE_AGENT = r"""
@@ -2132,6 +2137,13 @@ def _report_case_failure_details(
     if cli == "codex":
         details.append(_codex_event_summary(invocation))
     print(f"  Diagnostics (aggregate only): {'; '.join(details)}", flush=True)
+    if (
+        cli == "codex"
+        and tool_deltas is not None
+        and tool_deltas.get("function_call_output_category_permission_denied_bwrap", 0)
+        > 0
+    ):
+        print(f"  NOTE: {CODEX_BWRAP_PERMISSION_GUIDANCE}", flush=True)
 
 
 def build_agent_environment(cli: str) -> List[str]:

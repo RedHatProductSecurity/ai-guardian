@@ -47,6 +47,10 @@ Manual qualification on Linux/macOS Podman:
     the same runtime setup. The gate rejects root, `SYS_ADMIN`, and `NET_ADMIN`;
     the firewall helper alone receives `NET_ADMIN`. The firewall and every hook,
     execution, raw-output and clean-exit assertion remain mandatory.
+17. If Codex's aggregate tool result reports a Bubblewrap permission denial, the
+    runner prints a fixed explanation and links `docs/CODEX_SANDBOX_RUNTIME.md`.
+    The affected case remains failed; the message never exposes raw error text or
+    recommends bypassing `workspace-write` or smoke isolation.
 """
 
 import importlib.util
@@ -645,6 +649,27 @@ def test_codex_failure_diagnostics_exclude_command_and_output(
         in output
     )
     assert "private" not in output
+
+
+def test_codex_bwrap_denial_explains_local_runtime_failure(runner, capsys):
+    """USER EXPERIENCE: explain a bwrap denial without turning it into a pass."""
+    case = next(case for case in runner.CASES if case.name == "clean_tool")
+    invocation = subprocess.CompletedProcess(["codex", "exec"], 0, "", "")
+
+    runner._report_case_failure_details(
+        case,
+        invocation,
+        {},
+        1,
+        tool_deltas={"function_call_output_category_permission_denied_bwrap": 1},
+        cli="codex",
+    )
+
+    output = capsys.readouterr().out
+    assert "Codex reported a Bubblewrap permission denial" in output
+    assert "this case remains failed" in output
+    assert "docs/CODEX_SANDBOX_RUNTIME.md" in output
+    assert "danger-full-access" not in output
 
 
 @pytest.mark.parametrize(

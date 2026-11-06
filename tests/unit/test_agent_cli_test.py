@@ -2261,6 +2261,27 @@ def test_cli_failure_classification_exposes_only_a_fixed_category(
     assert "diagnostic body" not in output
 
 
+def test_codex_bwrap_denial_prints_actionable_runtime_documentation(capsys):
+    runner = _load(RUNNER_PATH, "agent_cli_bwrap_permission_guidance")
+    case = next(case for case in runner.CASES if case.name == "clean_tool")
+    invocation = subprocess.CompletedProcess(["codex", "exec"], 0, "", "")
+
+    runner._report_case_failure_details(
+        case,
+        invocation,
+        {},
+        1,
+        tool_deltas={"function_call_output_category_permission_denied_bwrap": 1},
+        cli="codex",
+    )
+
+    output = capsys.readouterr().out
+    assert "Codex reported a Bubblewrap permission denial" in output
+    assert "this case remains failed" in output
+    assert "docs/CODEX_SANDBOX_RUNTIME.md" in output
+    assert "private" not in output
+
+
 def test_codex_event_summary_omits_command_and_output_content():
     runner = _load(RUNNER_PATH, "agent_cli_codex_event_summary")
     invocation = subprocess.CompletedProcess(
