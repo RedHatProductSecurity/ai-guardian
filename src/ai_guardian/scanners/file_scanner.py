@@ -449,8 +449,9 @@ class FileScanner:
         if len(self.findings) <= findings_before:
             return
 
-        file_path = file_path.resolve()
-        base_path = base_path.resolve()
+        # Use lexical normalization only; resolve() dereferences untrusted paths.
+        file_path = Path(os.path.abspath(str(file_path)))
+        base_path = Path(os.path.abspath(str(base_path)))
         try:
             relative_file = file_path.relative_to(base_path)
         except ValueError:

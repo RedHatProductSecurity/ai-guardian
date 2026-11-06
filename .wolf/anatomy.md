@@ -1263,7 +1263,7 @@
 - `engine_tester.py` — URL configuration (~3606 tok)
 - `executor.py` — run_single_engine, run_python_scanner (~5968 tok)
 - `exfil_detection.py` — ExfilDetectionScanner: check_command, scan (~4083 tok)
-- `file_scanner.py` — URL configuration (~17795 tok)
+- `file_scanner.py` — URL configuration (~17829 tok)
 - `gitleaks.py` — class: find_project_root, load_gitleaks_allowlist, should_skip_file, filter_findings + 2 more (~2822 tok)
 - `image_scanner.py` — class: is_image_file, is_image_bytes, is_base64_image, strip_base64_images + 6 more (~3596 tok)
 - `installer.py` — InstallMethod: get_github_repo, get_pattern_servers, get_pinned_version, detect_platform + 2 more (~15496 tok)

@@ -727,6 +727,15 @@ class TestFileScannerScanFiles:
 
         assert scanner._finding_paths == ["$HOME/.config/agent/settings.json"]
 
+    def test_finding_path_normalizes_parent_segments_lexically(self, tmp_path):
+        file_path = tmp_path / "nested" / ".." / "settings.py"
+        scanner = FileScanner(config={})
+        scanner.findings.append({"file_path": str(file_path)})
+
+        scanner._record_finding_path(file_path, tmp_path, findings_before=0)
+
+        assert scanner._finding_paths == ["settings.py"]
+
 
 class TestFileScannerAnnotationSuppression:
     """Tests for annotation-based suppression in FileScanner (#1237)."""
