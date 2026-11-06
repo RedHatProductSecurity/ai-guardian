@@ -186,20 +186,18 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         content = "This is some content to scan"
-        has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
+        with patch(
+            "ai_guardian.scanners.secret_scanning._get_on_scan_error_action",
+            return_value="block",
+        ):
+            has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         # Should block operation (return True) with error message
         self.assertTrue(has_secrets, "Auth error should block operation")
         self.assertIsNotNone(error_msg, "Should return error message")
-        self.assertIn(
-            "AUTHENTICATION ERROR", error_msg, "Should mention authentication error"
-        )
-        self.assertIn(
-            "blocked for security", error_msg, "Should indicate operation is blocked"
-        )
-        self.assertIn(
-            "AI_GUARDIAN_PATTERN_TOKEN", error_msg, "Should mention token env var"
-        )
+        self.assertIn("authentication failed", error_msg.lower())
+        self.assertIn("on_scan_error=block", error_msg)
+        self.assertNotIn("AI_GUARDIAN_PATTERN_TOKEN", error_msg)
 
     @patch("ai_guardian.scanners.secret_scanning.run_engine")
     @patch("ai_guardian.scanners.secret_scanning.select_all_engines")
@@ -236,11 +234,16 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         content = "This is some content to scan"
-        has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
+        with patch(
+            "ai_guardian.scanners.secret_scanning._get_on_scan_error_action",
+            return_value="allow",
+        ):
+            has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         # Should not block (return False)
         self.assertFalse(has_secrets, "Network error should not block operation")
-        self.assertIsNone(error_msg, "Should not return error message (fail-open)")
+        self.assertIn("network or service issue", error_msg.lower())
+        self.assertIn("on_scan_error", error_msg)
 
         # Verify warning was printed to stderr
         self.assertTrue(mock_stderr.write.called, "Warning should be printed to stderr")
@@ -251,11 +254,86 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
             "SECRET SCANNING WARNING", stderr_output, "Should show warning header"
         )
         self.assertIn(
-            "Network or server issue", stderr_output, "Should mention network issue"
+            "network or service issue",
+            stderr_output.lower(),
+            "Should mention network issue",
         )
-        self.assertIn(
-            "continue", stderr_output.lower(), "Should indicate operation continues"
+        self.assertIn("on_scan_error", stderr_output)
+
+    @patch(
+        "ai_guardian.scanners.secret_scanning._load_pattern_server_config",
+        return_value=None,
+    )
+    @patch("ai_guardian.scanners.secret_scanning.run_engine")
+    @patch("ai_guardian.scanners.secret_scanning.select_all_engines")
+    @patch("ai_guardian.scanners.secret_scanning.select_engine")
+    @patch("ai_guardian.scanners.secret_scanning._load_secret_scanning_config")
+    @patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True)
+    def test_gitguardian_quota_error_keeps_local_coverage_and_obeys_policy(
+        self,
+        mock_load_config,
+        mock_select_engine,
+        mock_select_all,
+        mock_run_engine,
+        _mock_pattern_server,
+    ):
+        from ai_guardian.scanners.strategies import ScanResult
+
+        mock_load_config.return_value = (
+            {"engines": ["gitguardian", "gitleaks"]},
+            None,
         )
+        gitguardian = MagicMock()
+        gitguardian.type = "gitguardian"
+        gitguardian.file_patterns = None
+        gitguardian.ignore_files = None
+        gitleaks = MagicMock()
+        gitleaks.type = "gitleaks"
+        gitleaks.file_patterns = None
+        gitleaks.ignore_files = None
+        mock_select_engine.return_value = gitguardian
+        mock_select_all.return_value = [gitguardian, gitleaks]
+
+        def scan(engine_config, *_args, **_kwargs):
+            if engine_config.type == "gitguardian":
+                return ScanResult(
+                    has_secrets=False,
+                    secrets=[],
+                    engine="gitguardian",
+                    error="GitGuardian cloud scan quota exhausted or rate-limited",
+                )
+            return ScanResult(has_secrets=False, secrets=[], engine="gitleaks")
+
+        mock_run_engine.side_effect = scan
+
+        with patch(
+            "ai_guardian.scanners.secret_scanning._get_on_scan_error_action",
+            return_value="allow",
+        ):
+            has_secrets, warning = ai_guardian.check_secrets(
+                "synthetic clean content", "test.txt"
+            )
+
+        self.assertFalse(has_secrets)
+        self.assertIn("quota or rate limit was reached", warning)
+        self.assertIn("GitGuardian", warning)
+        self.assertNotIn("credential values", warning)
+        self.assertEqual(
+            [call.args[0].type for call in mock_run_engine.call_args_list],
+            ["gitguardian", "gitleaks"],
+        )
+        mock_run_engine.reset_mock()
+
+        with patch(
+            "ai_guardian.scanners.secret_scanning._get_on_scan_error_action",
+            return_value="block",
+        ):
+            has_secrets, blocked_warning = ai_guardian.check_secrets(
+                "synthetic clean content", "test.txt"
+            )
+
+        self.assertTrue(has_secrets)
+        self.assertIn("Operation BLOCKED (on_scan_error=block)", blocked_warning)
 
     @patch("subprocess.run")
     def test_check_secrets_empty_report_not_blocked(self, mock_run):

@@ -331,7 +331,7 @@ class TestContainerLaunchers:
         assert "generated `audit2allow` module" in troubleshooting
         assert "setenforce 0" not in troubleshooting
 
-    def test_images_preinstall_pinned_scanner_engines(self):
+    def test_images_preinstall_local_scanners_and_gate_gitguardian_opt_in(self):
         for dockerfile_path in (DOCKERFILE, OPENSHELL_DOCKERFILE):
             dockerfile = dockerfile_path.read_text(encoding="utf-8")
 
@@ -340,13 +340,15 @@ class TestContainerLaunchers:
                 "betterleaks",
                 "leaktk",
                 "secretlint",
-                "gitguardian",
             ):
                 assert (
                     f"ai-guardian scanner install {scanner} --use-pinned" in dockerfile
                 )
 
             assert "test -x /usr/local/bin/secretlint" in dockerfile
+            assert "ARG INCLUDE_GITGUARDIAN=false" in dockerfile
+            assert 'if [ "${INCLUDE_GITGUARDIAN}" = "true" ]' in dockerfile
+            assert "ai-guardian scanner install gitguardian --use-pinned" in dockerfile
             assert "test -x /usr/local/bin/ggshield" in dockerfile
 
             assert "get_pinned_version('detect-secrets')" in dockerfile
@@ -358,20 +360,27 @@ class TestContainerLaunchers:
             assert "ai-guardian scanner install trufflehog" not in dockerfile
 
         normal_image = DOCKERFILE.read_text(encoding="utf-8")
+        assert "COPY --from=builder /usr/local/bin/ggshield" not in normal_image
+        assert "GitGuardian CLI not included in this image" in normal_image
         assert "COPY --from=builder /usr/local/bin/leaktk /usr/local/bin/" in (
             normal_image
         )
+
+        container_readme = (REPO_ROOT / "container" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        assert container_readme.count("--build-arg INCLUDE_GITGUARDIAN=true") >= 2
+        assert "10,000 scan" in container_readme
+        assert "rolling 30-day" in container_readme
         assert "COPY --from=builder /usr/local/bin/secretlint /usr/local/bin/" in (
             normal_image
         )
-        assert "COPY --from=builder /usr/local/bin/ggshield /usr/local/bin/" in (
-            normal_image
-        )
+        assert 'printf \'#!/bin/sh\\nexec "%s" "$@"\\n\'' in normal_image
         assert (
             "COPY --from=builder /usr/local/bin/.ai-guardian "
             "/usr/local/bin/.ai-guardian" in normal_image
         )
-        assert "RUN ggshield --version" in normal_image
+        assert "ggshield --version" in normal_image
         assert (
             "COPY --from=builder /usr/local/bin/detect-secrets /usr/local/bin/"
             in normal_image

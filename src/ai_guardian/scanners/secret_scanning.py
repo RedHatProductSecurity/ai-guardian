@@ -99,8 +99,154 @@ _NETWORK_ERROR_KEYWORDS = frozenset(
         "dial tcp",
         "no route",
         "no route to host",
+        "service unavailable",
+        "server error",
+        "bad gateway",
     }
 )
+_QUOTA_ERROR_KEYWORDS = frozenset(
+    {
+        "quota",
+        "rate limit",
+        "rate-limit",
+        "too many requests",
+        "429",
+        "usage limit",
+        "limit exceeded",
+    }
+)
+
+
+def _gitguardian_selection_failures(errors) -> List[str]:
+    """Keep optional cloud-engine selection failures separate from local fallback."""
+    return [
+        str(error)
+        for error in errors or []
+        if str(error).partition(":")[0].strip().lower() == "gitguardian"
+    ]
+
+
+def _format_secret_scanner_failure(errors) -> str:
+    """Build a credential-safe warning for incomplete scanner coverage."""
+    if isinstance(errors, str):
+        error_items = [errors]
+    else:
+        error_items = list(errors or [])
+    error_text = " ".join(str(error) for error in error_items)
+    error_lower = error_text.lower()
+    is_gitguardian = "gitguardian" in error_lower
+
+    engine_names = {}
+    for match in re.finditer(r"(?:^|;\s*)([A-Za-z0-9_-]+):", error_text):
+        engine_name = match.group(1)
+        engine_names[engine_name.lower()] = engine_name
+    if is_gitguardian:
+        engine_names["gitguardian"] = "GitGuardian"
+    if not engine_names:
+        engine_names["configured"] = "configured scanner"
+    engine_summary = ", ".join(sorted(engine_names.values(), key=str.lower))
+
+    if any(keyword in error_lower for keyword in _QUOTA_ERROR_KEYWORDS):
+        if is_gitguardian:
+            detail = (
+                "GitGuardian rejected the cloud scan because a quota or rate limit "
+                "was reached. Check workspace usage and retry when capacity is "
+                "available; AI Guardian will not change your plan or submit another "
+                "request."
+            )
+        else:
+            detail = (
+                "The scanner reported a quota or rate limit. Check the service "
+                "status and retry when capacity is available."
+            )
+    elif "consent" in error_lower:
+        if is_gitguardian:
+            detail = (
+                "GitGuardian cloud scanning is configured but explicit consent is "
+                "missing. Review the data flow, then run `ai-guardian engine consent "
+                "gitguardian` only if you choose to authorize cloud scanning."
+            )
+        else:
+            detail = (
+                "A configured cloud scanner requires explicit consent. Review its "
+                "data flow before authorizing it."
+            )
+    elif "api key" in error_lower or "credential" in error_lower:
+        if is_gitguardian:
+            detail = (
+                "GitGuardian cloud scanning requires `GITGUARDIAN_API_KEY` in the "
+                "scanner runtime. Configure it securely; credential values are not "
+                "shown in this warning."
+            )
+        else:
+            detail = (
+                "The configured scanner needs authentication. Check its "
+                "credential configuration; values are not shown in this warning."
+            )
+    elif any(keyword in error_lower for keyword in _AUTH_ERROR_KEYWORDS):
+        if is_gitguardian:
+            detail = (
+                "GitGuardian cloud authentication failed. Verify explicit consent "
+                "and the `GITGUARDIAN_API_KEY` configuration; credential values "
+                "are not shown in this warning."
+            )
+        else:
+            detail = (
+                "The configured scanner authentication failed. Check its "
+                "credential and access configuration; credential values are not "
+                "shown in this warning."
+            )
+    elif (
+        "executable is not installed" in error_lower
+        or "binary not found" in error_lower
+    ):
+        if is_gitguardian:
+            detail = (
+                "The selected scanner executable is not installed. Install it with "
+                "`ai-guardian scanner install gitguardian` or, for a container "
+                "image, build with `--build-arg INCLUDE_GITGUARDIAN=true`."
+            )
+        else:
+            detail = (
+                "The selected scanner executable is not installed. Install the "
+                "configured scanner or choose an installed engine."
+            )
+    elif any(keyword in error_lower for keyword in _NETWORK_ERROR_KEYWORDS):
+        if is_gitguardian:
+            detail = (
+                "A scanner network or service issue prevented a completed scan. "
+                "Check network access and retry; GitGuardian requires access to its "
+                "cloud service, while local scanners run according to the selected "
+                "strategy."
+            )
+        else:
+            detail = (
+                "A scanner network or service issue prevented a completed scan. "
+                "Check network access and retry; local engines remain selected "
+                "according to the configured strategy."
+            )
+    else:
+        detail = (
+            "A configured scanner did not complete successfully. Review scanner "
+            "availability and service status; local scanners remain selected and "
+            "run according to the configured strategy."
+        )
+
+    return (
+        "⚠️  SECRET SCANNING WARNING\n"
+        "Secret scanning coverage is incomplete.\n"
+        f"Failed engine(s): {engine_summary}.\n"
+        f"{detail}\n"
+        "The operation follows the configured `on_scan_error` policy."
+    )
+
+
+def _apply_scan_error_policy(warning: str):
+    """Return the hook outcome required by the configured scanner-error policy."""
+    if _get_on_scan_error_action() == ActionMode.BLOCK:
+        logger.error("Secret scanning failed (fail-closed, on_scan_error=block)")
+        return True, warning + "\nOperation BLOCKED (on_scan_error=block)."
+    return False, warning + "\nOperation will continue (on_scan_error=allow)."
 
 
 def _build_secret_extras(details, context, *, file_path=None):
@@ -900,6 +1046,7 @@ def check_secrets(
             execution_strategy_name = "first-match"
             consensus_threshold = 2
             _all_available_engines: Optional[list[Any]] = None
+            engine_selection_errors: List[str] = []
             if not gitleaks_config_path and HAS_SCANNER_ENGINE:
                 try:
                     scanner_config = (
@@ -925,7 +1072,9 @@ def check_secrets(
 
                     # Select first available engine (logs warnings for unavailable ones)
                     engine_config = select_engine(
-                        engines_list, parent_config=scanner_config
+                        engines_list,
+                        parent_config=scanner_config,
+                        selection_errors=engine_selection_errors,
                     )
 
                     # For first-match strategy, get all available engines for fallthrough
@@ -936,7 +1085,9 @@ def check_secrets(
                     ):
                         try:
                             _all_available_engines = select_all_engines(
-                                engines_list, parent_config=scanner_config
+                                engines_list,
+                                parent_config=scanner_config,
+                                selection_errors=engine_selection_errors,
                             )
                         except RuntimeError:
                             pass  # Only primary engine available
@@ -954,6 +1105,9 @@ def check_secrets(
                 except RuntimeError:
                     # NO SCANNER AVAILABLE - WARN (allow operation to continue)
                     default_scanner = engines_list[0] if engines_list else "gitleaks"
+                    gitguardian_selection_errors = _gitguardian_selection_failures(
+                        engine_selection_errors
+                    )
                     if pattern_server_attempted:
                         warning_msg = (
                             f"⚠️  WARNING: No secret scanning available\n\n"
@@ -964,26 +1118,25 @@ def check_secrets(
                             f"Until a scanner is installed, you may leak secrets."
                         )
                     else:
-                        warning_msg = (
-                            f"⚠️  WARNING: No secret scanning available\n\n"
-                            f"No scanner engine is installed.\n"
-                            f"Tried engines: {engines_list} — none found\n\n"
-                            f"Please install a scanner with:\n"
-                            f"  ai-guardian scanner install {default_scanner}\n\n"
-                            f"Until a scanner is installed, you may leak secrets."
-                        )
-                    on_error = _get_on_scan_error_action()
-                    if on_error == ActionMode.BLOCK:
-                        logger.error(
-                            "No scanner available (fail-closed, on_scan_error=block)"
-                        )
-                        return (
-                            True,
-                            warning_msg
-                            + "\n\nOperation BLOCKED (on_scan_error=block).",
+                        if any(gitguardian_selection_errors):
+                            warning_msg = _format_secret_scanner_failure(
+                                gitguardian_selection_errors
+                            )
+                        else:
+                            warning_msg = (
+                                f"⚠️  WARNING: No secret scanning available\n\n"
+                                f"No scanner engine is installed.\n"
+                                f"Tried engines: {engines_list} — none found\n\n"
+                                f"Please install a scanner with:\n"
+                                f"  ai-guardian scanner install {default_scanner}\n\n"
+                                f"Until a scanner is installed, you may leak secrets."
+                            )
+                    if pattern_server_attempted and gitguardian_selection_errors:
+                        warning_msg += "\n" + _format_secret_scanner_failure(
+                            gitguardian_selection_errors
                         )
                     logger.warning("No scanner available - warning user")
-                    return False, warning_msg
+                    return _apply_scan_error_policy(warning_msg)
 
             # Validate pattern completeness if using pattern server
             if config_source == "pattern server" and gitleaks_config_path:
@@ -1016,7 +1169,9 @@ def check_secrets(
             ):
                 try:
                     all_engines = select_all_engines(
-                        engines_list, parent_config=scanner_config
+                        engines_list,
+                        parent_config=scanner_config,
+                        selection_errors=engine_selection_errors,
                     )
                     strategy_kwargs = {}
                     if execution_strategy_name == "consensus":
@@ -1034,6 +1189,26 @@ def check_secrets(
                             "original_file_path": file_path,
                         },
                     )
+
+                    selection_errors = list(
+                        dict.fromkeys(
+                            _gitguardian_selection_failures(engine_selection_errors)
+                        )
+                    )
+                    if selection_errors:
+                        if strategy_result.error:
+                            strategy_result.error += "; " + "; ".join(selection_errors)
+                        else:
+                            strategy_result.error = "; ".join(selection_errors)
+
+                    scanner_failure_warning = (
+                        _format_secret_scanner_failure(strategy_result.error)
+                        if strategy_result.error
+                        else None
+                    )
+                    if scanner_failure_warning:
+                        logger.warning("Configured secret-scanning engine failed")
+                        print(scanner_failure_warning, file=sys.stderr)
 
                     if strategy_result.has_secrets and strategy_result.secrets:
                         # Apply allowlist filtering
@@ -1069,6 +1244,10 @@ def check_secrets(
                                     logger.info(
                                         "All strategy findings matched allowlist — skipping"
                                     )
+                                    if scanner_failure_warning:
+                                        return _apply_scan_error_policy(
+                                            scanner_failure_warning
+                                        )
                                     return False, None
 
                         # Apply .gitleaks.toml allowlist filtering (Issue #488)
@@ -1092,6 +1271,10 @@ def check_secrets(
                                 logger.info(
                                     "All strategy findings matched .gitleaks.toml allowlist — skipping"
                                 )
+                                if scanner_failure_warning:
+                                    return _apply_scan_error_policy(
+                                        scanner_failure_warning
+                                    )
                                 return False, None
 
                         # Filter external scanner findings by stopwords/entropy (#1245)
@@ -1112,6 +1295,10 @@ def check_secrets(
                                 logger.info(
                                     "All external scanner findings filtered by stopwords/entropy — skipping"
                                 )
+                                if scanner_failure_warning:
+                                    return _apply_scan_error_policy(
+                                        scanner_failure_warning
+                                    )
                                 return False, None
 
                         # Filter hash false positives (#1378)
@@ -1126,6 +1313,8 @@ def check_secrets(
                             logger.info(
                                 "All external scanner findings filtered as hash values — skipping"
                             )
+                            if scanner_failure_warning:
+                                return _apply_scan_error_policy(scanner_failure_warning)
                             return False, None
 
                         # Secret liveness validation (Issue #971, #983)
@@ -1194,6 +1383,8 @@ def check_secrets(
                             logger.info(
                                 "All secrets validated as inactive (strategy path) — allowing"
                             )
+                            if scanner_failure_warning:
+                                return _apply_scan_error_policy(scanner_failure_warning)
                             return False, None
 
                         scanner_name = strategy_result.engine
@@ -1203,6 +1394,8 @@ def check_secrets(
                             f"Built-in {scanner_name} rules",
                             f"Secret Scanning ({execution_strategy_name} strategy)",
                         )
+                        if scanner_failure_warning:
+                            error_msg += "\n\n" + scanner_failure_warning
 
                         _log_finding_violation(
                             file_path or filename,
@@ -1221,79 +1414,10 @@ def check_secrets(
                         _last_secret_findings = secret_findings_list
                         return True, error_msg
 
-                    # No secrets found — check for engine errors that need user attention
-                    if strategy_result.error:
-                        error_lower = (strategy_result.error or "").lower()
-
-                        # Auth errors → block (user can fix credentials)
-                        is_auth_error = any(
-                            kw in error_lower for kw in _AUTH_ERROR_KEYWORDS
-                        )
-                        if is_auth_error:
-                            error_msg = (
-                                f"\n{'='*70}\n"
-                                f"🚨 BLOCKED BY POLICY\n"
-                                f"🔒 AUTHENTICATION ERROR\n"
-                                f"{'='*70}\n\n"
-                                f"Scanner authentication failed.\n"
-                                f"\nError: {strategy_result.error[:200]}\n"
-                                "\nThis operation has been blocked for security.\n\n"
-                                "DO NOT attempt to bypass this protection - fix the authentication issue.\n\n"
-                                "If using pattern-servers:\n"
-                                "  1. Check your authentication token is valid\n"
-                                "  2. Update token: export AI_GUARDIAN_PATTERN_TOKEN='your-token'\n"
-                                "  3. Or disable pattern-servers in ~/.config/ai-guardian/ai-guardian.json\n\n"
-                                "If NOT using pattern-servers:\n"
-                                "  1. Check ~/.gitleaks.toml configuration\n"
-                                "  2. Try: gitleaks version (to verify installation)\n"
-                                f"{'='*70}\n"
-                            )
-                            return True, error_msg
-
-                        # Network errors → warn but allow (fail-open)
-                        is_network_error = any(
-                            kw in error_lower for kw in _NETWORK_ERROR_KEYWORDS
-                        )
-                        if is_network_error:
-                            warning_msg = (
-                                f"\n{'='*70}\n"
-                                f"⚠️  SECRET SCANNING WARNING\n"
-                                f"{'='*70}\n"
-                                f"Scanner error: {strategy_result.error[:200]}\n"
-                                "\n💡 Network or server issue detected.\n"
-                                "   If using pattern-servers, the server may be temporarily unavailable.\n"
-                                "   You can disable pattern-servers in ~/.config/ai-guardian/ai-guardian.json\n"
-                                "\nOperation will continue, but secret scanning may not be functioning.\n"
-                                f"{'='*70}\n"
-                            )
-                            print(warning_msg, file=sys.stderr)
-                            on_error = _get_on_scan_error_action()
-                            if on_error == ActionMode.BLOCK:
-                                return (
-                                    True,
-                                    warning_msg
-                                    + "\nOperation BLOCKED (on_scan_error=block).",
-                                )
-                            return False, None
-
-                        # Binary not found → warn but allow (fail-open)
-                        if "not found" in error_lower or "no scanners" in error_lower:
-                            scanner_name = (
-                                engines_list[0] if engines_list else "gitleaks"
-                            )
-                            warning_msg = (
-                                f"\n{'='*70}\n"
-                                f"⚠️  SECRET SCANNING DISABLED\n"
-                                f"{'='*70}\n\n"
-                                f"Gitleaks binary not found.\n"
-                                f"Secret scanning will not run until Gitleaks is installed.\n\n"
-                                f"Install with:\n"
-                                f"  brew install {scanner_name}  (macOS)\n"
-                                f"\nOperation will continue without secret scanning.\n"
-                                f"{'='*70}\n"
-                            )
-                            print(warning_msg, file=sys.stderr)
-                            return False, None
+                    # Incomplete coverage follows the global scanner-error policy;
+                    # never present an unsuccessful engine as a clean scan.
+                    if scanner_failure_warning:
+                        return _apply_scan_error_policy(scanner_failure_warning)
 
                     return False, None
 

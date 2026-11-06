@@ -10,11 +10,11 @@ Provides different strategies for combining results from multiple scanners:
 import fnmatch
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, replace
 
 logger = logging.getLogger(__name__)
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Tuple, Callable
 
 from ai_guardian.scanners.engine_builder import resolve_engine_config_path
@@ -53,6 +53,19 @@ class ScanResult:
     engine: str
     error: Optional[str] = None
     scan_time_ms: float = 0.0
+
+
+def _combine_engine_errors(errors: List[str]) -> Optional[str]:
+    """Keep every engine failure attached to a combined strategy result."""
+    return "; ".join(errors) if errors else None
+
+
+def _result_with_errors(result: ScanResult, errors: List[str]) -> ScanResult:
+    """Return a copy of *result* with failures from earlier engines retained."""
+    combined_error = _combine_engine_errors(errors)
+    if combined_error:
+        return replace(result, error=combined_error)
+    return result
 
 
 class ExecutionStrategy(ABC):
@@ -131,6 +144,7 @@ class FirstMatchStrategy(ExecutionStrategy):
         engines = self._filter_engines_for_file(engine_configs, filename)
 
         last_clean_result = None
+        engine_errors: List[str] = []
 
         for engine_config in engines:
             report_file = f"{report_file_prefix}_{engine_config.type}.json"
@@ -145,9 +159,12 @@ class FirstMatchStrategy(ExecutionStrategy):
                 original_file_path=orig_path,
             )
 
-            if result.error and "not found" in (result.error or "").lower():
-                logger.warning(f"Engine {engine_config.type} unavailable, trying next")
-                continue
+            if result.error:
+                engine_errors.append(f"{result.engine}: {result.error}")
+                logger.warning(
+                    "Engine %s failed; trying the next configured engine",
+                    engine_config.type,
+                )
 
             if result.has_secrets:
                 logger.debug(
@@ -155,7 +172,10 @@ class FirstMatchStrategy(ExecutionStrategy):
                     f"duration_ms={result.scan_time_ms:.1f} "
                     f"has_secrets=True"
                 )
-                return result
+                return _result_with_errors(result, engine_errors)
+
+            if result.error:
+                continue
 
             logger.debug(
                 f"Engine {engine_config.type} found no secrets, trying next engine"
@@ -167,7 +187,15 @@ class FirstMatchStrategy(ExecutionStrategy):
                 f"Strategy 'first-match' complete: all engines clean "
                 f"(last={last_clean_result.engine})"
             )
-            return last_clean_result
+            return _result_with_errors(last_clean_result, engine_errors)
+
+        if engine_errors:
+            return ScanResult(
+                has_secrets=False,
+                secrets=[],
+                engine="first-match",
+                error=_combine_engine_errors(engine_errors),
+            )
 
         return ScanResult(
             has_secrets=False, secrets=[], engine="none", error="No scanners available"
@@ -214,10 +242,13 @@ class AnyMatchStrategy(ExecutionStrategy):
 
         all_secrets: List[SecretMatch] = []
         engines_run: List[str] = []
+        engine_errors: List[str] = []
         total_time_ms = 0.0
 
         for result in results:
-            if result.error and "not found" in (result.error or "").lower():
+            if result.error:
+                engine_errors.append(f"{result.engine}: {result.error}")
+            if result.error and "not found" in result.error.lower():
                 continue
             engines_run.append(result.engine)
             all_secrets.extend(result.secrets)
@@ -238,6 +269,7 @@ class AnyMatchStrategy(ExecutionStrategy):
             has_secrets=len(unique_secrets) > 0,
             secrets=unique_secrets,
             engine=engine_label,
+            error=_combine_engine_errors(engine_errors),
             scan_time_ms=total_time_ms,
         )
 
@@ -359,10 +391,13 @@ class ConsensusStrategy(ExecutionStrategy):
 
         all_secrets: List[SecretMatch] = []
         engines_run: List[str] = []
+        engine_errors: List[str] = []
         total_time_ms = 0.0
 
         for result in results:
-            if result.error and "not found" in (result.error or "").lower():
+            if result.error:
+                engine_errors.append(f"{result.engine}: {result.error}")
+            if result.error and "not found" in result.error.lower():
                 continue
             engines_run.append(result.engine)
             all_secrets.extend(result.secrets)
@@ -384,6 +419,7 @@ class ConsensusStrategy(ExecutionStrategy):
             has_secrets=len(consensus_secrets) > 0,
             secrets=consensus_secrets,
             engine=engine_label,
+            error=_combine_engine_errors(engine_errors),
             scan_time_ms=total_time_ms,
         )
 

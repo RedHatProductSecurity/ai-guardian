@@ -194,6 +194,8 @@ ENGINE_PRESETS = {
         config_flag=None,
         output_parser="gitguardian",
         success_exit_code=0,
+        # --exit-zero sends findings through successful JSON output; executor.py
+        # parses that output instead of relying on a distinct finding exit code.
         secrets_found_exit_code=1,
         requires_consent=True,
         api_key_env="GITGUARDIAN_API_KEY",
@@ -373,6 +375,7 @@ def revoke_engine_consent(engine_type: str) -> bool:
 def select_engine(
     engines_config: List[Any],
     parent_config: Optional[dict] = None,
+    selection_errors: Optional[List[str]] = None,
 ) -> EngineConfig:
     """
     Select first available engine from configuration list.
@@ -404,6 +407,10 @@ def select_engine(
             continue
 
         if not check_engine_consent(engine_config):
+            if selection_errors is not None:
+                selection_errors.append(
+                    f"{engine_config.type}: explicit cloud-scanning consent is missing"
+                )
             logger.warning(
                 f"Scanner '{engine_config.type}' requires consent. "
                 f"Run: ai-guardian engine consent {engine_config.type}"
@@ -419,22 +426,32 @@ def select_engine(
             logger.debug(f"Selected scanner engine: {engine_config.type}")
             return engine_config
         else:
+            if selection_errors is not None:
+                selection_errors.append(
+                    f"{engine_config.type}: executable is not installed"
+                )
             logger.warning(
                 f"Scanner '{engine_config.type}' (binary: {engine_config.binary}) "
                 f"not available, trying next scanner in list"
             )
 
-    raise RuntimeError(
+    error_message = (
         "No secret scanner found. Install one of:\n"
         "  • Gitleaks: brew install gitleaks\n"
         "  • BetterLeaks: brew install betterleaks\n"
         "  • LeakTK: brew install leaktk/tap/leaktk"
     )
+    if selection_errors:
+        error_message += "\nConfigured engine availability: " + "; ".join(
+            selection_errors
+        )
+    raise RuntimeError(error_message)
 
 
 def select_all_engines(
     engines_config: List[Any],
     parent_config: Optional[dict] = None,
+    selection_errors: Optional[List[str]] = None,
 ) -> List[EngineConfig]:
     """
     Select all available engines from configuration list.
@@ -461,6 +478,10 @@ def select_all_engines(
             continue
 
         if not check_engine_consent(engine_config):
+            if selection_errors is not None:
+                selection_errors.append(
+                    f"{engine_config.type}: explicit cloud-scanning consent is missing"
+                )
             logger.warning(f"Scanner '{engine_config.type}' requires consent, skipping")
             continue
 
@@ -473,18 +494,27 @@ def select_all_engines(
             logger.debug(f"Found available scanner engine: {engine_config.type}")
             available.append(engine_config)
         else:
+            if selection_errors is not None:
+                selection_errors.append(
+                    f"{engine_config.type}: executable is not installed"
+                )
             logger.warning(
                 f"Scanner '{engine_config.type}' (binary: {engine_config.binary}) "
                 f"not available, skipping"
             )
 
     if not available:
-        raise RuntimeError(
+        error_message = (
             "No secret scanner found. Install one of:\n"
             "  • Gitleaks: brew install gitleaks\n"
             "  • BetterLeaks: brew install betterleaks\n"
             "  • LeakTK: brew install leaktk/tap/leaktk"
         )
+        if selection_errors:
+            error_message += "\nConfigured engine availability: " + "; ".join(
+                selection_errors
+            )
+        raise RuntimeError(error_message)
 
     return available
 

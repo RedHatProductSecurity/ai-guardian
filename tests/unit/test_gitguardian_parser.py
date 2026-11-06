@@ -139,6 +139,14 @@ class TestGitGuardianOutputParser(unittest.TestCase):
         self.assertIsNone(result)
         os.unlink(path)
 
+    def test_parse_error_object_is_not_treated_as_clean(self):
+        path = self._write_output({"error": "workspace quota exceeded"})
+
+        result = self.parser.parse(path)
+
+        self.assertIsNone(result)
+        os.unlink(path)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,7 +25,23 @@ budget_tokens: 1000
 - Manual verification on the reporter's KDE session remains pending because the
   distro, Plasma version and X11/Wayland session were not provided. Changes are
   local and uncommitted; preserve branch `2667` and use external `daf complete`.
+## Issue #2671 implementation — 2026-11-06
 
+- Continued managed DAF `open` session
+  `RedHatProductSecurity-ai-guardian-2671` on existing branch `2671`.
+- Default Docker/Podman and OpenShell images omit the GitGuardian CLI; derived
+  images opt in with `INCLUDE_GITGUARDIAN=true`. Local engines remain available.
+  The executor parses findings from ggshield's `--exit-zero` JSON output and
+  treats nonzero, invalid, and error-shaped results as incomplete scans. Failures
+  are retained across first-match, any-match and consensus; consensus thresholds
+  are unchanged. Safe cloud failure/readiness warnings follow `on_scan_error`.
+- Updated container/scanner docs, CHANGELOG, unit tests and the complete scanner
+  warning UX contract. Added DAF progress note and GitHub progress comment.
+- **Validation:** 461 related tests pass, 1 skipped. Ruff, Black (Python 3.10
+  target), error-level Pylint, package Mypy, buglog JSON validation, and
+  `git diff --check` pass. No container image build or live cloud scan was run.
+- Changes remain local and uncommitted; no commit, push or PR was created.
+  **Next:** user review and external `daf complete`.
 ## Issue #2669 implementation — 2026-11-06
 
 - Continued managed DAF `open` session

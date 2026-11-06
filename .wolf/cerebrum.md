@@ -298,6 +298,15 @@
   history count drops to zero; display refreshed availability or `Unknown` without
   resetting the type, directory, or text filters.
 
+- **2026-11-06 — GitGuardian ggshield output semantics (#2671):**
+  `ggshield secret scan path --json --exit-zero` returns success for findings and
+  reports those findings in JSON; never infer a clean scan from exit code 0 without
+  parsing that output. Nonzero exits and missing/invalid `policy_breaks` are failed
+  scans. Retain attempted-engine failures across multi-engine strategies so local
+  fallbacks still run, cloud failures reach the user and `on_scan_error`, and
+  consensus thresholds do not silently change. A missing unselected local
+  alternative is not an incomplete scan when another local engine completed.
+
 - **2026-11-06 — Docker CLI smoke witness permissions:** The readiness image runs
   as `sandbox` UID 1000, while the smoke runner's bind-mounted workspace is created
   host-owned with default `0755`. The mock tool creates its execution witness

@@ -14,6 +14,7 @@
 #   Docker:  docker build -t ai-guardian container/
 #   Podman: podman build --build-arg AI_GUARDIAN_VERSION=1.20.0 -t ai-guardian container/
 #   Docker:  docker build --build-arg AI_GUARDIAN_VERSION=1.20.0 -t ai-guardian container/
+#   Include GitGuardian: podman build --build-arg INCLUDE_GITGUARDIAN=true -t ai-guardian container/
 #
 # Run:
 #   Podman: podman run -it -p 63152 ai-guardian
@@ -51,6 +52,7 @@ ARG PI_VERSION=0.86.0
 ARG GROK_VERSION=1.0.41
 ARG GH_VERSION=2.74.1
 ARG GLAB_VERSION=1.91.0
+ARG INCLUDE_GITGUARDIAN=false
 
 # Copy wheel files if present (Dockerfile included to guarantee COPY succeeds
 # even when no .whl files exist in the build context)
@@ -87,7 +89,9 @@ RUN echo "Installing ai-guardian: ${AI_GUARDIAN_VERSION}" \
 RUN uv pip uninstall --python /opt/uv-tools/ai-guardian/bin/python3 opencv-python \
     && uv pip install --python /opt/uv-tools/ai-guardian/bin/python3 opencv-python-headless
 
-# Secret scanners. Versions come from the scanner pins bundled with AI Guardian.
+# Local secret scanners. Versions come from the scanner pins bundled with AI Guardian.
+# GitGuardian is an opt-in cloud scanner; its CLI and bundled runtime are included
+# only when INCLUDE_GITGUARDIAN=true is passed at build time.
 # The optional BuildKit secret authenticates GitHub API requests without
 # persisting the token in an image layer. Local builds remain unauthenticated.
 RUN --mount=type=secret,id=github_token,required=false \
@@ -102,8 +106,14 @@ RUN --mount=type=secret,id=github_token,required=false \
     && test -x /usr/local/bin/leaktk \
     && ai-guardian scanner install secretlint --use-pinned \
     && test -x /usr/local/bin/secretlint \
-    && ai-guardian scanner install gitguardian --use-pinned \
-    && test -x /usr/local/bin/ggshield
+    && mkdir -p /usr/local/bin/.ai-guardian \
+    && touch /usr/local/bin/.ai-guardian/.keep \
+    && if [ "${INCLUDE_GITGUARDIAN}" = "true" ]; then \
+        ai-guardian scanner install gitguardian --use-pinned \
+        && test -x /usr/local/bin/ggshield; \
+    else \
+        echo "GitGuardian omitted (set INCLUDE_GITGUARDIAN=true to include the cloud-scanner CLI)"; \
+    fi
 
 # detect-secrets is a Python package. Install its pinned version into a separate
 # uv tool environment so it remains available in the runtime image without pip.
@@ -201,15 +211,22 @@ COPY --from=builder /usr/local/bin/ai-guardian /usr/local/bin/
 RUN ln -sf /usr/local/bin/ai-guardian /usr/bin/ai-guardian \
     && (ai-guardian --version || echo "ai-guardian installed (version check skipped under emulation)")
 
-# Secret scanner launchers, the complete ggshield bundle, and detect-secrets.
+# Local secret scanner launchers and detect-secrets.
 COPY --from=builder /usr/local/bin/gitleaks /usr/local/bin/
 COPY --from=builder /usr/local/bin/betterleaks /usr/local/bin/
 COPY --from=builder /usr/local/bin/leaktk /usr/local/bin/
 COPY --from=builder /usr/local/bin/secretlint /usr/local/bin/
-COPY --from=builder /usr/local/bin/ggshield /usr/local/bin/
 COPY --from=builder /usr/local/bin/.ai-guardian /usr/local/bin/.ai-guardian
 COPY --from=builder /usr/local/bin/detect-secrets /usr/local/bin/
-RUN ggshield --version
+RUN if [ -d /usr/local/bin/.ai-guardian/gitguardian ]; then \
+        bundle_binary="$(find /usr/local/bin/.ai-guardian/gitguardian -type f -name ggshield -print -quit)"; \
+        test -n "$bundle_binary"; \
+        printf '#!/bin/sh\nexec "%s" "$@"\n' "$bundle_binary" > /usr/local/bin/ggshield; \
+        chmod 755 /usr/local/bin/ggshield; \
+        ggshield --version; \
+    else \
+        echo "GitGuardian CLI not included in this image"; \
+    fi
 
 # Forge CLIs (static Go binaries)
 COPY --from=builder /usr/local/bin/gh /usr/local/bin/

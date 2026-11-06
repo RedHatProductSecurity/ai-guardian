@@ -81,7 +81,7 @@ Terms of Service.
 | LeakTK | Apache 2.0 | Build time |
 | detect-secrets | Apache 2.0 | Build time |
 | Secretlint | MIT | Build time |
-| GitGuardian ggshield CLI | MIT (service terms apply) | Build time |
+| GitGuardian ggshield CLI | MIT (service terms apply) | **Opt-in build only** |
 | Gemini CLI | Apache 2.0 | Build time |
 | Codex CLI | Apache 2.0 | Build time |
 | Grok Build | Apache 2.0 | Build time; version pinned at build time |
@@ -838,16 +838,39 @@ CLI policy; it does not grant GitHub API or Git access.
 #### Bundled scanner engines
 
 Both support images preinstall pinned Gitleaks, BetterLeaks, LeakTK,
-detect-secrets, Secretlint, and the GitGuardian `ggshield` CLI. Their versions
-come from the scanner configuration bundled with AI Guardian, so host, profile,
-restored, and sandbox-local configurations can select them without startup
-downloads or an OpenShell policy for downloading scanner binaries.
+detect-secrets, and Secretlint. Their versions come from the scanner
+configuration bundled with AI Guardian, so host, profile, restored, and
+sandbox-local configurations can select them without startup downloads. The
+GitGuardian `ggshield` CLI is excluded from both default images because it is an
+optional cloud-dependent engine.
 
-Secretlint scans locally. Using the GitGuardian engine sends scan data to its
-cloud service and still requires configured consent and an API key; an
-OpenShell sandbox also needs policy access to that service. Installing the CLI
-in the image does not add runtime network access. Pattern-server access remains
-governed by the selected configuration and policy.
+To include GitGuardian in a derived image, build from the repository root with
+the opt-in build argument:
+
+```bash
+podman build -f container/Dockerfile --build-arg INCLUDE_GITGUARDIAN=true \
+    -t ai-guardian:gitguardian container/
+podman build -f container/Dockerfile.openshell \
+    --build-arg INCLUDE_GITGUARDIAN=true -t ai-guardian-openshell:gitguardian container/
+```
+
+The first command builds the normal UBI image; the second builds the OpenShell
+image. OpenShell cannot download scanner binaries at sandbox startup, so include
+the CLI in the base image when that runtime is intended to use GitGuardian. The
+build argument only packages the CLI; it does not grant service access or send
+data.
+
+Secretlint scans locally. Using the GitGuardian engine sends scanned content to
+GitGuardian's cloud service and requires explicit AI Guardian consent, a
+`GITGUARDIAN_API_KEY`, and network access. OpenShell also needs policy access to
+the service. The `ggshield` CLI is MIT-licensed; this does not grant a service
+subscription or quota. Eligible free workspaces currently include 10,000 scan
+API calls per rolling 30-day period, shared across API keys in that workspace;
+availability and limits are controlled by GitGuardian. A failed or rate-limited
+cloud scan is reported as incomplete coverage, not a clean result. Configured
+local scanners continue according to the chosen strategy and the global
+`on_scan_error` policy applies. Pattern-server access remains governed by the
+selected configuration and policy.
 
 TruffleHog is not included in the stock images. Its AGPL-3.0 installation path
 requires interactive license acknowledgement, which cannot be collected during
