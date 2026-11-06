@@ -417,10 +417,11 @@ rewriting healthy Codex hooks.
 
 Violation records use `context.ide_type` for the stable integration identity,
 independently of the response protocol. Codex CLI and Codex mode in ChatGPT
-desktop both record `codex`, while Claude-compatible response formatting is
-preserved. This identity does not indicate coverage for regular ChatGPT mode;
-that mode is outside the current Codex hook enforcement path. Other adapters
-that share Claude-compatible formatting use their own stable values, such as
+desktop both record `codex`. Its responses share the Claude-compatible envelope,
+with Codex-specific required fields for PreToolUse denials. This identity does not
+indicate coverage for regular ChatGPT mode; that mode is outside the current Codex
+hook enforcement path. Other adapters that share Claude-compatible formatting use
+their own stable values, such as
 `windsurf`, `augment`, `opencode`, and `crush`.
 Payloads that do not identify an integration use `unknown` rather than being
 attributed to Claude Code.
@@ -699,7 +700,7 @@ JSON object so error payloads are not echoed.
 | Cline | JSON `cancel` field | `{"cancel": true, "reason": "..."}` |
 | Kiro | Exit code 2 (PreToolUse) or 1 (other) + stderr | stderr = error message |
 | Windsurf | Exit code 2 + stderr | stderr = error message |
-| Codex | Same as Claude Code for shared events; `PermissionRequest` uses the Codex nested deny decision | Pre-tool denials use `hookSpecificOutput.permissionDecision`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
+| Codex | Claude-compatible envelope; `PreToolUse` deny requires `permissionDecisionReason`; `PermissionRequest` uses the Codex nested deny decision | `PreToolUse`: `hookSpecificOutput.permissionDecision = "deny"` plus a non-empty sanitized `permissionDecisionReason`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
 | OpenCode V1/V2 | V1: Claude-compatible JSON bridge; V2: domain-hook throw/mutation | V1: Claude-compatible JSON bridge; V2: thrown block or mutable `event.result` |
 | Pi | Same as Claude Code | Same as Claude Code via the generated extension |
 | Crush | Same as Claude Code | Same as Claude Code |
@@ -715,7 +716,7 @@ When ai-guardian detects a non-blocking issue (warn/log mode) or injects securit
 |-------|------------------|-------------------|--------|--------|
 | Claude Code | `systemMessage` | `hookSpecificOutput.additionalContext` | All (incl. PreToolUse deny) | Confirmed |
 | Augment | `systemMessage` | `hookSpecificOutput.additionalContext` | All (incl. PreToolUse deny) | Confirmed (inherits Claude Code) |
-| Codex | `systemMessage` | `hookSpecificOutput.additionalContext` | All (incl. PreToolUse deny) | Confirmed (inherits Claude Code) |
+| Codex | `systemMessage` | `hookSpecificOutput.additionalContext`; required `permissionDecisionReason` on PreToolUse deny | All (incl. PreToolUse deny) | Supported; Codex-specific reason is sanitized |
 | OpenCode | `systemMessage` | `hookSpecificOutput.additionalContext` | All (incl. PreToolUse deny) | Best-effort (bridge plugin) |
 | Crush | `systemMessage` | `hookSpecificOutput.additionalContext` | PreToolUse (incl. deny) | Best-effort (compatible format) |
 | Cursor | `user_message` | `agent_message` | All (incl. PreToolUse deny) | Confirmed |

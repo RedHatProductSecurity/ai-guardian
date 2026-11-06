@@ -112,13 +112,16 @@ under the smoke policy. Its exact native `bash` tool is mapped to canonical `Bas
 so SSRF/configuration-exfiltration probes must be denied before execution; a finding
 without that native pre-tool evidence is not a pass.
 
-Podman smoke uses normal bridge routing with a **smoke-only namespace firewall**,
-so the host's published daemon REST port keeps its normal return route. A trusted,
-short-lived helper installs an atomic nftables policy covering IPv4 and IPv6:
+Podman smoke uses the engine's default rootless network with a **smoke-only
+namespace firewall**, so the host's published daemon REST port keeps its normal
+return route. A trusted, short-lived helper installs an atomic nftables policy
+covering IPv4 and IPv6:
 loopback/local mocks and replies to inbound connections are allowed; new
 non-loopback outbound traffic is dropped. The temporary image gates its original
 entrypoint until installation succeeds. The agent runs as a non-root user with
-all capabilities dropped and no-new-privileges; only the helper receives
+the normal rootless Podman capability profile, matching managed container
+launches. The startup gate rejects root plus `SYS_ADMIN` and `NET_ADMIN` in the
+effective, permitted, bounding, or ambient sets. Only the helper receives
 `NET_ADMIN` in the selected sandbox network namespace. Failed setup never starts
 the daemon/agent and stops even a `--keep` sandbox. No host firewall, global
 Podman settings, normal images, tray/discovery, or shared sandbox behavior is

@@ -8,11 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Codex PreToolUse denials:** Include Codex's required non-empty
+  `permissionDecisionReason` using the existing sanitized violation label, so the
+  CLI accepts denials instead of treating them as invalid hook output.
 - **Codex readiness smoke hook execution:** Use Codex's invocation-only hook-trust
   override in the disposable smoke container only after verifying its isolated
   `CODEX_HOME` contains exactly the generated AI Guardian hooks and no other active
-  hook sources. Do not persist trust state; keep all native hook, execution,
-  raw-output and clean-exit assertions mandatory.
+  hook sources. Do not persist trust state or change Codex's workspace-write
+  sandbox/approval policy. Keep all native hook, execution, raw-output and
+  clean-exit assertions mandatory. Failure diagnostics summarize only allowlisted
+  Codex event/item types, fixed error/output categories, native tool-name counts,
+  correlated function-output counts/shapes, and numeric statuses/exit codes. The
+  local mock emits function calls as in-progress until argument deltas complete,
+  then reports the completed item.
 - **Gemini native output containment:** Scan `AfterTool`'s model-visible
   `llmContent`, preserving text-part boundaries. Refuse results requiring
   sanitization through Gemini's native deny decision instead of returning an
@@ -52,13 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   REST through the sandbox's private address on its exact internal-only network
   when Docker omits published bindings for internal networks. No external network
   is attached; the Podman published-port/firewall path is unchanged.
-- **Agent CLI smoke network isolation:** Podman smoke uses normal bridge routing
-  and a smoke-only IPv4/IPv6 egress firewall, preserving the published daemon REST
-  return path. A short-lived namespace helper installs the policy before setup;
-  agents remain unprivileged and cannot remove it. Normal containers, shared
-  lifecycle code and the host firewall are unchanged; Docker retains its internal
-  network. The temporary Podman smoke image adds the GPL-2.0-only nftables external
-  tool; supplied images without the bootstrap fail closed without hidden rebuilds.
+- **Agent CLI smoke network isolation:** Podman smoke uses its default rootless
+  network with a smoke-only IPv4/IPv6 egress firewall, preserving the published
+  daemon REST return path. A short-lived namespace helper installs the policy before
+  setup; agents remain non-root and the startup gate rejects
+  `SYS_ADMIN`/`NET_ADMIN`, so
+  they cannot remove it. Normal containers, shared lifecycle code and the host
+  firewall are unchanged; Docker retains its internal network. The temporary
+  Podman smoke image adds the GPL-2.0-only nftables external tool; supplied images
+  without the bootstrap fail closed without hidden rebuilds.
 - **OpenCode smoke startup:** Disable automatic update checks and remote model
   catalog fetching for isolated smoke invocations, avoiding repeated network
   timeouts on the internal egress-blocked network. Normal OpenCode auto-updates
@@ -117,6 +127,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Release command safety:** `scripts/release.sh` now previews by default. An
   explicit `--execute` is required for release mutations and publication.
+- **Podman agent smoke profile:** Match the managed container's rootless
+  default network, `keep-id` user namespace, and normal capability defaults so
+  Codex's `workspace-write` Bubblewrap sandbox gets the same runtime setup. The
+  startup gate still requires a non-root user without `SYS_ADMIN` or `NET_ADMIN`;
+  the egress firewall, hook/execution/raw-output/clean-exit evidence, and Codex
+  sandbox/approval settings remain unchanged. A retained-container probe still
+  fails at Bubblewrap's `devpts` mount (`Permission denied`); the enforcement
+  source remains undetermined, so execution is not qualified.
 
 ### Added
 - **Smoke CLI version selection:** Use `--cli-name opencode --cli-version 1.19.0`

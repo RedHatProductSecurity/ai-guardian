@@ -91,7 +91,8 @@ def test_codex_blocked_operation_records_codex_identity():
     3. The violation is recorded for audit and observability.
 
     Expected User Experience:
-    - Codex receives its existing Claude-compatible deny response.
+    - Codex receives a protocol-complete deny response, including its required
+      sanitized ``permissionDecisionReason``.
     - The recorded context identifies the integration as ``codex``.
     - The recorded identity is not incorrectly reported as ``claude_code``.
     """
@@ -132,4 +133,8 @@ def test_codex_blocked_operation_records_codex_identity():
 
     response = json.loads(result["output"])
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    reason = response["hookSpecificOutput"]["permissionDecisionReason"]
+    assert reason
+    assert reason == response["hookSpecificOutput"]["additionalContext"]
+    assert "echo safe" not in reason
     assert violation_log.call_args.args[1].to_dict()["ide_type"] == "codex"

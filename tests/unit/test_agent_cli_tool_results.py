@@ -134,6 +134,7 @@ def test_mock_selects_native_shell_instead_of_an_earlier_advisory_checker(
     assert arguments[argument] == expected
     stats = provider._stats()
     assert stats["tool_offers"] == {case: 1}
+    assert stats["command_tool_names"] == {case: {native_name.casefold(): 1}}
     assert all(
         tool_name not in json.dumps(stats)
         for tool_name in (
@@ -169,6 +170,7 @@ def test_advisory_or_unknown_command_tools_never_count_as_a_native_tool_offer(
     )
     assert provider._stats()["tool_offers"] == {}
     assert provider._stats()["command_tool_requests"] == {}
+    assert provider._stats()["command_tool_names"] == {}
     assert provider.TOOL_IDENTITIES == {}
     assert provider.GEMINI_TOOL_CASES == {}
 
@@ -260,6 +262,81 @@ def test_clean_tool_requires_a_correlated_result_not_a_tool_offer(provider, prot
     provider._observe_request(payload)
     assert provider._stats()["clean_tool_results"]["clean_tool"] == 1
     assert provider.request_case(payload) == "clean_tool"
+
+
+def test_responses_function_output_diagnostics_retain_only_shape_counts(provider):
+    identity = provider._issued_tool_id("clean_tool", "call_")
+    payload = {
+        "input": [
+            {
+                "type": "function_call_output",
+                "call_id": identity,
+                "output": {"success": True, "output": "private-output-sentinel"},
+            }
+        ]
+    }
+
+    provider._observe_request(payload)
+    stats = provider._stats()
+
+    assert stats["function_call_outputs"] == {"clean_tool": 1}
+    assert stats["known_function_call_outputs"] == {"clean_tool": 1}
+    assert stats["unknown_function_call_outputs"] == {"clean_tool": 0}
+    assert stats["function_call_output_shapes"] == {"clean_tool": {"object_success": 1}}
+    assert stats["function_call_output_categories"] == {"clean_tool": {"other_text": 1}}
+    assert "private-output-sentinel" not in json.dumps(stats)
+
+
+def test_responses_function_output_diagnostics_count_unknown_ids(provider):
+    payload = {
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": "AGENT_CLI_SMOKE_CASE: clean_tool"}
+                ],
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "unrecognized-call-id",
+                "output": "No function found for this tool invocation",
+            },
+        ]
+    }
+
+    provider._observe_request(payload)
+    stats = provider._stats()
+
+    assert stats["function_call_outputs"] == {"clean_tool": 1}
+    assert stats["known_function_call_outputs"] == {"clean_tool": 0}
+    assert stats["unknown_function_call_outputs"] == {"clean_tool": 1}
+    assert stats["function_call_output_shapes"] == {"clean_tool": {"string": 1}}
+    assert stats["function_call_output_categories"] == {
+        "clean_tool": {"unresolved_tool": 1}
+    }
+    assert "No function found" not in json.dumps(stats)
+
+
+@pytest.mark.parametrize(
+    ("output", "category"),
+    (
+        ("approval policy is never; reject command", "approval_policy_rejected"),
+        ("approval request is unavailable", "approval_reference"),
+        ("permission denied", "permission_denied"),
+        ("bwrap: setting up uid map: Permission denied", "permission_denied_bwrap"),
+        ("Permission denied creating a namespace", "permission_denied_namespace"),
+        ("operation not permitted", "operation_not_permitted"),
+        ("permission check failed", "permission_reference"),
+        ("sandbox denied the operation", "sandbox_reference"),
+        ("execution policy rejected the operation", "policy_reference"),
+    ),
+)
+def test_function_call_output_categories_use_fixed_policy_labels(
+    provider, output, category
+):
+    assert provider._function_call_output_category("clean_tool", output) == category
+    assert output not in json.dumps({"category": category})
 
 
 @pytest.mark.parametrize("protocol", ("chat", "responses", "anthropic", "gemini"))
@@ -868,6 +945,38 @@ def test_tool_evidence_reader_accepts_only_aggregate_counts(monkeypatch):
         "tool_offers": 1,
         "clean_tool_results": 1,
         "raw_tool_output_requests": 0,
+        "function_call_outputs": 0,
+        "known_function_call_outputs": 0,
+        "unknown_function_call_outputs": 0,
+        "function_call_output_string": 0,
+        "function_call_output_object_success": 0,
+        "function_call_output_object_other": 0,
+        "function_call_output_array": 0,
+        "function_call_output_null": 0,
+        "function_call_output_scalar": 0,
+        "function_call_output_category_expected_probe_output": 0,
+        "function_call_output_category_unresolved_tool": 0,
+        "function_call_output_category_unsupported_tool": 0,
+        "function_call_output_category_invalid_arguments": 0,
+        "function_call_output_category_hook_blocked": 0,
+        "function_call_output_category_approval_policy_rejected": 0,
+        "function_call_output_category_approval_reference": 0,
+        "function_call_output_category_permission_denied": 0,
+        "function_call_output_category_permission_denied_bwrap": 0,
+        "function_call_output_category_permission_denied_namespace": 0,
+        "function_call_output_category_operation_not_permitted": 0,
+        "function_call_output_category_permission_reference": 0,
+        "function_call_output_category_sandbox_reference": 0,
+        "function_call_output_category_policy_reference": 0,
+        "function_call_output_category_timeout": 0,
+        "function_call_output_category_error_text": 0,
+        "function_call_output_category_other_text": 0,
+        "function_call_output_category_empty": 0,
+        "native_tool_name_bash": 0,
+        "native_tool_name_shell": 0,
+        "native_tool_name_exec_command": 0,
+        "native_tool_name_shell_command": 0,
+        "native_tool_name_run_shell_command": 0,
     }
     monkeypatch.setattr(
         runner,

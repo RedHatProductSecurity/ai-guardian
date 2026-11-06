@@ -8,19 +8,19 @@ import time
 from pathlib import Path
 
 READY_FILE = Path("/tmp/ai-guardian-smoke-firewall-ready")
+CAPABILITY_FIELDS = ("CapEff", "CapPrm", "CapBnd", "CapAmb")
+ADMIN_CAPABILITIES = (1 << 12) | (1 << 21)  # CAP_NET_ADMIN | CAP_SYS_ADMIN
 
 
-def agent_privileges_are_restricted(status: str) -> bool:
+def agent_has_no_container_admin_capabilities(status: str) -> bool:
     fields = dict(line.split(":", 1) for line in status.splitlines() if ":" in line)
-    if fields.get("NoNewPrivs", "").strip() != "1":
-        return False
     try:
-        return all(
-            int(fields[key].strip(), 16) == 0
-            for key in ("CapEff", "CapPrm", "CapBnd", "CapAmb")
-        )
+        capability_sets = [int(fields[key].strip(), 16) for key in CAPABILITY_FIELDS]
     except (KeyError, ValueError):
         return False
+    return all(
+        not capability_set & ADMIN_CAPABILITIES for capability_set in capability_sets
+    )
 
 
 def wait_for_firewall(path: Path = READY_FILE, timeout: float = 90) -> bool:
@@ -44,13 +44,15 @@ def wait_for_firewall(path: Path = READY_FILE, timeout: float = 90) -> bool:
 
 def main() -> int:
     try:
-        restricted = agent_privileges_are_restricted(
+        has_no_admin_capabilities = agent_has_no_container_admin_capabilities(
             Path("/proc/self/status").read_text(encoding="ascii")
         )
     except OSError:
-        restricted = False
-    if os.geteuid() == 0 or not restricted:
-        print("ERROR: smoke sandbox must be unprivileged with no-new-privileges.")
+        has_no_admin_capabilities = False
+    if os.geteuid() == 0 or not has_no_admin_capabilities:
+        print(
+            "ERROR: smoke sandbox requires a non-root user without SYS_ADMIN or NET_ADMIN."
+        )
         return 1
     if not wait_for_firewall():
         print(
