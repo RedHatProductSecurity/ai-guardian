@@ -2,9 +2,36 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-05
+> Last updated: 2026-11-06
 
 ## User Preferences
+
+- **2026-11-06 — Codex smoke runtime comparison:** User selected matching the
+  regular rootless Podman container defaults for the disposable smoke. This
+  authorizes removing the smoke-only all-capability drop/no-new-privileges flags
+  and aligning its user namespace and default network. Preserve Codex
+  `workspace-write`, the startup gate, egress firewall, admin-capability checks,
+  loopback REST binding, and every hook/execution/raw-output/clean-exit assertion.
+  It does not authorize Codex `danger-full-access`, a seccomp-policy change, or
+  weakening smoke evidence. Four retries still failed tool execution. A retained
+  container plus `codex sandbox /bin/true` reproduced
+  `bwrap: Can't mount devpts on /newroot/dev/pts: Permission denied`; combined
+  nested namespace creation and tmpfs mounting worked, but devpts mounting did
+  not. Host Podman reports Fedora 44 rootless, AppArmor disabled, SELinux and
+  seccomp enabled. This points to a devpts mount restriction, but does not prove
+  which enforcement layer denies it. Do not use the suggested unconfined or
+  setuid workarounds; no security policy was changed. User additionally requires
+  a fixed, explicit local smoke explanation with a project-doc link when Codex's
+  aggregate diagnostics identify this Bubblewrap denial. The message must not
+  expose raw errors, mark the case as passed, or weaken sandbox/isolation checks.
+
+- **2026-11-06 — Codex readiness hook trust:** User explicitly authorized the
+  invocation-only `--dangerously-bypass-hook-trust` option for the disposable
+  local-mock smoke after fail-closed validation of the exact generated AI Guardian
+  hook set. Keep the dedicated Codex home, no other active hook sources, no
+  persistent trust writes, and all native hook/execution/raw-output/clean-exit
+  assertions. The user also supplied `codex hooks trust approve --source ...` as a
+  possibility; use only if supported/documented, not by assumption.
 
 - **2026-11-05 — Gemini/Pi shared correction approval:** User selected "Fix both"
   for Gemini native-output scanning/refusal and Pi lazy-first-transcript handling,
@@ -263,6 +290,126 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-06 — Docker CLI smoke witness permissions:** The readiness image runs
+  as `sandbox` UID 1000, while the smoke runner's bind-mounted workspace is created
+  host-owned with default `0755`. The mock tool creates its execution witness
+  directory inside that mount; a differing host UID cannot write to the workspace,
+  causing each CLI's native output-tool cases to lack execution evidence. Pre-create
+  only `.agent-cli-smoke-results` with POSIX mode `0733`; keep the workspace at
+  `0755` and the temporary parent private. The source/test diagnosis fits the
+  aggregate CI evidence, but still needs runtime qualification; rerun
+  `42244579465` was dispatched on the fix. That run passes Gemini, OpenCode V1,
+  Pi, and OpenCode V2, confirming the permission mismatch affected those clients.
+  Codex still fails its output-tool cases with only fixed `permission_reference`,
+  error-category, and exit-status evidence; no witness exists. The user now permits
+  only this Codex step to use temporary `continue-on-error` for release readiness:
+  retain the failed outcome, emit a warning/job summary, and do not call it a pass.
+  Keep other failures blocking and do not infer that Codex shares local Podman's
+  Bubblewrap/devpts cause.
+
+- **2026-11-06 — Do not conflate Codex CI and local Podman failures:** Release
+  Readiness run `42229172707` passed Codex's five denial cases and clean prompt,
+  but its three output-tool cases recorded pre/post hooks and a tool offer while
+  `command_execution` ended `failed`/exit 1. The sanitized function result is only
+  `permission_reference` (with `unresolved_tool`/`other` error labels); no raw error
+  is logged. That is not proof of the local Fedora Podman `permission_denied_bwrap`
+  devpts failure. Preserve the evidence gate and diagnose these environments
+  separately.
+
+- **2026-11-06 — Codex hook trust is not the remaining smoke failure:** Codex
+  0.167 derives per-hook trust from a normalized handler/event/matcher identity and
+  compares it with `trusted_hash` in user/session `[hooks.state]`. State keys
+  include source path, event name, matcher-group index, and handler index; the
+  state loader intentionally accepts only user/session layers. Official docs
+  describe reviewing hooks with `/hooks`, not a supported `codex hooks trust
+  approve` CLI. The smoke's one-invocation `--dangerously-bypass-hook-trust` is
+  already active after exact source validation; PreToolUse/PostToolUse deltas prove
+  hooks run. Do not bake internal hash state into the image for this failure; the
+  remaining error is in Codex's nested sandbox execution.
+
+- **2026-11-06 — Codex PreToolUse denial wire contract:** Release Readiness run
+  `42151399090` passes isolated hook trust/scope but records expected SSRF/config
+  findings followed by PostToolUse, while clean/output probes lack execution
+  witnesses. Current Codex hook docs and parser require a non-empty
+  `hookSpecificOutput.permissionDecisionReason` with
+  `permissionDecision: "deny"`; the shared formatter omitted it. Add the existing
+  sanitized violation label only in `CodexAdapter` for PreToolUse;
+  keep clean output decision-free and preserve all trust, isolation, execution,
+  raw-output, and clean-exit assertions. This differs from Pi's lowercase-bash
+  mapping: Codex reports canonical `Bash` and the findings show it was recognized.
+  The stale-image issue also made the runner flag-position probe unnecessary; the
+  known subcommand form already passed hook-scope preflight. Focused tests and
+  linters pass. A current-source Podman smoke confirms the denial correction on
+  five denial cases, but three output cases still lack execution witnesses despite
+  tool offers and pre/post hooks. A follow-up found no `command_execution` item in
+  stdout. The third run found three `error` items and one `agent_message` per
+  output-tool case, but no command event. Classify error messages only to fixed
+  labels; report allowlisted Codex event/item types and numeric status/exit-code
+  counts from stdout/stderr, never command/output/error text. Fourth through sixth
+  runs continue to fail the output-tool cases; expanded categories still produce
+  one unresolved-tool and two other errors. Seventh smoke identifies the offered
+  native tool as `exec_command`, with a `cmd` string argument matching Codex's
+  documented schema. Eighth smoke shows one function-call output with a known
+  issued ID, but a string output value; execution is still unwitnessed. The mock
+  now classifies output content only into fixed labels (expected probe, unresolved
+  tool, unsupported, invalid arguments, hook/policy, timeout, generic error, other,
+  or empty), without storing or reporting content. Ninth smoke returned the broad
+  `policy_or_sandbox` category. The mock stream was also invalid: `output_item.added`
+  carried a completed function call and full arguments before argument deltas. It
+  now emits in-progress/empty arguments and completes at `output_item.done`, per
+  Codex's own fixtures. Tenth smoke is unchanged, so stream lifecycle was not the
+  blocker. Split the fixed output category into approval/policy/permission/sandbox
+  labels before another run. Twelfth smoke classified the output as
+  `permission_denied_bwrap`, confirming nested Bubblewrap setup fails in the
+  smoke. The user then authorized matching the regular rootless Podman profile.
+  Three retries removed the custom capability drop/no-new-privileges, matched
+  `keep-id` plus the image's non-root user, and used Podman's default network;
+  each still passed five denial cases and `allowed` but failed all three output
+  execution witnesses with the same category. These comparisons show those
+  container flags/network settings are not sufficient to explain the failure.
+  The thirteenth Landlock retry also failed with `sandbox_reference`; Codex 0.167's
+  Linux sandbox requires Bubblewrap for this filesystem policy, so the ineffective
+  Landlock override was removed. Remaining differences include the gated
+  entrypoint, bind-mount labels, and effective Codex invocation/config; the exact
+  blocked operation is not isolated. Preserve `workspace-write`, approval, the
+  firewall, admin-capability gate and all evidence assertions. No seccomp-policy
+  change or full-access mode is authorized; no full smoke qualification or
+  publication has occurred.
+
+- **2026-11-05 — Docker internal-network smoke REST preflight:** Release Readiness
+  run `42095872537` failed twice before cases because `docker port` returned no
+  host binding although sandbox IPC and internal REST health were healthy. A
+  missing host publication must not be conflated with daemon failure. The runner
+  may fall back only on Linux with a verified local Unix-socket Docker context,
+  using a private IPv4 returned for the exact smoke-only internal network; reject
+  remote/context overrides and non-private addresses. Keep proxy bypass and
+  redirect refusal, verify health first then authenticated stats, and never expose
+  the address/token. Do not attach another network or alter firewall/egress policy.
+  Podman's published-port route is unchanged. The new code has 160 focused unit and
+  complete UX tests plus all linters passing. User explicitly authorized
+  publication: commit `87f23706` is pushed to `2662`. Release Readiness run
+  `42127127572` confirms Docker internal-health and authenticated host-REST routing
+  pass on Linux. The same run then fails Codex smoke with zero hook events/findings;
+  sensitive tool output reaches the mock. This matches the prior verified Codex
+  native-hook untrusted status. Do not change trust or relax assertions. REST routing
+  is qualified in CI; full Codex, Docker Desktop and remote-context smoke remain
+  unqualified.
+
+- **2026-11-05 — Gemini hook capability metadata CI regression:** The PR matrix
+  failed all eight OS/Python jobs on the same registry response-contract test.
+  `IDEIntegration.post_output_transform` defaulted true for Gemini even though its
+  native `AfterTool` safely denies results requiring sanitization and cannot replace
+  output. Mark the Gemini registry entry refusal-only (`post_output_transform=False`)
+  and align its platform-contract text; retain the existing exact UX refusal and
+  the generic response contract. 54 unit/Gemini UX tests and static checks pass.
+  Published at the user's request as `b5570cd3`. All PR #2670 checks, including
+  all eight Python/OS matrix jobs, are green. Release Readiness run `42136972874`
+  attempt 1 had a transient OpenCode download connection reset in the minimal
+  scenario image build; its job-only retry passed. Readiness remains failed only at
+  Codex real-agent smoke: Docker REST passes, but there are zero hook events and raw
+  sensitive output reaches the mock. Do not alter the runtime refusal, native trust,
+  or smoke evidence to force a pass.
 
 - **2026-11-05 — Real Gemini/Pi smoke gaps (#2662), approved corrections:** Gemini
   0.67.0 sends `tool_response.llmContent`, not conventional output fields, and ignores

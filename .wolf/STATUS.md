@@ -5,9 +5,227 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-05 (UTC)
+> Last updated: 2026-11-06 (UTC)
 
 ---
+
+## Codex PreToolUse denial smoke correction — 2026-11-06
+
+- Release Readiness run `42151399090` passed the exact isolated Codex hook-scope
+  preflight but failed tool cases against pre-fix commit `57a7bb39`: expected
+  SSRF/config-exfil findings were logged, yet PostToolUse ran and output cases had
+  no execution witness. This distinguished the failure from the earlier hook-trust
+  issue.
+- Current Codex hook docs and parser require a non-empty
+  `hookSpecificOutput.permissionDecisionReason` for
+  `permissionDecision: "deny"`. `CodexAdapter` now adds the existing sanitized
+  violation label for PreToolUse blocks. Clean responses remain
+  `{}`; no other adapter, policy, trust state, or smoke assertion changed.
+- The uncommitted root-vs-subcommand flag-position probe was removed: the known
+  `codex exec --dangerously-bypass-hook-trust` syntax passed scope preflight, and
+  the probe addressed the stale-image false lead rather than this deny-format bug.
+- Investigated Codex 0.167 hook trust: trust state is a per-hook `trusted_hash`
+  under `CODEX_HOME/config.toml` `[hooks.state]`, keyed by source path, event,
+  matcher-group index and handler index; Codex recomputes normalized hook identity
+  hashes before dispatch. Official docs expose `/hooks` review, not a supported
+  `codex hooks trust approve` CLI. The smoke already uses the one-invocation trust
+  bypass after exact source validation, and its PreToolUse/PostToolUse deltas show
+  hooks ran. Trust is not the remaining tool-execution failure; do not bake
+  unsupported/persistent hook hashes into the image.
+- Validation: 252 adapter unit tests, 35 hook-processing tests, 148 runner unit
+  tests, and all 32 Codex + smoke UX tests pass. The latest diagnostic changes pass
+  301 runner/provider/smoke-UX tests. Ruff, Black (py310), error-level Pylint,
+  package/script Mypy, and `git diff --check` pass. A current-source Podman
+  Codex smoke confirmed the denial fix (all five denial cases pass) but still
+  failed the three output-tool execution witnesses. The second run again showed
+  tool offers and pre/post hooks but no execution witness or `command_execution`
+  item in stdout. The third run found three `error` items and one `agent_message` in
+  each output-tool case, with no command event. The runner now classifies those
+  error messages into fixed labels only (never emits error text), in addition to
+  allowlisted event/item counts and numeric command status/exit codes. The fourth
+  through sixth runs still fail the three output-tool execution witnesses. The
+  sixth includes the expanded fixed-label classifier but again reports one
+  unresolved-tool and two other errors, so error-message matching has not narrowed
+  the cause. Seventh smoke confirms Codex was offered `exec_command`, with its
+  documented `cmd` string argument shape, but still fails with the same events and
+  fixed error categories. Added fixed-label counts for function-call outputs,
+  whether their IDs correlate to an issued tool, and output value shape; no payload
+  values are retained or printed. Eighth smoke shows one output for a known
+  function-call ID, but its value is a string; no output text is retained. Ninth
+  smoke narrows the output to `policy_or_sandbox`, still without execution. Source
+  comparison then found the mock marked function calls `completed` in
+  `output_item.added` while also streaming arguments; Codex's own fixtures complete
+  function calls at `output_item.done`. The mock now uses an `in_progress` item with
+  empty arguments, streams the deltas, then completes the item. Tenth smoke still
+  fails all three output-tool cases with the same `policy_or_sandbox` function
+  result category and no execution witness; the stream correction was not
+  sufficient. Eleventh smoke narrowed the output to `permission_denied`; the
+  twelfth categorized it as `permission_denied_bwrap`. The thirteenth smoke still
+  failed after the legacy-Landlock CLI flag with `sandbox_reference`; Codex 0.167's
+  Linux sandbox requires Bubblewrap for this filesystem policy and app-server
+  socket isolation, so the flag was removed.
+- The user authorized matching the regular rootless Podman profile, without
+  changing smoke evidence or Codex `workspace-write`. Four current-source retries
+  removed the smoke-only capability drop/`no-new-privileges`, matched
+  `--userns=keep-id` plus the image's non-root user, and used Podman's default
+  network. All still passed the five denial cases and `allowed` but failed all
+  three output-tool execution witnesses with `permission_denied_bwrap`.
+- A retained failed sandbox reproduced the actionable error with
+  `CODEX_HOME=/sandbox/.codex codex sandbox /bin/true`:
+  `bwrap: Can't mount devpts on /newroot/dev/pts: Permission denied`. Nested
+  user/mount/pid/net/ipc/uts namespace creation and a tmpfs mount succeeded in
+  that same container, while a devpts mount failed. Host Podman reports Fedora 44,
+  rootless, AppArmor disabled, SELinux and seccomp enabled with the default
+  seccomp profile. This narrows the failure to devpts mounting but does not
+  identify whether SELinux, seccomp or another kernel/container rule denies it.
+  No security policy was changed. The retained container and its temporary files
+  were removed after diagnosis.
+- Added a fixed, privacy-safe local smoke message for the aggregate
+  `permission_denied_bwrap` result, linking to `docs/CODEX_SANDBOX_RUNTIME.md`.
+  The failing case remains failed; no raw error is printed and no sandbox or
+  isolation assertion is weakened. The doc is indexed in docs/README.md and MkDocs.
+- Focused adapter/runner/firewall/provider tests and both complete affected UX
+  contracts: **580 passed**. Ruff, Black (py310), error-level Pylint, and
+  project-managed `uv run --extra dev mypy` pass. Bare global Mypy still reports
+  the known 14 errors in untouched `skill_discovery.py` and `secret_validator.py`;
+  the project-managed checker reports no issues. `git diff --check` passes.
+- Pushed branch `2662` at `d181d933` (commits `3e050a75` and `d181d933`); local
+  `.wolf` records remain excluded. Release Readiness run `42229172707` completed:
+  only the Container Images job failed. Codex passed five denial cases and
+  `allowed`, but failed `clean_tool`, `tool_output_secret`, and `tool_output_pii`
+  because the command item ended failed (exit 1) and no execution witness was
+  recorded. Aggregate tool output was `permission_reference`; the event summary
+  had one `unresolved_tool` and two `other` errors. Pre/post hooks and a tool offer
+  were recorded. The raw Codex message is intentionally unavailable, so this does
+  not establish the exact cause and must not be conflated with local Podman's
+  `permission_denied_bwrap`/devpts failure.
+- Updated all Release Readiness job titles to describe their checked scope. Split
+  Codex, Gemini, OpenCode V1, Pi, OpenCode V2, and consent-gated Claude into named
+  steps. Each continues after a prior smoke failure only when the shared smoke
+  prerequisites succeeded and the run was not cancelled; at that commit any
+  failure still failed the job. OpenShell image checks also continue after a CLI
+  smoke failure. The later temporary Codex-only exception is documented below.
+  Validation: **199** runner/workflow and IDE-registry unit tests pass; Ruff,
+  Black (py310), and `git diff --check` pass. Committed the workflow/changelog/test
+  edits as `db39a986`, pushed `2662`, and dispatched Release Readiness run
+  `42234852481`. It completed with the Real CLI Smoke Matrix failing; other jobs,
+  including container scenarios and OpenShell image checks, passed. All five named
+  CLI steps ran; each passed the five deny cases and allowed prompt, but failed
+  `clean_tool`, `tool_output_secret`, and `tool_output_pii` without an execution
+  witness.
+- Source-level diagnosis: the host runner created an empty workspace with default
+  `0755` permissions but did not pre-create `.agent-cli-smoke-results`. The mock
+  tool creates that directory inside the bind mount, while the image runs as
+  `sandbox` UID 1000. If host and container UIDs differ, the container can traverse
+  but cannot create the witness directory. This explains the shared Docker-runner
+  signature; private raw CLI errors were not retained, so a new Actions run is
+  still needed to qualify the diagnosis/fix. The local Podman `permission_denied_bwrap`
+  devpts failure remains separate and unresolved.
+- Local fix: pre-create only the disposable witness directory and grant POSIX
+  write/search (`0733`) there; keep the workspace non-writable to other users and
+  its temporary parent private. The red lifecycle test failed before the setup
+  change, then all **315** related runner/provider/UX tests passed. Ruff, Black
+  (py310), Pylint, script Mypy, and `git diff --check` pass. This code/test/changelog
+  fix was committed as `3f9fa331`, pushed to `2662`, and Release Readiness run
+  `42244579465` was dispatched and completed with Codex still failing (details
+  below). OpenWolf state remains uncommitted.
+- Follow-up run `42244579465` is complete. The witness-directory change qualified
+  the other four CLI smokes: Gemini, OpenCode V1, Pi, and OpenCode V2 all passed,
+  as did OpenShell image checks and the other readiness jobs. Codex still passed
+  REST, exact hook-scope preflight, five denial cases, and allowed prompt, but its
+  three output-tool cases failed without an execution witness. Aggregate Codex
+  evidence again reports a tool offer, pre/post hooks, one
+   `function_call_output_category_permission_reference`, three error items
+   (`unresolved_tool: 1`, `other: 2`), and a failed command execution with exit 1.
+   Raw error text was not retained. This confirms the workspace-permission fix for
+   the four non-Codex clients but does not diagnose Codex or establish that its
+   failure is the same as local Podman's Bubblewrap/devpts denial. Keep the Codex
+   smoke result failed and unqualified until execution evidence is present.
+- The user authorized a temporary release exception for only the Codex smoke step.
+  The workflow now uses step-level `continue-on-error` and adds a warning plus job
+  summary when `steps.codex_smoke.outcome` is failure; this allows release readiness
+  to continue but does not claim Codex passed. No job-level exception was added;
+  all other CLI/OpenShell failures, prerequisites, and cancellation behavior remain
+  blocking. The workflow contract test now enforces the narrow exception and report.
+  All **150** tests in `tests/unit/test_agent_cli_test.py` pass; Black, Ruff and
+  `git diff --check` pass. Committed the workflow/docs/changelog/test changes as
+  `48edef4e`, pushed to `2662`, and dispatched Release Readiness run
+  `42252905253`; it is running. OpenWolf state remains uncommitted. Next, verify
+  that the Codex failure is explicitly reported as unqualified while the job and
+  later checks continue, without masking failures from other steps.
+- Preserve Codex `workspace-write`, approval, firewall, rootless profile,
+  admin-capability gate, hooks, execution witness, raw-output checks and clean exit.
+  Do not switch to `danger-full-access`, install setuid bwrap, unconfine AppArmor,
+  or change seccomp/SELinux policy without authorization. Next: continue Codex
+  diagnosis using privacy-safe evidence only; preserve the separate Codex-vs-local
+  Podman diagnosis. Upstream Codex issue #35547 is related; do not open a duplicate.
+  The local explanation remains at
+  `/home/itdove/Downloads/ai-guardian-codex-smoke-explained.md`.
+
+## Codex Release Readiness hook-trust fix — 2026-11-06
+
+- The user explicitly authorized Codex's invocation-only
+  `--dangerously-bypass-hook-trust` for this disposable local-mock smoke; do not
+  persist trust state or relax evidence. The suggested
+  `codex hooks trust approve --source ...` command is not in the official CLI
+  reference, so it was not run. Official docs describe `/hooks` for interactive
+  review and the one-shot flag for automation that vets sources.
+- Smoke creation now pins a dedicated `/sandbox/.codex`. Before starting the mock
+  or agent, the runner requires that the installed CLI exposes the flag, plugin
+  inventory is valid and empty, `hooks.json` exactly matches the canonical
+  AI Guardian hook manifest, and project/system/inline/plugin sources are absent.
+  Fail closed on any uncertainty; no persisted trust or approval changes.
+- All existing native prompt/tool hook, actual execution, raw-sensitive-output,
+  clean-result and zero-exit checks remain mandatory. The flag appears only on the
+  Codex invocation.
+- Validation: 145 runner unit tests and all 28 smoke UX contracts pass; Ruff,
+  Black (py310), error-level Pylint, package/script Mypy and `git diff --check`
+  pass. Commit `e57fdc1b` was pushed to `origin/2662`.
+- Release Readiness run `42150134386` was superseded by `42151399090`. The latter
+  confirms exact hook scope but predates the Codex denial-response correction above;
+  neither run qualifies that fix.
+
+## Current Release Readiness Docker REST preflight — 2026-11-05
+
+- Release Readiness run `42095872537` failed on both attempts in
+  `Container Images (real-agent smoke checks)`, before Codex cases. The daemon IPC
+  and in-container REST health were healthy, but `docker port` returned no host
+  binding (`host_port=0`); the runner treated the missing publication as fatal.
+- Added a fail-closed Docker-only fallback for Linux local Unix-socket contexts:
+  inspect the exact smoke network's private IPv4, probe daemon health without
+  redirects/proxies, then require authenticated stats. Reject global/non-private
+  addresses, Docker remote contexts and host/context overrides. No network,
+  firewall, trust, or egress policy changed; Podman remains on its published-port
+  path.
+- All **160** directly affected unit and complete smoke UX tests pass. Ruff,
+  Black (py310), error-level Pylint, package/script Mypy and diff checks pass.
+  The first script Mypy run caught an optional address type; an explicit JSON type
+  guard corrected it. No local container/runtime reproduction was performed.
+- At the user's request, committed the five code/test/doc files as `87f23706` and
+  pushed branch `2662`; remote SHA was verified. Release Readiness was dispatched
+  as run `42127127572` against that exact commit. The run failed only at the
+  container real-agent smoke job; the other listed jobs passed. Crucially, the new
+  Docker route worked: internal health and authenticated host stats both passed.
+  Codex then recorded no hook events or violations; its two sensitive-output probes
+  reached the mock and failed closed. This is consistent with the previously
+  verified untrusted native Codex hooks, not a REST regression. Do not change trust
+  or weaken assertions. Docker Desktop/remote contexts and a full Codex smoke pass
+  remain unqualified.
+- The PR Test matrix on `87f23706` also failed all eight OS/Python jobs on one
+  contract: `test_registered_hook_adapters_cover_response_contract[gemini]`.
+  Registry metadata inherited `post_output_transform=True`, contradicting the
+  already-implemented native AfterTool refusal and UX contract. Set it explicitly
+  false, documented the platform contract, and added a metadata regression. All 54
+  registry/Gemini unit+UX tests and static checks pass. Pushed as `b5570cd3`.
+- PR #2670 checks are green on `b5570cd3`, including all eight Python/OS matrix
+  jobs, linters, scenarios, integration tests, Buildx and docs.
+- Release Readiness run `42136972874` attempt 1 had a transient minimal-scenario
+  base-image fetch failure (curl exit 35, connection reset while downloading
+  OpenCode). The job-only retry on attempt 2 passed. Container real-agent smoke is
+  the sole remaining failed job: Docker internal health and authenticated host
+  REST pass, but Codex records no hook events/findings and sensitive output reaches
+  the local mock. Do not change trust or weaken evidence assertions; no source
+  change is indicated by the transient image-fetch failure.
 
 ## Issue #2662 implementation — 2026-11-04
 
