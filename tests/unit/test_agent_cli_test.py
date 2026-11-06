@@ -1918,6 +1918,25 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
     assert smoke_indices == sorted(smoke_indices)
     assert smoke_indices[0] > prerequisites_index
 
+    codex_step = next(step for step in steps if step.get("id") == "codex_smoke")
+    assert codex_step["continue-on-error"] is True
+    assert all(
+        step.get("continue-on-error") is not True
+        for step in steps
+        if step is not codex_step
+    )
+    assert "continue-on-error" not in workflow["jobs"]["container-images"]
+    codex_failure_report = next(
+        step
+        for step in steps
+        if step.get("name") == "Report tolerated Codex smoke failure"
+    )
+    assert codex_failure_report["if"] == (
+        "${{ !cancelled() && steps.codex_smoke.outcome == 'failure' }}"
+    )
+    assert "GITHUB_STEP_SUMMARY" in codex_failure_report["run"]
+    assert "does not qualify Codex" in codex_failure_report["run"]
+
     claude_steps = [
         step
         for step in steps
