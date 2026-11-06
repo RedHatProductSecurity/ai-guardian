@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Codex readiness smoke hook execution:** Use Codex's invocation-only hook-trust
+  override in the disposable smoke container only after verifying its isolated
+  `CODEX_HOME` contains exactly the generated AI Guardian hooks and no other active
+  hook sources. Do not persist trust state; keep all native hook, execution,
+  raw-output and clean-exit assertions mandatory.
 - **Gemini native output containment:** Scan `AfterTool`'s model-visible
   `llmContent`, preserving text-part boundaries. Refuse results requiring
   sanitization through Gemini's native deny decision instead of returning an

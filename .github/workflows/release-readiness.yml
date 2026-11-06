@@ -815,7 +815,9 @@ jobs:
 
       # Each invocation prepares a strict-derived config before creation: prompt /
       # pre-tool deny, clean-tool and sensitive-output sanitization cases. This is
-      # not unmodified @strict post-tool qualification. Trust is never auto-approved.
+      # not unmodified @strict post-tool qualification. Codex's invocation-only
+      # hook-trust override is used only after the runner verifies its exact isolated
+      # AI Guardian hook set; no persistent Codex trust state is written.
       - name: Verify real agent CLI hooks with local mock provider
         run: |
           scripts/agent-cli-test --cli-name codex --agent smoke \
