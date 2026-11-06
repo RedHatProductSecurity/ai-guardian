@@ -131,6 +131,13 @@ def test_managed_events_have_an_e2e_case_for_every_hook_surface():
             assert cases, f"{integration.key} has hooks but no event plan"
 
 
+def test_gemini_registry_marks_aftertool_refusal_as_nontransforming():
+    integration = next(item for item in SUPPORTED_IDE_REGISTRY if item.key == "gemini")
+
+    assert integration.post_output_transform is False
+    assert "not safe output replacement" in integration.platform_contract
+
+
 def test_transcript_and_session_capabilities_have_registered_implementations():
     transcript_names = {adapter.name for adapter in TRANSCRIPT_ADAPTERS}
     format_to_adapter = {

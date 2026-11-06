@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `llmContent`, preserving text-part boundaries. Refuse results requiring
   sanitization through Gemini's native deny decision instead of returning an
   unsupported replacement field that leaves raw output visible.
+- **Gemini hook capability metadata:** Mark `AfterTool` as refusal-only, not a
+  safe output-transform surface, matching the native adapter and user contract.
 - **Pi first-session transcript:** Handle the expected not-yet-persisted first
   transcript without blocking clean prompts. Start at byte zero so the first
   persisted content is scanned; other initial I/O failures retain scan-error policy.
