@@ -1,13 +1,14 @@
 """User-visible contract for safe default text output from ``ai-guardian scan``.
 
-The default terminal view identifies affected files without echoing scanned source
-content. Users may request a JSON or SARIF report explicitly; those reports can
-contain source-derived details and should be handled as sensitive files.
+The default terminal view reports finding counts and relative file paths without
+echoing source-derived messages, positions, or snippets. Users may request a JSON
+or SARIF report explicitly; those reports can contain source-derived details and
+should be handled as sensitive files.
 
 Manual verification:
 1. Scan a file containing a synthetic sensitive marker.
-2. Confirm the default terminal output reports the finding and file path but not
-   its message, line/column, or source snippet.
+2. Confirm the default terminal output reports the finding count and relative path,
+   but not its message, line/column, or source snippet.
 3. Use an explicit JSON/SARIF output path only when detailed results are needed.
 """
 
@@ -35,13 +36,13 @@ def test_default_scan_output_omits_finding_details_and_source_content():
     args = SimpleNamespace(
         verbose=False,
         config=None,
-        text="synthetic scan input",
+        text=None,
         diff=False,
         staged=False,
         pr=None,
         mr=None,
         stdin_diff=False,
-        path=None,
+        path=".",
         changed_lines_only=False,
         agent_configs=False,
         sarif_output=None,
@@ -57,7 +58,8 @@ def test_default_scan_output_omits_finding_details_and_source_content():
         scanner = scanner_class.return_value
         scanner._code_scanner_unavailable = None
         scanner._code_scan_skipped_count = 0
-        scanner.scan_text.return_value = findings
+        scanner._finding_paths = ["src/settings.py"]
+        scanner.scan_directory.return_value = findings
         with redirect_stdout(output):
             result = scan_command(args)
 

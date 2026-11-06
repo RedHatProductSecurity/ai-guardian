@@ -1212,9 +1212,10 @@ ai-guardian scan --diff --staged                 # Scan git staged changes only
 
 ### How do I get line numbers in scan output?
 
-Default terminal output reports finding counts and affected file paths without
-printing scanner messages, line positions, or source snippets. For detailed local
-results, use `--json-output` or `--sarif-output`; these reports may contain
+Default terminal output reports finding counts and relative file paths; it does
+not print scanner messages, line positions, or source snippets. Absolute paths
+under the user's home directory are displayed with a `$HOME` prefix. For detailed
+local results, use `--json-output` or `--sarif-output`; these reports may contain
 source-derived content and should be handled as sensitive files.
 
 ```bash
