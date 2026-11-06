@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **KDE tray sandbox form focus:** Restore foreground focus once after the tray
   menu handoff and clear the temporary topmost hint; the form does not remain
   always-on-top or repeatedly reclaim focus.
+- **CLI scan output privacy:** Default terminal results show the finding count and
+  affected file paths without printing scanner messages, source positions, or code
+  snippets. Explicit JSON/SARIF reports retain detailed findings and should be
+  handled as sensitive files.
 - **GitGuardian cloud scanner packaging and failures:** Omit the optional
   GitGuardian CLI from default Docker/Podman and OpenShell images; derived images
   can opt in with `INCLUDE_GITGUARDIAN=true`. Parse findings from ggshield's

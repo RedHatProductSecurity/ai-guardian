@@ -1212,7 +1212,15 @@ ai-guardian scan --diff --staged                 # Scan git staged changes only
 
 ### How do I get line numbers in scan output?
 
-Line numbers and code snippets are included by default in v1.11.0 scan output. No extra flags needed.
+Default terminal output reports finding counts and affected file paths without
+printing scanner messages, line positions, or source snippets. For detailed local
+results, use `--json-output` or `--sarif-output`; these reports may contain
+source-derived content and should be handled as sensitive files.
+
+```bash
+ai-guardian scan . --json-output results.json
+ai-guardian scan . --sarif-output results.sarif
+```
 
 ### How do I suppress verbose logging in scan output?
 

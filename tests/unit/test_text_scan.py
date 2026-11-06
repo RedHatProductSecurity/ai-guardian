@@ -181,7 +181,12 @@ class TestScanCommandText:
     @mock.patch("ai_guardian.scanners.file_scanner.FileScanner.scan_text")
     def test_text_with_json_output(self, mock_scan_text, tmp_path):
         mock_scan_text.return_value = [
-            {"rule_id": "SECRET-001", "message": "test", "file_path": "inline"}
+            {
+                "rule_id": "SECRET-001",
+                "message": "synthetic detailed finding",
+                "file_path": "inline",
+                "snippet": "synthetic source excerpt",
+            }
         ]
         json_file = str(tmp_path / "out.json")
         args = self._make_args(text="secret content", json_output=json_file)
@@ -193,6 +198,8 @@ class TestScanCommandText:
             data = json.load(f)
         assert len(data) == 1
         assert data[0]["file_path"] == "inline"
+        assert data[0]["message"] == "synthetic detailed finding"
+        assert data[0]["snippet"] == "synthetic source excerpt"
 
     @mock.patch("ai_guardian.scanners.file_scanner.FileScanner.scan_text")
     def test_text_with_exit_code(self, mock_scan_text):

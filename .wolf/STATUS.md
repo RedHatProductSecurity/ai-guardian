@@ -50,6 +50,13 @@ budget_tokens: 1000
   pass. Follow-up changes are local and uncommitted; CI and CodeQL have not rerun.
 - **Next:** user review; publish the follow-up only if requested, then verify PR
   matrix and CodeQL. No container image build or live cloud scan was run.
+- CodeQL check `128145447260` on `fa0ff0c9` reported four clear-text findings in
+  the default `ai-guardian scan` text renderer (`message`, source positions, and
+  snippets). The CLI now reports finding counts and affected paths only; explicit
+  JSON/SARIF reports retain details and are documented as sensitive. Added a
+  complete output UX contract and confirmed JSON details remain available. **83**
+  related tests pass; Ruff, Black, error-level Pylint, package Mypy and diff checks
+  pass. These additional changes are local; the CodeQL check has not rerun.
 
 ## Issue #2669 implementation — 2026-11-06
 
