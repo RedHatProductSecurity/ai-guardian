@@ -28,6 +28,7 @@ ARG AI_GUARDIAN_VERSION=1.20.0
 ARG UV_VERSION=0.11.16
 ARG CODEX_VERSION=0.160.0
 ARG OPENCODE_VERSION=1.19.0
+ARG INCLUDE_GITGUARDIAN=false
 
 # The supported OpenShell workload is intentionally minimal. Install every
 # runtime dependency needed by the support image instead of relying on a
@@ -109,10 +110,10 @@ RUN npm install --global --prefix /usr --no-fund --no-audit \
 RUN uv pip uninstall --python /sandbox/.venv/bin/python opencv-python || true \
     && uv pip install --python /sandbox/.venv/bin/python opencv-python-headless
 
-# Install the same pinned scanner engines as the normal image, except for
-# TruffleHog, whose license acknowledgement requires an interactive install.
-# These tools are present before OpenShell starts, so no runtime egress policy
-# is needed for scanner downloads.
+# Install the local pinned scanner engines used by the normal image. GitGuardian
+# is an opt-in cloud scanner; OpenShell users can include its CLI at build time
+# because scanner downloads are not available at sandbox startup.
+# TruffleHog is excluded because its license acknowledgement requires an interactive install.
 # The optional BuildKit secret authenticates GitHub API requests without
 # persisting the token in an image layer. Local builds remain unauthenticated.
 RUN --mount=type=secret,id=github_token,required=false \
@@ -128,8 +129,12 @@ RUN --mount=type=secret,id=github_token,required=false \
     && test -x /usr/local/bin/leaktk \
     && ai-guardian scanner install secretlint --use-pinned \
     && test -x /usr/local/bin/secretlint \
-    && ai-guardian scanner install gitguardian --use-pinned \
-    && test -x /usr/local/bin/ggshield
+    && if [ "${INCLUDE_GITGUARDIAN}" = "true" ]; then \
+        ai-guardian scanner install gitguardian --use-pinned \
+        && test -x /usr/local/bin/ggshield; \
+    else \
+        echo "GitGuardian omitted (set INCLUDE_GITGUARDIAN=true to include the cloud-scanner CLI)"; \
+    fi
 
 # Install the pinned detect-secrets Python package in the sandbox-local uv tool
 # directory, which is already included in the runtime PATH and writable home.

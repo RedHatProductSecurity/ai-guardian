@@ -248,6 +248,186 @@ class ScannerNotInstalledWarningTests(TestCase):
         assert (
             "scanner" in warning.lower()
         ), "Warning should mention scanner when no engine is available"
-        mock_select_engine.assert_called_once_with(
-            ["toml-patterns", "gitleaks"], parent_config=None
+        mock_select_engine.assert_called_once()
+        assert mock_select_engine.call_args.kwargs["selection_errors"] == []
+
+
+class TestGitGuardianCloudFailureContract(TestCase):
+    """USER EXPERIENCE: cloud quota errors are visible and never reported clean.
+
+    Scenario:
+    1. GitGuardian and a local scanner are explicitly configured.
+    2. A mocked GitGuardian response reports a quota failure; the local engine
+       returns a completed clean scan.
+    3. The prompt hook reports incomplete coverage according to on_scan_error.
+
+    This contract uses no API key, provider request, user configuration, or live
+    quota. Manual verification should use the scanner mocks, not a real workspace.
+    """
+
+    def test_quota_failure_shows_actionable_warning_without_exposing_credentials(self):
+        from ai_guardian.scanners.engine_builder import ENGINE_PRESETS
+        from ai_guardian.scanners.strategies import ScanResult
+
+        engines = [
+            ENGINE_PRESETS["gitguardian"],
+            ENGINE_PRESETS["gitleaks"],
+        ]
+        called_engines = []
+
+        def scan(engine_config, *_args, **_kwargs):
+            called_engines.append(engine_config.type)
+            if engine_config.type == "gitguardian":
+                return ScanResult(
+                    has_secrets=False,
+                    secrets=[],
+                    engine="gitguardian",
+                    error="GitGuardian cloud scan quota exhausted or rate-limited",
+                )
+            return ScanResult(has_secrets=False, secrets=[], engine="gitleaks")
+
+        config = {
+            "enabled": True,
+            "engines": ["gitguardian", "gitleaks"],
+            "execution_strategy": "first-match",
+        }
+        hook_data = {
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "Please continue with the task.",
+        }
+
+        with (
+            patch(
+                "ai_guardian.config.loaders._load_secret_scanning_config",
+                return_value=(config, None),
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning._load_secret_scanning_config",
+                return_value=(config, None),
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning._load_pattern_server_config",
+                return_value=None,
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning.select_engine",
+                return_value=engines[0],
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning.select_all_engines",
+                return_value=engines,
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning.run_engine",
+                side_effect=scan,
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning._get_on_scan_error_action",
+                return_value="allow",
+            ),
+            patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True),
+            patch("sys.stdin", StringIO(json.dumps(hook_data))),
+        ):
+            result = ai_guardian.process_hook_input()
+
+        response = json.loads(result["output"])
+        warning = response.get("systemMessage", "")
+
+        assert result["exit_code"] == 0
+        assert response.get("decision") != "block"
+        assert "coverage is incomplete" in warning
+        assert "quota or rate limit was reached" in warning
+        assert "Check workspace usage" in warning
+        assert "GITGUARDIAN_API_KEY" not in warning
+        assert called_engines == ["gitguardian", "gitleaks"]
+
+    def test_consent_credentials_and_service_errors_are_distinguished(self):
+        from ai_guardian.scanners.secret_scanning import (
+            _format_secret_scanner_failure,
         )
+
+        cases = (
+            (
+                "gitguardian: explicit cloud-scanning consent is missing",
+                "explicit consent is missing",
+            ),
+            (
+                "gitguardian: API key not set: $GITGUARDIAN_API_KEY",
+                "requires `GITGUARDIAN_API_KEY`",
+            ),
+            (
+                "gitguardian: GitGuardian cloud service unavailable or unreachable",
+                "network or service issue",
+            ),
+        )
+        for error, expected_message in cases:
+            with self.subTest(error=error):
+                warning = _format_secret_scanner_failure(error)
+                self.assertIn(expected_message, warning)
+                self.assertNotIn("synthetic-secret-value", warning)
+                self.assertIn("coverage is incomplete", warning)
+
+    def test_default_container_without_gitguardian_keeps_local_scan_and_warns(self):
+        from ai_guardian.scanners.strategies import ScanResult
+
+        config = {
+            "enabled": True,
+            "engines": ["gitguardian", "gitleaks"],
+            "execution_strategy": "first-match",
+        }
+        hook_data = {
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "Please continue with the task.",
+        }
+        scanned_engines = []
+
+        def scan(engine_config, *_args, **_kwargs):
+            scanned_engines.append(engine_config.type)
+            return ScanResult(has_secrets=False, secrets=[], engine=engine_config.type)
+
+        with (
+            patch(
+                "ai_guardian.config.loaders._load_secret_scanning_config",
+                return_value=(config, None),
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning._load_secret_scanning_config",
+                return_value=(config, None),
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning._load_pattern_server_config",
+                return_value=None,
+            ),
+            patch(
+                "ai_guardian.scanners.engine_builder.check_engine_consent",
+                return_value=True,
+            ),
+            patch(
+                "ai_guardian.scanners.engine_builder.shutil.which",
+                side_effect=lambda binary: (
+                    "/usr/bin/gitleaks" if binary == "gitleaks" else None
+                ),
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning.run_engine",
+                side_effect=scan,
+            ),
+            patch(
+                "ai_guardian.scanners.secret_scanning._get_on_scan_error_action",
+                return_value="allow",
+            ),
+            patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True),
+            patch("sys.stdin", StringIO(json.dumps(hook_data))),
+        ):
+            result = ai_guardian.process_hook_input()
+
+        response = json.loads(result["output"])
+        warning = response.get("systemMessage", "")
+
+        assert result["exit_code"] == 0
+        assert response.get("decision") != "block"
+        assert scanned_engines == ["gitleaks"]
+        assert "coverage is incomplete" in warning
+        assert "GitGuardian" in warning
+        assert "executable is not installed" in warning
+        assert "INCLUDE_GITGUARDIAN=true" in warning

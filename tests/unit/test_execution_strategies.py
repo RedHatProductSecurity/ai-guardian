@@ -608,5 +608,108 @@ class TestPerEngineConfigPathResolution(unittest.TestCase):
         self.assertIsNone(by_engine["trufflehog"])
 
 
+class TestStrategyEngineFailures(unittest.TestCase):
+    """Unsuccessful scanners remain visible in combined strategy results."""
+
+    @staticmethod
+    def _engine(engine_type):
+        return _build_engine_config(engine_type)
+
+    @staticmethod
+    def _scan_result(engine_config, *, error=None, finding=False):
+        secrets = (
+            [
+                SecretMatch(
+                    rule_id="synthetic-rule",
+                    description="Synthetic finding",
+                    file="test.txt",
+                    line_number=1,
+                    engine=engine_config.type,
+                )
+            ]
+            if finding
+            else []
+        )
+        return ScanResult(
+            has_secrets=bool(secrets),
+            secrets=secrets,
+            engine=engine_config.type,
+            error=error,
+        )
+
+    def test_first_match_retains_cloud_error_after_local_clean_scan(self):
+        engines = [self._engine("gitguardian"), self._engine("gitleaks")]
+
+        def scanner(engine_config, *_args, **_kwargs):
+            if engine_config.type == "gitguardian":
+                return self._scan_result(
+                    engine_config, error="GitGuardian cloud scan quota exhausted"
+                )
+            return self._scan_result(engine_config)
+
+        result = FirstMatchStrategy().execute(engines, scanner, "input", "report")
+
+        self.assertFalse(result.has_secrets)
+        self.assertIn(
+            "gitguardian: GitGuardian cloud scan quota exhausted", result.error
+        )
+        self.assertEqual(result.engine, "gitleaks")
+
+    def test_first_match_retains_prior_error_with_local_finding(self):
+        engines = [self._engine("gitguardian"), self._engine("gitleaks")]
+
+        def scanner(engine_config, *_args, **_kwargs):
+            if engine_config.type == "gitguardian":
+                return self._scan_result(
+                    engine_config, error="GitGuardian cloud service unavailable"
+                )
+            return self._scan_result(engine_config, finding=True)
+
+        result = FirstMatchStrategy().execute(engines, scanner, "input", "report")
+
+        self.assertTrue(result.has_secrets)
+        self.assertEqual(len(result.secrets), 1)
+        self.assertIn(
+            "gitguardian: GitGuardian cloud service unavailable", result.error
+        )
+
+    def test_any_match_retains_each_engine_failure(self):
+        engines = [self._engine("gitguardian"), self._engine("gitleaks")]
+
+        def scanner(engine_config, *_args, **_kwargs):
+            if engine_config.type == "gitguardian":
+                return self._scan_result(
+                    engine_config, error="GitGuardian cloud scan authentication failed"
+                )
+            return self._scan_result(engine_config)
+
+        result = AnyMatchStrategy().execute(engines, scanner, "input", "report")
+
+        self.assertFalse(result.has_secrets)
+        self.assertIn(
+            "gitguardian: GitGuardian cloud scan authentication failed", result.error
+        )
+
+    def test_consensus_error_does_not_lower_threshold(self):
+        engines = [self._engine("gitguardian"), self._engine("gitleaks")]
+
+        def scanner(engine_config, *_args, **_kwargs):
+            if engine_config.type == "gitguardian":
+                return self._scan_result(
+                    engine_config, error="GitGuardian cloud service unavailable"
+                )
+            return self._scan_result(engine_config, finding=True)
+
+        result = ConsensusStrategy(threshold=2).execute(
+            engines, scanner, "input", "report"
+        )
+
+        self.assertFalse(result.has_secrets)
+        self.assertEqual(result.secrets, [])
+        self.assertIn(
+            "gitguardian: GitGuardian cloud service unavailable", result.error
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

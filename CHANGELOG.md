@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **KDE tray sandbox form focus:** Restore foreground focus once after the tray
   menu handoff and clear the temporary topmost hint; the form does not remain
   always-on-top or repeatedly reclaim focus.
+- **GitGuardian cloud scanner packaging and failures:** Omit the optional
+  GitGuardian CLI from default Docker/Podman and OpenShell images; derived images
+  can opt in with `INCLUDE_GITGUARDIAN=true`. Parse findings from ggshield's
+  `--exit-zero` JSON output, retain per-engine failures across first-match,
+  any-match, and consensus results, and preserve consensus thresholds. Report cloud
+  quota, credentials, consent, and service failures as incomplete scan coverage
+  under `on_scan_error` without exposing credential values.
 - **Codex PreToolUse denials:** Include Codex's required non-empty
   `permissionDecisionReason` using the existing sanitized violation label, so the
   CLI accepts denials instead of treating them as invalid hook output.

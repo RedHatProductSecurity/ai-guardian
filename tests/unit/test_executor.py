@@ -242,6 +242,119 @@ class TestRunSingleEngine(unittest.TestCase):
         self.assertIn("Unexpected exit code 99", result.error)
         os.unlink(report)
 
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("ai_guardian.scanners.executor.subprocess.run")
+    def test_gitguardian_missing_api_key_is_reported_without_value(self, mock_run):
+        report = self._make_report_file()
+
+        result = run_single_engine(
+            ENGINE_PRESETS["gitguardian"], "/tmp/test.txt", report
+        )
+
+        self.assertFalse(result.has_secrets)
+        self.assertIn("API key not set", result.error)
+        mock_run.assert_not_called()
+        os.unlink(report)
+
+    @patch.dict(os.environ, {"GITGUARDIAN_API_KEY": "synthetic-test-value"})
+    @patch("ai_guardian.scanners.executor.subprocess.run")
+    def test_gitguardian_quota_failure_is_classified_without_raw_output(self, mock_run):
+        report = self._make_report_file()
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout='{"error":"workspace quota exceeded; diagnostic=DO_NOT_SHOW_THIS_VALUE"}',
+            stderr="",
+        )
+
+        result = run_single_engine(
+            ENGINE_PRESETS["gitguardian"], "/tmp/test.txt", report
+        )
+
+        self.assertFalse(result.has_secrets)
+        self.assertIn("quota exhausted or rate-limited", result.error)
+        self.assertNotIn("DO_NOT_SHOW_THIS_VALUE", result.error)
+        self.assertNotIn("synthetic-test-value", result.error)
+        os.unlink(report)
+
+    @patch.dict(os.environ, {"GITGUARDIAN_API_KEY": "synthetic-test-value"})
+    @patch("ai_guardian.scanners.executor.subprocess.run")
+    def test_gitguardian_zero_exit_parses_findings_with_exit_zero(self, mock_run):
+        report = self._make_report_file()
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "policy_break_count": 1,
+                    "policies": ["Secrets detection"],
+                    "policy_breaks": [
+                        {
+                            "break_type": "Synthetic finding",
+                            "validity": "no_checker",
+                            "incidents": [
+                                {
+                                    "location": {
+                                        "filename": "test.txt",
+                                        "line_start": 2,
+                                        "line_end": 2,
+                                    },
+                                    "type": "synthetic_rule",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            stderr="",
+        )
+
+        result = run_single_engine(
+            ENGINE_PRESETS["gitguardian"], "/tmp/test.txt", report
+        )
+
+        self.assertTrue(result.has_secrets)
+        self.assertEqual(result.secrets[0].rule_id, "synthetic_rule")
+        self.assertEqual(result.secrets[0].line_number, 2)
+        os.unlink(report)
+
+    @patch.dict(os.environ, {"GITGUARDIAN_API_KEY": "synthetic-test-value"})
+    @patch("ai_guardian.scanners.executor.subprocess.run")
+    def test_gitguardian_zero_exit_parses_a_completed_clean_scan(self, mock_run):
+        report = self._make_report_file()
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {"policy_break_count": 0, "policies": [], "policy_breaks": []}
+            ),
+            stderr="",
+        )
+
+        result = run_single_engine(
+            ENGINE_PRESETS["gitguardian"], "/tmp/test.txt", report
+        )
+
+        self.assertFalse(result.has_secrets)
+        self.assertIsNone(result.error)
+        os.unlink(report)
+
+    @patch.dict(os.environ, {"GITGUARDIAN_API_KEY": "synthetic-test-value"})
+    @patch("ai_guardian.scanners.executor.subprocess.run")
+    def test_gitguardian_success_without_scan_results_is_not_clean(self, mock_run):
+        report = self._make_report_file()
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='{"error":"workspace quota exceeded; diagnostic=DO_NOT_SHOW_THIS_VALUE"}',
+            stderr="",
+        )
+
+        result = run_single_engine(
+            ENGINE_PRESETS["gitguardian"], "/tmp/test.txt", report
+        )
+
+        self.assertFalse(result.has_secrets)
+        self.assertIn("quota exhausted or rate-limited", result.error)
+        self.assertNotIn("DO_NOT_SHOW_THIS_VALUE", result.error)
+        os.unlink(report)
+
     @patch("ai_guardian.scanners.executor.subprocess.run")
     def test_records_timing(self, mock_run):
         """Test that scan_time_ms is recorded."""

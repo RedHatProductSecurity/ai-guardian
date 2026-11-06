@@ -533,7 +533,13 @@ class GitGuardianOutputParser(ScannerOutputParser):
             with open(output_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            policy_breaks = data.get("policy_breaks", [])
+            if not isinstance(data, dict) or not isinstance(
+                data.get("policy_breaks"), list
+            ):
+                logger.error("GitGuardian JSON output has no policy-break results")
+                return None
+
+            policy_breaks = data["policy_breaks"]
             if not policy_breaks:
                 return {"has_secrets": False, "findings": [], "total_findings": 0}
 

@@ -12,10 +12,74 @@ These functions are the building blocks that execution strategies use.
 import logging
 import os
 import subprocess
-
-logger = logging.getLogger(__name__)
 import time
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+_GITGUARDIAN_QUOTA_ERROR_KEYWORDS = (
+    "quota",
+    "rate limit",
+    "rate-limit",
+    "too many requests",
+    "429",
+    "usage limit",
+    "limit exceeded",
+)
+_GITGUARDIAN_AUTH_ERROR_KEYWORDS = (
+    "401",
+    "403",
+    "unauthorized",
+    "authentication",
+    "forbidden",
+    "invalid token",
+    "bad credentials",
+)
+_GITGUARDIAN_NETWORK_ERROR_KEYWORDS = (
+    "connection",
+    "timeout",
+    "network",
+    "unreachable",
+    "refused",
+    "no route",
+    "service unavailable",
+    "server error",
+    "bad gateway",
+    "internal server error",
+)
+
+
+def _gitguardian_failure(returncode: Optional[int], output: str = "") -> str:
+    """Classify ggshield failures without retaining potentially sensitive output."""
+    output_lower = output.lower()
+    suffix = f" (exit code {returncode})" if returncode is not None else ""
+    if any(keyword in output_lower for keyword in _GITGUARDIAN_QUOTA_ERROR_KEYWORDS):
+        return f"GitGuardian cloud scan quota exhausted or rate-limited{suffix}"
+    if any(keyword in output_lower for keyword in _GITGUARDIAN_AUTH_ERROR_KEYWORDS):
+        return f"GitGuardian cloud scan authentication failed{suffix}"
+    if any(keyword in output_lower for keyword in _GITGUARDIAN_NETWORK_ERROR_KEYWORDS):
+        return f"GitGuardian cloud service unavailable or unreachable{suffix}"
+    if any(f"{status}" in output_lower for status in ("500", "502", "503", "504")):
+        return f"GitGuardian cloud service returned a server error{suffix}"
+    if returncode is not None and 500 <= returncode <= 599:
+        return f"GitGuardian cloud service returned a server error{suffix}"
+    return f"GitGuardian cloud scan failed{suffix}"
+
+
+def _has_gitguardian_failure_indicator(output: str) -> bool:
+    """Check whether otherwise successful CLI output describes a failed request."""
+    output_lower = output.lower()
+    keywords = (
+        *_GITGUARDIAN_QUOTA_ERROR_KEYWORDS,
+        *_GITGUARDIAN_AUTH_ERROR_KEYWORDS,
+        *_GITGUARDIAN_NETWORK_ERROR_KEYWORDS,
+        "500",
+        "502",
+        "503",
+        "504",
+    )
+    return any(keyword in output_lower for keyword in keywords)
+
 
 from ai_guardian.daemon import get_daemon_state as _get_daemon_state
 from ai_guardian.scanners.engine_builder import EngineConfig, build_scanner_command
@@ -108,6 +172,48 @@ def run_single_engine(
                 with open(report_file, "w", encoding="utf-8") as f:
                     f.write(result.stdout)
 
+        if engine_config.type == "gitguardian":
+            output = "\n".join((result.stderr or "", result.stdout or ""))
+            if result.returncode != engine_config.success_exit_code:
+                safe_error = _gitguardian_failure(result.returncode, output)
+                logger.warning("%s", safe_error)
+                return ScanResult(
+                    has_secrets=False,
+                    secrets=[],
+                    engine=engine_config.type,
+                    error=safe_error,
+                    scan_time_ms=elapsed_ms,
+                )
+
+            parsed = get_parser(engine_config.output_parser).parse(report_file)
+            if parsed is None:
+                safe_error = (
+                    _gitguardian_failure(result.returncode, output)
+                    if _has_gitguardian_failure_indicator(output)
+                    else "GitGuardian cloud scan returned invalid or missing results"
+                )
+                logger.warning("%s", safe_error)
+                return ScanResult(
+                    has_secrets=False,
+                    secrets=[],
+                    engine=engine_config.type,
+                    error=safe_error,
+                    scan_time_ms=elapsed_ms,
+                )
+
+            scan_result = _build_scan_result_from_dict(
+                engine_config.type, parsed, elapsed_ms, original_file_path
+            )
+            if not scan_result.has_secrets and _has_gitguardian_failure_indicator(
+                result.stderr or ""
+            ):
+                scan_result.error = _gitguardian_failure(None, result.stderr or "")
+                logger.warning("%s", scan_result.error)
+                return scan_result
+
+            _cache_put(cache, content_hash, engine_config.type, cfg_hash, scan_result)
+            return scan_result
+
         # Gitleaks/betterleaks exit code 1 special case (Issue #411):
         # when --exit-code flag is not honored, exit 1 means secrets found
         is_gitleaks_like = engine_config.type in ("gitleaks", "betterleaks")
@@ -152,12 +258,13 @@ def run_single_engine(
         )
         if engine_config.version_hint:
             msg += f" ({engine_config.version_hint})"
+        safe_error = f"Unexpected exit code {result.returncode}: {stderr_preview}"
         logger.warning(msg)
         return ScanResult(
             has_secrets=False,
             secrets=[],
             engine=engine_config.type,
-            error=f"Unexpected exit code {result.returncode}: {stderr_preview}",
+            error=safe_error,
             scan_time_ms=elapsed_ms,
         )
 
@@ -168,7 +275,11 @@ def run_single_engine(
             has_secrets=False,
             secrets=[],
             engine=engine_config.type,
-            error=f"Timed out after {timeout}s",
+            error=(
+                "GitGuardian cloud service timed out"
+                if engine_config.type == "gitguardian"
+                else f"Timed out after {timeout}s"
+            ),
             scan_time_ms=elapsed_ms,
         )
     except FileNotFoundError:
@@ -185,12 +296,17 @@ def run_single_engine(
         )
     except Exception as e:
         elapsed_ms = (time.monotonic() - start_time) * 1000
-        logger.error(f"Engine {engine_config.type} failed: {e}")
+        if engine_config.type == "gitguardian":
+            safe_error = _gitguardian_failure(None, str(e))
+            logger.warning("%s", safe_error)
+        else:
+            safe_error = str(e)
+            logger.error(f"Engine {engine_config.type} failed: {e}")
         return ScanResult(
             has_secrets=False,
             secrets=[],
             engine=engine_config.type,
-            error=str(e),
+            error=safe_error,
             scan_time_ms=elapsed_ms,
         )
 

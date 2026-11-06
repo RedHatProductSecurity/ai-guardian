@@ -18,6 +18,7 @@ from ai_guardian.scanners.engine_builder import (
     ENGINE_PRESETS,
     PATTERN_SERVER_UNSET,
     select_engine,
+    select_all_engines,
     build_scanner_command,
     resolve_engine_config_path,
     _build_engine_config,
@@ -205,6 +206,47 @@ class TestSelectEngine(unittest.TestCase):
 
         config = select_engine(["nonexistent", "gitleaks"])
         self.assertEqual(config.type, "gitleaks")
+
+    @patch("ai_guardian.scanners.engine_builder.check_engine_consent")
+    @patch("ai_guardian.scanners.engine_builder.shutil.which")
+    def test_select_all_reports_missing_consent_and_keeps_local_engine(
+        self, mock_which, mock_consent
+    ):
+        mock_consent.side_effect = lambda config: config.type != "gitguardian"
+        mock_which.return_value = "/usr/bin/gitleaks"
+        selection_errors = []
+
+        engines = select_all_engines(
+            ["gitguardian", "gitleaks"], selection_errors=selection_errors
+        )
+
+        self.assertEqual([engine.type for engine in engines], ["gitleaks"])
+        self.assertEqual(
+            selection_errors,
+            ["gitguardian: explicit cloud-scanning consent is missing"],
+        )
+
+    @patch(
+        "ai_guardian.scanners.engine_builder.check_engine_consent", return_value=True
+    )
+    @patch("ai_guardian.scanners.engine_builder.shutil.which")
+    def test_select_all_reports_missing_gitguardian_cli_and_keeps_local_engine(
+        self, mock_which, _mock_consent
+    ):
+        mock_which.side_effect = lambda binary: (
+            "/usr/bin/gitleaks" if binary == "gitleaks" else None
+        )
+        selection_errors = []
+
+        engines = select_all_engines(
+            ["gitguardian", "gitleaks"], selection_errors=selection_errors
+        )
+
+        self.assertEqual([engine.type for engine in engines], ["gitleaks"])
+        self.assertEqual(
+            selection_errors,
+            ["gitguardian: executable is not installed"],
+        )
 
 
 class TestBuildScannerCommand(unittest.TestCase):

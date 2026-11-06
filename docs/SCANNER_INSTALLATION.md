@@ -14,9 +14,24 @@ AI Guardian provides automated installation and management of secret scanner eng
 | Secretlint | Local rules | MIT | `ai-guardian scanner install secretlint` |
 | GitGuardian (`ggshield`) | Cloud service | MIT CLI | `ai-guardian scanner install gitguardian` |
 
-The GitGuardian engine also requires explicit consent, an API key, and network
-access to its cloud service. See [Multi-Engine Support](MULTI_ENGINE_SUPPORT.md)
-for the data-flow and consent details.
+GitGuardian is an optional cloud service, not an offline scanner. Using the
+engine requires explicit consent, `GITGUARDIAN_API_KEY`, and network access;
+scanned content is sent to GitGuardian's service. The `ggshield` CLI is MIT
+licensed, separately from the service's terms and account requirements. Eligible
+free workspaces currently include 10,000 scan API calls per rolling 30-day
+period, shared across API keys in the workspace. Check GitGuardian's current
+[pricing](https://www.gitguardian.com/pricing) and
+[API quota documentation](https://docs.gitguardian.com/api-docs/usage-and-quotas)
+for eligibility and current limits. A quota or service failure is an unsuccessful
+scan and follows `on_scan_error`; it is never reported as a clean scan.
+
+The default Docker/Podman and OpenShell images omit the GitGuardian CLI. Build a
+derived image with `--build-arg INCLUDE_GITGUARDIAN=true` to bundle it; this is
+particularly important for OpenShell, where scanner binaries cannot be fetched
+at sandbox startup. Packaging the CLI does not provide consent, credentials,
+quota, or network access. See [container image scanner details](../container/README.md#bundled-scanner-engines)
+and [Multi-Engine Support](MULTI_ENGINE_SUPPORT.md) for data-flow and consent
+details.
 
 ## Quick Start
 
