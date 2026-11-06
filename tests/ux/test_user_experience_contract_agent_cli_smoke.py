@@ -363,7 +363,9 @@ def test_opencode_smoke_uses_native_execution_not_an_advisory_mcp_check(native_n
     assert provider._stats()["tool_offers"] == {"clean_tool": 1}
 
 
-def test_codex_smoke_trust_override_is_one_invocation_and_hook_scoped(runner):
+def test_codex_smoke_trust_override_is_one_invocation_and_hook_scoped(
+    runner, monkeypatch, capsys
+):
     """USER EXPERIENCE: only verified disposable Codex hooks get the one-shot override.
 
     The runner must verify the exact AI Guardian hook set before invocation. The
@@ -379,6 +381,24 @@ def test_codex_smoke_trust_override_is_one_invocation_and_hook_scoped(runner):
         "gemini", "default", "synthetic prompt"
     )
     assert runner._CODEX_HOOK_SCOPE_PROBE.startswith("\nimport json, os, shlex, sys")
+
+    calls = []
+
+    def reject_option(*args, **kwargs):
+        calls.append(args[2])
+        return subprocess.CompletedProcess(args[2], 2, stdout="", stderr="")
+
+    monkeypatch.setattr(runner, "_exec", reject_option)
+    assert not runner._verify_codex_smoke_hook_scope("docker", "sandbox", 30)
+    assert calls == [
+        [
+            "codex",
+            "exec",
+            "--dangerously-bypass-hook-trust",
+            "--help",
+        ]
+    ]
+    assert "FAIL Codex hook scope: installed CLI rejected" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("case_name", ("ssrf", "config_exfil"))

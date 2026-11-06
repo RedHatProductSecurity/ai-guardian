@@ -354,11 +354,16 @@ def test_codex_hook_scope_preflight_requires_supported_cli_flag_and_probe(
 
     def fake_exec(_engine, _name, command, _timeout, **_kwargs):
         calls.append(command)
-        if command[:3] == ["codex", "exec", "--help"]:
+        if command[:4] == [
+            "codex",
+            "exec",
+            "--dangerously-bypass-hook-trust",
+            "--help",
+        ]:
             return subprocess.CompletedProcess(
                 command,
                 0,
-                stdout="--dangerously-bypass-hook-trust",
+                stdout="Usage: codex exec [OPTIONS]",
                 stderr="",
             )
         if command[:3] == ["codex", "plugin", "list"]:
@@ -379,6 +384,12 @@ def test_codex_hook_scope_preflight_requires_supported_cli_flag_and_probe(
 
     assert runner._verify_codex_smoke_hook_scope("docker", "sandbox", 30)
     assert len(calls) == 3
+    assert calls[0] == [
+        "codex",
+        "exec",
+        "--dangerously-bypass-hook-trust",
+        "--help",
+    ]
     assert calls[1][:3] == ["codex", "plugin", "list"]
     assert calls[2][1] == "-c"
     assert "PASS Codex hook scope: exact generated hooks" in capsys.readouterr().out
@@ -392,13 +403,13 @@ def test_codex_hook_scope_preflight_fails_closed_without_supported_cli_flag(
 
     def fake_exec(_engine, _name, command, _timeout, **_kwargs):
         calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="help", stderr="")
+        return subprocess.CompletedProcess(command, 2, stdout="help", stderr="")
 
     monkeypatch.setattr(runner, "_exec", fake_exec)
 
     assert not runner._verify_codex_smoke_hook_scope("docker", "sandbox", 30)
     assert len(calls) == 1
-    assert "FAIL Codex hook scope: installed CLI lacks" in capsys.readouterr().out
+    assert "FAIL Codex hook scope: installed CLI rejected" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -417,11 +428,16 @@ def test_codex_hook_scope_preflight_rejects_plugins_or_unverifiable_inventory(
 
     def fake_exec(_engine, _name, command, _timeout, **_kwargs):
         calls.append(command)
-        if command[:3] == ["codex", "exec", "--help"]:
+        if command[:4] == [
+            "codex",
+            "exec",
+            "--dangerously-bypass-hook-trust",
+            "--help",
+        ]:
             return subprocess.CompletedProcess(
                 command,
                 0,
-                stdout="--dangerously-bypass-hook-trust",
+                stdout="Usage: codex exec [OPTIONS]",
                 stderr="",
             )
         return subprocess.CompletedProcess(
