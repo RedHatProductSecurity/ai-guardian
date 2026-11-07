@@ -129,6 +129,8 @@ def present_tk_window(window, tk, *, focus_widget=None, grab=False) -> None:
             window.focus_force()
             if focus_widget is not None:
                 focus_widget.focus_set()
+            if grab:
+                window.grab_set()
         except tk.TclError:
             logger.debug("Tray dialog closed before foreground focus restoration")
 
@@ -153,8 +155,6 @@ def present_tk_window(window, tk, *, focus_widget=None, grab=False) -> None:
     try:
         window.deiconify()
         window.lift()
-        if grab:
-            window.grab_set()
     except tk.TclError:
         try:
             window.attributes("-topmost", False)

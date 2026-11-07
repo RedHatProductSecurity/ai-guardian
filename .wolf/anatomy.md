@@ -1412,7 +1412,7 @@
 - `forms.py` — Reusable form flows; ordering and fallback belong exclusively to run_modal. (~476 tok)
 - `hook_simulator.py` — Shared hook simulator data and result parsing for the web console. (~1098 tok)
 - `ignore_file_editor.py` — Shared logic for the 'Ignore File...' flow. (~690 tok)
-- `modal.py` — Runtime modal lifecycle: only proven pre-display failure permits fallback. (~3926 tok)
+- `modal.py` — Runtime modal lifecycle: only proven pre-display failure permits fallback. (~3928 tok)
 - `monitor.py` — Display-only monitor context and placement; safe to load in an isolated child. (~7381 tok)
 - `native_form.py` — Complete single-field native forms, isolated from the tray's GUI state. (~4805 tok)
 - `pattern_editor.py` — Pattern editor for the ask dialog's "Allow Always" flow. (~3252 tok)
