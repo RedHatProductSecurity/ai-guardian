@@ -105,6 +105,7 @@ def _show_tkinter_message(
     from tkinter import ttk
 
     from ai_guardian.ui.display import _ensure_tcl_library
+    from ai_guardian.ui.modal import present_tk_window
 
     _ensure_tcl_library()
     prepare_tk_display()
@@ -160,35 +161,7 @@ def _show_tkinter_message(
     # so a later child-process failure cannot trigger a different toolkit.
     root.bind("<Map>", mapped, add="+")
 
-    def focus():
-        try:
-            if root.winfo_exists():
-                root.deiconify()
-                root.lift()
-                root.focus_force()
-                root.grab_set()
-        except tk.TclError:
-            logger.debug("Message dialog closed or rejected foreground focus")
-
-    def finish_startup():
-        try:
-            if root.winfo_exists():
-                root.attributes("-topmost", False)
-        except tk.TclError:
-            logger.debug("Message dialog raising hint could not be cleared")
-        # Clearing topmost or closing the tray popup can change stacking/focus
-        # on KDE/XWayland. Restore once after that handoff, never continuously.
-        focus()
-
-    root.update_idletasks()
-    try:
-        root.attributes("-topmost", True)
-    except tk.TclError:
-        logger.debug("Message dialog window manager does not accept a raising hint")
-    root.deiconify()
-    root.lift()
-    root.after_idle(focus)
-    root.after(200, finish_startup)
+    present_tk_window(root, tk, grab=True)
     root.mainloop()
 
 

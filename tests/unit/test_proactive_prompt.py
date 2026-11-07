@@ -531,10 +531,20 @@ def test_prompt_falls_back_to_headless_when_ui_unavailable():
 def test_tkinter_two_step_later_opens_delay_selection(monkeypatch):
     class FakeRoot:
         next_action = "later"
+        instances = []
 
         def __init__(self):
             self.buttons = {}
             self.close_handler = None
+            self.attributes_calls = []
+            self.focus_calls = 0
+            self.instances.append(self)
+
+        def withdraw(self):
+            pass
+
+        def deiconify(self):
+            pass
 
         def title(self, _title):
             pass
@@ -564,10 +574,16 @@ def test_tkinter_two_step_later_opens_delay_selection(monkeypatch):
             pass
 
         def focus_force(self):
-            pass
+            self.focus_calls += 1
 
-        def attributes(self, *_args):
-            pass
+        def attributes(self, *args):
+            self.attributes_calls.append(args)
+
+        def winfo_exists(self):
+            return True
+
+        def after_idle(self, callback):
+            callback()
 
         def after(self, _delay, callback):
             callback()
@@ -576,8 +592,10 @@ def test_tkinter_two_step_later_opens_delay_selection(monkeypatch):
             pass
 
         def mainloop(self):
-            if self.next_action == "later":
+            if self.next_action == "later" and "Later" in self.buttons:
                 self.buttons["Later"]()
+            elif self.next_action == "later" and "6h" in self.buttons:
+                self.buttons["6h"]()
             else:
                 self.close_handler()
 
@@ -597,7 +615,8 @@ def test_tkinter_two_step_later_opens_delay_selection(monkeypatch):
 
     class FakeButton:
         def __init__(self, frame, **kwargs):
-            frame.parent.buttons[kwargs["text"]] = kwargs["command"]
+            if "text" in kwargs:
+                frame.parent.buttons[kwargs["text"]] = kwargs["command"]
 
         def grid(self, *_args, **_kwargs):
             pass
@@ -611,11 +630,14 @@ def test_tkinter_two_step_later_opens_delay_selection(monkeypatch):
 
     tkinter = types.ModuleType("tkinter")
     tkinter.Tk = FakeRoot
+    tkinter.BooleanVar = FakeStringVar
     tkinter.StringVar = FakeStringVar
     ttk = types.ModuleType("tkinter.ttk")
     ttk.Frame = FakeFrame
     ttk.Label = FakeLabel
     ttk.Button = FakeButton
+    ttk.Checkbutton = FakeButton
+    ttk.Radiobutton = FakeButton
     tkinter.ttk = ttk
     monkeypatch.setitem(sys.modules, "tkinter", tkinter)
     monkeypatch.setitem(sys.modules, "tkinter.ttk", ttk)
@@ -631,23 +653,46 @@ def test_tkinter_two_step_later_opens_delay_selection(monkeypatch):
     with (
         patch("ai_guardian.tray.proactive_prompt._ensure_tcl_library"),
         patch("ai_guardian.tray.proactive_prompt._place_window_on_screen"),
-        patch.object(
-            dialog, "_show_snooze_tkinter", return_value="snooze_6h"
-        ) as snooze,
     ):
         assert dialog._show_tkinter() == "snooze_6h"
 
-    snooze.assert_called_once_with()
+    assert len(FakeRoot.instances) == 2
+    for root in FakeRoot.instances:
+        assert root.attributes_calls == [
+            ("-topmost", True),
+            ("-topmost", False),
+        ]
+        assert root.focus_calls == 2
 
     FakeRoot.next_action = "close"
     with (
         patch("ai_guardian.tray.proactive_prompt._ensure_tcl_library"),
         patch("ai_guardian.tray.proactive_prompt._place_window_on_screen"),
-        patch.object(dialog, "_show_snooze_tkinter") as snooze,
     ):
         assert dialog._show_tkinter() == "snooze_1h"
 
-    snooze.assert_not_called()
+    structured = ProactivePromptDialog(
+        "Set Up AI Guardian",
+        "Hooks are missing.",
+        "Set Up Now",
+        "Don't Ask Again",
+        ide_choices=({"ide": "claude", "name": "Claude Code"},),
+        two_step_snooze=True,
+    )
+    FakeRoot.next_action = "later"
+    with (
+        patch("ai_guardian.tray.proactive_prompt._ensure_tcl_library"),
+        patch("ai_guardian.tray.proactive_prompt._place_window_on_screen"),
+    ):
+        structured._show_ide_choices_tkinter()
+
+    assert len(FakeRoot.instances) == 5
+    for root in FakeRoot.instances[3:]:
+        assert root.attributes_calls == [
+            ("-topmost", True),
+            ("-topmost", False),
+        ]
+        assert root.focus_calls == 2
 
 
 def test_nicegui_two_step_later_opens_delay_selection(monkeypatch):

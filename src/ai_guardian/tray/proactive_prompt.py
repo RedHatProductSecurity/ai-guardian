@@ -21,6 +21,7 @@ from ai_guardian.ui.display import (
 from ai_guardian.ui.modal import (
     UIUnavailable,
     create_tk_root,
+    present_tk_window,
     run_modal,
     run_modal_subprocess,
 )
@@ -584,6 +585,7 @@ class ProactivePromptDialog:
         )
         result = {"value": self._ide_selection_result(initial_result)}
         root = create_tk_root()
+        root.withdraw()
         root.title(self.title)
         root.resizable(False, False)
         frame = ttk.Frame(root, padding=16)
@@ -735,11 +737,7 @@ class ProactivePromptDialog:
             root.winfo_reqwidth(),
             root.winfo_reqheight(),
         )
-        root.lift()
-        root.focus_force()
-        root.attributes("-topmost", True)
-        root.after(50, root.focus_force)
-        root.after(150, lambda: root.attributes("-topmost", False))
+        present_tk_window(root, tk)
         root.mainloop()
         if (
             self.two_step_snooze
@@ -871,6 +869,7 @@ class ProactivePromptDialog:
 
         result = {"value": self._default_snooze_result()}
         root = create_tk_root()
+        root.withdraw()
         root.title("Remind me later")
         root.resizable(False, False)
         frame = ttk.Frame(root, padding=16)
@@ -902,11 +901,7 @@ class ProactivePromptDialog:
             root.winfo_reqwidth(),
             root.winfo_reqheight(),
         )
-        root.lift()
-        root.focus_force()
-        root.attributes("-topmost", True)
-        root.after(50, root.focus_force)
-        root.after(150, lambda: root.attributes("-topmost", False))
+        present_tk_window(root, tk)
         root.mainloop()
         return result["value"]
 
@@ -922,6 +917,7 @@ class ProactivePromptDialog:
             )
         }
         root = create_tk_root()
+        root.withdraw()
         root.title(self.title)
         root.resizable(False, False)
         frame = ttk.Frame(root, padding=16)
@@ -969,11 +965,7 @@ class ProactivePromptDialog:
             root.winfo_reqwidth(),
             root.winfo_reqheight(),
         )
-        root.lift()
-        root.focus_force()
-        root.attributes("-topmost", True)
-        root.after(50, root.focus_force)
-        root.after(150, lambda: root.attributes("-topmost", False))
+        present_tk_window(root, tk)
         root.mainloop()
         if self.two_step_snooze and result["value"] == "later":
             return self._show_snooze_tkinter()

@@ -9,6 +9,34 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2682 implementation — 2026-11-07
+
+- Continued on the existing DAF branch `2682`; no branch switch was made. The
+  remote branch is at `c8c473f6` with open PR #2684. No GitHub issue state or DAF
+  completion was changed during this follow-up.
+- Audited tray-launched Tk windows and added shared one-shot presentation in
+  `ui/modal.py`: withdrawn layout, temporary topmost hint, focus after mapping,
+  then clear the hint and deiconify/refocus once after 200 ms. Applied it to tray
+  messages, proactive/setup/snooze prompts, plugin/SSH forms, Pause and sandbox
+  forms, progress, logs and confirmations. Support review retains its equivalent
+  isolated flow.
+- Kept native/browser providers unchanged. File/directory pickers remain a special
+  case: their Tk owner must not refocus while an OS panel owns focus. Added unit and
+  UX coverage and expanded the modal provider/manual verification guidance.
+- CI run `42389159624`: six workflows passed; only the Tests workflow failed, with
+  the same three About grab-order assertions failing in all eight Python/OS matrix
+  jobs. Moved optional grab acquisition into the post-map focus callback to retain
+  the existing About event order. The local follow-up is uncommitted and has not
+  been pushed, so CI still needs a rerun.
+- **Validation:** 1,151 related unit tests and complete modal, support, About, SSH
+  and Pause UX contracts pass locally. Ruff, Black (Python 3.10 target), error-level
+  Pylint, package Mypy (336 files), and `git diff --check` pass. One existing
+  PyGObject deprecation warning remains.
+- **Pending:** publish/CI rerun for the local follow-up and actual visual
+  verification on the reporter's KDE/Plasma session; distro/version and
+  X11/Wayland details were not provided. No commit or push was made during this
+  follow-up; use external `daf complete` after review.
+
 ## Issue #2674 implementation — 2026-11-07
 
 - Continued the managed DAF `open` session on existing branch `2674` in the real
