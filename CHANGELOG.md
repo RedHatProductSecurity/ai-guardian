@@ -166,6 +166,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source remains undetermined, so execution is not qualified.
 
 ### Added
+- **Sandbox deletion confirmation copy control (#2668):** Display the full expected
+  sandbox name with a Copy action and explicit clipboard success/failure feedback.
+  Keep deletion behind the existing exact-name confirmation; use complete isolated
+  Tkinter/NiceGUI interactions because native text-entry dialogs cannot provide the
+  copy control.
 - **Violations page daemon filtering:** Apply case-insensitive partial source
   searches while retaining exact, identity-based source selection. Show refreshed
   Running, Paused, Offline, or Unknown availability labels; refresh and clearing

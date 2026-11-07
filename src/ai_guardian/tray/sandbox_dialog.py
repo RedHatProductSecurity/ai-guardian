@@ -1406,9 +1406,9 @@ def _show_tkinter_confirmation(
     _ensure_tcl_library()
     root = create_tk_root()
     root.title(title)
-    root.geometry("560x250")
-    _place_window_on_screen(root, screen_bounds, 560, 250)
-    root.minsize(480, 220)
+    root.geometry("560x320")
+    _place_window_on_screen(root, screen_bounds, 560, 320)
+    root.minsize(480, 300)
     root.resizable(True, False)
     root.columnconfigure(0, weight=1)
 
@@ -1419,15 +1419,39 @@ def _show_tkinter_confirmation(
     ttk.Label(frame, text=message, justify="left", wraplength=510).grid(
         row=0, column=0, sticky="w", pady=(0, 14)
     )
+    ttk.Label(frame, text="Sandbox name to copy:").grid(
+        row=1, column=0, sticky="w", pady=(0, 4)
+    )
+    name_frame = ttk.Frame(frame)
+    name_frame.grid(row=2, column=0, sticky="ew")
+    name_frame.columnconfigure(0, weight=1)
+    displayed_name = tk.StringVar(value=expected_name)
+    ttk.Entry(
+        name_frame,
+        textvariable=displayed_name,
+        state="readonly",
+    ).grid(row=0, column=0, sticky="ew")
+    copy_status = tk.StringVar()
+
+    def copy_name() -> None:
+        copy_status.set(_copy_sandbox_name_to_tk(expected_name, root))
+
+    ttk.Button(name_frame, text="Copy", command=copy_name).grid(
+        row=0, column=1, padx=(8, 0)
+    )
+
     ttk.Label(frame, text="Type the sandbox name to confirm:").grid(
-        row=1, column=0, sticky="w"
+        row=3, column=0, sticky="w", pady=(10, 0)
     )
     name = tk.StringVar()
     entry = ttk.Entry(frame, textvariable=name)
-    entry.grid(row=2, column=0, sticky="ew", pady=(4, 0))
+    entry.grid(row=4, column=0, sticky="ew", pady=(4, 0))
     error = tk.StringVar()
     ttk.Label(frame, textvariable=error, foreground="#b00020").grid(
-        row=3, column=0, sticky="w", pady=(6, 0)
+        row=5, column=0, sticky="w", pady=(6, 0)
+    )
+    ttk.Label(frame, textvariable=copy_status).grid(
+        row=6, column=0, sticky="w", pady=(4, 0)
     )
 
     confirmed = False
@@ -1445,7 +1469,7 @@ def _show_tkinter_confirmation(
         root.destroy()
 
     button_frame = ttk.Frame(frame)
-    button_frame.grid(row=4, column=0, sticky="e", pady=(14, 0))
+    button_frame.grid(row=7, column=0, sticky="e", pady=(14, 0))
     ttk.Button(button_frame, text="Cancel", command=cancel).pack(side="left")
     ttk.Button(button_frame, text="Delete sandbox", command=confirm).pack(
         side="left", padx=(8, 0)
@@ -1495,6 +1519,38 @@ def _show_tkinter_confirmation_subprocess(
     )
     process = run_modal_subprocess([sys.executable, "-c", child, payload])
     return (process.stdout or "").strip().splitlines()[-1:] == ["true"]
+
+
+def _copy_sandbox_name_to_tk(expected_name: str, clipboard_owner) -> str:
+    """Copy the exact expected name using the isolated Tk window's clipboard."""
+    try:
+        # Do not pump Tk events here; Return is bound to the destructive action.
+        clipboard_owner.clipboard_clear()
+        clipboard_owner.clipboard_append(expected_name)
+    except Exception as exc:
+        logger.warning(
+            "Sandbox name could not be copied to the Tk clipboard (%s)",
+            type(exc).__name__,
+        )
+        return "Could not copy sandbox name; select it and copy manually."
+    return "Sandbox name copied to clipboard."
+
+
+async def _copy_sandbox_name_to_browser(expected_name: str, ui) -> bool:
+    """Copy the exact sandbox name through the browser clipboard API."""
+    script = (
+        "(async () => { try { await navigator.clipboard.writeText("
+        f"{json.dumps(expected_name)}"
+        "); return true; } catch (_) { return false; } })()"
+    )
+    try:
+        return await ui.run_javascript(script) is True
+    except Exception as exc:
+        logger.debug(
+            "Sandbox name browser clipboard operation failed (%s)",
+            type(exc).__name__,
+        )
+        return False
 
 
 def _copy_sandbox_log(log_text: str, clipboard_owner=None) -> str:
@@ -2010,6 +2066,18 @@ def _render_nicegui_confirmation(
         result_holder["value"] = True
         close()
 
+    async def copy_expected_text() -> None:
+        if expected_text is None:
+            return
+        copied = await _copy_sandbox_name_to_browser(expected_text, ui)
+        if copied:
+            ui.notify("Sandbox name copied to clipboard.", type="positive")
+        else:
+            ui.notify(
+                "Could not copy sandbox name; check browser clipboard permissions or copy it manually.",
+                type="negative",
+            )
+
     @ui.page("/")
     def _confirmation_page() -> None:
         with (
@@ -2022,6 +2090,12 @@ def _render_nicegui_confirmation(
             for line in error_lines:
                 ui.label(str(line)).classes("text-red-600 whitespace-pre-wrap")
             if expected_text is not None:
+                ui.label("Sandbox name to copy:").classes("text-sm")
+                with ui.row().classes("w-full items-start no-wrap"):
+                    ui.label(expected_text).classes("font-mono break-all").style(
+                        "flex: 1; min-width: 0; overflow-wrap: anywhere"
+                    )
+                    ui.button("Copy", on_click=copy_expected_text)
                 expected_input["widget"] = ui.input(
                     label=f"Type {expected_text} to confirm"
                 ).classes("w-full")
@@ -2135,18 +2209,9 @@ def show_sandbox_confirmation(
     )
     options = {"screen_bounds": screen_bounds} if screen_bounds is not None else {}
 
-    def native():
-        result = _show_native_confirmation(
-            title, message, "Delete sandbox", expected_text=name
-        )
-        if result is None:
-            raise UIUnavailable("Native confirmation could not start")
-        return result
-
     return run_modal(
-        "confirmation",
+        "form",
         {
-            "native": native,
             "tkinter": lambda: _show_tkinter_confirmation_subprocess(
                 title, message, name, **options
             ),

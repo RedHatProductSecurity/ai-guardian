@@ -64,7 +64,7 @@ controls.
 | Tray Pause... daemon/project/session hierarchy: `open_pause_controls` | isolated T → G | isolated T → G | isolated T → G |
 | Browser form's auxiliary file/directory Browse | N AppleScript choose file/folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms OpenFileDialog/FolderBrowserDialog → isolated T |
 | Sandbox create/configuration/policy editor: `show_sandbox_form` | isolated T → G | isolated T → G | isolated T → G |
-| Sandbox deletion (must type exact name): `show_sandbox_confirmation` | N AppleScript text-entry confirmation → isolated T → G | N zenity entry/kdialog inputbox → isolated T → G | N PowerShell VisualBasic InputBox → isolated T → G |
+| Sandbox deletion (copy exact name, then type it to confirm): `show_sandbox_confirmation` | isolated T → G | Same | Same |
 | Sandbox upload summary/errors and complete policy replacement review | isolated T → G; compact native confirmation is ineligible | Same | Same |
 | Sandbox live progress: `show_sandbox_progress` | isolated T; otherwise captured-output object | Same | Same |
 | Sandbox captured logs: `show_sandbox_log` | isolated T → G, complete scrollable/copyable text | Same | Same |
@@ -335,9 +335,11 @@ monitor, result and sanitized screenshots/timing for each matrix row.
    tray close/repeated opens and absence of permanent topmost. For remote panels,
    Wayland or browsers, verify the **explicit manual-move guidance** and actually
    move the window before continuing; record this as fallback, not enforcement.
-6. Verify typed-name deletion rejects incorrect/empty text. Review the last lines
-   of large policies, upload errors and logs, then cancel: no mutation occurs.
-   Check log scrolling/copy and progress/Connect behavior separately.
+6. Verify typed-name deletion rejects incorrect/empty text. Copy the full expected
+   sandbox name in Tk and NiceGUI, verify success/failure feedback, and confirm Copy
+   leaves the dialog open without deleting. Review the last lines of large policies,
+   upload errors and logs, then cancel: no mutation occurs. Check log scrolling/copy
+   and progress/Connect behavior separately.
 7. Support: use local ZIP review only; check per-file View, full paging, required
     fields, saved selection, native consent controls and safe no-desktop refusal.
     Exercise the distinct local tray-host and per-daemon actions in flat/nested

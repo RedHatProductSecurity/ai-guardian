@@ -5,9 +5,24 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-06 (UTC)
+> Last updated: 2026-11-07 (UTC)
 
 ---
+
+## Issue #2668 implementation — 2026-11-07
+
+- Added a clearly labeled, copyable expected sandbox name with clipboard success
+  and failure feedback in the isolated Tkinter and NiceGUI deletion dialogs. Copy
+  leaves the dialog open; exact-name confirmation and cancellation remain intact.
+- The confirmation uses the shared rich-form dispatcher, so native one-field
+  prompts are ineligible. Updated the modal capability matrix and manual checks.
+- Marked all six GitHub acceptance criteria complete, applied the `done` label,
+  added a progress comment, and recorded a DAF note.
+- **Validation:** 259 related unit tests and all 19 modal UX contract tests pass.
+  Ruff, Black (Python 3.10 target), error-level Pylint, package Mypy, JSON parsing,
+  and `git diff --check` pass.
+- Changes remain local and uncommitted on branch `2668`; ready for user review and
+  external `daf complete`. Manual desktop clipboard verification was not run.
 
 ## Issue #2667 KDE tray sandbox form focus — 2026-11-06
 
