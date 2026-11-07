@@ -18,7 +18,6 @@ import json
 import logging
 import os
 import platform
-import re
 import shutil
 import subprocess
 import sys
@@ -29,12 +28,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
+from ai_guardian.cli_runtime import (
+    detect_cli_runtime,
+    parse_cli_version,
+    pre_1_0_cli_advisory,
+)
 from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY, get_ide_integration
 
 logger = logging.getLogger(__name__)
-
-_CLI_VERSION_PATTERN = re.compile(r"(?<!\d)v?(\d+\.\d+\.\d+)(?!\d)")
-_CLI_VERSION_TIMEOUT_SECONDS = 5
 
 
 class CheckStatus(enum.Enum):
@@ -1378,55 +1379,12 @@ class Doctor:
     @staticmethod
     def _parse_cli_version(output: str) -> Optional[str]:
         """Extract the first semantic version from CLI output."""
-        match = _CLI_VERSION_PATTERN.search(output or "")
-        return match.group(1) if match else None
+        return parse_cli_version(output)
 
     @staticmethod
     def _detect_cli_runtime(integration) -> Optional[Dict[str, Any]]:
         """Best-effort version probe for an installed CLI integration."""
-        if not integration.cli_capable:
-            return None
-
-        if integration.key == "opencode":
-            from ai_guardian.opencode_support import detect_opencode_runtime
-
-            runtime = detect_opencode_runtime()
-            if not runtime.get("executable") and not runtime.get("version"):
-                return None
-            result: Dict[str, Any] = {
-                "executable": integration.cli_executables[0],
-                "version": runtime.get("version"),
-            }
-            generation = runtime.get("generation")
-            if generation and generation != "unknown":
-                result["generation"] = generation
-            return result
-
-        for executable in integration.cli_executables:
-            binary = shutil.which(executable)
-            if not binary:
-                continue
-            try:
-                completed = subprocess.run(
-                    [binary, "--version"],
-                    capture_output=True,
-                    check=False,
-                    text=True,
-                    timeout=_CLI_VERSION_TIMEOUT_SECONDS,
-                )
-            except (OSError, subprocess.SubprocessError) as exc:
-                logger.debug("Could not read %s version: %s", executable, exc)
-                return {"executable": executable, "version": None}
-
-            output = "\n".join(
-                value for value in (completed.stdout, completed.stderr) if value
-            )
-            return {
-                "executable": executable,
-                "version": Doctor._parse_cli_version(output),
-            }
-
-        return None
+        return detect_cli_runtime(integration)
 
     @staticmethod
     def _format_cli_runtime(runtime: Dict[str, Any]) -> str:
@@ -1454,8 +1412,15 @@ class Doctor:
             if runtime is None:
                 continue
 
+            advisory = pre_1_0_cli_advisory(integration, runtime)
+            if advisory:
+                runtime["stability"] = "pre-1.0"
+                runtime["advisory"] = advisory["message"]
+
             result["cli"] = runtime
             cli_message = self._format_cli_runtime(runtime)
+            if advisory:
+                cli_message += f"; WARNING: {advisory['message']}"
             message = result.get("message", "")
             result["message"] = f"{message}; {cli_message}" if message else cli_message
             results[index] = f"{result.get('display_name', result.get('name', ''))}: "

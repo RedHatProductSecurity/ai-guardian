@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-10-30T18:14:36.659Z
-> Files: 1298 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1299 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -14,7 +14,7 @@
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~20012 tok)
 - `ai-guardian-example.json` — ', '**/examples/**')", (~21642 tok)
-- `CHANGELOG.md` — Change log (~84533 tok)
+- `CHANGELOG.md` — Change log (~84614 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -26,7 +26,7 @@
 - `mkdocs.yml` (~1260 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2605 tok)
-- `README.md` — Project documentation (~10885 tok)
+- `README.md` — Project documentation (~10923 tok)
 - `RELEASING.md` — Release Management Process (~13424 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
@@ -904,7 +904,7 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~16940 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~17075 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
@@ -945,7 +945,7 @@
 - `SUPPORT.md` — Support bundles and public GitHub Discussions (~8241 tok)
 - `TOML_PATTERNS.md` — TOML Pattern Engine (~3843 tok)
 - `TOOL_POLICY.md` — Tool Policy System (~5839 tok)
-- `TROUBLESHOOTING.md` — Troubleshooting Guide (~7666 tok)
+- `TROUBLESHOOTING.md` — Troubleshooting Guide (~7725 tok)
 - `UBUNTU_VM.md` — Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release) (~8328 tok)
 - `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3729 tok)
 - `VIOLATION_LOGGING.md` — Violation Logging (~5810 tok)
@@ -1069,12 +1069,13 @@
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
 - `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~6184 tok)
 - `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~13275 tok)
+- `cli_runtime.py` — Shared version detection and stability advisories for agent CLIs. (~877 tok)
 - `cli.py` — main (~31206 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
 - `constants.py` — Constants for AI Guardian. (~5482 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
 - `developer_session.py` — Trusted developer-session configuration. (~485 tok)
-- `doctor.py` — URL configuration (~32227 tok)
+- `doctor.py` — URL configuration (~31840 tok)
 - `dummy_agent.py` — run_interactive (~6239 tok)
 - `git_workflow.py` — Git workflow helpers for init-project --annotate. (~1960 tok)
 - `help_content.py` — Centralized help content for all AI Guardian scanner pages. (~9474 tok)
@@ -1330,9 +1331,9 @@
 
 ## src/ai_guardian/setup/
 
-- `__init__.py` — setup_hooks (~10965 tok)
+- `__init__.py` — setup_hooks (~11018 tok)
 - `config.py` — Default configuration creation for ai-guardian. (~8021 tok)
-- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~50212 tok)
+- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~50693 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~17615 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
 - `utils.py` — Shared utility functions for ai-guardian setup modules. (~3326 tok)

@@ -17,6 +17,16 @@ checks that this support list agrees with adapter aliases, setup modes,
 managed events, MCP/rules and transcript/session registries, installer
 surfaces, and release-readiness matrices.
 
+## Upstream CLI maturity
+
+Support status describes AI Guardian's integration coverage, not the upstream
+agent CLI's maturity or stability. When setup or `ai-guardian doctor` detects a
+CLI version below 1.0.0, it reports a non-blocking advisory because upstream
+interfaces may change before 1.0.0. This does not mean the integration is
+misconfigured. If the CLI version is unavailable or cannot be parsed, AI Guardian
+does not classify it as pre-1.0. See [Troubleshooting](TROUBLESHOOTING.md#general-diagnostics)
+for doctor output details.
+
 ### Codex and ChatGPT desktop scope
 
 `OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** in the

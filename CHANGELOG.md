@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Pre-1.0 agent CLI advisories:** Setup and Doctor now report a non-blocking
+  warning when a supported CLI's detected version is below 1.0.0. Doctor includes
+  the advisory in human-readable and structured output without changing hook
+  health; unavailable or unparsable versions are not classified as pre-1.0.
+
 ### Fixed
 - **KDE tray sandbox form focus:** Restore foreground focus once after the tray
   menu handoff and clear the temporary topmost hint; the form does not remain

@@ -20,6 +20,8 @@ from ai_guardian.constants import (
     HookEvent,
     MANAGED_HOOK_EVENTS_BY_IDE,
 )
+from ai_guardian.cli_runtime import detect_cli_runtime, pre_1_0_cli_advisory
+from ai_guardian.ide_registry import get_ide_integration
 from ai_guardian.ide_paths import resolve_ide_config_path
 from ai_guardian.opencode_support import detect_opencode_runtime
 from ai_guardian.setup.utils import (
@@ -72,6 +74,21 @@ _OPENCODE_GENERATION_MARKER = "// ai-guardian-opencode-generation:"
 _PI_MCP_ENABLED_TOKEN = "__AI_GUARDIAN_PI_MCP_ENABLED__"
 
 logger = logging.getLogger(__name__)
+
+
+def _cli_stability_warning(ide_type: str) -> Optional[Dict[str, str]]:
+    """Return a best-effort pre-1.0 advisory for a supported CLI integration."""
+    integration = get_ide_integration(ide_type)
+    if integration is None:
+        return None
+    try:
+        runtime = detect_cli_runtime(integration)
+    except Exception:
+        logger.debug(
+            "Unable to inspect %s CLI version after setup", ide_type, exc_info=True
+        )
+        return None
+    return pre_1_0_cli_advisory(integration, runtime) if runtime else None
 
 
 def _hook_config_schema_error(
@@ -981,6 +998,7 @@ class IDESetup:
         """Initialize IDE setup manager."""
         self._last_merged_config: Optional[Dict] = None
         self._last_backup_error: Optional[str] = None
+        self._last_cli_stability_warning: Optional[Dict[str, str]] = None
 
     @staticmethod
     def _codex_project_root(cwd: Optional[str] = None) -> Optional[Path]:
@@ -3363,6 +3381,34 @@ class IDESetup:
         return already_configured
 
     def setup_ide_hooks(
+        self,
+        ide_type: str,
+        dry_run: bool = False,
+        force: bool = False,
+        scope: str = "user",
+        project_dir: Optional[str] = None,
+        enable_mcp: bool = True,
+    ) -> Tuple[bool, str]:
+        """Configure hooks and append any applicable upstream CLI advisory."""
+        self._last_cli_stability_warning = None
+        success, message = self._setup_ide_hooks(
+            ide_type,
+            dry_run=dry_run,
+            force=force,
+            scope=scope,
+            project_dir=project_dir,
+            enable_mcp=enable_mcp,
+        )
+        if not success or dry_run:
+            return success, message
+
+        advisory = _cli_stability_warning(ide_type)
+        if advisory:
+            self._last_cli_stability_warning = advisory
+            message = f"{message.rstrip()}\n\n  ⚠️ WARNING: {advisory['message']}\n"
+        return success, message
+
+    def _setup_ide_hooks(
         self,
         ide_type: str,
         dry_run: bool = False,

@@ -162,6 +162,66 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("version", "expected_advisory"),
+    [
+        ("0.67.0", True),
+        ("1.0.0", False),
+        (None, False),
+        ("unparseable", False),
+    ],
+)
+def test_doctor_surfaces_pre_1_0_advisory_without_changing_hook_health(
+    tmp_path, version, expected_advisory
+):
+    config_path = tmp_path / "gemini" / "settings.json"
+    config_path.parent.mkdir()
+    config_path.write_text("{}", encoding="utf-8")
+
+    with (
+        patch(
+            "ai_guardian.setup.IDESetup.list_detected_ides",
+            return_value=["gemini"],
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.get_config_path",
+            return_value=str(config_path),
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.check_hooks_for_ide",
+            return_value=(True, "Google Gemini CLI: configured"),
+        ),
+        patch.object(
+            Doctor,
+            "_detect_cli_runtime",
+            return_value={"executable": "gemini", "version": version},
+        ),
+    ):
+        result = Doctor().check_hooks()
+
+    gemini = next(item for item in result.integrations if item["ide"] == "gemini")
+    report = DoctorReport(checks=[result])
+    human = format_human(report)
+    structured = json.loads(format_json(report))["checks"][0]["integrations"]
+    structured_gemini = next(item for item in structured if item["ide"] == "gemini")
+
+    assert result.status == CheckStatus.PASS
+    assert gemini["status"] == CheckStatus.PASS.value
+    assert report.exit_code == 0
+    if expected_advisory:
+        assert "pre-1.0.0" in gemini["message"]
+        assert gemini["cli"]["stability"] == "pre-1.0"
+        assert "upstream interface may change" in human
+        assert "integration coverage, not upstream CLI stability" in human
+        assert structured_gemini["cli"]["advisory"] in structured_gemini["message"]
+        assert structured_gemini["cli"]["version"] == version
+    else:
+        assert "pre-1.0" not in gemini["message"]
+        assert "stability" not in gemini["cli"]
+        assert "pre-1.0" not in human
+        assert "advisory" not in structured_gemini["cli"]
+
+
+@pytest.mark.parametrize(
     "mcp_config, expected_layout",
     [
         (
@@ -578,6 +638,69 @@ def test_cli_setup_yes_configures_all_pending_integrations():
     assert [call.args[0] for call in setup.setup_ide_hooks.call_args_list] == [
         "claude",
         "cursor",
+    ]
+
+
+def test_noninteractive_setup_shows_pre_1_0_cli_warning(capsys):
+    with (
+        patch(
+            "ai_guardian.setup._discover_unconfigured_ides",
+            return_value=(["gemini"], ["gemini"]),
+        ),
+        patch.object(
+            IDESetup,
+            "_setup_ide_hooks",
+            return_value=(True, "Hooks configured"),
+        ),
+        patch(
+            "ai_guardian.setup.hooks.detect_cli_runtime",
+            return_value={"executable": "gemini", "version": "0.67.0"},
+        ),
+        patch("ai_guardian.setup._handle_mcp_setup"),
+        patch("ai_guardian.setup._notify_daemon_reload"),
+    ):
+        assert setup_hooks(interactive=False) is True
+
+    output = capsys.readouterr().out
+    assert "WARNING: Google Gemini CLI version 0.67.0 is pre-1.0.0" in output
+    assert "integration coverage, not upstream CLI stability" in output
+
+
+def test_json_setup_exposes_pre_1_0_cli_warning_as_advisory(tmp_path, capsys):
+    config_path = tmp_path / "gemini" / "settings.json"
+    with (
+        patch.object(IDESetup, "get_config_path", return_value=str(config_path)),
+        patch.object(
+            IDESetup,
+            "_setup_ide_hooks",
+            return_value=(True, "Hooks configured"),
+        ),
+        patch(
+            "ai_guardian.setup.hooks.detect_cli_runtime",
+            return_value={"executable": "gemini", "version": "0.67.0"},
+        ),
+        patch("ai_guardian.setup._handle_mcp_setup"),
+        patch(
+            "ai_guardian.setup.get_mcp_config_path",
+            return_value=tmp_path / "mcp.json",
+        ),
+    ):
+        assert setup_hooks(ide_type="gemini", json_output=True) is True
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["success"] is True
+    assert result["warnings"] == [
+        {
+            "code": "pre_1_0_cli",
+            "ide": "gemini",
+            "executable": "gemini",
+            "version": "0.67.0",
+            "message": (
+                "Google Gemini CLI version 0.67.0 is pre-1.0.0. Its upstream "
+                "interface may change; AI Guardian's support status describes "
+                "integration coverage, not upstream CLI stability."
+            ),
+        }
     ]
 
 

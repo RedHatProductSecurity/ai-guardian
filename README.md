@@ -427,6 +427,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Kubernetes Deployment](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md) | Kustomize manifests for Kind, OpenShift, and production deployments |
 | [Security Instructions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Configurable agent context injection rules via the web console |
 | [Transcript Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability) | Scan IDE conversation transcripts for secrets/PII across 7+ IDEs |
+| [Agent CLI Maturity Advisories](docs/AGENT_SUPPORT.md#upstream-cli-maturity) | Non-blocking setup/doctor warnings for detected pre-1.0 CLI versions |
 | [LeakTK Listen Mode](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Event-driven scanning with 40x latency reduction vs polling |
 | [Zero-Config Onboarding](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | `init --scan` scans the project and generates a tuned config |
 | [Language-Aware FP Suppression](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Tree-sitter AST parsing reduces false positives in code |

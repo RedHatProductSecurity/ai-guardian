@@ -848,6 +848,51 @@ class TestIDESetup:
                 assert "WARNING: Secret scanning will be disabled" in message
                 assert "install gitleaks" in message.lower()
 
+    @pytest.mark.parametrize(
+        ("version", "expected_warning"),
+        [("0.67.0", True), ("1.0.0", False), (None, False), ("unknown", False)],
+    )
+    def test_setup_ide_hooks_only_warns_for_detected_pre_1_0_cli(
+        self, version, expected_warning
+    ):
+        setup = IDESetup()
+        with (
+            mock.patch.object(
+                setup, "_setup_ide_hooks", return_value=(True, "Hooks configured")
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks.detect_cli_runtime",
+                return_value={"executable": "gemini", "version": version},
+            ),
+        ):
+            success, message = setup.setup_ide_hooks("gemini")
+
+        assert success is True
+        assert ("pre-1.0.0" in message) is expected_warning
+        assert (setup._last_cli_stability_warning is not None) is expected_warning
+        if expected_warning:
+            assert "Google Gemini CLI version 0.67.0 is pre-1.0.0" in message
+            assert "upstream interface may change" in message
+            assert "integration coverage, not upstream CLI stability" in message
+            assert setup._last_cli_stability_warning["version"] == version
+
+    def test_setup_ide_hooks_dry_run_does_not_report_pre_1_0_advisory(self):
+        setup = IDESetup()
+        with (
+            mock.patch.object(
+                setup,
+                "_setup_ide_hooks",
+                return_value=(True, "[DRY RUN] Would configure hooks"),
+            ),
+            mock.patch("ai_guardian.setup.hooks.detect_cli_runtime") as detect_runtime,
+        ):
+            success, message = setup.setup_ide_hooks("gemini", dry_run=True)
+
+        assert success is True
+        assert "pre-1.0" not in message
+        assert setup._last_cli_stability_warning is None
+        detect_runtime.assert_not_called()
+
     # ── supports_hooks ──────────────────────────────────────────────────
 
     def test_supports_hooks_true_for_claude(self):

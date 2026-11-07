@@ -4,7 +4,7 @@ Common issues with the AI Guardian daemon, system tray, container deployments, a
 
 ## General Diagnostics
 
-Run `ai-guardian doctor` for a comprehensive health check covering config validation, scanner availability and selection, hook installation, permissions, unknown config keys, and more. The scanner report lists supported engines and warns when enabled secret scanning omits the built-in `toml-patterns` engine. Installed CLI integrations include their detected executable version; OpenCode also reports its V1 or V2 generation. For the tray-launched Console, local health is evaluated by the active daemon so it reflects the daemon's runtime context. Use `--json` for machine-readable output.
+Run `ai-guardian doctor` for a comprehensive health check covering config validation, scanner availability and selection, hook installation, permissions, unknown config keys, and more. The scanner report lists supported engines and warns when enabled secret scanning omits the built-in `toml-patterns` engine. Installed CLI integrations include their detected executable version; versions below 1.0.0 include a non-blocking upstream-stability advisory, while unavailable or unparsable versions are not classified. This advisory does not change hook/configuration health. OpenCode also reports its V1 or V2 generation. For the tray-launched Console, local health is evaluated by the active daemon so it reflects the daemon's runtime context. Use `--json` for machine-readable output, including structured CLI advisory details.
 
 ```bash
 ai-guardian doctor
