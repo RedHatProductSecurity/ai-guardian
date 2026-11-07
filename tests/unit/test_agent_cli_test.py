@@ -1842,7 +1842,7 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
         "fresh-install": "Fresh Install, CLI, Config & Pattern Checks (Python ${{ matrix.python-version }})",
         "upgrade-from-previous": "Stable Upgrade & Legacy Config Migration",
         "multi-agent-setup": "IDE Registry, Setup & Documentation Parity",
-        "ide-hook-e2e": "IDE Hook Integration E2E (${{ matrix.ide }})",
+        "ide-hook-e2e": "IDE Hook Integration E2E (${{ matrix.variant }})",
         "daemon-lifecycle": "Daemon, REST, SSH, Tray, Support & Release Checks",
         "smoke-tests": "Detection, Hook, False-Positive, Initialization & Lifecycle Smokes",
         "scenario-tests": "Container Agent Scenarios (minimal, standard, strict)",

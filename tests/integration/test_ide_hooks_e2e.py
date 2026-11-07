@@ -7,9 +7,11 @@ the generated-source boundary because their host runtimes are not available in
 this repository's test environment. Junie is verified as MCP-only.
 
 Set AI_GUARDIAN_TEST_IDE to run one IDE from the matrix. Without it, the test
-runs the complete local matrix. The release-readiness workflow sets the
-variable per matrix job so a failure identifies both the IDE and the hook
-event under test.
+runs the complete local matrix. OpenCode's versioned plugin contract runs both
+generations when OpenCode is selected; AI_GUARDIAN_TEST_OPENCODE_GENERATION
+selects only v1 or v2 and requires AI_GUARDIAN_TEST_IDE=opencode. The
+release-readiness workflow sets these variables per matrix job so a failure
+identifies the IDE generation and hook event under test.
 """
 
 import contextlib
@@ -38,6 +40,10 @@ EXTERNAL_IDES = SUPPORTED_IDE_TYPES
 
 POST_OUTPUT_MARKER = "E2E_GUARDIAN_MARKER_A1B2C3D4E5F6G7H8"
 POST_OUTPUT_PATTERN = r"E2E_GUARDIAN_MARKER_[A-Z0-9]{16}"
+OPENCODE_VERSION_CASES = (
+    ("1.18.31", "v1", "@opencode-ai/plugin"),
+    ("2.0.22", "v2", None),
+)
 
 
 EVENT_CASES = {ide_type: get_e2e_event_cases(ide_type) for ide_type in EXTERNAL_IDES}
@@ -52,6 +58,32 @@ def _selected_ides() -> Tuple[str, ...]:
             )
         return (requested,)
     return EXTERNAL_IDES
+
+
+def _opencode_version_cases_for_selection(
+    requested_generation: Optional[str], selected_ides: Tuple[str, ...]
+) -> Tuple[Tuple[str, str, Optional[str]], ...]:
+    """Select only the requested OpenCode generation, or both for local runs."""
+    if not requested_generation:
+        return OPENCODE_VERSION_CASES if "opencode" in selected_ides else ()
+    if requested_generation not in {"v1", "v2"}:
+        raise ValueError(
+            "AI_GUARDIAN_TEST_OPENCODE_GENERATION must be either 'v1' or 'v2'"
+        )
+    if selected_ides != ("opencode",):
+        raise ValueError(
+            "AI_GUARDIAN_TEST_OPENCODE_GENERATION requires "
+            "AI_GUARDIAN_TEST_IDE=opencode"
+        )
+    return tuple(
+        case for case in OPENCODE_VERSION_CASES if case[1] == requested_generation
+    )
+
+
+def _selected_opencode_version_cases() -> Tuple[Tuple[str, str, Optional[str]], ...]:
+    return _opencode_version_cases_for_selection(
+        os.environ.get("AI_GUARDIAN_TEST_OPENCODE_GENERATION"), _selected_ides()
+    )
 
 
 def _walk_commands(value: Any) -> Iterable[str]:
@@ -651,11 +683,7 @@ def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
 
 @pytest.mark.parametrize(
     "opencode_version,generation,plugin_package",
-    [
-        ("1.18.31", "v1", "@opencode-ai/plugin"),
-        ("2.0.22", "v2", None),
-    ],
-    ids=("v1", "v2"),
+    [pytest.param(*case, id=case[1]) for case in _selected_opencode_version_cases()],
 )
 def test_opencode_versioned_plugin_setup(
     opencode_version,
@@ -665,9 +693,6 @@ def test_opencode_versioned_plugin_setup(
     monkeypatch,
 ):
     """Verify both generated plugin contracts in isolated homes."""
-    if "opencode" not in _selected_ides():
-        pytest.skip("OpenCode is not selected for this isolated matrix run")
-
     monkeypatch.setenv("AI_GUARDIAN_OPENCODE_VERSION", opencode_version)
     setup, verification = _install_and_verify("opencode")
 
@@ -691,6 +716,11 @@ def test_install_verify_and_exercise_ide_integration(
     ide_type, isolated_ide_environment
 ):
     """Install, verify, and exercise the generated integration for one IDE."""
+    if ide_type == "opencode":
+        pytest.skip(
+            "OpenCode is covered by generation-specific plugin and MCP contracts"
+        )
+
     setup, verification = _install_and_verify(ide_type)
     _assert_mcp_registration(ide_type)
 

@@ -9,6 +9,31 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2675 implementation — 2026-11-07
+
+- On managed DAF branch `2675`, split the `ide-hook-e2e` OpenCode coverage into
+  separately named `opencode-v1` and `opencode-v2` matrix variants; all other IDE
+  variants remain one each. Each job passes a generation selector to pytest, which
+  collects only the matching fixed-version plugin/MCP contract. The generic
+  ambient OpenCode setup test is skipped, preventing V2 from silently falling back
+  to V1. Shared OpenCode unit/plugin-runtime checks run only once.
+- Added workflow-to-collection contract coverage, updated the job-name assertion
+  and Unreleased changelog. GitHub acceptance criteria were checked and a progress
+  comment was added.
+- Release Readiness run `42383624100` failed only at the registry parity step:
+  its embedded parser expected the old `matrix.ide` sequence and raised
+  `IndexError` after the workflow moved to `matrix.include`. Both OpenCode E2E
+  variants passed in that run. Replaced the duplicate parser with the tested
+  registry-contract pytest file, installing pytest in the setup job and asserting
+  that invocation in the test. The focused file now has **50 passing tests**.
+- **Validation:** 150 `test_agent_cli_test.py` tests pass. OpenCode E2E passes for
+  V1 and V2 separately and in unfiltered local mode (one expected generic-path
+  skip). Full Black, Ruff, error-level Pylint, package Mypy (336 source files),
+  and `git diff --check` pass.
+- The matrix implementation is committed/pushed as `26b8ebeeb`; the parity-step
+  follow-up is local and uncommitted. **Next:** validate the follow-up and rerun
+  Release Readiness after publication; no new run has started yet.
+
 ## Issue #2674 implementation — 2026-11-07
 
 - Continued the managed DAF `open` session on existing branch `2674` in the real

@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the advisory in human-readable and structured output without changing hook
   health; unavailable or unparsable versions are not classified as pre-1.0.
 
+### CI/CD
+- **OpenCode hook E2E variants:** Run OpenCode V1 and V2 plugin/MCP integration
+  contracts as separately named Release Readiness matrix jobs, with generation-
+  specific test selection and shared OpenCode unit checks run only once.
+
 ### Fixed
 - **KDE tray sandbox form focus:** Restore foreground focus once after the tray
   menu handoff and clear the temporary topmost hint; the form does not remain
