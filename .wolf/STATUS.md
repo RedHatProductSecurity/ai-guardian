@@ -35,9 +35,10 @@ budget_tokens: 1000
   Release Readiness after publication; no new run has started yet.
 ## Issue #2682 implementation — 2026-11-07
 
-- Continued on the existing DAF branch `2682`; no branch switch was made. The
-  remote branch is at `c8c473f6` with open PR #2684. No GitHub issue state or DAF
-  completion was changed during this follow-up.
+- Continued on the existing DAF branch `2682` and rebased its two commits onto
+  `origin/main` at `1159bc57`. The rebased commits are `4319203a` and `753c5883`.
+  Open PR #2684 still points to pre-rebase commit `fc174fb9`; it has not been
+  force-updated. No GitHub issue state or DAF completion was changed.
 - Audited tray-launched Tk windows and added shared one-shot presentation in
   `ui/modal.py`: withdrawn layout, temporary topmost hint, focus after mapping,
   then clear the hint and deiconify/refocus once after 200 ms. Applied it to tray
@@ -49,17 +50,16 @@ budget_tokens: 1000
   UX coverage and expanded the modal provider/manual verification guidance.
 - CI run `42389159624`: six workflows passed; only the Tests workflow failed, with
   the same three About grab-order assertions failing in all eight Python/OS matrix
-  jobs. Moved optional grab acquisition into the post-map focus callback to retain
-  the existing About event order. The local follow-up is uncommitted and has not
-  been pushed, so CI still needs a rerun.
+  jobs. The fix moves optional grab acquisition into the post-map focus callback
+  to retain the existing About event order. The 1,151 related unit/UX tests and
+  static checks passed before rebase; they have not been rerun since rebasing.
 - **Validation:** 1,151 related unit tests and complete modal, support, About, SSH
   and Pause UX contracts pass locally. Ruff, Black (Python 3.10 target), error-level
   Pylint, package Mypy (336 files), and `git diff --check` pass. One existing
   PyGObject deprecation warning remains.
-- **Pending:** publish/CI rerun for the local follow-up and actual visual
-  verification on the reporter's KDE/Plasma session; distro/version and
-  X11/Wayland details were not provided. No commit or push was made during this
-  follow-up; use external `daf complete` after review.
+- **Pending:** update the PR branch after approval, rerun CI, and perform actual
+  visual verification on the reporter's KDE/Plasma session; distro/version and
+  X11/Wayland details were not provided. No push was made during this rebase.
 
 ## Issue #2674 implementation — 2026-11-07
 
