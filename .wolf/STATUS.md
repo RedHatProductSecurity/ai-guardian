@@ -20,12 +20,19 @@ budget_tokens: 1000
 - Added workflow-to-collection contract coverage, updated the job-name assertion
   and Unreleased changelog. GitHub acceptance criteria were checked and a progress
   comment was added.
-- **Validation:** 49 `test_ide_registry.py` tests and 150 `test_agent_cli_test.py`
-  tests pass. OpenCode E2E passes for V1 and V2 separately and in unfiltered local
-  mode (one expected generic-path skip). Full Black, Ruff, error-level Pylint,
-  package Mypy (336 source files), and `git diff --check` pass.
-- Changes remain local and uncommitted; no push or Release Readiness Actions run.
-  **Next:** user review and external `daf complete`.
+- Release Readiness run `42383624100` failed only at the registry parity step:
+  its embedded parser expected the old `matrix.ide` sequence and raised
+  `IndexError` after the workflow moved to `matrix.include`. Both OpenCode E2E
+  variants passed in that run. Replaced the duplicate parser with the tested
+  registry-contract pytest file, installing pytest in the setup job and asserting
+  that invocation in the test. The focused file now has **50 passing tests**.
+- **Validation:** 150 `test_agent_cli_test.py` tests pass. OpenCode E2E passes for
+  V1 and V2 separately and in unfiltered local mode (one expected generic-path
+  skip). Full Black, Ruff, error-level Pylint, package Mypy (336 source files),
+  and `git diff --check` pass.
+- The matrix implementation is committed/pushed as `26b8ebeeb`; the parity-step
+  follow-up is local and uncommitted. **Next:** validate the follow-up and rerun
+  Release Readiness after publication; no new run has started yet.
 
 ## Issue #2674 implementation — 2026-11-07
 

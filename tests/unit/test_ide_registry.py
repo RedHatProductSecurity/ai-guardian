@@ -188,6 +188,24 @@ def test_release_readiness_matrices_match_canonical_registry():
     ] == [("opencode-v1", "v1"), ("opencode-v2", "v2")]
 
 
+def test_release_readiness_runs_the_ide_registry_contract_tests():
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "release-readiness.yml").read_text()
+    )
+    job = workflow["jobs"]["multi-agent-setup"]
+    install_step = next(
+        step for step in job["steps"] if step.get("name") == "Install ai-guardian"
+    )
+    parity_step = next(
+        step
+        for step in job["steps"]
+        if step.get("name") == "Verify supported IDE registry parity"
+    )
+
+    assert "pip install . pytest" in install_step["run"]
+    assert parity_step["run"] == "python -m pytest tests/unit/test_ide_registry.py -q"
+
+
 def test_release_readiness_e2e_matrix_selects_matching_opencode_generation():
     workflow = yaml.safe_load(
         (ROOT / ".github" / "workflows" / "release-readiness.yml").read_text()

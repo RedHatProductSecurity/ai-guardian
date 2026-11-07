@@ -157,7 +157,7 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~15415 tok)
+- `release-readiness.yml` — CI: Release Readiness (~15112 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~7340 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
