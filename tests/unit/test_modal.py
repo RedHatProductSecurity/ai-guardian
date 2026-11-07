@@ -172,24 +172,26 @@ def test_sandbox_form_real_child_startup_failure_preserves_all_fields(automatic)
     compile(child.call_args.args[0][2], "<child>", "exec")
 
 
-@pytest.mark.parametrize("cancel", [False, True])
-def test_delete_cancellation_stops_but_missing_native_advances(automatic, cancel):
+@pytest.mark.parametrize("startup_failure", [False, True])
+def test_delete_only_advances_after_tk_startup_failure(automatic, startup_failure):
     from ai_guardian.tray.sandbox_dialog import show_sandbox_confirmation
 
     with (
         patch(
-            "ai_guardian.tray.sandbox_dialog._show_native_confirmation",
-            return_value=False if cancel else None,
-        ),
-        patch(
             "ai_guardian.tray.sandbox_dialog._show_tkinter_confirmation_subprocess",
+            side_effect=UIUnavailable() if startup_failure else None,
             return_value=False,
         ) as tkinter,
-        patch("ai_guardian.tray.sandbox_dialog._show_nicegui_confirmation") as browser,
+        patch(
+            "ai_guardian.tray.sandbox_dialog._show_nicegui_confirmation",
+            return_value=False,
+        ) as browser,
+        patch("ai_guardian.tray.sandbox_dialog._show_native_confirmation") as native,
     ):
         assert show_sandbox_confirmation("sandbox", "container") is False
-    assert tkinter.call_count == int(not cancel)
-    browser.assert_not_called()
+    tkinter.assert_called_once()
+    assert browser.call_count == int(startup_failure)
+    native.assert_not_called()
 
 
 def test_review_fallback_preserves_errors_and_explicit_approval(automatic):

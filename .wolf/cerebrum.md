@@ -291,6 +291,12 @@
 
 ## Key Learnings
 
+- **2026-11-07 — Sandbox deletion Copy control (#2668):** A confirmation with a
+  separate clipboard action and truthful feedback uses the shared rich-form
+  capability (isolated Tk → NiceGUI); native one-field prompts are ineligible.
+  The Tk copy callback must not call `update()`: Return is bound to destructive
+  confirmation, and pumping events during Copy could process queued input.
+
 - **2026-11-06 — Violations source filter (#2669):** Keep free-form daemon-name
   search separate from the identity-valued exact-source selector. Apply the
   case-folded query to source labels while preserving hashed source identity for

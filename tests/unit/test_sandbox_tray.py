@@ -2851,6 +2851,67 @@ class TestSandboxDialogFallback:
         clipboard_owner.clipboard_append.assert_called_once_with("runtime output")
         clipboard_owner.update.assert_called_once_with()
 
+    def test_sandbox_name_copy_uses_exact_tk_clipboard_text(self):
+        from ai_guardian.tray.sandbox_dialog import _copy_sandbox_name_to_tk
+
+        clipboard_owner = mock.MagicMock()
+        name = 'sandbox / "exact"'
+
+        result = _copy_sandbox_name_to_tk(name, clipboard_owner)
+
+        assert result == "Sandbox name copied to clipboard."
+        clipboard_owner.clipboard_clear.assert_called_once_with()
+        clipboard_owner.clipboard_append.assert_called_once_with(name)
+        clipboard_owner.update.assert_not_called()
+
+    def test_sandbox_name_copy_reports_tk_clipboard_failure(self):
+        from ai_guardian.tray.sandbox_dialog import _copy_sandbox_name_to_tk
+
+        clipboard_owner = mock.MagicMock()
+        clipboard_owner.clipboard_append.side_effect = RuntimeError("clipboard")
+
+        result = _copy_sandbox_name_to_tk("sandbox-name", clipboard_owner)
+
+        assert result == "Could not copy sandbox name; select it and copy manually."
+        clipboard_owner.clipboard_clear.assert_called_once_with()
+        clipboard_owner.update.assert_not_called()
+
+    @pytest.mark.parametrize("clipboard_result", [True, False])
+    def test_sandbox_name_browser_copy_reports_clipboard_result(self, clipboard_result):
+        import asyncio
+        import json
+
+        from ai_guardian.tray.sandbox_dialog import _copy_sandbox_name_to_browser
+
+        browser = SimpleNamespace(
+            run_javascript=mock.AsyncMock(return_value=clipboard_result)
+        )
+        name = 'sandbox / "exact"'
+
+        assert (
+            asyncio.run(_copy_sandbox_name_to_browser(name, browser))
+            is clipboard_result
+        )
+        script = browser.run_javascript.await_args.args[0]
+        assert json.dumps(name) in script
+        assert "navigator.clipboard.writeText" in script
+
+    def test_sandbox_name_browser_copy_reports_javascript_failure(self):
+        import asyncio
+
+        from ai_guardian.tray.sandbox_dialog import _copy_sandbox_name_to_browser
+
+        browser = SimpleNamespace(
+            run_javascript=mock.AsyncMock(
+                side_effect=RuntimeError("browser unavailable")
+            )
+        )
+
+        assert (
+            asyncio.run(_copy_sandbox_name_to_browser("sandbox-name", browser)) is False
+        )
+        browser.run_javascript.assert_awaited_once()
+
     def test_progress_forwards_output_and_completion(self):
         import json
 
@@ -3382,6 +3443,93 @@ class TestSandboxDialogFallback:
             "The runtime sandbox will be removed. Saved host configuration snapshots are kept.",
             "ag-test",
         )
+
+    @pytest.mark.parametrize(
+        ("action", "expected_result"),
+        [("copy", False), ("wrong", False), ("exact", True), ("cancel", False)],
+    )
+    def test_tk_confirmation_copy_is_separate_from_exact_name_confirmation(
+        self, monkeypatch, action, expected_result
+    ):
+        import sys
+
+        from ai_guardian.tray import sandbox_dialog
+
+        root = mock.MagicMock()
+        buttons = {}
+        variables = []
+        entries = []
+        expected_name = "sandbox-random-identifier"
+
+        class FakeStringVar:
+            def __init__(self, value=""):
+                self.value = value
+                variables.append(self)
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+
+        def make_button(_parent, *, text, command):
+            buttons[text] = command
+            return mock.MagicMock()
+
+        def make_entry(*_args, **kwargs):
+            entries.append(kwargs)
+            return mock.MagicMock()
+
+        ttk = SimpleNamespace(
+            Button=make_button,
+            Entry=make_entry,
+            Frame=mock.Mock(return_value=mock.MagicMock()),
+            Label=mock.Mock(return_value=mock.MagicMock()),
+        )
+        tk = SimpleNamespace(
+            StringVar=FakeStringVar,
+            TclError=type("TclError", (Exception,), {}),
+            ttk=ttk,
+        )
+
+        def interact():
+            if action == "copy":
+                buttons["Copy"]()
+            elif action == "wrong":
+                variables[2].set("not-the-sandbox-name")
+                buttons["Delete sandbox"]()
+            elif action == "exact":
+                variables[2].set(expected_name)
+                buttons["Delete sandbox"]()
+            else:
+                buttons["Cancel"]()
+
+        root.mainloop.side_effect = interact
+        monkeypatch.setitem(sys.modules, "tkinter", tk)
+        monkeypatch.setattr(sandbox_dialog, "create_tk_root", lambda: root)
+        monkeypatch.setattr(sandbox_dialog, "_place_window_on_screen", mock.Mock())
+        monkeypatch.setattr("ai_guardian.ui.display._ensure_tcl_library", lambda: None)
+
+        result = sandbox_dialog._show_tkinter_confirmation(
+            "Delete sandbox",
+            f"Permanently delete '{expected_name}'?",
+            expected_name,
+        )
+
+        assert result is expected_result
+        assert variables[0].get() == expected_name
+        assert entries[0]["state"] == "readonly"
+        if action == "copy":
+            root.clipboard_clear.assert_called_once_with()
+            root.clipboard_append.assert_called_once_with(expected_name)
+            root.update.assert_not_called()
+            assert variables[1].get() == "Sandbox name copied to clipboard."
+            root.destroy.assert_not_called()
+        elif action == "wrong":
+            assert variables[3].get() == "The sandbox name does not match."
+            root.destroy.assert_not_called()
+        else:
+            root.destroy.assert_called_once_with()
 
     def test_upload_confirmation_returns_false_when_ui_is_headless(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_upload_confirmation
