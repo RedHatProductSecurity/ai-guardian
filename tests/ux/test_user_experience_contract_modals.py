@@ -83,6 +83,51 @@ def test_headless_is_noninteractive_and_never_approves_a_mutation(monkeypatch):
     browser.assert_not_called()
 
 
+def test_tray_tk_modal_handoff_restores_foreground_once():
+    """USER EXPERIENCE: Tray menu closes -> Tk dialogs stay usable, not topmost.
+
+    This handoff covers Tk-rendered messages/results, plugin and SSH forms,
+    proactive prompts and snooze steps, Pause, and sandbox forms/logs/progress/
+    confirmations. Support review has its own isolated renderer with the same
+    one-shot timing. Native OS dialogs and browser windows keep their provider
+    behavior; cancellation and fallback remain covered by the contracts below.
+    """
+    from types import SimpleNamespace
+
+    from ai_guardian.ui.modal import present_tk_window
+
+    state = {"visible": False, "foreground": False, "topmost": False}
+    root = Mock()
+    root.winfo_exists.return_value = True
+    callbacks = {}
+    root.attributes.side_effect = lambda name, value: state.update({"topmost": value})
+    root.deiconify.side_effect = lambda: state.update(visible=True)
+    root.lift.side_effect = lambda: state.update(visible=True)
+    root.focus_force.side_effect = lambda: state.update(foreground=True)
+    root.after_idle.side_effect = lambda callback: callbacks.setdefault(
+        "idle", callback
+    )
+    root.after.side_effect = lambda delay, callback: callbacks.setdefault(
+        delay, callback
+    )
+    tk = SimpleNamespace(TclError=type("TclError", (Exception,), {}))
+
+    present_tk_window(root, tk)
+    callbacks["idle"]()
+    assert state == {"visible": True, "foreground": True, "topmost": True}
+
+    # The tray menu closes and KDE changes stacking; one delayed restore recovers it.
+    state["foreground"] = False
+    callbacks[200]()
+    assert state == {"visible": True, "foreground": True, "topmost": False}
+    assert root.focus_force.call_count == 2
+    assert root.after.call_count == 1
+
+    # The user can switch away; no repeating callback steals focus again.
+    state["foreground"] = False
+    assert root.focus_force.call_count == 2
+
+
 @pytest.mark.parametrize(
     ("preference", "chosen_provider"),
     [("auto", "tkinter"), ("tkinter", "tkinter"), ("nicegui", "nicegui")],
@@ -315,6 +360,7 @@ def test_sandbox_create_form_restores_focus_after_kde_tray_menu_handoff(
     )
 
     def run_form():
+        root.after_idle.call_args.args[0]()
         delay, restore_focus = root.after.call_args.args
         assert delay == 200
         restore_focus()
@@ -349,7 +395,7 @@ def test_sandbox_create_form_restores_focus_after_kde_tray_menu_handoff(
         call("-topmost", True),
         call("-topmost", False),
     ]
-    assert root.lift.call_count == 2
+    assert root.lift.call_count == 3
     assert root.focus_force.call_count == 2
     root.after.assert_called_once()
     root.destroy.assert_called_once()

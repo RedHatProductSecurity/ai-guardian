@@ -12,7 +12,9 @@ Manual desktop verification:
    Changing it does not advance. Click Next for the selected review page, or Cancel.
    Without GitHub credentials, selecting Gist + Discussion disables Next, with an
    explanation. Switching back to ZIP enables Next without GitHub authentication.
-1. Verify the dialog opens normally in the foreground, not minimized. doctor.json
+1. Verify the dialog remains visible in the foreground after the tray menu closes,
+   not minimized. Its temporary raising hint clears, and switching to another
+   application afterward does not reclaim focus. doctor.json
    comes first and is checked for new lists; remaining files are alphabetical and
    unchecked. Saved selections, including an unchecked Doctor, are preserved.
    The Discussion title starts blank. Title and Your message are required; whitespace

@@ -73,6 +73,19 @@ controls.
 
 ### Explicit exceptions
 
+- **Tray-menu foreground handoff:** Standalone Tk windows launched by tray actions
+  are completed while withdrawn, mapped with a temporary raising hint, focused
+  after mapping, then deiconified/lifted/focused once more 200 ms later after the
+  hint is cleared (some window managers iconify the window during that handoff).
+  The shared modal helper applies this to messages/results, plugin parameters,
+  reusable SSH forms, proactive/setup/snooze prompts, Pause, and sandbox
+  configuration, progress, logs and confirmations. Support review keeps its
+  equivalent one-shot sequence inside the isolated user-consent renderer. Closing
+  before the callback is harmless; no window stays always-on-top or repeatedly
+  reclaims focus. Native OS dialogs and NiceGUI/browser windows retain their own
+  activation behavior. Native file/directory panels are different: their hidden
+  Tk owner establishes placement, then the OS panel owns focus, so the owner must
+  not schedule a delayed focus grab while the panel is open.
 - **Tray pause controls:** a complete hierarchy needs inline per-row duration/Resume
   dropdowns, full identities, inherited-state explanations and
   in-place refresh. Native simple forms do not implement this contract and are
@@ -331,10 +344,15 @@ monitor, result and sanitized screenshots/timing for each matrix row.
    Repeat with monitors left/right/above/below primary, negative coordinates,
    mixed resolutions, 100%/150%/200% scaling and taskbars/docks on different edges.
    Rearrange/resize, then disconnect the originating screen during a delayed flow;
-   verify visible primary fallback, and single-monitor behavior. Check focus after
-   tray close/repeated opens and absence of permanent topmost. For remote panels,
-   Wayland or browsers, verify the **explicit manual-move guidance** and actually
-   move the window before continuing; record this as fallback, not enforcement.
+   verify visible primary fallback, and single-monitor behavior. Check focus
+   after tray close/repeated opens for every Tk tray family (including
+   proactive/snooze, plugin and SSH forms, sandbox, Pause, messages/results and
+   support). Confirm the one delayed restoration occurs only once, switching to
+   another application afterward is respected, and topmost clears. For native
+   file/directory panels, confirm the OS panel remains active while open. For
+   remote panels, Wayland or browsers, verify the **explicit manual-move guidance**
+   and actually move the window before continuing; record this as fallback, not
+   enforcement.
 6. Verify typed-name deletion rejects incorrect/empty text. Copy the full expected
    sandbox name in Tk and NiceGUI, verify success/failure feedback, and confirm Copy
    leaves the dialog open without deleting. Review the last lines of large policies,

@@ -112,6 +112,67 @@ def create_tk_root():
     return root
 
 
+def present_tk_window(window, tk, *, focus_widget=None, grab=False) -> None:
+    """Show a completed tray dialog and restore its foreground once.
+
+    The brief topmost hint bridges the tray-menu dismissal. It is always cleared
+    after 200 ms; focus is requested after mapping and once after that hint is
+    removed, never on a repeating timer.
+    """
+
+    def focus():
+        try:
+            if not window.winfo_exists():
+                return
+            window.deiconify()
+            window.lift()
+            window.focus_force()
+            if focus_widget is not None:
+                focus_widget.focus_set()
+        except tk.TclError:
+            logger.debug("Tray dialog closed before foreground focus restoration")
+
+    def clear_raising_hint():
+        try:
+            if not window.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        try:
+            window.attributes("-topmost", False)
+        except tk.TclError:
+            logger.debug("Tray dialog temporary raising hint could not be cleared")
+        focus()
+
+    window.update_idletasks()
+    try:
+        window.attributes("-topmost", True)
+    except tk.TclError:
+        logger.debug("Tray dialog window manager rejected the raising hint")
+
+    try:
+        window.deiconify()
+        window.lift()
+        if grab:
+            window.grab_set()
+    except tk.TclError:
+        try:
+            window.attributes("-topmost", False)
+        except tk.TclError:
+            logger.debug("Tray dialog temporary raising hint could not be cleared")
+        raise
+
+    try:
+        window.after_idle(focus)
+    except tk.TclError:
+        logger.debug("Tray dialog closed before initial foreground focus")
+    try:
+        window.after(200, clear_raising_hint)
+    except tk.TclError:
+        logger.debug("Tray dialog closed before delayed foreground focus")
+        clear_raising_hint()
+
+
 def mark_modal_displayed() -> None:
     """Latch possible visibility before entering a panel without a Map event."""
     state = _lifecycle.get()

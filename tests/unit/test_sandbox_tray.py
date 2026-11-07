@@ -3077,6 +3077,7 @@ class TestSandboxDialogFallback:
                 callback()
 
         root.after.side_effect = schedule
+        root.after_idle.side_effect = lambda callback: callback()
         root.mainloop.side_effect = lambda: scheduled.pop(0)()
         variables = []
 
@@ -3123,6 +3124,12 @@ class TestSandboxDialogFallback:
             _show_tkinter_progress("Creating sandbox", "Running")
 
         root.destroy.assert_not_called()
+        root.withdraw.assert_called_once_with()
+        assert root.attributes.call_args_list == [
+            mock.call("-topmost", True),
+            mock.call("-topmost", False),
+        ]
+        assert root.focus_force.call_count == 2
         assert buttons["Connect"].pack.called is connect_visible
         buttons["Copy"].pack.assert_called_once_with(side="left")
         buttons["Close"].pack.assert_called_once_with(side="left", padx=(8, 0))
@@ -3140,6 +3147,49 @@ class TestSandboxDialogFallback:
                 connect_call.kwargs["command"]()
             send_connect.assert_called_once_with('{"type": "connect"}', flush=True)
             buttons["Connect"].configure.assert_called_once_with(state="disabled")
+
+    def test_sandbox_log_restores_foreground_after_tray_menu_handoff(self, monkeypatch):
+        import sys
+        from types import ModuleType
+
+        from ai_guardian.tray import sandbox_dialog
+
+        root = mock.MagicMock()
+        root.winfo_exists.return_value = True
+        callbacks = {}
+        root.after_idle.side_effect = lambda callback: callbacks.setdefault(
+            "idle", callback
+        )
+        root.after.side_effect = lambda delay, callback: callbacks.setdefault(
+            delay, callback
+        )
+        error = type("TclError", (Exception,), {})
+        tkinter = ModuleType("tkinter")
+        tkinter.TclError = error
+        tkinter.StringVar = mock.Mock(return_value=mock.MagicMock())
+        tkinter.BooleanVar = mock.Mock(return_value=mock.MagicMock())
+        tkinter.Text = mock.Mock(return_value=mock.MagicMock())
+        ttk = ModuleType("tkinter.ttk")
+        for name in ("Frame", "Label", "Scrollbar", "Checkbutton", "Button"):
+            setattr(ttk, name, mock.Mock(return_value=mock.MagicMock()))
+        tkinter.ttk = ttk
+        monkeypatch.setitem(sys.modules, "tkinter", tkinter)
+        monkeypatch.setitem(sys.modules, "tkinter.ttk", ttk)
+        monkeypatch.setattr(sandbox_dialog, "create_tk_root", lambda: root)
+        monkeypatch.setattr(sandbox_dialog, "_place_window_on_screen", mock.Mock())
+        monkeypatch.setattr("ai_guardian.ui.display._ensure_tcl_library", lambda: None)
+
+        sandbox_dialog._show_tkinter_log("Readiness", "Full report", "safe report")
+
+        root.withdraw.assert_called_once_with()
+        callbacks["idle"]()
+        callbacks[200]()
+        assert root.attributes.call_args_list == [
+            mock.call("-topmost", True),
+            mock.call("-topmost", False),
+        ]
+        assert root.focus_force.call_count == 2
+        assert root.after.call_count == 1
 
     def test_sandbox_text_wrap_switches_between_wrapped_and_unwrapped(self):
         from ai_guardian.tray.sandbox_dialog import _set_text_wrap
@@ -3401,6 +3451,7 @@ class TestSandboxDialogFallback:
         _present_tk_sandbox_form(root, tk)
 
         assert root.attributes.call_args_list == [mock.call("-topmost", True)]
+        root.after_idle.call_args.args[0]()
         assert root.focus_force.call_count == 1
         delay, finish_startup = root.after.call_args.args
         assert delay == 200
@@ -3411,7 +3462,7 @@ class TestSandboxDialogFallback:
             mock.call("-topmost", True),
             mock.call("-topmost", False),
         ]
-        assert root.lift.call_count == 2
+        assert root.lift.call_count == 3
         assert root.focus_force.call_count == 2
         root.after.assert_called_once()
 
