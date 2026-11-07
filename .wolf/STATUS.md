@@ -9,6 +9,27 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2682 implementation — 2026-11-07
+
+- Continued on the existing DAF branch `2682`; no branch switch, commit, push,
+  GitHub issue edit or DAF completion was performed.
+- Audited tray-launched Tk windows and added shared one-shot presentation in
+  `ui/modal.py`: withdrawn layout, temporary topmost hint, focus after mapping,
+  then clear the hint and deiconify/refocus once after 200 ms. Applied it to tray
+  messages, proactive/setup/snooze prompts, plugin/SSH forms, Pause and sandbox
+  forms, progress, logs and confirmations. Support review retains its equivalent
+  isolated flow.
+- Kept native/browser providers unchanged. File/directory pickers remain a special
+  case: their Tk owner must not refocus while an OS panel owns focus. Added unit and
+  UX coverage and expanded the modal provider/manual verification guidance.
+- **Validation:** 1,128 related unit tests and complete modal, support, About, SSH
+  and Pause UX contracts pass. Ruff, Black (Python 3.10 target), error-level
+  Pylint, package Mypy (336 files), JSON validation and `git diff --check` pass.
+  One existing PyGObject deprecation warning remains.
+- **Pending:** actual visual verification on the reporter's KDE/Plasma session;
+  distro/version and X11/Wayland details were not provided. Changes are local and
+  uncommitted; preserve branch `2682` and use external `daf complete` after review.
+
 ## Issue #2674 implementation — 2026-11-07
 
 - Continued the managed DAF `open` session on existing branch `2674` in the real

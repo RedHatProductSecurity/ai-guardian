@@ -183,7 +183,7 @@ def test_tray_pause_window_restores_focus_after_menu_handoff(pause_ui):
         call("-topmost", True),
         call("-topmost", False),
     ]
-    assert root.deiconify.call_count == 1
+    assert root.deiconify.call_count == 3
     assert root.focus_force.call_count == 2
     pause_ui.tray._multi_client.send_pause.assert_not_called()
 

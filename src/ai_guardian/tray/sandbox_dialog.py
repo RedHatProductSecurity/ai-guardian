@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 from ai_guardian.ui.modal import (
     create_tk_root,
+    present_tk_window,
     run_modal,
     run_modal_subprocess,
     run_nicegui_modal,
@@ -687,35 +688,9 @@ class _TkTextVariable:
 
 def _present_tk_sandbox_form(root, tk) -> None:
     """Raise the form briefly, then restore focus after the tray menu closes."""
-
-    def finish_startup() -> None:
-        try:
-            if not root.winfo_exists():
-                return
-            try:
-                root.attributes("-topmost", False)
-            except tk.TclError:
-                logger.debug("Sandbox form temporary raising hint could not be cleared")
-            root.lift()
-            root.focus_force()
-        except tk.TclError:
-            logger.debug("Sandbox form closed before foreground focus was restored")
-
-    root.lift()
-    root.focus_force()
-    try:
-        root.grab_set()
-        root.attributes("-topmost", True)
-    except tk.TclError:
-        logger.debug("Sandbox form window manager rejected the modal raising hint")
-
-    try:
-        # KDE/XWayland may close the tray popup after this child maps. Restore
-        # focus once after that handoff, without keeping the form always-on-top.
-        root.after(200, finish_startup)
-    except tk.TclError:
-        logger.debug("Sandbox form closed before startup focus could be scheduled")
-        finish_startup()
+    # KDE/XWayland may close the tray popup after this child maps. Restore focus
+    # once after that handoff, without keeping the form always-on-top.
+    present_tk_window(root, tk, grab=True)
 
 
 def _show_tkinter_form(
@@ -742,6 +717,7 @@ def _show_tkinter_form(
     result: Dict[str, Any] = {}
 
     root = create_tk_root()
+    root.withdraw()
     root.title(title)
     root.geometry("760x680")
     _place_window_on_screen(root, screen_bounds, 760, 680)
@@ -1127,6 +1103,7 @@ def _show_tkinter_progress(
     log_parts: list[str] = []
     completed = False
     root = create_tk_root()
+    root.withdraw()
     root.title(title)
     root.geometry("760x480")
     _place_window_on_screen(root, screen_bounds, 760, 480)
@@ -1283,17 +1260,7 @@ def _show_tkinter_progress(
         name="sandbox-progress-reader",
     ).start()
     root.after(50, poll_updates)
-    root.lift()
-    root.focus_force()
-    try:
-        root.grab_set()
-        root.attributes("-topmost", True)
-        root.after(150, lambda: root.attributes("-topmost", False))
-    except tk.TclError:
-        # Some desktop environments reject modal/topmost hints. The progress
-        # window remains usable as an ordinary window in that case.
-        pass
-    root.update_idletasks()
+    present_tk_window(root, tk, grab=True)
     print(_PROGRESS_READY, flush=True)
     root.mainloop()
 
@@ -1313,6 +1280,7 @@ def _show_tkinter_log(
 
     _ensure_tcl_library()
     root = create_tk_root()
+    root.withdraw()
     root.title(title)
     root.geometry("760x480")
     _place_window_on_screen(root, screen_bounds, 760, 480)
@@ -1377,16 +1345,7 @@ def _show_tkinter_log(
     ttk.Button(button_frame, text="Close", command=close).pack(side="left", padx=(8, 0))
     root.protocol("WM_DELETE_WINDOW", close)
     root.bind("<Escape>", lambda _event: close())
-    root.lift()
-    root.focus_force()
-    try:
-        root.grab_set()
-        root.attributes("-topmost", True)
-        root.after(150, lambda: root.attributes("-topmost", False))
-    except tk.TclError:
-        # Some desktop environments reject transient/topmost hints.  The log
-        # remains usable as an ordinary window in that case.
-        pass
+    present_tk_window(root, tk, grab=True)
     root.mainloop()
 
 
@@ -1405,6 +1364,7 @@ def _show_tkinter_confirmation(
 
     _ensure_tcl_library()
     root = create_tk_root()
+    root.withdraw()
     root.title(title)
     root.geometry("560x320")
     _place_window_on_screen(root, screen_bounds, 560, 320)
@@ -1477,17 +1437,7 @@ def _show_tkinter_confirmation(
     root.protocol("WM_DELETE_WINDOW", cancel)
     root.bind("<Escape>", lambda _event: cancel())
     root.bind("<Return>", lambda _event: confirm())
-    root.lift()
-    root.focus_force()
-    entry.focus_set()
-    try:
-        root.grab_set()
-        root.attributes("-topmost", True)
-        root.after(150, lambda: root.attributes("-topmost", False))
-    except tk.TclError:
-        # Some desktop environments reject transient/topmost hints.  The
-        # confirmation remains usable as an ordinary modal window in that case.
-        pass
+    present_tk_window(root, tk, focus_widget=entry, grab=True)
     root.mainloop()
     return confirmed
 
@@ -2240,6 +2190,7 @@ def _show_tkinter_upload_confirmation(
 
     _ensure_tcl_library()
     root = create_tk_root()
+    root.withdraw()
     root.title(title)
     root.geometry("720x360")
     _place_window_on_screen(root, screen_bounds, 720, 360)
@@ -2313,16 +2264,7 @@ def _show_tkinter_upload_confirmation(
     root.protocol("WM_DELETE_WINDOW", cancel)
     root.bind("<Escape>", lambda _event: cancel())
     root.bind("<Return>", lambda _event: continue_upload())
-    root.lift()
-    root.focus_force()
-    try:
-        root.grab_set()
-        root.attributes("-topmost", True)
-        root.after(150, lambda: root.attributes("-topmost", False))
-    except tk.TclError:
-        # Some desktop environments reject modal/topmost hints. The upload
-        # confirmation remains usable as an ordinary window in that case.
-        pass
+    present_tk_window(root, tk, grab=True)
     root.mainloop()
     return confirmed
 

@@ -188,6 +188,9 @@ class TestChooseDirectory:
         root.focus_force.assert_called_once_with()
         root.attributes.assert_any_call("-topmost", True)
         root.attributes.assert_any_call("-topmost", False)
+        # The OS panel owns focus while open; the hidden parent must not
+        # schedule a delayed focus grab that could steal it back.
+        root.after.assert_not_called()
         filedialog.askdirectory.assert_called_once_with(
             parent=root,
             initialdir="/Users/dev",

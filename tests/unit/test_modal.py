@@ -5,7 +5,7 @@ import subprocess
 import sys
 from argparse import Namespace
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call as mock_call, patch
 
 import pytest
 
@@ -24,6 +24,68 @@ def automatic(monkeypatch):
     monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
     monkeypatch.setattr("platform.system", lambda: "Linux")
     monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+
+
+def test_tray_window_handoff_clears_topmost_and_restores_focus_once():
+    from ai_guardian.ui.modal import present_tk_window
+
+    root = Mock()
+    root.winfo_exists.return_value = True
+    callbacks = {}
+    root.after_idle.side_effect = lambda callback: callbacks.setdefault(
+        "idle", callback
+    )
+    root.after.side_effect = lambda delay, callback: callbacks.setdefault(
+        delay, callback
+    )
+    focus_widget = Mock()
+    tk = SimpleNamespace(TclError=type("TclError", (Exception,), {}))
+
+    present_tk_window(root, tk, focus_widget=focus_widget, grab=True)
+
+    assert root.attributes.call_args_list == [mock_call("-topmost", True)]
+    root.after_idle.assert_called_once()
+    root.after.assert_called_once()
+    assert root.after.call_args.args[0] == 200
+    root.grab_set.assert_called_once_with()
+
+    callbacks["idle"]()
+    assert root.focus_force.call_count == 1
+    callbacks[200]()
+
+    assert root.attributes.call_args_list == [
+        mock_call("-topmost", True),
+        mock_call("-topmost", False),
+    ]
+    assert root.focus_force.call_count == 2
+    assert root.lift.call_count == 3
+    assert focus_widget.focus_set.call_count == 2
+    assert root.after.call_count == 1
+
+
+def test_tray_window_handoff_still_restores_focus_when_topmost_is_unsupported():
+    from ai_guardian.ui.modal import present_tk_window
+
+    error = type("TclError", (Exception,), {})
+    root = Mock()
+    root.winfo_exists.return_value = True
+    callbacks = {}
+    root.after_idle.side_effect = lambda callback: callbacks.setdefault(
+        "idle", callback
+    )
+    root.after.side_effect = lambda delay, callback: callbacks.setdefault(
+        delay, callback
+    )
+    root.attributes.side_effect = error("unsupported window hint")
+    tk = SimpleNamespace(TclError=error)
+
+    present_tk_window(root, tk)
+    callbacks["idle"]()
+    callbacks[200]()
+
+    assert root.focus_force.call_count == 2
+    assert root.deiconify.call_count == 3
+    root.after.assert_called_once()
 
 
 def test_mapped_tk_failure_never_changes_toolkit(automatic, monkeypatch):

@@ -14,9 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   health; unavailable or unparsable versions are not classified as pre-1.0.
 
 ### Fixed
-- **KDE tray sandbox form focus:** Restore foreground focus once after the tray
-  menu handoff and clear the temporary topmost hint; the form does not remain
-  always-on-top or repeatedly reclaim focus.
+- **Tray modal focus handoff:** Standardize one-shot foreground restoration after
+  tray-menu dismissal for Tk messages/results, plugin and SSH forms, proactive and
+  snooze prompts, Pause, sandbox forms/progress/logs/confirmations, and support
+  review. Temporary topmost hints are cleared; dialogs do not remain always-on-top
+  or repeatedly reclaim focus. Native dialogs and browser windows are unchanged.
 - **CLI scan output privacy:** Default terminal results show finding counts and
   relative file paths without printing scanner messages, source positions, or code
   snippets. Absolute paths under the home directory use a `$HOME` prefix. Explicit
