@@ -291,6 +291,14 @@
 
 ## Key Learnings
 
+- **2026-11-07 — OpenCode hook E2E generation matrix (#2675):**
+  `AI_GUARDIAN_TEST_IDE` alone selects only the IDE; it does not distinguish
+  OpenCode plugin generations. Keep V1/V2 cases explicitly pinned with
+  `AI_GUARDIAN_OPENCODE_VERSION`, filter collection via a separate generation
+  selector, and skip the generic ambient-detection setup path for OpenCode so a
+  V2 job cannot silently cover V1 instead. Shared OpenCode unit/runtime contracts
+  should run once, not once in each generation job.
+
 - **2026-11-07 — NiceGUI readiness-dependent controls (#2672):** Values such as
   email-switch readiness are computed while rendering the page. After a blur save
   changes a prerequisite (for example, saving the previously missing recipient),
