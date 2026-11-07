@@ -1,7 +1,10 @@
 """Parity and coverage-contract tests for supported IDE integrations."""
 
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -43,11 +46,14 @@ def _release_readiness_setup_ids() -> tuple:
 
 
 def _release_readiness_e2e_ids() -> tuple:
-    workflow = (ROOT / ".github" / "workflows" / "release-readiness.yml").read_text()
-    ide_job_header = "  " + "ide-hook-e2e:"
-    matrix_section = workflow.split(ide_job_header, 1)[1].split("\n    steps:", 1)[0]
-    matrix_section = matrix_section.split("        ide:\n", 1)[1]
-    return tuple(re.findall(r"^\s+- ([a-z0-9-]+)$", matrix_section, re.MULTILINE))
+    return tuple(variant["ide"] for variant in _release_readiness_e2e_variants())
+
+
+def _release_readiness_e2e_variants() -> tuple:
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "release-readiness.yml").read_text()
+    )
+    return tuple(workflow["jobs"]["ide-hook-e2e"]["strategy"]["matrix"]["include"])
 
 
 def test_canonical_registry_is_unique_and_complete():
@@ -168,16 +174,116 @@ def test_transcript_and_session_capabilities_have_registered_implementations():
 
 def test_release_readiness_matrices_match_canonical_registry():
     assert _release_readiness_setup_ids() == SUPPORTED_IDE_TYPES
-    assert _release_readiness_e2e_ids() == SUPPORTED_IDE_TYPES
+    assert tuple(dict.fromkeys(_release_readiness_e2e_ids())) == SUPPORTED_IDE_TYPES
+    variants = _release_readiness_e2e_variants()
+    assert tuple(variant["variant"] for variant in variants) == tuple(
+        f"opencode-{generation}" if ide_type == "opencode" else ide_type
+        for ide_type in SUPPORTED_IDE_TYPES
+        for generation in (("v1", "v2") if ide_type == "opencode" else (None,))
+    )
+    assert [
+        (variant["variant"], variant["opencode_generation"])
+        for variant in variants
+        if variant["ide"] == "opencode"
+    ] == [("opencode-v1", "v1"), ("opencode-v2", "v2")]
 
 
-def test_release_readiness_e2e_matrix_parses_as_a_yaml_sequence():
+def test_release_readiness_e2e_matrix_selects_matching_opencode_generation():
     workflow = yaml.safe_load(
         (ROOT / ".github" / "workflows" / "release-readiness.yml").read_text()
     )
 
-    matrix = workflow["jobs"]["ide-hook-e2e"]["strategy"]["matrix"]["ide"]
-    assert matrix == list(SUPPORTED_IDE_TYPES)
+    job = workflow["jobs"]["ide-hook-e2e"]
+    assert job["name"] == "IDE Hook Integration E2E (${{ matrix.variant }})"
+    e2e_step = next(
+        step
+        for step in job["steps"]
+        if step.get("name") == "Run isolated ${{ matrix.variant }} hook matrix"
+    )
+    assert e2e_step["env"] == {
+        "AI_GUARDIAN_TEST_IDE": "${{ matrix.ide }}",
+        "AI_GUARDIAN_TEST_OPENCODE_GENERATION": "${{ matrix.opencode_generation || '' }}",
+    }
+    shared_opencode_checks = {
+        step["name"]: step["if"]
+        for step in job["steps"]
+        if step.get("name")
+        in (
+            "Set up Node for OpenCode plugin contracts",
+            "Verify shared OpenCode paths, workspace routing and safe diagnostics",
+        )
+    }
+    assert shared_opencode_checks == {
+        "Set up Node for OpenCode plugin contracts": "matrix.ide == 'opencode' && matrix.opencode_generation == 'v1'",
+        "Verify shared OpenCode paths, workspace routing and safe diagnostics": "matrix.ide == 'opencode' && matrix.opencode_generation == 'v1'",
+    }
+
+    test_path = ROOT / "tests" / "integration" / "test_ide_hooks_e2e.py"
+    selection_cases = (
+        ("opencode", "v1", ("v1",)),
+        ("opencode", "v2", ("v2",)),
+        ("opencode", None, ("v1", "v2")),
+        ("claude", None, ()),
+    )
+    for ide, generation, expected_generations in selection_cases:
+        env = os.environ.copy()
+        env["AI_GUARDIAN_TEST_IDE"] = ide
+        if generation is None:
+            env.pop("AI_GUARDIAN_TEST_OPENCODE_GENERATION", None)
+        else:
+            env["AI_GUARDIAN_TEST_OPENCODE_GENERATION"] = generation
+        collected = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "--collect-only",
+                "-q",
+                f"{test_path}::test_opencode_versioned_plugin_setup",
+            ],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=30,
+        )
+        assert collected.returncode == 0, collected.stderr
+        node_ids = [
+            line
+            for line in collected.stdout.splitlines()
+            if "test_opencode_versioned_plugin_setup[" in line
+        ]
+        selected_generations = tuple(
+            generation
+            for generation in ("v1", "v2")
+            if any(f"[{generation}]" in node_id for node_id in node_ids)
+        )
+        assert selected_generations == expected_generations
+
+    invalid_env = os.environ.copy()
+    invalid_env["AI_GUARDIAN_TEST_IDE"] = "opencode"
+    invalid_env["AI_GUARDIAN_TEST_OPENCODE_GENERATION"] = "latest"
+    invalid_selection = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
+            f"{test_path}::test_opencode_versioned_plugin_setup",
+        ],
+        cwd=ROOT,
+        env=invalid_env,
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=30,
+    )
+    assert invalid_selection.returncode != 0
+    assert "must be either 'v1' or 'v2'" in (
+        invalid_selection.stdout + invalid_selection.stderr
+    )
 
 
 def test_installers_and_support_docs_mention_every_supported_ide():

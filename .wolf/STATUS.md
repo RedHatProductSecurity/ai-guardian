@@ -9,6 +9,24 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2675 implementation — 2026-11-07
+
+- On managed DAF branch `2675`, split the `ide-hook-e2e` OpenCode coverage into
+  separately named `opencode-v1` and `opencode-v2` matrix variants; all other IDE
+  variants remain one each. Each job passes a generation selector to pytest, which
+  collects only the matching fixed-version plugin/MCP contract. The generic
+  ambient OpenCode setup test is skipped, preventing V2 from silently falling back
+  to V1. Shared OpenCode unit/plugin-runtime checks run only once.
+- Added workflow-to-collection contract coverage, updated the job-name assertion
+  and Unreleased changelog. GitHub acceptance criteria were checked and a progress
+  comment was added.
+- **Validation:** 49 `test_ide_registry.py` tests and 150 `test_agent_cli_test.py`
+  tests pass. OpenCode E2E passes for V1 and V2 separately and in unfiltered local
+  mode (one expected generic-path skip). Full Black, Ruff, error-level Pylint,
+  package Mypy (336 source files), and `git diff --check` pass.
+- Changes remain local and uncommitted; no push or Release Readiness Actions run.
+  **Next:** user review and external `daf complete`.
+
 ## Issue #2674 implementation — 2026-11-07
 
 - Continued the managed DAF `open` session on existing branch `2674` in the real

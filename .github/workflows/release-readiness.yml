@@ -396,31 +396,53 @@ jobs:
           test -f docs/SCANNER_INTEGRATION_CHECKLIST.md
 
   ide-hook-e2e:
-    name: IDE Hook Integration E2E (${{ matrix.ide }})
+    name: IDE Hook Integration E2E (${{ matrix.variant }})
     runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        ide:
-          - claude
-          - cursor
-          - copilot
-          - grok
-          - codex
-          - windsurf
-          - gemini
-          - antigravity
-          - cline
-          - zoocode
-          - kiro
-          - aiderdesk
-          - openclaw
-          - opencode
-          - pi
-          - augment
-          - crush
-          - junie
+        include:
+          - ide: claude
+            variant: claude
+          - ide: cursor
+            variant: cursor
+          - ide: copilot
+            variant: copilot
+          - ide: grok
+            variant: grok
+          - ide: codex
+            variant: codex
+          - ide: windsurf
+            variant: windsurf
+          - ide: gemini
+            variant: gemini
+          - ide: antigravity
+            variant: antigravity
+          - ide: cline
+            variant: cline
+          - ide: zoocode
+            variant: zoocode
+          - ide: kiro
+            variant: kiro
+          - ide: aiderdesk
+            variant: aiderdesk
+          - ide: openclaw
+            variant: openclaw
+          - ide: opencode
+            opencode_generation: v1
+            variant: opencode-v1
+          - ide: opencode
+            opencode_generation: v2
+            variant: opencode-v2
+          - ide: pi
+            variant: pi
+          - ide: augment
+            variant: augment
+          - ide: crush
+            variant: crush
+          - ide: junie
+            variant: junie
 
     steps:
       - name: Checkout code
@@ -438,13 +460,13 @@ jobs:
           pip install . pytest
 
       - name: Set up Node for OpenCode plugin contracts
-        if: matrix.ide == 'opencode'
+        if: matrix.ide == 'opencode' && matrix.opencode_generation == 'v1'
         uses: actions/setup-node@v7
         with:
           node-version: '24'
 
-      - name: Verify OpenCode native paths, workspace routing and safe diagnostics
-        if: matrix.ide == 'opencode'
+      - name: Verify shared OpenCode paths, workspace routing and safe diagnostics
+        if: matrix.ide == 'opencode' && matrix.opencode_generation == 'v1'
         run: |
           python -m pytest \
             tests/unit/test_opencode_input.py \
@@ -460,9 +482,10 @@ jobs:
             tests/ux/test_user_experience_contract_violation_guidance.py \
             tests/ux/test_user_experience_contract_ide_setup.py -q
 
-      - name: Run isolated ${{ matrix.ide }} hook matrix
+      - name: Run isolated ${{ matrix.variant }} hook matrix
         env:
           AI_GUARDIAN_TEST_IDE: ${{ matrix.ide }}
+          AI_GUARDIAN_TEST_OPENCODE_GENERATION: ${{ matrix.opencode_generation || '' }}
         run: python -m pytest tests/integration/test_ide_hooks_e2e.py -q
 
   daemon-lifecycle:
