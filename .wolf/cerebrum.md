@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-06
+> Last updated: 2026-11-07
 
 ## User Preferences
 
@@ -298,6 +298,16 @@
   selector, and skip the generic ambient-detection setup path for OpenCode so a
   V2 job cannot silently cover V1 instead. Shared OpenCode unit/runtime contracts
   should run once, not once in each generation job.
+- **2026-11-07 — Tray modal handoff (#2682):** Use one shared, one-shot Tk
+  foreground handoff for standalone windows launched by tray actions: finish
+  layout withdrawn, map with a temporary raising hint, focus after mapping, then
+  clear the hint and restore focus once after the tray menu closes. Each focus
+  request must deiconify before lifting/focusing: some window managers iconify the
+  dialog when the temporary hint clears. Native file and directory panels are
+  different: their hidden Tk owner positions the OS panel, so do not schedule a
+  delayed focus grab while that panel is open. Acquire an optional modal grab in
+  the post-map focus callback, not before mapping; About's UX contract guards this
+  order and repeated restoration after the temporary hint clears.
 
 - **2026-11-07 — NiceGUI readiness-dependent controls (#2672):** Values such as
   email-switch readiness are computed while rendering the page. After a blur save

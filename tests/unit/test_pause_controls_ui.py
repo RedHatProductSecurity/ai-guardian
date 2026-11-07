@@ -249,7 +249,7 @@ def test_tk_window_uses_temporary_raise_and_restores_focus(topmost_supported):
         call("-topmost", True),
         call("-topmost", False),
     ]
-    assert root.deiconify.call_count == 1
+    assert root.deiconify.call_count == 3
     assert root.lift.call_count == 3
     assert root.focus_force.call_count == 2
 

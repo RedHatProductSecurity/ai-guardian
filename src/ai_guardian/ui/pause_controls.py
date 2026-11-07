@@ -7,6 +7,7 @@ from functools import partial
 
 from ai_guardian.ui.modal import (
     create_tk_root,
+    present_tk_window as _present_tray_tk_window,
     run_modal_channel,
     run_modal_child,
     run_nicegui_modal,
@@ -30,33 +31,7 @@ def _set_initial_tk_size(window):
 
 def _present_tk_window(window, tk):
     """Raise once, then restore focus after the tray-menu handoff."""
-
-    def focus():
-        try:
-            if window.winfo_exists():
-                window.lift()
-                window.focus_force()
-        except tk.TclError:
-            logger.debug("Pause controls closed before foreground focus")
-
-    def finish_startup():
-        try:
-            if window.winfo_exists():
-                window.attributes("-topmost", False)
-        except tk.TclError:
-            logger.debug("Pause controls temporary raising hint could not be cleared")
-        # Clearing the hint or closing the tray popup can change stacking/focus.
-        focus()
-
-    window.update_idletasks()
-    try:
-        window.attributes("-topmost", True)
-    except tk.TclError:
-        logger.debug("Pause controls window manager does not accept a raising hint")
-    window.deiconify()
-    window.lift()
-    window.after_idle(focus)
-    window.after(200, finish_startup)
+    _present_tray_tk_window(window, tk)
 
 
 def run_pause_provider(provider, payload, on_event, *, screen_bounds=None):

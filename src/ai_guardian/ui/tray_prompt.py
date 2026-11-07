@@ -20,7 +20,7 @@ import os
 from typing import Any, Dict, Optional
 
 from ai_guardian.ui.display import get_preferred_ui
-from ai_guardian.ui.modal import create_tk_root, run_modal
+from ai_guardian.ui.modal import create_tk_root, present_tk_window, run_modal
 from ai_guardian.ui.monitor import (
     screen_payload,
     placement_notice,
@@ -218,11 +218,7 @@ class _TkinterPromptApp:
             ),
         )
 
-        self._root.deiconify()
-        self._root.lift()
-        self._root.attributes("-topmost", True)
-        self._root.after(100, lambda: self._root.attributes("-topmost", False))
-        self._root.focus_force()
+        present_tk_window(self._root, tk)
 
         self._root.mainloop()
         return self._result

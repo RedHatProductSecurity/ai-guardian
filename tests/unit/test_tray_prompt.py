@@ -1,7 +1,9 @@
 """Tests for prompt --mode params (tray plugin parameter form) and CLI handler."""
 
 import os
+import sys
 import tempfile
+import types
 from unittest import mock
 
 import pytest
@@ -202,6 +204,44 @@ class TestTrayPromptAppCreation:
         app = TrayPromptApp([], "echo", screen_bounds=bounds)
 
         assert app._screen_bounds == bounds
+
+    def test_tk_prompt_restores_foreground_once_after_tray_handoff(self, monkeypatch):
+        from ai_guardian.ui.tray_prompt import _TkinterPromptApp
+
+        root = mock.MagicMock()
+        root.winfo_exists.return_value = True
+        callbacks = {}
+        root.after_idle.side_effect = lambda callback: callbacks.setdefault(
+            "idle", callback
+        )
+        root.after.side_effect = lambda delay, callback: callbacks.setdefault(
+            delay, callback
+        )
+        ttk = mock.MagicMock()
+        tkinter = types.ModuleType("tkinter")
+        tkinter.ttk = ttk
+        tkinter.messagebox = mock.MagicMock()
+        tkinter.TclError = type("TclError", (Exception,), {})
+        monkeypatch.setitem(sys.modules, "tkinter", tkinter)
+        monkeypatch.setitem(sys.modules, "tkinter.ttk", ttk)
+        monkeypatch.setattr("ai_guardian.ui.tray_prompt.create_tk_root", lambda: root)
+        monkeypatch.setattr("ai_guardian.ui.display._ensure_tcl_library", lambda: None)
+        monkeypatch.setattr(
+            "ai_guardian.ui.tray_prompt._place_window_on_screen", mock.Mock()
+        )
+
+        assert _TkinterPromptApp([], "echo").run() is None
+
+        root.withdraw.assert_called_once_with()
+        assert root.after.call_args.args[0] == 200
+        callbacks["idle"]()
+        callbacks[200]()
+        assert root.attributes.call_args_list == [
+            mock.call("-topmost", True),
+            mock.call("-topmost", False),
+        ]
+        assert root.focus_force.call_count == 2
+        assert root.after.call_count == 1
 
     def test_app_with_empty_params(self):
         from ai_guardian.ui.tray_prompt import TrayPromptApp

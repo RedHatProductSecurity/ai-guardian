@@ -395,10 +395,16 @@ def _present_window(root) -> None:
 
     def release_topmost():
         try:
-            if root.winfo_exists():
-                root.attributes("-topmost", False)
+            if not root.winfo_exists():
+                return
+        except tk.TclError:
+            logger.debug("Support window closed before its raising hint was cleared")
+            return
+        try:
+            root.attributes("-topmost", False)
         except tk.TclError:
             logger.debug("Temporary support window raising hint could not be cleared")
+        focus()
 
     root.after_idle(focus)
     root.after(200, release_topmost)

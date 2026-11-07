@@ -1393,6 +1393,7 @@ def test_native_support_window_is_restored_raised_and_focused(native, mode):
     )
     release()
     root.attributes.assert_called_with("-topmost", False)
+    assert root.focus_force.call_count == 2
     calls = [call[0] for call in root.method_calls]
     assert (
         calls.index("withdraw")
@@ -1411,7 +1412,11 @@ def test_foreground_hint_rejection_does_not_cancel_native_review(native):
     )
     root.deiconify.assert_called_once()
     root.after_idle.call_args.args[0]()
-    root.focus_force.assert_called_once()
+    release = next(
+        call.args[1] for call in root.after.call_args_list if call.args[0] == 200
+    )
+    release()
+    assert root.focus_force.call_count == 2
     root.mainloop.assert_called_once()
 
 
