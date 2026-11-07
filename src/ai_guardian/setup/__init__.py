@@ -944,6 +944,9 @@ def _setup_hooks_json_output(
         result["hooks"] = setup._last_merged_config
     elif not setup_success:
         result["error"] = message
+    stability_warning = getattr(setup, "_last_cli_stability_warning", None)
+    if setup_success and isinstance(stability_warning, dict):
+        result["warnings"] = [stability_warning]
 
     # MCP server always installed by default (Issue #477, #808, #1377)
     if setup_success:

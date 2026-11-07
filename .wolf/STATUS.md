@@ -9,6 +9,27 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2674 implementation — 2026-11-07
+
+- Continued the managed DAF `open` session on existing branch `2674` in the real
+  workspace. Preserved the DAF-managed OpenCode title; no branch change or commit.
+- Added shared supported-CLI version detection and a non-blocking pre-1.0 advisory
+  for successful setup, including non-interactive and JSON setup. Doctor reports
+  the detected version and advisory in human and JSON output while leaving hook
+  health/status unchanged. Unavailable, unparsable, and >=1.0.0 versions do not
+  produce the advisory. Rechecked current upstream stable examples; no dated
+  version snapshot was added to user docs.
+- Documented the distinction between AI Guardian integration coverage and
+  upstream CLI stability in `docs/AGENT_SUPPORT.md` and `docs/TROUBLESHOOTING.md`,
+  added the README feature link and Unreleased changelog entry, and covered setup,
+  doctor, JSON, and version-boundary behavior.
+- **Validation:** 634 related unit/UX tests pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint, package Mypy (336 source files), and `git diff --check` pass.
+- Updated all five GitHub acceptance criteria in a progress comment, added the
+  `done` label without replacing existing labels, and saved a DAF progress note.
+- **Next:** user review and external DAF completion. Changes are local and
+  uncommitted; no push or PR was created.
+
 ## Issue #2672 implementation — 2026-11-07
 
 - Continued on the existing `2672` branch. Added independent desktop/email

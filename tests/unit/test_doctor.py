@@ -15,6 +15,7 @@ from unittest import mock
 import pytest
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
+from ai_guardian.cli_runtime import pre_1_0_cli_advisory
 from ai_guardian.doctor import (
     CheckResult,
     CheckStatus,
@@ -47,10 +48,10 @@ class TestCliRuntime:
 
         with (
             mock.patch(
-                "ai_guardian.doctor.shutil.which", return_value="/usr/bin/claude"
+                "ai_guardian.cli_runtime.shutil.which", return_value="/usr/bin/claude"
             ),
             mock.patch(
-                "ai_guardian.doctor.subprocess.run", return_value=completed
+                "ai_guardian.cli_runtime.subprocess.run", return_value=completed
             ) as run,
         ):
             runtime = Doctor._detect_cli_runtime(integration)
@@ -63,6 +64,32 @@ class TestCliRuntime:
             text=True,
             timeout=5,
         )
+
+    @pytest.mark.parametrize(
+        ("ide", "version", "expected"),
+        [
+            ("gemini", "0.67.0", True),
+            ("crush", "0.100.0", True),
+            ("codex", "0.167.0", True),
+            ("pi", "1.5.0", False),
+            ("gemini", "1.0.0", False),
+            ("gemini", None, False),
+            ("gemini", "unparseable", False),
+        ],
+    )
+    def test_pre_1_0_advisory_requires_parseable_version_below_one(
+        self, ide, version, expected
+    ):
+        integration = next(item for item in SUPPORTED_IDE_REGISTRY if item.key == ide)
+        advisory = pre_1_0_cli_advisory(
+            integration, {"executable": ide, "version": version}
+        )
+
+        assert (advisory is not None) is expected
+        if expected:
+            assert advisory["version"] == version
+            assert advisory["code"] == "pre_1_0_cli"
+            assert "integration coverage" in advisory["message"]
 
     def test_reports_opencode_generation(self):
         integration = next(
