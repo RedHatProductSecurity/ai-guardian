@@ -256,20 +256,30 @@ Violation logging is enabled by default:
 
 ## Violation notifications
 
-Privacy-safe alerts are enabled by default and are independent of violation
-history logging and detection. Desktop notifications are selected by default;
-email is optional. Configure one or both channels in the Web Console's
-**Violation Notifications** card or under `violation_notifications`:
+Privacy-safe alerts are independent of violation history logging and detection.
+Each supported violation type has separate desktop and email preferences. Types
+without an explicit preference default to desktop enabled and email disabled.
+Configure them in the Web Console's **Violation Notifications** card or under
+`violation_notifications`:
 
 ```json
 {
   "violation_notifications": {
-    "enabled": true,
-    "channels": {"desktop": true, "email": false},
+    "by_type": {
+      "secret_detected": {"desktop": true, "email": false},
+      "prompt_injection": {"desktop": false, "email": false}
+    },
     "email": {"recipient": "security@example.org"}
   }
 }
 ```
+
+The Web Console migrates existing global settings when preferences are saved:
+legacy `enabled: false` keeps every type disabled, while legacy `channels` values
+are copied to each type that has no explicit preference. The deprecated legacy
+keys remain accepted for older configurations and are removed by the next Console
+save. A per-type email preference can be changed only after the alert recipient
+and usable TLS SMTP transport (including any configured authentication) are ready.
 
 Alerts include only a fixed violation category, severity, and originating daemon.
 They never include detected secrets, PII, scanned content, file paths, commands,
@@ -280,10 +290,12 @@ implicit TLS; other ports use STARTTLS). Environment-variable SMTP credentials
 are recommended; credentials and alert content are never written to notification
 diagnostics. An email recipient and usable TLS SMTP settings are both required.
 
-Each daemon first attempts its configured channels. The local tray relays remote
-events through this host's own notification settings only when a remote channel is
-known to be unconfigured or to have failed. A durable private event ledger
-deduplicates channel delivery across daemon retries, tray polling, and restarts.
+Each daemon first attempts its configured per-type channels. The local tray relays
+remote events through this host's own preference for the exact violation type only
+when a remote channel is known to be unconfigured or to have failed. Outbox events
+from earlier daemons are joined to curated violation summaries by ID when they lack
+the type field. A durable private event ledger deduplicates channel delivery across
+daemon retries, tray polling, and restarts.
 If the remote send outcome is ambiguous, the local host does not retry that
 channel, avoiding a possible duplicate. Remote alert relay is separate from the
 opt-in remote history mirroring setting. Events are kept in a private outbox for
@@ -354,10 +366,18 @@ Notification options are separate from that history configuration:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `violation_notifications.enabled` | Enable alerts independently of logging and detection | `true` |
-| `violation_notifications.channels.desktop` | Deliver OS desktop notifications | `true` |
-| `violation_notifications.channels.email` | Deliver email when a recipient and TLS SMTP settings are usable | `false` |
+| `violation_notifications.by_type.<type>.desktop` | Deliver OS desktop notifications for one supported violation type | `true` |
+| `violation_notifications.by_type.<type>.email` | Deliver email for one type when recipient and TLS SMTP settings are usable | `false` |
 | `violation_notifications.email.recipient` | Alert recipient; SMTP transport/auth uses `support.email` | Empty |
+
+The supported `<type>` keys are `tool_permission`, `directory_blocking`,
+`secret_detected`, `image_secret_detected`, `pii_detected`, `image_pii_detected`,
+`secret_in_transcript`, `pii_in_transcript`, `suspected_password`,
+`secret_redaction`, `prompt_injection`, `jailbreak_detected`, `ssrf_blocked`,
+`config_file_exfil`, `prompt_injection_in_transcript`, `annotation_suppressed`,
+`middleware_paused`, `bash_exfil`, `scan_finding`, `canary_detection`,
+`context_poisoning`, `supply_chain`, `code_security`, `offensive_language`,
+`canary_detected`, `exfil_detection`, and `sensitive_finding`.
 
 ---
 

@@ -459,10 +459,9 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
                 "supply_chain",
             ],
         },
-        "_comment_violation_notifications": "Privacy-safe violation alerts. Independent of violation logging/detection. Email uses the SMTP server/authentication in support.email; its recipient is separate from support-bundle destinations.",
+        "_comment_violation_notifications": "Privacy-safe per-violation-type alerts, independent of logging/detection. Missing types default to desktop enabled/email disabled. Legacy disabled settings remain disabled and legacy channel defaults migrate on Console save. Alerts contain only a fixed category, severity, and daemon name.",
         "violation_notifications": {
-            "enabled": True,
-            "channels": {"desktop": True, "email": False},
+            "by_type": {},
             "email": {"recipient": ""},
         },
         "_comment_daemon": "Background daemon for faster hook processing. Auto-starts on any command, falls back to direct if unavailable.",

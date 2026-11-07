@@ -1231,13 +1231,18 @@
     "_log_types_note": "Which violation types to log. Remove types to suppress specific categories."
   },
 
-  "_comment_violation_notifications": "Privacy-safe violation alerts, independent of logging/detection. Only category, severity and daemon identity are sent; no detected values or scanned content.",
-  "_comment_violation_notifications_email": "Email uses the SMTP host/TLS/authentication from support.email, but this recipient is separate from support-bundle destinations. TLS is required for alerts.",
+  "_comment_violation_notifications": "Privacy-safe per-violation-type alerts, independent of logging/detection. Only category, severity and daemon identity are sent; no detected values or scanned content. Types omitted from by_type default to desktop enabled and email disabled.",
+  "_comment_violation_notifications_email": "Email uses the SMTP host/TLS/authentication from support.email, but this recipient is separate from support-bundle destinations. Email preferences require this recipient and usable TLS SMTP settings.",
   "violation_notifications": {
-    "enabled": true,
-    "channels": {
-      "desktop": true,
-      "email": false
+    "by_type": {
+      "secret_detected": {
+        "desktop": true,
+        "email": false
+      },
+      "prompt_injection": {
+        "desktop": false,
+        "email": false
+      }
     },
     "email": {
       "recipient": ""

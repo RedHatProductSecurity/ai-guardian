@@ -13,8 +13,8 @@
 - `.readthedocs.yaml` (~55 tok)
 - `.release-config.json` (~147 tok)
 - `AGENTS.md` — Agent Instructions for AI Guardian (~20012 tok)
-- `ai-guardian-example.json` — ', '**/examples/**')", (~21577 tok)
-- `CHANGELOG.md` — Change log (~84425 tok)
+- `ai-guardian-example.json` — ', '**/examples/**')", (~21642 tok)
+- `CHANGELOG.md` — Change log (~84533 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
@@ -157,7 +157,7 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~15174 tok)
+- `release-readiness.yml` — CI: Release Readiness (~15156 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~7340 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -948,7 +948,7 @@
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~7666 tok)
 - `UBUNTU_VM.md` — Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release) (~8328 tok)
 - `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3729 tok)
-- `VIOLATION_LOGGING.md` — Violation Logging (~5487 tok)
+- `VIOLATION_LOGGING.md` — Violation Logging (~5810 tok)
 
 ## docs/api/
 
@@ -1077,7 +1077,7 @@
 - `doctor.py` — URL configuration (~32227 tok)
 - `dummy_agent.py` — run_interactive (~6239 tok)
 - `git_workflow.py` — Git workflow helpers for init-project --annotate. (~1960 tok)
-- `help_content.py` — Centralized help content for all AI Guardian scanner pages. (~9568 tok)
+- `help_content.py` — Centralized help content for all AI Guardian scanner pages. (~9474 tok)
 - `hook_context.py` — HookContextManager: save_pretool_context, get_pretool_context, cleanup_session, cleanup (~2346 tok)
 - `hook_processing.py` — URL configuration (~39013 tok)
 - `ide_paths.py` — Canonical path resolution for supported IDE and agent integrations. (~3451 tok)
@@ -1118,7 +1118,7 @@
 - `desktop.py` — Desktop shortcut and autostart integration for the ai-guardian tray. (~4266 tok)
 - `discovery.py` — class: is_container_id, should_use_container_api_name, should_update_target_name, ssh_manager + 6 more (~20762 tok)
 - `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~20027 tok)
-- `notification_relay.py` — Deliver privacy-safe remote violation alerts through local settings. (~1132 tok)
+- `notification_relay.py` — Deliver privacy-safe remote violation alerts through local settings. (~1532 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 14 more (~2027 tok)
 - `rest_api.py` — _ThreadedHTTPServer: get_request, handle_error, log_message, do_GET + 1 more (~21739 tok)
@@ -1309,7 +1309,7 @@
 
 ## src/ai_guardian/schemas/
 
-- `ai-guardian-config.schema.json` (~40894 tok)
+- `ai-guardian-config.schema.json` (~41450 tok)
 - `aiguardignore.schema.json` (~620 tok)
 - `policy-decision.schema.json` (~584 tok)
 - `scenario.schema.json` — Declares to (~1315 tok)
@@ -1331,7 +1331,7 @@
 ## src/ai_guardian/setup/
 
 - `__init__.py` — setup_hooks (~10965 tok)
-- `config.py` — Default configuration creation for ai-guardian. (~8011 tok)
+- `config.py` — Default configuration creation for ai-guardian. (~8021 tok)
 - `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~50212 tok)
 - `mcp.py` — MCP server configuration for ai-guardian setup. (~17615 tok)
 - `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
@@ -1360,10 +1360,10 @@
 
 ## src/ai_guardian/templates/profiles/
 
-- `minimal.json` (~4873 tok)
-- `moderator.json` (~5226 tok)
-- `standard.json` (~5613 tok)
-- `strict.json` (~4822 tok)
+- `minimal.json` — Declares alerts (~4885 tok)
+- `moderator.json` (~5238 tok)
+- `standard.json` (~5625 tok)
+- `strict.json` — Declares alerts (~4834 tok)
 
 ## src/ai_guardian/templates/tray-plugins/
 

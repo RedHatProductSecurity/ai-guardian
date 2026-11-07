@@ -650,17 +650,10 @@ _FIELD_HELP_SUPPLEMENT: dict = {
         "Enable violation logging to disk. "
         "When enabled, all blocked operations are recorded for audit review."
     ),
-    "violation_notifications.enabled": (
-        "Enable privacy-safe violation alerts independently of history logging "
-        "and detection. Alerts include only a fixed category, severity, and daemon name."
-    ),
-    "violation_notifications.channels.desktop": (
-        "Deliver violation alerts as OS desktop notifications. "
-        "Remote alerts may fall back to the paired local tray when needed."
-    ),
-    "violation_notifications.channels.email": (
-        "Send violation alert email through the configured TLS SMTP transport. "
-        "Email is off by default and needs a separate alert recipient."
+    "violation_notifications.by_type": (
+        "Choose desktop and email delivery independently for each violation type. "
+        "Unspecified types default to desktop enabled and email disabled. "
+        "Email controls require a valid alert recipient and usable TLS SMTP settings."
     ),
     "violation_notifications.email.recipient": (
         "Recipient for violation alerts. Configure SMTP host, port, TLS, and "

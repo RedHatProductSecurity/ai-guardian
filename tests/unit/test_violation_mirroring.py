@@ -110,8 +110,7 @@ def test_generated_config_and_bundled_profiles_default_mirroring_off():
     generated = _get_default_config_template(permissive=False)
     assert generated["violation_logging"]["mirror_remote_violations"] is False
     assert generated["violation_notifications"] == {
-        "enabled": True,
-        "channels": {"desktop": True, "email": False},
+        "by_type": {},
         "email": {"recipient": ""},
     }
 
@@ -126,10 +125,18 @@ def test_generated_config_and_bundled_profiles_default_mirroring_off():
     assert mirror_schema["type"] == "boolean"
     assert mirror_schema["default"] is False
     notification_schema = schema["properties"]["violation_notifications"]
-    assert notification_schema["properties"]["enabled"]["default"] is True
-    notification_channels = notification_schema["properties"]["channels"]["properties"]
+    by_type_schema = notification_schema["properties"]["by_type"]
+    assert by_type_schema["default"] == {}
+    from ai_guardian.violations.notifications import VIOLATION_NOTIFICATION_TYPES
+
+    assert set(by_type_schema["propertyNames"]["enum"]) == set(
+        VIOLATION_NOTIFICATION_TYPES
+    )
+    notification_channels = by_type_schema["additionalProperties"]["properties"]
     assert notification_channels["desktop"]["default"] is True
     assert notification_channels["email"]["default"] is False
+    assert notification_schema["properties"]["enabled"]["deprecated"] is True
+    assert notification_schema["properties"]["channels"]["deprecated"] is True
 
     for profile in ("minimal", "standard", "strict", "moderator"):
         profile_config = json.loads(

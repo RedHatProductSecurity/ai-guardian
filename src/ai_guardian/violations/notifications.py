@@ -64,6 +64,9 @@ _CATEGORY_LABELS = {
     "prompt_injection_in_transcript": "Prompt injection",
     "annotation_suppressed": "Annotation suppressed",
     "middleware_paused": "Middleware paused",
+    "bash_exfil": "Shell exfiltration",
+    "scan_finding": "Scan finding",
+    "canary_detection": "Canary detection",
     "context_poisoning": "Context poisoning",
     "supply_chain": "Supply-chain threat",
     "code_security": "Code security",
@@ -72,6 +75,37 @@ _CATEGORY_LABELS = {
     "exfil_detection": "Exfiltration detected",
     "sensitive_finding": "Sensitive finding",
 }
+NOTIFICATION_TYPE_LABELS = {
+    "tool_permission": "Tool permission",
+    "directory_blocking": "Directory blocking",
+    "secret_detected": "Secret detected",
+    "image_secret_detected": "Image secret detected",
+    "pii_detected": "PII detected",
+    "image_pii_detected": "Image PII detected",
+    "secret_in_transcript": "Secret in transcript",
+    "pii_in_transcript": "PII in transcript",
+    "suspected_password": "Suspected password",
+    "secret_redaction": "Secret redaction",
+    "prompt_injection": "Prompt injection",
+    "jailbreak_detected": "Jailbreak detected",
+    "ssrf_blocked": "SSRF blocked",
+    "config_file_exfil": "Configuration file exfiltration",
+    "prompt_injection_in_transcript": "Prompt injection in transcript",
+    "annotation_suppressed": "Annotation suppressed",
+    "middleware_paused": "Middleware paused",
+    "bash_exfil": "Shell exfiltration",
+    "scan_finding": "Scan finding",
+    "canary_detection": "Canary detection",
+    "context_poisoning": "Context poisoning",
+    "supply_chain": "Supply-chain threat",
+    "code_security": "Code security",
+    "offensive_language": "Offensive language",
+    "canary_detected": "Canary detected",
+    "exfil_detection": "Exfiltration detected",
+    "sensitive_finding": "Sensitive finding",
+}
+VIOLATION_NOTIFICATION_TYPES = tuple(NOTIFICATION_TYPE_LABELS)
+DEFAULT_NOTIFICATION_PREFERENCES = {"desktop": True, "email": False}
 _SAFE_CATEGORY_LABELS = frozenset(_CATEGORY_LABELS.values()) | {"Security violation"}
 _MAX_NOTIFICATION_EVENTS = 10_000
 _MAX_NOTIFICATION_SOURCES = 1_000
@@ -106,6 +140,64 @@ def _category_label(violation_type: Any) -> str:
     if isinstance(value, str):
         return _CATEGORY_LABELS.get(value, "Security violation")
     return "Security violation"
+
+
+def _safe_violation_type(value: Any) -> str:
+    value = getattr(value, "value", value)
+    return value if isinstance(value, str) and value in NOTIFICATION_TYPE_LABELS else ""
+
+
+def _violation_type_from_category(category: Any) -> str:
+    raw_type = _safe_violation_type(category)
+    if raw_type:
+        return raw_type
+    if not isinstance(category, str):
+        return ""
+    matches = [
+        violation_type
+        for violation_type, label in _CATEGORY_LABELS.items()
+        if label == category
+    ]
+    return matches[0] if len(matches) == 1 else ""
+
+
+def get_notification_preferences(
+    notification_config: Any,
+) -> dict[str, dict[str, bool]]:
+    """Return complete, validated per-type settings with legacy compatibility.
+
+    A legacy explicit ``enabled: false`` remains a safety gate until a Console
+    save migrates the setting to per-type preferences. Legacy channel choices are
+    otherwise copied to types without an explicit new preference.
+    """
+    config = notification_config if isinstance(notification_config, dict) else {}
+    by_type = config.get("by_type", {})
+    by_type = by_type if isinstance(by_type, dict) else {}
+    legacy_channels = config.get("channels", {})
+    legacy_channels = legacy_channels if isinstance(legacy_channels, dict) else {}
+    has_legacy = "enabled" in config or "channels" in config
+    legacy_enabled = config.get("enabled", True) is True
+    defaults = (
+        {
+            "desktop": legacy_enabled and legacy_channels.get("desktop", True) is True,
+            "email": legacy_enabled and legacy_channels.get("email", False) is True,
+        }
+        if has_legacy
+        else DEFAULT_NOTIFICATION_PREFERENCES
+    )
+
+    preferences: dict[str, dict[str, bool]] = {}
+    for violation_type in VIOLATION_NOTIFICATION_TYPES:
+        configured = by_type.get(violation_type, {})
+        configured = configured if isinstance(configured, dict) else {}
+        values = dict(defaults)
+        for channel in CHANNELS:
+            if isinstance(configured.get(channel), bool):
+                values[channel] = configured[channel]
+        if "enabled" in config and not legacy_enabled:
+            values = {channel: False for channel in CHANNELS}
+        preferences[violation_type] = values
+    return preferences
 
 
 def _severity_label(severity: Any) -> str:
@@ -168,9 +260,19 @@ class NotificationStore:
             "CREATE TABLE IF NOT EXISTS notification_events ("
             "event_key TEXT PRIMARY KEY, namespace TEXT NOT NULL, "
             "event_id TEXT NOT NULL, occurred_at TEXT NOT NULL, "
-            "category TEXT NOT NULL, severity TEXT NOT NULL, "
+            "category TEXT NOT NULL, violation_type TEXT NOT NULL DEFAULT '', "
+            "severity TEXT NOT NULL, "
             "source_daemon TEXT NOT NULL, created_at REAL NOT NULL)"
         )
+        event_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(notification_events)")
+        }
+        if "violation_type" not in event_columns:
+            connection.execute(
+                "ALTER TABLE notification_events ADD COLUMN "
+                "violation_type TEXT NOT NULL DEFAULT ''"
+            )
         connection.execute(
             "CREATE TABLE IF NOT EXISTS notification_deliveries ("
             "event_key TEXT NOT NULL, channel TEXT NOT NULL, status TEXT NOT NULL, "
@@ -193,14 +295,16 @@ class NotificationStore:
     ) -> bool:
         cursor = connection.execute(
             "INSERT OR IGNORE INTO notification_events "
-            "(event_key, namespace, event_id, occurred_at, category, severity, "
-            "source_daemon, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(event_key, namespace, event_id, occurred_at, category, violation_type, "
+            "severity, source_daemon, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 event_key,
                 namespace,
                 event["id"],
                 event["timestamp"],
                 event["category"],
+                _safe_violation_type(event.get("violation_type")),
                 event["severity"],
                 event["source_daemon"],
                 time.time(),
@@ -258,7 +362,6 @@ class NotificationStore:
         event: dict[str, str],
         remote_statuses: dict[str, str],
         local_statuses: dict[str, str],
-        local_notifications_enabled: bool,
     ) -> tuple[str, list[str]]:
         """Record a remote event and claim only channels needing local fallback."""
         key = _event_key(namespace, event["id"])
@@ -303,9 +406,6 @@ class NotificationStore:
                         "remote_pending" if remote == "pending" else "remote_uncertain",
                     )
                     continue
-                if not local_notifications_enabled:
-                    self._set_status(connection, key, channel, "local_disabled")
-                    continue
                 if local_statuses.get(channel) != "pending":
                     self._set_status(connection, key, channel, "not_configured")
                     continue
@@ -343,7 +443,7 @@ class NotificationStore:
         try:
             row = connection.execute(
                 "SELECT event_key, event_id, occurred_at, category, severity, "
-                "source_daemon FROM notification_events "
+                "source_daemon, violation_type FROM notification_events "
                 "WHERE namespace = 'local' AND event_id = ?",
                 (event_id,),
             ).fetchone()
@@ -367,6 +467,9 @@ class NotificationStore:
                 "severity": row["severity"],
                 "source_daemon": row["source_daemon"],
             }
+            safe_type = _safe_violation_type(row["violation_type"])
+            if safe_type:
+                event["violation_type"] = safe_type
             return row["event_key"], event, pending_channels
         finally:
             connection.close()
@@ -411,7 +514,8 @@ class NotificationStore:
             connection.commit()
             rows = connection.execute(
                 "SELECT event_key, event_id, occurred_at, category, severity, "
-                "source_daemon FROM notification_events WHERE namespace = 'local' "
+                "source_daemon, violation_type FROM notification_events "
+                "WHERE namespace = 'local' "
                 "ORDER BY created_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
@@ -423,19 +527,21 @@ class NotificationStore:
                     (row["event_key"],),
                 ).fetchall()
                 delivery = {item["channel"]: item["status"] for item in delivery_rows}
-                events.append(
-                    {
-                        "id": row["event_id"],
-                        "timestamp": row["occurred_at"],
-                        "category": row["category"],
-                        "severity": row["severity"],
-                        "source_daemon": row["source_daemon"],
-                        "delivery": {
-                            channel: delivery.get(channel, "not_configured")
-                            for channel in CHANNELS
-                        },
-                    }
-                )
+                event = {
+                    "id": row["event_id"],
+                    "timestamp": row["occurred_at"],
+                    "category": row["category"],
+                    "severity": row["severity"],
+                    "source_daemon": row["source_daemon"],
+                    "delivery": {
+                        channel: delivery.get(channel, "not_configured")
+                        for channel in CHANNELS
+                    },
+                }
+                safe_type = _safe_violation_type(row["violation_type"])
+                if safe_type:
+                    event["violation_type"] = safe_type
+                events.append(event)
             return events
         finally:
             connection.close()
@@ -528,6 +634,15 @@ def _smtp_ready(email_settings: dict[str, Any], recipient: Any) -> bool:
     return _smtp_auth_available(email_settings)
 
 
+def notification_email_ready(notification_config: Any, smtp_config: Any) -> bool:
+    """Whether alert email has a valid recipient and usable TLS SMTP transport."""
+    config = notification_config if isinstance(notification_config, dict) else {}
+    email = config.get("email", {})
+    email = email if isinstance(email, dict) else {}
+    smtp = smtp_config if isinstance(smtp_config, dict) else {}
+    return _smtp_ready(smtp, email.get("recipient"))
+
+
 def _smtp_credentials(
     email_settings: dict[str, Any],
 ) -> tuple[Optional[str], Optional[str]]:
@@ -612,9 +727,7 @@ class ViolationNotificationService:
         daemon_name: Optional[str] = None,
     ):
         config = notification_config if isinstance(notification_config, dict) else {}
-        self.enabled = config.get("enabled", True) is True
-        channels = config.get("channels", {})
-        self.channels = channels if isinstance(channels, dict) else {}
+        self.preferences = get_notification_preferences(config)
         email = config.get("email", {})
         self.alert_email = email if isinstance(email, dict) else {}
         self.smtp_config = smtp_config if isinstance(smtp_config, dict) else {}
@@ -651,9 +764,11 @@ class ViolationNotificationService:
 
         return show_notification(title, message, wait=True) is True
 
-    def _channel_statuses(self) -> dict[str, str]:
-        desktop_selected = self.enabled and self.channels.get("desktop", True) is True
-        email_selected = self.enabled and self.channels.get("email", False) is True
+    def _channel_statuses(self, violation_type: Any) -> dict[str, str]:
+        type_key = _safe_violation_type(violation_type)
+        preferences = self.preferences.get(type_key, DEFAULT_NOTIFICATION_PREFERENCES)
+        desktop_selected = preferences.get("desktop") is True
+        email_selected = preferences.get("email") is True
         recipient = self.alert_email.get("recipient")
         email_ready = email_selected and _smtp_ready(self.smtp_config, recipient)
         return {
@@ -668,8 +783,9 @@ class ViolationNotificationService:
         severity: Any,
         source_daemon: Any,
         timestamp: Any = None,
+        violation_type: Any = None,
     ) -> dict[str, str]:
-        return {
+        event = {
             "id": safe_event_id(event_id),
             "timestamp": _safe_timestamp(timestamp),
             "category": (
@@ -680,6 +796,12 @@ class ViolationNotificationService:
             "severity": _severity_label(severity),
             "source_daemon": _display_name(source_daemon, self.daemon_name),
         }
+        type_key = _safe_violation_type(
+            violation_type
+        ) or _violation_type_from_category(category)
+        if type_key:
+            event["violation_type"] = type_key
+        return event
 
     def notify_local(
         self,
@@ -742,8 +864,9 @@ class ViolationNotificationService:
             severity,
             source_daemon or self.daemon_name,
             timestamp,
+            violation_type=violation_type,
         )
-        statuses = self._channel_statuses()
+        statuses = self._channel_statuses(event.get("violation_type"))
         event_key, created = self.store.register_local_event(event, statuses)
         return event, event_key, created, statuses
 
@@ -759,6 +882,7 @@ class ViolationNotificationService:
             remote_event.get("severity"),
             remote_event.get("source_daemon"),
             remote_event.get("timestamp"),
+            violation_type=remote_event.get("violation_type"),
         )
         raw_delivery = remote_event.get("delivery", {})
         raw_delivery = raw_delivery if isinstance(raw_delivery, dict) else {}
@@ -771,14 +895,18 @@ class ViolationNotificationService:
             )
             for channel in CHANNELS
         }
-        local_statuses = self._channel_statuses()
+        local_type = event.get("violation_type")
+        local_statuses = (
+            self._channel_statuses(local_type)
+            if local_type
+            else {channel: "not_configured" for channel in CHANNELS}
+        )
         namespace = f"remote:{source_key.lower()}"
         event_key, scheduled = self.store.register_remote_event(
             namespace=namespace,
             event=event,
             remote_statuses=remote_statuses,
             local_statuses=local_statuses,
-            local_notifications_enabled=self.enabled,
         )
         for channel in scheduled:
             self._schedule(event_key, channel, event)
