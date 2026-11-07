@@ -47,10 +47,11 @@ def test_tray_window_handoff_clears_topmost_and_restores_focus_once():
     root.after_idle.assert_called_once()
     root.after.assert_called_once()
     assert root.after.call_args.args[0] == 200
-    root.grab_set.assert_called_once_with()
+    root.grab_set.assert_not_called()
 
     callbacks["idle"]()
     assert root.focus_force.call_count == 1
+    root.grab_set.assert_called_once_with()
     callbacks[200]()
 
     assert root.attributes.call_args_list == [
@@ -60,6 +61,7 @@ def test_tray_window_handoff_clears_topmost_and_restores_focus_once():
     assert root.focus_force.call_count == 2
     assert root.lift.call_count == 3
     assert focus_widget.focus_set.call_count == 2
+    assert root.grab_set.call_count == 2
     assert root.after.call_count == 1
 
 

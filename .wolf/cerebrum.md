@@ -305,7 +305,9 @@
   request must deiconify before lifting/focusing: some window managers iconify the
   dialog when the temporary hint clears. Native file and directory panels are
   different: their hidden Tk owner positions the OS panel, so do not schedule a
-  delayed focus grab while that panel is open.
+  delayed focus grab while that panel is open. Acquire an optional modal grab in
+  the post-map focus callback, not before mapping; About's UX contract guards this
+  order and repeated restoration after the temporary hint clears.
 
 - **2026-11-07 — NiceGUI readiness-dependent controls (#2672):** Values such as
   email-switch readiness are computed while rendering the page. After a blur save
