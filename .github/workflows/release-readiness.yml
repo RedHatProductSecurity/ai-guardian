@@ -1033,8 +1033,7 @@ jobs:
           cfg = json.load(open('$CFG_PATH'))
           assert cfg['violation_logging']['mirror_remote_violations'] is False
           assert cfg['violation_notifications'] == {
-              'enabled': True,
-              'channels': {'desktop': True, 'email': False},
+              'by_type': {},
               'email': {'recipient': ''},
           }
           print(f'  Keys: {sorted(cfg.keys())[:5]}...')

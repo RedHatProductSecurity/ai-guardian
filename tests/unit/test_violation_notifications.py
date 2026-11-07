@@ -3,7 +3,9 @@
 from unittest.mock import Mock
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import os
 import queue
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,8 +31,7 @@ def _service(
     return ViolationNotificationService(
         settings
         or {
-            "enabled": True,
-            "channels": {"desktop": True, "email": False},
+            "by_type": {},
             "email": {"recipient": ""},
         },
         smtp or {},
@@ -64,6 +65,7 @@ def test_local_alert_is_minimal_and_independent_of_history_storage(tmp_path):
         "id": "viol_0123456789abcdef",
         "timestamp": event["timestamp"],
         "category": "Sensitive finding",
+        "violation_type": "secret_detected",
         "severity": "critical",
         "source_daemon": "local-daemon",
         "delivery": {"desktop": "delivered", "email": "not_configured"},
@@ -71,6 +73,117 @@ def test_local_alert_is_minimal_and_independent_of_history_storage(tmp_path):
     assert "blocked" not in event
     assert "context" not in event
     assert "scanned content" not in repr(event)
+
+
+def test_missing_type_preferences_default_to_desktop_only():
+    preferences = notifications.get_notification_preferences({})
+
+    assert set(preferences) == set(notifications.VIOLATION_NOTIFICATION_TYPES)
+    assert all(
+        settings == {"desktop": True, "email": False}
+        for settings in preferences.values()
+    )
+
+
+def test_per_type_preferences_control_local_channels(tmp_path, monkeypatch):
+    email_sender = Mock(return_value="delivered")
+    monkeypatch.setattr(notifications, "_send_email_notification", email_sender)
+    smtp = {
+        "smtp_host": "mail.example.org",
+        "smtp_port": 587,
+        "smtp_tls": True,
+        "auth": {"method": "none"},
+    }
+    desktop_sender = Mock(return_value=True)
+    service = _service(
+        tmp_path / "notifications.sqlite3",
+        settings={
+            "by_type": {
+                "secret_detected": {"desktop": False, "email": True},
+                "prompt_injection": {"desktop": False, "email": False},
+            },
+            "email": {"recipient": "alerts@example.org"},
+        },
+        smtp=smtp,
+        desktop_sender=desktop_sender,
+    )
+
+    service.notify_local("secret_detected", "high", "viol_0123456789abcdef")
+    service.notify_local("prompt_injection", "high", "viol_abcdef0123456789")
+    service.notify_local("tool_permission", "high", "viol_1234567890abcdef")
+
+    assert email_sender.call_count == 1
+    assert email_sender.call_args.args[0]["violation_type"] == "secret_detected"
+    desktop_sender.assert_called_once_with(
+        "AI Guardian violation: Tool permission",
+        "Severity: high\nOriginating daemon: local-daemon",
+    )
+    deliveries = {
+        event["violation_type"]: event["delivery"]
+        for event in service.store.recent_local_events()
+    }
+    assert deliveries["secret_detected"] == {
+        "desktop": "not_configured",
+        "email": "delivered",
+    }
+    assert deliveries["prompt_injection"] == {
+        "desktop": "not_configured",
+        "email": "not_configured",
+    }
+    assert deliveries["tool_permission"] == {
+        "desktop": "delivered",
+        "email": "not_configured",
+    }
+
+
+def test_legacy_global_settings_preserve_disabled_intent():
+    disabled = notifications.get_notification_preferences(
+        {
+            "enabled": False,
+            "channels": {"desktop": True, "email": True},
+            "by_type": {"tool_permission": {"desktop": True, "email": True}},
+        }
+    )
+    assert all(
+        settings == {"desktop": False, "email": False} for settings in disabled.values()
+    )
+
+    legacy_channels = notifications.get_notification_preferences(
+        {
+            "enabled": True,
+            "channels": {"desktop": False, "email": True},
+        }
+    )
+    assert all(
+        settings == {"desktop": False, "email": True}
+        for settings in legacy_channels.values()
+    )
+
+
+def test_notification_store_adds_violation_type_to_existing_outbox(tmp_path):
+    path = tmp_path / "notifications.sqlite3"
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "CREATE TABLE notification_events ("
+        "event_key TEXT PRIMARY KEY, namespace TEXT NOT NULL, "
+        "event_id TEXT NOT NULL, occurred_at TEXT NOT NULL, "
+        "category TEXT NOT NULL, severity TEXT NOT NULL, "
+        "source_daemon TEXT NOT NULL, created_at REAL NOT NULL)"
+    )
+    connection.commit()
+    connection.close()
+    os.chmod(path, 0o600)
+
+    connection = NotificationStore(path)._connect()
+    try:
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(notification_events)")
+        }
+    finally:
+        connection.close()
+
+    assert "violation_type" in columns
 
 
 def test_local_retry_does_not_send_same_channel_twice(tmp_path):
@@ -112,6 +225,33 @@ def test_direct_hook_handoff_persists_before_starting_worker(tmp_path, monkeypat
     assert spawned == ["viol_0123456789abcdef"]
     assert notification_queue.empty()
     assert service.store.recent_local_events()[0]["delivery"]["desktop"] == "pending"
+
+
+def test_direct_hook_handoff_honors_per_type_preferences(tmp_path, monkeypatch):
+    service = _service(
+        tmp_path / "notifications.sqlite3",
+        settings={"by_type": {"secret_detected": {"desktop": False, "email": False}}},
+    )
+    spawned = Mock(return_value=True)
+    monkeypatch.setattr(
+        ViolationNotificationService,
+        "from_global_config",
+        classmethod(lambda cls, **_kwargs: service),
+    )
+    monkeypatch.setattr(notifications, "_spawn_notification_worker", spawned)
+
+    with notifications.direct_hook_notification_handoff():
+        assert notifications.schedule_violation_notification(
+            "secret_detected", "high", "viol_0123456789abcdef"
+        )
+
+    spawned.assert_not_called()
+    event = service.store.recent_local_events()[0]
+    assert event["violation_type"] == "secret_detected"
+    assert event["delivery"] == {
+        "desktop": "not_configured",
+        "email": "not_configured",
+    }
 
 
 def test_detached_worker_delivers_persisted_event_once(tmp_path):
@@ -263,6 +403,68 @@ def test_remote_failure_falls_back_locally_once(tmp_path):
     )
 
 
+def test_remote_fallback_does_not_guess_ambiguous_legacy_category(tmp_path):
+    local_send = Mock(return_value=True)
+    local = _service(
+        tmp_path / "local.sqlite3",
+        settings={
+            "by_type": {
+                "prompt_injection": {"desktop": True, "email": False},
+                "prompt_injection_in_transcript": {
+                    "desktop": False,
+                    "email": False,
+                },
+            }
+        },
+        desktop_sender=local_send,
+    )
+    event = {
+        "id": "viol_abcdef0123456789",
+        "category": "Prompt injection",
+        "severity": "high",
+        "source_daemon": "remote-daemon",
+        "delivery": {"desktop": "failed", "email": "not_configured"},
+    }
+
+    assert local.relay_remote_event("e" * 64, event) is False
+    local_send.assert_not_called()
+
+
+def test_remote_fallback_uses_the_exact_local_violation_type_preference(tmp_path):
+    local_send = Mock(return_value=True)
+    local = _service(
+        tmp_path / "local.sqlite3",
+        settings={
+            "by_type": {
+                "secret_detected": {"desktop": False, "email": False},
+                "prompt_injection": {"desktop": True, "email": False},
+            }
+        },
+        desktop_sender=local_send,
+    )
+    secret_event = {
+        "id": "viol_0123456789abcdef",
+        "category": "Sensitive finding",
+        "violation_type": "secret_detected",
+        "severity": "high",
+        "source_daemon": "remote-daemon",
+        "delivery": {"desktop": "failed", "email": "not_configured"},
+    }
+    prompt_event = {
+        **secret_event,
+        "id": "viol_abcdef0123456789",
+        "category": "Prompt injection",
+        "violation_type": "prompt_injection",
+    }
+
+    assert local.relay_remote_event("e" * 64, secret_event) is False
+    assert local.relay_remote_event("e" * 64, prompt_event) is True
+    local_send.assert_called_once_with(
+        "AI Guardian violation: Prompt injection",
+        "Severity: high\nOriginating daemon: remote-daemon",
+    )
+
+
 def test_concurrent_remote_retries_claim_only_one_local_delivery(tmp_path):
     send = Mock(return_value=True)
     service = _service(tmp_path / "local.sqlite3", desktop_sender=send)
@@ -319,8 +521,7 @@ def test_email_uses_separate_recipient_and_tls_transport(tmp_path, monkeypatch):
     service = _service(
         tmp_path / "notifications.sqlite3",
         settings={
-            "enabled": True,
-            "channels": {"desktop": False, "email": True},
+            "by_type": {"ssrf_blocked": {"desktop": False, "email": True}},
             "email": {"recipient": "alerts@example.org"},
         },
         smtp=smtp,
@@ -424,8 +625,7 @@ def test_email_requires_recipient_and_tls_smtp(tmp_path, monkeypatch, smtp, reci
     service = _service(
         tmp_path / "notifications.sqlite3",
         settings={
-            "enabled": True,
-            "channels": {"desktop": False, "email": True},
+            "by_type": {"tool_permission": {"desktop": False, "email": True}},
             "email": {"recipient": recipient},
         },
         smtp=smtp,
@@ -457,8 +657,7 @@ def test_smtp_authentication_failure_does_not_log_server_details(
     service = _service(
         tmp_path / "notifications.sqlite3",
         settings={
-            "enabled": True,
-            "channels": {"desktop": False, "email": True},
+            "by_type": {"tool_permission": {"desktop": False, "email": True}},
             "email": {"recipient": "alerts@example.org"},
         },
         smtp=smtp,
@@ -516,6 +715,61 @@ def test_remote_old_daemon_fallback_uses_only_curated_fields(tmp_path, monkeypat
     assert "private-scanned-content" not in repr(send.call_args)
     assert "private-prompt-content" not in repr(send.call_args)
     send.assert_called_once()
+
+
+def test_older_notification_outbox_uses_curated_violation_type_for_fallback(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from ai_guardian.daemon.notification_relay import (
+        relay_remote_violation_notifications,
+    )
+
+    send = Mock(return_value=True)
+    service = _service(
+        tmp_path / "notifications.sqlite3",
+        settings={"by_type": {"pii_detected": {"desktop": True, "email": False}}},
+        desktop_sender=send,
+    )
+    monkeypatch.setattr(
+        ViolationNotificationService,
+        "from_global_config",
+        classmethod(lambda _cls: service),
+    )
+    target = SimpleNamespace(
+        name="remote-daemon",
+        runtime="manual",
+        status="running",
+        url="https://remote.example",
+    )
+
+    class Client:
+        def get_violations(self, _target, limit):
+            assert limit == 1000
+            return {
+                "notification_events": [
+                    {
+                        "id": "viol_0123456789abcdef",
+                        "category": "Sensitive finding",
+                        "severity": "high",
+                        "source_daemon": "remote-daemon",
+                        "delivery": {"desktop": "failed"},
+                    }
+                ],
+                "violations": [
+                    {
+                        "id": "viol_0123456789abcdef",
+                        "violation_type": "pii_detected",
+                    }
+                ],
+            }
+
+    assert relay_remote_violation_notifications(Client(), [target]) == 1
+    send.assert_called_once_with(
+        "AI Guardian violation: Sensitive finding",
+        "Severity: high\nOriginating daemon: remote-daemon",
+    )
 
 
 def test_legacy_remote_baseline_does_not_replay_old_history(tmp_path, monkeypatch):

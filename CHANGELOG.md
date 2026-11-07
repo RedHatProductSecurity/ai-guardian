@@ -166,6 +166,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source remains undetermined, so execution is not qualified.
 
 ### Added
+- **Per-violation notification preferences (#2672):** Configure desktop and email
+  alerts independently for each supported violation type. Desktop defaults on and
+  email off; email controls require a valid alert recipient and usable TLS SMTP.
+  Migrate legacy global/channel settings without re-enabling a previously disabled
+  configuration, and apply the same preferences to local, direct-hook, and remote
+  fallback delivery.
 - **Sandbox deletion confirmation copy control (#2668):** Display the full expected
   sandbox name with a Copy action and explicit clipboard success/failure feedback.
   Keep deletion behind the existing exact-name confirmation; use complete isolated

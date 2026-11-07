@@ -9,6 +9,27 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2672 implementation — 2026-11-07
+
+- Continued on the existing `2672` branch. Added independent desktop/email
+  preferences for each supported violation type; unspecified types default to
+  desktop on and email off. The notification outbox now carries a safe violation
+  type, including a SQLite migration for existing outboxes.
+- Preserved legacy `enabled: false` and channel intent at runtime and on Console
+  migration. Email selection is rejected unless recipient/TLS SMTP/auth settings
+  are usable; remote fallback joins older outbox events to curated records by ID
+  and fails closed on ambiguous legacy categories.
+- Replaced the Console master/channel controls with a per-type matrix, updated the
+  schema, generated config, all profiles, example, help, docs, release-readiness
+  assertion and CHANGELOG. Saving a recipient refreshes readiness-dependent email
+  controls. OpenWolf buglog records that UI readiness fix.
+- **Validation:** 543 directly affected unit/UX tests pass (one existing PyGObject
+  deprecation warning). Ruff, Black (Python 3.10 target), error-level Pylint,
+  package Mypy (335 source files), JSON/workflow validation and `git diff --check`
+  pass. No live Console/SMTP delivery verification was run.
+- Changes remain local and uncommitted; no GitHub issue status/comment, commit,
+  push or PR was changed. **Next:** user review; preserve branch `2672`.
+
 ## Issue #2668 implementation — 2026-11-07
 
 - Added a clearly labeled, copyable expected sandbox name with clipboard success

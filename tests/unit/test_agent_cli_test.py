@@ -1086,8 +1086,13 @@ def test_smoke_config_derives_from_strict_with_explicit_output_sanitization(tmp_
     assert profile["secret_redaction"]["enabled"] is True
     assert profile["scan_pii"]["action"] == "redact"
     assert profile["latency_tracking"]["enabled"] is True
+    # The disposable smoke profile uses legacy compatibility only to suppress
+    # all per-type notifications; normal profiles no longer expose a master key.
     assert profile["violation_notifications"]["enabled"] is False
-    assert strict["violation_notifications"]["enabled"] is True
+    assert strict["violation_notifications"] == {
+        "by_type": {},
+        "email": {"recipient": ""},
+    }
     assert strict["secret_redaction"]["enabled"] is False
     assert strict["scan_pii"]["action"] == "block"
     assert runner.STRICT_PROFILE.read_bytes() == original_strict

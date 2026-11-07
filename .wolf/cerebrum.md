@@ -291,6 +291,12 @@
 
 ## Key Learnings
 
+- **2026-11-07 — NiceGUI readiness-dependent controls (#2672):** Values such as
+  email-switch readiness are computed while rendering the page. After a blur save
+  changes a prerequisite (for example, saving the previously missing recipient),
+  refresh the page after a successful save so the dependent controls are rebuilt
+  and become available without a manual reload.
+
 - **2026-11-07 — Sandbox deletion Copy control (#2668):** A confirmation with a
   separate clipboard action and truthful feedback uses the shared rich-form
   capability (isolated Tk → NiceGUI); native one-field prompts are ineligible.

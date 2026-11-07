@@ -2089,28 +2089,82 @@
     },
     "violation_notifications": {
       "type": "object",
-      "description": "Privacy-safe global violation alerts for this daemon. Independent of violation history and detection settings. Email uses support.email SMTP transport/authentication but the alert recipient is independent of support-bundle destinations.",
+      "description": "Privacy-safe global violation alerts with independent desktop and email preferences per violation type. Email uses support.email SMTP transport/authentication but the alert recipient is independent of support-bundle destinations.",
       "properties": {
+        "by_type": {
+          "type": "object",
+          "description": "Per-type channel overrides. Types omitted here default to desktop enabled and email disabled.",
+          "propertyNames": {
+            "enum": [
+              "tool_permission",
+              "directory_blocking",
+              "secret_detected",
+              "image_secret_detected",
+              "pii_detected",
+              "image_pii_detected",
+              "secret_in_transcript",
+              "pii_in_transcript",
+              "suspected_password",
+              "secret_redaction",
+              "prompt_injection",
+              "jailbreak_detected",
+              "ssrf_blocked",
+              "config_file_exfil",
+              "prompt_injection_in_transcript",
+              "annotation_suppressed",
+              "middleware_paused",
+              "bash_exfil",
+              "scan_finding",
+              "canary_detection",
+              "context_poisoning",
+              "supply_chain",
+              "code_security",
+              "offensive_language",
+              "canary_detected",
+              "exfil_detection",
+              "sensitive_finding"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "desktop": {
+                "type": "boolean",
+                "description": "Show OS desktop notifications for this violation type.",
+                "default": true
+              },
+              "email": {
+                "type": "boolean",
+                "description": "Send email alerts for this violation type when an alert recipient and usable TLS SMTP settings are configured.",
+                "default": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": {}
+        },
         "enabled": {
           "type": "boolean",
-          "description": "Enable violation alerts independently of violation logging and detection.",
-          "default": true
+          "description": "Deprecated legacy setting. An explicit false is preserved as all per-type channels disabled until preferences are migrated by a Console save.",
+          "deprecated": true
         },
         "channels": {
           "type": "object",
+          "description": "Deprecated legacy channel defaults used to migrate configurations that do not yet have by_type preferences.",
           "properties": {
             "desktop": {
               "type": "boolean",
-              "description": "Show OS desktop notifications. Remote daemons fall back to the paired local host when desktop delivery fails.",
+              "description": "Legacy default for OS desktop notifications.",
               "default": true
             },
             "email": {
               "type": "boolean",
-              "description": "Send an alert email when an alert recipient and usable TLS SMTP settings are configured.",
+              "description": "Legacy default for email notifications.",
               "default": false
             }
           },
           "additionalProperties": false,
+          "deprecated": true,
           "default": {
             "desktop": true,
             "email": false

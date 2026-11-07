@@ -44,9 +44,7 @@ class TestConfigFieldHelp:
             "secret_scanning.validate_secrets",
             "secret_scanning.engines",
             "ssrf_protection.allowed_domains",
-            "violation_notifications.enabled",
-            "violation_notifications.channels.desktop",
-            "violation_notifications.channels.email",
+            "violation_notifications.by_type",
             "violation_notifications.email.recipient",
         ]
         for key in expected_nested:

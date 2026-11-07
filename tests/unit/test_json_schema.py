@@ -121,6 +121,38 @@ def test_minimal_valid_config(schema):
 
 
 @pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_notification_preferences_schema_accepts_per_type_and_legacy_settings(schema):
+    """New preferences validate while existing global settings remain compatible."""
+    validate(
+        instance={
+            "violation_notifications": {
+                "by_type": {"secret_detected": {"desktop": False, "email": True}},
+                "email": {"recipient": "alerts@example.org"},
+            }
+        },
+        schema=schema,
+    )
+    validate(
+        instance={
+            "violation_notifications": {
+                "enabled": False,
+                "channels": {"desktop": True, "email": False},
+            }
+        },
+        schema=schema,
+    )
+    with pytest.raises(ValidationError):
+        validate(
+            instance={
+                "violation_notifications": {
+                    "by_type": {"unknown_type": {"desktop": False}}
+                }
+            },
+            schema=schema,
+        )
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
 def test_empty_config_is_valid(schema):
     """Test that an empty object is valid (all fields are optional)."""
     empty_config = {}

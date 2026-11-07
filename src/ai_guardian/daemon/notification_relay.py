@@ -8,7 +8,11 @@ from ai_guardian.daemon.violation_mirroring import (
     REMOTE_RUNTIMES,
     _source_key,
 )
-from ai_guardian.violations.notifications import ViolationNotificationService
+from ai_guardian.violations.notifications import (
+    VIOLATION_NOTIFICATION_TYPES,
+    ViolationNotificationService,
+    safe_event_id,
+)
 from ai_guardian.violations.utils import is_mirrored_violation
 
 logger = logging.getLogger(__name__)
@@ -30,9 +34,10 @@ def relay_remote_violation_notifications(client: Any, targets: Iterable[Any]) ->
     """Use local channel settings for remote events that were not delivered there.
 
     Newer daemons return their durable notification outbox alongside the existing
-    violations response. Older daemons have no such field, so their curated
-    violation summaries are treated as unconfigured remote events only within a
-    persisted, overlapping poll window; the initial poll never replays old history.
+    violations response. Earlier outbox events are joined to curated violation
+    summaries by ID when they lack a type. Older daemons with no outbox field use
+    those summaries only within a persisted, overlapping poll window; the initial
+    poll never replays old history.
     """
     if client is None:
         return 0
@@ -55,9 +60,32 @@ def relay_remote_violation_notifications(client: Any, targets: Iterable[Any]) ->
 
         events = response.get("notification_events")
         if isinstance(events, list):
+            violation_types_by_id: dict[str, str] = {}
+            records = response.get("violations")
+            if isinstance(records, list):
+                for record in records:
+                    if not isinstance(record, dict):
+                        continue
+                    record_id = record.get("id")
+                    violation_type = record.get("violation_type", record.get("type"))
+                    if (
+                        isinstance(record_id, str)
+                        and violation_type in VIOLATION_NOTIFICATION_TYPES
+                    ):
+                        violation_types_by_id[record_id] = violation_type
+                        violation_types_by_id[safe_event_id(record_id)] = violation_type
             for event in events:
                 try:
-                    if service.relay_remote_event(source_key, event):
+                    relay_event = event
+                    if (
+                        isinstance(event, dict)
+                        and event.get("violation_type")
+                        not in VIOLATION_NOTIFICATION_TYPES
+                    ):
+                        inferred_type = violation_types_by_id.get(event.get("id", ""))
+                        if inferred_type:
+                            relay_event = {**event, "violation_type": inferred_type}
+                    if service.relay_remote_event(source_key, relay_event):
                         relayed += 1
                 except Exception:
                     logger.warning("Could not relay a remote notification; continuing")
@@ -85,6 +113,7 @@ def relay_remote_violation_notifications(client: Any, targets: Iterable[Any]) ->
                 "id": record.get("id"),
                 "timestamp": record.get("timestamp"),
                 "category": record.get("violation_type", record.get("type")),
+                "violation_type": record.get("violation_type", record.get("type")),
                 "severity": record.get("severity"),
                 "source_daemon": getattr(target, "name", "remote"),
                 "delivery": {

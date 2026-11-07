@@ -11,6 +11,12 @@ from nicegui import run, ui
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.help_panel import field_help_icon
 from ai_guardian.web.config_helpers import load_web_config, load_web_config_global
+from ai_guardian.violations.notifications import (
+    NOTIFICATION_TYPE_LABELS,
+    VIOLATION_NOTIFICATION_TYPES,
+    get_notification_preferences,
+    notification_email_ready,
+)
 
 ALL_LOG_TYPES = [
     ("tool_permission", "Tool Permission — blocked tool/skill invocations"),
@@ -84,20 +90,53 @@ def _save_notification_config(updates):
     """Save alert preferences globally without touching support destinations."""
     from ai_guardian.web.config_helpers import load_web_config_global, save_web_config
 
+    if not isinstance(updates, dict):
+        return False
+    if any(key not in {"by_type", "email"} for key in updates):
+        return False
+
     with _NOTIFICATION_CONFIG_LOCK:
         config = load_web_config_global()
         notifications = config.get("violation_notifications", {})
         if not isinstance(notifications, dict):
             notifications = {}
-        for key, value in updates.items():
-            if isinstance(value, dict):
-                current = notifications.get(key, {})
-                if not isinstance(current, dict):
-                    current = {}
-                current.update(value)
-                notifications[key] = current
-            else:
-                notifications[key] = value
+
+        preferences = get_notification_preferences(notifications)
+        alert_email = notifications.get("email", {})
+        alert_email = dict(alert_email) if isinstance(alert_email, dict) else {}
+        email_update = updates.get("email", {})
+        if not isinstance(email_update, dict):
+            return False
+        if any(key != "recipient" for key in email_update):
+            return False
+        if "recipient" in email_update:
+            if not isinstance(email_update["recipient"], str):
+                return False
+            alert_email["recipient"] = email_update["recipient"]
+
+        by_type_updates = updates.get("by_type", {})
+        if not isinstance(by_type_updates, dict):
+            return False
+        support = config.get("support", {})
+        smtp = support.get("email", {}) if isinstance(support, dict) else {}
+        candidate_notifications = {"email": alert_email}
+        email_ready = notification_email_ready(candidate_notifications, smtp)
+        for violation_type, channels in by_type_updates.items():
+            if (
+                violation_type not in preferences
+                or not isinstance(channels, dict)
+                or any(channel not in {"desktop", "email"} for channel in channels)
+                or any(not isinstance(value, bool) for value in channels.values())
+            ):
+                return False
+            if channels.get("email") is True and not email_ready:
+                return False
+            preferences[violation_type].update(channels)
+
+        notifications.pop("enabled", None)
+        notifications.pop("channels", None)
+        notifications["by_type"] = preferences
+        notifications["email"] = alert_email
         config["violation_notifications"] = notifications
         return save_web_config(config, scope="global")
 
@@ -152,9 +191,7 @@ def create_violation_logging_page(service, daemon_name: str):
             notifications = global_config.get("violation_notifications", {})
             if not isinstance(notifications, dict):
                 notifications = {}
-            notification_channels = notifications.get("channels", {})
-            if not isinstance(notification_channels, dict):
-                notification_channels = {}
+            notification_preferences = get_notification_preferences(notifications)
             alert_email = notifications.get("email", {})
             if not isinstance(alert_email, dict):
                 alert_email = {}
@@ -189,14 +226,8 @@ def create_violation_logging_page(service, daemon_name: str):
             mirror_remote_violations = (
                 global_vlog.get("mirror_remote_violations") is True
             )
-            notifications_enabled = notifications.get("enabled", True) is True
-            desktop_alerts = notification_channels.get("desktop", True) is True
-            email_alerts = notification_channels.get("email", False) is True
             alert_recipient = alert_email.get("recipient", "")
-            smtp_host = support_email.get("smtp_host", "")
-            smtp_port = support_email.get("smtp_port", 587)
-            smtp_tls = support_email.get("smtp_tls", True)
-            smtp_ready = bool(smtp_host) and (smtp_port == 465 or smtp_tls is True)
+            smtp_ready = notification_email_ready(notifications, support_email)
 
             with content:
                 # --- Enable/Disable Toggle ---
@@ -327,65 +358,65 @@ def create_violation_logging_page(service, daemon_name: str):
 
                 # --- Violation Notifications ---
                 with ui.card().classes("w-full"):
-                    ui.label("Violation Notifications").classes("text-lg font-bold")
+                    with ui.row().classes("items-center gap-1"):
+                        ui.label("Violation Notifications").classes("text-lg font-bold")
+                        field_help_icon("violation_notifications")
                     ui.label(
                         "Alerts are independent of violation logging and detection. "
                         "They include only category, severity, and originating daemon; "
                         "detected values and scanned content are never included."
                     ).classes("text-xs text-grey-6")
                     ui.label(
-                        "These alert preferences are global to this daemon."
+                        "Choose desktop and email alerts separately for each violation "
+                        "type. Missing preferences default to desktop on and email off."
                     ).classes("text-xs text-grey-6")
 
-                    notification_switch = ui.switch(
-                        "Enable violation notifications", value=notifications_enabled
-                    )
+                    with ui.row().classes("items-center gap-4 w-full"):
+                        ui.label("Violation type").classes("flex-grow font-bold")
+                        ui.label("Desktop").classes("w-24 font-bold")
+                        ui.label("Email").classes("w-24 font-bold")
 
-                    async def save_notification_toggle(e):
-                        saved = await run.io_bound(
-                            _save_notification_config, {"enabled": bool(e.value)}
-                        )
-                        if not saved:
-                            ui.notify(
-                                "Could not save notification setting", type="negative"
+                    for violation_type in VIOLATION_NOTIFICATION_TYPES:
+                        type_preferences = notification_preferences[violation_type]
+                        with ui.row().classes("items-center gap-4 w-full"):
+                            ui.label(NOTIFICATION_TYPE_LABELS[violation_type]).classes(
+                                "flex-grow"
                             )
-                            await refresh()
+                            desktop_switch = ui.switch(
+                                "Desktop", value=type_preferences["desktop"]
+                            ).props("dense")
+                            email_switch = ui.switch(
+                                "Email", value=type_preferences["email"]
+                            ).props("dense")
+                            if not smtp_ready:
+                                email_switch.disable()
 
-                    notification_switch.on_value_change(save_notification_toggle)
+                            async def save_desktop_channel(e, type_key=violation_type):
+                                saved = await run.io_bound(
+                                    _save_notification_config,
+                                    {"by_type": {type_key: {"desktop": bool(e.value)}}},
+                                )
+                                if not saved:
+                                    ui.notify(
+                                        "Could not save notification preference",
+                                        type="negative",
+                                    )
+                                    await refresh()
 
-                    desktop_switch = ui.switch(
-                        "OS desktop notifications", value=desktop_alerts
-                    )
+                            async def save_email_channel(e, type_key=violation_type):
+                                saved = await run.io_bound(
+                                    _save_notification_config,
+                                    {"by_type": {type_key: {"email": bool(e.value)}}},
+                                )
+                                if not saved:
+                                    ui.notify(
+                                        "Could not save notification preference",
+                                        type="negative",
+                                    )
+                                    await refresh()
 
-                    async def save_desktop_channel(e):
-                        saved = await run.io_bound(
-                            _save_notification_config,
-                            {"channels": {"desktop": bool(e.value)}},
-                        )
-                        if not saved:
-                            ui.notify(
-                                "Could not save desktop notification setting",
-                                type="negative",
-                            )
-                            await refresh()
-
-                    desktop_switch.on_value_change(save_desktop_channel)
-
-                    email_switch = ui.switch("Email notifications", value=email_alerts)
-
-                    async def save_email_channel(e):
-                        saved = await run.io_bound(
-                            _save_notification_config,
-                            {"channels": {"email": bool(e.value)}},
-                        )
-                        if not saved:
-                            ui.notify(
-                                "Could not save email notification setting",
-                                type="negative",
-                            )
-                            await refresh()
-
-                    email_switch.on_value_change(save_email_channel)
+                            desktop_switch.on_value_change(save_desktop_channel)
+                            email_switch.on_value_change(save_email_channel)
 
                     with ui.row().classes("items-center gap-2 w-full"):
                         recipient_input = (
@@ -412,18 +443,20 @@ def create_violation_logging_page(service, daemon_name: str):
                                 "Could not save alert email recipient",
                                 type="negative",
                             )
-                            await refresh()
+                        await refresh()
 
                     recipient_input.on("blur", save_alert_recipient)
                     if smtp_ready:
                         ui.label(
-                            "TLS SMTP host is configured under Support email settings. "
-                            "Alert emails use that transport but not its support-bundle destination."
+                            "Email preferences are available. Alerts use the configured "
+                            "TLS SMTP transport but not its support-bundle destination."
                         ).classes("text-xs text-grey-6")
                     else:
                         ui.label(
-                            "Email alerts require a recipient and TLS SMTP settings under "
-                            "Support email settings. Plaintext SMTP is not used."
+                            "Per-type email preferences are disabled until an alert "
+                            "recipient is set above and usable TLS SMTP settings are "
+                            "configured under Support email settings. Plaintext SMTP "
+                            "is not used."
                         ).classes("text-xs text-amber")
 
                 # --- Retention Settings ---
