@@ -291,6 +291,14 @@
 
 ## Key Learnings
 
+- **2026-11-08 — Release-image recovery (#2689):** A generated NotebookLM export
+  can preserve intentional historical wheel/version mentions, so active release
+  references are validated in source files and the export is regenerated after
+  source synchronization. On this Linux host, rootless Podman built v1.21.0 for
+  amd64 but cannot execute arm64 build stages without QEMU/binfmt; CI Buildx/QEMU
+  passed multi-arch validation. Local Quay credentials are absent, so local image
+  tags do not mean the public registry was updated.
+
 - **2026-11-07 — OpenCode hook E2E generation matrix (#2675):**
   `AI_GUARDIAN_TEST_IDE` alone selects only the IDE; it does not distinguish
   OpenCode plugin generations. Keep V1/V2 cases explicitly pinned with

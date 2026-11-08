@@ -9,6 +9,32 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2689 — 2026-11-08
+
+- Removed the generated `docs/notebooklm-export.md` from active release-reference
+  synchronization/checking. Its historical version mentions remain intact; the
+  source Dockerfiles/READMEs continue to be checked and the release process
+  regenerates the export after source updates. Added regression coverage for the
+  untouched historical export and stale active references. The corrected checker
+  passes on the workspace and against the `v1.21.0` release contents.
+- **Validation:** 108 related unit tests pass; changed-file Ruff/Black, source
+  Pylint/Mypy and `git diff --check` pass. Repository-wide Ruff/Black checks still
+  report unrelated existing issues in `scripts/check_parser_compat.py` and
+  `scripts/check_scanner_versions.py`.
+- Built and ran local `linux/amd64` images from the exact `v1.21.0` source:
+  `quay.io/redhatproductsecurity/ai-guardian:1.21.0` and
+  `quay.io/redhatproductsecurity/ai-guardian-openshell:1.21.0`. Both report AI
+  Guardian 1.21.0. These are local-only; Quay reports both remote tags missing
+  and this host has no Quay login. Local Podman lacks arm64 emulation, so its
+  multi-arch attempt failed with `Exec format error`; Release Readiness run
+  `42511390541` passed the CI Buildx/QEMU multi-arch validation.
+- The original tag workflow `42511626456` still reflects the old tagged checker
+  and failed before build/push. No registry push, commit, or branch push was made.
+  Existing local changes and the current `main` checkout were preserved. The issue
+  has a partial progress comment (#issuecomment-6726675018); criteria for public
+  image publication remain open pending a source-correct authenticated CI/push
+  path.
+
 ## Issue #2685 implementation — 2026-11-08
 
 - Implemented on the existing managed DAF branch `2685`. `scripts/release.sh`

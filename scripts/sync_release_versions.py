@@ -54,7 +54,12 @@ def latest_stable_version(changelog_path: Path) -> str:
 def _release_reference_rules(
     stable_version: str,
 ) -> List[Tuple[str, List[Replacement]]]:
-    """Return the active release-reference substitutions for this project."""
+    """Return active source-file release-reference substitutions.
+
+    The generated NotebookLM export is intentionally excluded: it contains
+    historical version references and is regenerated from these source files
+    during the release process.
+    """
     replacement = r"\g<1>" + stable_version
     replacement_with_suffix = r"\g<1>" + stable_version + r"\g<2>"
     return [
@@ -115,41 +120,6 @@ def _release_reference_rules(
                     rf"(\|\s*`AI_GUARDIAN_VERSION`\s*\|\s*`){STABLE_VERSION_PATTERN}(`\s*\|)",
                     replacement_with_suffix,
                     "container README build-argument table",
-                ),
-            ],
-        ),
-        (
-            "docs/notebooklm-export.md",
-            [
-                (
-                    rf"(quay\.io/redhatproductsecurity/ai-guardian:v){STABLE_VERSION_PATTERN}",
-                    replacement,
-                    "generated documentation pinned image references",
-                ),
-                (
-                    rf"(quay\.io/redhatproductsecurity/ai-guardian:){STABLE_VERSION_PATTERN}",
-                    replacement,
-                    "generated documentation container image references",
-                ),
-                (
-                    rf"(pinned stable release \(e\.g\.\s+`){STABLE_VERSION_PATTERN}(?=`)",
-                    replacement,
-                    "generated documentation stable-version example",
-                ),
-                (
-                    rf"(AI_GUARDIAN_VERSION=){STABLE_VERSION_PATTERN}",
-                    replacement,
-                    "generated documentation stable build argument",
-                ),
-                (
-                    rf"(ai_guardian-){STABLE_VERSION_PATTERN}(-py3-none-any\.whl)",
-                    replacement_with_suffix,
-                    "generated documentation stable wheel references",
-                ),
-                (
-                    rf"(\|\s*`AI_GUARDIAN_VERSION`\s*\|\s*`){STABLE_VERSION_PATTERN}(`\s*\|)",
-                    replacement_with_suffix,
-                    "generated documentation build-argument table",
                 ),
             ],
         ),
