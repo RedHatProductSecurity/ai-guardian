@@ -64,6 +64,7 @@ def _create_release_reference_repo(tmp_path: Path) -> None:
                 "cp dist/ai_guardian-1.0.0-py3-none-any.whl container/vendor/",
                 "podman build --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.0.0-py3-none-any.whl",
                 "| `AI_GUARDIAN_VERSION` | `1.0.0` | PyPI version or `.whl` filename |",
+                "Historical qualification: ai_guardian-0.9.0-py3-none-any.whl",
                 "",
             ]
         ),
@@ -80,8 +81,10 @@ def _run_sync(tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
     )
 
 
-def test_sync_updates_all_active_release_references(tmp_path):
+def test_sync_updates_active_references_without_rewriting_generated_history(tmp_path):
     _create_release_reference_repo(tmp_path)
+    export_path = tmp_path / "docs" / "notebooklm-export.md"
+    generated_export_before = export_path.read_text(encoding="utf-8")
 
     result = _run_sync(tmp_path, "--stable-version", "1.1.0")
 
@@ -101,6 +104,10 @@ def test_sync_updates_all_active_release_references(tmp_path):
     assert "ai_guardian-1.1.0-py3-none-any.whl" in container_readme
     assert "`AI_GUARDIAN_VERSION` | `1.1.0`" in container_readme
     assert "ai_guardian-1.0.0.dev0-py3-none-any.whl" in container_readme
+    assert export_path.read_text(encoding="utf-8") == generated_export_before
+    assert "Historical qualification: ai_guardian-0.9.0-py3-none-any.whl" in (
+        generated_export_before
+    )
 
 
 def test_check_uses_latest_changelog_release_and_detects_stale_references(tmp_path):
@@ -112,6 +119,9 @@ def test_check_uses_latest_changelog_release_and_detects_stale_references(tmp_pa
         "## [1.1.0] - 2026-02-01\n## [1.0.0] - 2026-01-01\n",
         encoding="utf-8",
     )
+
+    historical_check_result = _run_sync(tmp_path, "--check")
+    assert historical_check_result.returncode == 0, historical_check_result.stderr
 
     (tmp_path / "container" / "Dockerfile.openshell").write_text(
         "ARG AI_GUARDIAN_VERSION=0.9.0\n",
@@ -136,11 +146,11 @@ def test_check_rejects_a_missing_active_reference(tmp_path):
     assert "release reference layout changed" in result.stderr
 
 
-def test_update_validates_all_files_before_writing(tmp_path):
-    """A layout error must not leave earlier files partially updated."""
+def test_update_validates_active_files_before_writing(tmp_path):
+    """An active-source layout error must not leave partial updates."""
     _create_release_reference_repo(tmp_path)
-    (tmp_path / "docs" / "notebooklm-export.md").write_text(
-        "missing generated references\n",
+    (tmp_path / "container" / "README.md").write_text(
+        "missing active references\n",
         encoding="utf-8",
     )
 
