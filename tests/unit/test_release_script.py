@@ -14,6 +14,15 @@ RELEASE_SCRIPT = REPO_ROOT / "scripts" / "release.sh"
 RELEASE_READINESS_WORKFLOW = (
     REPO_ROOT / ".github" / "workflows" / "release-readiness.yml"
 )
+REQUIRED_CI_WORKFLOWS = (
+    "release-readiness.yml",
+    "test.yml",
+    "lint.yml",
+    "integration-tests.yml",
+)
+WORKFLOW_RUN_IDS = {
+    workflow: str(1001 + index) for index, workflow in enumerate(REQUIRED_CI_WORKFLOWS)
+}
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32",
@@ -104,6 +113,45 @@ def test_release_readiness_covers_announcement_cli_without_publication():
     assert "gh api" not in step["run"]
 
 
+def test_release_ci_workflows_have_safe_manual_dispatch_contracts():
+    """Release validation dispatches CI without scanner issue automation."""
+
+    def events(workflow_path):
+        workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+        return workflow.get("on", workflow.get(True, {}))
+
+    test_events = events(REPO_ROOT / ".github" / "workflows" / "test.yml")
+    lint_events = events(REPO_ROOT / ".github" / "workflows" / "lint.yml")
+    integration_events = events(
+        REPO_ROOT / ".github" / "workflows" / "integration-tests.yml"
+    )
+    assert "workflow_dispatch" in test_events
+    assert "workflow_dispatch" in lint_events
+
+    release_validation = integration_events["workflow_dispatch"]["inputs"][
+        "release_validation"
+    ]
+    assert release_validation["type"] == "boolean"
+    assert release_validation["default"] is False
+
+    integration = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "integration-tests.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    health_check = integration["jobs"]["version-health-check"]
+    assert "github.event.inputs.release_validation != 'true'" in health_check["if"]
+
+    readiness = yaml.safe_load(RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8"))
+    jobs = readiness["jobs"]
+    assert jobs["smoke-tests"]["uses"] == "./.github/workflows/smoke-tests.yml"
+    assert jobs["scenario-tests"]["uses"] == "./.github/workflows/scenario-tests.yml"
+    assert (
+        jobs["container-build-validation"]["uses"]
+        == "./.github/workflows/container-build-validation.yml"
+    )
+
+
 @pytest.fixture
 def release_sandbox(tmp_path):
     """Run the full shell orchestrator in a disposable tree with fake executables."""
@@ -146,9 +194,70 @@ if program == "git":
     elif args[0] not in ("status", "fetch", "checkout", "merge", "add", "commit", "push", "tag", "pull"):
         raise AssertionError(args)
 elif program == "gh":
-    if args[:2] == ["run", "list"]:
-        print("123")
-    elif args[:2] not in (["auth", "status"], ["workflow", "run"], ["run", "watch"]):
+    workflow_ids = json.loads(os.environ["RELEASE_WORKFLOW_RUN_IDS"])
+    outcomes = json.loads(os.environ["RELEASE_WORKFLOW_OUTCOMES"])
+    previous_runs = json.loads(os.environ["RELEASE_PREEXISTING_RUNS"])
+    metadata_overrides = json.loads(os.environ["RELEASE_RUN_METADATA"])
+    missing_workflow = os.environ.get("RELEASE_MISSING_WORKFLOW", "")
+    dispatch_failure = os.environ.get("RELEASE_DISPATCH_FAILURE", "")
+
+    def option_value(name):
+        for index, argument in enumerate(args):
+            if argument == name and index + 1 < len(args):
+                return args[index + 1]
+            if argument.startswith(name + "="):
+                return argument.split("=", 1)[1]
+        return ""
+
+    def workflow_for_run(run_id):
+        return next(
+            (workflow for workflow, value in workflow_ids.items() if value == run_id),
+            "",
+        )
+
+    if args[:2] == ["auth", "status"]:
+        pass
+    elif args[:2] == ["workflow", "run"]:
+        workflow = args[2]
+        if workflow == dispatch_failure:
+            sys.exit(1)
+    elif args[:2] == ["run", "list"]:
+        workflow = option_value("--workflow")
+        run_ids = [str(run_id) for run_id in previous_runs.get(workflow, [])]
+        logged = [
+            json.loads(line)
+            for line in Path(os.environ["RELEASE_TEST_LOG"]).read_text().splitlines()
+        ]
+        was_dispatched = any(
+            command[:3] == ["gh", "workflow", "run"] and command[3] == workflow
+            for command in logged
+        )
+        if was_dispatched and workflow != missing_workflow:
+            run_ids.append(workflow_ids.get(workflow, ""))
+        print("\n".join(run_id for run_id in run_ids if run_id))
+    elif args[:2] == ["run", "view"]:
+        run_id = args[2]
+        workflow = workflow_for_run(run_id)
+        details = {
+            "headSha": "same-commit",
+            "headBranch": "main",
+            "event": "workflow_dispatch",
+            "status": "completed",
+            "conclusion": outcomes.get(workflow, "success"),
+            "url": "https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/" + run_id,
+        }
+        details.update(metadata_overrides.get(workflow, {}))
+        if "--jq" in args and "@tsv" in args[args.index("--jq") + 1]:
+            print("\t".join(str(details[key]) for key in (
+                "headSha", "headBranch", "event", "status", "conclusion", "url"
+            )))
+        else:
+            raise AssertionError(args)
+    elif args[:2] == ["run", "watch"]:
+        workflow = workflow_for_run(args[2])
+        if outcomes.get(workflow, "success") != "success":
+            sys.exit(1)
+    else:
         raise AssertionError(args)
 elif program == "python3":
     if Path(args[0]).name == "release_helper.py":
@@ -179,6 +288,8 @@ elif program == "python3":
         raise AssertionError(args)
 elif program == "pip":
     sys.exit(int(os.environ.get("PIP_TEST_EXIT", "0")))
+elif program == "git-cliff":
+    print("### Added\n- Generated changelog entry")
 elif program not in ("curl", "git-cliff", "sleep"):
     raise AssertionError(program)
 """
@@ -187,7 +298,18 @@ elif program not in ("curl", "git-cliff", "sleep"):
         path.write_text(fake, encoding="utf-8")
         path.chmod(0o755)
 
-    def run(*flags, outcome="success", pip_exit=0):
+    def run(
+        *flags,
+        outcome="success",
+        pip_exit=0,
+        workflow_outcomes=None,
+        missing_workflow="",
+        dispatch_failure="",
+        run_metadata=None,
+        empty_changelog=False,
+    ):
+        if empty_changelog:
+            (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n")
         result = subprocess.run(
             ["bash", str(script), "--skip-cursor", *flags, "patch"],
             input="y\ny\n",
@@ -201,6 +323,14 @@ elif program not in ("curl", "git-cliff", "sleep"):
                 "RELEASE_TEST_LOG": str(log),
                 "ANNOUNCEMENT_TEST_OUTCOME": outcome,
                 "PIP_TEST_EXIT": str(pip_exit),
+                "RELEASE_WORKFLOW_RUN_IDS": json.dumps(WORKFLOW_RUN_IDS),
+                "RELEASE_WORKFLOW_OUTCOMES": json.dumps(workflow_outcomes or {}),
+                "RELEASE_PREEXISTING_RUNS": json.dumps(
+                    {workflow: ["90"] for workflow in REQUIRED_CI_WORKFLOWS}
+                ),
+                "RELEASE_MISSING_WORKFLOW": missing_workflow,
+                "RELEASE_DISPATCH_FAILURE": dispatch_failure,
+                "RELEASE_RUN_METADATA": json.dumps(run_metadata or {}),
             },
         )
         commands = [json.loads(line) for line in log.read_text().splitlines()]
@@ -209,20 +339,212 @@ elif program not in ("curl", "git-cliff", "sleep"):
     return run
 
 
+def _workflow_dispatches(commands):
+    return [command for command in commands if command[:2] == ["gh", "workflow"]]
+
+
+def _option_value(command, name):
+    for index, argument in enumerate(command):
+        if argument == name and index + 1 < len(command):
+            return command[index + 1]
+        if argument.startswith(name + "="):
+            return argument.split("=", 1)[1]
+    return ""
+
+
+def _release_mutations(commands):
+    mutations = []
+    for command in commands:
+        if command[0] == "git" and command[1] in (
+            "add",
+            "checkout",
+            "commit",
+            "merge",
+            "pull",
+            "push",
+            "tag",
+        ):
+            if command[1:3] != ["tag", "--list"]:
+                mutations.append(command)
+        if command[0] == "python3" and any(
+            operation in command for operation in ("update-version", "update-changelog")
+        ):
+            mutations.append(command)
+    return mutations
+
+
 def test_release_script_defaults_to_non_mutating_preview(release_sandbox):
     result, commands = release_sandbox()
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Release mode: preview only" in result.stdout
-    assert "[dry-run] gh workflow run release-readiness.yml --ref main" in (
-        result.stdout
+    assert "GitHub CI will run" in result.stdout
+    assert [command[3] for command in _workflow_dispatches(commands)] == list(
+        REQUIRED_CI_WORKFLOWS
     )
-    assert not any(command[:2] == ["gh", "workflow"] for command in commands)
-    assert not any(
-        command[:2] in (["git", "checkout"], ["git", "commit"], ["git", "push"])
-        for command in commands
-    )
+    assert not _release_mutations(commands)
     assert not any(command[:2] == ["pip", "install"] for command in commands)
+
+
+def test_preview_does_not_generate_an_empty_changelog(release_sandbox):
+    result, commands = release_sandbox("--dry-run", empty_changelog=True)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not any(command[0] == "git-cliff" for command in commands)
+    assert not _release_mutations(commands)
+
+
+def test_ci_failure_does_not_generate_changelog_before_gate(release_sandbox):
+    result, commands = release_sandbox(
+        "--execute",
+        workflow_outcomes={"release-readiness.yml": "failure"},
+        empty_changelog=True,
+    )
+
+    assert result.returncode == 1
+    assert not any(command[0] == "git-cliff" for command in commands)
+    assert not _release_mutations(commands)
+
+
+def test_dispatch_failure_still_starts_and_awaits_other_required_workflows(
+    release_sandbox,
+):
+    result, commands = release_sandbox("--execute", dispatch_failure="lint.yml")
+
+    assert result.returncode == 1
+    assert "Lint (dispatch failed)" in result.stderr
+    assert [command[3] for command in _workflow_dispatches(commands)] == list(
+        REQUIRED_CI_WORKFLOWS
+    )
+    assert (
+        len([command for command in commands if command[:3] == ["gh", "run", "watch"]])
+        == len(REQUIRED_CI_WORKFLOWS) - 1
+    )
+    assert not _release_mutations(commands)
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [(), ("--dry-run",), ("--execute",)],
+    ids=["default-preview", "explicit-preview", "execute"],
+)
+def test_release_script_dispatches_and_awaits_required_ci_in_every_mode(
+    flags, release_sandbox
+):
+    result, commands = release_sandbox(*flags)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    dispatches = _workflow_dispatches(commands)
+    assert dispatches == [
+        ["gh", "workflow", "run", workflow, "--ref", "main"]
+        for workflow in REQUIRED_CI_WORKFLOWS[:3]
+    ] + [
+        [
+            "gh",
+            "workflow",
+            "run",
+            "integration-tests.yml",
+            "--ref",
+            "main",
+            "-f",
+            "release_validation=true",
+        ]
+    ]
+
+    watched_runs = [
+        command[3] for command in commands if command[:3] == ["gh", "run", "watch"]
+    ]
+    assert watched_runs == [
+        WORKFLOW_RUN_IDS[workflow] for workflow in REQUIRED_CI_WORKFLOWS
+    ]
+    assert all(
+        command[4] == "--exit-status"
+        for command in commands
+        if command[:3] == ["gh", "run", "watch"]
+    )
+    assert all(
+        "--commit" in command
+        and command[command.index("--commit") + 1] == "same-commit"
+        and "--branch" in command
+        and command[command.index("--branch") + 1] == "main"
+        and "--event" in command
+        and command[command.index("--event") + 1] == "workflow_dispatch"
+        for command in commands
+        if command[:3] == ["gh", "run", "list"]
+        and _option_value(command, "--workflow") in REQUIRED_CI_WORKFLOWS
+    )
+
+    final_watch = max(
+        i for i, command in enumerate(commands) if command[:3] == ["gh", "run", "watch"]
+    )
+    mutations = [
+        i
+        for i, command in enumerate(commands)
+        if command in _release_mutations(commands)
+    ]
+    if flags == ("--execute",):
+        assert mutations and min(mutations) > final_watch
+    else:
+        assert not mutations
+
+
+@pytest.mark.parametrize("failed_workflow", REQUIRED_CI_WORKFLOWS)
+@pytest.mark.parametrize(
+    "flags",
+    [("--dry-run",), ("--execute",)],
+    ids=["preview", "execute"],
+)
+def test_failed_required_ci_blocks_release_mutations(
+    failed_workflow, flags, release_sandbox
+):
+    result, commands = release_sandbox(
+        *flags, workflow_outcomes={failed_workflow: "failure"}
+    )
+
+    assert result.returncode == 1
+    assert "Required CI validation failed or was incomplete" in result.stderr
+    failed_label = {
+        "release-readiness.yml": "Release Readiness",
+        "test.yml": "Tests",
+        "lint.yml": "Lint",
+        "integration-tests.yml": "Integration Tests",
+    }[failed_workflow]
+    assert f"{failed_label} did not succeed" in result.stdout
+    assert [command[3] for command in _workflow_dispatches(commands)] == list(
+        REQUIRED_CI_WORKFLOWS
+    )
+    assert len(
+        [command for command in commands if command[:3] == ["gh", "run", "watch"]]
+    ) == len(REQUIRED_CI_WORKFLOWS)
+    assert not _release_mutations(commands)
+
+
+def test_missing_required_ci_run_blocks_release_mutations(release_sandbox):
+    result, commands = release_sandbox(
+        "--execute", missing_workflow="integration-tests.yml"
+    )
+
+    assert result.returncode == 1
+    assert "missing or ambiguous run" in result.stderr
+    assert [command[3] for command in _workflow_dispatches(commands)] == list(
+        REQUIRED_CI_WORKFLOWS
+    )
+    assert (
+        len([command for command in commands if command[:3] == ["gh", "run", "watch"]])
+        == len(REQUIRED_CI_WORKFLOWS) - 1
+    )
+    assert not _release_mutations(commands)
+
+
+def test_mismatched_ci_source_commit_blocks_release_mutations(release_sandbox):
+    result, commands = release_sandbox(
+        "--execute", run_metadata={"lint.yml": {"headSha": "different-commit"}}
+    )
+
+    assert result.returncode == 1
+    assert "does not match the requested source ref, commit, and event" in result.stdout
+    assert "source verification failed" in result.stderr
+    assert not _release_mutations(commands)
 
 
 def test_release_script_rejects_conflicting_execution_modes():
@@ -305,10 +627,8 @@ def test_release_script_dry_run_previews_announcement_without_mutations(
         command for command in commands if "announce-release" in command
     )
     assert announcement[-3:] == ["announce-release", "1.2.3", "--dry-run"]
-    assert not any(command[0] in ("gh", "pip", "curl") for command in commands)
-    assert not any(
-        command[0] == "git"
-        and command[1] in ("checkout", "push", "commit", "add", "tag", "pull", "merge")
-        and command[1:3] != ["tag", "--list"]
-        for command in commands
+    assert [command[3] for command in _workflow_dispatches(commands)] == list(
+        REQUIRED_CI_WORKFLOWS
     )
+    assert not any(command[0] in ("pip", "curl") for command in commands)
+    assert not _release_mutations(commands)

@@ -13,22 +13,29 @@ scripts/release.sh --execute patch        # create a patch release
 scripts/release.sh --execute major        # create a major release
 ```
 
-The script automates prerequisite validation, Release Readiness CI, interactive
-Cursor verification, release preparation, TestPyPI, production tagging,
-publication checks, a production release announcement, and merge-back. Run it as
-an authorized maintainer in your terminal, outside an active DAF agent session.
-Land preparation changes through
-the normal feature-branch review workflow first; do not launch it from a DAF
-issue branch such as `2563`.
+The script automates prerequisite validation, Release Readiness and standard CI,
+interactive Cursor verification, release preparation, TestPyPI, production
+tagging, publication checks, a production release announcement, and merge-back.
+Run it as an authorized maintainer in your terminal, outside an active DAF agent
+session. Land release-script preparation changes through the normal feature-branch
+review workflow first; do not launch it from a DAF issue branch such as `2563`.
 
 Start from a clean `main` synchronized with `origin/main`, with current remote
 production tags. The script calculates the target from the latest local
 production `v*` tag, not the development package version. Preview with
 `scripts/release.sh minor` (dry-run is the default) and confirm the planned
-release version, branch, and next development version. Only then run
-`scripts/release.sh --execute minor`. A dry run is a plan, not evidence that
-the release gates passed. Complete all six Cursor events when prompted, and
-verify TestPyPI and the reviewed release notes before approving production.
+release version, branch, and next development version. Both the default preview
+and `--dry-run` dispatch and await Release Readiness, Tests, Lint, and Integration
+Tests on the current source ref and commit; `--execute` runs the same gates before
+making release changes. Release Readiness already includes Smoke Tests, Scenario
+Tests, and Container Build Validation, so the script does not dispatch those a
+second time. The preview requires authenticated `gh` access and starts GitHub
+Actions runs; this is its intentional external side effect. It does not edit
+release files or create branches, commits, tags, pushes, or publications. A
+preview is not evidence of passing gates unless its matching run results succeed.
+Only then run `scripts/release.sh --execute minor`. Complete all six Cursor events
+when prompted, and verify TestPyPI and the reviewed release notes before approving
+production.
 
 **Do not blindly re-run after a partial or published release.** A newly created
 production tag changes the next calculated version. Reconcile the intended
@@ -1071,22 +1078,27 @@ later release; users who cannot upgrade should pin `ai-guardian<1.20`.
 The release-relevant GitHub Actions workflows include:
 
 1. **test.yml** - Runs tests on Python 3.10, 3.11, 3.12, 3.13, 3.14
-   - Triggered on: push to main, pull requests
+   - Triggered on: pull requests, selected branch pushes, and manual dispatch
    - Includes coverage reporting
 
 2. **lint.yml** - Runs code quality checks (pylint, black, ruff, mypy)
-   - Triggered on: pull requests
+   - Triggered on: pull requests, selected branch pushes, and manual dispatch
 
-3. **publish.yml** - Routes `v*-test*` tags to TestPyPI; production version tags
+3. **integration-tests.yml** - Runs MCP, hook-processing, test-isolation, and
+   performance checks. Manual dispatch supports a validation-only input used by
+   `release.sh`; that mode skips the scanner-version issue automation reserved
+   for normal manual checks and scheduled runs.
+
+4. **publish.yml** - Routes `v*-test*` tags to TestPyPI; production version tags
    publish Python distributions to PyPI and create the GitHub Release with Rust
    middleware assets and checksums. The tag selects the registry; package
    metadata selects the uploaded version. Manual dispatch is not inherently a
    TestPyPI operation. Both registries require their matching trusted publisher.
 
-4. **release-readiness.yml** - Validates installs, upgrade, IDE/hooks, daemon,
+5. **release-readiness.yml** - Validates installs, upgrade, IDE/hooks, daemon,
    config/MCP, smoke/scenarios, containers, and middleware compatibility.
 
-5. **build-container.yml** - Publishes both separate versioned Quay images;
+6. **build-container.yml** - Publishes both separate versioned Quay images;
    `latest` remains the main-branch channel.
 
 ### Ubuntu Runner Policy

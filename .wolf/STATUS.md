@@ -5,9 +5,32 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-07 (UTC)
+> Last updated: 2026-11-08 (UTC)
 
 ---
+
+## Issue #2685 implementation — 2026-11-08
+
+- Implemented on the existing managed DAF branch `2685`. `scripts/release.sh`
+  now dispatches and awaits Release Readiness, Tests, Lint, and Integration Tests
+  in default preview, explicit `--dry-run`, and `--execute` modes. Each new run
+  is correlated against the captured source branch/commit and dispatch event;
+  missing, ambiguous, failed, or mismatched results exit nonzero before release
+  file preparation or other release mutations.
+- Moved execute-mode changelog generation and release-helper validation behind
+  the CI gate. Preview explicitly reports GitHub Actions dispatch as its one
+  intentional external side effect; it does not make release changes.
+- Added safe `workflow_dispatch` entry points to Tests and Lint. Integration
+  Tests accepts `release_validation=true` to skip scanner-version issue
+  automation while retaining its normal behavior for other manual dispatches.
+  Release Readiness remains the only invocation for Smoke Tests, Scenario Tests,
+  and Container Build Validation.
+- Updated `RELEASING.md`, CHANGELOG, and release-script contracts. **31 focused
+  tests pass**; Black, Ruff, error-level Pylint, package Mypy (336 source files),
+  Bash syntax, and diff checks pass.
+- No live GitHub workflows were dispatched and no commit or push was made.
+  Posted the completed acceptance checklist on issue #2685 and added the `done`
+  label. **Next:** user review and external `daf complete` on branch `2685`.
 
 ## Issue #2675 implementation — 2026-11-07
 

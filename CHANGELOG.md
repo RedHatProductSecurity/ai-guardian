@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   health; unavailable or unparsable versions are not classified as pre-1.0.
 
 ### CI/CD
+- **Release script CI gates:** Run and await Release Readiness, Tests, Lint, and
+  Integration Tests on the current source ref in preview and execute modes.
+  Release Readiness continues to provide Smoke Tests, Scenario Tests, and
+  Container Build Validation once; failed or unmatched runs stop release changes.
 - **OpenCode hook E2E variants:** Run OpenCode V1 and V2 plugin/MCP integration
   contracts as separately named Release Readiness matrix jobs, with generation-
   specific test selection and shared OpenCode unit checks run only once.
