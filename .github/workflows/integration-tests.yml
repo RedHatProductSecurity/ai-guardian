@@ -2,6 +2,12 @@ name: Integration Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      release_validation:
+        description: Run release validation without scanner update issue automation
+        required: false
+        type: boolean
+        default: false
   schedule:
     # Run integration tests daily at 2 AM UTC
     - cron: '0 2 * * *'
@@ -181,8 +187,12 @@ jobs:
   version-health-check:
     name: Scanner Version Health Check
     runs-on: ubuntu-26.04
-    # Only run on schedule, not on PR
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Keep the normal scheduled/manual update check, but skip issue automation
+    # when release.sh dispatches the validation-only mode.
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.release_validation != 'true')
 
     steps:
       - name: Checkout code
