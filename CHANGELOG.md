@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Stable release reference checks:** Validate active source references without
+  rewriting historical version mentions in the generated NotebookLM export.
+
 ## [1.21.0] - 2026-11-08
 
 ### Added
