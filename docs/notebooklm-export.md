@@ -8,7 +8,7 @@ Auto-generated combined export of all project documentation.
 # AI Guardian
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
 </p>
 
 > AI IDE security hook: controls MCP/skill permissions, blocks directories, detects prompt injection, scans secrets
@@ -149,21 +149,21 @@ decisions and Never install choice.
 
 ```bash
 # Auto-detect installed IDEs (Linux / macOS)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash
 
 # Linux / macOS (auto-detects uv → venv → pip)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/install.sh | bash -s -- --ide claude
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --ide claude
 
 # Force a specific install method
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/install.sh | bash -s -- --venv --ide claude  # venv + pip
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/install.sh | bash -s -- --pip --ide claude   # bare pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --venv --ide claude  # venv + pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --pip --ide claude   # bare pip
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/install.ps1 | iex
+irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.ps1 | iex
 
 # Install without changing IDE hooks
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/install.sh | bash -s -- --no-setup
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --no-setup
 ```
 
 ### Container
@@ -178,7 +178,7 @@ credentials passed to it are available inside and may be readable by the agent.
 
 ```bash
 # Recommended — run.sh handles auth, port mapping, config sharing, and ToS consent
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.20.0/container/run.sh -o run.sh
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/container/run.sh -o run.sh
 chmod +x run.sh
 OPENAI_API_KEY=... \
     ./run.sh --agent codex --repo $(pwd)
@@ -327,8 +327,8 @@ access.
 
 ```bash
 # Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.20.0
-podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.20.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.21.0
+podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.21.0
 
 # Or build from source
 podman build -t ai-guardian container/
@@ -391,7 +391,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 
 | Feature | Description |
 |---------|-------------|
-| [Secret Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Multi-layered detection of API keys, tokens, passwords |
+| [Secret Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Credential patterns and [experimental opt-in password heuristics](docs/security/PASSWORD_LIKELIHOOD.md) |
 | [PII Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Detect personally identifiable information |
 | [Prompt Injection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Language-aware detection with tree-sitter AST parsing and configurable sensitivity |
 | [Image Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md) | OCR-based secret and PII detection in screenshots and images |
@@ -400,9 +400,11 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Config File Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) | Detect exfiltration of sensitive config files |
 | [Directory Blocking](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md) | `.ai-read-deny` markers + config-based rules |
 | [Tool Permissions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md) | Allow/deny lists for Skills, MCP, Bash, Write |
-| [Violation Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) | JSON audit trail with unified policy decisions |
+| [Violation Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) | Privacy-aware audit history, read-only remote mirroring, and desktop/email alerts |
 | [Compliance Audit Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AUDIT_LOGGING.md) | Sanitized all-decision audit trail for SOC 2, GDPR, and HIPAA |
 | [Sanitize Command](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) | Clean sensitive data from files |
+| [Support bundles](docs/SUPPORT.md) | Tray/standalone CLI with local ZIP-only export or public Bug Reports/Q&A and user-only consent |
+| [Uninstall and orphan recovery](docs/UNINSTALL.md) | Standalone scoped POSIX/Windows integration cleanup without the installed package |
 | [Interactive Console](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | NiceGUI browser console for managing configuration visually |
 | [Scanner Management](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Install and manage 8 scanner engines (including built-in toml-patterns) |
 | [Pre-commit Hook](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md) | Scan staged files for secrets before commit |
@@ -411,7 +413,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [MCP Security Advisor](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) | Read-only security tools for AI agents (proactive checks) |
 | [MCP Security Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md#mcp-security-scanning) | Audit MCP server configs and source code for supply chain risks |
 | [Project Config Overlay](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180) | Per-repo config with immutable fields and global-only section protection |
-| [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Discover daemons and pause individual sessions or all sessions in a project across local, Podman/Docker, and Kubernetes |
+| [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Discover/control local and remote daemons, with SSH-managed HTTPS and [opt-in SSH alias discovery](docs/MULTI_DAEMON_TRAY.md#discover-ssh-aliases) |
 | [Desktop Shortcut & Autostart](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) | Install tray as desktop app with optional login startup |
 | [Tray Plugins](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) | Custom menu items with native tkinter or NiceGUI forms, platform-aware commands |
 | [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |
@@ -432,6 +434,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Kubernetes Deployment](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md) | Kustomize manifests for Kind, OpenShift, and production deployments |
 | [Security Instructions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Configurable agent context injection rules via the web console |
 | [Transcript Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability) | Scan IDE conversation transcripts for secrets/PII across 7+ IDEs |
+| [Agent CLI Maturity Advisories](docs/AGENT_SUPPORT.md#upstream-cli-maturity) | Non-blocking setup/doctor warnings for detected pre-1.0 CLI versions |
 | [LeakTK Listen Mode](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Event-driven scanning with 40x latency reduction vs polling |
 | [Zero-Config Onboarding](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | `init --scan` scans the project and generates a tuned config |
 | [Language-Aware FP Suppression](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Tree-sitter AST parsing reduces false positives in code |
@@ -591,8 +594,11 @@ Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`
 
 - **Python 3.10+**
 - **Windows**: Python 3.10, 3.13, and 3.14 are tested; other versions may work but are not CI-verified
+- **WSL2**: Experimental support when installed and run inside a Linux
+  distribution; see [platform and scanner notes](docs/SCANNER_INSTALLATION.md#wsl2-experimental)
+  and [Console guidance](docs/CONSOLE.md#wsl2-experimental).
 - **Scanner engine**: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, or gitguardian
-- **GNOME Linux**: AppIndicator extension for system tray icon ([setup steps](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#getting-started))
+- **GNOME Linux**: AppIndicator extension for system tray icon ([system tray notes](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#system-tray))
 
 See [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) for installation instructions.
 
@@ -748,7 +754,7 @@ Terms of Service.
 | LeakTK | Apache 2.0 | Build time |
 | detect-secrets | Apache 2.0 | Build time |
 | Secretlint | MIT | Build time |
-| GitGuardian ggshield CLI | MIT (service terms apply) | Build time |
+| GitGuardian ggshield CLI | MIT (service terms apply) | **Opt-in build only** |
 | Gemini CLI | Apache 2.0 | Build time |
 | Codex CLI | Apache 2.0 | Build time |
 | Grok Build | Apache 2.0 | Build time; version pinned at build time |
@@ -772,12 +778,12 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/redhatproductsecurity/ai-guardian:1.20.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.21.0
 ```
 
 Tag conventions:
 - `:latest` — tracks main branch (updated on every merge)
-- `:<version>` — pinned stable release (e.g. `1.20.0`)
+- `:<version>` — pinned stable release (e.g. `1.21.0`)
 
 ## Build Locally
 
@@ -786,10 +792,10 @@ Tag conventions:
 podman build -t ai-guardian container/
 
 # Specific version
-podman build --build-arg AI_GUARDIAN_VERSION=1.20.0 -t ai-guardian container/
+podman build --build-arg AI_GUARDIAN_VERSION=1.21.0 -t ai-guardian container/
 
 # Local wheel (copy the wheel into container/vendor/ first)
-WHEEL_PATH=dist/ai_guardian-1.20.0-py3-none-any.whl
+WHEEL_PATH=dist/ai_guardian-1.21.0-py3-none-any.whl
 WHEEL_NAME="$(basename "$WHEEL_PATH")"
 cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
 podman build --build-arg "AI_GUARDIAN_VERSION=$WHEEL_NAME" \
@@ -1505,16 +1511,39 @@ CLI policy; it does not grant GitHub API or Git access.
 #### Bundled scanner engines
 
 Both support images preinstall pinned Gitleaks, BetterLeaks, LeakTK,
-detect-secrets, Secretlint, and the GitGuardian `ggshield` CLI. Their versions
-come from the scanner configuration bundled with AI Guardian, so host, profile,
-restored, and sandbox-local configurations can select them without startup
-downloads or an OpenShell policy for downloading scanner binaries.
+detect-secrets, and Secretlint. Their versions come from the scanner
+configuration bundled with AI Guardian, so host, profile, restored, and
+sandbox-local configurations can select them without startup downloads. The
+GitGuardian `ggshield` CLI is excluded from both default images because it is an
+optional cloud-dependent engine.
 
-Secretlint scans locally. Using the GitGuardian engine sends scan data to its
-cloud service and still requires configured consent and an API key; an
-OpenShell sandbox also needs policy access to that service. Installing the CLI
-in the image does not add runtime network access. Pattern-server access remains
-governed by the selected configuration and policy.
+To include GitGuardian in a derived image, build from the repository root with
+the opt-in build argument:
+
+```bash
+podman build -f container/Dockerfile --build-arg INCLUDE_GITGUARDIAN=true \
+    -t ai-guardian:gitguardian container/
+podman build -f container/Dockerfile.openshell \
+    --build-arg INCLUDE_GITGUARDIAN=true -t ai-guardian-openshell:gitguardian container/
+```
+
+The first command builds the normal UBI image; the second builds the OpenShell
+image. OpenShell cannot download scanner binaries at sandbox startup, so include
+the CLI in the base image when that runtime is intended to use GitGuardian. The
+build argument only packages the CLI; it does not grant service access or send
+data.
+
+Secretlint scans locally. Using the GitGuardian engine sends scanned content to
+GitGuardian's cloud service and requires explicit AI Guardian consent, a
+`GITGUARDIAN_API_KEY`, and network access. OpenShell also needs policy access to
+the service. The `ggshield` CLI is MIT-licensed; this does not grant a service
+subscription or quota. Eligible free workspaces currently include 10,000 scan
+API calls per rolling 30-day period, shared across API keys in that workspace;
+availability and limits are controlled by GitGuardian. A failed or rate-limited
+cloud scan is reported as incomplete coverage, not a clean result. Configured
+local scanners continue according to the chosen strategy and the global
+`on_scan_error` policy applies. Pattern-server access remains governed by the
+selected configuration and policy.
 
 TruffleHog is not included in the stock images. Its AGPL-3.0 installation path
 requires interactive license acknowledgement, which cannot be collected during
@@ -1938,7 +1967,7 @@ Access from the host: `http://localhost:63152`
 
 | Arg | Default | Description |
 |-----|---------|-------------|
-| `AI_GUARDIAN_VERSION` | `1.20.0` | PyPI version or `.whl` filename |
+| `AI_GUARDIAN_VERSION` | `1.21.0` | PyPI version or `.whl` filename |
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
 | `OPENCODE_VERSION` | `1.19.0` | OpenCode V1 version for both support images |
@@ -2018,6 +2047,16 @@ checks that this support list agrees with adapter aliases, setup modes,
 managed events, MCP/rules and transcript/session registries, installer
 surfaces, and release-readiness matrices.
 
+## Upstream CLI maturity
+
+Support status describes AI Guardian's integration coverage, not the upstream
+agent CLI's maturity or stability. When setup or `ai-guardian doctor` detects a
+CLI version below 1.0.0, it reports a non-blocking advisory because upstream
+interfaces may change before 1.0.0. This does not mean the integration is
+misconfigured. If the CLI version is unavailable or cannot be parsed, AI Guardian
+does not classify it as pre-1.0. See [Troubleshooting](TROUBLESHOOTING.md#general-diagnostics)
+for doctor output details.
+
 ### Codex and ChatGPT desktop scope
 
 `OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** in the
@@ -2055,6 +2094,9 @@ upstream distinction.
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
 
 ## IDE-specific home and configuration paths
+
+For removal and package-first recovery, see [Uninstall and orphan recovery](UNINSTALL.md),
+including the explicitly unverified per-host missing-runtime lifecycle matrix.
 
 AI Guardian resolves user-level setup, MCP registration, verification, audit,
 and supported session paths from the same environment-variable rules. An
@@ -2157,6 +2199,12 @@ future integrations. For this repository, the main evidence paths are
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
 | Junie | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 
+Tray session-pause controls remove a session immediately when a normalized
+`SessionEnd` event is received. For integrations without a reliable end event,
+hook activity within the last 30 minutes is the documented liveness fallback;
+this does not inspect whether the IDE process is open. Directory-wide controls
+remain available to callers without stable session identities.
+
 The Codex row applies to Codex CLI and desktop Codex mode only. Regular
 ChatGPT mode does not run these Codex lifecycle hooks.
 
@@ -2178,7 +2226,7 @@ integration guides.
 | Grok Build | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported; only PreToolUse can block |
 | OpenAI Codex (CLI + Desktop) | Command hooks | UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported (five managed events) |
 | Windsurf | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
-| Gemini CLI | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| Gemini CLI | Command hooks | SessionStart, BeforeAgent, BeforeTool, AfterTool | Supported |
 | Cline / ZooCode | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | Kiro | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | Augment Code | Command hooks | PreToolUse, PostToolUse | Supported |
@@ -2216,11 +2264,12 @@ Coverage per agent depends on which hooks are available. This table shows repres
 
 Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
 
-Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus UserPromptSubmit where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
+Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus the equivalent prompt event where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Gemini uses its `BeforeAgent` event for prompt checks; sensitive tool output is refused rather than replaced (see below). Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
 
 | Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
 |---|---|---|---|---|---|---|
 | secret_detected | Pre+Post | Enforce | Enforce | Enforce | Enforce | Advisory |
+| suspected_password (opt-in experimental) | Prompt/Pre/Post where exposed | Unqualified* | Unqualified* | Unqualified* | No post output; unqualified* | Advisory only |
 | secret_redaction | Post | Enforce | Enforce | Enforce | No (no tool output) | No |
 | pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
 | directory_blocking | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
@@ -2246,6 +2295,36 @@ Agents with full hook support not shown individually (Windsurf, Gemini CLI, Clin
 - **No** — not supported
 
 ## Known Limitations
+
+### Gemini CLI — sensitive tool results are refused, not replaced
+
+Gemini's native `AfterTool` payload exposes model-visible output as
+`tool_response.llmContent`, including structured text parts. AI Guardian scans
+that content, not just its separate display text. Gemini CLI 0.67.0 ignores
+`updatedToolOutput`, so requests to redact/sanitize a result instead return a
+native `decision: deny`. Gemini replaces the original model and display results
+with a fixed refusal. Clean results are unchanged; this is containment through
+refusal, not delivery of sanitized output.
+
+### Password-likelihood boundary qualification
+
+`suspected_password` is a default-off local heuristic, not a known-vault match or
+proof that a string is secret. **No real host/version/platform is yet qualified
+for pre-model prevention by this feature.** Shared unit/UX response tests do not
+establish host compliance. This applies to every supported agent, including those
+otherwise shown as having full hooks. In particular, post-tool denials or output
+replacement can be ignored, observation-only callbacks are too late, and input
+arguments may already have been generated by the model before a pre-tool check.
+Antigravity has no post-tool content, MCP-only modes are advisory, and transcript
+scans are retrospective. Existing credential support ratings are unchanged.
+
+Once explicitly enabled, the default Ask outcome reuses existing local/remote
+tray approval with private Allow Once / Block and denies without approval. The
+optional block outcome requests denial for qualified contextual candidate classes
+and incomplete analysis; ambiguous candidates stay advisory in every mode. No automatic
+heuristic PostToolUse transformation is claimed. Explicit full-span text
+sanitization is not itself host-boundary evidence. See the
+[scope, budgets and per-host manual evidence protocol](security/PASSWORD_LIKELIHOOD.md).
 
 ### Claude Code upstream issues
 
@@ -2378,10 +2457,11 @@ rewriting healthy Codex hooks.
 
 Violation records use `context.ide_type` for the stable integration identity,
 independently of the response protocol. Codex CLI and Codex mode in ChatGPT
-desktop both record `codex`, while Claude-compatible response formatting is
-preserved. This identity does not indicate coverage for regular ChatGPT mode;
-that mode is outside the current Codex hook enforcement path. Other adapters
-that share Claude-compatible formatting use their own stable values, such as
+desktop both record `codex`. Its responses share the Claude-compatible envelope,
+with Codex-specific required fields for PreToolUse denials. This identity does not
+indicate coverage for regular ChatGPT mode; that mode is outside the current Codex
+hook enforcement path. Other adapters that share Claude-compatible formatting use
+their own stable values, such as
 `windsurf`, `augment`, `opencode`, and `crush`.
 Payloads that do not identify an integration use `unknown` rather than being
 attributed to Claude Code.
@@ -2510,6 +2590,16 @@ the existing nonce attestation, and a failed attestation registers no MCP tools.
 If npm is unavailable or the install fails, setup leaves the extension in place
 and reports the retry command.
 
+Pi can advertise its session transcript path before creating the file. AI Guardian
+records byte zero for this expected initial absence without creating a fabricated
+transcript, then scans the first persisted content when it appears. Other initial
+I/O errors still follow the configured scan-error policy; existing transcript
+baselines are unchanged.
+
+Pi's exact native `bash` tool is normalized to canonical `Bash` for shell permissions,
+SSRF and configuration-exfiltration checks before execution. Custom and MCP tool
+names are not rewritten.
+
 This is agent-level protection for activity routed through a user-controlled Pi
 process. It does not enforce policy on activity outside that process; OpenShell
 or another outer runtime boundary is required for that enforcement. Pi setup
@@ -2545,6 +2635,13 @@ generated files and reports that server activation is unverified. Unknown or
 unavailable CLI versions retain the V1 compatibility fallback; an existing
 generated V2 plugin is preserved when the runtime cannot report a version. The
 two generations cannot share one active `opencode` executable on the same PATH.
+V2 file tools normalize native `path` and compatible legacy file aliases through
+the same adapter/direct-policy boundary; malformed or conflicting targets remain
+fail-closed. Per-event session metadata supplies the current workspace, and the
+OpenCode checker child uses that directory for both direct and daemon-forwarded
+policy evaluation. Plugin/server startup directories are not workspace fallbacks.
+Safe tool diagnostics distinguish input failures, immutable targets, and ordinary
+permission denials without exposing raw tool payloads or stored reasons to MCP.
 Both support images bundle OpenCode V1 `1.19.0`. The OpenShell selector exposes
 OpenCode with an explicit agent profile; the implemented `claude` profile uses
 native Vertex AI with gateway-owned Google Cloud ADC. That path still requires
@@ -2577,7 +2674,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Grok Build | Low | Hook contract and isolated tests are covered; real host and passive-event behavior remain limited |
-| Gemini CLI | Low | Hook format implemented but limited testing |
+| Gemini CLI | Medium | Current grouped settings format and hook enforcement covered by the local-mock real-agent smoke matrix; live provider qualification remains manual |
 | Antigravity CLI | Low | Hook adapter implemented based on documentation; limited real-world testing |
 | Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
 | Windsurf | Low | Hook format implemented but limited testing |
@@ -2643,7 +2740,7 @@ JSON object so error payloads are not echoed.
 | Cline | JSON `cancel` field | `{"cancel": true, "reason": "..."}` |
 | Kiro | Exit code 2 (PreToolUse) or 1 (other) + stderr | stderr = error message |
 | Windsurf | Exit code 2 + stderr | stderr = error message |
-| Codex | Same as Claude Code for shared events; `PermissionRequest` uses the Codex nested deny decision | Pre-tool denials use `hookSpecificOutput.permissionDecision`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
+| Codex | Claude-compatible envelope; `PreToolUse` deny requires `permissionDecisionReason`; `PermissionRequest` uses the Codex nested deny decision | `PreToolUse`: `hookSpecificOutput.permissionDecision = "deny"` plus a non-empty sanitized `permissionDecisionReason`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
 | OpenCode V1/V2 | V1: Claude-compatible JSON bridge; V2: domain-hook throw/mutation | V1: Claude-compatible JSON bridge; V2: thrown block or mutable `event.result` |
 | Pi | Same as Claude Code | Same as Claude Code via the generated extension |
 | Crush | Same as Claude Code | Same as Claude Code |
@@ -2659,7 +2756,7 @@ When ai-guardian detects a non-blocking issue (warn/log mode) or injects securit
 |-------|------------------|-------------------|--------|--------|
 | Claude Code | `systemMessage` | `hookSpecificOutput.additionalContext` | All (incl. PreToolUse deny) | Confirmed |
 | Augment | `systemMessage` | `hookSpecificOutput.additionalContext` | All (incl. PreToolUse deny) | Confirmed (inherits Claude Code) |
-| Codex | `systemMessage` | `hookSpecificOutput.additionalContext` | All (incl. PreToolUse deny) | Confirmed (inherits Claude Code) |
+| Codex | `systemMessage` | `hookSpecificOutput.additionalContext`; required `permissionDecisionReason` on PreToolUse deny | All (incl. PreToolUse deny) | Supported; Codex-specific reason is sanitized |
 | OpenCode | `systemMessage` | `hookSpecificOutput.additionalContext` | All (incl. PreToolUse deny) | Best-effort (bridge plugin) |
 | Crush | `systemMessage` | `hookSpecificOutput.additionalContext` | PreToolUse (incl. deny) | Best-effort (compatible format) |
 | Cursor | `user_message` | `agent_message` | All (incl. PreToolUse deny) | Confirmed |
@@ -4078,6 +4175,23 @@ than leaving them implicit.
   or process handling differs. Record unsupported platforms explicitly.
 - [ ] Update the relevant CI jobs, including container build, scenario tests,
   CLI version health, and release-readiness checks.
+- [ ] Keep the real-agent hook smoke matrix in sync when adding/changing a CLI or
+  hook scanner: extend `scripts/agent_cli_test.py` and its local mock-protocol
+  adapter/cases, cover the violation and clean-allow paths in
+  `tests/unit/test_agent_cli_test.py` and `test_agent_cli_tool_results.py`, and wire
+  the CLI into `.github/workflows/release-readiness.yml`. Use synthetic inputs and a local
+  mock only; preserve explicit ToS/credential gates. If the scanner cannot be
+  exercised through a supported CLI hook, record why this check is not applicable.
+- [ ] Verify hook stages, not just findings: prompt probes need prompt events;
+  pre-tool deny probes need native tool offers and pre-tool events; output probes
+  need real execution, pre/post events, and provider-boundary containment. Require
+  a correlated clean tool result too. Cover the smoke UX contract in
+  `tests/ux/test_user_experience_contract_agent_cli_smoke.py`; client limitations
+  and unapproved hooks must fail rather than silently qualify.
+- [ ] Keep release-readiness runtime coverage explicit about image/version lanes:
+  Gemini CLI runs in the normal support image; OpenCode runs against the bundled
+  V1 image and a separate V2 smoke-only image. The V2 image must not be described
+  as bundled or deployment-qualified without a separate support decision.
 - [ ] Record the tested image digest, CLI versions, provider/model/region,
   gateway version, host OS, and known failures in the issue or pull request.
 
@@ -4099,9 +4213,74 @@ than leaving them implicit.
 
 For an existing CLI, rerun the applicable sections whenever its command,
 profile, image/base image, version pin, provider, auth bridge, policy, model
-route, or lifecycle behavior changes. Runtime support is not complete until
+route, lifecycle behavior, or real-agent smoke adapter/case changes. Runtime support is not complete until
 the normal container and OpenShell status are both documented, even when one
 of them is explicitly unsupported.
+
+# === docs/CODEX_SANDBOX_RUNTIME.md ===
+
+# Codex Linux sandbox runtime troubleshooting
+
+AI Guardian's Codex smoke requires Codex's normal `workspace-write` sandbox. A
+Bubblewrap startup failure is a failed smoke case—not evidence that the tool ran,
+and not a reason to switch Codex to unrestricted execution.
+
+## Runner message
+
+When the smoke's privacy-safe aggregate diagnostics classify a function result as
+`permission_denied_bwrap`, the runner prints an explanation and points here. It
+does not print the raw Codex error. The case remains failed, and execution,
+PostToolUse, output-containment, and clean-exit assertions are not waived.
+
+## Known local Podman failure
+
+On Fedora 44 with rootless Podman and Codex CLI 0.167.0, a retained smoke container
+reproduced:
+
+```text
+bwrap: Can't mount devpts on /newroot/dev/pts: Permission denied
+```
+
+In that same container, nested user/mount/pid/network/ipc/uts namespace creation
+and a tmpfs mount succeeded, while a devpts mount failed. Podman reported SELinux
+and seccomp enabled, AppArmor disabled, and the default seccomp profile. This
+narrows the symptom to Bubblewrap's devpts mount; it does **not** establish which
+kernel or container security layer denied it. Do not infer a specific SELinux or
+seccomp rule from this message alone.
+
+## GitHub Actions is a different runtime
+
+The Release Readiness container job currently runs on `ubuntu-26.04` with Docker
+and uses the regular `ai-guardian sandbox create` path. Local Linux Podman runs use
+a smoke-specific startup gate and egress firewall. Either environment may pass or
+fail independently; a successful GitHub Actions run does not qualify every local
+Docker/Podman/SELinux/AppArmor setup. Check the workflow result for each configured
+CLI smoke before claiming readiness. Claude Code remains conditional on the
+repository's explicit terms-of-service consent variable.
+
+The Codex CLI smoke step currently has a temporary `continue-on-error` allowance
+so this unresolved runtime issue does not block the release process. A failure is
+reported in the workflow warning and job summary, but remains an unqualified Codex
+result—not a passing smoke. Other CLI and OpenShell failures remain blocking. Remove
+the exception only after Codex executes the native tool and passes the existing
+execution, output-containment, and clean-exit checks.
+
+## Safe response
+
+- Keep Codex in `workspace-write` and keep the outer egress firewall and all smoke
+  evidence checks enabled.
+- Diagnose the specific runtime denial using read-only host/runtime evidence, or
+  run the smoke on a runtime that supports the required Bubblewrap mounts.
+- Do not use `danger-full-access`, setuid Bubblewrap, an unconfined AppArmor
+  profile, or weakened seccomp/SELinux/container policy as a workaround without
+  explicit review and authorization.
+- Do not treat tool offers, hook events, or violation records alone as proof of
+  command execution or output containment.
+
+OpenAI Codex issue [#35547](https://github.com/openai/codex/issues/35547) tracks
+the related need for actionable diagnostics when Linux sandbox backends are
+unavailable. Its reported AppArmor/old-kernel failure differs from the Fedora
+`devpts` reproduction above.
 
 # === docs/CONFIGURATION.md ===
 
@@ -4131,6 +4310,18 @@ scheduled for removal in 2.x (#2194).
 
 ## Configuration Files
 
+The experimental [password-likelihood heuristic](security/PASSWORD_LIKELIHOOD.md)
+is global-only, default-off in every profile and controlled separately from secret
+engine selection. Its Secrets-page controls auto-save human changes to the selected
+daemon's global policy, even when a project is selected; viewing the page or
+changing the outcome does not enable analysis. `ask` is the
+default enabled outcome, reusing local/remote private Allow Once / Block approval
+and denying when approval is unavailable. `warn` is advisory and `block` requests
+denial only for contextual candidates or incomplete analysis. Ambiguous findings
+remain advisory; SDK checks deny unresolved Ask without opening a UI.
+Real-host pre-model prevention remains unqualified. Project overlays,
+tool payloads and project exclusions cannot activate or weaken this policy.
+
 AI Guardian loads configuration from multiple sources in a specific priority order:
 
 ### 1. User Configuration (Default)
@@ -4157,7 +4348,69 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **What can be overridden**: Prompt injection, secret scanning, PII, SSRF, permissions, directory rules, annotations, and more.
 
-**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`.
+**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`, `violation_notifications`.
+
+### Daemon REST TLS
+
+**Trying HTTPS on a single Linux PC?** Start with
+[Test HTTPS on your own PC](MULTI_DAEMON_TRAY.md#test-https-on-your-own-pc):
+four steps for the local daemon REST API, without VMs, SSH, private-CA
+administration or system-wide certificate installation. This does not change
+the Web Console webpage to HTTPS.
+
+**Setting up a headless Ubuntu VM from PyPI?** Follow the ordered
+[Ubuntu VM HTTPS/SSH guide](UBUNTU_VM.md) for setup, private certificates,
+VM Console bootstrap and workstation enrollment. It targets an **upcoming
+release**: PyPI 1.20.0 lacks this workflow; published-artifact qualification and
+the confirmed minimum supporting version remain pending.
+
+`daemon.rest_tls` enables optional native HTTPS without changing existing bind
+addresses, localhost HTTP defaults, REST fields or daemon-token authentication.
+Configure `enabled` (default `false`), `cert_file` and `key_file`; local REST
+callers use `client.ca_file`, `client.server_name` and the optional additional
+`client.certificate_sha256` leaf pin (all empty by default). Empty CA/name use
+system trust and the connection hostname/IP. Certificate SAN/expiry/chain
+verification is always required; a pin never replaces it.
+
+All built-in profiles include these same disabled TLS defaults; selecting a
+security profile does not provision certificates, enroll trust, or enable HTTPS.
+
+These are global-only settings, exposed under **Global Settings → Daemon REST
+HTTPS**. Paths refer to the selected daemon's host, not the browser/Console host.
+The form stores paths, never key contents. Saving does not restart the listener:
+certificate/key/listener changes require an explicit daemon restart. Invalid TLS
+prevents REST startup rather than selecting HTTP. Existing local IPC remains
+independent of this listener.
+
+Manual targets store equivalent client-only `tls` trust in `tray-targets.json`.
+Remote hook/SDK clients accept `AI_GUARDIAN_DAEMON_CA_FILE`,
+`AI_GUARDIAN_DAEMON_SERVER_NAME`, and `AI_GUARDIAN_DAEMON_CERT_SHA256` alongside
+their existing URL/token settings. See [native HTTPS, private-VM provisioning,
+pairing and rotation](MULTI_DAEMON_TRAY.md#native-https-and-explicit-certificate-trust)
+for all fields, file protection, tunnel identity and certificate lifecycle.
+
+### SSH alias discovery
+
+`daemon.tray.ssh_alias_discovery` is workstation-global and off by default in setup,
+the example and every built-in profile. Set `enabled: true` once to offer local SSH
+aliases at tray startup/refresh and in the loopback Web Console picker. The optional
+`alias_prefix` defaults to `"ai-guardian-"`; `""` discovers concrete existing aliases
+without renaming. Save these settings in the **workstation Console home `/` → SSH
+daemon connections** card (from a dashboard, click the **AI Guardian** header),
+not a remote daemon/project settings page. The development tray also offers
+**Discover SSH aliases...**; see the VM guide's release gate before assuming
+availability in a published build. Discovery never probes hosts or grants
+trust; review and explicit identity confirmation remain mandatory. See
+[SSH config locations, bounded Includes, Match behavior and persistent dismissal](MULTI_DAEMON_TRAY.md#discover-ssh-aliases).
+
+For `support`, defaults select `export_destination: "github-discussions"`
+and `github_category: "bug-reports"`; only `"q-a"` is an alternative category.
+Preparation is local and public publication requires native user-only approval.
+Empty/missing destinations use GitHub. Explicit local/S3/GCS/email settings remain
+in effect for tray, CLI and MCP. For GitHub, **Contact supports** offers a local-only
+ZIP or explicitly approved public Discussion, without changing those settings.
+See [Support bundles](SUPPORT.md) for migration,
+authentication, public-visibility warnings, and content/attachment limits.
 
 ### Hook Process Failure Policy
 
@@ -4898,15 +5151,33 @@ ai-guardian console --web --port 8080
 The console binds to `127.0.0.1` by default. Keep the host restricted to a
 trusted interface unless access control and network isolation are configured.
 
+### WSL2 (Experimental)
+
+Run the Console inside the WSL2 Linux distribution, for example with
+`ai-guardian console --web`. The web server is a Linux process in WSL; when WSL
+localhost forwarding is available, you can open its printed localhost URL in a
+Windows browser. Using that browser does not move the server to Windows. Tray
+and native-dialog availability depends on the Linux graphical-session and
+desktop integration, and is not guaranteed by this experimental platform
+status. WSL1 is not included, and WSL2 has not received comprehensive platform
+testing. See
+[WSL2 console troubleshooting](TROUBLESHOOTING.md#wsl2-console-troubleshooting)
+for manual startup and connection checks.
+
 The historical `ai-guardian tui` command remains as an alias for
 `ai-guardian console`; it now opens the browser console.
 
 ## Pages
 
 - **Security Dashboard**: Multi-daemon status and feature navigation
+- **Daemon picker / SSH connections**: Pair an authorized SSH host, confirm its
+  daemon TLS identity, view reconnect/offline state, and remove saved pairings
+  (loopback-bound Console only; [SSH workflow](MULTI_DAEMON_TRAY.md#add-daemon-via-ssh))
 - **Global Settings**: Effective security configuration and search
+- **Engine Config**: Select built-in or installed secret-scanning engines with
+  immediate save; advanced JSON configuration remains available
 - **Violations**: Filterable violation records by daemon and type
-- **Violation Logging**: Violation retention and output settings
+- **Violation Logging**: History retention, remote mirroring, and notification settings
 - **Metrics**: Violation counts by type and severity
 - **Detection Patterns**: Read-only built-in and pattern-server rules
 - **Auto Directory Rules**: Discovered directory permission rules
@@ -4918,6 +5189,7 @@ The historical `ai-guardian tui` command remains as an alias for
 - **IDE Conversations**: IDE transcript inspection
 - **Scan Configure**: False-positive analysis and suppression configuration
 - **Daemon Detail**: Pause, resume, reload, and recent violations
+- **About**: Version/system details and **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**
 
 To correlate an SDK run with a hook-based IDE session, provide the SDK
 `RunContext.run_id` as the hook event's `run_id`. The matching values appear as
@@ -4943,6 +5215,12 @@ The preferred dialog setting supports `auto`, `tkinter`, `nicegui`, and
 `headless`. Existing persisted `textual` values are treated as `nicegui` for
 configuration compatibility. The environment override is
 `AI_GUARDIAN_PREFERRED_UI`.
+
+Automatic dialogs prefer **Native → Tkinter → NiceGUI** among implementations
+that preserve the entire interaction. Explicit toolkit choices are exclusive;
+only proven startup unavailability can advance an automatic flow. See the
+[modal provider matrix](MODAL_PROVIDERS.md) for capability, placement, host-path,
+progress and user-only support-consent exceptions and desktop verification.
 
 ## System Tray
 
@@ -5991,7 +6269,7 @@ Configurations are merged in this order (later overrides earlier):
 3. **User global config** (`~/.config/ai-guardian/ai-guardian.json`)
 4. **Remote configs** (enterprise policies, highest priority)
 
-Exception: fields marked `"immutable": true` in remote configs cannot be overridden by any lower-priority source. Global-only sections (`daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`) cannot be overridden by project config.
+Exception: fields marked `"immutable": true` in remote configs cannot be overridden by any lower-priority source. Global-only sections (`daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`, `violation_notifications`) cannot be overridden by project config.
 
 ### How do I use .aiguardignore.toml for project-level ignores?
 
@@ -6087,10 +6365,12 @@ existing scope-specific lifetime rules.
 Copy the full stable `session_key` from `ai-guardian daemon status`, not a display
 name, raw session ID, or directory. Unknown, expired, and unsupported session
 keys fail without falling back to a directory-wide or global operation. Session
-pauses expire on their timer, SessionEnd, 24 hours without hook activity, or
-daemon restart. Callers without stable hook identities are covered by global
-and directory pauses, not individual-session controls. Resume removes only the
-requested scope's pause; other global, directory, or session pauses still apply.
+pauses expire on their timer, SessionEnd, 30 minutes without hook activity, or
+daemon restart. The inactivity timeout is the fallback for integrations without a
+reliable session-end event; it reflects hook activity, not whether an IDE process
+is open. Callers without stable hook identities are covered by global and directory
+pauses, not individual-session controls. Resume removes only the requested scope's
+pause; other global, directory, or session pauses still apply.
 
 The older `ai-guardian daemon pause --minutes 15 --dir DIRECTORY` and
 `ai-guardian daemon resume --dir DIRECTORY` forms remain supported, as do their
@@ -6191,7 +6471,16 @@ ai-guardian scan --diff --staged                 # Scan git staged changes only
 
 ### How do I get line numbers in scan output?
 
-Line numbers and code snippets are included by default in v1.11.0 scan output. No extra flags needed.
+Default terminal output reports finding counts and relative file paths; it does
+not print scanner messages, line positions, or source snippets. Absolute paths
+under the user's home directory are displayed with a `$HOME` prefix. For detailed
+local results, use `--json-output` or `--sarif-output`; these reports may contain
+source-derived content and should be handled as sensitive files.
+
+```bash
+ai-guardian scan . --json-output results.json
+ai-guardian scan . --sarif-output results.sarif
+```
 
 ### How do I suppress verbose logging in scan output?
 
@@ -9018,6 +9307,16 @@ even when the integration also has GUI, plugin, or MCP surfaces.
   verification behavior for the integration.
 - [ ] Preserve unrelated configuration and existing user-owned hooks during
   installation and reconciliation.
+- [ ] Keep `scripts/ai_guardian_recovery.py`'s standalone inventory aligned with
+  setup: selected user/project scopes, relocated homes, current/owned legacy
+  registrations and generated artifacts. Never depend on importing the package.
+- [ ] Verify independent POSIX and native Windows recovery after package-first
+  removal: preview, unique backups with documented access controls, third-party preservation,
+  safe malformed/unwritable handling, partial-failure exit status and idempotency.
+- [ ] Update [the missing-runtime lifecycle matrix](UNINSTALL.md#missing-runtime-lifecycle-matrix)
+  separately from application startup-failure tests. Record live host version,
+  event/platform evidence or explicitly mark it unverified; do not weaken strict
+  denials, automatically remove protections, or expose cleanup as an agent tool.
 - [ ] Add the MCP client registration in `src/ai_guardian/setup/mcp.py` when
   the agent supports the MCP advisor.
 - [ ] For every local/remote or desktop/cloud variant, verify the MCP
@@ -10445,7 +10744,7 @@ also be returned. An MCP startup failure reports `startup_failure` or
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `get_violations` | `violation_type?`, `limit?` | violation list with file:line and policy decision | Recent security violations |
+| `get_violations` | `violation_type?`, `limit?` | violation list with file:line, policy decision, optional safe input diagnostics/correlation | Recent security violations |
 | `get_config` | `project_dir?` | feature enabled/disabled map | Current security posture |
 | `get_scanner_status` | — | installed scanners + versions | Scanner inventory |
 | `get_scanner_supported` | — | all available scanners | What can be installed |
@@ -10453,12 +10752,29 @@ also be returned. An MCP startup failure reports `startup_failure` or
 | `get_metrics` | `since_days?` | stats by type/severity | Violation statistics |
 | `doctor` | — | check results with fix hints | Health check |
 
+Use `sensitive_finding` to query the consolidated, privacy-safe sensitive
+category. The legacy filters `secret_detected`, `image_secret_detected`, and
+`pii_detected` remain supported and match consolidated records; a current record
+does not retain which sensitive subtype produced it. The canonical filter also
+includes type-specific sensitive records from older history.
+
+Tool-permission entries can include `input_diagnostics` with fixed validation
+subreasons and schema-recognized argument names/types, never payload values or
+arbitrary key strings. Available `id`, `session_id`, `tool_use_id`, `message_id`,
+`host_version`, `integration_version`, and `workspace_source` are additive bounded
+metadata; unavailable values are explicit. Tool identity also falls back to the
+stored `blocked.tool_name` used by the policy logger. Missing/invalid input gets
+validation guidance, not advice to obtain admin permission. Raw stored reasons,
+session titles, rule patterns, and protection-suppression instructions are not
+forwarded through these diagnostics. See
+[Tool input diagnostics](VIOLATION_LOGGING.md#tool-input-diagnostics).
+
 ### Support Bundle
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `prepare_support_bundle` | — | bundle_id, temp_path, file list | Create sanitized diagnostics |
-| `send_support_bundle` | `bundle_id` | sent/error | Send after user review |
+| `prepare_support_bundle` | `title?`, `description?`, `category?` | bundle_id, temp_path, destination, file list/redaction counts | Prepare locally; never publish |
+| `send_support_bundle` | `bundle_id` | sent/error; `discussion_url` on GitHub success | Native final public approval; no agent approval parameter |
 
 ## Resources
 
@@ -10477,7 +10793,7 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 | `check_path` | allowed/denied for operation | Which rule matched, full rules list |
 | `check_command` | allowed/blocked + reason category | Which pattern matched, the deny list |
 | `get_config` | Feature on/off, action mode | Allowlist patterns, regex, rule details |
-| `get_violations` | Type, timestamp, file:line, action, normalized policy decision | Matched pattern internals or raw content |
+| `get_violations` | Type, timestamp, file:line, action, normalized policy decision, vetted input diagnostics/correlation | Matched pattern internals, raw input/content, arbitrary stored reasons |
 | `get_patterns_list` | Category names and counts | Regex patterns |
 
 ### Self-protection
@@ -10502,24 +10818,64 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 
 ## Support Bundle Flow
 
-The support bundle uses a two-step process with user approval:
+The support bundle uses local preparation and native user approval:
 
 1. **Prepare**: `prepare_support_bundle()` creates a sanitized temp directory (protected by `.ai-read-deny`)
 2. **Review**: AI shows the file list with redaction counts and the temp path — the user reviews and deletes unwanted files
-3. **Send**: After user approval, `send_support_bundle(bundle_id)` sends remaining files to the configured destination
+3. **Send**: After the user's local file review, `send_support_bundle(bundle_id)` opens the configured delivery flow. GitHub has a **Destination** dropdown and **Next**, offering **Create ZIP only** (default; no authentication/upload) or **Gist + Discussion** (Next disabled without GitHub credentials). Public delivery first requires native approval of the exact files uploaded to an unlisted, user-owned Gist, then separate approval of the exact Discussion containing the actual Gist link. Unlisted is not private. The account, fixed repository/category, and exact title/body/files are backend-verified; the agent cannot approve either step on the user's behalf.
 
-Sanitized files include: config (tokens redacted), violations (paths truncated), metrics (aggregate only), doctor results, system info, and full log (secrets/PII redacted).
+Files are alphabetical with **doctor.json** first and checked by default on new
+lists; saved selections, including deselections, are retained. The title starts
+blank unless supplied. GitHub review requires a title and message, ZIP/legacy
+review requires a message, and both need at least one selected diagnostic.
 
-Default destination: `~/.local/state/ai-guardian/support-bundles/`. Configure via `support.export_destination` (local path, `s3://bucket/prefix/`, or `gs://bucket-name/`).
+Sanitized files include: AI Guardian config, individual CLI settings/hooks/MCP config copies (not auth stores or conversations), all violation records from the last 12 hours (paths redacted, no count/size cap), metrics (aggregate only), doctor results, system info, and the last 12 hours of logs (secrets/PII redacted, newest text retained). Only the log may be visibly truncated; collected configuration and other structured files remain complete and fully viewable through next/previous pages. The user can delete any unwanted prepared files from the printed review directory before sending; original CLI settings remain unchanged.
+
+A local destination is **export only**, not a support submission. Results identify
+`delivery_status: local_only`, give the retained directory, and state that no
+Discussion was created. That reviewed copy remains available across CLI processes
+within the original bundle lifetime; removed files are not restored.
+
+**Create ZIP only** results use `delivery_status: zip_only` and return `zip_path`.
+Show that local path and explain that nothing was uploaded/sent, no Discussion
+was created, and the ZIP is not encrypted. The user arranges any later sharing;
+there is no automatic email or Gist upload. The original bundle remains available
+to `support send` until expiry, with its configured destination unchanged.
+
+Successful public results return `discussion_url` and `gist_url`. If Discussion
+publication is cancelled or fails after Gist upload, show `gist_url` so the user
+can manage/delete it; `delivery_status: gist_only` is not a completed support
+submission. Deleting a Gist cannot retract copies or forks. Retries reuse a verified
+Gist rather than uploading a duplicate, and uncertain upload/publication outcomes
+must never be blindly retried. There is no automatic login or scope upgrade.
+
+Default: public **GitHub Discussions** in `RedHatProductSecurity/ai-guardian`,
+**Bug Reports** (`bug-reports`) preselected and **Q&A** (`q-a`) the only alternative.
+Sanitization is not a confidentiality guarantee. Preparation stays local; only
+the user may inspect protected contents. Successful publication returns
+`discussion_url`; direct the user there, not to a separate support contact.
+Empty/missing destinations use GitHub; explicit local/S3/GCS/email destinations
+remain available. Only the prepared log uses a marked size-bounded excerpt from
+the last 12 hours; View and Send never apply different size crops. Complete files
+that exceed the final GitHub limit require fewer selected files or a separate
+private channel, not hidden truncation. Headless public approval is not supported.
+Unsupported binary or still-oversized edited/imported files remain local for manual delivery;
+uncertain publication outcomes must not be blindly retried. See
+[Support bundles](SUPPORT.md) for authentication, consent, limits, and migration.
 
 ### CLI Alternative
 
 The same prepare/send workflow is available via the CLI for direct use without an AI agent:
 
+If the agent CLI or MCP is broken, run `ai-guardian support send --prepare`
+from your own terminal. It requires neither MCP nor a running daemon and does
+not auto-start the daemon. The native final public-consent dialog still applies;
+see [the standalone support recipe](SUPPORT.md#if-your-agent-cli-or-mcp-is-unavailable).
+
 ```bash
 ai-guardian support prepare                    # Prepare bundle, show file summary
 ai-guardian support send                       # Send last prepared bundle (with confirmation)
-ai-guardian support send --prepare --yes       # One-shot: prepare + send (for CI)
+ai-guardian support send --prepare --yes       # Legacy exports only; never skips public approval
 ai-guardian support status                     # Show destination, auth, pending bundles
 ai-guardian support prepare --output ./bundle  # Save to specific directory
 ai-guardian support prepare --no-log           # Exclude log file
@@ -10868,6 +11224,424 @@ ai-guardian daemon start
 
 With `fallback_on_error: "heuristic"` (default), detection falls back to regex patterns when the daemon is unavailable.
 
+# === docs/MODAL_PROVIDERS.md ===
+
+# Modal providers and runtime fallback
+
+AI Guardian uses **Native → Tkinter → NiceGUI**, in that order, among
+implementations that preserve the **entire** interaction. This is a capability
+policy, not a promise that every family has three implementations. NiceGUI and
+Python 3.10+ remain required. There is no interactive terminal/Textual fallback.
+
+## Preferences and lifecycle
+
+`console.preferred_ui` and its environment override select:
+
+| Preference | Behavior |
+|---|---|
+| `auto` | Try eligible providers in the matrix below. |
+| `tkinter` | Tk only; no native or browser replacement if unavailable. |
+| `nicegui` | NiceGUI only; no Tk or native replacement if unavailable. |
+| `headless` | No dialogs or browser launches. |
+
+An unavailable requested implementation produces the family's safe no-UI result.
+Existing persisted `textual` values still resolve to NiceGUI, not a terminal UI.
+
+**Only a proven pre-display startup failure advances the cascade.** Missing
+executables and Tk initialization failures qualify. Isolated rich-dialog children
+track the root's Map event and explicitly report failures before mapping. The
+message child retains its separate mapped-readiness protocol from #2569.
+The Cocoa bridge reports initialization failure explicitly before showing its
+first window; a failure in its later snooze step is terminal. Browser flows latch
+possible visibility before requesting the tab. Auxiliary file panels latch it
+before entering the panel, since their withdrawn Tk parent does not map.
+`None`, `False`, Cancel, Escape, title-bar Close, an answered prompt, a timeout,
+or an error of unknown visibility never authorize another provider. A failure
+starting a later snooze step cannot restart the initial prompt in another toolkit.
+The same rule holds across host input, identity review and results in a form flow.
+Modal children have no user-reading deadline.
+
+Native command-line tools do not provide a reliable mapped-window signal. Only
+missing executables and recognized display-initialization diagnostics permit
+trying another implementation; other errors stop conservatively. A stderr warning
+alone is not startup proof. Linux native dismissal is final. Diagnostics report
+provider/stage/error class, not raw child stderr, dialog content or result data.
+
+## Platform and capability matrix
+
+N = native implementation, T = Tkinter, G = NiceGUI/browser. An arrow is a
+**pre-display** fallback, not a second prompt after cancellation. Implementations
+listed as absent are intentionally ineligible, not silently emulated with fewer
+controls.
+
+| Modal family / entry point | macOS | Linux | Windows |
+|---|---|---|---|
+| Plain messages, health/results, plugin modal output: `plugins.show_dialog` | N AppleScript → T → G | N desktop-ordered zenity/kdialog → T → G | N PowerShell WinForms MessageBox → T → G |
+| Linked About/message | T → G; N lacks explicit link controls | T → G; same exception | T → G; same exception |
+| Proactive action/upgrade/snooze: `ProactivePromptDialog.show` | N JXA/Cocoa NSAlert/accessory controls → T → G | N zenity question/extra buttons or kdialog menu → T → G | T → G; no complete native action/snooze implementation |
+| Structured setup/profile/per-IDE choices and later/snooze | N JXA/Cocoa checkbox pairs/profile popup → T → G | T → G; native tools do not implement the complete setup form | T → G; same capability restriction |
+| Ask/security decision: CLI `prompt --mode ask` | T → G; native simple prompts lack full decision/edit controls | T → G | T → G |
+| Password-likelihood Ask: existing `prompt --mode ask`, private decision-only variant | T → G; same Ask providers, values withheld, Allow Once / Block only | T → G | T → G |
+| Tray-forwarded remote ask on macOS 14+ | G in subprocess; existing tray focus-safety Tk suppression remains | As above | As above |
+| Plugin parameter forms: `TrayPromptApp.run` | T → G | T → G | T → G |
+| Simple form flows / tray Add daemon via SSH and discovered-alias review: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | N desktop-ordered zenity/kdialog input/checklist → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
+| Tray Discover SSH aliases... settings: `run_form_flow` | N JXA/Cocoa two-step checkbox/prefix → isolated T → G | N desktop-ordered zenity/kdialog two-step checklist/prefix → isolated T → G | N PowerShell WinForms two-step checkbox/prefix → isolated T → G |
+| Multi-target plugin selection: `TrayTargetSelectorApp.run` | G only | G only | G only |
+| Working-directory picker: `working_dir.choose_directory` | N AppleScript choose folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms FolderBrowserDialog → isolated T |
+| SSH VM working directory: `run_form_flow` | N JXA/Cocoa optional absolute-path input → isolated T → G | N desktop-ordered zenity/kdialog input → isolated T → G | N PowerShell WinForms input → isolated T → G |
+| Tray Pause... daemon/project/session hierarchy: `open_pause_controls` | isolated T → G | isolated T → G | isolated T → G |
+| Browser form's auxiliary file/directory Browse | N AppleScript choose file/folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms OpenFileDialog/FolderBrowserDialog → isolated T |
+| Sandbox create/configuration/policy editor: `show_sandbox_form` | isolated T → G | isolated T → G | isolated T → G |
+| Sandbox deletion (copy exact name, then type it to confirm): `show_sandbox_confirmation` | isolated T → G | Same | Same |
+| Sandbox upload summary/errors and complete policy replacement review | isolated T → G; compact native confirmation is ineligible | Same | Same |
+| Sandbox live progress: `show_sandbox_progress` | isolated T; otherwise captured-output object | Same | Same |
+| Sandbox captured logs: `show_sandbox_log` | isolated T → G, complete scrollable/copyable text | Same | Same |
+| Support destination/bundle/View/ZIP/result/upload/publication review | Trusted isolated Tk desktop script only | Same | Same |
+| Web Console's already-open page/dialog controls | G, stays in the current browser session | Same | Same |
+
+### Explicit exceptions
+
+- **Tray-menu foreground handoff:** Standalone Tk windows launched by tray actions
+  are completed while withdrawn, mapped with a temporary raising hint, focused
+  after mapping, then deiconified/lifted/focused once more 200 ms later after the
+  hint is cleared (some window managers iconify the window during that handoff).
+  The shared modal helper applies this to messages/results, plugin parameters,
+  reusable SSH forms, proactive/setup/snooze prompts, Pause, and sandbox
+  configuration, progress, logs and confirmations. Support review keeps its
+  equivalent one-shot sequence inside the isolated user-consent renderer. Closing
+  before the callback is harmless; no window stays always-on-top or repeatedly
+  reclaims focus. Native OS dialogs and NiceGUI/browser windows retain their own
+  activation behavior. Native file/directory panels are different: their hidden
+  Tk owner establishes placement, then the OS panel owns focus, so the owner must
+  not schedule a delayed focus grab while the panel is open.
+- **Tray pause controls:** a complete hierarchy needs inline per-row duration/Resume
+  dropdowns, full identities, inherited-state explanations and
+  in-place refresh. Native simple forms do not implement this contract and are
+  ineligible; the shared dispatcher selects isolated Tk → isolated NiceGUI.
+  One child/window remains open across actions. Only display snapshots and narrow
+  row/action/duration events cross its stdin/stdout channel; credentials and
+  transport objects stay in the tray worker. Row tokens expire on refresh. Tk
+  maps with a brief topmost hint, clears it after 200 ms, then restores focus once
+  after the tray-menu handoff; topmost is never permanent.
+  Dropdowns start at inert placeholders. Selecting a duration pauses that row
+  immediately; a paused row instead offers Resume. There is no separate Pause
+  button or shared duration selector. The Tk window requests 1200 × 820 within
+  usable bounds, with width-fitting content and responsive label wrapping so the
+  action column remains visible on narrow screens. Close/Escape before any action changes nothing; closing never rolls back actions
+  already explicitly taken. Resume clears only the selected row's own pause.
+  Unknown/offline/unsupported rows remain visible with unavailable controls.
+  The same captured monitor context follows startup fallback and every refresh.
+  The initial Tk geometry is applied explicitly before monitor placement, so
+  single-monitor/no-context flows do not fall back to the canvas's small natural
+  size. Compact instructions keep controls first; full help/lifetime text remains
+  available in a collapsed in-window section without switching providers.
+- **Password-likelihood Ask:** reuses the existing local/remote transport and
+  modal dispatcher, with one operation-scoped Allow Once / Block decision. Both
+  providers withhold candidate text and omit source/persistent-exception controls;
+  there is no source-file recovery. Cancellation, timeout and unavailable approval
+  deny. Automatic display-less detection still permits registered remote tray
+  forwarding; explicit headless does not. A queued remote timeout is terminal.
+  Manually verify synthetic contextual/ambiguous/incomplete input, both decisions,
+  Close/Escape/timeout, provider startup-only fallback and exclusive preferences,
+  local and SSH tray forwarding/disconnect, and unchanged stronger credential
+  enforcement. These UI/transport checks do not establish the model boundary;
+  follow [password-likelihood qualification](security/PASSWORD_LIKELIHOOD.md).
+
+- **Placement:** with captured monitor context, native implementations without a
+  positioned window/owner are ineligible on **all** platforms. Messages,
+  confirmations and host-path pickers therefore start with isolated Tk; Linux's
+  zenity/kdialog forms/actions likewise defer to Tk. Cocoa forms/setup/actions and
+  WinForms simple forms retain native eligibility when the complete layout fits.
+  Restricted/unknown origins and small work areas use the complete scrollable Tk
+  implementation. Browser forms retain the context and show explicit manual-move
+  guidance rather than claiming URL launch places a window. Explicit preferences
+  remain exclusive. See [Physical-monitor placement](#physical-monitor-placement).
+- **Multi-target selection:** the existing NiceGUI-only implementation preserves
+  multi-selection, Select all, validation and disconnect cancellation. No native
+  or Tk implementation currently implements that complete contract. `tkinter`
+  and `headless` therefore return no selection; they do not silently open a browser.
+- **Host paths:** a browser upload/directory input cannot return an absolute host
+  path for a runtime command. Standalone pickers have no NiceGUI tier. Browse in a
+  browser parameter form is deliberately an auxiliary OS/Tk picker even with
+  `nicegui` selected; it never replaces the parent form or retries cancellation.
+  Browse inside a Tk form remains an owned Tk file panel.
+- **Progress:** no native or NiceGUI live-stream implementation preserves the
+  current output/status/Connect handshake. Those tiers are ineligible. The
+  captured-output object keeps the operation running without a live window;
+  failure details use the separate full log-review interaction, never a truncated
+  message. `nicegui`/`headless` use this object without starting Tk. A result/log
+  review after an operation is distinct from retrying its progress window.
+- **Support consent:** support's native, user-only review is a security boundary,
+  not an ordinary configurable modal. It remains isolated stdlib Tk with its own
+  exact-content upload/publication approvals. `headless` or unavailable Tk refuses
+  delivery and retains the bundle; no browser, terminal, agent approval, upload,
+  automatic credential upgrade or alternate consent tier is introduced. Selecting
+  Next is still not consent. Per-daemon preparation runs on the source, but every
+  review/consent window remains on the tray user's desktop. All review stages show
+  the captured source; remote metadata cannot select delivery or grant approval.
+  The local tray-host action stays independent. See [Support bundles](SUPPORT.md).
+- **SSH pairing:** the tray's Add action uses the reusable form-flow adapter, not
+  the Web Console. All steps retain one provider, including failures and results.
+  The native Linux tool is likewise pinned after its first dialog. Only the
+  display-safe identity summary reaches renderers; credentials and certificate
+  objects remain in the tray-owned manager's closure. Trust starts unchecked and
+  is required before enrollment. Native Linux checklist buttons can remain
+  enabled while unchecked; submitting that state ends without saving or opening
+  another provider. **Manage SSH connection...** still opens the
+  existing local Web Console's saved-connection management page; its already-open
+  browser controls do not enter a new standalone-modal cascade.
+  **Review discovered daemon** enters this same flow directly at the complete
+  identity review, skipping host input only. Discovery never opens a modal itself.
+  The first native startup failure can still fall back, but cancellation/unchecked
+  consent and any later displayed-step failure remain terminal. Verify the direct
+  route on each supported desktop as well as manual Add; see the full SSH UX
+   contract for opt-in, cancellation, dismissal/restart and identity-change checks.
+- **SSH discovery settings:** **Discover SSH aliases...** is always available in
+  the workstation tray, including discovery-off/zero-candidate/no-pairing states.
+  Reuse `run_form_flow` for the complete two-step interaction: current enable
+  checkbox and **Continue**, then current optional literal prefix and **Save**.
+  All providers retain both controls, explanations, validation feedback and
+  cancellation. Continue is non-mutating; Cancel/Close before Save changes nothing.
+  Errors/retries/results stay in the selected provider, including after saving.
+  Only display-safe settings reach renderers; configuration I/O runs in the tray
+  worker, using the same workstation-global writer as the Web Console. Saving
+  requests discovery refresh, not pairing, probing, certificate trust or removal.
+  Existing candidate Review/Dismiss actions and saved connections stay unchanged.
+- **SSH working directory:** use an optional text field for an absolute VM path,
+  not a workstation directory picker. Native → isolated Tk → NiceGUI dispatch,
+  complete explanation, validation retry and Cancel/Close follow `run_form_flow`.
+  Empty selects remote home. Only Save persists the per-target command directory;
+  it does not change daemon configuration scope. Capture placement before the
+  worker; no SSH/filesystem probing occurs in the form or menu callback.
+- **Process ownership:** Tk messages, sandbox dialogs, plugin CLI forms and tray
+  proactive dialogs run outside the tray GUI loop. Proactive NiceGUI fallback also
+  runs in its own child and opens the actual loopback port only after server startup.
+  Sandbox browser forms, confirmations and logs likewise use a fresh child/server
+  per interaction; complete review payloads cross stdin, not command-line limits.
+  Plugin runners select transport with the shared selector; the child parameter
+  CLI executes the shared runtime policy. The active Web Console keeps its existing
+  browser-server lifetime, without entering the tray's Tk process state.
+
+No-UI outcomes remain non-destructive: forms/target/path selection return no value,
+confirmations return false, proactive prompts dismiss (or use the shortest snooze
+in two-step flows), and ask uses its existing configured security fallback. No
+provider failure independently grants permission or performs a destructive action.
+
+## Physical-monitor placement
+
+Tray callbacks capture display-only context **before** starting a worker, child
+process, source collection or command. It contains immutable usable bounds,
+platform display identity when available, coordinate/DPI information and whether
+automatic placement can be enforced. The same context follows confirmations,
+reopened forms, pickers, progress/log/error/result windows and support View/upload/
+publication reviews. It is not saved in bundles/configuration and grants no consent.
+
+`ui/monitor.py` is the shared placement implementation. Immediately before showing
+a window it re-enumerates monitors by identity, not by the later pointer/focus or
+old geometry. Rearranged/resized monitors use their current work area. If the
+origin disappears, use the primary monitor's current work area. If inventory is
+unavailable, discard the stale offset and let the window manager place a smaller,
+resizable recovery window; its title explains **Display unavailable; move window
+to a visible screen**. Single-monitor and non-tray flows keep normal WM defaults.
+Identity means the platform's display identifier, not a promise of hardware serial
+tracking where the desktop exposes only connector/logical identity.
+
+| Platform / host | Capture and coordinates | Qualification / explicit fallback |
+|---|---|---|
+| macOS | Existing AppKit mouse-menu event, menu window/status-item context for keyboard activation; `screens[0]` baseline converts Cocoa points to Tk top-left coordinates. Cocoa display number survives geometry changes. | Tk stays isolated; inventory uses a non-UI Cocoa child, never AppKit-before-Tk. An unknown keyboard origin is not replaced with an unrelated pointer. |
+| Windows | Shell notification-icon rectangle, not another application's focus or the keyboard user's pointer. Monitor work areas exclude taskbars; device interface identity is preferred over display numbering. | Capture and Tk/WinForms use per-monitor-aware physical pixels. Coordinates are not multiplied by DPI; current DPI controls decoration allowance. |
+| Linux X11 | Mapped GTK tray-menu window, or an actual pointer menu event; GTK device scale converts to XRandR root pixels. XRandR monitor identity and EWMH work area are queried through optional system X11/XRandR libraries. | No Tk or subprocess is started on the tray loop. Missing libraries/desktop geometry produce explicit recovery, not stale offsets. Native commands lacking reliable monitor ownership are ineligible. |
+| Remote AppIndicator/DBusMenu hosts | The panel may render the menu in another process without supplying its physical coordinates, including keyboard activation. | Do **not** guess from pointer/focus. Use a visible desktop-managed Tk window titled **Move this window to the tray screen**; move it with the title bar or the desktop's Move-to-screen command before continuing. |
+| Wayland / XWayland | The compositor can deny absolute positioning or expose only XWayland monitor data. | Position requests are best effort, **not a guarantee**. The same explicit title/manual-move fallback applies. Native Wayland without X11 inventory uses the smaller WM-positioned recovery window. |
+| NiceGUI in a normal browser | Every standalone modal retains originating context, including target selection and plugin parameter forms. | A browser may reuse any window. A visible banner says **The browser cannot place this dialog… Move this window… before continuing.** Move the browser with the title bar/desktop controls. No unsupported `moveTo`, silent discarded argument, automatic permission grant, or claim of enforced placement. Already-open Web Console pages remain browser-owned. |
+
+Placement-capable Tk windows clamp to usable work areas with current-DPI frame
+allowance and capped minimum/maximum sizes; scrollable content and bottom actions
+remain available. Parameter forms and tray support reviews use a shared
+two-axis viewport with reserved actions; support's full, wrapped, initially
+unchecked consent stays outside that scrolling review. Native Cocoa providers
+share an in-child identity check for every window, including Later, and reject
+an undersized complete layout before first display rather than dropping controls.
+WinForms also rechecks screen identity/work area after child startup.
+Negative coordinates are absolute (`+-N` in Tk geometry), not
+offsets from another screen's edge. Owned file panels receive a positioned parent;
+support preview windows use the action origin even if the parent was moved later.
+Folder opening/external application links remain explicitly user-launched desktop
+applications, not AI Guardian-owned modal windows.
+
+Scheduled setup/upgrade prompts and hook-originated asks have **no tray origin**:
+their existing provider/security fallback and WM/browser placement remain the
+default. No pointer position is fabricated to label them as tray actions. Support
+continues to require its isolated native user-only approvals; moving a window,
+Next, or provider failure never authorizes collection/upload/publication.
+
+## Implementation and automated contracts
+
+`ui/display.py:ui_provider_order` defines capability/preference/placement order.
+`ui/modal.py:run_modal` executes it and distinguishes startup unavailability from
+completion. Messages, proactive prompts, ask CLI, parameter forms, directory/path
+pickers, target selection, reusable simple-form/SSH flows and sandbox
+forms/reviews/logs use that policy. Progress
+uses the same selector with its documented captured-output exception. Native-only
+action/confirmation helpers are implementations called *after* policy selection,
+not independent cascades. Support and embedded Web Console dialogs intentionally
+remain outside it for the reasons above.
+
+Related unit tests cover policy, actual entry-point calls, child framing, real
+mocked Tk initialization failure, complete field/error/log propagation, explicit
+preferences and cancellation. About, IDE setup, modal and support UX contracts
+cover the user-visible behavior. These checks do **not** establish actual visual
+ordering, compositor focus, browser rendering or consent behavior on a desktop.
+
+## Adding a modal
+
+**Do not write another provider-order or fallback loop.** All standalone modal
+entry points use `ui/modal.py:run_modal`; it consults the one policy in
+`ui/display.py:ui_provider_order`. Individual implementations render content and
+return a result. They do not choose the next toolkit.
+
+For a simple form or multi-step form interaction, use `ui/forms.py:run_form_flow`:
+
+```python
+from ai_guardian.ui.forms import run_form_flow
+
+def interaction(form):
+    values = form("Add connection", "Enter the known destination.", [
+        {"name": "host", "label": "Known host", "required": True},
+    ])
+    if values is None:
+        return None
+    # Subsequent form(...) calls keep this provider; no cross-toolkit restart.
+    return values
+
+result = run_form_flow(interaction, screen_bounds=captured_bounds)
+```
+
+The adapter binds native, isolated Tk and isolated NiceGUI renderers to the shared
+dispatcher. Its native form supports one text field, one checkbox, or a message;
+larger forms need their complete provider implementations and the appropriate
+capability classification. Do not label an incomplete native form as supported.
+Keep work before the first form non-mutating: a pre-display retry can rerun the
+interaction callback. Mutate backend state only after explicit user confirmation.
+
+For other modal families, supply supported renderer callbacks to `run_modal` and
+use the family's capability type and safe no-UI result. Add a capability only
+when its complete implementation exists; do not change the central order.
+Raise `UIUnavailable` only when no interaction has appeared. Track Map/launch
+visibility and preserve it across later steps; cancellation is an ordinary final
+result, never unavailability. Reuse the child framing helpers rather than guessing
+visibility from stderr or nonzero exits.
+
+Capture placement before leaving the tray callback. Keep toolkit state isolated,
+serialize only display-safe values, and retain the separate support-consent and
+active Web Console exceptions. Add unit tests plus the complete affected UX
+contract for precedence, startup-only retry, cancellation/post-display failure,
+explicit preferences/headless and full controls. Update this matrix and record
+real desktop qualification separately from mocked validation. The contributor
+checklist also lives in `AGENTS.md`.
+
+## Manual desktop verification (not yet qualified by this change)
+
+Run on macOS, native Windows, GNOME/zenity and KDE/kdialog, with X11 and Wayland
+where available. Use benign test messages, disposable sandboxes and no live support
+upload. Record OS/desktop, display server, preference, toolkit process, captured
+monitor, result and sanitized screenshots/timing for each matrix row.
+
+1. In automatic mode exercise plain and linked messages, actions, setup/profile
+   controls, both snooze steps, parameter/target forms, host-path Browse, ask, and
+   sandbox create/upload/delete/policy/progress/log flows. Test SSH input/identity
+   review against an explicitly authorized disposable host; Cancel must not save,
+   and a later-step failure must not switch toolkits. Confirm the first
+   **eligible** toolkit, all controls and complete long text, not merely its theme.
+2. Repeat with each explicit preference and headless. Confirm exclusive behavior
+   and the documented target/path/progress/support exceptions; no terminal opens.
+3. In a disposable test environment, test absent native executables and failed Tk
+   initialization. Confirm the next eligible provider appears exactly once. Do
+   not change security policy or uninstall the operator's working toolkits.
+4. Cancel, Escape, title-bar Close and time out applicable decision prompts. Leave
+   informational/review windows open beyond 30 seconds. No cancellation or
+   interrupted wait should produce another toolkit. Inject a post-map child
+   failure in a developer test harness and confirm no replacement window appears.
+5. On **physical** monitors, invoke every applicable matrix row from a non-primary
+   tray/menu, with both mouse and keyboard. Include About/results, setup plus Later,
+    SSH settings/pairing, pause controls, parameters plus Browse, target selection and each sandbox
+   form/confirmation/upload/policy/progress/log/error/reopen. Repeat while delayed:
+   move pointer **and** application focus to a different screen before display.
+   Exercise a pre-display provider failure and subsequent windows without changing
+   the origin. Verify the complete outer window and controls fit the usable area.
+   Repeat with monitors left/right/above/below primary, negative coordinates,
+   mixed resolutions, 100%/150%/200% scaling and taskbars/docks on different edges.
+   Rearrange/resize, then disconnect the originating screen during a delayed flow;
+   verify visible primary fallback, and single-monitor behavior. Check focus
+   after tray close/repeated opens for every Tk tray family (including
+   proactive/snooze, plugin and SSH forms, sandbox, Pause, messages/results and
+   support). Confirm the one delayed restoration occurs only once, switching to
+   another application afterward is respected, and topmost clears. For native
+   file/directory panels, confirm the OS panel remains active while open. For
+   remote panels, Wayland or browsers, verify the **explicit manual-move guidance**
+   and actually move the window before continuing; record this as fallback, not
+   enforcement.
+6. Verify typed-name deletion rejects incorrect/empty text. Copy the full expected
+   sandbox name in Tk and NiceGUI, verify success/failure feedback, and confirm Copy
+   leaves the dialog open without deleting. Review the last lines of large policies,
+   upload errors and logs, then cancel: no mutation occurs. Check log scrolling/copy
+   and progress/Connect behavior separately.
+7. Support: use local ZIP review only; check per-file View, full paging, required
+    fields, saved selection, native consent controls and safe no-desktop refusal.
+    Exercise the distinct local tray-host and per-daemon actions in flat/nested
+    layouts (including SSH). During preparation, refresh/reorder/remove a target:
+    the Source must not change. Check source provenance/omissions, source-only
+    diagnostics and credential-free offline/older-daemon feedback. No remote
+    desktop opens, and failures never collect desktop files as a substitute.
+   Mock/cancel public upload and publication reviews; do not publish diagnostics as
+    part of UI verification. Live publication requires separate operator consent.
+   For each support stage, including per-file View, check the same physical-monitor
+   origin through source delays and provider startup errors. No placement test may
+   auto-check consent, upload a Gist, publish a Discussion or duplicate a send.
+8. SSH discovery settings: with discovery off, zero matches and no enrolled
+   daemons, find **Discover SSH aliases...** next to **Add daemon via SSH**.
+   Check both current values, cancel/close either step, and confirm no persistence.
+   Save a custom `guardian-` prefix, then an empty prefix; reject wildcard/invalid
+   input with feedback without switching toolkit. Confirm candidates refresh
+   without restarting, reopen/restart to check persistence, and compare with the
+   local Web Console (untouched controls update; unsaved edits remain). Disable
+   discovery: candidates disappear but the settings entry and existing paired
+   workers/tunnels remain. No Save may contact a host or grant trust. Repeat the
+    preference/startup/cancel/later-step-failure checks above for this flow.
+9. SSH Working Dir: confirm it asks for a VM path instead of browsing workstation
+   folders. Save an absolute path and verify only that VM's commands use it; empty
+   selects remote home. Retry relative/invalid input, Cancel/Close, remove the
+   connection with the form open and test each provider/headless preference. No
+   mutation before Save and no toolkit switch after display or validation.
+
+Do not check off desktop qualification using selector mocks or merely installed
+native executables. Keep any untested platform/scenario explicitly pending.
+
+For **Pause...**, verify a single root action with one/multiple daemons; daemon →
+project → session rows each have their own duration/Resume dropdown. Exercise every
+duration, timed expiry, an inherited pause and resuming only one layer. Confirm
+in-place refresh, inert initial dropdown values, unavailable/older-daemon rows,
+duplicate session titles with full keys, stale clicks and SSH reconnect/removal.
+On KDE Plasma, record the Plasma version, X11/Wayland session, UI preference and
+actual provider; invoke Pause from the tray and confirm the window is visible and
+foreground after the menu closes, with no persistent topmost state.
+Opening, Refresh, Close and Escape without an action must not change pause state.
+Check that a single-monitor/no-placement-context launch actually applies the
+requested initial geometry within WM limits. Confirm row controls are visible
+before expanding help, and Show help/Help changes no pause state.
+Repeat startup-only fallback, post-display failure, exclusive preferences,
+headless and physical-monitor checks; never change a live security configuration
+just to simulate failure.
+
+For **Create sandbox** on KDE Plasma, record the Linux distribution, Plasma
+version, X11/Wayland session, UI preference and actual provider. Open the form from
+the tray and confirm it remains visible and usable in the foreground after the
+menu closes. After startup, switch to another application and confirm the form is
+not always-on-top and does not reclaim focus; repeat several opens to check for
+one-time restoration only. Repeat with the other eligible provider where available
+and confirm its behavior and full controls are unchanged. Mocked tests do not
+qualify this desktop check; record the reporter-session result separately.
+
 # === docs/MULTI_DAEMON_TRAY.md ===
 
 # Multi-Daemon Tray Client
@@ -10907,39 +11681,112 @@ If not set, defaults to `hostname`. For containers, the priority is:
 
 ## Tray Menu Structure
 
-Each discovered daemon appears as a top-level menu item with its own submenu:
+With multiple daemons, each has a submenu; one daemon uses the same applicable
+entries in a flat layout. This includes SSH-managed VMs:
+
+Local daemons are always first. All other daemons are sorted alphabetically by
+their displayed name, ignoring case, across SSH/container/Kubernetes/manual
+transports. Discovery refresh preserves that ordering and the selected target.
 
 ```
 ● local                         >
+  Status                        >
+  Terminal
+  Console
+  Violations
+  Metrics & Audit
   Statistics                    >
+  MCP Proactive: low            >
+  Working Dir: ~
+  Maintenance                   >
+  About
+● ssh-my-vm                     >
+  Status                        >
+  Terminal
   Console
   Violations
-  Metrics
-  Mode: auto                    >
+  Metrics & Audit
+  Statistics                    >
   MCP Proactive: low            >
-  Pause...                      >
-  Resume
-  Stop daemon
-  Restart daemon
-○ my-container (container)      >
-  Console
-  Violations
-  Metrics
-  Mode: auto                    >
-  MCP Proactive: low            >
-  Start daemon
+  Working Dir: ~
+  Maintenance                   >
+  About
+  Manage SSH connection...
+Pause...
 ─────────────
 Restart
 Quit
+─────────────
+Contact supports
+About
 ```
 
-- **●** Running daemon — full submenu with Statistics, Pause/Resume, Stop/Restart
-- **○** Stopped daemon — limited submenu with Console, Mode, Start daemon
+- **●** Running daemon — full submenu with Statistics and Stop/Restart;
+  the shared **Pause...** modal controls pause/resume for every daemon.
+- **○** Offline SSH daemon — cached diagnostics, Terminal and management remain;
+  REST-dependent actions are unavailable and **Start daemon** is offered.
 - **⚠●** Running daemon with stale code detected — shows orange dot; local daemons show a **Restart daemon (stale code)** item; remote/container/Kubernetes daemons show a **Rebuild image** hint instead
 
 The MCP Proactive submenu includes `low`, `medium`, `high`, and `paused`.
 Daemon pauses temporarily use the `paused` effective state without changing the
 saved proactive level; hooks continue enforcing security.
+
+**About** shows **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**,
+without displaying the full profile URL, alongside the existing
+version, system, scanner and repository details. With Tk available, click the
+author line or focus it and press Enter/Space to open the profile. Opening or
+closing About does not open the profile. If Tk is unavailable, the browser UI
+keeps the same clickable attribution; the profile still opens only on selection.
+Older daemon responses also retain this author attribution. See the
+[provider/capability matrix](MODAL_PROVIDERS.md) for all modal families and exceptions.
+The Tk dialog finishes layout before opening and requests foreground focus again
+after the tray-menu handoff, so it stays visible rather than immediately dropping
+behind other windows. The raising hint is temporary, not permanent always-on-top.
+
+On Linux, About and shared informational message dialogs have no reading
+deadline: leaving a window open beyond 30 seconds must not replace it with
+another provider. Normal dismissal (including Escape or the window close
+button) completes the action. Missing providers and startup failures retain
+fallback support; an isolated Tk window that has already mapped is never
+replaced by another toolkit after a later failure. Diagnostics identify the
+provider, exit status and startup/display stage without logging dialog content.
+This does not change the separate response deadlines for security prompts.
+
+For an intermittent opening/style flash, record the distribution, desktop,
+X11/Wayland session, selected UI and actual provider/process, plus the delay and
+a screen recording with sensitive content removed. Compare repeated opens and
+leaving the window open beyond 30 seconds on GNOME/zenity and KDE/kdialog where
+available. A rendering/decorations transition is not by itself evidence of a
+toolkit fallback.
+
+**Contact supports**, immediately above **About**, is a global action available
+even with no running daemon. It respects the configured support destination;
+GitHub is the default; its first screen has a **Destination** dropdown with
+**Create ZIP only** (initial selection) or **Gist + Discussion**, followed by
+**Next** to open the selected review page, without rewriting saved export settings.
+The native modal has an aligned file table,
+fully paged View buttons, inclusion checkboxes, Select all / Deselect all, a message
+field, GitHub-only Bug Reports/Q&A selection, and a final destination. The ZIP
+and send reviews list **doctor.json** first and preselect only that file for new
+bundles, with remaining files alphabetically ordered. Saved selections, including
+an unchecked Doctor, are retained. Title starts blank; GitHub requires a title
+and message, and ZIP/legacy reviews require a message. The action also requires
+at least one selected file. Dialogs request
+foreground focus instead of opening minimized. The ZIP
+choice needs no GitHub authentication or upload and includes complete selected
+diagnostics; only the log can be shortened. Logs and violations cover the last
+12 hours, with included violation records kept complete. Cancel, Create ZIP or Send when ready.
+The result stays visible until closed; a created ZIP offers **Open destination
+folder** in the native file browser. View includes a **Wrap lines** toggle and
+a horizontal scrollbar when wrapping is off.
+Next is disabled for the public choice without GitHub credentials. It requires separate
+native consent to upload the exact selected files to your unlisted Gist, then to
+publish the exact Discussion containing its actual link. Unlisted is not private.
+After upload, cancellation or failure shows **Open Gist** for management/deletion
+instead of claiming nothing was uploaded. It never collects remote-daemon
+diagnostics implicitly. See [Support bundles](SUPPORT.md#from-the-system-tray).
+Explicit local CLI/MCP exports do not contact support. Retained reviewed copies
+remain available to a later terminal `support send` within their original lifetime.
 
 Every discovered daemon is exposed in the tray. The menu is rebuilt when the
 discovery result changes, so the number of running containers or other remote
@@ -10987,16 +11834,20 @@ removed in v1.13.0.
 
 ## Discovery Methods
 
-The tray discovers daemons using four methods:
+The tray finds daemon targets through runtime discovery, explicit SSH enrollment
+or manual configuration:
 
 | Runtime | Discovery | How |
 |---------|-----------|-----|
 | Local | PID file + socket ping | Check `~/.local/state/ai-guardian/daemon.pid` |
 | Podman/Docker | `podman ps` / `docker ps` | Label filter + port filter (cascading) |
 | Kubernetes | `kubectl get pods` | Label selector + user filter |
+| SSH | Explicit enrollment + saved connections | Verify a known alias with **Add daemon via SSH**; optional alias inventory offers candidates, not trusted targets |
 | Manual | Config file | `~/.config/ai-guardian/tray-targets.json` |
 
-Discovery runs on-demand when the tray icon is clicked (~1 second to refresh).
+Runtime discovery refreshes in the background and on tray interaction. SSH alias
+inventory is opt-in; saved SSH targets reconnect independently of that inventory.
+The [Ubuntu VM guide](UBUNTU_VM.md) covers its upcoming-release PyPI prerequisites.
 
 ### Container Discovery
 
@@ -11110,6 +11961,304 @@ prevents discovery and token reads from crossing user boundaries in shared
 namespaces. The ownership selector is added to `label_selector` and cannot be
 removed by setting a broader base selector.
 
+### Add daemon via SSH
+
+**Fresh headless Ubuntu VM?** Start with the
+[ordered PyPI/venv HTTPS/SSH guide](UBUNTU_VM.md), including the release gate,
+VM-hosted Console bootstrap and workstation-side pairing. As of 2026-10-28,
+production PyPI 1.20.0 does not contain these features; the guide targets 1.21
+development until a supporting published artifact is qualified.
+
+For an SSH-only VM (including a known AWS instance), choose **Add daemon via SSH**
+in the tray. The shared modal dispatcher tries **Native → Tkinter → NiceGUI**,
+respecting explicit preferences and advancing only after proven pre-display
+startup failure. It never switches toolkit after host input or cancellation.
+No Web Console, `tray-targets.json` editing or separately maintained tunnel is
+needed. The local Web Console retains its existing pairing controls too.
+
+**Prerequisites:** a system OpenSSH client, an existing host-key-verified SSH
+destination and agent/key authentication, and a POSIX remote host with `python3`
+and a running loopback HTTPS AI Guardian daemon. Provision its certificate and
+local trust as described [below](#native-https-and-explicit-certificate-trust).
+This does not install/start the remote daemon or provision SSH keys. Unknown or
+changed SSH host keys are never accepted automatically; verify them independently
+using your ordinary SSH client before pairing. Password/keyboard-interactive
+authentication is not offered by this non-interactive workflow.
+
+1. Enter the known alias or `user@host`. Port, identity-file, jump-host and agent
+   settings come from your existing SSH configuration; options/commands/URLs are
+   not accepted in the host field. Use an alias for IPv6 literals or custom ports.
+2. Review **Verify SSH daemon identity**: the SSH destination, remote daemon name,
+   actual runtime port, expected TLS SAN identity and certificate SHA-256 pin.
+   Certificate trust and the authorized daemon credential are retrieved only over
+   authenticated, host-key-verified SSH as that user, without sudo. The fixed
+   read-only Python probe cannot execute commands from remote metadata.
+3. Check **I confirm this SSH destination and daemon certificate identity**, then
+   choose **Trust and add daemon**. Cancel saves nothing. HTTPS verification and
+   authenticated status must succeed before saving. SSH private keys/passwords
+   are never read into or stored by AI Guardian; the daemon token is never shown.
+4. The target appears as `ssh-<destination>` with cached state and the standard
+   **Console**, **Violations**, **Metrics & Audit**, **Statistics**, **Terminal**,
+   **Maintenance** and applicable **MCP** controls. Actions run in background workers.
+   **Manage SSH connection...** returns to the picker for removal.
+
+The owned OpenSSH process adds an explicit `127.0.0.1` local forward to the remote
+loopback listener. SSH and TLS identities are verified independently: the local
+TCP address/port never becomes the expected remote TLS identity. CA, SAN,
+validity and the paired leaf pin are checked on the actual request connection
+before HTTP headers or credentials. Readiness uses an unauthenticated health
+request. Failed/occupied ports and dead/removed generations cannot select a
+plaintext or unverified fallback. Only processes created for these connections
+are stopped; unrelated listeners are never killed. Existing SSH configuration
+is trusted local configuration; forwarding conflicts in it can prevent startup.
+
+No public inbound REST port or VM-to-workstation inbound connection is needed.
+Polling-only tray registration keeps remote permission prompts and decisions on
+tray-initiated authenticated requests. This registration requires the #2552
+daemon implementation; older HTTPS daemons can provide status/control but show
+an explicit upgrade warning for permission prompts. Callback-only live trace
+push is not available over this connection. Existing trace retrieval/catch-up
+uses tray-initiated REST instead; no reverse SSH forward is created.
+
+#### SSH menu/action parity audit
+
+SSH targets share the normal per-daemon menu construction and ordering, rather
+than a reduced transport-specific submenu. The following are intentional details
+and runtime differences:
+
+| Entry | SSH behavior and limitations |
+|---|---|
+| Status / Statistics | Selected VM's cached counters, pause scopes, version and connection/prompt warnings; menu rendering never starts SSH or requests REST. Offline targets do not present unavailable counters as live data. |
+| Console / Violations / Metrics & Audit | Open the workstation-hosted Console at the selected saved VM's route, never a browser/server on the VM or the workstation daemon's data. REST-backed navigation is disabled while offline. |
+| Pause... (shared root action) | One modal mirrors daemon → project directory → individual session rows, each with its own duration/Resume dropdown. Requests stay on the displayed connection; missing scope support or failed acknowledgement is reported, never broadened. |
+| Terminal | A workstation terminal runs system OpenSSH to the saved destination, retaining host-key checks and alias/jump-host settings. The terminal stays open after SSH exits so login/connection errors remain readable until dismissal. No local shell/container fallback; an unavailable terminal reports failure. |
+| Maintenance | The VM's daemon-scoped plugins, with bundled defaults while remote definitions are unavailable. Stop/Restart/Reload and scanner installation run as the SSH user on that VM. Bundled **View Doctor** opens its workstation Console health page; remote CLI diagnostics are also supported by the SSH transport. Nonzero exit/timeout is not reported as success. |
+| MCP | Installation/enabled state and configured proactive level come from the VM, not workstation settings. If older/main daemons omit the new stats fields, the connection worker reads the existing authenticated `GET /api/config?scope=global` endpoint. Supported level changes write only that VM's global configuration through authenticated REST, which reloads it. A daemon-wide pause changes the displayed effective level, not the saved choice. Only absent/invalid capabilities show unavailable controls; installation remains VM-side setup, not workstation setup. |
+| Working Dir | An optional absolute **VM** directory for Terminal and target plugin commands, entered through the shared native-first form dispatcher. No saved selection or an empty value means remote home; the workstation home is never sent as a default `cd`. Explicit VM paths display literally, not shortened against the workstation's home. This is not a workstation folder picker or a project/configuration-scope change. Cancel saves nothing. |
+| Start daemon | Uses the same SSH user, interpreter and configuration/state paths as the last authenticated daemon. Available after stopping it in this tray session; it does not provision a new daemon. |
+| Match Tray Version | Available under the normal version-mismatch rules when pip exists in that VM installation. Runs that installation's Python/pip and reports restart failure separately. UV/pipx-managed or externally managed installations without pip require their original installer, accessible through Terminal. A development tray version is not an installable release. Global tray self-upgrade remains a separate workstation action. |
+| About | Fetches the selected VM's information; an unavailable remote response is explicitly identified, not replaced with unlabeled workstation information. |
+| Manage SSH connection... | Retained in both flat and multi-daemon layouts. Removal discards saved pairing/owned tunnels, never stops the VM daemon. |
+| Container/Kubernetes/OpenShell controls | Container creation, pod operations, sandbox Connect/Manage and image-rebuild hints do not apply to SSH VMs and are not copied. Version/connection warnings still apply. |
+
+The private PID metadata now publishes the daemon's actual Python interpreter
+and configuration/state directories. The fixed read-only SSH probe retrieves
+that context without executing it. For existing Linux daemons from main without
+these new fields, the same probe uses the same-user running daemon's procfs
+arguments and executable identity to prove its interpreter. It preserves a venv
+interpreter link rather than resolving it to the base Python, and reads neither
+process environments nor unrelated processes. It does not execute a guessed
+`ai-guardian` from PATH. Only after verified TLS and authenticated
+status does the tray enable its use for explicit CLI actions; arbitrary virtualenv
+paths work even when `ai-guardian` is absent from non-interactive PATH. These
+paths contain no daemon token and are not substituted with workstation paths.
+Context is retained **in memory** across a daemon stop/network outage, but not
+across tray restart. If the tray starts while the VM daemon is stopped, or
+the running installation cannot be proven (including older non-Linux daemons
+without this metadata), CLI actions explain that context is unavailable. Start
+the daemon through Terminal and reconnect; newer daemons publish portable PID
+metadata. Updating package files alone does not replace a running process. MCP
+on current main does **not** require an upgrade to this feature branch: its
+existing configuration endpoint supplies the missing menu state. Do not
+interpret missing MCP capability fields as proof that MCP is not installed.
+
+Remote plugin command maps marked `run_on_target` resolve against the VM's
+reported POSIX platform, not the desktop's platform. Existing bundled bare
+`ai-guardian` Maintenance commands are also SSH-bound, including older bundles
+without that flag. Workstation browser actions open locally without invoking a
+remote shell. Other workstation-command plugins, remote global-scope plugins
+and multi-target actions inside a VM-scoped menu are intentionally unavailable;
+use a workstation/global plugin for local actions and explicit target execution
+for VM commands. No unsupported command falls back to workstation execution.
+
+Menu callbacks retain the displayed VM and its clicked tunnel generation across
+discovery reordering/reconnection. Removal or identity change invalidates remote
+commands. All network/process work runs outside menu-building and GUI callbacks.
+No additional manually maintained tunnel, root installation or sudo is needed.
+
+Permission responses stay bound to the tunnel generation that fetched them.
+Prompt IDs also contain a daemon-instance nonce, so a dialog left open across a
+daemon restart cannot approve a different invocation after a counter resets.
+
+Disconnected targets stay visible **offline** and retry with bounded timeouts
+and exponential backoff (2 seconds up to 60 seconds). New runtime ports can be
+detected on reconnect; changed certificate trust, TLS identity or daemon tokens
+are never adopted silently. Independently verify a renewal/rotation, then remove
+and explicitly pair again. Restarting the tray reconnects saved destinations.
+Tray/Web Console shutdown and saved-target removal clean up their owned tunnels;
+another running local client observes removal on its next refresh, and every
+authenticated request also checks that its saved pairing still exists unchanged.
+Removing a connection never stops the remote daemon.
+
+Pairings live under the local **state directory** at
+`ssh-connections/<destination-id>.json`, separate from `ai-guardian.json` and
+`tray-targets.json`. POSIX directories/files are owner-only (`0700`/`0600`) with
+ownership and parent-path checks. Windows encrypts/authenticates the entire
+record with current-user DPAPI; copying it to another account does not provision
+trust or credentials. Temporary CA material is public certificate data, with the
+immutable paired pin still enforced. SSH storage is not collected by support
+bundles; do not attach pairing records to issues. Tray enrollment uses the desktop
+modal flow. Web enrollment/removal is available only in a loopback-bound Web
+Console, not an exposed-network Console. Tray and
+Console each own their own tunnels if both query a saved target concurrently.
+
+Custom `AI_GUARDIAN_CONFIG_DIR`, `AI_GUARDIAN_HOME`, `AI_GUARDIAN_STATE_DIR` and XDG
+paths must be available in the remote SSH environment. A stopped daemon, missing
+configuration, unsafe storage, unavailable metadata, a running process without a
+REST listener, non-loopback listener or legacy HTTP-only daemon fails with a
+distinct credential-free message; port 63152 is never assumed. This connects to
+user-identified hosts only: it does not enumerate AWS instances or use AWS APIs.
+
+#### Discover SSH aliases
+
+Discovery is **off by default**, independent of saved SSH connections. Choose
+**Discover SSH aliases...** directly in the workstation tray, next to **Add daemon
+via SSH**. This settings entry is always available—even with discovery disabled,
+zero matching aliases, or no enrolled daemons. **Add daemon via SSH** remains the
+separate pairing action, not the discovery settings form.
+
+1. Check or uncheck **Enable SSH alias discovery**, reflecting the current saved
+   value, then choose **Continue**. This step does not save anything.
+2. Edit **Optional alias prefix (empty lists all supported concrete aliases)**,
+   reflecting the saved prefix, then **Save**. Use a literal prefix such as
+   `guardian-`, or leave it empty to include existing supported aliases without
+   renaming. Invalid prefixes show feedback and can be corrected in the same flow.
+
+**Cancel**, Escape or title-bar **Close** before Save leaves both settings
+unchanged. The complete two-step form uses the shared **Native → Tkinter →
+NiceGUI** dispatcher; only pre-display startup failure permits fallback, never
+cancellation or a later-step error. Configuration reads/writes and enumeration
+run outside the tray GUI thread. Saving does not contact hosts, execute SSH or
+grant trust; connection and identity verification remain explicit separate steps.
+
+The **workstation loopback Web Console home `/` → SSH daemon connections** retains
+the equivalent **Discover SSH aliases**, prefix and **Save SSH discovery settings**
+controls above the daemon cards. The picker is not a sidebar item: from a daemon
+dashboard, click **AI Guardian** in the top-left header to return home. Launch
+this Console in a workstation terminal, not through the VM's SSH bootstrap
+tunnel. Both entry points share workstation-global validation and persistence,
+not the selected remote daemon or a project. Untouched Web Console fields follow
+saved tray changes on refresh; unsaved browser edits are not overwritten. Settings
+survive tray restarts. Alternatively, set the following in the local user
+`ai-guardian.json`:
+
+```json
+{"daemon": {"tray": {"ssh_alias_discovery": {
+  "enabled": true,
+  "alias_prefix": "ai-guardian-"
+}}}}
+```
+
+The case-insensitive prefix is a literal filter, not a required naming convention.
+Leave it empty to list **all concrete existing aliases**, with no renaming. A
+prefix such as `ai-guardian-` is useful when the same config includes unrelated
+hosts. Discovery reads **`~/.ssh/config`**; the system OpenSSH client on Windows
+uses **`%USERPROFILE%\.ssh\config`**. Windows' system-wide equivalent is
+`%PROGRAMDATA%\ssh\ssh_config` (`/etc/ssh/ssh_config` on POSIX); system-wide files
+are not enumerated. Windows alternate SSH clients/config locations are not
+searched. Actual connections still delegate users, ports, keys, jump hosts and
+connection predicates to the system OpenSSH client.
+
+At tray startup and each background refresh, **SSH aliases available to pair (N)**
+appears as a pending-enrollment menu only when aliases are available, separate
+from saved/connected targets. With zero aliases it disappears, not a greyed `(0)`
+entry; discovery warnings remain accessible as **SSH alias discovery notice**.
+The **Discover SSH aliases...** settings entry remains available in either case. Each
+alias offers **Review discovered daemon** and **Dismiss alias**. The loopback Web
+Console picker refreshes the equivalent list automatically. Changing either the
+SSH config or these discovery settings takes effect on the next refresh, without
+restarting the daemon or tray. Saving from the tray requests that refresh; scanning
+does not block the tray/browser UI.
+
+**Review discovered daemon** probes only that user-chosen alias, then opens the
+complete **Verify SSH daemon identity** step directly—no separate Add action or
+manual host-entry form. The tray uses the shared native-first modal dispatcher;
+the already-open Web Console uses its existing browser review. Both retain full
+destination/port/SAN/fingerprint details and explicit, initially unchecked consent.
+Cancel saves nothing. Finding a name alone does **not** establish that AI Guardian
+is installed or running there. No background probes are performed, no SSH command
+or predicate is executed during enumeration, no key contents are read, no SSH
+config is modified, and no cloud inventory is queried.
+
+Only confirmed, SSH-verified, HTTPS-verified **and authenticated** enrollment saves
+a pairing. Existing dynamic-port tunnels, backoff, restart recovery and polling-only
+tray registration then apply unchanged. Refreshes do not open trust dialogs,
+replace saved credentials/certificates, or create candidate connection workers.
+Offline hosts, absent SSH clients and unconfigured/stopped daemons report the
+existing credential-free errors only when reviewed; other candidates remain usable.
+
+**Parser limits and conditional configuration:**
+
+- Only declared concrete `Host` names are listed. Comments, quoted names,
+  `Host=...`, multiple names and case-insensitive duplicates are handled. Wildcard
+  and negated patterns are never expanded into destinations. Host names must fit
+  the existing safe SSH destination syntax; unsupported names remain available
+  through independently configured supported aliases.
+- Unconditional `Include` directives support regular **`config` or `*.conf` files
+  below the user's `.ssh` directory**, including literal subdirectories and
+  basename globs such as `Include config.d/*.conf`. Relative paths are relative
+  to `.ssh`, not the including file. Put this directive **before the first `Host`
+  or `Match`** and use `.conf` filenames for fragments. Included text shares scope;
+  an included `Host`/`Match` can make later Include directives conditional too.
+- Includes inside `Host` or `Match` scopes are skipped. Match conditions (including
+  `exec`, `localnetwork`, `canonical` and `final`) are never evaluated. A later
+  explicit `Host` declaration starts a new host scope and can be listed; it is
+  not proof that its effective settings will work. This is an alias inventory,
+  not an OpenSSH configuration evaluator.
+- Include cycles, links, external paths, parent traversal, recursive/directory
+  globs, environment/percent expansion and key-file paths are unsupported and
+  skipped. Limits: 8 nested file levels including the root, 64 files and Include
+  patterns, 256 aliases, 256 KiB per file / 1 MiB total, and 4,096 directory entries
+  per basename glob. Incomplete/unsupported scans show a credential-free notice;
+  valid partial results remain available. Use a small dedicated Include file or
+  explicit **Add daemon via SSH** for unsupported constructs.
+
+Dismissal persists across refreshes/restarts as a private, hostname-digest marker
+in the existing SSH state directory; it never edits SSH configuration or trust.
+**Removing a saved connection also dismisses its alias**, so discovery cannot
+recreate it or repeatedly offer enrollment. Changing/removing the SSH config never
+deletes saved pairings. Dismissed aliases can still be paired deliberately through
+**Add daemon via SSH**; there is no automatic reset of dismissal state. Turning
+discovery off hides candidates but leaves saved connections/tunnels unchanged.
+Removal closes only client-owned tunnels and never stops the remote daemon.
+
+#### POSIX storage preconditions
+
+Setup (including JSON mode) and startup create missing application directories
+and their missing parents with explicit `0700` permissions. Generated configuration
+and authentication tokens use `0600` files from creation, including temporary
+files. An ordinary group-writable umask such as `0002` cannot make newly created
+storage fail its own credential checks. Setup publishes configuration atomically;
+without an explicit overwrite request it preserves an intervening creator's file.
+
+Existing directories are **not** silently chmodded. Credential storage rejects
+untrusted ownership, linked application directories/files, and group/other-writable
+ancestors (with the existing exception for trusted sticky system temporary
+ancestors). A secure application leaf is insufficient if, for example, `.local`
+or `.local/state` remains `0775`. Setup reports the offending path and precondition
+without writing configuration. Review existing storage with its administrator;
+do not assume running setup repairs shared directories. Missing configuration is
+an independent setup problem, not proof of a permission failure.
+
+`ai-guardian daemon status` distinguishes **IPC: running** from **REST API:
+available**, **unavailable**, or **disabled**. An unavailable listener includes its
+credential-free startup reason, including the offending storage path/mode when
+known. PID metadata and IPC status expose additive `rest_status` and `rest_error`
+fields; legacy daemons lacking readiness information are shown as unknown rather
+than presumed healthy. IPC can continue serving hooks when REST startup fails;
+this does not mean tray/HTTPS enrollment is ready. SSH pairing separately reports
+missing configuration, unsafe metadata, and a live process without REST. It does
+not echo remote exception text, tokens, certificates, or key contents.
+
+These mode checks apply to POSIX. Windows retains administrator-managed ACLs;
+POSIX unit tests do not qualify Windows access control.
+
+Unit/UX tests exercise synthetic TLS endpoints and mocked SSH processes. Live
+private-VM enrollment, reconnect/prompt delivery and native Windows/macOS desktop
+qualification remain a release/manual-validation gate, not a claim established
+by those tests. See the manual checklist in
+`tests/ux/test_user_experience_contract_ssh_daemons.py`.
+
 ### Manual Targets
 
 Create `~/.config/ai-guardian/tray-targets.json`:
@@ -11126,11 +12275,314 @@ Create `~/.config/ai-guardian/tray-targets.json`:
 }
 ```
 
+If `name` is provided, it must be a non-empty string. Entries with `null`,
+non-string, or blank names are skipped with a warning; other valid entries remain
+available. If `name` is omitted, the target keeps the `manual` fallback name.
+
 Use `--no-discover` to skip auto-discovery and only load manual targets:
 
 ```bash
 ai-guardian tray start --no-discover
 ```
+
+### Native HTTPS and explicit certificate trust
+
+Native HTTPS is opt-in (`daemon.rest_tls`, targeting 1.21; not in PyPI 1.20.0).
+For a fresh headless guest, use the [Ubuntu VM HTTPS/SSH guide](UBUNTU_VM.md);
+it explicitly separates the upcoming release from published-PyPI qualification.
+The advanced trust/PKI reference below remains applicable to supporting builds.
+Existing localhost HTTP configurations need no changes. TLS does **not** change
+`rest_host`, publish
+ports, open a firewall, enable mTLS, or replace the daemon's bearer token. Container
+bind-address defaults also remain unchanged. Set an explicit loopback bind address
+when the daemon must only be reachable through an administrative tunnel.
+
+#### Test HTTPS on your own PC
+
+**Prerequisites:** Linux, OpenSSL **3.x** (`openssl version`), `curl`, and an
+AI Guardian build with native daemon TLS (1.21 or newer). Your local daemon and
+Web Console should already be running. This test needs no second machine, public
+DNS, firewall changes or system-wide certificate installation.
+
+This enables HTTPS for the **daemon REST API**, normally
+`https://127.0.0.1:63152`. It does **not** enable HTTPS for the Web Console
+webpage; keep using the Console's existing browser URL. Keep the REST listener
+bound to `127.0.0.1` (`daemon.rest_host`); enabling HTTPS does not change its bind
+address. For remote or production setups, use the
+[private-VM/private-CA guidance](#private-vm-provisioning-and-pairing-no-public-inbound-rest)
+below instead.
+
+Run the following commands yourself in a **normal terminal**, not through an AI
+agent. Keep that terminal open for step 4, which uses the same `TLS_DIR` variable.
+No scanning or protection settings need to change.
+
+##### 1. Generate a local test certificate
+
+Create a fresh private directory so existing certificates and keys are not
+overwritten:
+
+```bash
+umask 077
+mkdir -p "$HOME/.config/ai-guardian"
+TLS_DIR=$(mktemp -d "$HOME/.config/ai-guardian/tls-local.XXXXXX")
+
+openssl req -x509 -newkey rsa:3072 -noenc -sha256 -days 90 \
+  -keyout "$TLS_DIR/server-key.pem" \
+  -out "$TLS_DIR/server-cert.pem" \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+  -addext "basicConstraints=critical,CA:FALSE" \
+  -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+  -addext "extendedKeyUsage=serverAuth" \
+  -addext "subjectKeyIdentifier=hash" \
+  -addext "authorityKeyIdentifier=keyid:always"
+
+printf 'Certificate directory: %s\n' "$TLS_DIR"
+```
+
+The new directory is owner-only (`0700`), and `umask 077` makes the new key and
+certificate files owner-only (`0600`). Existing parent-directory permissions are
+not changed. The unattended daemon needs an **unencrypted** private key, so keep
+it private and never paste its contents into the Console or chat. The certificate
+expires after **90 days**; it contains both the `localhost` DNS SAN and the
+`127.0.0.1` IP SAN, not just a Common Name.
+
+##### 2. Fill in the Web Console fields
+
+Select the **local daemon**, use **Global** scope, then open
+**Global Settings → Daemon REST HTTPS**. For example, if the command printed
+`/home/alex/.config/ai-guardian/tls-local.A1b2C3`, enter:
+
+| Field | Value |
+|-------|-------|
+| Enable native HTTPS | On |
+| Certificate chain PEM path (on daemon host) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
+| Private-key PEM path (on daemon host) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-key.pem` |
+| Trusted CA PEM path (empty: system trust) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
+| Expected server SAN identity / SNI | `localhost` |
+| Optional independently verified SHA-256 leaf pin | Leave empty for this initial local test |
+
+Replace the example directory with **your exact printed directory**, including
+your username and random suffix. Use full absolute paths, not the literal
+`$TLS_DIR` variable or file contents; these fields do not expand shell variables.
+
+The **Trusted CA PEM path** explicitly trusts the self-signed public certificate
+you just generated. This is sufficient for this local test; no separate CA or
+system trust-store installation is needed. Do not leave this field empty for the
+self-signed recipe or trust an arbitrary discovered certificate. Certificate
+validity and identity verification remain mandatory. Local REST clients verify
+`localhost` even when connecting to `127.0.0.1`.
+
+##### 3. Save and restart
+
+Click **Save HTTPS settings**, then run in your terminal:
+
+```bash
+ai-guardian daemon restart
+```
+
+Reload alone does **not** replace the live listener or certificate. After the
+restart, refresh the Console and tray so they pick up the HTTPS listener and
+saved trust. The Console webpage itself keeps its existing URL/scheme.
+
+##### 4. Verify HTTPS and expected results
+
+In the **same terminal** as step 1:
+
+```bash
+curl --noproxy '*' --fail --show-error \
+  --cacert "$TLS_DIR/server-cert.pem" \
+  https://127.0.0.1:63152/api/health
+```
+
+Expected: JSON containing `"status": "ok"`. `curl` explicitly trusts your public
+certificate and verifies the URL's `127.0.0.1` IP SAN. In a new terminal, replace
+`$TLS_DIR/server-cert.pem` with the full printed certificate path, in quotes.
+If your REST port differs, replace `63152` in these URLs with the actual port
+(including the assigned port if configured as `0`).
+
+Also check that authentication is still required:
+
+```bash
+curl --noproxy '*' --show-error \
+  --cacert "$TLS_DIR/server-cert.pem" \
+  --output /dev/null --write-out 'HTTP %{http_code}\n' \
+  https://127.0.0.1:63152/api/status
+```
+
+Expected: **HTTP 401** without daemon-token authentication. HTTPS does not
+replace that authentication. `/api/health` checks transport/connectivity only;
+success does not establish authenticated SDK/tray integration.
+
+- Without `--cacert`, this freshly generated, untrusted self-signed certificate
+  should fail certificate verification.
+- Plain `http://127.0.0.1:63152/api/health` should no longer succeed on this TLS
+  listener; a reset/closed connection rather than JSON is expected.
+
+If something fails:
+
+| Symptom | What to check |
+|---------|---------------|
+| Self-signed certificate / unknown CA | Use the generated `server-cert.pem` for both the Console's trusted CA field and `curl --cacert`. Keep certificate verification enabled. |
+| Server identity / SAN mismatch | The Console identity is `localhost`; the `curl` URL uses `127.0.0.1`. The certificate must contain both SANs as generated above. |
+| Missing file, permission error, or unavailable REST listener | Check full paths on the daemon host and access by its user. The key must be owner-only; certificates/trust files and their parent directories must not be writable by other users. Review unsafe existing parents rather than making them broadly writable. Invalid TLS material prevents REST startup, not a fallback to HTTP. |
+| Expired or not-yet-valid certificate | Check the system clock. Generate replacement material before the 90-day expiry, update the paths, restart, then refresh the Console/tray. Startup warns within 30 days of expiry. |
+
+See [validation, renewal and restart](#validation-failures-renewal-and-restart)
+for more detail.
+
+#### Listener and client configuration
+
+```json
+{
+  "daemon": {
+    "rest_host": "127.0.0.1",
+    "rest_port": 63152,
+    "rest_tls": {
+      "enabled": true,
+      "cert_file": "/private/guardian/server-chain.pem",
+      "key_file": "/private/guardian/server-key.pem",
+      "client": {
+        "ca_file": "/private/guardian/trusted-ca.pem",
+        "server_name": "daemon.vm.internal",
+        "certificate_sha256": ""
+      }
+    }
+  }
+}
+```
+
+The certificate file starts with the server leaf, followed by intermediates. The
+key must be an unencrypted matching PEM key: unattended startup never prompts for
+a password. Use a certificate with an appropriate DNS/IP **subject alternative
+name** (SAN) and server-auth usage; a Common Name alone is not sufficient.
+`client` configures local REST callers (SDK project registration, ask requests,
+trace submission and Console health checks), not the server's client-auth policy.
+These callers connect to loopback but verify `server_name`, not `127.0.0.1`.
+For public/enterprise CA certificates, an empty `ca_file` uses system trust.
+
+Manual remote targets have their own explicitly provisioned trust:
+
+```json
+{
+  "daemons": [{
+    "name": "private-vm",
+    "url": "https://127.0.0.1:64443",
+    "token": "provision-the-existing-daemon-token-privately",
+    "tls": {
+      "ca_file": "/private/trusted-vm-ca.pem",
+      "server_name": "daemon.vm.internal",
+      "certificate_sha256": ""
+    }
+  }]
+}
+```
+
+The URL is the TCP connection address; `server_name` supplies both SNI and the
+expected certificate identity. SSH-managed connections reuse this transport without
+requiring a localhost certificate. The same target can use a direct HTTPS address
+with the same trusted identity. Empty `server_name` verifies the URL hostname/IP.
+The optional `certificate_sha256` is the independently verified SHA-256 **leaf
+certificate** fingerprint (64 hex digits, with optional colons). It is an extra
+constraint: CA trust, validity, hostname and server-auth verification still apply.
+Discovery cannot approve trust, enroll certificates or replace an existing pin.
+
+#### Private VM provisioning and pairing (no public inbound REST)
+
+Use an existing organizational PKI where available. Otherwise, issue a server
+certificate from a private CA maintained by the administrator. Example OpenSSL
+commands, run by the operator, not an agent:
+
+1. On the VM, create a private directory and a server key/CSR. The identity need
+   not resolve in public DNS:
+   ```bash
+   umask 077
+   mkdir -p "$HOME/.config/ai-guardian/tls"
+   cd "$HOME/.config/ai-guardian/tls"
+   openssl req -new -newkey rsa:3072 -noenc -keyout server-key.pem -out server.csr -subj /CN=daemon.vm.internal
+   ```
+2. Send the CSR over an independently authenticated administrative channel to
+   the private-CA administrator. Keep the CA private key off the VM and clients.
+   On the administrator's offline workstation, if no CA exists:
+   ```bash
+   umask 077
+   openssl req -x509 -newkey rsa:3072 -noenc -keyout ca-key.pem -out ca.pem -days 365 -subj /CN=Guardian-private-CA -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign
+   ```
+   Create `server.ext` containing:
+   ```ini
+   basicConstraints=critical,CA:FALSE
+   keyUsage=critical,digitalSignature,keyEncipherment
+   extendedKeyUsage=serverAuth
+   subjectAltName=DNS:daemon.vm.internal
+   subjectKeyIdentifier=hash
+   authorityKeyIdentifier=keyid,issuer
+   ```
+   Issue the certificate and return only the server certificate and public CA:
+   ```bash
+   openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-chain.pem -days 90 -sha256 -extfile server.ext
+   ```
+3. **Before saving trust**, compare the CA's SHA-256 fingerprint using a trusted
+   console or SSH session with an already independently verified SSH host key,
+   not an unauthenticated REST connection or discovery result:
+   ```bash
+   openssl x509 -in ca.pem -noout -fingerprint -sha256
+   openssl x509 -in server-chain.pem -noout -fingerprint -sha256
+   ```
+   Provision the verified CA on the VM (for local REST callers) and tray/client
+   host. Optionally record the separately verified server fingerprint as the
+   additional leaf pin. An independently verified self-signed server certificate
+   can instead be the dedicated `ca_file`; never trust one just because it was
+   discovered. Copy no private keys to clients.
+4. Configure the VM as above with its own absolute paths, explicit loopback
+   `rest_host`, and matching local `client` trust. Keep private keys and the
+   token-bearing `tray-targets.json` owner-only (`0600`, private parent directory
+   on POSIX). Trust/certificate files must not be writable by other users; runtime
+   checks reject unsafe POSIX file ownership/modes. On Windows, administrators
+   must restrict file and parent-directory ACLs to the owning account (and needed
+   system administrators); POSIX mode checks are not an ACL validator.
+5. Restart the daemon through the ordinary operator workflow. No public inbound
+   REST port is necessary. For a manual connectivity check, the operator may use
+   an already verified SSH connection:
+   ```bash
+   ssh -N -L 127.0.0.1:64443:127.0.0.1:63152 vm
+   ```
+   Provision the existing daemon token privately and configure the manual target
+   above. Refresh/restart the tray to reload manual target trust. Alternatively,
+   use [Add daemon via SSH](#add-daemon-via-ssh) to enroll and manage the tunnel.
+   SSH key provisioning/management remains outside AI Guardian.
+
+#### Validation failures, renewal and restart
+
+TLS 1.2 or newer and certificate verification are mandatory. Verification and any
+pin comparison complete on the actual request connection **before** HTTP headers,
+tokens or request bodies are transmitted. Daemon REST requests ignore environment
+proxies and refuse redirects (including HTTPS-to-HTTP), so credentials are not
+forwarded to another destination. HTTPS failures never retry over HTTP.
+
+Invalid, missing, expired, not-yet-valid or mismatched server material prevents
+REST startup; it never creates a plaintext listener. The local IPC daemon can
+remain available, but REST-dependent features report an unavailable listener.
+Startup warns for a leaf expiring within 30 days. Validity is checked at startup;
+clients revalidate the live certificate on every new request, including after it
+expires. Errors distinguish CA validation, identity/validity and changed-pin
+failures, without including tokens, key contents or raw crypto/parser errors.
+
+Certificate files are loaded at startup. Config reload does **not** change the
+live listener, certificate or transport; explicit daemon restart is required.
+Renew ahead of expiry, install the matching certificate/key securely, and restart.
+For CA rotation, independently verify the replacement CA before updating trust;
+an overlap bundle can ease planned rotation. If pinning, independently verify the
+new leaf fingerprint and explicitly update each saved pin, then refresh the tray.
+Changed pins fail closed; no observed certificate can silently replace them.
+Replacing files without restart leaves the original certificate in service.
+
+Hook/SDK remote-daemon clients use `AI_GUARDIAN_DAEMON_URL` and the existing
+`AI_GUARDIAN_AUTH_TOKEN`, plus optional `AI_GUARDIAN_DAEMON_CA_FILE`,
+`AI_GUARDIAN_DAEMON_SERVER_NAME` and `AI_GUARDIAN_DAEMON_CERT_SHA256`. Remote trace
+submission uses the same three trust variables with its existing trace endpoint
+and token variables. Trust options on an HTTP URL are rejected. Prefer the token
+environment variable over embedding a token in the legacy daemon URL; do not
+paste tokens or private keys into logs, support diagnostics or chat.
 
 ## REST API
 
@@ -11140,7 +12592,7 @@ Each daemon exposes a REST API for tray communication:
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
 | `/api/status` | GET | Daemon status (name, version, paused, middleware_pause, menu_tags, config_source, config_read_only) |
-| `/api/stats` | GET | Full stats, including active stable-ID hook sessions (`active_sessions`) |
+| `/api/stats` | GET | Full stats, including active stable-ID hook sessions (`active_sessions`), remote MCP installation/enabled state and configured proactive level (`mcp_installed`, `mcp_enabled`, `mcp_proactive_level`) |
 | `/api/middleware/status` | GET | Effective daemon pause for OpenShell middleware; accepts optional `project_dir` |
 | `/api/pause` | POST | Pause scanning (`{"minutes": 15}`) |
 | `/api/resume` | POST | Resume scanning |
@@ -11195,14 +12647,18 @@ The REST port is configurable via `daemon.rest_port` (default 63152, 0 = OS-assi
 
 Each daemon's submenu routes actions to the correct transport:
 
-| Action | Local | Container | Kubernetes |
-|--------|-------|-----------|------------|
-| Statistics | Unix socket | REST API | REST API |
-| Console | New terminal | `podman exec -it` | `kubectl exec -it` |
-| Pause/Resume | Unix socket | REST API | REST API |
-| Start/Stop/Restart | Subprocess | `podman exec` | `kubectl exec` |
+| Action | Local | Container | Kubernetes | SSH VM |
+|--------|-------|-----------|------------|--------|
+| Statistics | Unix socket | REST API | REST API | Background-polled HTTPS cache |
+| Console | Workstation Console | Workstation Console | Workstation Console | Workstation Console scoped to VM |
+| Terminal | Local shell | `podman exec -it` | `kubectl exec -it` | Saved OpenSSH destination |
+| Pause/Resume | Unix socket | REST API | REST API | Authenticated managed HTTPS tunnel |
+| Start/Stop/Restart | Subprocess | `podman exec` | `kubectl exec` | SSH user's actual installation/context |
 
-> **In-progress guard**: Restart actions are protected against double-clicks. Once a restart is triggered, the menu item is disabled and the tray polls the daemon until it responds again (up to 10 seconds) before re-enabling the item.
+> **In-progress guard**: Local/container restart actions retain their existing
+> double-click guard and status polling. SSH CLI actions report their actual exit
+> status; the connection worker independently discovers daemon stop/start and
+> reconnects with backoff, without reading the workstation PID file.
 
 ## CLI Reference
 
@@ -11241,9 +12697,11 @@ Session-scoped controls require a currently active stable hook identity. Use
 the full `session_key` from status, not a display title, raw session ID, directory,
 or an inferred current session. Unknown/expired keys and unsupported session
 requests fail with non-zero status and never fall back to broader control.
-Session pauses clear on timed expiry, resume, SessionEnd, 24 hours of inactivity,
-or daemon restart. Integrations without stable identities are covered only by
-global or directory-wide pauses.
+Session pauses clear on timed expiry, resume, SessionEnd, 30 minutes without hook
+activity, or daemon restart. The 30-minute activity window is the fallback for
+integrations that do not provide a reliable session-end event; it is based on hook
+activity, not IDE process detection. Integrations without stable identities are
+covered only by global or directory-wide pauses.
 
 Resume clears only the selected scope's pause; other pause layers still apply.
 All forms reuse the existing configured daemon and do not auto-start a daemon
@@ -11480,15 +12938,14 @@ By default, all plugins appear on all daemons. Use tags to filter plugins to spe
 
 On Linux, the tray intentionally does not rebuild the native menu every second
 while a daemon is paused. GTK/AppIndicator replaces the menu during an update,
-which can collapse an open nested submenu in KDE before **Resume** can be
-selected. Linux pause labels therefore use a stable paused indicator instead of
-a live countdown; pause/resume visibility still refreshes when the pause state
-changes. macOS keeps the live countdown refresh behavior.
+which can discard a selected action in KDE. Pause/resume now lives in its own
+modal; the daemon header's pause state still refreshes on actual transitions,
+not countdown-only changes. macOS keeps its existing countdown refresh behavior.
 
 AppIndicator popup replacement is deferred until the popup closes and a short
 click-delivery grace period elapses, then renders fresh daemon stats. KDE sends
 the popup's close event before the selected item's click; rebuilding immediately
-can discard that action, including Pause/Resume or About. Rapid reopening keeps
+can discard that action, including **Pause...** or About. Rapid reopening keeps
 the new popup protected from an older close callback.
 Scoped actions and idle polling refresh actual pause/resume
 transitions, expiry, session end, and session/project-list changes; countdown-only
@@ -11496,16 +12953,52 @@ changes do not replace Linux menus. Windows and macOS retain countdown updates.
 
 ### Session and directory pause controls
 
-**Sessions...** lists active hook sessions that have a stable identity from their
+One root **Pause...** action opens a status-aware modal. In the single-daemon
+flat menu it follows **Status**; multi-daemon menus share one root action rather
+than repeating nested controls inside each daemon submenu.
+
+The window mirrors the existing hierarchy, with inline dropdowns at every level:
+
+```text
+◐ workstation (local)                         [Pause for… ▾]
+    ◐ Project: /path/to/project               [Pause for… ▾]
+        ☾ Session: OpenCode: Fix tray labels  [Resume…    ▾]
+        ● Session: Claude Code: Add tests     [Pause for… ▾]
+● remote-vm (ssh)                             [Pause for… ▾]
+    ● Project: /remote/project                [Pause for… ▾]
+```
+
+Choose **5 minutes**, **15 minutes**, **30 minutes**, **1 hour**, or **Until resume**
+from the intended row's dropdown to pause it immediately. A row with its own
+pause offers **Resume** instead; selecting it removes only that row's own pause.
+There is no shared duration selector or separate Pause button.
+A successful action refreshes the
+same window; **Refresh status** reads external changes and expiry without changing
+pause state. Opening the window or a dropdown, Close, or Escape without selecting
+an action sends no pause/resume request. Closing does not undo actions already taken.
+
+The Tk window explicitly applies a **1200 × 820** initial size within the window
+manager's limits, including when no monitor-placement context is available.
+Captured-monitor placement then clamps it to that monitor's usable area.
+Labels wrap to the viewport and dropdowns keep their own visible column;
+no horizontal scrolling is needed to reach an action, including on smaller
+screens. The full hierarchy scrolls vertically, while Close/Refresh remain in a
+reserved footer. A short instruction and legend appear above the
+rows; detailed instructions and session-lifetime notes start collapsed under
+**Show help** (Tk) / **Help** (browser), below the hierarchy. Toggling help changes
+no pause state and opens no replacement window. All discovered daemons appear, including unavailable
+ones with disabled controls. Tk runs in an isolated process; NiceGUI is the
+complete browser fallback. Toolkit preferences and startup-only fallback follow
+the [modal provider policy](MODAL_PROVIDERS.md).
+
+Session rows list active hook sessions that have a stable identity from their
 agent adapter. Entries prefer a human-readable session title, for example
 `OpenCode: Fix tray labels`, and fall back to the session ID, then the stable
 session key when no usable title is known (including older daemons). Titles are
-compact, single-line, display-safe text capped at 80 characters. Identical labels
-receive an eight-character stable-key fingerprint so they remain distinguishable.
-Windows menu text escapes literal ampersands so titles such as `Fix A&B` retain
-the `&` instead of turning it into a keyboard mnemonic. Stored titles and other
-platforms' menu text are unchanged.
-The submenu retains the full session key and project directory; controls always
+compact, single-line, display-safe text capped at 80 characters. Rows retain full
+session keys and project directories, so duplicate titles remain distinguishable.
+Literal ampersands are displayed unchanged in every modal provider.
+Controls always
 target that key, never the title. This works for local, remote, and container
 daemons, so two sessions in the same directory can be paused independently.
 
@@ -11517,49 +13010,60 @@ through its plugin API, with a 500 ms lookup deadline and a 30-second cache
 name/title metadata; unknown titles keep the ID fallback. No transcript or
 conversation-wide discovery is performed for tray labels.
 
-Session pause
-durations are 5, 15, or 30 minutes, 1 hour, or until resumed/session end. Timed
-pauses expire automatically; every session pause is cleared on a SessionEnd
-event, after 24 hours without hook activity, or when the daemon restarts. Session
-pauses are intentionally not persisted across restarts.
+The Pause scanning modal lists only daemon targets that currently return valid
+pause status (running or globally paused). Offline discovered targets do not get
+individual controls; when none are active, the modal shows one inert
+"No active daemon available" row and a refresh prompt.
 
-The **All sessions in directory...** submenu is the explicit bulk control. It
-combines explicitly paused directories with `active_project_dirs`, which records
-recently observed project directories rather than currently open IDE sessions.
-Directory entries remain until the project tracking TTL expires (currently 24
-hours without another request), including while global scanning is paused.
+Session pause durations are 5, 15, or 30 minutes, 1 hour, or until resumed/session
+end. Timed pauses expire automatically; every session pause is cleared immediately
+on a received SessionEnd event, after 30 minutes without hook activity, or when the
+daemon restarts. Session pauses are intentionally not persisted across restarts.
+The activity timeout is the documented fallback for integrations without a
+reliable end event; it does not detect whether an IDE process is open.
 
-In both single- and multi-daemon layouts, a confirmed session or directory pause
-shows **☾** and a selectable **Resume** on the next menu opening, even immediately
-within the stats-cache window. Resume restores **●** and the duration choices.
-Headers, Status, and scoped controls share the same stats snapshot; no additional
-hook request, unrelated menu interaction, or tray restart is needed.
+Each **Project** row is the explicit all-sessions-in-directory bulk control. It
+shows project directories with hook activity in the last 30 minutes, including
+directory-only callers without stable session IDs, and paths for currently active
+sessions. Explicitly paused directories remain available for Resume after activity
+stops or global scanning is paused. The legacy `active_project_dirs` stats field
+continues to retain directories for up to 24 hours; the pause controls use the
+separate liveness-filtered target list when the daemon provides it. For older
+daemons without the `pause_control_*` stats, the tray falls back to legacy fields
+for compatibility; upgrade those daemons to get the same liveness filtering.
+
+After an action, the modal reads authoritative state and updates every level.
+The tray header and **Status** also refresh; no additional hook request,
+unrelated menu interaction or tray restart is needed.
 
 | Indicator | Meaning |
 |-----------|---------|
-| **● Daemon (global)** | No global pause; session/directory pauses may still apply |
-| **☾ Daemon (global)** | Scanning is paused globally |
-| **● / ☾** on a session or directory | That scope's own pause is absent / present |
-| **◐** on a daemon header | Daemon is not globally paused, but at least one session or directory is paused |
+| **●** | Active at the displayed level |
+| **◐** | Partially paused: a daemon has scoped pauses, or a project has individual paused sessions |
+| **☾** | Paused, including an inherited global/directory pause |
+| **○** | Unavailable/offline, unsupported scope, or no known targets |
 
 Resuming a session does not clear a directory or global pause. Resuming a
-directory does not clear individual session or global pauses. Thus a scoped
-**●** is not a promise that effective scanning has resumed; each submenu explains
-that other pause layers may still apply. Directory controls remain the bulk
+directory does not clear individual session or global pauses. Row text explicitly
+identifies inherited pauses. A row paused only by its parent still offers
+pause durations to add its own independent pause, not a misleading Resume that would
+clear the parent. Directory controls remain the bulk
 control for all callers in that project, including those without stable IDs.
 
 Scoped requests require an explicit daemon acknowledgement. An unreachable,
-unsupported, or ended scope produces a failure notification without claiming
+unsupported, or ended scope produces feedback in the same modal without claiming
 success or falling back to a broader scope. Older daemons without session support
 show that limitation while retaining their directory/global controls.
 
 Session controls are offered only for hooks that provide a stable session ID;
 the daemon never guesses an identity from a project directory. Integrations,
 MCP callers, and provider middleware requests without a stable hook identity
-cannot be isolated by session. Use the global control or **All sessions in
-directory...** for those callers. `GET /api/stats` reports `active_sessions` with
-the daemon-issued `session_key` for CLI/API control. The tray pre-allocates 16
-session entries; additional sessions are listed by `ai-guardian daemon status`.
+cannot be isolated by session. Use the daemon or project-directory row for those
+callers. `GET /api/stats` reports `active_sessions` with the daemon-issued
+`session_key` for CLI/API control. The modal shows all reported sessions rather
+than imposing the former 16-entry native-menu slot limit. Displayed row tokens
+are bound to their connection and stable key; stale actions after refresh,
+removal, expiry or SSH reconnect cannot silently retarget another row.
 
 ## Migration from v1.7.x
 
@@ -11786,13 +13290,17 @@ Then run Option B from any machine with access to `localhost:63152`.
 **Status**: ✅ **Phase 1 Complete (v1.5.0)** | ✅ **Phase 2 Complete (v1.6.0)**  
 **Priority**: High (Production Ready)
 
+> **Current default:** If `secret_scanning.engines` is omitted, AI Guardian uses
+> `toml-patterns` followed by Gitleaks. An explicit list replaces that default.
+> The phase-planning notes below preserve the earlier Gitleaks-only proposal.
+
 ## Summary
 
 Multi-engine support for secret scanning is **fully implemented and production-ready** since v1.5.0. Users can choose or combine different secret detection tools based on their organization's requirements, compliance needs, and detection preferences.
 
 ## Background
 
-AI Guardian supports multiple secret scanning engines since v1.5.0 (see `src/ai_guardian/scanners/engine_builder.py`). While Gitleaks is the default and an excellent open-source tool with 100+ built-in patterns, different organizations have varying needs:
+AI Guardian supports multiple secret scanning engines since v1.5.0 (see `src/ai_guardian/scanners/engine_builder.py`). The built-in `toml-patterns` engine and Gitleaks are the default when no engine list is configured; different organizations can explicitly select other engines based on their needs:
 
 ### Why Multi-Engine Support?
 
@@ -11841,7 +13349,7 @@ The `engines` field is **fully functional** with support for both simple and adv
 {
   "secret_scanning": {
     "enabled": true,
-    "engines": ["gitleaks"]  // Single engine (default)
+    "engines": ["gitleaks"]  // Explicit Gitleaks-only selection
   }
 }
 ```
@@ -12339,7 +13847,8 @@ For organizations with AGPL concerns, use gitleaks, betterleaks, leaktk, or dete
   - [x] Strategy-level logging: engines_run, combined_findings, deduplicated
 
 - [x] **Console panel**
-  - [x] "Engine Configuration" panel with JSON editor
+  - [x] "Engine Configuration" panel with installed-engine checkboxes that
+    auto-save selections and update the advanced JSON editor
   - [x] Strategy dropdown, consensus threshold input
   - [x] Live JSON validation
 
@@ -12440,7 +13949,7 @@ Easy to add new engines as they emerge:
 
 ## Backward Compatibility
 
-- **No `engines` config**: Default to Gitleaks (current behavior)
+- **No `engines` config**: Default to `toml-patterns`, then Gitleaks
 - **`engines: ["gitleaks"]`**: Explicit Gitleaks-only (same as current)
 - **Pattern server**: Works with any engine that supports TOML configs
 - **Existing configs**: Continue working unchanged
@@ -12935,10 +14444,11 @@ reason, severity, confidence, policy version, source, agent, repository,
 correlation ID, and latency. Raw commands, matched text, snippets, and other
 scanner payloads are not copied into these attributes.
 
-The same decision metadata is embedded in `violations.jsonl`, returned by the
-daemon REST violation and check endpoints, and exposed in SARIF result
-properties. Existing fields and OTEL span names remain compatible with older
-consumers.
+The same decision metadata is embedded in standard `violations.jsonl` entries,
+returned by the daemon REST violation and check endpoints, and exposed in SARIF
+result properties. Sensitive finding history uses a minimal record and omits the
+per-finding policy decision. Existing fields and OTEL span names remain
+compatible with older consumers.
 
 ## What Gets Exported
 
@@ -13261,6 +14771,24 @@ V2 are both installed under different executable names, the version resolved as
 | V1 | `opencode-ai` 1.x | `@opencode-ai/plugin` import | `plugin` | `tool.execute.before`, `chat.message`, `tool.execute.after`, `session.end` |
 | V2 | `@opencode/cli` 2.x | Local auto-discovery; direct `{ id, setup }` export | None for this local plugin | `ctx.session.hook("prompt")`, `ctx.tool.hook("execute.before")`, `ctx.tool.hook("execute.after")`, session events |
 
+The V1 plugin replaces every blocked prompt part with one fixed synthetic
+refusal notice, retaining only the required part/session/message identifiers.
+This avoids an empty turn, removes original text and attachments before model
+submission, and lets a safe follow-up remain in the same session. V1 cannot skip
+the assistant turn, so OpenCode may process the fixed notice and produce a brief
+response; the toast explains the substitution.
+
+The issue reporter confirmed the affected generation is V2 (2.x); the exact patch
+version and OS are still unknown. In the previous V2 handler, a block added a
+synthetic notice and threw from prompt admission. V2's admission hook has no typed
+denial result, so this failed-admission path is consistent with the reported
+first-prompt session switch, but still needs live-host confirmation. The generated
+V2 plugin now replaces the mutable prompt draft with the fixed refusal notice,
+clears file attachments, agent mentions, and skills, and lets the safe input be
+admitted into the requested session. The original prompt data is not persisted or
+sent to the model. V2 may run the model on the fixed notice and produce a generic
+response; it no longer adds a duplicate synthetic entry or rejects admission.
+
 The V2 plugin deliberately omits the documented `@opencode/plugin` import.
 OpenCode V2 server builds have been reported to fail resolving that scoped
 package from local plugin files, while accepting a plain default-exported
@@ -13276,6 +14804,18 @@ events expose a mutable `event.result`; failed after-tool events expose
 `event.error` instead. AI Guardian scans both paths and only applies output
 redaction to completed results.
 
+V2 results can include both structured `output` and model-visible `content`.
+Redaction replaces the **whole result** with a valid content-only `Tool.Result`,
+not just one of those fields. Original structured data, attachments and metadata
+are discarded on replacement so duplicate raw values cannot survive. Claude-style
+`stdout`/`stderr` replacements are converted to text, never assigned to V2's
+different native shell output schema. Completed blocked results are likewise
+cleared before the fixed refusal/error path. Clean, allowed results are unchanged.
+
+OpenCode V2 reports its built-in command tool as `shell`; AI Guardian normalizes
+that name to canonical `Bash` so shared command scanning, policy, and immutable
+self-protection apply consistently across V1 and V2.
+
 V2 lifecycle events carry the stable session ID in `event.data.sessionID`.
 `session.idle` ends a turn and forwards `Stop`; it does not remove the active
 session or clear a session-scoped pause. `session.deleted` forwards `SessionEnd`
@@ -13284,11 +14824,14 @@ only closes its event subscription; it does not delete persistent sessions.
 
 V2 prompt, tool, and idle hooks also forward the native title obtained from
 `ctx.session.get({ sessionID })` as optional `session_title` display metadata.
-Lookup is bounded to 500 ms and cached for 30 seconds per exact session (including
-misses, at most 128 entries). Later activity refreshes generated/renamed titles.
-Unavailable or invalid metadata never skips hook checks: the tray retains a known
-title or uses the stable ID fallback. Deletion clears the cached entry. No
-messages or full transcripts are loaded to obtain a title.
+The same metadata supplies `session.location.directory` for the exact session.
+Lookup is bounded to 500 ms, with at most 128 concurrent requests. Concurrent
+lookups for the same session share one request; completed results are not cached
+across events, so session moves and title changes are observed on the next event.
+No messages or full transcripts are loaded. A missing title uses the stable ID
+fallback; an unavailable workspace is explicitly unknown and cannot authorize
+prompt admission or tool/result delivery. Deleted-session cleanup uses the stable
+session ID without inventing a workspace.
 
 Blocked pre-tool calls add a fixed notice saying the tool did not run. Blocked
 post-tool results add a notice saying the tool ran but its result was withheld;
@@ -13296,14 +14839,13 @@ the tool's side effects cannot be undone. Both notices avoid tool arguments and
 result contents. OpenCode receives a fixed tool error immediately, and the
 synthetic transcript notice is available as context on the next model turn.
 
-When the V2 prompt hook blocks a prompt, it adds a fixed AI Guardian refusal
-notice to the session transcript as a synthetic entry with `resume: false`,
-then rejects the original prompt. OpenCode records the notice as synthetic
-user-role input rather than a generated assistant answer. The next model turn
-sees that the request was refused; the original prompt and detection details
-are not included. OpenCode V2 does not expose a typed prompt-denial result, so
-it may still display its generic failed-send notification for the rejected
-prompt.
+When the V2 prompt hook blocks a prompt, it replaces the prompt draft with a
+fixed AI Guardian refusal notice and clears file attachments, agent mentions,
+and selected skills. This avoids a failed admission and keeps the safe turn in
+the requested session; the original prompt and detection details are not admitted.
+V2 does not expose a typed prompt-denial result, so the model may run on the fixed
+notice and produce a generic response. The notice is the admitted user input, not
+a separate synthetic transcript entry.
 
 The shared bridge remains outside the direct plugin discovery directory:
 
@@ -13315,6 +14857,76 @@ The shared bridge remains outside the direct plugin discovery directory:
 
 The bridge invokes `ai-guardian --ide opencode` with a 30-second timeout and
 keeps the host plugin free of duplicated process and response handling.
+For OpenCode, it sets the child process's `cwd` to the hook's workspace. This
+binds direct checks and the daemon client's existing CWD forwarding to the same
+project without changing the shared OpenCode process's working directory.
+Missing/unusable workspaces and checker process failures fail closed; they do
+not silently fall back to the plugin or server startup directory. A failure
+before the checker starts may have no backend violation record. Fixed,
+stage-specific OpenCode refusal notices still withhold private bridge errors.
+
+If Check hooks/MCP finds a healthy OpenCode plugin but missing MCP registration,
+the tray's explicit setup action can repair MCP without forcing replacement of
+healthy hooks. Setup verifies the existing plugin before taking that path, and
+the tray's final health check remains authoritative. Cancelling makes no change.
+
+Doctor and tray verification distinguish the user setup target from the
+registration source that wins across the checked OpenCode configuration layers.
+They inspect the selected user JSON/JSONC file (including `OPENCODE_CONFIG` or
+`OPENCODE_CONFIG_DIR`), applicable system configuration, and macOS managed
+preferences. Project files are included only when a project directory is supplied;
+the tray does not infer one from its own working directory. The structured result
+reports the checked scope/source and paths, not configuration values. If the user
+target is missing but a higher-precedence layer supplies a valid registration,
+effective MCP health is healthy while the target status remains separately
+visible. Effective file precedence is global, explicit `OPENCODE_CONFIG`,
+project files (direct configs then `.opencode` configs), system configuration,
+then managed preferences.
+
+OpenCode V2 normalizes supported V1 flat MCP entries in memory. Verification
+checks native `mcp.servers.ai-guardian` first and falls back to the legacy
+`mcp.ai-guardian` entry only when the native entry is absent. If both exist, the
+native entry wins regardless of JSON key order; an invalid or disabled winning
+entry is not reported healthy. OpenCode's `mcp list` connection state is not
+queried by Doctor or the tray: these checks do not launch the configured server,
+prove its connection, or verify that OpenCode activated the plugin. Plugin runtime
+load therefore remains explicitly unverified.
+
+## Native File Arguments and Diagnostics
+
+V2 `read` uses `path`, as do V2 `write` and `edit`. Normalization is shared by the
+adapter and direct policy callers. Their existing `filePath` and `file_path`
+representations remain compatible; this does not change OpenCode's own native
+input schema. Relative targets are resolved against the hook's workspace, not
+the daemon's startup CWD. Directory checks and content scanning receive the same
+canonical target as tool policy. Other tools' `path` arguments are not reinterpreted as
+file operations.
+Resolution also follows V2's leading `~` home expansion and Windows shell drive
+aliases; it does not invent `~username` expansion. Ambiguous Windows drive-relative
+targets are rejected instead of guessing a per-drive process directory. These
+semantics were checked against the MIT-licensed V2 2.0.24 `FileAccess.resolvePath`
+and `FSUtil.windowsPath` implementation; no new runtime dependency is added.
+
+Every supplied file alias must be a nonempty string without NUL characters and
+resolve to the same target. Missing, whitespace-only, malformed, and conflicting
+aliases are denied before protection checks consume them, including when ordinary
+permission rules are disabled. Protected valid targets still receive an immutable
+protection denial rather than a false missing-parameter error.
+
+New tool-permission records include bounded `blocked.input_diagnostics`: a fixed
+subreason, native/canonical tool names, expected field, schema-recognized argument
+names and JSON types, an unrecognized-argument count, and known/unknown target
+status. No argument values, arbitrary key strings, prompt/file contents, or
+session titles are copied into those diagnostics. Recoverable targets use the
+existing `blocked.file_path`; genuinely unknown targets are `null`.
+
+Console Details and Markdown/JSON copies expose the safe diagnostic projection
+and available violation/session/call/message IDs and versions. Workspace labels
+distinguish the hook location, the actual policy request context, and the plugin
+startup location. MCP exposes vetted diagnostic/correlation fields, not raw
+stored reasons or policy patterns; input failures do not receive admin-permission
+advice. Older records remain readable with unavailable metadata shown as unknown.
+See [violation logging](VIOLATION_LOGGING.md#tool-input-diagnostics).
 
 ## Database And Paths
 
@@ -13374,19 +14986,32 @@ The directly affected local validation command is:
 ```bash
 uv run --extra dev python -m pytest \
   tests/unit/test_opencode_support.py \
+  tests/unit/test_opencode_input.py \
+  tests/unit/test_typescript_bridge.py \
   tests/unit/test_opencode_transcript.py \
   tests/unit/test_ide_sessions.py \
   tests/unit/test_cli_version_check.py \
   tests/unit/test_ide_registry.py \
   tests/unit/test_setup.py \
   tests/unit/test_container_scripts.py \
-  tests/ux/test_user_experience_contract_opencode_self_protection.py -q
+  tests/ux/test_user_experience_contract_opencode_self_protection.py \
+  tests/ux/test_user_experience_contract_violation_guidance.py \
+  tests/ux/test_user_experience_contract_ide_setup.py -q
 ```
 
-Release readiness validates the normal image's pinned V1 executable; V2 remains
-a host-plugin contract only. V2 doctor status confirms generated files and
-discovery-path configuration, but does not inspect whether a running OpenCode
-server successfully activated the plugin.
+Release readiness validates the normal image's pinned V1 executable and builds a
+separate OpenCode V2 `2.0.24` smoke image for the credential-free local-mock hook
+cases. V2 is not bundled in either support image; this isolated smoke check does
+not qualify a published V2 deployment or a live provider integration. V2 doctor
+status confirms generated files and discovery-path configuration, but does not
+inspect whether a running OpenCode server successfully activated the plugin.
+
+The #2627 regressions exercise the generated V2 plugin/bridge with Node and
+isolated Python policy contexts, including concurrent projects with different
+rules, session movement, malformed aliases, unavailable metadata, fixed tool
+refusals, and diagnostic privacy. They do not establish live-host behavior for
+every V2 build. Verify safe/protected reads and workspace movement on the exact
+installed OpenCode version before claiming runtime qualification.
 
 The isolated host matrix currently passes both generated plugin generations. The
 version variable below is a test-only override used to exercise both contracts;
@@ -13399,8 +15024,9 @@ uv run --extra dev python -m pytest \
   tests/integration/test_ide_hooks_e2e.py -q
 ```
 
-Both support images pin OpenCode V1 to `1.19.0`. Live OpenShell Vertex model
-qualification remains manual.
+Both support images pin OpenCode V1 to `1.19.0`. The release-readiness-only V2
+image pins `2.0.24` in `.github/workflows/release-readiness.yml`. Live OpenShell
+Vertex model qualification remains manual.
 
 A disposable normal-image model-request smoke test, including provider
 authentication, remains a release-environment requirement. It is not claimed
@@ -16024,6 +17650,51 @@ https://policies.company.com/
 **Last Updated:** 2026-04-24  
 **Version:** 1.4.0-dev
 
+# === docs/POTENTIAL_INTEGRATIONS.md ===
+
+# Potential Integrations
+
+The proposals below are not available integrations or commitments to develop them.
+For implemented IDE/agent integrations, see [Agent Support](AGENT_SUPPORT.md).
+
+## Potential Integration: ServiceNow Bring Your Own Guardrail (BYOG)
+
+**Status: Potential integration — not implemented, not tested, unsupported, and
+unvalidated.**
+
+ServiceNow's Now Assist Guardian / AI Guardian supports Bring Your Own Guardrail
+(BYOG), allowing organizations to integrate external security services to evaluate
+AI prompts and responses.
+
+AI Guardian (this project) could potentially serve as a custom guardrail provider
+for ServiceNow by leveraging its existing REST API and security scanning engines.
+These building blocks do not provide a ServiceNow-compatible BYOG integration
+today.
+
+Such an integration would require additional development to:
+
+- Adapt ServiceNow's request and response formats to AI Guardian's scanning inputs
+  and results.
+- Configure secure communication, including authentication and transport
+  protection.
+- Validate guardrail enforcement for prompts and responses in a suitable
+  ServiceNow development/test environment.
+
+**This integration is not currently supported or validated.** Access to a suitable
+ServiceNow development environment would be required for testing. No integration
+development is planned until there is interest and access to such an environment;
+this proposal does not commit the project to implementation or a delivery date.
+
+Organizations or contributors interested in implementing this integration are
+encouraged to contribute to the discussion in
+[enhancement #2572](https://github.com/RedHatProductSecurity/ai-guardian/issues/2572)
+for contributor interest and future validation, or open a related GitHub issue.
+
+**References:**
+
+- [ServiceNow BYOG documentation](https://www.servicenow.com/docs/r/zurich/intelligent-experiences/enable-ai-experiences/configuring-byog.html)
+- [AI Guardian GitHub repository](https://github.com/RedHatProductSecurity/ai-guardian)
+
 # === docs/PRE_COMMIT.md ===
 
 # Pre-commit Hook
@@ -16265,12 +17936,16 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | Document | Description |
 |----------|-------------|
 | [Configuration Guide](CONFIGURATION.md) | Config file locations, options, precedence, and remote configs |
+| [Headless Ubuntu VM](UBUNTU_VM.md) | Upcoming-release PyPI/venv walkthrough: private HTTPS, Console bootstrap and workstation SSH enrollment; published-artifact qualification pending |
 | [Configuration Cookbook](COOKBOOK.md) | Practical Q&A pairs for common configuration tasks |
 | [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage pinned secret scanner engines |
 | [TOML Pattern Engine](TOML_PATTERNS.md) | Built-in Python scanner with 267 pre-compiled TOML patterns |
 | [Console Guide](CONSOLE.md) | NiceGUI browser console for managing configuration |
+| [Modal providers](MODAL_PROVIDERS.md) | Platform/capability matrix, startup-only fallback, preferences and manual desktop checks |
 | [Hook Ordering](HOOKS.md) | How hooks work and ordering requirements |
 | [Troubleshooting](TROUBLESHOOTING.md) | Daemon, tray, container, and OpenShell issue resolution |
+| [Uninstall and orphan recovery](UNINSTALL.md) | Standalone scoped POSIX/Windows cleanup, preservation contract, and missing-runtime lifecycle matrix |
+| [Support bundles](SUPPORT.md) | Reviewed public GitHub Discussions, restricted categories, legacy export, and safe retries |
 | [OpenShell Supervisor Middleware](OPENSHELL_MIDDLEWARE.md) | External Rust service managed by OpenShell gateway registration and policy |
 
 ## Security Features
@@ -16279,6 +17954,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 |----------|-------------|
 | [Security Overview](security/README.md) | Index of all security feature documentation |
 | [Secret Scanning](security/SECRET_SCANNING.md) | Secret detection, pattern server, false positives |
+| [Password Likelihood](security/PASSWORD_LIKELIHOOD.md) | Experimental opt-in local suspected-password heuristics, privacy and release gates |
 | [Prompt Injection](security/PROMPT_INJECTION.md) | Heuristic detection, sensitivity, allowlists |
 | [SSRF Protection](security/SSRF_PROTECTION.md) | Private IP blocking, metadata endpoints, limitations |
 | [Unicode Attacks](security/UNICODE_ATTACKS.md) | Zero-width chars, bidi override, homoglyphs |
@@ -16301,7 +17977,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Security Design](SECURITY_DESIGN.md) | Architecture principles, self-protection, known limitations |
 | [Tool Policy](TOOL_POLICY.md) | Allow/deny lists for Skills, MCP, Bash, Write |
 | [Permissions Comparison](PERMISSIONS_COMPARISON.md) | ai-guardian vs settings.json permissions |
-| [Violation Logging](VIOLATION_LOGGING.md) | JSON audit trail with unified policy decisions |
+| [Violation Logging](VIOLATION_LOGGING.md) | Privacy-aware violation history, remote mirroring, and desktop/email alerts |
 | [Compliance Audit Logging](AUDIT_LOGGING.md) | Sanitized all-decision audit trail for SOC 2, GDPR, and HIPAA |
 
 ## AI Security Awareness
@@ -16310,7 +17986,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 |----------|-------------|
 | [MCP Server](MCP_SERVER.md) | MCP security advisor server — tools, setup, proactive levels, support bundles |
 | [MCP Security Scanning](MCP_SERVER.md#mcp-security-scanning) | Audit MCP server configs and source code for credential exposure, supply chain risks |
-| [Multi-Daemon Tray](MULTI_DAEMON_TRAY.md) | Discover and manage daemons across local, Podman/Docker, and Kubernetes |
+| [Multi-Daemon Tray](MULTI_DAEMON_TRAY.md) | Discover and manage local, Podman/Docker, Kubernetes and explicitly enrolled SSH daemons |
 
 ## IDE Integration
 
@@ -16326,11 +18002,18 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Multi-Engine Support](MULTI_ENGINE_SUPPORT.md) | Scanner engine options and future plans |
 | [Pattern Server](PATTERN_SERVER.md) | Enterprise pattern server configuration |
 
+## Potential Integrations
+
+| Document | Description |
+|----------|-------------|
+| [ServiceNow BYOG proposal](POTENTIAL_INTEGRATIONS.md) | Potential, unimplemented, untested, unsupported, and unvalidated integration; no development commitment |
+
 ## Container
 
 | Document | Description |
 |----------|-------------|
 | [Sandbox CLI](Sandbox.md) | Named Docker/Podman and OpenShell sandbox lifecycle management and native command mappings |
+| [Codex sandbox runtime](CODEX_SANDBOX_RUNTIME.md) | Diagnose Bubblewrap permission failures without weakening Codex or container isolation |
 | [CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md) | Onboarding and validation checklist for container and OpenShell CLI support |
 | [Container Image](../container/README.md) | UBI-based image with supported agent integrations, published to quay.io |
 
@@ -16900,6 +18583,7 @@ The most useful options are:
 | `--cli NAME` | Select the CLI. OpenShell supports `codex`, `claude`, and `opencode`. |
 | `--repo DIR` | Mount a container repository or upload it to OpenShell. |
 | `--name NAME` | Choose the sandbox name. |
+| `--container-network NAME` | Attach a container sandbox to an existing Docker/Podman network. The caller is responsible for that network's egress and isolation policy. |
 | `--profile PROFILE` | Start with a bundled or custom AI Guardian profile. |
 | `--policy FILE` | Add an OpenShell policy file; repeatable. |
 | `--provider NAME` | Attach an existing OpenShell provider; repeatable. |
@@ -17033,9 +18717,24 @@ AI Guardian provides automated installation and management of secret scanner eng
 | Secretlint | Local rules | MIT | `ai-guardian scanner install secretlint` |
 | GitGuardian (`ggshield`) | Cloud service | MIT CLI | `ai-guardian scanner install gitguardian` |
 
-The GitGuardian engine also requires explicit consent, an API key, and network
-access to its cloud service. See [Multi-Engine Support](MULTI_ENGINE_SUPPORT.md)
-for the data-flow and consent details.
+GitGuardian is an optional cloud service, not an offline scanner. Using the
+engine requires explicit consent, `GITGUARDIAN_API_KEY`, and network access;
+scanned content is sent to GitGuardian's service. The `ggshield` CLI is MIT
+licensed, separately from the service's terms and account requirements. Eligible
+free workspaces currently include 10,000 scan API calls per rolling 30-day
+period, shared across API keys in the workspace. Check GitGuardian's current
+[pricing](https://www.gitguardian.com/pricing) and
+[API quota documentation](https://docs.gitguardian.com/api-docs/usage-and-quotas)
+for eligibility and current limits. A quota or service failure is an unsuccessful
+scan and follows `on_scan_error`; it is never reported as a clean scan.
+
+The default Docker/Podman and OpenShell images omit the GitGuardian CLI. Build a
+derived image with `--build-arg INCLUDE_GITGUARDIAN=true` to bundle it; this is
+particularly important for OpenShell, where scanner binaries cannot be fetched
+at sandbox startup. Packaging the CLI does not provide consent, credentials,
+quota, or network access. See [container image scanner details](../container/README.md#bundled-scanner-engines)
+and [Multi-Engine Support](MULTI_ENGINE_SUPPORT.md) for data-flow and consent
+details.
 
 ## Quick Start
 
@@ -17143,7 +18842,7 @@ When GitHub API is unavailable (offline, network issues), ai-guardian falls back
 ```toml
 [tool.ai-guardian.scanners]
 gitleaks = "8.30.1"
-betterleaks = "1.3.1"
+betterleaks = "1.9.0"
 leaktk = "0.3.4"
 secretlint = "13.0.5"
 gitguardian = "1.54.0"
@@ -17255,6 +18954,27 @@ AI Guardian supports the following platforms and architectures:
 - x64
 - ARM64
 - x32
+
+### WSL2 (Experimental)
+
+AI Guardian has experimental support when installed and run inside a WSL2 Linux
+distribution. From that distribution, install AI Guardian as on Linux:
+
+```bash
+uv tool install ai-guardian
+# or: pip install ai-guardian
+```
+
+Install any optional scanners from WSL as well, using the Linux instructions
+and corresponding Linux packages or binaries; this does not add Windows scanner
+binaries to the WSL environment. Optional scanner availability still depends on
+each engine's Linux package and release support.
+
+This is not a guarantee for every Linux distribution, scanner, or architecture,
+and WSL2 does not have comprehensive CI or platform-test coverage. WSL1 is not
+included. See the [Console Guide](CONSOLE.md#wsl2-experimental) for browser and
+desktop-integration caveats. [WSL2 troubleshooting](TROUBLESHOOTING.md#wsl2-console-troubleshooting)
+covers manual browser and localhost checks.
 
 ## Troubleshooting
 
@@ -17507,6 +19227,15 @@ one causes a broken or incomplete feature.
 
 ### 10. Tests
 - [ ] `tests/unit/test_<scanner>.py` — unit tests: clean input, known-bad input, config options (threshold, allowlist), suppression annotations, robustness (empty input, parse errors)
+- [ ] If the scanner is enforced through a supported agent CLI hook, add a
+  synthetic violation case and a clean control to `scripts/agent_cli_test.py`,
+  update `tests/unit/test_agent_cli_test.py` and `test_agent_cli_tool_results.py`,
+  and keep the release-readiness matrix in sync. The smoke case must use the local
+  mock provider, never read user files or contact external endpoints. A value-free
+  execution witness in the disposable smoke workspace is allowed. Output cases
+  must verify pre/post hook events and containment at the mock boundary, not just
+  finding counts. If no supported CLI hook exercises this
+  scanner, record the reason and retain focused scanner/UX coverage.
 
 ### 11. Help tooltips
 - [ ] `src/ai_guardian/setup/config.py` — add `_comment_*` keys inside the scanner dict in `_get_default_config_template()` for each configurable field so they surface automatically as Web Console tooltips
@@ -17516,6 +19245,10 @@ one causes a broken or incomplete feature.
 
 ### 12. Don't forget
 - [ ] `.aiguardignore.toml` scanner type — add to `SCANNER_TYPES` in `aiguardignore.py` if file-content based
+- [ ] Real-agent CLI hook smoke — when the scanner is hook-reachable, synchronize
+  `scripts/agent_cli_test.py`, `tests/unit/test_agent_cli_test.py`, and
+  `.github/workflows/release-readiness.yml` as described in the
+  [CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md).
 - [ ] `docs/AGENT_SUPPORT.md` — add row to Violation Type Coverage Matrix
 - [ ] `CHANGELOG.md` — add entry under `[Unreleased]`
 - [ ] `src/ai_guardian/doctor.py` — add `check_<scanner>()` method to verify the scanner's underlying dependency is importable (use `importlib.util.find_spec()`); add it to the `checks` list in `run_all()`; add display name to `_CHECK_DISPLAY_NAMES`; update the check count assertion in `tests/unit/test_doctor.py::TestDoctorRunAll::test_run_all_returns_report`
@@ -19195,6 +20928,18 @@ Returns a dict:
     "stats": {"secrets": 0, "pii": 0, "total": 0}
 }
 ```
+
+### `session.get_violations(*, tool_use_id=None, session_id=None, violation_type=None, limit=50)`
+
+Returns recent hook-triggered violation records as a list. Results are sanitized
+before returning and include `violation_type`, `message`, `tool_name`,
+`tool_use_id`, `session_id`, `timestamp`, and `severity`.
+
+Use `sensitive_finding` to filter the consolidated, privacy-safe sensitive
+category. For compatibility, `secret_detected`, `image_secret_detected`, and
+`pii_detected` remain aliases and match consolidated records; these records do
+not retain the original sensitive subtype. The canonical filter also includes
+type-specific sensitive records from older history.
 
 ### `session.results`
 
@@ -21751,6 +23496,232 @@ image_scanning .... FAIL  rapidocr/onnxruntime not available (required for image
   Fix: pip install rapidocr onnxruntime
 ```
 
+# === docs/security/PASSWORD_LIKELIHOOD.md ===
+
+# Password likelihood (experimental, opt-in)
+
+Issue #2612 adds an **offline suspected-password heuristic**, independent of
+credential-engine selection. It is **off by default in every profile**, including
+strict. It does not access a vault, browser, account database, remote classifier,
+credential-validation service or password-training corpus. No dependency is added.
+
+**Release qualification is pending.** A string's randomness or apparent strength
+does not establish that it is a password. Do not advertise this feature as
+universal password recognition or qualified pre-model leak prevention.
+
+## Existing capabilities and reuse decision
+
+- Bundled service/assignment rules already detect recognizable credentials and
+  many password assignments. They remain unchanged.
+- `TomlPatternsScanner` performs pattern matching **before** entropy/stopword
+  filtering. Those filters do not extract arbitrary standalone candidates.
+- The optional `detect-secrets` engine includes Base64/hex entropy plugins, but
+  their default extraction is quoted/alphabet-specific, not general mixed-symbol
+  or contextual passphrase recognition. Its supported default CLI path is not
+  qualified as offline: upstream plugins can perform network verification. Do not
+  activate its entire plugin set to implement this feature.
+- Reviewed upstream [v1.5.0 license](https://github.com/Yelp/detect-secrets/blob/v1.5.0/LICENSE)
+  (Apache-2.0), [entropy plugins](https://github.com/Yelp/detect-secrets/blob/v1.5.0/detect_secrets/plugins/high_entropy_strings.py),
+  and [documentation](https://github.com/Yelp/detect-secrets/tree/v1.5.0).
+  No upstream code or additional package is incorporated. The implementation
+  reuses the existing local `shannon_entropy()` helper, plus bounded structural
+  checks. No dictionary/model license, download or language data is introduced.
+
+## Trusted controls and outcomes
+
+The Web Console's **Secret Detection Settings** page has a separate experimental
+card. Its enable checkbox and outcome selector **save automatically when changed**;
+there is no separate Save button. Changing the outcome does not enable analysis,
+and merely opening the page never saves or opts in. Each change saves only that
+field in the selected daemon's global configuration, preserving the other control
+and unrelated policy. Read-only configuration cannot be changed, and failed saves
+show an error notification instead of success.
+Project scope cannot activate, deactivate or change this stage. Tool inputs are
+data, never configuration. A trusted SDK application may pass explicit policy;
+an absent section in an explicit SDK config means off, not workstation fallback.
+
+| Outcome | Behavior |
+|---|---|
+| Default/off | Existing scanning behavior; no heuristic analysis |
+| `ask` (default once enabled) + contextual candidate | Hold the applicable hook decision for private **Allow Once / Block** approval; no approval means denial |
+| `ask` + ambiguous candidate | Advisory only; no approval prompt |
+| Incomplete/error + `ask` | Ask with an explicit incomplete-analysis warning, not a positive password claim; no approval means denial |
+| `warn` | Generic advisory finding; **does not prevent a leak** |
+| `block` + contextual candidate | Request denial at applicable hook/SDK boundary |
+| `block` + ambiguous candidate | Advisory only, not a universal random-string blocker |
+| Incomplete/error + `block` | Request denial without claiming a positive password match |
+| Incomplete/error + `warn` | Explicit incomplete-analysis warning; no prevention assurance |
+
+Malformed opted-in outcomes fail conservatively to block; only literal boolean
+opt-in enables the stage. Configured secret engines, fallback ordering, language
+overlays, project exclusions and annotation processing do not control it.
+Existing credential findings are never downgraded by heuristic negative scores.
+The shared content pipeline removes a heuristic finding only when reliable
+coordinates establish full coverage by a stronger blocking credential finding.
+When coordinates are missing, both independently labeled findings may remain.
+
+Ask reuses the existing local/remote daemon → workstation tray → decision path,
+including SSH's authenticated poll-only transport. A remote daemon does not need
+its own display. An explicit headless preference remains non-interactive and
+denies unresolved Ask; a missing/disconnected tray, cancellation, timeout or UI
+failure never silently approves. A queued remote timeout is terminal, not a new
+local prompt. The existing modal dispatcher retains Tkinter → NiceGUI eligibility,
+exclusive toolkit preferences and startup-only fallback.
+
+One approval covers only this operation, including its repeated contextual spans;
+it never approves a later hook or changes another scanner's decision. Candidate
+values are withheld from the dialog payload, subprocess arguments, queue and audit.
+This dialog offers **Allow Once / Block** only: no source recovery, View File,
+persistent exception, source annotation or ignore-file editor. Existing explicitly
+saved `warn`/`block` outcomes are preserved; missing outcomes now default to `ask`.
+SDK and static scans never open a UI. Enforcing SDK checks reject unresolved Ask;
+the trusted application must handle that denial rather than assume approval.
+The trusted violation Details view offers private review guidance, not a copyable
+source/persistent-exception snippet. Static reports retain only validated numeric
+locations and fixed class labels; they do not copy arbitrary fields from findings.
+
+## Initial supported classes and limits
+
+| Candidate class | Initial treatment |
+|---|---|
+| Mixed-symbol or alphanumeric random-looking ASCII spans | Ambiguous without credential context; advisory only |
+| A bounded value immediately following explicit password/passphrase prose | Contextual suspicion, not known-value identity |
+| Joined lower-case word-like, CamelCase, separator-delimited values | Contextual only; no dictionary segmentation or language claim |
+| Quoted, spaced word sequences | Contextual only, bounded single-line value |
+| Arbitrary context-free joined words, ordinary sentences | **Not reliably recognized; deferred** |
+| Multilingual segmentation, escaped/multiline quoted passphrases | **Not qualified; deferred** |
+
+Context is deliberately narrow, not any credential-related word anywhere in a
+document. Confusable identifiers, URLs, UUID-like values, digests and encoded data
+reduce only context-free heuristic scores. They are not global exclusions from
+stronger scanners, and explicit credential context can still flag such forms.
+Short/common passwords and unsupported layouts can be missed. Numeric confidence
+probabilities and strength estimates are intentionally not reported.
+
+Fixed work limits: 262,144 input characters, 128 characters per candidate, 4,096
+candidate examinations and 128 reported findings. Tool-argument traversal also
+limits depth to 16 and aggregate characters/nodes. Over-budget work is explicitly
+incomplete, never silently clean. Unicode is bounded but not linguistically
+classified. There is no unbounded segmentation or input-controlled regex.
+
+## Privacy, sanitization and interception
+
+Findings contain fixed class labels and character offsets/line/column locations,
+not candidate values, hints, surrounding text or candidate hashes. Exceptions
+and audit failures withhold exception text/tracebacks. This violation type never
+creates a deferred allowlist snippet/hash or copies arbitrary command/context
+overrides. CLI/SARIF, SDK, daemon, MCP retrieval and diagnostic/support paths use
+these safe records; no new candidate retrieval API or persistent store is added.
+
+Explicit text sanitization, including batch/trace/support sanitization, honors
+trusted opt-in and replaces **every complete matched span** (including ambiguous,
+repeated and overlapping spans). No password prefix/suffix is retained. Incomplete
+sanitization withholds the entire text rather than leave an unexamined suffix.
+This does not retroactively erase already disclosed input. Existing scanners may
+still operate within their existing trusted input/staging boundary; the heuristic
+does not create candidate files or change existing scanner telemetry settings.
+
+The new PostToolUse path does **not** claim automatic safe output transformation:
+it resolves Ask or requests a block for contextual candidates before the existing
+pattern-redaction path. Approval and warnings must not bypass stronger credential checks.
+Clean pre-tool context never skips analysis of a different tool result.
+
+Tool-argument locations refer to string values joined by newlines in traversal
+order, not JSON-escaped command text. SDK content/file/command checks and daemon
+content checks use the independent stage. Static CLI scans are retrospective and
+advisory, even when policy selects block. Transcript-only detection and MCP-only
+advice are **not** preventive. See [host limitations](../AGENT_SUPPORT.md#password-likelihood-boundary-qualification).
+
+### Scanner checklist decisions
+
+The scanner/violation, shared pipeline, argument/result paths, static findings,
+schema/setup/example/all profiles, existing Secrets page, help/status, SDK/daemon
+and release-readiness checks are synchronized. No new engine preset, dependency,
+installer/image download or dependency doctor check is needed. No new modal or
+navigation page is introduced. The scanner name is registered in ignore-file
+tooling/schema, but this global-only experimental stage deliberately does **not**
+consume project `.aiguardignore.toml`, target allowlists or language overlays:
+project data must not silently weaken the human's choice.
+Broader trusted exception controls would require a separately reviewed design.
+Ask extends the existing decision dialog with a private, decision-only variant;
+it does not introduce another modal dispatcher or remote approval system.
+
+## Qualification budgets (declared before results)
+
+Run `uv run --extra dev python scripts/qualify_password_likelihood.py` in a source
+checkout. It prints aggregate counts only; it does not read real user settings or
+passwords, make network calls, persist candidate text, or invoke external engines.
+
+- Frozen held-out seed, 1,000 synthetic samples per class; report class counts,
+  character volumes, detection/contextual counts and incomplete analyses.
+- Supported-class recall **at least 95% per class**, not just overall.
+- Labeled benign false-positive budgets per class: **at most 1% advisory** and
+  **at most 0.1% contextual/block-eligible**.
+- Contextual precision **at least 99% in the declared balanced synthetic corpus**;
+  this is prevalence-dependent, not a population precision estimate.
+- 4-KiB typical-input p95 **at most 25 ms**; bounded adversarial-input worst time
+  **at most 250 ms**; peak traced allocations **at most 8 MiB**. Record platform
+  and Python version; no universal hardware/latency guarantee is implied.
+- Fixed repository source/documentation windows are reported **unadjudicated**,
+  not assumed benign. Independently labeled representative code/prose/log/config,
+  identifiers, versions, UUIDs, checksums and encoded/binary-like corpora, with
+  reported sizes and class-specific results, remain a **release gate**.
+- Synthetic test success cannot substitute for actual model-boundary evidence.
+  Keep broad passphrase recognition deferred and the v1.21.0 prevention claim
+  gated until both real-corpus and applicable host-boundary evidence qualify.
+
+### Preliminary measurements — 2026-10-28
+
+Linux, Python 3.14.7, frozen seed `26122026`, 1,000 generated samples per
+positive class (8,000 total), and six benign template classes (6,000 total):
+
+| Synthetic class | Detections / samples |
+|---|---|
+| Standalone alphanumeric | 986 / 1,000, all advisory |
+| Standalone mixed-symbol | 987 / 1,000, all advisory |
+| Contextual alphanumeric | 986 / 1,000 |
+| Contextual mixed-symbol | 1,000 / 1,000 |
+| Contextual joined / CamelCase / separated / spaced | 1,000 / 1,000 **each** |
+| Benign code / prose / logs / config / digest / URL templates | 0 / 1,000 **each** |
+
+There were no incomplete synthetic analyses. Contextual precision in this
+constructed dataset was 100%; **repeated templates are not 6,000 independently
+sampled real-world documents**, and that result is not population precision.
+The measured 4-KiB p95 was 0.94 ms, bounded adversarial worst time 15.28 ms, and
+peak traced allocations 2,858,268 bytes (not total process RSS). These local
+synthetic/performance checks passed their declared budgets.
+
+The separate unadjudicated repository probe had **3 / 11 source windows** (39,131
+characters) and **3 / 9 documentation windows** (32,915 characters) with advisory
+findings. None were contextual/block-eligible; none were incomplete. These six
+flagged windows are **not** evidence of acceptable benign false-positive rates.
+They require independent adjudication and a representative held-out evaluation;
+do not label the real-world quality gate passed or tune against these samples and
+then call them held-out. Keep experimental status and the release/prevention
+gates open. Broad context-free passphrase recognition remains deferred.
+
+### Manual host evidence (not yet performed)
+
+For **each claimed host/version/platform and event**:
+
+1. Use a disposable project/account/configuration and synthetic values only;
+   separately verify opt-out, warn, contextual block and ambiguous behavior.
+2. Observe the actual request sent to a disposable local model/transport recorder
+   (not just the hook JSON). Check prompts, Read, Write/Edit/Bash arguments and
+   tool results independently. Identify which inputs were already model-visible.
+3. Verify the complete original value, including repetitions/overlaps, never
+   reaches the model on a claimed preventive path. A warning, transcript finding,
+   generic hook denial or replacement text alone is **not sufficient evidence**.
+4. Exercise scanner failures/limits, ignored host responses, missing events and
+   existing credential redaction simultaneously. Unsupported transformations,
+   post-consumption callbacks and observation-only events remain non-preventive.
+5. Record artifact/version, host/platform, recorder method, event, observed model
+   payload (redacted evidence), cancellation/failure behavior and limitations.
+   No production passwords, runtime enrollment or workstation vault access.
+
+Until that evidence exists, all real-host pre-model prevention cells for this
+feature remain **unqualified**, irrespective of older scanner support ratings.
+
 # === docs/security/PROMPT_INJECTION.md ===
 
 # Prompt Injection Detection
@@ -23307,17 +25278,27 @@ Default engine order: ["toml-patterns", "gitleaks"]
 
 ### Configuration
 
-**Default (Gitleaks):**
+**Default engine selection:**
 ```json
 {
   "secret_scanning": {
     "enabled": true
-    // Defaults to gitleaks if not specified
+    // If engines is omitted, defaults to ["toml-patterns", "gitleaks"]
   }
 }
 ```
 
-**Recommended (BetterLeaks with Gitleaks fallback):**
+An explicit `engines` list replaces that default. For example,
+`"engines": ["gitleaks"]` runs Gitleaks only and does not run the built-in
+`toml-patterns` engine in this secret-scanning pipeline.
+
+The Console's **Engine Configuration** page shows built-in TOML patterns selected
+when the engine list is omitted. Clear **Built-in TOML patterns** to save an
+explicit opt-out; the selection remains cleared after using **Reload**. Select it
+again to restore built-in pattern scanning.
+
+**External-only example (BetterLeaks with Gitleaks fallback; explicitly opts out
+of built-in TOML patterns):**
 ```json
 {
   "secret_scanning": {
@@ -23332,7 +25313,7 @@ Default engine order: ["toml-patterns", "gitleaks"]
 - Falls back to Gitleaks if BetterLeaks not found
 - Works on any system (automatic detection)
 
-**Three-Scanner Fallback:**
+**Three external scanners (also explicitly opts out of built-in TOML patterns):**
 ```json
 {
   "secret_scanning": {
@@ -23354,6 +25335,16 @@ When the ai-guardian daemon is running and LeakTK (v0.3.3+) is installed, secret
 ### Detection Techniques (v1.15.0+)
 
 **Prefix-based token detection** — TOML rules can declare `token_prefixes` for fast prefix matching, separate from keyword-based pre-filtering. This enables detection of tokens with known prefixes (e.g., `sk-or-`, `hvs.`, `AIza`) without running the full regex against all content. See [TOML_PATTERNS.md](../TOML_PATTERNS.md) for field documentation.
+
+**Bundled service credentials** — the built-in engine recognizes standalone
+Baseten (`b10_`), Labelbox (`lbx_`), Recursion (`rma_`), Supabase secret
+(`sb_secret_`), and typed Tailscale API, auth, OAuth-client, and webhook keys.
+The formats are based on [vendor documentation](https://docs.baseten.co/organization/api-keys),
+[Supabase API key documentation](https://supabase.com/docs/guides/api/api-keys),
+[Tailscale key-prefix documentation](https://tailscale.com/docs/reference/key-prefixes),
+and [MIT-licensed Betterleaks rules](https://github.com/betterleaks/betterleaks/pull/429).
+These bundled rules perform format matching, not live credential validation; the
+Tailscale SCIM format remains excluded because its key-ID layout is undocumented.
 
 **Credentials in git remote URLs** — AI Guardian detects credentials embedded in git remote URLs (e.g., `https://user:token@github.com/org/repo`). This pattern catches a common source of credential leaks where tokens are hardcoded into remote URLs instead of using credential helpers. The detection runs automatically as part of the secret scanning pipeline.
 
@@ -23405,9 +25396,14 @@ When the ai-guardian daemon is running and LeakTK (v0.3.3+) is installed, secret
 AI Guardian automatically selects the first available scanner from your `engines` list:
 
 1. **Defaults to toml-patterns:** If no `engines` configured, uses `["toml-patterns", "gitleaks"]` — `toml-patterns` is always available (pure Python, no binary)
-2. **Checks availability:** Tries each scanner binary in order
-3. **Selects first found:** Uses the first scanner that exists in PATH
-4. **Falls back gracefully:** If an external scanner is not installed, the next engine in the list is tried; `toml-patterns` always provides a working fallback
+2. **Explicit lists replace defaults:** Only engines in `secret_scanning.engines` are selected; a Gitleaks-only list omits `toml-patterns`
+3. **Checks availability:** Tries each scanner binary in order
+4. **Selects first found:** Uses the first scanner that exists in PATH
+5. **Falls back gracefully:** If an external scanner is not installed, the next engine in the list is tried; `toml-patterns` always provides a working fallback when included
+
+`ai-guardian doctor` lists supported engines and indicates which are configured
+and installed. It warns when secret scanning is enabled but `toml-patterns` is
+not selected.
 
 **Example:**
 ```bash
@@ -24604,7 +26600,7 @@ AI Guardian's SSRF protection blocks these attacks by checking all Bash commands
 
 These protections **CANNOT be disabled** via configuration:
 
-### Private IP Ranges (RFC 1918 + Loopback + Link-local)
+### Private, Reserved, and Special-Use IP Ranges
 
 **IPv4:**
 - `10.0.0.0/8` - Private network (Class A)
@@ -24613,8 +26609,10 @@ These protections **CANNOT be disabled** via configuration:
 - `127.0.0.0/8` - Loopback (localhost)
 - `169.254.0.0/16` - Link-local (AWS/Azure metadata)
 - `0.0.0.0/8` - Unspecified and reserved destination addresses
+- `198.18.0.0/15` - Benchmarking range (RFC 2544)
 
 **IPv6:**
+- `::/128` - Unspecified destination address
 - `::1/128` - Loopback
 - `fc00::/7` - Unique local addresses (private network)
 - `fe80::/10` - Link-local addresses
@@ -24654,6 +26652,7 @@ destination policy to these protocol-defined IPv4 endpoints:
 | IPv4-mapped (`::ffff:0:0/96`) | The mapped IPv4 address |
 | 6to4 (`2002::/16`) | The IPv4 routing endpoint encoded after the prefix |
 | Teredo (`2001::/32`) | Both the server IPv4 address and decoded client IPv4 address |
+| Well-known NAT64 (`64:ff9b::/96`) | The embedded IPv4 destination |
 
 The Teredo client identifies the tunneled endpoint. Its server can receive
 setup/control traffic, so both roles are relevant to destination policy; the
@@ -24663,6 +26662,10 @@ a blanket ban on transition prefixes. Numeric metadata checks also cover fresh
 DNS results, including the existing Alibaba Cloud (`100.100.100.200`) and Oracle
 Cloud (`192.0.0.192`) endpoints outside the core private ranges. Classification
 uses the existing standard-library `ipaddress` properties without DNS or sockets.
+For NAT64, only the well-known `/96` prefix is decoded; the prefix itself is not
+blocked, and a public embedded IPv4 destination remains allowed. A single
+terminal DNS root dot is normalized before metadata and domain policy checks, so
+`metadata.google.internal.` receives the same protection as its undotted name.
 
 Public transition endpoints and native public IPv6 remain allowed by this
 check. Private-looking bits in an unrelated IPv6 address, or in a 6to4 interface
@@ -24684,7 +26687,8 @@ result at their connection boundary, as described below.
 validation failure in another product; it is not a CVE assignment for AI Guardian.
 Implementation is independently authored from protocol facts in
 [RFC 3056](https://www.rfc-editor.org/rfc/rfc3056.html),
-[RFC 4380](https://www.rfc-editor.org/rfc/rfc4380.html), and the
+[RFC 4380](https://www.rfc-editor.org/rfc/rfc4380.html),
+[RFC 6052](https://www.rfc-editor.org/rfc/rfc6052.html), and the
 [Python IPv6 address properties](https://docs.python.org/3/library/ipaddress.html#ipaddress.IPv6Address.sixtofour).
 No third-party detector code or dependency was added.
 
@@ -24698,9 +26702,10 @@ changes.
 Network-aware integrations that own the connection boundary can revalidate the
 destination with `SSRFProtector.check_resolved_destination(url, addresses)`.
 Pass every fresh IPv4 and IPv6 address returned immediately before connecting.
-Any private, loopback, link-local, metadata, IPv6-local, or `0.0.0.0/8`
-destination is an immutable block. A domain allow-list cannot override that
-result; it only applies to configurable domain deny-list entries.
+Any destination covered by a private, loopback, link-local, metadata, or IPv6-local
+block, or by `0.0.0.0/8`, `198.18.0.0/15`, or `::/128`, is an immutable block.
+A domain allow-list cannot override that result; it only applies to configurable
+domain deny-list entries.
 
 For redirects, pass the complete absolute URL chain to
 `SSRFProtector.check_redirect_chain()` and provide fresh addresses for each
@@ -25941,6 +27946,527 @@ Unicode attack detection in AI Guardian is based on:
 - **v1.5.0** - Added tag character detection and strict mode
 - **v1.6.0** - Enhanced homoglyph database (80+ pairs), context-aware detection
 
+# === docs/SUPPORT.md ===
+
+# Support bundles and public GitHub Discussions
+
+The default support destination is **GitHub Discussions** in
+[`RedHatProductSecurity/ai-guardian`](https://github.com/RedHatProductSecurity/ai-guardian/discussions).
+When GitHub is selected, the first native screen has a **Destination** dropdown:
+**Create ZIP only** (default, no upload) or **Gist + Discussion** (requires GitHub
+credentials). Choose a destination and click **Next** to open its review page;
+changing the dropdown alone does not continue or send anything. For **Gist +
+Discussion**, selected diagnostic files go into one **unlisted Gist owned by your
+GitHub account**; the public Discussion
+contains your sanitized message and a separate **Diagnostics** link, not inline
+file contents. Explicitly configured S3,
+GCS, email and local destinations remain in effect, including from the tray.
+
+This is not the GitHub Issues workflow. **Bug Reports** (`bug-reports`) is
+preselected; **Q&A** (`q-a`) is the only other supported category. Q&A must
+support accepted answers; Bug Reports does not need to. Repository/category IDs
+are discovered from GitHub and category-to-repository membership is checked before publication. Missing
+categories, disabled Discussions, or mismatches fail without a fallback.
+
+> **Public visibility:** anyone can read the submitted title, description, and
+> diagnostics. Sanitization is not a guarantee of confidentiality. Remove anything
+> you do not want published, including private hostnames, paths, and context.
+> An unlisted ("secret") Gist is **not private**. Anyone with its link can read it,
+> and publishing the link in a public Discussion exposes it to readers.
+
+You own the diagnostic Gist and can manage or delete it on GitHub. Deletion does
+not retract downloaded copies, forks, quotations or caches. AI Guardian never
+deletes your Gist automatically, including when Discussion publication is cancelled.
+
+## Posting permissions and privacy
+
+For a public repository, **organization membership is not normally required**.
+[GitHub allows any authenticated user who can view the repository to start a discussion](https://docs.github.com/en/discussions/quickstart#creating-a-new-discussion).
+Organization-level discussions use the same access rules as their source
+repository. Repository/account interaction restrictions can still apply, and
+[announcement-format categories restrict who can start a discussion](https://docs.github.com/en/discussions/managing-discussions-for-your-community/managing-categories-for-discussions).
+The support categories should use open discussion or Q&A formats, not announcements.
+The submitting GitHub API credential must also have the appropriate permissions;
+being able to browse a public repository does not grant every token API access.
+
+**A public repository has no private discussion category or per-report private
+visibility.** Discussions inherit the repository's visibility. Anyone can read,
+copy, or potentially index the published report, even without signing in.
+Removing a post later cannot guarantee that all copies disappear. Redaction of
+secrets/PII is not a confidentiality guarantee: directory names, hostnames,
+permission rules, commands and infrastructure details may also be private.
+
+Diagnostic files are sorted alphabetically, with **doctor.json always first**.
+On new lists, only **doctor.json is checked by default** when available; all other
+files start unchecked. You can uncheck Doctor too. Previously saved explicit
+choices, including deselections, are retained when reopening the same bundle.
+The Discussion **title starts blank** unless you supplied a proposal; both its
+title and message are required. ZIP/legacy review also requires a message.
+**Create ZIP / Send** stays disabled until the required fields contain non-whitespace
+text and at least one file is selected. Inclusion and final-publication review remain essential.
+For confidential diagnostics, export locally and arrange a separate private
+ticket, upload portal or support mailbox with the maintainers. No private intake
+address is assumed or automatically substituted. A private GitHub repository
+requires explicitly granted access and may expose other reports to those invited;
+it is not equivalent to a private per-customer support ticket.
+
+## If your agent CLI or MCP is unavailable
+
+Run AI Guardian directly from your own terminal:
+
+```bash
+ai-guardian support send --prepare
+```
+
+This standalone command does **not** need an agent, MCP connection, or running
+AI Guardian daemon, and does not try to start the daemon. It prepares the local
+bundle, displays its review path, and offers local ZIP export or the
+category/context, Gist-upload approval and final public-consent dialogs. Neither route depends on the
+agent/IDE integration you are troubleshooting. For a separate file-review step,
+use `support prepare` followed later by `support send`, as below.
+
+## From the system tray
+
+Tray-launched destination, file review/View, ZIP, upload/publication consent and
+result windows retain the originating monitor context throughout preparation.
+Disconnected displays fall back to a visible work area. Some remote tray panels
+and Wayland compositors cannot expose/enforce that position: the window title
+explicitly asks you to move it to the tray screen before continuing. See
+[Physical-monitor placement](MODAL_PROVIDERS.md#physical-monitor-placement) for
+platform limits and the manual fallback. Placement never supplies consent.
+
+Choose **Contact supports — local tray host**, directly above **About** in the
+top-level tray menu, for diagnostics from the desktop running the tray.
+It honors the configured support destination and opens a native modal, not a
+shell or terminal. Empty/missing destinations use **GitHub Discussions**; that
+route uses a **Destination** dropdown and **Next** button rather than separate
+destination buttons. **Create ZIP only** is selected initially. Selecting
+**Gist + Discussion** disables Next with an explanation if GitHub CLI has no
+configured credential for `github.com`; switching back to ZIP re-enables Next.
+The chooser checks only local credential availability; GitHub verifies the
+credential/account after you choose the public route. No login or permission
+upgrade is started automatically. ZIP export remains available without credentials.
+No saved setting or previously prepared bundle destination is changed.
+
+- **View** opens each complete prepared diagnostic as read-only plain text, using
+  **Next page / Previous page** for large files without omitting the ending.
+  **Wrap lines** switches between word wrapping and a horizontal scrollbar.
+  Wrapping starts off, stays consistent across pages, and never edits the file.
+- An **include checkbox** beside each file lets you exclude it without editing
+  or deleting the original configuration. New lists check only **doctor.json**,
+  shown first; remaining files are alphabetical. Only checked files are exported.
+  Keep at least one selected and complete required fields to enable **Create ZIP / Send**.
+- **Select all / Deselect all** controls and a live selected-file count simplify
+  choosing diagnostics. File names, redaction/truncation notes, and View buttons
+  are aligned in a scrollable table.
+- For GitHub, select **Bug Reports** or **Q&A** and enter a **required title** (no
+  generated default) and message.
+  `support-context.json` supplies this editable proposal; it is not uploaded as
+  a separate diagnostic containing superseded wording.
+- Use the required **Your message** to describe the problem, expected behavior, and reproduction
+  steps. Your edited text is sanitized again before the final preview.
+- The **final destination** shows the public repository and selected category.
+- **Send** opens the exact Gist-upload review. Its initially unchecked consent box
+  and **Create Gist** button authorize only that upload. The next preview shows
+  the exact Discussion, including the actual Gist link, for separate public consent.
+- **Cancel** before upload sends nothing. After upload, Cancel prevents the
+  Discussion but leaves your Gist online; the result shows its management link.
+- For **Create ZIP only**, **Create ZIP** saves the selected files and sanitized
+  message locally. It does not authenticate to GitHub, upload, open an email client,
+  or create a Discussion.
+
+The completion dialog stays open until you close it and shows the result,
+including **Open Discussion** and **Open Gist** buttons after public submission.
+If publication is cancelled or fails after upload, **Open Gist** is still available.
+For a created ZIP, **Open destination folder** opens its containing directory in
+the native file browser, without opening/extracting the archive or sending it.
+Support dialogs are explicitly restored, raised and focused when opened, with
+only a temporary foreground hint rather than permanent always-on-top behavior.
+There is no second send step for completed public submission. The ZIP result
+instead states that nothing was sent and prints the archive path. Explicit local,
+bucket, and email destinations retain their existing delivery flow.
+
+The local-host entry remains available with no running daemon or MCP connection,
+in both single- and multi-daemon layouts, and never starts a daemon.
+
+### Diagnostics from a selected daemon
+
+Choose **Contact supports** inside that daemon's submenu. With a single daemon,
+the flat menu instead labels this **Contact supports — name (daemon)**, separately
+from the local tray-host action. Local daemons, containers, Kubernetes, manual
+HTTPS connections, enrolled SSH daemons and existing OpenShell connections use
+their established authenticated transport. This is not a bulk collector or target
+picker; refreshing/reordering discovery cannot redirect an already selected action.
+For SSH, clicking captures the current verified connection of that same saved
+daemon, including after its initial connect or a reconnect. A stale menu never
+reuses an absent/closed tunnel; later reconnects do not move an in-flight collection
+to a different connection. Removed/replaced saved identities are not substituted.
+
+Preparation runs in the selected daemon's own installation and runtime, using its
+configuration/state roots, working directory and daemon-observed project configs.
+No desktop, shell window or publication credential is needed on that host. The
+desktop shows the **Source** during preparation and throughout review and results.
+View **daemon-source.json** for sanitized provenance, source version/roots/project
+paths and explicit unavailable diagnostics. Missing source files are never replaced
+by workstation files. CLI diagnostic copies use the source environment's known
+integration paths, not the tray user's CLI settings.
+
+Sanitized copies leave the source only over the existing authenticated connection,
+including its TLS verification or enrolled SSH tunnel. The desktop validates file
+names, checksums, complete structured content and size limits, sanitizes again, and
+creates a new protected review directory. It never extracts a remote archive or
+accepts remote destinations, publication context, file selections or consent.
+Project configuration reads, for both local and daemon preparation, reject linked
+files/directories and hard links and validate normalized absolute directory
+containment without resolving untrusted paths before validation.
+Unsafe project files are omitted, never followed to collect unrelated content;
+daemon provenance records the omission. Accepted structured copies stay complete.
+The **tray user's configured destination** and the same per-file View/selection,
+ZIP-only and separate native Gist-upload/Discussion-publication approvals apply.
+Sanitization is not a guarantee of confidentiality: review these files yourself.
+
+Collection requests run off the tray/UI thread. Each source permits one collector
+at a time, with a 90-second collection timeout and short, bounded polling requests
+(110-second desktop deadline). Up to four results are retained for five minutes.
+Transfers allow at most 256 files, 4 MiB per file, 5 MiB of complete diagnostic text
+and an 8 MiB wire response. Larger collections fail safely rather than silently
+cropping configuration or violation records. Existing last-12-hours log/violation
+rules and explicitly marked log excerpts remain unchanged. Source collection
+omissions are recorded even when the remaining files can be reviewed.
+
+An offline target, failed authentication/TLS verification, timeout, failed
+collection or older daemon without this API produces source-specific feedback.
+Nothing is published and there is no local-host fallback. Upgrade an unsupported
+source daemon before retrying its action; the independent local-host action is
+still available for desktop troubleshooting.
+
+The collection-only API is `POST /api/support-bundles` with an empty JSON object,
+followed by `GET /api/support-bundles/<opaque-job-id>`. Both require the daemon's
+configured authentication, even on loopback. It accepts no paths, commands,
+delivery destinations or approvals. Existing API fields keep their semantics.
+
+Opening the menu item is not publication approval. GitHub still requires the
+native exact-content review and final public consent, never a hidden `--yes` or
+terminal prompt. With no usable
+desktop/Tk, a notification explains the unavailable review and nothing is sent
+(the local-host action also gives the standalone command);
+the tray does not silently fall back to opening a shell. See the
+desktop/authentication prerequisites below.
+
+## Prepare → user review → choose delivery
+
+```bash
+ai-guardian support prepare --title "Unexpected behavior" --category bug-reports
+ai-guardian support send
+```
+
+1. **Prepare locally.** No Discussion is created or diagnostic information sent
+   to GitHub during preparation. The protected directory includes sanitized
+   diagnostics and `support-context.json` (title, description, approved category).
+   `--description`, `--no-log`, `--no-violations`, and `--output DIRECTORY` are
+   available. When using `--output`, review that directory: sending uses those
+   same files, including edits and removals, not a hidden original copy.
+2. **Review the local files yourself.** The agent receives only the path, file
+   list, redaction counts, and destination summary. It must not read the protected
+   contents. **Delete any files you do not want to send from the printed temporary
+   directory before continuing**, or edit those prepared copies. Do not delete
+   the original CLI settings. Removed files are never
+   re-collected from the original sources.
+3. **Choose delivery on your desktop.** For GitHub, select **Create ZIP
+   only** or **Gist + Discussion** from the first screen's **Destination** dropdown,
+   then click **Next**. Next opens the selected review page; it is not permission
+   to upload or publish. ZIP export needs no GitHub account or token;
+   review the selected files/message and click **Create ZIP**. For publication,
+   sending resolves the
+   authenticated GitHub account and fixed repository/category. A native dialog
+   lets you view and check/uncheck diagnostic files, choose Bug Reports or Q&A,
+   and edit troubleshooting context. Send opens the next dialog showing the
+   **exact sanitized Gist description, filenames and contents**, authenticated owner,
+   unlisted visibility, and redaction counts. Nothing has been uploaded yet.
+   Edits replace the proposal in `support-context.json`; that local metadata is
+   not also published as a diagnostic file containing discarded wording.
+4. **Approve the Gist upload explicitly.** Check the initially unchecked upload
+   consent box, then click **Create Gist**. Only those reviewed files are uploaded,
+   to your account. An unlisted Gist is readable by anyone with its URL. If you
+   cancel now, no upload or Discussion occurs.
+5. **Approve the exact Discussion explicitly.** After the upload, the next native
+   dialog shows your sanitized message unchanged and the actual Gist URL in a
+   separate **Diagnostics** section. Diagnostic file contents are not embedded.
+   **Publish publicly** is disabled until you check the
+   initially unchecked public-consent box. The consent control stays visible below
+   the preview with a hint explaining how to enable the button. Then click
+   **Publish publicly**, or Cancel. Approval is private to the backend,
+   lasts at most five minutes and never outlives the bundle, is single-use, and
+   binds the account, repository, resolved category, title/body, and exact file
+   contents. File or selection changes invalidate approval and require review
+   again. Gist-upload consent is independently time-limited and single-use too.
+   There is no client approval parameter; `--yes`, terminal input, and an agent's assertion
+   cannot grant either approval. Cancelling after upload never deletes the Gist;
+   the result gives its link for management/deletion.
+6. **Continue in the Discussion.** Success returns `discussion_url` and `gist_url` in human CLI,
+   `--json`, and MCP results, and in the tray completion dialog. Existing
+   `status`, `destination`, and `message` fields retain their meanings.
+   Keep the bundle reference for troubleshooting.
+
+### Included CLI configurations
+
+Preparation includes existing supported CLI settings, hooks, and MCP registration
+files, alongside AI Guardian's own configuration. It follows the same relocated
+CLI-home/config paths as setup and includes known overlays in the active project.
+Each file is an individually removable `cli-<integration>-<scope>-<kind>.json`
+diagnostic copy in the review directory; JSON/JSONC, TOML, and YAML inputs are
+normalized to JSON. No CLI executable, agent, or MCP service needs to work.
+
+Copies redact credential fields/containers, environment and header values,
+detected secrets/PII, and home/project prefixes. **Original configuration files
+are never changed.** Credential stores, auth files, histories, conversations,
+and arbitrary plugin/skill directories are not collected. Claude's mixed global
+state file contributes only its MCP registration mapping.
+
+Reads are limited to 256,000 bytes per CLI configuration and 1,000,000 bytes in
+total. Linked, unreadable, malformed, oversized, or unsafely sanitizable files
+produce a small omission-status diagnostic, never an unsanitized raw fallback.
+Check the file list and redaction counts, and uncheck or delete unwanted copies
+before confirming export/publication. Sanitization cannot promise confidentiality.
+
+## Create ZIP only — nothing uploaded
+
+With GitHub as the configured/default destination, choose **Create ZIP only**.
+Review the files using View (large files have complete next/previous pages),
+keep at least one diagnostic selected and fill in the required **Your message**.
+Only **doctor.json** starts checked, with the other files in alphabetical order.
+**Create ZIP** remains disabled until both requirements are met. The read-only destination
+shows the planned local archive path; **Create ZIP** confirms local creation only.
+
+The archive contains the selected sanitized prepared files, including nested
+configuration copies, plus the required sanitized message. **Only the log
+may have a marked tail excerpt.** Violation records are filtered to the last
+12 hours and kept complete, without a newest-100 limit or size crop. Configuration
+files and other collected structured diagnostics are complete.
+
+Results identify `delivery_status: zip_only`, print `zip_path`, and explicitly
+state **No files were uploaded or sent to support. No Discussion was created.**
+The tray result's **Open destination folder** button opens Finder, Windows File
+Explorer, or the default Linux file browser on the ZIP's directory, only when
+clicked. The result stays open. If the browser cannot be launched, the ZIP stays
+intact and the dialog points you to the displayed path for manual opening.
+There is no GitHub authentication, Gist upload or automatic email hand-off. The
+ZIP is stored in a restricted-access directory under AI Guardian's state directory
+(`support-exports/…`) and survives cleanup/expiry of the temporary review bundle.
+It is **not encrypted**; review it and arrange an appropriate support channel
+before forwarding it by email or any other means. No private recipient is assumed.
+
+Creating a ZIP does not rewrite `support.export_destination`. The original
+reviewed bundle and selected-file choices remain available to a later
+`ai-guardian support send` within their original lifetime. That command offers
+ZIP or Gist + Discussion again and still requires fresh public consent for publication.
+It never uploads the ZIP merely because you created it.
+
+## Local directory export is not a support submission
+
+With a saved local destination, the terminal asks:
+
+```text
+Export bundle locally to <local-directory>? [y/N]
+```
+
+**Yes only saves the reviewed files locally** under `<local-directory>/<bundle-id>/`.
+The tray honors that saved local destination too; it shows the selected-file
+review and actual local path instead of forcing a GitHub report.
+The completion message says **Exported locally**, prints that retained location,
+and explicitly states that no files were sent to support and no Discussion was
+created. It is not an upload, email, ticket, or GitHub publication.
+
+The retained reviewed copy remains available to `ai-guardian support send` from
+another terminal within the original bundle lifetime. Repeating that command
+does not fail merely because local export finished; it reuses the same copy and
+never restores files you deleted or excluded. A narrower selection cannot overwrite
+an existing retained export in place; use a new export directory or prepare a new
+bundle rather than assuming old exported files have been removed.
+Older exports whose reference still points to
+a removed temporary directory are recovered from that exact local destination
+when present and unexpired. Local exports themselves are not deleted on expiry;
+an expired retained directory can be explicitly selected with `--bundle`.
+
+To actually submit a public support Discussion, first select **GitHub Discussions
+(public)** in Web Console → MCP Settings → Support Bundle Export. Then prepare a
+new bundle, or explicitly reuse the reviewed local copy:
+
+```bash
+ai-guardian support send --bundle <local-directory>/<bundle-id>
+```
+
+Explicitly selecting an existing directory uses the currently configured
+destination and requires a fresh native public review. No local export is ever
+silently rerouted to GitHub.
+
+The same backend serves `prepare_support_bundle(title?, description?, category?)`
+and `send_support_bundle(bundle_id)`. The agent should request sending only after
+you review the files; the native final confirmation is additionally enforced.
+
+## Authentication and desktop prerequisites
+
+The **Gist + Discussion** workflow is available only with configured GitHub
+credentials; **Create ZIP only** needs none. Missing CLI, missing credentials or a
+local credential lookup timeout disables only the public choice. Credential
+availability does not prove that a token is still valid or has sufficient permissions;
+GitHub verifies identity and enforces access before performing each operation.
+Install [GitHub CLI](https://cli.github.com/) (MIT) and authenticate **your own**
+account for `github.com`, for example with `gh auth login --hostname github.com`.
+AI Guardian retrieves that account's credential into process memory and queries
+GitHub for its identity; it never accepts a supplied reporter name, uses a shared
+support bot, or stores the credential in bundle metadata, logs, or Discussion
+or Gist content. Authentication is pinned throughout both reviews and submission.
+AI Guardian never runs login, refresh, or scope-escalation commands for you.
+
+GitHub's [Discussions API guide](https://docs.github.com/en/graphql/guides/using-the-graphql-api-for-discussions)
+documents `public_repo` for public-repository OAuth/classic-token access. The
+[Gists API](https://docs.github.com/en/rest/gists/gists#create-a-gist) additionally
+requires Gist access (`gist` for OAuth/classic tokens). A credential must support
+**both** Gist creation and Discussions writing in the canonical repository,
+subject to organization authorization. Known missing OAuth Gist scopes are
+rejected before upload; GitHub remains authoritative for other credential types
+and access restrictions. No
+Issue/Release write permission or external bucket is needed. GitHub account
+authentication identifies the submitting account; it does **not** prove that
+diagnostics are genuine or that maintainers endorse the report.
+
+Public approval requires an available native Tk desktop dialog. AI Guardian
+launches its installed review script with isolated Python, not project-local
+module lookup or a caller-supplied executable. It does not start an
+unauthenticated browser/HTTP approval endpoint or fall back to
+agent-controlled terminal confirmation. Without a usable desktop/Tk installation
+(including headless/container/remote-only sessions), sending fails closed and
+keeps the local bundle. Review on a desktop or complete the submission manually
+in your browser. No automatic publication is performed to compensate.
+
+## Text diagnostics, size limits, and manual attachments
+
+### Recent logs and readable excerpts
+
+`ai-guardian.log` includes only timestamped records from the **last 12 hours**,
+with multiline tracebacks belonging to those records. Older, future-dated, and
+unattributed preamble text is not collected. Reads are bounded even for very large
+logs; only the newest complete records in the bounded tail can be retained.
+
+`violations.jsonl` includes **all sanitized violation records from the last
+12 hours**, newest first. Older, future-dated and invalid/undated records are
+excluded. Included records stay complete: there is no arbitrary count cap,
+byte-size truncation or partial JSON excerpt. Source audit logs are unchanged.
+
+**Only the log is truncated.** Collected sanitized configuration files, violation
+records, metrics and other structured diagnostics remain complete, including
+their final fields. They are never cut to satisfy a preview or publication budget.
+Unsafe/unparseable CLI settings still produce explicit omission status, not raw
+or partial configuration data.
+
+The prepared log copy is bounded to **1,000,000 bytes**, retaining its newest text.
+For GitHub, the log alone uses the space remaining in a **40,000-byte diagnostic
+target** after complete non-log files, with a minimum 1,024-byte newest-log budget.
+This keeps default diagnostic uploads compact; it does not guarantee
+that very large complete configurations fit the total Gist input limit. A **Truncated**
+notice and file-list note identify a shortened log. UTF-8 characters are not split.
+Original source logs/configurations are never modified.
+
+### What View and Send include
+
+**View reads the complete prepared copy. Send uses that same copy without an
+additional size crop.** A prepared log excerpt is identical in both paths.
+Sending repeats security redaction and authentication-credential scrubbing; the
+separate Gist upload preview is authoritative for its exact filenames/content.
+The subsequent public preview is authoritative for the Discussion title/body/link.
+
+The built-in viewer reads up to **1,000,000 bytes per page**, preserving UTF-8
+boundaries. **Next page / Previous page** and byte-range indicators let you inspect
+the whole file, including the final configuration fields; there is no whole-file
+display cap. Paging does not alter the prepared file or ZIP. Binary, linked or
+otherwise unsupported files still fail safely rather than rendering unsafe content.
+Importing an older bundle does not silently filter or shorten it; prepare a new
+bundle for fresh 12-hour log/violation records.
+
+### Public delivery limits
+
+The supported automated delivery uploads **UTF-8 text files to your unlisted Gist**.
+Sanitization covers the title, description, filenames and file text. Gist names
+are flattened, numbered to avoid collisions, and restricted to plain-text
+extensions; other extensions receive `.txt` so they do not render as active Markdown/HTML.
+The exact filenames and complete sanitized content are shown before upload.
+Gist input is bounded to **1,000,000 bytes total** and **100 diagnostic files**.
+The Discussion body has a separate **60,000 UTF-8 bytes** limit including your
+message, reference, link and formatting; diagnostics do not consume that body limit.
+Binary, excessive imported/edited,
+unregistered, or linked files are not silently skipped. If a message or edited
+bundle still exceeds the limit, publication fails without creating a Discussion.
+
+`createDiscussion` accepts a title/body and repository/category IDs, **not a ZIP
+upload**. If complete Gist delivery is not supported, the result is an error
+(`manual_required`, `delivery_status: not_published`): **no Discussion was
+created**. Uncheck unwanted/oversized files and retry with a new review, or run
+`support send` again and choose **Create ZIP only** for a separately arranged
+private support channel. Complete configurations
+are not silently cut to make sending succeed. Attaching files in GitHub's browser
+UI would still make them public in this repository. A local filesystem path is not
+an attachment. No Issues/Release upload API or non-GitHub service is used.
+No draft/partial delivery is reported as a completed diagnostic submission.
+The file chooser opens before Gist diagnostic-size/content validation, so you
+can uncheck binary or oversized diagnostics before the final preview. Previews
+are bounded plain text; they never execute file contents or follow linked files.
+
+## Retry and lifetime
+
+Authentication, permissions, API rate limits, unavailable categories, and network
+errors produce credential-free messages without changing the destination. The
+reviewed bundle remains available within its normal lifetime (30 minutes by
+default). Known rejected requests can be retried only with a new review/approval.
+GitHub bundles retain private Gist/upload and Discussion/publication receipts
+for that lifetime; re-sending a successful bundle returns the same Discussion URL
+and explicitly says no new diagnostics were sent.
+
+After a Gist upload, cancellation or a known Discussion failure returns
+`delivery_status: gist_only` and `gist_url`, without claiming a completed support
+submission. The result and tray dialog show the URL so you can manage/delete the
+existing Gist. Retrying the same selected files/account verifies and reuses that
+Gist, then requires fresh consent to the exact Discussion. Changed files/accounts,
+changed remote contents, or a deleted Gist never trigger a silent replacement
+upload or fallback to inline diagnostics. Prepare a new bundle for a different
+upload, and manage the old Gist yourself.
+
+A timeout, partial response, server failure, interrupted process, or unverified
+creation response can mean GitHub already created the Gist or Discussion. A persisted
+pre-mutation journal blocks automatic retries, including after process restart.
+**Check your own Gists and the repository Discussions manually** before taking any
+further action. A known Gist URL is reported even if later publication fails;
+an unknown upload outcome does not invent a URL or upload another copy.
+Do not assume `clientMutationId` provides idempotency. Receipt-write failures
+also remain fail-closed against duplicate publication.
+Gists are not deleted when the local bundle expires. Delete the Gist yourself
+if you no longer want to retain the uploaded diagnostic files.
+
+## Configuration and upgrades
+
+```json
+"support": {"export_destination": "github-discussions", "github_category": "bug-reports", "bundle_ttl_minutes": 30}
+```
+
+Generated configurations/profiles and empty/missing destinations select GitHub
+Discussions, including when the support section is absent from a saved config.
+Explicit legacy destinations remain in effect for tray, CLI and MCP. A previously prepared
+bundle retains its original destination; no existing bundle is silently rerouted.
+
+To change an explicit legacy destination, select **GitHub Discussions
+(public)** in Web Console → MCP Settings → Support Bundle Export, or select
+`github-discussions` in the global support configuration. Preparation
+is still local; selecting the default never constitutes publication approval.
+The settings offer only Bug Reports and Q&A, not every discovered repository
+category. The backend enforces the same restriction for CLI and MCP requests.
+
+Explicit local paths, `s3://…`, `gs://…`, and `mailto:…`/email destinations retain
+their configuration/authentication semantics. Legacy automated export can still
+use `support send --prepare --yes`; this does not authorize GitHub publication.
+Without SMTP, email export prepares a ZIP for manual attachment and opens the
+mail client. The result says **Manual email delivery required**, not that an email
+was sent; attach the reviewed ZIP and complete sending yourself.
+
 # === docs/TOML_PATTERNS.md ===
 
 # TOML Pattern Engine
@@ -25959,7 +28485,11 @@ The TOML patterns work out of the box. All detection modules load them automatic
 
 ## Scanner SDK Engine (Optional)
 
-For the secret scanning PreToolUse pipeline, `toml-patterns` is also available as a Scanner SDK engine. This is useful if you want to run it instead of (or alongside) gitleaks:
+For the secret-scanning PreToolUse pipeline, `toml-patterns` is a built-in
+Scanner SDK engine and is included by default when `secret_scanning.engines` is
+omitted. An explicit engine list replaces that default; for example,
+`["gitleaks"]` does not run `toml-patterns` in this pipeline. Use the engine
+list to select it alone or alongside external scanners:
 
 ```json
 {
@@ -27119,12 +29649,34 @@ Common issues with the AI Guardian daemon, system tray, container deployments, a
 
 ## General Diagnostics
 
-Run `ai-guardian doctor` for a comprehensive health check covering config validation, scanner availability, hook installation, permissions, unknown config keys, and more. Installed CLI integrations include their detected executable version; OpenCode also reports its V1 or V2 generation. For the tray-launched Console, local health is evaluated by the active daemon so it reflects the daemon's runtime context. Use `--json` for machine-readable output.
+Run `ai-guardian doctor` for a comprehensive health check covering config validation, scanner availability and selection, hook installation, permissions, unknown config keys, and more. The scanner report lists supported engines and warns when enabled secret scanning omits the built-in `toml-patterns` engine. Installed CLI integrations include their detected executable version; versions below 1.0.0 include a non-blocking upstream-stability advisory, while unavailable or unparsable versions are not classified. This advisory does not change hook/configuration health. OpenCode also reports its V1 or V2 generation. For the tray-launched Console, local health is evaluated by the active daemon so it reflects the daemon's runtime context. Use `--json` for machine-readable output, including structured CLI advisory details.
 
 ```bash
 ai-guardian doctor
 ai-guardian doctor --json
 ```
+
+## WSL2 Console Troubleshooting
+
+WSL2 support is experimental; WSL1 is not included, and these steps are
+diagnostic rather than a confirmed fix. The reported initial Console stall has
+not been diagnosed, and retrying is not a guaranteed remedy.
+
+To start the Console inside the Linux distribution without automatically
+opening a browser, run:
+
+```bash
+ai-guardian console --web --no-open --port 8080
+```
+
+While that process is running, manually open `http://127.0.0.1:8080/` in a
+browser available to you. A Windows browser can reach the Linux-hosted Console
+when WSL localhost forwarding and local network policy allow it. If the page
+does not connect, check that the Console is still running, that port 8080 is
+available, and that WSL/host networking permits the connection; these checks do
+not establish the cause of the reported stall. See the
+[Console Guide](CONSOLE.md#wsl2-experimental) for the WSL server/browser
+distinction and desktop-integration limitations.
 
 ## Daemon Startup Issues
 
@@ -27900,16 +30452,859 @@ Paths are governed by XDG conventions and can be overridden with environment var
 - `AI_GUARDIAN_CONFIG_DIR`, `AI_GUARDIAN_HOME`, or `XDG_CONFIG_HOME`
 - `AI_GUARDIAN_STATE_DIR` or `XDG_STATE_HOME`
 
+# === docs/UBUNTU_VM.md ===
+
+# Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release)
+
+> **Upcoming-release guide — not supported by PyPI 1.20.0.** Checked on
+> **2026-10-28**: [production PyPI](https://pypi.org/pypi/ai-guardian/json) still
+> reports **1.20.0**, with no published `1.21.*`. Its wheel has neither native
+> daemon TLS nor SSH-managed enrollment. The first supporting **published**
+> version is therefore **not yet established**; these features target **1.21**.
+> The `>=1.21.0` constraints below are provisional and cannot succeed today.
+> Wait for a supporting production release; do not substitute a source checkout,
+> development dependencies, GitHub RC artifact or TestPyPI installation.
+
+This guide takes a fresh Ubuntu Server VM to a loopback HTTPS daemon controlled
+by the **workstation tray over SSH**, using only the released PyPI package in
+virtual environments. The earlier successful `1.21.0-dev` source-build VM
+walkthrough is useful evidence, **not** fresh-PyPI qualification. The
+[release checklist](#release-qualification) remains open.
+
+| Required feature | First production PyPI release |
+|---|---|
+| Native daemon HTTPS (#2551) and SSH enrollment (#2552) | Not published; planned for 1.21 |
+| Private storage/setup diagnostics (#2584) | Not published; planned for 1.21 |
+| Alias discovery and native-first pairing (#2587 / #2589) | Not published; planned for 1.21 |
+| Tray discovery settings (#2591) and SSH menu parity (#2592) | Merged development changes, not published; planned for 1.21 |
+
+Recheck each feature against the actual released artifact before replacing this
+notice with a confirmed minimum version. A merged PR or a running development
+process does not prove PyPI availability.
+
+## Which machine does what?
+
+Run commands yourself in ordinary terminals, not through an AI agent. Stop on a
+failed command; do not continue past a failed installation or health check. Unless
+marked otherwise, **VM** means an SSH shell as the regular user `guardian`;
+**workstation** means your logged-in Linux desktop, with a browser and tray.
+
+| Component | Runs on | Address / storage in this example |
+|---|---|---|
+| Daemon REST listener | VM | HTTPS at `127.0.0.1:63152`, TLS identity `guardian-vm.test`; check the actual port |
+| Bootstrap Web Console | VM | HTTP `127.0.0.1:8080`, forwarded to workstation `127.0.0.1:18080` |
+| Bootstrap browser | Workstation | `http://127.0.0.1:18080`; files/settings still belong to the VM |
+| Routine tray and Web Console | Workstation | Locally opened/printed Console URL; select `ssh-guardian-vm` |
+| SSH alias and saved pairing | Workstation | User SSH config and private AI Guardian state, respectively |
+| TLS server private key | VM only | Fresh private directory printed in step 4 |
+
+**Ordering matters: SSH-managed enrollment requires HTTPS first.** Use an
+ordinary SSH Console tunnel to configure HTTPS on the VM, verify it, **then**
+enroll from the workstation. A Console tunnel alone never enrolls a daemon.
+
+## 1. Prepare the host and guest
+
+- Create a headless **Ubuntu Server LTS** guest under KVM/libvirt, for example
+  Ubuntu 24.04 LTS with Python 3.12. AI Guardian requires Python **3.10+**;
+  the project's supported test matrix is 3.10–3.14. No guest desktop or browser
+  is needed. Follow the [Ubuntu installation guide](https://documentation.ubuntu.com/server/tutorial/basic-installation/)
+  and [libvirt guide](https://documentation.ubuntu.com/server/how-to/virtualisation/libvirt/)
+  for VM creation, rather than installing a desktop in the guest.
+- This example assumes a regular VM user **`guardian`**, an SSH alias
+  **`guardian-vm`**, and a guest address such as **`192.168.122.50`**. Substitute
+  your own user/address. The alias is not necessarily the libvirt VM name.
+- The libvirt **system NAT network** is sufficient for SSH from its workstation
+  host to the guest. Other hosts or user-session/SLIRP networking may need a
+  separately configured SSH route. Do not expose REST or Console ports publicly.
+- **KDE/Plasma is a desktop, not a Linux distribution.** Install hypervisor,
+  OpenSSH client, `ssh-copy-id`, desktop tray and dialog prerequisites using
+  your workstation distribution's instructions. Do not run the guest's Ubuntu
+  package commands blindly on a Fedora, openSUSE or other KDE host. See
+  [tray requirements](CONSOLE.md#system-tray) and
+  [modal providers](MODAL_PROVIDERS.md).
+
+**VM console**, using sudo only for OS prerequisites:
+
+```bash
+sudo apt update
+sudo apt install python3 python3-venv python3-pip openssh-server openssl curl ca-certificates
+sudo systemctl enable --now ssh
+python3 --version
+openssl version
+```
+
+Use OpenSSL **3.x** for the certificate recipe below. Ensure the guest clock is
+correct and both machines can reach production PyPI. Allow SSH only over the
+intended private route; keep REST and Console bound to loopback.
+
+## 2. Verify SSH before involving AI Guardian
+
+First obtain the VM's SSH host-key fingerprint through its **trusted hypervisor
+console**, independently of the first SSH connection:
+
+```bash
+sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256
+```
+
+**Workstation:** reuse an appropriate existing public key, or create a dedicated
+identity. For a new identity, choose an **unused** filename; never agree to
+overwrite another key. Use a passphrase and your desktop SSH agent:
+
+```bash
+ssh-keygen -t ed25519 -f "$HOME/.ssh/id_ed25519_guardian_vm" -C guardian-vm
+ssh-add "$HOME/.ssh/id_ed25519_guardian_vm"
+```
+
+If that filename already exists, skip generation and use its matching public
+key, or choose a different unused filename throughout these examples.
+`ssh-copy-id: ERROR: No identities found` means there was no suitable public
+identity to copy; generating/reusing a key and passing its **`.pub`** file
+explicitly resolves that prerequisite. Never copy the private key to the VM.
+
+Edit the workstation's `~/.ssh/config`, preserving existing entries:
+
+```sshconfig
+Host guardian-vm
+    HostName 192.168.122.50
+    User guardian
+    IdentityFile ~/.ssh/id_ed25519_guardian_vm
+    IdentitiesOnly yes
+    StrictHostKeyChecking yes
+```
+
+For the **first** connection, request OpenSSH's interactive first-use review:
+
+```bash
+ssh -o StrictHostKeyChecking=ask guardian-vm
+```
+
+Compare the offered fingerprint with the independently obtained fingerprint
+before accepting it. If it differs, stop and investigate. Authenticate using
+your existing authorized method (a guest password may be needed initially),
+then `exit` back to the workstation. Do not accept a changed key merely to
+silence an error. Now copy only the public key and verify unattended access:
+
+```bash
+ssh-copy-id -i "$HOME/.ssh/id_ed25519_guardian_vm.pub" guardian-vm
+ssh -o BatchMode=yes guardian-vm true
+```
+
+The last command must exit successfully without a password, passphrase or
+host-key question. If using an agent, the **workstation tray process** must
+inherit that agent's environment and have the identity unlocked. Starting an
+agent in an unrelated terminal does not update an already-running tray. Launch
+the tray from the appropriate desktop/agent environment; do not enable agent
+forwarding or copy private keys to the guest for this workflow. Never publish
+keys, daemon tokens or pairing records in diagnostics.
+
+## 3. Install from PyPI and create global configuration
+
+**Release gate:** perform this step only once a supporting production version
+exists. Until then, the proposed install correctly finds no matching release;
+do not lower the constraint to 1.20.0 to continue this guide.
+
+**VM**, as `guardian`, before initial package invocation/setup/startup:
+
+```bash
+umask 077
+namei -l "$HOME/.config/ai-guardian" "$HOME/.local/state/ai-guardian"
+```
+
+Missing components are normal on a fresh account. Audit **existing** components:
+the application directories/files must belong to the intended user, with trusted
+ownership along the path and no group/other-writable ancestors. For example,
+an owner-only leaf under `.local/state` mode `0775` is still unsafe. Review
+unexpected links and any non-default XDG/config/state locations too.
+
+`umask 077` restricts **new** files; it does not repair existing directories.
+Stop and have the owner/administrator correct the specifically identified
+unsafe path. Do not weaken validation, recursively chmod a home/shared tree,
+or make paths world-writable. See
+[storage preconditions](MULTI_DAEMON_TRAY.md#posix-storage-preconditions) and
+[issue #2584](https://github.com/RedHatProductSecurity/ai-guardian/issues/2584).
+
+After that audit, install as the **same regular user used for SSH**:
+
+```bash
+umask 077
+python3 -m venv "$HOME/.venvs/ai-guardian"
+source "$HOME/.venvs/ai-guardian/bin/activate"
+python -m pip install --upgrade pip
+python -m pip install --upgrade 'ai-guardian>=1.21.0'
+ai-guardian --version
+ai-guardian setup --create-config
+```
+
+Inspect an existing virtualenv before reusing it; do not delete another
+installation. Do not use system-wide `sudo pip`, an editable install, or a
+repository clone. **Package installation alone does not create global config.**
+Setup creates `~/.config/ai-guardian/ai-guardian.json` for this account. If setup
+offers optional IDE integration, it is not required for connectivity; only
+select integrations you intend to install.
+
+Activation changes PATH only in this shell. In subsequent SSH sessions, either
+activate again or use the installed executable's absolute path:
+`/home/guardian/.venvs/ai-guardian/bin/ai-guardian` for this sample user. The
+commands below use `"$HOME/.venvs/ai-guardian/bin/ai-guardian"` **inside the VM**.
+
+```bash
+"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start
+"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
+```
+
+Check configuration and **REST API** readiness, not just a PID, **IPC: running**
+or **Config: loaded**. A working IPC socket can coexist with an unavailable REST
+listener, for example when private token storage is unsafe. Before step 6, a
+fresh daemon normally serves loopback HTTP; enrollment requires the verified
+HTTPS listener established below. Record the actual runtime REST port from
+status; **63152 is the default, not a guarantee**, including with port `0`.
+
+### Optional: install an agent on the VM
+
+An agent is useful for later end-to-end hook tests, **not required** for tray
+connectivity. To use OpenCode, install **V2** using its
+[official installation instructions](https://opencode.ai/v2/docs/) as the VM
+user. Then, with that `opencode` executable on the VM's PATH:
+
+```bash
+source "$HOME/.venvs/ai-guardian/bin/activate"
+ai-guardian setup --ide opencode --install-scanner
+```
+
+See [OpenCode integration](OPENCODE.md) for version detection, plugin activation
+and qualification limits. Installing this integration is separate from proving
+that the workstation can reach the daemon.
+
+## 4. Create a dedicated lab TLS identity on the VM
+
+**VM:** keep this shell open through step 7 so `TLS_DIR` stays defined. Create a
+fresh private directory; repeating this command must not overwrite old keys:
+
+```bash
+umask 077
+TLS_DIR=$(mktemp -d "$HOME/.config/ai-guardian/tls-vm.XXXXXX")
+openssl req -x509 -newkey rsa:3072 -noenc -sha256 -days 90 \
+  -keyout "$TLS_DIR/server-key.pem" \
+  -out "$TLS_DIR/server-cert.pem" \
+  -subj "/CN=guardian-vm.test" \
+  -addext "subjectAltName=DNS:guardian-vm.test" \
+  -addext "basicConstraints=critical,CA:FALSE" \
+  -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+  -addext "extendedKeyUsage=serverAuth" \
+  -addext "subjectKeyIdentifier=hash" \
+  -addext "authorityKeyIdentifier=keyid:always"
+printf 'Certificate directory: %s\n' "$TLS_DIR"
+openssl x509 -in "$TLS_DIR/server-cert.pem" -noout \
+  -fingerprint -sha256 -ext subjectAltName -dates
+```
+
+The directory is `0700`, with newly created key/certificate files `0600` under
+this umask. The **matching, unencrypted PEM key** allows unattended startup;
+its owner-only storage is essential. Keep it on the VM, never in browser fields,
+chat or the workstation. Record the absolute directory and public certificate's
+**SHA-256 fingerprint and SAN** over this already host-key-verified SSH session
+for the later independent pairing comparison.
+
+`guardian-vm.test` is the expected TLS identity, not a public DNS requirement.
+This **90-day self-signed lab certificate** is explicitly trusted only for this
+dedicated daemon. That is not permission to trust any certificate found by
+discovery. Do not install it in a global CA store. For production, organizational
+CA issuance and renewal/rotation, use the
+[advanced PKI reference](MULTI_DAEMON_TRAY.md#private-vm-provisioning-and-pairing-no-public-inbound-rest)
+and [certificate lifecycle guidance](MULTI_DAEMON_TRAY.md#validation-failures-renewal-and-restart).
+
+## 5. Bootstrap with the VM-hosted Web Console
+
+**Do this before SSH-managed enrollment.** First check for existing listeners:
+on the **VM**, `ss -ltnp 'sport = :8080'`; on the **workstation**,
+`ss -ltnp 'sport = :18080'`. An empty result means no matching listening socket.
+If occupied, identify its owner/purpose and choose another unused port; never
+kill an unrelated process. Update the corresponding forwarding/Console port
+and browser URL together.
+
+In a **second workstation terminal**, run this foreground command:
+
+```bash
+ssh -t -o ExitOnForwardFailure=yes \
+  -L 127.0.0.1:18080:127.0.0.1:8080 guardian-vm \
+  'exec "$HOME/.venvs/ai-guardian/bin/ai-guardian" console --web --port 8080 --no-open'
+```
+
+The remote shell expands `$HOME` on the **VM**; workstation virtualenv activation
+is irrelevant to that remote executable. Keep the default loopback Console bind.
+Open **`http://127.0.0.1:18080` in the workstation browser**. NiceGUI's printed
+`127.0.0.1:8080` address belongs to the **VM**, not the browser's machine.
+
+Keep this terminal running while using the page. `-t` allocates a remote PTY;
+Ctrl+C there interrupts the foreground remote Console. Wait for SSH to exit and
+check the owned listener if cleanup is uncertain. Closing a **non-PTY** SSH
+command, or losing the network, is not proof that its remote Console stopped.
+
+This is the **Web Console webpage**, not the daemon REST listener. Its bootstrap
+URL can remain HTTP on loopback: SSH encrypts the machine-to-machine traffic.
+Turning on REST HTTPS in the next step does not change this browser URL.
+
+## 6. Save global HTTPS settings, then restart the VM daemon
+
+In the **VM-hosted Console forwarded at port 18080**, select its **local daemon**
+and **Global** configuration scope, then **Global Settings → Daemon REST HTTPS**.
+If step 4 printed `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3`, enter:
+
+| Field | Value for this VM lab |
+|---|---|
+| Enable native HTTPS | On |
+| Certificate chain PEM path (on daemon host) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-cert.pem` |
+| Private-key PEM path (on daemon host) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-key.pem` |
+| Trusted CA PEM path (empty: system trust) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-cert.pem` |
+| Expected server SAN identity / SNI | `guardian-vm.test` |
+| Optional independently verified SHA-256 leaf pin | Leave empty for initial VM-local trust; workstation enrollment separately records the verified leaf pin |
+
+Replace the example username/directory/suffix with the **exact printed absolute
+VM paths**. These inputs do not expand `$TLS_DIR`, `$HOME` or `~`, generate files,
+or upload private keys. The trusted CA field explicitly trusts the generated
+self-signed public certificate for **VM-local REST clients**; it is not a
+server client-auth setting. Do not leave it empty for this self-signed recipe.
+
+Preserve the daemon's **`127.0.0.1` REST bind** and daemon-token authentication.
+HTTPS neither changes the bind nor replaces authentication. Click **Save HTTPS
+settings**, then in the original **VM SSH shell** run:
+
+```bash
+"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon restart
+"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
+```
+
+Saving or reloading alone does **not** replace the active listener/certificate.
+Refresh the VM Console after restart. If REST is unavailable, resolve its
+credential-free startup error before pairing; do not accept IPC liveness as TLS
+readiness. Invalid TLS material does not fall back to plaintext.
+
+## 7. Verify HTTPS before pairing
+
+**VM, same shell as certificate generation:** replace `63152` with the actual
+runtime REST port from status if different:
+
+```bash
+REST_PORT=63152
+curl --noproxy '*' --fail --show-error \
+  --cacert "$TLS_DIR/server-cert.pem" \
+  --resolve "guardian-vm.test:$REST_PORT:127.0.0.1" \
+  "https://guardian-vm.test:$REST_PORT/api/health"
+```
+
+Expected: JSON containing **`"status": "ok"`**. `--resolve` connects to VM
+loopback while verifying the certificate's **`guardian-vm.test` SAN**; neither a
+public DNS record nor a public REST port is needed. Certificate verification
+remains enabled. In another shell, set `TLS_DIR` to the exact previously printed
+absolute directory (or substitute that certificate path directly), not a newly
+generated directory. Shell variables do not survive logout/reboot.
+
+Health verifies transport/connectivity, **not authenticated control**. This
+additional unauthenticated request should still report **HTTP 401**:
+
+```bash
+curl --noproxy '*' --show-error \
+  --cacert "$TLS_DIR/server-cert.pem" \
+  --resolve "guardian-vm.test:$REST_PORT:127.0.0.1" \
+  --output /dev/null --write-out 'HTTP %{http_code}\n' \
+  "https://guardian-vm.test:$REST_PORT/api/status"
+```
+
+Do not paste a daemon token into commands or chat to test this. The enrollment
+flow performs its own authenticated verification after explicit identity review.
+
+## 8. Enroll from the workstation, not the VM Console
+
+### Prepare the workstation installation
+
+The **workstation tray and workstation Console** must use a supporting published
+release too, with the **tray version at least as new as the daemon**. For a fresh
+Linux workstation install, after the same private-storage audit as step 3:
+
+```bash
+umask 077
+python3 -m venv "$HOME/.venvs/ai-guardian"
+source "$HOME/.venvs/ai-guardian/bin/activate"
+python -m pip install --upgrade pip
+python -m pip install --upgrade 'ai-guardian>=1.21.0'
+ai-guardian --version
+ai-guardian setup --create-config
+```
+
+The same **unpublished-release gate** applies. If already installed, upgrade the
+intended workstation environment rather than creating a second competing one;
+preserve existing settings. For Linux tray support, satisfy your distribution's
+GTK/AppIndicator and [PyGObject build prerequisites](https://pygobject.gnome.org/getting_started.html),
+then install the optional extra **in this workstation virtualenv**:
+
+```bash
+python -m pip install --upgrade 'ai-guardian[tray-linux]>=1.21.0'
+ai-guardian doctor
+```
+
+A distro `python3-gi` installation alone is not necessarily visible inside an
+isolated virtualenv. Confirm the prerequisites from the same desktop environment
+that will run the tray. The headless **guest does not need this tray extra**.
+After upgrading, quit and relaunch already-running workstation tray/Console
+processes from the upgraded installation; updating package files does not replace
+an existing process. Start the workstation tray in its own desktop terminal:
+
+```bash
+"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon tray start
+```
+
+### Choose a pairing entry point
+
+- **Direct tray:** choose **Add daemon via SSH** and enter `guardian-vm`.
+  It uses the shared **native-first pairing flow** (Native → Tkinter → NiceGUI
+  where eligible), not necessarily the Web Console. No discovery opt-in is needed.
+- **Browser alternative:** in a separate **workstation terminal, not through SSH**,
+  activate its virtualenv and run `ai-guardian console --web`. Use that command's
+  opened/printed **workstation Console URL**, not the VM's port-18080 page.
+  The **daemon picker is home page `/`**, not a sidebar item. From any daemon
+  dashboard, click **AI Guardian** in the top-left header to return home.
+  **SSH daemon connections** appears **above the daemon cards**. Its **Add daemon
+  via SSH** accepts the known alias without discovery.
+
+Both pages may have loopback browser URLs; that alone does not identify the
+machine hosting them. Pairing in the VM's own forwarded Console stores a pairing
+**on the VM**, not in the workstation tray. Use the workstation-hosted entry point.
+
+### Optional: discover your existing SSH alias
+
+On **workstation Console home `/` → SSH daemon connections**:
+
+1. Enable **Discover SSH aliases**.
+2. Set **Optional alias prefix (empty lists all concrete aliases)** to
+   **`guardian-`** for this walkthrough, or leave it empty for all supported names.
+3. Click **Save SSH discovery settings**. These settings are **workstation-global**,
+   not settings on the selected VM or its project.
+
+Discovery is **off by default**. The default **`ai-guardian-`** prefix does **not**
+match `guardian-vm`; no alias renaming is required. This reads supported concrete
+declarations in the workstation user's SSH configuration, **not libvirt/AWS
+inventory**. Conditional/unsupported Include layouts have limits; see the
+[SSH alias parser reference](MULTI_DAEMON_TRAY.md#discover-ssh-aliases).
+
+Expect **SSH aliases available to pair (N)** in the Console and, after refresh,
+the tray when candidates exist. A candidate is **not an enrolled daemon**.
+Listing names does not contact hosts, power on a VM, start a daemon or grant trust.
+Already-paired and dismissed aliases are excluded. Do **not** remove a working
+pairing to force rediscovery: removal also dismisses that alias. For optional
+repeat testing, add `guardian-vm-test` as a second name in the same declaration
+(`Host guardian-vm guardian-vm-test`), preserving its connection settings, then
+verify `ssh -o BatchMode=yes guardian-vm-test true`. Manual **Add daemon via SSH**
+remains available for deliberate pairing of a dismissed alias.
+
+**Development UI update:** #2591 added **Discover SSH aliases...** directly in
+the tray, next to manual pairing; its enable/Continue and prefix/Save steps edit
+the same settings. It is merged, but not in production PyPI as of the date above.
+Do not expect that entry in 1.20.0. The Console path above remains available in
+the target development workflow; reconfirm both paths against the final release.
+
+### Review, explicitly trust, and connect
+
+1. Choose a candidate's **Review discovered daemon**, or use **Add daemon via SSH**
+   with `guardian-vm`. Review skips manual alias entry, **not identity checks**.
+2. In **Verify SSH daemon identity**, check destination/user, remote daemon name,
+   actual loopback port, SAN identity **`guardian-vm.test`** and certificate
+   **SHA-256 fingerprint** against step 4's independently obtained values through
+   verified SSH. Colons/case may differ in the fingerprint display, not its bytes.
+3. Only if these match, check **I confirm this SSH destination and daemon
+   certificate identity**, then **Trust and add daemon**. **Cancel/Close does not
+   enroll anything.** SSH host-key verification, TLS CA/SAN/validity/pin checks and
+   authenticated daemon status must all succeed before a pairing is saved.
+4. After discovery refresh, expect **`ssh-guardian-vm`** (or
+   **`ssh-guardian-vm-test`** for that alias) with connected status. The pairing is
+   saved privately on the **workstation**, not in global config or an SSH key file.
+
+AI Guardian now owns its **HTTPS REST tunnel**, separately from the manual
+18080-to-8080 Console tunnel. Stop the foreground bootstrap command with Ctrl+C
+when finished; that tunnel is unnecessary for routine workstation-tray
+administration. Saved pairings can reconnect after tray restart/VM recovery once
+SSH, the HTTPS daemon and the unchanged saved identity are available. Turning
+discovery off hides candidates without deleting saved connections/tunnels.
+
+### Which SSH tray menu should appear?
+
+The earlier source-build walkthrough had only **Status**, **Pause...**, **Web
+Console** and **Manage SSH connection...**. **Web Console** there was the same
+role as **Console** in local/container menus; fewer shortcuts did not mean failed
+pairing. Open it and select the remote target to use supported Console pages.
+
+[#2592](https://github.com/RedHatProductSecurity/ai-guardian/issues/2592) is now
+merged in development: SSH targets share applicable **Console**, **Violations**,
+**Metrics & Audit**, **Statistics**, **Terminal**, **Maintenance** and **MCP**
+entries. Runtime/capability/offline differences still apply; see the
+[menu audit](MULTI_DAEMON_TRAY.md#ssh-menuaction-parity-audit). Neither that parity
+nor [#2591](https://github.com/RedHatProductSecurity/ai-guardian/issues/2591) is yet
+a PyPI feature. Check the final published version's menus rather than promising
+the old reduced menu or every development shortcut. Never substitute local
+maintenance commands for a remote action.
+
+## 9. Return after shutdown or reboot
+
+Installation, alias discovery and a saved pairing **do not start the VM or its
+daemon**. This guide does not install or claim a verified boot-time daemon
+service. Hypervisor VM autostart, guest daemon startup and managed tunnel
+reconnection are three different lifecycle mechanisms.
+
+1. Power on the VM using the correct hypervisor instance/network. From the
+   **workstation**, verify `ssh -o BatchMode=yes guardian-vm true` again.
+2. Connect with `ssh guardian-vm`, then run **on the VM as the same SSH user**:
+
+   ```bash
+   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
+   ```
+
+3. **If stopped**, start the existing installation and check readiness:
+
+   ```bash
+   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start
+   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
+   ```
+
+4. Reuse the saved TLS paths/certificate/key and verify step 7 with their actual
+   paths and current REST port. Let the workstation tray reconnect/refresh.
+   Do not regenerate certificates or enroll again merely because the guest was
+   stopped. A changed/expired identity needs separate deliberate verification and
+   [renewal handling](MULTI_DAEMON_TRAY.md#validation-failures-renewal-and-restart).
+
+**The remote daemon is stopped. Start it as the SSH user, then reconnect.** means
+the remote probe could connect but found no running daemon. A powered-off VM may
+instead fail SSH before metadata can be read; not every outage produces that
+same error. Automatic tunnel reconnection is not automatic daemon startup.
+
+## 10. Optional background Console forwarding and owned cleanup
+
+Use this only for an **already-running VM Console** on loopback port 8080, for
+example one kept open in a separate VM terminal. The foreground bootstrap command
+already owns its own forward; do not stack this on its occupied port. Check both
+listeners as in step 5 first.
+
+**Workstation:** create a dedicated private control socket for this tunnel only:
+
+```bash
+umask 077
+CONTROL_DIR=$(mktemp -d "${TMPDIR:-/tmp}/guardian-console.XXXXXX")
+CONTROL_SOCKET="$CONTROL_DIR/ssh"
+ssh -M -S "$CONTROL_SOCKET" -o ControlPersist=no -o BatchMode=yes \
+  -o ExitOnForwardFailure=yes -fNT \
+  -L 127.0.0.1:18080:127.0.0.1:8080 guardian-vm
+printf 'Console tunnel control socket: %s\n' "$CONTROL_SOCKET"
+```
+
+Open `http://127.0.0.1:18080`. `-N` starts **no remote command**: it does not start
+the VM Console, daemon or VM, and does not enroll anything. A successful local
+forward bind alone does not prove that something listens on remote port 8080.
+This is not a service and is not guaranteed to survive network disconnects,
+logout or reboot.
+
+In the same **workstation shell**, stop **only this owned tunnel**:
+
+```bash
+ssh -S "$CONTROL_SOCKET" -O exit guardian-vm
+rmdir "$CONTROL_DIR"
+```
+
+In another shell, use the exact printed socket path and its directory instead;
+do not guess another client's socket. `rmdir` removes only an empty directory.
+This does not stop the VM Console or the tray's separately managed REST tunnel.
+Stop a Console you started from its original terminal with Ctrl+C. Never use
+blanket SSH/process kills or terminate an unrelated port owner.
+
+## Troubleshooting checklist
+
+| Symptom | Check / next step |
+|---|---|
+| `ssh-copy-id: ERROR: No identities found` | Reuse/generate an appropriate key without overwriting another identity; explicitly copy its matching `.pub` file (step 2). |
+| Non-interactive SSH fails | Verify host key, alias/user/port, public-key authorization and desktop agent availability. Make the BatchMode check pass before pairing. |
+| Package installed / daemon running, but global config missing | Run `setup --create-config` from the intended VM virtualenv as the SSH user; package installation is not setup. |
+| Unsafe config/state ancestors, missing REST token, or IPC-only startup | Read that user's `daemon status`; audit ownership, links and every existing ancestor, not just the leaf. See #2584/storage preconditions; do not weaken permissions or paste token material. |
+| **Remote daemon metadata is unavailable or invalid** | Confirm the installation, global config and private state belong to the SSH user and are visible in non-interactive SSH. Custom XDG/AI Guardian paths must be available there too. |
+| **SSH-managed connections require a running HTTPS daemon** | Complete TLS provisioning, save Global settings, explicitly restart and pass the verified health request before attempting enrollment. |
+| TLS file/CA/SAN/validity error | Check exact VM paths, matching key/certificate, owner-only key, trusted certificate field, `guardian-vm.test` SAN, clock and expiry. Keep verification enabled; share no private material. |
+| Console/forward port occupied | Identify existing listeners on the correct machine, choose unused ports and adjust both ends/URL. A non-PTY SSH interruption may have left your old VM Console running. |
+| VM visible in its own Console, absent from workstation tray | Complete **workstation-side** enrollment. The port-18080 browser page administers a VM-hosted client. |
+| Cannot find daemon picker/discovery settings | In the **workstation Console**, click the top-left **AI Guardian** link to `/`; the SSH card is above daemon cards, not in the sidebar. Native Add is a different entry point. |
+| Valid alias, no candidates | Check opt-in, `guardian-`/empty prefix (not default `ai-guardian-`), supported SSH config layout, paired/dismissed status and the versions of actually running/restarted workstation components. |
+| Candidate visible, no connected target | Inventory is not enrollment: review, independently verify and explicitly complete trust. |
+| Remote daemon stopped / SSH unavailable after shutdown | Follow step 9: VM power → SSH → same-user daemon status/start → verified REST → reconnect. Do not reset TLS/trust just for an outage. |
+| Connected target has fewer entries / says Web Console | Compare its build with the #2592 development changes above. Use supported pages with the remote target selected, not workstation-local maintenance. |
+
+## Release qualification
+
+**Status on 2026-10-28:** production PyPI metadata and the SHA-256-verified
+`ai_guardian-1.20.0-py3-none-any.whl` were inspected; that wheel lacks the native
+TLS/SSH modules and TLS schema. No qualifying published version exists to record
+for the VM or workstation. The earlier reporter walkthrough used **1.21.0-dev**
+source builds, not a fresh PyPI install; it did not establish boot-time startup
+or complete desktop/platform qualification.
+
+Documentation checks on Linux with Python **3.14.7**, OpenSSL **3.5.8** and curl
+**8.18.0** passed shell syntax, local links/navigation, exact UI-label checks and
+the certificate/strict-TLS curl recipe against a **disposable synthetic loopback
+endpoint**. These checks do not qualify daemon authentication, live SSH/Console
+lifecycles, native desktop behavior or a released VM/workstation installation.
+
+Before calling this a release-qualified reproducible PyPI walkthrough:
+
+- [ ] Identify each feature's first **production PyPI** version, update the table
+  and minimum constraints, and remove the upcoming notice only when justified.
+- [ ] Install the actual released package/dependencies into fresh VM and
+  workstation virtualenvs; record Ubuntu/Python/OpenSSL versions, workstation
+  OS/desktop and both AI Guardian versions/artifact identities. No source/editable
+  or development-dependency substitution.
+- [ ] Follow the entire sequence, including global setup/storage, TLS fields,
+  restart, verified health and unauthenticated 401, and independently verified
+  workstation pairing. Record what was actually observed, not just unit results.
+- [ ] Verify native/manual pairing, browser home navigation, optional prefix
+  discovery, cancellation, dismissed/paired aliases and the released tray menus.
+- [ ] Verify foreground PTY shutdown and dedicated background tunnel cleanup;
+  no unrelated listeners/processes should be stopped.
+- [ ] Power off/reboot and recover using step 9; verify saved pairing/tunnel
+  reconnection with the original valid identity. Qualify any proposed boot-time
+  daemon service separately before documenting it as automatic.
+
+Keep this gate open in [#2585](https://github.com/RedHatProductSecurity/ai-guardian/issues/2585)
+until those exact released-artifact observations are recorded. See the
+[advanced multi-daemon reference](MULTI_DAEMON_TRAY.md) for ongoing administration.
+
+# === docs/UNINSTALL.md ===
+
+# Uninstall and orphaned-integration recovery
+
+AI Guardian's hooks, plugins/extensions, and MCP registrations live in host-owned
+files, outside its Python installation. Removing a package, virtual environment,
+interpreter, or launcher first can leave those registrations behind. A startup
+fallback cannot run when its executable or interpreter no longer exists.
+
+**These are operator-terminal lifecycle tools, not agent tools.** They are never
+invoked automatically by a hook, daemon, SDK, or MCP server. Agent-originated
+execution of the recovery entrypoint and identified uninstall wrappers is denied,
+including in trusted development sessions. A genuine security denial is not an
+orphan and must not trigger cleanup. No hook response, strict failure setting,
+host permission policy, or security configuration is relaxed by recovery.
+
+## Prerequisites and obtaining the tools
+
+Use a reviewed checkout of the desired AI Guardian release, or download
+`uninstall.sh` / `uninstall.ps1` and `scripts/ai_guardian_recovery.py` from the
+**same revision**, retaining that directory layout. The recovery engine uses only
+the Python standard library. It requires an **independent Python 3.11+** that has
+not been removed with AI Guardian; this is separate from the application's
+Python 3.10 minimum. No AI Guardian import, host CLI, Node/npm, daemon, scanner,
+network connection, or WSL is needed with the companion engine present.
+
+The Bash wrapper also supports the existing HTTPS `curl .../uninstall.sh | bash`
+distribution path: if its companion is unavailable, it downloads the engine from
+the repository's `main` branch using curl. For a version-pinned or offline review,
+obtain both files from one release checkout instead. PowerShell requires both
+local files and does not download or execute an additional network payload.
+
+Close the affected IDEs/CLIs and, for normal package uninstall, close the tray and
+stop the daemon through their ordinary operator controls first. Read the preview
+before applying changes. Do not run recovery against production configurations as
+a test of host failure behavior.
+
+## Normal uninstall
+
+On POSIX, `bash uninstall.sh --dry-run` previews user integration cleanup and
+normal uninstall. `bash uninstall.sh` confirms integration changes, then confirms
+process/desktop/package removal. Package detection supports uv tool, the dedicated
+`~/.ai-guardian-venv`, pyenv's `ai-guardian` environment, and the selected Python's
+pip installation. Integration failures stop the workflow before package/data
+removal. Project integrations are not touched unless explicitly selected.
+
+On Windows, use native PowerShell, for example `./uninstall.ps1 -DryRun` followed
+by `./uninstall.ps1`. `-Python 'C:\Python312\python.exe'` selects the independent
+interpreter. The wrapper removes the matching uv tool or the selected Python's
+pip installation after successful integration cleanup. Other interpreter/venv
+installations must be removed with their original package manager. It does not
+signal processes, delete virtual environments, or remove desktop/startup entries.
+Those are deliberate Windows limitations, not a claim of POSIX feature parity.
+
+Both paths preserve AI Guardian settings, logs, caches, and violation history by
+default. POSIX `--all` explicitly opts into deleting AI Guardian config/state/cache
+and violation history; it cannot be combined with integration-only recovery.
+Windows has no data-deletion option. Neither path uninstalls Python, uv, pyenv,
+scanners, host CLIs, or unrelated integrations.
+
+## Orphan recovery without the package
+
+Use integration-only mode when the application is already absent or when only
+registrations need repair. This does **not** stop processes, remove packages or
+desktop entries, or modify AI Guardian settings/history.
+
+```bash
+bash uninstall.sh --integrations-only --scope user --dry-run
+bash uninstall.sh --integrations-only --scope user
+```
+
+```powershell
+./uninstall.ps1 -IntegrationsOnly -Scope user -DryRun
+./uninstall.ps1 -IntegrationsOnly -Scope user
+```
+
+The standalone engine can also be run directly with independent Python:
+`python3 -I -S scripts/ai_guardian_recovery.py --scope user --dry-run`.
+`-I -S` excludes application/site imports and environment-based Python injection;
+it does not disable host or AI Guardian security checks.
+
+### Explicit project selection
+
+Choose `project` to leave user integration files alone, or `both` for user files
+and explicitly named project roots. Project-only scope requires integration-only
+mode in the wrappers. There is no repository, parent, child, or home-directory
+crawl, and the current directory is never an implicit project selection.
+
+```bash
+bash uninstall.sh --integrations-only --scope project --project /work/app --dry-run
+```
+
+```powershell
+./uninstall.ps1 -IntegrationsOnly -Scope project -Project 'C:\work\app' -DryRun
+```
+
+Repeat Bash `--project` for more roots; PowerShell accepts a `-Project` string
+array when invoked in a PowerShell session. Review each scope separately.
+Noninteractive operator automation may use `--yes` / `-Yes`; these flags do not
+override ownership checks, parser errors, file safety checks, or agent denial.
+
+## Cleanup inventory and preservation contract
+
+The finite inventory follows `setup/hooks.py`, `setup/mcp.py`, and `ide_paths.py`.
+The [relocation table](AGENT_SUPPORT.md#ide-specific-home-and-configuration-paths)
+defines home-variable precedence, including Gemini's nested `.gemini` directory,
+OpenClaw's state-versus-config distinction, and OpenCode's explicit file override.
+Only the effective selected home is visited, not every previous installation.
+Run separately for other deliberately selected historical homes.
+
+| Surface | Selected cleanup targets |
+|---|---|
+| Claude, Cursor, Copilot, Grok, Codex, Windsurf, Gemini, Augment, Antigravity, Crush | Owned commands in their known hook containers; Copilot's top-level arrays and Antigravity's named namespace included |
+| JSON/JSONC MCP | Exact `ai-guardian` entries with an owned local launch command; unrelated names, remote/custom servers, settings and containers retained |
+| Codex/Grok TOML | Owned `[mcp_servers.ai-guardian]`, quoted spelling and child tables; other table contents retained and complete parsed result verified |
+| Codex legacy | Selected home's `codex.json`, plus historical home-level `codex.json`, only when an owned registration exists |
+| OpenCode V1/V2 | Selected JSON/JSONC, legacy `mcp.ai-guardian`, V2 `mcp.servers.ai-guardian`, owned absolute/file-URI V1 plugin registrations; current plugin/shared bridge and old discovery-directory bridge |
+| Pi | Current managed `ai-guardian/index.ts` and matching `package.json`, and owned legacy flat `ai-guardian.ts`, in user or explicitly selected project scope |
+| AiderDesk/OpenClaw | Generated `index.ts`, matching package manifest and shared bridge in the selected extension/plugin home |
+| Cline/ZooCode/Kiro project scripts | Only known event filenames and Windows script variants with the exact generated single-command shape; never their shared hook directories |
+| Other selected project files | Known Claude/Cursor/Codex/Copilot/Grok/Gemini/Antigravity/Crush files, project OpenCode JSON/JSONC and `.opencode` artifacts; user-home overrides do not redirect these paths |
+
+Ownership is conservative: an exact executable/module launch, the generated
+source-version marker, or a matching managed package identity is required. A
+name containing `ai-guardian`, a comment, a similarly named binary, or an
+unrecognized source file is insufficient. Mixed/custom compound hook commands,
+remote servers, ambiguous same-name plugins and unsupported TOML layouts are
+retained rather than guessed at. Inline TOML MCP definitions currently require
+operator review. A nonzero result names every known retained/failed path without
+printing configuration values or raw parser exceptions.
+
+Windows setup's `pythonw.exe -m ai_guardian` launches are included, as are
+historical OpenCode entries embedding that module launch in the first command-array
+element. This does not authorize cleanup of other Python modules, compound
+commands or malformed quoting; unrecognized entries are retained for review.
+
+Every edited or removed integration file gets an exact, unique sibling
+`*.ai-guardian-backup-<id>.bak`; existing backups are never overwritten.
+Backup files use POSIX mode `0600`; Windows files inherit their parent directory's
+ACL, so the selected configuration directory must already be access-restricted.
+JSONC comments/formatting are retained around surgical member deletions. TOML edits
+are validated against the complete original settings minus the owned server.
+Writes use a same-directory temporary file and atomic replacement. Link/reparse
+paths, hard links, non-regular/oversized files, parse errors, duplicate JSON keys,
+unwritable paths, failed backups and intervening content changes fail safely.
+These checks reduce accidental damage; they are not an adversarial filesystem
+transaction or a substitute for closing concurrent config editors.
+
+Preview creates no backups or config writes. Exit **0** means the selected cleanup
+completed (or a successful preview); **1** means cancellation or partial failure;
+**2** means invalid arguments/prerequisites. Review originals/backups after partial
+failure and rerun only after resolving the reported conditions. Repeated successful
+cleanup is a no-op and produces no additional backups. Backups may contain private
+host configuration; protect and retain them under your own retention policy.
+
+Dependency caches/lockfiles and unknown files inside managed extension directories
+are deliberately retained; only generated entrypoints/manifests/bridges are
+removed. Skills, rules, static guidelines, project source, Git hooks and
+`.pre-commit-config.yaml` are outside this IDE integration recovery scope. Manage
+pre-commit integrations separately using the [pre-commit guide](PRE_COMMIT.md).
+No system/enterprise, dashboard/cloud, remote/container, or other user's
+configuration is modified. A leftover directory is not evidence that its removed
+entrypoint is still registered.
+
+## Missing-runtime lifecycle matrix
+
+Evidence as of **2026-10-24**: source/setup contracts and isolated recovery tests,
+**not live host qualification**. `U` means the host's exact UI/exit/continuation
+behavior has **not been experimentally verified** for any of these three cases:
+missing pinned executable, missing interpreter, missing launcher/module. All three
+prevent the unavailable application from returning its normal decision. A surviving
+Python launcher can handle application import failure; it cannot handle its own
+absence. Do not equate import failure with a real security denial.
+
+`H/U`: installed event invokes the missing runtime; host outcome unverified.
+`L/U`: plugin/extension loads but its child launch or bridge may fail; load/runtime
+outcome unverified. `M/U`: owned MCP local process cannot initialize; host error/
+retry/continuation unverified. `—`: no managed surface for that stage.
+
+| Host | Startup/lifecycle | Prompt | Tool | Plugin/extension | MCP | Known contract, not a host-crash claim |
+|---|---|---|---|---|---|---|
+| Claude Code (`claude`) | H/U | H/U | H/U | — | M/U | Nested command hooks; missing-process handling is outside the surviving launcher |
+| Cursor (`cursor`) | — | H/U | H/U | — | M/U | Setup sets `failClosed: true` on decision hooks; observation hooks have no decision channel |
+| Copilot (`copilot`) | — | H/U | H/U | — | M/U if explicitly configured | Top-level managed event arrays |
+| Grok Build (`grok`) | H/U | H/U | H/U | — | M/U | Only `PreToolUse` has a blocking decision channel |
+| Codex CLI / desktop Codex mode (`codex`) | H/U | H/U | H/U | — | M/U | Managed lifecycle includes compaction/end; regular ChatGPT mode is not covered |
+| Windsurf (`windsurf`) | — | H/U | H/U | — | M/U if configured | Nested hook events; no universal fail-open assumption |
+| Gemini CLI (`gemini`) | H/U | H/U | H/U | — | M/U if configured | BeforeAgent/BeforeTool/AfterTool and startup registration |
+| Antigravity (`antigravity`) | — | H/U (PreInvocation) | H/U | — | M/U | Post-tool observation has limited host data |
+| Cline (`cline`) | — | H/U | H/U | — | M/U if configured | Project event scripts |
+| ZooCode (`zoocode`) | — | H/U | H/U | — | M/U if configured | Shared Cline project-script surface |
+| Kiro (`kiro`) | — | H/U | H/U | — | M/U if configured | Project event scripts; user MCP separate |
+| AiderDesk (`aiderdesk`) | L/U | L/U | L/U | L/U | M/U if configured | TypeScript entrypoint delegates to shared child-process bridge |
+| OpenClaw (`openclaw`) | L/U | L/U | L/U | L/U | M/U if configured | Plugin discovery and child-process failure are separate boundaries |
+| OpenCode V1/V2 (`opencode`) | L/U | L/U | L/U | L/U | M/U if configured | V1 explicit registration and V2 auto-discovery; V2 MCP uses `mcp.servers` |
+| Pi (`pi`) | L/U | L/U | L/U | L/U | L/U | Managed extension owns both hooks and MCP tool bridge; no native MCP file |
+| Augment (`augment`) | — | — | H/U | — | M/U if configured | Pre/post-tool hook integration |
+| Crush (`crush`) | — | — | H/U | — | M/U | Partial managed event coverage, not universal enforcement |
+| Junie (`junie`) | — | — | — | — | M/U | MCP-only, static guidelines do not invoke a runtime |
+
+The tests verify package-independent recovery for synthetic missing executable,
+interpreter and module registrations; current setup schemas; JSON/JSONC/TOML;
+mixed integrations; relocated paths; explicit projects; preview/backups;
+cancellation, safe failure and idempotency. Existing startup-failure and strict
+denial contracts remain unchanged. CI adds Linux/macOS Bash and native Windows
+PowerShell lifecycle coverage; a configured CI gate is not evidence of a completed
+run. No installed host or live user installation was removed during development.
+
+For live qualification, use a disposable account per host/version/platform, install
+mixed integrations, independently remove each pinned runtime component, exercise
+each applicable startup/prompt/tool/plugin/MCP stage, record errors/exit codes and
+whether the requested action ran, then preview/apply recovery and restart. Record
+the exact evidence before changing a `U` cell. Never generalize a shell launch error
+into a claim that an entire host crashes, or automatically erase security controls
+after an ordinary denial. In particular, do not change Cursor's strict decision
+policy merely to hide a missing-runtime error.
+
+After cleanup, **fully restart** the affected host (including any background
+service) to unload cached plugins and MCP connections. Recovery of one local scope
+does not remove registrations loaded from another project, parent, system layer,
+remote machine, or dashboard. Use the reported paths and host diagnostics to
+identify remaining scopes; do not recursively remove shared configuration folders.
+
 # === docs/VIOLATION_LOGGING.md ===
 
 # Violation Logging
 
-AI Guardian automatically logs all blocked operations in JSON format, providing a complete audit trail for security review and compliance.
+AI Guardian records blocked operations in JSONL for security review. Sensitive
+secret and personal-data findings use a minimal, privacy-preserving audit record;
+other violation types retain their normal event details.
 
 ## What is Violation Logging?
 
 **Violation Logging** automatically records when AI Guardian blocks an operation:
-- 📝 **Complete audit trail** - Every blocked action is logged
+- 📝 **Privacy-aware audit trail** - Blocked actions are logged with sensitive findings minimized
 - 🔍 **Security insights** - Understand attack patterns
 - ✅ **Compliance proof** - Evidence of security controls
 - 🐛 **Debug assistance** - Troubleshoot false positives
@@ -27928,7 +31323,7 @@ Every time AI Guardian blocks something, it creates a log entry:
 |----------------|-------------------|-------------|
 | **Tool Permission** | Blocked command execution | Command, tool name, policy rule |
 | **Directory Blocking** | Restricted path access | File path, requested operation |
-| **Secret Detected** | Secret found in commit/file | Secret type, file location, line/column number |
+| **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, and timestamp only; no per-finding details |
 | **Secret Redaction** | Secret masked in output | Secret type, masking strategy |
 | **Prompt Injection** | Malicious prompt detected | Pattern matched, confidence score |
 | **SSRF Protection** | Dangerous network request | URL, reason (private IP, metadata, etc.) |
@@ -27957,7 +31352,7 @@ Each violation is logged as a single JSON object per line (JSONL format).
 
 ### Unified Policy Decision
 
-New entries include a `policy_decision` object. Its versioned schema is defined
+Standard entries include a `policy_decision` object. Its versioned schema is defined
 in `src/ai_guardian/schemas/policy-decision.schema.json` and is shared by hook,
 MCP, SDK, daemon, scanner, and external-inspector paths.
 
@@ -27987,10 +31382,59 @@ and scanner payloads are excluded by default. The correlation ID uses an
 explicit run ID when available, then the session ID or tool-use ID, so related
 checks can be grouped without copying agent content.
 
-The existing top-level JSONL fields remain unchanged. Consumers that read older
-entries can treat a missing `policy_decision` field as a legacy record; the
-current REST, SDK, SARIF, and OTEL adapters preserve their existing shapes and
-add the normalized record or its safe fields.
+The existing top-level JSONL fields remain unchanged for standard violation
+types; sensitive findings use the minimal record described below. Consumers that
+read older entries can treat a missing `policy_decision` field as a legacy
+record. Current REST, SDK, SARIF, and OTEL adapters preserve their existing
+shapes and add the normalized record or its safe fields.
+
+### Tool Input Diagnostics
+
+New tool-permission records add optional `blocked.input_diagnostics` with integer
+`schema_version: 1`. This distinguishes validation failures from ordinary policy
+denials without copying the native tool payload:
+
+```json
+{
+  "schema_version": 1,
+  "subreason": "missing_argument",
+  "native_tool_name": "read",
+  "canonical_tool_name": "Read",
+  "expected_field": "path",
+  "input_type": "object",
+  "argument_shape": {"limit": "integer"},
+  "unrecognized_argument_count": 0,
+  "target_status": "unknown"
+}
+```
+
+Subreasons are fixed labels: `missing_argument`, `empty_argument`,
+`invalid_argument`, `conflicting_arguments`, `normalization_failure`,
+`workspace_unavailable`, `immutable_protection`, or `permission_denied`.
+Recognized keys depend on the tool schema; only JSON type labels are retained.
+Unrecognized keys are counted, not persisted, and the count is capped at 10,000.
+Argument values, arbitrary keys, file contents, credentials, and session titles
+are excluded. A normalization failure can retain a recoverable target in the
+existing `blocked.file_path`; unknown/ambiguous targets are `null`, with an empty
+string `tool_value` rather than a fabricated file name.
+
+The associated context preserves canonical `tool_name`, existing session/call
+correlation, and available `message_id`, `host_version`, `integration_version`,
+and `workspace_source`. `project_path` identifies the hook's workspace;
+`policy_project_path` identifies the policy request context, while `plugin_cwd`
+records an available plugin startup location separately. Missing workspace data
+is not replaced by daemon startup CWD. OpenCode's bridge also starts its checker
+in the session workspace so its daemon forwarding uses that same directory.
+
+Console Details and copy views revalidate the added diagnostics. MCP returns
+only vetted fields, bounded IDs/version strings, and fixed guidance; unavailable
+values are `null` or `unknown`. Legacy records without these fields remain valid;
+the exact old missing-parameter classification is recognized without treating
+arbitrary stored reason text as agent-safe. The existing `policy_decision.reason`
+remains the generic safe classification, not a channel for raw details.
+
+Paths and IDs are operational metadata. Review diagnostic copies before sharing.
+Immutable input failures remain blocked and do not gain override actions.
 
 ### Example Log Entry (Blocked Command)
 
@@ -28025,32 +31469,31 @@ add the normalized record or its safe fields.
 
 ```json
 {
-  "timestamp": "2024-04-27T08:35:42Z",
-  "violation_type": "secret_detected",
+  "id": "viol_1234abcd",
+  "timestamp": "2026-11-02T08:35:42Z",
+  "violation_type": "sensitive_finding",
   "severity": "high",
-  "blocked": {
-    "secret_type": "GitHub Personal Token",
-    "file": "config/settings.py",
-    "line": 42,
-    "column": 15,
-    "scanner": "gitleaks"
-  },
-  "context": {
-    "project_path": "/home/user/projects/webapp",
-    "git_branch": "feature/auth",
-    "tool_name": "Write",
-    "source": "PostToolUse",
-    "file_path": "config/settings.py"
-  },
-  "suggestion": {
-    "action": "use_environment_variable",
-    "example": "GITHUB_TOKEN=ghp_... in .env"
-  },
   "resolved": false,
   "resolved_at": null,
   "resolved_action": null
 }
 ```
+
+For `secret_detected`, `image_secret_detected`, and `pii_detected`, JSONL keeps
+only the generic category, ID, timestamp, severity, and resolution state. It does
+not retain source paths/positions, matched values, detector metadata, context,
+suggestions, policy-decision details, or allowlist snippets. The original finding
+remains available to the in-memory caller; the persistent history does not
+distinguish which sensitive type was detected. Aggregate secret counts remain
+available separately.
+
+Ask-mode history does not store the matched input or scanner error text; it keeps
+a fixed description and available source position. CLI scan history stores the
+rule ID and source position, but not the finding message or snippet. The original
+Ask inputs and complete CLI findings remain available to their in-memory callers
+and command output, respectively. Generic records also persist only recognized
+violation/severity labels; unknown labels are normalized rather than copied
+verbatim.
 
 ### Example Log Entry (Directory Blocked)
 
@@ -28091,6 +31534,7 @@ Violation logging is enabled by default:
 {
   "violation_logging": {
     "enabled": true,
+    "mirror_remote_violations": false,
     "max_entries": 1000,
     "retention_days": 30,
     "log_types": [
@@ -28107,14 +31551,130 @@ Violation logging is enabled by default:
 }
 ```
 
+## Violation notifications
+
+Privacy-safe alerts are independent of violation history logging and detection.
+Each supported violation type has separate desktop and email preferences. Types
+without an explicit preference default to desktop enabled and email disabled.
+Configure them in the Web Console's **Violation Notifications** card or under
+`violation_notifications`:
+
+```json
+{
+  "violation_notifications": {
+    "by_type": {
+      "secret_detected": {"desktop": true, "email": false},
+      "prompt_injection": {"desktop": false, "email": false}
+    },
+    "email": {"recipient": "security@example.org"}
+  }
+}
+```
+
+The Web Console migrates existing global settings when preferences are saved:
+legacy `enabled: false` keeps every type disabled, while legacy `channels` values
+are copied to each type that has no explicit preference. The deprecated legacy
+keys remain accepted for older configurations and are removed by the next Console
+save. A per-type email preference can be changed only after the alert recipient
+and usable TLS SMTP transport (including any configured authentication) are ready.
+
+Alerts include only a fixed violation category, severity, and originating daemon.
+They never include detected secrets, PII, scanned content, file paths, commands,
+or scanner details. Email alerts use the SMTP host and authentication configured
+under `support.email`, but use their own `violation_notifications.email.recipient`;
+the support-bundle destination is not used. TLS is required (port 465 uses
+implicit TLS; other ports use STARTTLS). Environment-variable SMTP credentials
+are recommended; credentials and alert content are never written to notification
+diagnostics. An email recipient and usable TLS SMTP settings are both required.
+
+Each daemon first attempts its configured per-type channels. The local tray relays
+remote events through this host's own preference for the exact violation type only
+when a remote channel is known to be unconfigured or to have failed. Outbox events
+from earlier daemons are joined to curated violation summaries by ID when they lack
+the type field. A durable private event ledger deduplicates channel delivery across
+daemon retries, tray polling, and restarts.
+If the remote send outcome is ambiguous, the local host does not retry that
+channel, avoiding a possible duplicate. Remote alert relay is separate from the
+opt-in remote history mirroring setting. Events are kept in a private outbox for
+up to 30 days so the tray can catch up after reconnecting. For older remote
+daemons without a notification outbox, the tray uses a persisted overlapping
+poll cursor and does not alert on the source's pre-existing history at first
+connection.
+
+When a hook falls back to direct processing because the daemon is unavailable,
+it commits the privacy-safe event to the outbox before returning its response.
+A detached worker delivers selected channels without keeping the short-lived IDE
+hook open. Hooks handled by the long-running daemon retain asynchronous dispatch.
+
+## Remote violation history mirroring
+
+Remote mirroring is **off by default**. Enable the receiving daemon's global
+`violation_logging.mirror_remote_violations` setting in the Web Console's
+**Remote Violation Mirroring** card
+to import summaries from reachable container, Kubernetes, manual, or SSH daemons.
+The tray polls while the option is enabled and violation logging is active.
+
+Only the violation type, severity, timestamp, and available tool/file/action/line
+summary fields are copied. Raw blocked content, tool context, session identifiers,
+policy details, and suggestions are not copied. Each local entry retains the source
+daemon, event ID, and original event timestamp. Each source daemon is stored separately in
+`remote-violations/<sha256-source-key>.jsonl`; the key hashes runtime/endpoint
+identity rather than the display name, so same-named daemons do not collide.
+Native local entries remain in
+`violations.jsonl`. A private local index prevents duplicate imports across polls,
+tray restarts, and violation-log rotation. Mirroring does not alter
+or delete the source record. Local copies are explicitly **read-only**: the Console
+does not offer Always Allow, Ignore File, or Suppress in Source actions for them.
+When the source daemon is available and the source record has an ID, the Console
+links back to its authoritative detail page. Unavailable daemons do not prevent
+other sources from syncing, and existing local mirrors remain visible.
+The Violations page's **Filter by daemon** field filters the displayed history as
+you type, matching source labels case-insensitively alongside the type and directory
+filters. **Select exact source** retains the source options for identity-specific
+selection; same-named daemons with different endpoint identities remain distinct.
+Options show current **Running**, **Paused**, or **Offline** availability. A source
+that is not currently discoverable, or whose status cannot be confirmed, is shown as
+**Unknown** rather than inferred offline from its historical records. Refreshing
+source/status information keeps the selected filters. Clearing the daemon search
+returns to **All Sources** without resetting the type or directory filters. Sources
+are listed with the local daemon first, then remote sources by most recent violation.
+Each file is rotated independently by the configured
+`max_entries` and `retention_days`; cleanup runs during history reads and tray sync,
+removing an empty source file so inactive daemons age out of the filter list.
+
+Entries older than the receiving daemon's configured retention window are not
+imported. The receiver must also have violation logging enabled. Disable the
+setting at any time to stop future imports; already mirrored records remain in
+local history until ordinary retention or size rotation removes them. Clearing
+violation history removes the local log and all per-daemon mirror logs; the opaque
+dedup index remains so previously cleared remote events are not silently restored.
+
 ### Configuration Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `enabled` | Enable violation logging | `true` |
+| `mirror_remote_violations` | Import curated summaries from reachable remote daemons into this daemon's local history | `false` |
 | `max_entries` | Maximum log entries to keep | `1000` |
 | `retention_days` | Delete entries older than N days | `30` |
 | `log_types` | Which violation types to log | All types |
+
+Notification options are separate from that history configuration:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `violation_notifications.by_type.<type>.desktop` | Deliver OS desktop notifications for one supported violation type | `true` |
+| `violation_notifications.by_type.<type>.email` | Deliver email for one type when recipient and TLS SMTP settings are usable | `false` |
+| `violation_notifications.email.recipient` | Alert recipient; SMTP transport/auth uses `support.email` | Empty |
+
+The supported `<type>` keys are `tool_permission`, `directory_blocking`,
+`secret_detected`, `image_secret_detected`, `pii_detected`, `image_pii_detected`,
+`secret_in_transcript`, `pii_in_transcript`, `suspected_password`,
+`secret_redaction`, `prompt_injection`, `jailbreak_detected`, `ssrf_blocked`,
+`config_file_exfil`, `prompt_injection_in_transcript`, `annotation_suppressed`,
+`middleware_paused`, `bash_exfil`, `scan_finding`, `canary_detection`,
+`context_poisoning`, `supply_chain`, `code_security`, `offensive_language`,
+`canary_detected`, `exfil_detection`, and `sensitive_finding`.
 
 ---
 
@@ -28379,7 +31939,7 @@ Violation logging is **extremely efficient**:
 
 **Violation Logging** provides:
 
-📝 **Complete audit trail** - Every blocked operation is logged with details  
+📝 **Privacy-aware audit trail** - Sensitive finding details are intentionally omitted
 🔍 **Security insights** - Understand attack patterns and trends  
 ✅ **Compliance proof** - Evidence that security controls are active  
 🐛 **Debug assistance** - Troubleshoot false positives easily  
@@ -28573,8 +32133,15 @@ Violation logging is **extremely efficient**:
     "expire_after_hours": 168
   },
 
+  "_comment_password_likelihood": "Optional local suspected-password heuristic. Global-only human opt-in; no vault access. Not proof of a password or universal leak prevention.",
+  "password_likelihood": {
+    "_comment_enabled": "Default off in every profile. Only explicit boolean true enables local analysis.",
+    "enabled": false,
+    "_comment_action": "ask (default) requests private Allow Once / Block approval for contextual candidates or incomplete analysis; unavailable approval blocks. warn is advisory; block requests denial. Ambiguous candidates remain advisory. Host model-boundary qualification is required.",
+    "action": "ask"
+  },
   "secret_scanning": {
-    "_comment": "NEW in v1.4.0: Secret scanning with Gitleaks control",
+    "_comment": "Secret scanning defaults to built-in TOML patterns followed by Gitleaks",
     "_comment2": "Controls whether secret scanning is performed",
     "_comment3": "Supports both boolean (permanent) and time-based (temporary) formats",
     "_comment_immutable": "immutable prevents project-level configs from overriding these fields",
@@ -28598,10 +32165,11 @@ Violation logging is **extremely efficient**:
       "EXAMPLE_API_KEY_[A-Z0-9]+",
       {"pattern": "sk_test_temp_[A-Za-z0-9]+", "valid_until": "2026-06-01T00:00:00Z"}
     ],
-    "_engines_comment": "Multi-engine support with execution strategies and per-engine pattern servers",
+    "_engines_comment": "Default engines are built-in toml-patterns followed by gitleaks. An explicit list replaces this default; omit toml-patterns to opt out, including through the Console Engine Configuration checkbox.",
     "_engines_comment2": "Configure multiple scanner engines with different strategies for combining results",
     "_engines_comment3": "pattern_server is now per-engine (Issue #530) — put it inside the engine object",
     "engines": [
+      "toml-patterns",
       {
         "type": "gitleaks",
         "_comment": "Pattern server config is per-engine (canonical format since v1.7.x)",
@@ -28666,9 +32234,11 @@ Violation logging is **extremely efficient**:
       }
     ],
     "_engines_examples": {
-      "_simple": ["gitleaks"],
-      "_multi_engine": ["gitleaks", "trufflehog"],
+      "_simple": ["toml-patterns", "gitleaks"],
+      "_gitleaks_only_opt_out": ["gitleaks"],
+      "_multi_engine": ["toml-patterns", "gitleaks", "trufflehog"],
       "_with_per_engine_pattern_server": [
+        "toml-patterns",
         {
           "type": "gitleaks",
           "pattern_server": {"url": "https://raw.githubusercontent.com", "patterns_endpoint": "/leaktk/patterns/main/target/patterns/gitleaks/8.27.0"}
@@ -28676,6 +32246,7 @@ Violation logging is **extremely efficient**:
         "betterleaks"
       ],
       "_with_per_engine_config": [
+        "toml-patterns",
         "gitleaks",
         {
           "type": "trufflehog",
@@ -28688,14 +32259,14 @@ Violation logging is **extremely efficient**:
     },
     "_engines_secretlint_example": {
       "_comment": "Secretlint (MIT, Node.js): npm install -g @secretlint/secretlint-rule-preset-recommend",
-      "_config": ["gitleaks", "secretlint"]
+      "_config": ["toml-patterns", "gitleaks", "secretlint"]
     },
     "_engines_gitguardian_example": {
       "_comment": "GitGuardian (MIT ggshield CLI, cloud service): ai-guardian scanner install gitguardian. Requires consent and API key.",
       "_consent": "Run: ai-guardian engine consent gitguardian",
       "_api_key": "Set GITGUARDIAN_API_KEY environment variable",
       "_warning": "Content is sent to GitGuardian cloud API for scanning",
-      "_config": ["gitleaks", "gitguardian"]
+      "_config": ["toml-patterns", "gitleaks", "gitguardian"]
     },
     "_engines_python_scanner_example": {
       "_comment": "Python-based custom scanners (NEW in v1.8.0, Issue #474). Run in-process (~1ms vs ~50ms subprocess). No binary installation needed.",
@@ -28713,6 +32284,7 @@ Violation logging is **extremely efficient**:
         "class": "MyScanner"
       },
       "_config": [
+        "toml-patterns",
         "gitleaks",
         {
           "type": "python",
@@ -29459,7 +33031,7 @@ Violation logging is **extremely efficient**:
   "_comment_console": "Console settings",
   "console": {
     "preferred_ui": "auto",
-    "_comment_preferred_ui": "Preferred UI toolkit for dialogs. Options: auto, tkinter, nicegui, headless. Legacy textual values use nicegui. Env var override: AI_GUARDIAN_PREFERRED_UI",
+    "_comment_preferred_ui": "Dialogs: auto prefers Native → Tkinter → NiceGUI among complete implementations; only pre-display failures advance. tkinter/nicegui are exclusive; headless opens no UI. Host-path, progress, placement and native user-only support-review exceptions: docs/MODAL_PROVIDERS.md. Legacy textual values use nicegui. Env var override: AI_GUARDIAN_PREFERRED_UI",
     "editor_theme": "monokai",
     "_comment_editor_theme": "Color theme for the JSON config editor. Options: monokai, vscode_dark, dracula, github_light",
     "web": {
@@ -29526,6 +33098,18 @@ Violation logging is **extremely efficient**:
     "idle_timeout_minutes": 0,
     "client_timeout_seconds": 2.0,
     "rest_port": 63152,
+    "rest_tls": {
+      "_comment": "Optional HTTPS; never changes rest_host or replaces daemon-token authentication. Provision certificates and explicit client trust before enabling. Invalid TLS prevents REST startup; restart required after certificate or listener changes. See docs/MULTI_DAEMON_TRAY.md.",
+      "enabled": false,
+      "cert_file": "",
+      "key_file": "",
+      "client": {
+        "_comment": "Local REST client trust. Empty ca_file uses system CAs; use an independently verified CA bundle or self-signed server certificate for private deployments. server_name is the expected SAN identity, not necessarily the TCP host. An optional SHA-256 leaf pin supplements, never replaces, CA/expiry/hostname validation. Never auto-replace a pin.",
+        "ca_file": "",
+        "server_name": "",
+        "certificate_sha256": ""
+      }
+    },
     "tray": {
       "enabled": true,
       "auto_install": true,
@@ -29535,6 +33119,8 @@ Violation logging is **extremely efficient**:
       "discovery_interval_seconds": 15,
       "discover_containers": true,
       "discover_kubernetes": false,
+      "_comment_ssh_alias_discovery": "Workstation-global opt-in: enumerate local user SSH config at startup/refresh, without contacting hosts. Empty alias_prefix includes all concrete aliases. Review still requires explicit SSH/TLS identity confirmation; dismissed/removed aliases stay dismissed.",
+      "ssh_alias_discovery": {"enabled": false, "alias_prefix": "ai-guardian-"},
       "kubernetes": {
         "namespace": "ai-sdlc",
         "label_selector": "app=ai-guardian",
@@ -29580,6 +33166,8 @@ Violation logging is **extremely efficient**:
   "_comment_violation_logging2": "All scanner findings are written to violations.jsonl for review in the web console",
   "violation_logging": {
     "enabled": true,
+    "mirror_remote_violations": false,
+    "_mirror_remote_violations_note": "Opt in to copying curated remote violation summaries into this host's history. Raw blocked content is not copied; mirrored records are read-only.",
     "max_entries": 1000,
     "_max_entries_note": "Maximum entries in violations.jsonl before oldest are rotated out",
     "retention_days": 30,
@@ -29604,6 +33192,24 @@ Violation logging is **extremely efficient**:
       "supply_chain"
     ],
     "_log_types_note": "Which violation types to log. Remove types to suppress specific categories."
+  },
+
+  "_comment_violation_notifications": "Privacy-safe per-violation-type alerts, independent of logging/detection. Only category, severity and daemon identity are sent; no detected values or scanned content. Types omitted from by_type default to desktop enabled and email disabled.",
+  "_comment_violation_notifications_email": "Email uses the SMTP host/TLS/authentication from support.email, but this recipient is separate from support-bundle destinations. Email preferences require this recipient and usable TLS SMTP settings.",
+  "violation_notifications": {
+    "by_type": {
+      "secret_detected": {
+        "desktop": true,
+        "email": false
+      },
+      "prompt_injection": {
+        "desktop": false,
+        "email": false
+      }
+    },
+    "email": {
+      "recipient": ""
+    }
   },
 
   "_comment_security_instructions": "Security rule injection into AI context (v1.7.0 #580, v1.8.0 #584)",
@@ -29714,8 +33320,9 @@ Violation logging is **extremely efficient**:
   },
 
   "support": {
-    "export_destination": "",
-    "_comment_export_destination_examples": "Local: ~/support-bundles | S3: s3://bucket/prefix/ | GCS+Vertex: gs://company-bucket/ai-guardian/support/config-bundle/ | Email: mailto:support@company.com",
+    "export_destination": "github-discussions",
+    "github_category": "bug-reports",
+    "_comment_export_destination_examples": "Default: github-discussions, including missing/empty destinations. Offers Create ZIP only (local, no GitHub authentication/upload; not encrypted) or PUBLIC Discussions with native final approval. Only bug-reports (default) and q-a. Tray, CLI and MCP respect explicit destinations; existing bundles are not rerouted. Logs and violations cover the last 12 hours; only logs may be truncated. Collected configurations and included violation records stay complete and fully viewable through pages. Alternatives: ~/support-bundles | s3://bucket/prefix/ | gs://company-bucket/ai-guardian/support/config-bundle/ | mailto:support@company.com",
     "auth": {
       "method": "none",
       "token_env": ""
@@ -29909,6 +33516,26 @@ Violation logging is **extremely efficient**:
         }
       }
     },
+    "password_likelihood": {
+      "type": "object",
+      "description": "Global-only, explicit human opt-in local suspected-password heuristic. No vault/source enrollment. Off by default; Ask is the default enabled outcome, never proof that a value is a password. Project settings and content cannot activate or weaken it.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable bounded offline analysis. Default off, including strict profiles."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["ask", "warn", "block"],
+          "default": "ask",
+          "description": "ask requests private Allow Once / Block approval for contextual candidates or incomplete analysis using existing local/remote Ask transport. Cancellation, timeout and unavailable approval block. SDK/static checks do not prompt; unresolved Ask is denied at enforcing SDK checks. warn is advisory only; block requests denial. Ambiguous candidates remain advisory in every mode. Actual pre-model host enforcement must be qualified separately. No automatic heuristic redaction."
+        },
+        "_comment_enabled": {"type": "string"},
+        "_comment_action": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
     "secret_scanning": {
       "type": "object",
       "description": "Secret scanning with multi-engine support (v1.4.0+). Object with 'enabled' property that supports boolean (permanent) or time-based (temporary) formats. Multi-engine support added in v1.5.0 - configure multiple engines with automatic fallback.",
@@ -29918,13 +33545,14 @@ Violation logging is **extremely efficient**:
         },
         "engines": {
           "type": "array",
-          "description": "List of secret scanning engines to use. Tries engines in order, using first available. Supported: 'gitleaks' (default, industry standard), 'betterleaks' (faster fork), 'leaktk' (auto-pattern management), 'trufflehog' (700+ detectors with verification), 'detect-secrets' (baseline workflow), Python-based custom scanners (type: 'python'), or custom engine config objects. See docs/MULTI_ENGINE_SUPPORT.md for examples.",
+          "description": "List of secret scanning engines to use, tried in order. The default is ['toml-patterns', 'gitleaks']; toml-patterns is built in and requires no binary. An explicit list replaces the default, so omit toml-patterns to intentionally opt out. Also supported: 'betterleaks' (faster fork), 'leaktk' (auto-pattern management), 'trufflehog' (700+ detectors with verification), 'detect-secrets' (baseline workflow), Python-based custom scanners (type: 'python'), or custom engine config objects. See docs/MULTI_ENGINE_SUPPORT.md for examples.",
           "items": {
             "oneOf": [
               {
                 "type": "string",
-                "description": "Built-in engine name: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
+                "description": "Built-in or external engine name: 'toml-patterns' (built-in), 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
                 "enum": [
+                  "toml-patterns",
                   "gitleaks",
                   "betterleaks",
                   "leaktk",
@@ -30136,6 +33764,7 @@ Violation logging is **extremely efficient**:
             ]
           },
           "default": [
+            "toml-patterns",
             "gitleaks"
           ]
         },
@@ -31732,6 +35361,11 @@ Violation logging is **extremely efficient**:
         "enabled": {
           "$ref": "#/definitions/time_based_enabled"
         },
+        "mirror_remote_violations": {
+          "type": "boolean",
+          "description": "Opt in to copying curated summaries of remote daemon violations into this host's local history. Raw blocked content is not copied; mirrored records are read-only.",
+          "default": false
+        },
         "max_entries": {
           "type": "number",
           "description": "Maximum number of log entries to retain",
@@ -31753,6 +35387,7 @@ Violation logging is **extremely efficient**:
               "tool_permission",
               "directory_blocking",
               "secret_detected",
+              "suspected_password",
               "secret_redaction",
               "prompt_injection",
               "jailbreak_detected",
@@ -31778,6 +35413,7 @@ Violation logging is **extremely efficient**:
             "tool_permission",
             "directory_blocking",
             "secret_detected",
+            "suspected_password",
             "secret_redaction",
             "prompt_injection",
             "jailbreak_detected",
@@ -31796,6 +35432,103 @@ Violation logging is **extremely efficient**:
             "canary_detected",
             "exfil_detection"
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "violation_notifications": {
+      "type": "object",
+      "description": "Privacy-safe global violation alerts with independent desktop and email preferences per violation type. Email uses support.email SMTP transport/authentication but the alert recipient is independent of support-bundle destinations.",
+      "properties": {
+        "by_type": {
+          "type": "object",
+          "description": "Per-type channel overrides. Types omitted here default to desktop enabled and email disabled.",
+          "propertyNames": {
+            "enum": [
+              "tool_permission",
+              "directory_blocking",
+              "secret_detected",
+              "image_secret_detected",
+              "pii_detected",
+              "image_pii_detected",
+              "secret_in_transcript",
+              "pii_in_transcript",
+              "suspected_password",
+              "secret_redaction",
+              "prompt_injection",
+              "jailbreak_detected",
+              "ssrf_blocked",
+              "config_file_exfil",
+              "prompt_injection_in_transcript",
+              "annotation_suppressed",
+              "middleware_paused",
+              "bash_exfil",
+              "scan_finding",
+              "canary_detection",
+              "context_poisoning",
+              "supply_chain",
+              "code_security",
+              "offensive_language",
+              "canary_detected",
+              "exfil_detection",
+              "sensitive_finding"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "desktop": {
+                "type": "boolean",
+                "description": "Show OS desktop notifications for this violation type.",
+                "default": true
+              },
+              "email": {
+                "type": "boolean",
+                "description": "Send email alerts for this violation type when an alert recipient and usable TLS SMTP settings are configured.",
+                "default": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": {}
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Deprecated legacy setting. An explicit false is preserved as all per-type channels disabled until preferences are migrated by a Console save.",
+          "deprecated": true
+        },
+        "channels": {
+          "type": "object",
+          "description": "Deprecated legacy channel defaults used to migrate configurations that do not yet have by_type preferences.",
+          "properties": {
+            "desktop": {
+              "type": "boolean",
+              "description": "Legacy default for OS desktop notifications.",
+              "default": true
+            },
+            "email": {
+              "type": "boolean",
+              "description": "Legacy default for email notifications.",
+              "default": false
+            }
+          },
+          "additionalProperties": false,
+          "deprecated": true,
+          "default": {
+            "desktop": true,
+            "email": false
+          }
+        },
+        "email": {
+          "type": "object",
+          "properties": {
+            "recipient": {
+              "type": "string",
+              "description": "Recipient for violation alerts. SMTP transport settings and credentials come from support.email; support export destinations are not used.",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -32090,7 +35823,7 @@ Violation logging is **extremely efficient**:
             "headless"
           ],
           "default": "auto",
-          "description": "Preferred UI toolkit for interactive dialogs (tray-prompt, ask-prompt). auto = cascade tkinter → NiceGUI → headless. tkinter/nicegui = use only that toolkit. headless = no UI dialogs, ask actions use configured fallback. Env var override: AI_GUARDIAN_PREFERRED_UI"
+          "description": "Preferred UI toolkit for interactive dialogs. auto = Native → Tkinter → NiceGUI among complete, eligible implementations, with fallback only on pre-display unavailability. tkinter/nicegui = use only that toolkit. headless = no dialogs; ask uses configured fallback. Host-path, progress, placement and native user-only support-review exceptions are documented in MODAL_PROVIDERS.md. Env var override: AI_GUARDIAN_PREFERRED_UI"
         },
         "editor_theme": {
           "type": "string",
@@ -32176,6 +35909,29 @@ Violation logging is **extremely efficient**:
           "default": "127.0.0.1",
           "description": "REST API bind address. Default 127.0.0.1 (localhost only). Auto-detects Docker/Podman/Kubernetes containers and defaults to 0.0.0.0. Can also be set via AI_GUARDIAN_REST_HOST env var. Resolution order: config > env var > container detection > 127.0.0.1."
         },
+        "rest_tls": {
+          "type": "object",
+          "description": "Opt-in native HTTPS. Does not change the bind address or replace daemon authentication. Certificate and listener changes require a daemon restart; reload leaves the live listener unchanged.",
+          "properties": {
+            "enabled": {"type": "boolean", "default": false, "description": "Serve HTTPS instead of HTTP. Invalid TLS configuration prevents REST startup; never falls back to plaintext."},
+            "cert_file": {"type": "string", "default": "", "description": "PEM leaf certificate followed by intermediate certificates. Must be currently valid and match key_file."},
+            "key_file": {"type": "string", "default": "", "description": "Unencrypted PEM private key, accessible only to the daemon account (0600 on POSIX; restricted ACL on Windows). Never put key contents in configuration."},
+            "client": {
+              "type": "object",
+              "description": "Explicit trust for local REST callers connecting to this daemon over loopback. Provision trust independently; never copy trust from discovery. Manual remote targets use their own tls object in tray-targets.json.",
+              "properties": {
+                "ca_file": {"type": "string", "default": "", "description": "Independently verified PEM CA bundle (or verified self-signed server certificate). Empty uses system trust. Must not be writable by other users."},
+                "server_name": {"type": "string", "default": "", "description": "Expected certificate SAN identity and TLS SNI, independent of the TCP address. Empty verifies the connection hostname/IP."},
+                "certificate_sha256": {"type": "string", "default": "", "pattern": "^(?:[0-9a-fA-F]{64}|(?:[0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2})?$", "description": "Optional independently verified SHA-256 leaf-certificate fingerprint, additional to CA/expiry/hostname verification. Never automatically replaced on renewal."}
+              },
+              "patternProperties": {"^_comment": {"type": "string"}},
+              "additionalProperties": false
+            }
+          },
+          "allOf": [{"if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]}, "then": {"required": ["cert_file", "key_file"], "properties": {"cert_file": {"minLength": 1}, "key_file": {"minLength": 1}}}}],
+          "patternProperties": {"^_comment": {"type": "string"}},
+          "additionalProperties": false
+        },
         "tray": {
           "type": "object",
           "description": "System tray icon settings. Disable on headless servers without a display.",
@@ -32211,6 +35967,15 @@ Violation logging is **extremely efficient**:
               "type": "boolean",
               "default": false,
               "description": "Enable Kubernetes pod daemon discovery. Requires kubectl and appropriate cluster access."
+            },
+            "ssh_alias_discovery": {
+              "type": "object",
+              "description": "Workstation-global opt-in local user SSH config enumeration at startup/refresh. Never probes or trusts destinations automatically. Conditional Includes are skipped; bounded config/*.conf Includes below the user .ssh directory are supported.",
+              "properties": {
+                "enabled": {"type": "boolean", "default": false, "description": "Offer concrete SSH aliases for explicit review in the tray and loopback Web Console. Off leaves existing saved SSH connections unchanged."},
+                "alias_prefix": {"type": "string", "default": "ai-guardian-", "maxLength": 253, "pattern": "^[A-Za-z0-9_.-]*$", "description": "Optional case-insensitive literal prefix. Empty discovers all concrete aliases without renaming existing hosts."}
+              },
+              "additionalProperties": false
             },
             "kubernetes": {
               "type": "object",
@@ -32434,8 +36199,14 @@ Violation logging is **extremely efficient**:
       "properties": {
         "export_destination": {
           "type": "string",
-          "description": "Destination for support bundles. Local path (e.g., '~/support-bundles'), S3 URI (e.g., 's3://bucket/prefix/'), GCS URI (e.g., 'gs://bucket-name/'), or email (e.g., 'mailto:support@company.com'). Default: XDG state directory (~/.local/state/ai-guardian/support-bundles/). Preconfigured by admin — agent cannot override.",
-          "default": ""
+          "description": "Default: 'github-discussions', offering Create ZIP only (local, not encrypted, no authentication/upload) or public support in the fixed RedHatProductSecurity/ai-guardian repository with native final approval. Preparation stays local. Missing/empty destinations use GitHub. Explicit local paths, S3, GCS, and email remain in effect for tray, CLI and MCP. No saved settings or existing bundle destinations are changed. Agent cannot override the destination.",
+          "default": "github-discussions"
+        },
+        "github_category": {
+          "type": "string",
+          "enum": ["bug-reports", "q-a"],
+          "default": "bug-reports",
+          "description": "Public support Discussion category: Bug Reports (default, non-answerable) or Q&A (must support accepted answers). IDs are resolved and repository membership validated at send time. No other category is supported."
         },
         "auth": {
           "type": "object",
@@ -33041,6 +36812,10 @@ Violation logging is **extremely efficient**:
       "additionalProperties": false
     },
     "secret_scanning": { "$ref": "#/$defs/scanner_section" },
+    "password_likelihood": {
+      "$ref": "#/$defs/scanner_section",
+      "description": "Recognized scanner name. Experimental password likelihood uses global-only policy and does not consume project ignore paths."
+    },
     "scan_pii": { "$ref": "#/$defs/scanner_section" },
     "prompt_injection": { "$ref": "#/$defs/scanner_section" },
     "config_file_scanning": { "$ref": "#/$defs/scanner_section" },
@@ -33549,6 +37324,591 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-11-08
+
+### Added
+- **Pre-1.0 agent CLI advisories:** Setup and Doctor now report a non-blocking
+  warning when a supported CLI's detected version is below 1.0.0. Doctor includes
+  the advisory in human-readable and structured output without changing hook
+  health; unavailable or unparsable versions are not classified as pre-1.0.
+
+### CI/CD
+- **Release script CI gates:** Run and await Release Readiness, Tests, Lint, and
+  Integration Tests on the current source ref in preview and execute modes.
+  Release Readiness continues to provide Smoke Tests, Scenario Tests, and
+  Container Build Validation once; failed or unmatched runs stop release changes.
+- **OpenCode hook E2E variants:** Run OpenCode V1 and V2 plugin/MCP integration
+  contracts as separately named Release Readiness matrix jobs, with generation-
+  specific test selection and shared OpenCode unit checks run only once.
+
+### Fixed
+- **Tray modal focus handoff:** Standardize one-shot foreground restoration after
+  tray-menu dismissal for Tk messages/results, plugin and SSH forms, proactive and
+  snooze prompts, Pause, sandbox forms/progress/logs/confirmations, and support
+  review. Temporary topmost hints are cleared; dialogs do not remain always-on-top
+  or repeatedly reclaim focus. Native dialogs and browser windows are unchanged.
+- **CLI scan output privacy:** Default terminal results show finding counts and
+  relative file paths without printing scanner messages, source positions, or code
+  snippets. Absolute paths under the home directory use a `$HOME` prefix. Explicit
+  JSON/SARIF reports retain detailed findings and should be handled as sensitive
+  files.
+- **GitGuardian cloud scanner packaging and failures:** Omit the optional
+  GitGuardian CLI from default Docker/Podman and OpenShell images; derived images
+  can opt in with `INCLUDE_GITGUARDIAN=true`. Parse findings from ggshield's
+  `--exit-zero` JSON output, retain per-engine failures across first-match,
+  any-match, and consensus results, and preserve consensus thresholds. Report cloud
+  quota, credentials, consent, and service failures as incomplete scan coverage
+  under `on_scan_error` without exposing credential values. Scanner diagnostics
+  are not echoed to stderr; the hook warning uses fixed engine labels and safe
+  summaries.
+- **Codex PreToolUse denials:** Include Codex's required non-empty
+  `permissionDecisionReason` using the existing sanitized violation label, so the
+  CLI accepts denials instead of treating them as invalid hook output.
+- **Codex readiness smoke hook execution:** Use Codex's invocation-only hook-trust
+  override in the disposable smoke container only after verifying its isolated
+  `CODEX_HOME` contains exactly the generated AI Guardian hooks and no other active
+  hook sources. Do not persist trust state or change Codex's workspace-write
+  sandbox/approval policy. Keep all native hook, execution, raw-output and
+  clean-exit assertions mandatory. Failure diagnostics summarize only allowlisted
+  Codex event/item types, fixed error/output categories, native tool-name counts,
+  correlated function-output counts/shapes, and numeric statuses/exit codes. The
+  local mock emits function calls as in-progress until argument deltas complete,
+  then reports the completed item. A detected Bubblewrap permission denial now
+  prints a fixed explanation linking to `docs/CODEX_SANDBOX_RUNTIME.md`; the case
+  remains failed and no sandbox requirement is relaxed.
+- **Release Readiness CLI reporting:** Give each configured CLI smoke its own
+  named step and continue to remaining clients after an individual smoke failure,
+  while keeping prerequisites, cancellation, and Claude consent gates intact.
+  Temporarily allow only the unresolved Codex smoke step to fail without blocking
+  release readiness; report it as unqualified, and keep other failures blocking.
+  Rename jobs to describe their test coverage.
+- **CLI smoke execution witness:** Prepare only the disposable witness directory
+  as writable by the container user on POSIX hosts, so Docker UID mismatches do not
+  prevent native tool execution. Keep the rest of the workspace non-writable to
+  other users and retain all execution-evidence checks.
+- **Gemini native output containment:** Scan `AfterTool`'s model-visible
+  `llmContent`, preserving text-part boundaries. Refuse results requiring
+  sanitization through Gemini's native deny decision instead of returning an
+  unsupported replacement field that leaves raw output visible.
+- **Gemini hook capability metadata:** Mark `AfterTool` as refusal-only, not a
+  safe output-transform surface, matching the native adapter and user contract.
+- **Pi first-session transcript:** Handle the expected not-yet-persisted first
+  transcript without blocking clean prompts. Start at byte zero so the first
+  persisted content is scanned; other initial I/O failures retain scan-error policy.
+- **Pi native shell checks:** Normalize the exact native `bash` tool to canonical
+  `Bash` so shell permissions, SSRF and configuration-exfiltration checks run before
+  execution. Custom and MCP tool names remain unchanged.
+- **OpenCode smoke continuation budget:** Give only the disposable mock model a
+  128K context window instead of 8K, leaving room for native/MCP tools and their
+  result continuation without disabling compaction. Add fixed-category CLI error
+  diagnostics without exposing private output; clean native-result and zero-exit
+  requirements remain unchanged.
+- **OpenCode V2 result containment:** Replace the complete native result during
+  output redaction, removing duplicate raw content/structured output/metadata.
+  Convert shared Bash replacements to valid V2 text content and clear completed
+  blocked results before the refusal path. Clean results stay unchanged. The smoke
+  mock also recognizes JSON-encoded correlated clean results without weakening
+  execution, hook, successful-exit or raw-delivery requirements.
+- **Smoke native tool routing:** Select an advertised native shell rather than the
+  first tool with a command-shaped input, which could be an advisory MCP checker
+  in OpenCode. Checker findings never substitute for native hook/execution evidence.
+  Shared hooks, policy, egress isolation and raw-delivery assertions are unchanged.
+- **Smoke output policy:** Prepare a disposable strict-derived configuration before
+  sandbox creation and stage it through the existing config snapshot-copy path,
+  leaving the active config writable. Exercise secret/PII output sanitization
+  while retaining prompt/pre-tool blocking and raw-delivery failure assertions.
+  Announce that this is not unmodified `@strict` post-tool qualification; bundled
+  profiles, runtime adapters, normal images and the smoke firewall are unchanged.
+- **Smoke REST diagnostics:** Run the private diagnostic reader with the classic
+  image's installed AI Guardian Python environment, not system Python, preventing
+  an import failure after daemon readiness. On Docker, probe authenticated host
+  REST through the sandbox's private address on its exact internal-only network
+  when Docker omits published bindings for internal networks. No external network
+  is attached; the Podman published-port/firewall path is unchanged.
+- **Agent CLI smoke network isolation:** Podman smoke uses its default rootless
+  network with a smoke-only IPv4/IPv6 egress firewall, preserving the published
+  daemon REST return path. A short-lived namespace helper installs the policy before
+  setup; agents remain non-root and the startup gate rejects
+  `SYS_ADMIN`/`NET_ADMIN`, so
+  they cannot remove it. Normal containers, shared lifecycle code and the host
+  firewall are unchanged; Docker retains its internal network. The temporary
+  Podman smoke image adds the GPL-2.0-only nftables external tool; supplied images
+  without the bootstrap fail closed without hidden rebuilds.
+- **OpenCode smoke startup:** Disable automatic update checks and remote model
+  catalog fetching for isolated smoke invocations, avoiding repeated network
+  timeouts on the internal egress-blocked network. Normal OpenCode auto-updates
+  remain enabled.
+- **OpenCode V1 smoke runtime:** Reuse one headless server and perform a clean,
+  local-provider warm-up before the smoke cases so MCP integrations do not incur a
+  fresh cold start for each invocation.
+- **Claude smoke setup:** Install Claude Code in the temporary smoke image only
+  after explicit ToS opt-in, preventing an egress-isolated sandbox from trying to
+  download the CLI from `claude.ai` at runtime.
+- **Podman macOS smoke setup:** Preserve Podman's connection metadata in the
+  runner's isolated environment so sandbox creation uses the configured machine
+  connection rather than a missing temporary socket.
+- **Remote tray menu responsiveness:** Render remote daemon menu details from the
+  last background stats snapshot instead of issuing REST requests from native menu
+  callbacks, keeping an unreachable container from freezing the macOS tray.
+- **Real-agent smoke diagnostics:** Report aggregate provider-request and violation
+  deltas when a CLI case fails, without emitting agent prompts or raw output.
+  Check internal and published REST health/authentication before running cases;
+  retained smoke sandboxes support read-only `--diagnose-sandbox` checks without
+  exposing credentials or response bodies.
+- **Codex smoke profile compatibility:** Write the local mock provider into Codex's
+  native named-profile file instead of a rejected legacy profile table, preserving
+  the base MCP and hook configuration.
+- **Smoke image build visibility:** Stream normal Docker/Podman build output live
+  instead of hiding build steps behind generic elapsed-time messages. Agent
+  invocation output remains captured; build commands and caching are unchanged.
+- **Tray pause target liveness (#2663):** Show sessions and project directories
+  for active daemons using hook activity in the last 30 minutes, remove sessions
+  immediately on `SessionEnd`, and keep explicitly paused directories available for
+  Resume. Documented the inactivity fallback for integrations without reliable
+  end events.
+- **Manual daemon tray actions (#2654):** Rebuild menu descriptors when a
+  same-name target's endpoint or TLS trust settings change, so actions use the
+  newly discovered target without displaying or logging credentials.
+- **Manual daemon target discovery (#2655):** Skip entries with null, non-string,
+  or blank names and warn without logging the supplied value. Invalid target names
+  can no longer interrupt sorting or leave the tray with stale discovery results.
+- **Sensitive violation filters (#2652):** Keep `secret_detected`,
+  `image_secret_detected`, and `pii_detected` queries compatible with consolidated
+  `sensitive_finding` history, and document the privacy-safe category in MCP and
+  SDK references.
+- **Direct-hook violation notifications (#2651):** Persist the privacy-safe alert
+  envelope to the outbox before a short-lived direct hook exits, then hand delivery
+  to a detached worker. Daemon-mode notification dispatch remains asynchronous.
+- **IPv6 daemon REST reachability (#2649):** Resolve daemon endpoints for both
+  address families and check each TCP candidate, allowing reachable IPv6 listeners
+  to proceed through the existing verified REST transport.
+- **PowerShell CLI self-protection (#2653):** Fail closed on opaque encoded-command
+  payloads, including common PowerShell aliases and `.exe` entrypoints, while
+  preserving ordinary commands and documentation mentions.
+- **OpenCode V2 shell enforcement:** Normalize OpenCode's native `shell` tool to
+  canonical `Bash`, so shared command scanners, permissions, and immutable CLI
+  self-protection run before V2 shell execution.
+
+### Changed
+- **Release command safety:** `scripts/release.sh` now previews by default. An
+  explicit `--execute` is required for release mutations and publication.
+- **Podman agent smoke profile:** Match the managed container's rootless
+  default network, `keep-id` user namespace, and normal capability defaults so
+  Codex's `workspace-write` Bubblewrap sandbox gets the same runtime setup. The
+  startup gate still requires a non-root user without `SYS_ADMIN` or `NET_ADMIN`;
+  the egress firewall, hook/execution/raw-output/clean-exit evidence, and Codex
+  sandbox/approval settings remain unchanged. A retained-container probe still
+  fails at Bubblewrap's `devpts` mount (`Permission denied`); the enforcement
+  source remains undetermined, so execution is not qualified.
+
+### Added
+- **Per-violation notification preferences (#2672):** Configure desktop and email
+  alerts independently for each supported violation type. Desktop defaults on and
+  email off; email controls require a valid alert recipient and usable TLS SMTP.
+  Migrate legacy global/channel settings without re-enabling a previously disabled
+  configuration, and apply the same preferences to local, direct-hook, and remote
+  fallback delivery.
+- **Sandbox deletion confirmation copy control (#2668):** Display the full expected
+  sandbox name with a Copy action and explicit clipboard success/failure feedback.
+  Keep deletion behind the existing exact-name confirmation; use complete isolated
+  Tkinter/NiceGUI interactions because native text-entry dialogs cannot provide the
+  copy control.
+- **Violations page daemon filtering:** Apply case-insensitive partial source
+  searches while retaining exact, identity-based source selection. Show refreshed
+  Running, Paused, Offline, or Unknown availability labels; refresh and clearing
+  preserve unrelated violation filters.
+- **Smoke CLI version selection:** Use `--cli-name opencode --cli-version 1.19.0`
+  or `--cli-version 2.0.24` to pin OpenCode in a temporary smoke image and verify
+  the installed version before testing. Omission keeps the image default;
+  supplied images and other clients reject the option. Normal OpenCode installs,
+  image defaults, build/cache behavior and smoke isolation remain unchanged.
+- **Real-agent hook-stage evidence:** Add clean tool execution and synthetic secret/
+  PII output cases. Require normalized pre/post-tool events and an execution witness;
+  verify clean results reach the local mock and sensitive values do not, including
+  token-count requests. A logged finding or offered tool alone cannot pass. Keep
+  prompt/pre-tool blocking, egress isolation, native trust and ToS gates unchanged;
+  report only aggregate evidence, not model/tool output.
+- **Real-agent CLI hook smoke check:** Release Readiness runs Codex, Gemini CLI,
+  OpenCode, and Pi in strict-derived smoke sandboxes built from the current wheel;
+  Claude Code remains behind its explicit CI ToS-consent variable. Native local
+  mock protocols exercise blocked prompt/tool paths and a clean allow path without
+  host credentials or billable provider calls. OpenCode is checked with bundled
+  V1 `1.19.0` and a separate V2 `2.0.24` smoke-only image. The V2 CLI is installed
+  from its pinned npm package and uses an isolated standalone run per case. Gemini's
+  mock supports the native GenerateContent/countTokens protocol, and its native
+  `run_shell_command` hook name now maps to canonical Bash scanning/policy. The
+  runner retains rootless Podman storage identity, waits for sandbox readiness,
+  and reports bounded build/configuration diagnostics. Claude's permission is
+  written to sandbox-owned settings, and its Anthropic token-count preflight is
+  handled locally.
+- **Experimental WSL2 platform guidance (#2593):** Document Linux-distribution
+  installation and scanner boundaries, browser-console use from Windows, and
+  manual localhost troubleshooting. Clarify that WSL1 and comprehensive WSL2
+  testing are not covered, and that the reported initial stall is undiagnosed.
+- **Violation notifications (#2634):** Send privacy-safe desktop alerts by default
+  and optionally deliver email through configured TLS SMTP. Remote daemons deliver
+  through their selected channels first; the tray falls back locally only for
+  channels known to be unconfigured or to have failed. A private outbox prevents
+  duplicate delivery across retries and excludes detected values and scanned content.
+- **Opt-in remote violation history mirroring (#2633):** Allow a receiving
+  daemon's tray to import curated summaries from reachable remote daemons into
+  separate per-daemon JSONL files included in the local history view. Mirrored
+  entries retain source identity, deduplicate across
+  polls/restarts, remain read-only, and never copy raw blocked content, context,
+  or suggestions. Disabled by default.
+- **Bundled credential patterns (#2632):** Detect standalone Baseten, Labelbox,
+  Recursion, Supabase secret, and typed Tailscale API/auth/OAuth-client/webhook
+  credential formats with the built-in TOML engine. Add synthetic scanner and
+  blocking/redaction UX coverage plus CI detection canaries; no live validation
+  or corpus-wide false-positive claim.
+- **Status-aware tray pause modal (#2620):** Replace nested pause submenus with
+  one **Pause...** action. The modal mirrors the daemon → project directory →
+  hook session hierarchy, with status glyphs and a duration/Resume dropdown
+  at every level. A larger, width-fitting layout wraps long labels so row controls
+  remain visible without horizontal scrolling, explicitly applies initial geometry
+  without monitor context, and keeps detailed help collapsed below the controls.
+  Keep existing durations and pause lifetimes, show inherited
+  pauses explicitly, and refresh the same isolated Tk/NiceGUI window after each
+  action. Closing without an action is non-mutating; failed or stale requests
+  never fall back to a broader scope.
+- **Bundled TOML secret-scanning defaults (#2617):** Align the canonical example
+  and schema with the runtime default of built-in `toml-patterns` followed by
+  Gitleaks. Keep all built-in profile comments in sync and clarify explicit
+  opt-out behavior in generated-config comments, the Console, and documentation.
+- **Console engine selection:** Engine Configuration now offers checkboxes for
+  built-in TOML patterns and external scanners installed on the selected daemon.
+  Selection changes save immediately and update the advanced JSON editor; the
+  About API exposes installed scanner names without binary paths.
+- **Doctor secret-engine diagnostics:** List every supported secret-scanning
+  engine with configured/installed status, and warn when enabled scanning omits
+  the built-in `toml-patterns` engine. Preserve multiline detail formatting in
+  the Web Console so each engine remains on its own line. Doctor and scanner
+  catalog pattern-server lists now show one server per line with its
+  `patterns_endpoint`. The Engine Tester lists only explicitly configured engines
+  and explains that installed/built-in engines are not added automatically.
+- **Experimental password-likelihood heuristics (#2612):** Independent offline,
+  default-off/global-only suspected-password analysis with explicit trusted opt-in,
+  contextual versus ambiguous classes, bounded work and generic privacy-safe
+  locations. Adds shared SDK/daemon/hook/static-scan integration, a trusted Secrets
+  control, full-span explicit sanitization, isolated unit/UX coverage and frozen
+  synthetic quality/performance budgets. Once enabled, defaults to Ask through
+  existing local/remote tray approval, with value-withheld Allow Once / Block,
+  fail-closed unavailable approval and unchanged stronger credential decisions.
+  Automatic display-less remote daemons can forward to a registered tray without
+  overriding explicit headless mode; queued prompt timeouts are terminal.
+  Console enable/outcome controls auto-save human changes globally without a
+  separate Save button; viewing the page or changing outcome does not opt in.
+  Details provide private-review guidance without persistent-exception snippets;
+  report metadata is restricted to numeric locations and fixed labels. Delimited
+  phrase validation avoids repeated-regex backtracking.
+  No dependency, vault/source enrollment or
+  universal passphrase recognition. Warnings are not prevention; real-corpus and
+  actual pre-model host evidence remain explicit release gates, not inferred from
+  hook responses or existing credential-scanner support ratings.
+- **Headless Ubuntu VM quickstart (#2585):** Add an ordered PyPI/venv guide for
+  verified SSH, explicit global setup/private storage, lab TLS, VM-hosted Console
+  bootstrap, restart/verified health and workstation enrollment/discovery. Cover
+  reboot recovery, owned foreground/background tunnels, current development-menu
+  changes and troubleshooting; link from navigation/configuration/HTTPS/SSH
+  references and include enrolled SSH targets in the discovery table. Clearly mark
+  the upcoming-release gate: PyPI 1.20.0 lacks the features, the first supporting
+  published version is unconfirmed, and fresh VM/workstation PyPI qualification
+  remains pending rather than being inferred from source-build validation.
+- **Production release announcements (#2595):** The release helper and shell script
+  announce the exact verified public GitHub Release and downloadable production
+  PyPI wheel/sdist in Announcements using existing `gh` authentication. Includes
+  paginated duplicate-safe lookup, offline dry-run, announcement-only retry,
+  uncertain-create reconciliation and explicit summary/error status. No support
+  reporting category or consent changes; includes mocked helper/shell contracts.
+- **Tray physical-monitor context (#2581):** Capture action-time display identity
+  and usable bounds on macOS, Windows and geometry-capable Linux tray hosts;
+  retain them through delayed dialogs, child pickers, target selection and support
+  review/preview/results. Revalidate topology/DPI before placement and fall back
+  visibly when a monitor disappears. Native providers without positioning defer
+  to isolated Tk; browser/Wayland/remote-panel limitations have explicit manual
+  move-window guidance, not a false placement guarantee. Preserve cancellation,
+  exclusive preferences, single-monitor defaults and native user-only consent.
+  Includes isolated unit/UX contracts and physical-desktop verification guidance.
+- **Per-daemon Contact Support (#2597):** Add source-bound diagnostics actions for
+  local/container/Kubernetes/manual HTTPS/SSH/OpenShell daemons in flat and nested
+  tray menus. Keep the independently available local tray-host action. Collect
+  sanitized source-runtime diagnostics through authenticated, bounded background
+  jobs; validate complete files and protected desktop staging, retain sanitized
+  provenance/explicit omissions, and never substitute desktop diagnostics on
+  failure. Capture SSH's current verified tunnel on click, avoiding false offline
+  failures after initial connection/reconnect without migrating in-flight work.
+  Desktop destination settings, per-file review, ZIP-only export and
+  separate native Gist/Discussion consent remain authoritative. Includes isolated
+  unit/UX contracts, API release-readiness coverage and source/modal documentation.
+- **SSH tray menu parity (#2592):** Reuse standard daemon menus for SSH VMs,
+  including flat/nested layouts, Console/Violations/Metrics navigation, cached
+  Statistics/Status, Terminal, Maintenance and target-scoped MCP state/controls.
+  Add verified-destination SSH lifecycle, diagnostics, scanner and pip execution
+  using the remote installation's actual virtualenv/configuration/state context;
+  retain connection management, host-key/TLS verification and managed reconnect.
+  Bind actions/plugins to the displayed VM and clicked connection generation,
+  distinguish local browser UI from VM commands, and explain unsupported actions
+  without workstation fallback. Document the parity audit and older-daemon,
+  installer, offline and runtime-specific limitations. Hide the empty SSH alias
+  `(0)` indicator while retaining discovery notices and the settings entry.
+  Keep local daemons first and sort all remaining daemon names alphabetically,
+  ignoring case, without retargeting already displayed actions.
+  Keep SSH Terminal failures open until dismissal so their diagnostics are readable.
+  Default SSH working directories to the remote user's home, never the
+  workstation home; apply only explicitly saved VM paths and display them literally.
+  Support current-main remote daemons through the existing global MCP config API
+  and read-only Linux process-verified installation discovery, without requiring
+  unreleased remote metadata or guessing a workstation/PATH installation.
+- **Tray SSH alias discovery settings (#2591):** Add an always-available
+  **Discover SSH aliases...** entry next to pairing, with native-first enable and
+  optional-prefix steps, validation, Save/Cancel and automatic candidate refresh.
+  Reuse the Web Console's workstation-global settings writer; untouched browser
+  fields follow saved changes without discarding edits. Default opt-in/prefix,
+  explicit identity review, saved pairings and existing tunnels remain unchanged.
+- **Single-PC HTTPS quickstart (#2582):** Document four steps to test native
+  daemon REST HTTPS on Linux with OpenSSL 3.x, explicit local certificate trust,
+  private key storage, restart and verification checks. Link directly from the
+  configuration reference and distinguish REST HTTPS from the Console webpage;
+  preserve the advanced private-VM/CA/SSH guidance.
+- **Opt-in local SSH alias discovery (#2587):** Offer concrete user OpenSSH aliases
+  automatically at tray startup/refresh and in the loopback Web Console, with an
+  optional literal prefix, bounded unconditional Includes, pending-enrollment
+  indicator and direct full identity review. Enumeration never probes hosts or
+  executes config predicates; SSH/TLS verification and unchecked explicit trust
+  confirmation remain mandatory. Persistent dismissal/removal prevents re-offering
+  aliases; saved trust, owned tunnels, dynamic ports and reconnect remain unchanged.
+  Includes synchronized settings/schema/setup/profiles, isolated parser/manager/
+  tray/Web/UX contracts, source documentation and release-readiness coverage.
+- **Capability-aware modal policy (#2580):** Share Native → Tkinter → NiceGUI
+  ordering across eligible dialog implementations, with exclusive explicit
+  preferences and fallback only on proven pre-display startup failure. Preserve
+  cancellation and the no-toolkit-switch-after-display contract; retain complete
+  setup choices, upload/policy reviews, destructive confirmations and uncropped
+  log review. Isolate proactive tray toolkits and retain native user-only support
+  consent. Includes the platform/capability matrix, unit/UX contracts and manual
+  desktop verification checklist; visual/platform qualification remains pending.
+  Tray **Add daemon via SSH** now uses a reusable form-flow adapter over that
+  dispatcher instead of launching the Web Console: complete native input/trust
+  controls first, then isolated Tk and NiceGUI on startup failure only. Retains
+  unchecked identity consent and one provider across all steps. Contributor
+  instructions and a modal implementation recipe require this shared policy for
+  future modals; native desktop qualification remains pending.
+- **SSH-managed remote daemons (#2552):** Add a known SSH host/alias from the tray
+  or local Web Console, explicitly confirm its daemon TLS identity, and reconnect
+  automatically through owned loopback-only OpenSSH forwarding. Uses existing SSH
+  configuration/agent and strict host-key checks; detects the actual runtime port,
+  verifies HTTPS identity before sending daemon credentials, and never silently
+  replaces trust or downgrades to HTTP. Pairings use private POSIX storage or
+  current-user Windows DPAPI, separate from exported configuration. Includes
+  asynchronous controls, offline/backoff states, cleanup, polling-only remote
+  permission prompts, unit/UX contracts and release-readiness checks. No new
+  dependencies, SSH key provisioning, AWS inventory or public REST ports.
+- **Native daemon REST HTTPS and explicit trust (#2551):** Opt-in TLS 1.2+ listener,
+  CA/SAN/validity verification, separate TCP address and expected TLS identity,
+  and optional independently provisioned SHA-256 leaf pins checked before HTTP
+  credentials are sent. Keeps HTTP defaults, bind addresses, tokens, REST fields
+  and SDK APIs; rejects invalid TLS without plaintext fallback or downgrade.
+  Shared local/remote REST clients refuse redirects and environment proxies.
+  Includes global Web Console controls, private-VM provisioning/pairing and
+  restart/renewal guidance, unit/UX contracts and release-readiness coverage.
+  Adds **cryptography >=43.0.0** for certificate lifecycle validation (dual
+  Apache-2.0/BSD-3-Clause license verified upstream).
+- **Standalone orphaned-integration recovery (#2568):** Shared package-independent
+  Python 3.11+ cleanup for Bash and native PowerShell, with explicit user/project
+  scopes, preview, unique backups with documented access controls, ownership checks,
+  safe partial-failure reporting and idempotency. Covers managed/legacy Pi,
+  Codex/Grok TOML, relocated homes, OpenCode JSONC/V2 MCP and legacy artifacts,
+  and current Copilot/Antigravity hook schemas. Preserves third-party settings
+  and violation history; operator-only recovery remains blocked to agents.
+  Documents per-host missing-runtime qualification gaps and Windows limitations;
+  adds isolated unit/UX and cross-platform CI lifecycle gates.
+- **Potential ServiceNow BYOG integration documentation (#2573):** Describe the
+  unimplemented, untested, unsupported, and unvalidated proposal, required adapter
+  and security work, and ServiceNow test-environment prerequisite. Link contributor
+  interest and future validation to #2572 without committing to development.
+- **About author attribution:** Show **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**
+  in tray and Web Console About views, without displaying the full profile URL.
+  The tray author line is clickable/keyboard-accessible when Tk is available;
+  native fallback dialogs retain the same compact attribution. Opening About never opens a browser.
+- **Reviewed public support Discussions (#2567):** Fresh configurations select
+  GitHub Discussions in the fixed AI Guardian repository, with Bug Reports
+  preselected and Q&A as the only alternative. CLI and MCP share native final
+  user consent bound to the authenticated account, resolved category, exact
+  sanitized title/body and remaining diagnostics; agents and `--yes` cannot
+  grant upload or public approval. Selected sanitized files go into one user-owned
+  unlisted Gist, followed by a separate exact Discussion preview containing its
+  actual link, not inline diagnostics or a replaced user message. Unlisted is not
+  private; users can manage/delete their Gist, but cannot retract copies/forks.
+  The public choice is disabled without GitHub credentials; ZIP stays available,
+  with no automatic login or scope upgrades. Includes both URL outputs, bounded Gist text delivery,
+  explicit manual-delivery errors, durable duplicate/uncertain-result protection,
+  Web Console settings, and [migration guidance](docs/SUPPORT.md).
+  Standalone `ai-guardian support send --prepare` needs no agent, MCP, or running
+  daemon and never auto-starts the daemon while troubleshooting it.
+  A global **Contact supports** tray action, directly above About, respects the
+  configured destination and opens a restyled native modal instead of a shell. It includes
+  an aligned diagnostic table, View/inclusion controls, Select all / Deselect all,
+  a user message field, restricted category selection, and Cancel/Send actions.
+  Diagnostic files are alphabetical with doctor.json first and checked by default
+  on new lists; saved explicit selections, including deselections, remain available.
+  The generated title is removed. GitHub review requires a title and message;
+  ZIP/legacy review requires a message. Create ZIP / Send also requires at least
+  one file, and empty/whitespace fields cannot advance. Support dialogs are restored,
+  raised and focused on opening rather than left minimized or behind other windows.
+  File View adds a Wrap lines checkbox and an unwrapped horizontal scrollbar,
+  preserving its setting across pages. The final public-consent control stays
+  visible with an explanation of why Publish publicly starts disabled.
+  GitHub retains its separate exact-content public-consent step; results stay
+  visible until closed. Legacy exports include only selected files, and manual
+  email hand-off is not reported as a completed send.
+  Empty/missing destinations use GitHub; explicit CLI/MCP exports and previously
+  prepared bundles retain their destinations. No saved settings are rewritten.
+  The first screen uses a read-only Destination dropdown and **Next** button,
+  defaulting to local ZIP, instead of per-destination action buttons. Selecting
+  an unavailable public route disables Next; switching to ZIP re-enables it.
+  The choice list can grow without adding more destination buttons.
+  With GitHub selected, **Create ZIP only** offers a retained local archive of the
+  selected files and sanitized message, without GitHub authentication, upload,
+  email or Gist. Results distinguish ZIP creation from support delivery and warn
+  that the archive is not encrypted. Public Discussion publication still requires
+  separate final consent; ZIP creation leaves the configured route unchanged.
+  Cancellation/failure after upload reports the existing Gist URL without claiming
+  nothing was uploaded. Verified Gists are reused across retries/process restarts;
+  ambiguous uploads block duplicates, with no silent inline fallback or deletion.
+  The ZIP result includes **Open destination folder** in the native file browser,
+  without opening/extracting the archive or uploading it.
+  Bundles now include individually removable, sanitized CLI settings/hooks/MCP
+  copies (not credential stores or conversations), with explicit temporary-file
+  review/deletion instructions and unchanged originals. Local exports clearly
+  state that no support submission occurred and retain their cross-process
+  reference, fixing a later `support send` incorrectly finding no pending bundle.
+  Only the log is truncated, retaining the newest text from the last 12 hours;
+  violations also include only the last 12 hours, with every included sanitized
+  record complete and no arbitrary newest-100 limit. Collected sanitized
+  configuration and structured files remain complete. View's next/previous pages
+  reach every field of large files, using the same prepared copy as Send/ZIP
+  without a separate size crop. Large
+  complete files fail public size checks clearly rather than being cut to fit;
+  originals remain unchanged. Documents public posting permissions and the need
+  for a separately arranged private channel for confidential diagnostics.
+
+### Changed
+- **Violation JSONL performance (#2637):** Avoid parsing and rewriting the local
+  history after routine appends; retention and entry-limit cleanup runs when
+  needed or on a bounded schedule. Small local history queries read backward in
+  chunks while preserving newest-first timestamp order, with a full-scan fallback
+  for out-of-order legacy records. Resolve/unresolve still rewrite the file because
+  resolution state is stored in each record.
+- **Betterleaks scanner pin:** Update Betterleaks from 1.3.1 to 1.9.0. The
+  upstream release includes the Linux x64 and arm64 assets required by container
+  builds and scanner-version validation.
+
+### Fixed
+- **GitHub support Gist receipts (#2650):** Accept GitHub's documented ID-only
+  Gist URL while retaining independent authenticated-owner, unlisted-visibility,
+  description, and exact-file verification. Persist and safely reuse the verified
+  receipt on retry so Discussion publication can continue without another upload.
+- **KDE Pause dialog foreground (#2645):** Map the Tk window with a temporary
+  raising hint, clear it after the tray-menu handoff, and restore focus once more.
+  Monitor placement and provider eligibility are unchanged.
+- **Privacy-safe violation diagnostics:** Avoid echoing caller-provided violation
+  categories in logger debug messages; log only fixed diagnostic text.
+- **Violation-log sensitive-data minimization:** Store only an ID, timestamp,
+  severity, generic category, and resolution state for secret, image-secret, and
+  PII findings. Ask-mode history omits matched input/error text, and CLI scan
+  history omits finding messages/snippets; callers and CLI output retain their
+  original data. Generic records persist recognized type/severity labels only,
+  including the middleware-paused and CLI fallback/canary categories.
+- **SSRF destination classification (#2632):** Normalize a terminal DNS root dot,
+  block the RFC 2544 benchmarking range and IPv6 unspecified address, and apply
+  existing destination policy to IPv4 endpoints embedded in the well-known NAT64
+  prefix without blanket-blocking public NAT64 destinations.
+- **Scanner version CI checks:** When GitHub rejects the repository-scoped token
+  for a public upstream release, retry the metadata request without credentials
+  instead of reporting an existing scanner release as missing.
+- **OpenCode V2 file targets and diagnostics (#2627):** Normalize native `path`
+  alongside compatible file aliases in both adapter and direct policy calls;
+  reject malformed/conflicting targets without weakening immutable protection.
+  Bind current-session workspace metadata and checker child CWD to project-policy
+  selection, including parallel sessions and moved sessions. Add value-free input
+  subreasons/shape, version and operation correlation to Console/copy and MCP,
+  including the stored `blocked.tool_name` fallback and legacy-record handling.
+  Input failures no longer receive misleading admin-permission advice. Keep fixed
+  stage-specific refusals, fail closed on unavailable workspaces/checker failures,
+  and cover privacy plus complete affected UX contracts with isolated tests.
+  Pass the canonical target to file-content/directory checks too. Repair missing
+  OpenCode MCP registration from the tray without forcing replacement of verified
+  healthy hooks, avoiding a recurring setup prompt after non-interactive repair.
+  Preserve other adapters' native immutable-configuration guard precedence before
+  canonical input validation; Grok native file mutations retain the correct
+  configuration-protection denial for dict/JSON arguments and file-path aliases.
+- **OpenCode V2 MCP setup (#2622):** Register the local AI Guardian server under
+  `mcp.servers` with V2's `disabled` semantics while preserving the V1 MCP shape.
+  Doctor verifies the active generation, and setup removal cleans only AI
+  Guardian's legacy/V2 entries while retaining unrelated config. Add isolated
+  JSON/JSONC coverage for both config overrides and a Doctor UX contract.
+- **OpenCode V2 MCP verification (#2628):** Recognize supported legacy flat MCP
+  registrations in V2, with a native entry taking precedence in mixed configs.
+  Evaluate known system/managed and explicitly supplied project layers separately
+  from the user setup target, exposing safe source/scope metadata. Doctor and tray
+  distinguish an MCP-only issue from configured plugin artifacts; plugin activation
+  remains explicitly unverified.
+- **OpenCode blocked first prompt (#2615):** For the reporter-confirmed V2
+  generation, replace the blocked prompt draft with a fixed refusal notice, clear
+  attachments and agent/skill selections, and complete safe prompt admission
+  instead of throwing. This keeps the safe turn in the requested session without
+  admitting the original content; V2 may run the model on the fixed notice. Also
+  replace blocked V1 prompt parts instead of leaving an empty turn. Add executable
+  first-block, safe-follow-up, and later-block coverage plus V1/V2 UX contracts.
+  The reporter's exact OpenCode patch version and OS remain unknown.
+- **Tray daemon menu support actions (#2614):** Keep bundled Maintenance available
+  in a local daemon submenu alongside other targets. Show Contact supports once per
+  daemon without a duplicate root-level host action; retain the standalone host
+  action when no daemon targets exist. Add unit and UX coverage for zero, single,
+  and multiple targets, including local-plus-remote menus.
+- **Support project-config path validation (#2597 / PR #2600):** Route local and
+  daemon project diagnostic reads through the shared regular-file reader, reject
+  file/directory symlinks and hard links, and validate normalized absolute path
+  containment before opening, without resolving untrusted paths before validation.
+  Preserve complete local configurations, including explicit filenames and files
+  larger than remote transfer limits. Addresses CodeQL alerts #323–#325 without
+  suppressing or dismissing findings.
+- **Secure setup/startup storage (#2584):** Create missing POSIX application
+  directories/parents as `0700` and configuration/token files as `0600`, including
+  JSON setup and early logging initialization. Preserve fail-closed credential
+  checks and existing shared-directory modes; report unsafe storage paths rather
+  than silently repairing them. Distinguish IPC liveness from REST readiness in
+  status/PID metadata and missing configuration, unsafe metadata, or unavailable
+  REST during SSH pairing. Adds isolated umask, publication/cleanup and UX coverage.
+- **Windows CI prerequisite checks:** Isolate every UI path in proactive prompt
+  precedence tests and cover Windows' first eligible provider explicitly. Native
+  PowerShell recovery now resolves only an executable before checking Python,
+  avoiding module discovery/imports when the interpreter is missing; keeps exit
+  code 2 and the non-mutating prerequisite error.
+- **Daemon TLS configuration consistency (#2551):** Include matching opt-in HTTPS
+  defaults in every built-in profile and accept documentation comments in the
+  TLS schema without accepting unknown settings. Isolate TLS UX log capture from
+  earlier CLI tests' logging suppression.
+- **Windows standalone recovery (#2568):** Compare path and handle timestamps
+  within their respective APIs so Windows metadata differences do not falsely
+  retain unchanged integrations. Preserve file-change checks, isolate PowerShell
+  caches from CI preservation snapshots, and avoid the Windows connection-close
+  race in the REST authorization regression without changing authorization.
+  Shared test/lifecycle launches also prevent native Windows startup-optimization
+  cache writes that ignore environment cache paths, without excluding home files.
+  Recognize setup-generated `pythonw.exe` module launches and legacy OpenCode
+  command arrays after runtime removal; retain unrelated or ambiguous commands.
+- **Linux tray dialog lifecycle (#2569):** Keep shared informational dialogs open
+  until dismissal instead of replacing them after a 30-second timeout. Treat
+  normal window closure as completion, retain missing-provider/startup fallbacks,
+  and never switch toolkits after an isolated Tk message window has displayed.
+  Provider/lifecycle diagnostics no longer include raw dialog output.
+- **About window foreground focus:** Finish layout before showing the native
+  About dialog, then restore normal visibility/focus after its temporary raising
+  hint is released so it does not flash and drop behind other windows on KDE.
+  Keep it normally stackable after startup and tolerate early closure or rejected
+  window-manager hints.
+
 ## [1.20.0] - 2026-10-20
 
 ### Changed
@@ -33729,257 +38089,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepts the resolved workload identity under Podman.
 - **Sandbox image picker timestamps:** Show local-time creation timestamps while
   preserving the underlying container image reference used for selection.
-
-## [1.19.0] - 2026-10-01
-
-### Fixed
-- **MCP command-check context and diagnostics (#2471):** Evaluate commands
-  against the caller's supplied project context and startup developer-session
-  snapshot, and return stable permission, command-policy, identity, and
-  policy-error categories instead of a generic `policy_denied` result.
-- **OpenCode trace token usage (#2467):** Read usage from OpenCode's SQLite
-  `message.data.tokens` records, finalize OpenCode session-end hooks with their
-  session ID, and show token usage as unavailable when no usage data exists.
-- **OpenCode configuration self-protection (#2425):** Canonicalize native lowercase tool names and camelCase file arguments before immutable policy checks.
-- **Malformed host CLI configuration handling (#2461):** Report parse and
-  supported hook/MCP schema errors across CLI integrations in doctor and tray
-  setup health, and stop setup before replacing an existing invalid file.
-
-### Changed
-- **OpenShell CLI boundary (#2470):** The dedicated OpenShell image, selector,
-  tray, and qualification matrix now support Codex only. Claude support is
-  deferred until OpenShell `0.1.3`; OpenCode remains supported through host
-  setup and the normal Docker/Podman image only.
-- **OpenShell v0.1.2 workload compatibility (#2460):** Move the dedicated
-  image from the retired Community base to a pinned NVIDIA Ubuntu 24.04 base,
-  install workload dependencies explicitly, and remove managed
-  `inference.local` route assumptions in favor of native provider attachments.
-  Pi provider configuration keeps credentials exclusively in the OpenShell
-  gateway and stores no API key in the sandbox. Codex policy remains compatible
-  with OpenShell v0.1.2 by omitting the unsupported `tls: terminate` field.
-- Codex OpenShell v0.1.2 API-key qualification passed with gateway-owned
-  OpenAI provider credentials; Codex and OpenAI provider-profile setup is now
-  documented.
-- OpenCode/OpenAI OpenShell v0.1.2 qualification passed. Claude/Vertex and
-  OpenCode/Claude/Vertex remain blocked by the OpenShell metadata-emulator issue
-  tracked in NVIDIA/OpenShell#3973; Pi/OpenAI remains unqualified.
-- Immutable violations now carry explicit metadata through policy, scanner, and
-  directory-rule logging; TUI and Web Console details show only the enforced
-  protection notice and hide override guidance and actions (#2457).
-
-- CLI/agent onboarding checklists now require explicit evidence for supported
-  CLI configuration protection and agent-originated host CLI execution
-  restrictions, including scope, wrapper, permissions-disabled, and trusted
-  boundary cases.
-- Immutable policy checks now prefer adapter-normalized tool fields and cover
-  Grok's native shell and file-mutation tool names before normalization.
-- Pi setup now automatically installs the pinned MCP SDK with npm when available; failed installs leave an actionable retry diagnostic.
-- Verified AI Guardian MCP tools now bypass ordinary host MCP permission rules after identity attestation, including calls routed through the Pi bridge.
-- The Web Console Effective Configuration page now clearly warns when the Project selector is set to Global only, so project-local overrides are not mistaken as missing.
-
-### Added
-
-- **SSRF destination revalidation (#2482):** Block the complete immutable
-  `0.0.0.0/8` destination range, add caller-owned DNS/redirect revalidation for
-  fresh IPv4 and IPv6 results, and document that domain allowlists cannot
-  override resolved private destinations or replace runtime network controls.
-
-- **Credential format coverage (#2477):** Add complete GitLab personal access
-  token v3 matching with entropy filtering and a narrowly scoped Okta OAuth
-  client-secret rule. The formats were independently authored from public
-  documentation after TruffleHog discovery; its AGPL-3.0 implementation was
-  not copied. Add positive, negative, and placeholder regression coverage.
-
-- **Pause-aware MCP action gating (#2472):** Add the `paused` proactive level
-  and make MCP path, command, and trust checks observe global, directory, and
-  timed daemon pauses without restarting. Paused responses clearly report that
-  the check was skipped while query tools and mandatory hooks remain available.
-
-- **Compliance audit logging (#266):** Add an opt-in, sanitized `audit.jsonl`
-  trail for final hook decisions with SOC 2, GDPR, and HIPAA markers,
-  configurable retention, all context-field controls, and TUI/Web Console
-  JSON/CSV export actions while preserving the existing violation log.
-
-- **Grok Build integration (#2446):** Add the dedicated camelCase hook adapter,
-  six managed lifecycle events, PreToolUse deny responses, user/project hook
-  setup, TOML MCP registration, config-artifact protection, installer and
-  release-readiness parity, and pinned normal-container support for the
-  Apache-2.0 `@xai-official/grok` package. OpenShell remains explicitly
-  unsupported pending image, policy, and authentication validation.
-
-- **Host CLI self-invocation protection (#2444):** Add the global-only
-  `self_protection.block_host_agent_cli` guard with canonical executable and
-  adapter identity resolution across supported CLI integrations. Direct,
-  path-qualified, package-launcher, and shell-wrapper launches are denied
-  before child-process execution while the existing AI Guardian CLI guard and
-  trusted host boundaries remain unchanged.
-
-- **Provider-aware SDK compaction (#2432):** Use Anthropic's native signed
-  compaction blocks when the Messages API and model support them, preserve
-  configured initial/recent turns, scan provider summaries, and fall back to
-  deterministic local compaction for OpenAI Chat Completions, Gemini,
-  OpenAI-compatible providers, unsupported models, or failed native requests.
-
-- **Structured MCP hook coverage (#2429):** Extend dummy-agent scenarios to
-  model MCP `tools/call` results and scan structured MCP output during
-  PostToolUse so secrets are redacted before reaching the agent.
-
-- **Supported agent configuration protection (#2443):** Add a secure,
-  global-only `agent_config_protection.enabled` setting and a canonical
-  inventory for supported CLI/IDE settings, hooks, MCP registrations, plugins,
-  extensions, bridges, relocated user paths, and active project/workspace
-  artifacts. Agent-originated file and shell mutations are denied before
-  ordinary permissions, including when permissions are disabled.
-
-- **Trusted developer-session CLI access (#2441):** Add the explicit,
-  fail-closed `developer_session.enabled` setting in the protected global
-  configuration for AI Guardian development sessions. Hook payloads, project
-  configs, overlays, and command arguments cannot enable it, and other
-  immutable protections remain enforced.
-
-- **Top-level daemon pause/resume commands (#2427):** Add tray-independent
-  `ai-guardian pause [MINUTES]` and `ai-guardian resume` commands that control
-  an existing daemon without auto-starting it, with duration validation and
-  clear unreachable-daemon errors. The nested `daemon pause/resume` commands
-  remain unchanged.
-
-- **Verified MCP server identity attestation (#2416)**: Register the canonical
-  AI Guardian executable and package identity during setup, require a
-  nonce-based process attestation before auto-allowing built-in MCP tools, and
-  automatically migrate missing or stale records for existing, manual, and
-  `uvx` registrations while failing closed for spoofed or tampered records.
-
-- **Unified policy decision and audit schema (#2307)**: Add a versioned,
-  content-safe decision record shared by hook, MCP, SDK, daemon REST, scanner,
-  external-inspector, JSONL, SARIF, and OTEL outputs while preserving legacy
-  fields and correlation identifiers.
-
-- **Pluggable code security inspection (#2303)**: Normalize code-inspection
-  findings behind a shared interface, preserve Bandit behavior, add a
-  dependency-free Python AST inspector, per-inspector timeouts, unavailable
-  inspector handling, and configuration for both TUI and web consoles.
-
-- **Pi coding-agent support (#2325)**: Add a dedicated Pi extension adapter with
-  global and project-local setup, six managed lifecycle events, Pi JSONL
-  transcript/session discovery, and managed MCP support.
-
-- **Managed Pi MCP bridge (#2426):** Add a versioned TypeScript extension
-  package that retains Pi hook/scan handling while discovering the canonical
-  local AI Guardian MCP server's tools. Preserve signed identity registration
-  and nonce attestation, pin the executable, migrate the legacy flat extension,
-  and fail closed when verification or dependencies are missing.
-
-- **Pi container support (#2326)**: Add the pinned MIT Pi coding agent to the
-  normal and OpenShell images, selected-CLI setup, OpenShell policy coverage,
-  provider-backed Anthropic inference routing, experimental OpenAI provider
-  paths, version monitoring, and image smoke checks.
-
-- **Versioned OpenShell qualification (#2394)**: Add a credential-free contract
-  around the three documented provider workflows plus an opt-in manual runner
-  that records sanitized creation, detection, lifecycle, service, and image
-  metadata results.
-
-### Changed
-
-- **Hook process failure policy (#2434)**: Extend `on_scan_error` to cover
-  bootstrap/import failures, daemon/direct fallback failures, malformed hook
-  responses, and uncaught pipeline exceptions. Add a dependency-light launcher
-  that emits valid host-specific fail-open responses or preserves fail-closed
-  behavior without echoing startup errors into hook protocols.
-
-- **IDE detection isolation**: Require IDE-specific configuration files or
-  installation artifacts instead of treating empty project directories as an
-  installed integration. Cursor's `.cursor/rules/` metadata is no longer
-  mistaken for a Cursor installation, while hook and MCP verification still
-  determines whether AI Guardian is configured.
-
-- **MCP health diagnostics (#2422)**: Report read-only MCP registration status
-  for every supported local client in combined setup verification and doctor
-  output, including Claude Code, OpenCode, MCP-only integrations, disabled
-  entries, and invalid configuration files.
-
-- **Headless UI isolation**: Honor the explicit headless UI preference in native
-  tray dialogs and keep automated tests from opening desktop or browser windows.
-
-- **KDE tray compatibility (#2416)**: Prefer the D-Bus AppIndicator backend on
-  KDE Wayland sessions and preserve the white symbolic icon used by dark KDE
-  panels.
-
-- **Python 3.14 image OCR support (#2408)**: Replace the Python-version-gated
-  `rapidocr-onnxruntime` package with pinned `rapidocr` and
-  Python/platform-compatible `onnxruntime` dependencies, and update OCR result
-  parsing and installation guidance.
-
-- **Codex MCP activation (#2408)**: Write an explicit `enabled = true` flag
-  during setup, re-enable stale disabled registrations, and report disabled
-  Codex MCP entries as inactive during health checks.
-
-- **Sandbox creation feedback (#2409)**: Show preparation progress during
-  OpenShell repository preflight, wait for the isolated progress window before
-  starting runtime work, and ignore duplicate tray create actions.
-
-- **Optional Tkinter tray dialogs (#2410)**: Apply one provider-selection policy
-  to sandbox forms, confirmations, progress, and output so macOS can use native
-  dialogs or NiceGUI/Textual fallbacks when Tkinter is unavailable or disabled.
-
-- **Doctor hook inventory (#2400)**: Report every supported IDE/CLI integration
-  in canonical order with explicit `Not installed` statuses, structured JSON/REST
-  records, and separate CLI, TUI, and web health-check rows.
-
-- **OpenCode plugin discovery compatibility (#2404)**: Store the generated
-  shared bridge outside OpenCode's auto-discovered plugin directory and remove
-  stale bridge files during setup upgrades, preventing OpenCode V1 from loading
-  bridge helper exports as standalone plugins.
-
-- **Fedora/OpenShell SELinux diagnostics (#2343)**: Document the host-policy
-  cause and security-preserving package-update remediation for
-  `nnp_transition`/`nosuid_transition` AVC denials during hardened OpenShell
-  gateway workflows. Add regression coverage to prevent guidance that disables
-  SELinux or container labeling.
-
-- **Ubuntu 26.04 runner migration (#2341)**: Pin Linux CI, release-readiness,
-  wheel, PyPI, container, smoke, and maintenance workflows to `ubuntu-24.04`;
-  add an explicit compatibility gate covering Python 3.9-3.14, scanner
-  installation, smoke tests, scenario containers, Docker Buildx, and QEMU.
-  Python 3.9 stays on the pinned baseline because setup-python does not
-  currently publish it for `ubuntu-26.04`; Python 3.10-3.14 run on the target.
-
-- **Container image release verification (#2342)**: Retry versioned normal and
-  OpenShell manifest checks with bounded command timeouts and retry delays,
-  report delayed publication as success, and identify the Build Container Image
-  workflow when availability times out.
-
-- **Automatic TypeScript integration upgrades**: On daemon startup, regenerate
-  previously configured OpenCode, AiderDesk, OpenClaw, and Pi TypeScript
-  integrations when their generated version marker is stale or an expected
-  generated artifact is missing. Unconfigured IDE directories are left alone.
-
-- **Shared TypeScript agent bridge (#2344)**: Refactor OpenCode, AiderDesk,
-  and OpenClaw integrations to use one generated process/response bridge for
-  executable invocation, timeout and environment handling, block decisions, and
-  redacted output parsing while preserving host-specific callback contracts.
-
-- **OpenShell selector scope**: Limit the default OpenShell CLI selector to the
-  clients bundled and validated in the image (`claude`, `copilot`, `codex`,
-  `opencode`, and `pi`). Pi's OpenShell form now advertises only its tested
-  Anthropic-compatible provider route plus experimental direct-API `openai`;
-  the resolver-backed `openai-codex` route remains an explicit unsupported
-  diagnostic. Native Codex is selected as the `codex` CLI, not as a Pi provider.
-- **Agent onboarding checklist**: Expand the integration checklist with the
-  runtime, provider, policy, authentication, test, documentation, and release
-  gates required before advertising a new agent.
-- **OpenShell Codex credentials**: Refresh the auto-managed Codex provider from
-  the current local login before creating a new sandbox, while preserving
-  resolver-backed credentials and automatic policy composition. OpenAI-shaped
-  OpenCode and Pi routes can reuse a Codex API-key login without entering the
-  incompatible OpenShell inference route.
-- **Manual OpenShell smoke runner**: Add an opt-in local matrix under
-  `container/tests/` for developers to validate CLI/provider combinations with
-  their own subscriptions without requiring CI credentials. Add a matching
-  Docker/Podman runner for the broader Container matrix, with one-case and
-  `--all` execution modes.
-- **OpenShell OpenCode policy**: Allow the OpenAI API and OpenCode's read-only
-  model/package metadata endpoints required during generic OpenCode startup.
 
 
 *(Earlier versions omitted — see CHANGELOG.md for full history)*

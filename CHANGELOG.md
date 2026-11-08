@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-11-08
+
 ### Added
 - **Pre-1.0 agent CLI advisories:** Setup and Doctor now report a non-blocking
   warning when a supported CLI's detected version is below 1.0.0. Doctor includes
@@ -4858,7 +4860,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.20.0...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.21.0...HEAD
+[1.21.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.21.0
 [1.20.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.20.0
 [1.19.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.19.0
 [1.18.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.18.0
