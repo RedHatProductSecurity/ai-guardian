@@ -5,7 +5,32 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-09 (UTC)
+> Last updated: 2026-11-10 (UTC)
+
+---
+
+## PR #2694 review and CI follow-up — 2026-11-10
+
+- Original CI run `42737676198` failed across the Python matrix for two causes:
+  the SSH worker test patched `stop.wait` although the retry loop uses
+  `retry_now.wait`, so it never exited; and the real pystray import selected an
+  Xorg/GTK backend in headless Linux. The Tk sandbox submit gate also ignored
+  `enabled_when` for required checkboxes, preventing Codex submission when Claude
+  terms were disabled.
+- Fixed the SSH test to stop via the retry event and forced pystray's dummy backend
+  for the menu contract. Updated the Tk gate to associate required checkboxes with
+  field names, ignore disabled controls and refresh on dependency changes. Added
+  unit and UX regressions. Also corrected the published-version note in
+  `docs/UBUNTU_VM.md` and added docstrings to the new source helpers.
+- Pushed `0769f142` to `fix/remote-ssh-https-enrollment`; PR #2694 remains open:
+  https://github.com/RedHatProductSecurity/ai-guardian/pull/2694. Updated the PR
+  description to include the template's issue/type/security/testing/commands and
+  checklist sections. `.wolf` records remain local and uncommitted.
+- **Validation:** 270 affected unit tests and 95 affected UX contracts pass.
+  Ruff, Black, Pylint, and project-environment Mypy (336 source files) pass.
+  The new GitHub CI run `42742273003` is in progress; initial Ruff, Black and
+  scanner-version checks pass. **Next:** wait for the new CI matrix and review
+  any remaining failures before merging.
 
 ---
 

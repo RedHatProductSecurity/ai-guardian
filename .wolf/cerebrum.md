@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-07
+> Last updated: 2026-11-10
 
 ## User Preferences
 
@@ -339,6 +339,18 @@
   Terminal status can report a generic invalid TLS configuration when a saved
   certificate/key path contains a trailing space; never weaken file permissions
   when the reported modes and ownership are already safe.
+
+- **2026-11-10 — Conditional required form controls:** A required checkbox may be
+  disabled by `enabled_when`; the Tk submit gate must ignore it while disabled and
+  refresh after dependency changes, matching submit validation and NiceGUI. Preserve
+  explicit gating when the checkbox becomes enabled and clear stale consent when it
+  is disabled again.
+
+- **2026-11-10 — Headless pystray tests and SSH worker loops:** Tests that only need
+  pystray menu descriptors should set `PYSTRAY_BACKEND=dummy` before importing the
+  package; `importorskip` will not catch display initialization errors from Xorg/GTK.
+  When a worker's retry/backoff loop waits on `retry_now`, tests must patch that event
+  rather than the separate stop event's `wait` method.
 
 - **2026-11-08 — Release-image recovery (#2689):** A generated NotebookLM export
   can preserve intentional historical wheel/version mentions, so active release
