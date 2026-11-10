@@ -5,9 +5,30 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-08 (UTC)
+> Last updated: 2026-11-10 (UTC)
 
 ---
+
+## Issue #2700 release test-matrix stabilization — 2026-11-10
+
+- Continued the managed DAF `open` session on branch `2700`, based on
+  `release-1.21`. The release gate remains blocking and no commit or push was made.
+- Updated the redaction performance test to warm up and use the median of five
+  measurements against its unchanged 100 ms threshold. The recovery fixture now
+  creates its isolated state directory before exposing process-wide home/state
+  overrides and asserts no unexpected files exist before seeding test history.
+  The Windows trace proves that directory already existed at the old `mkdir`, but
+  does not identify which activity created it; that diagnosis criterion remains
+  open pending Windows validation. The no-runtime OpenCode MCP test pins V1 rather
+  than consulting the host's installed runtime.
+- Created follow-up #2702 to carry the fix from release 1.21.0 to `main` after it
+  lands on the release branch. Updated #2700 with local progress; the full matrix
+  criterion remains open until CI runs on the published change.
+- **Validation:** 191 affected unit tests pass, 8 skip; the performance and
+  cancellation regressions each pass five repeated runs. Black, Ruff, error-level
+  Pylint, package Mypy (336 files), and `git diff --check` pass.
+- **Next:** resolve/confirm the Windows state-directory initializer and run the
+  release test matrix after external `daf complete` publishes the reviewed change.
 
 ## Issue #2685 implementation — 2026-11-08
 

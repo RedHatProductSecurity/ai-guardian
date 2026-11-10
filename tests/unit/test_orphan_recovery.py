@@ -36,6 +36,10 @@ GENERATED = "// ai-guardian-generated-version: 1.20.0\n"
 def isolated_home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
+    state_dir = home / ".local/state/ai-guardian"
+    # Establish the expected state directory before exposing these process-wide
+    # home overrides; other test activity must not race this test's setup mkdir.
+    state_dir.mkdir(parents=True)
     for name in HOME_VARIABLES:
         monkeypatch.delenv(name, raising=False)
     for name in ("HOME", "USERPROFILE"):
@@ -47,7 +51,7 @@ def isolated_home(tmp_path, monkeypatch):
         "XDG_STATE_HOME": ".local/state",
         "XDG_CACHE_HOME": ".cache",
         "AI_GUARDIAN_CONFIG_DIR": ".config/ai-guardian",
-        "AI_GUARDIAN_STATE_DIR": ".local/state/ai-guardian",
+        "AI_GUARDIAN_STATE_DIR": str(state_dir),
         "AI_GUARDIAN_CACHE_DIR": ".cache/ai-guardian",
     }.items():
         monkeypatch.setenv(name, str(home / relative))
@@ -717,6 +721,9 @@ def test_current_windows_mcp_setup_round_trips_without_runtime(
 
     from ai_guardian.setup import mcp, utils
 
+    if host == "opencode":
+        # Keep this no-runtime contract on V1 instead of inspecting the host CLI.
+        monkeypatch.setattr(mcp, "_opencode_mcp_generation", lambda: "v1")
     with (
         mock.patch.object(utils.platform, "system", return_value="Windows"),
         mock.patch.object(
@@ -917,7 +924,8 @@ def test_cancellation_and_preserved_guardian_history(
         isolated_home / ".config/ai-guardian/ai-guardian.json", {"setting": "retain"}
     )
     history = isolated_home / ".local/state/ai-guardian/violations.jsonl"
-    history.parent.mkdir(parents=True)
+    assert history.parent.is_dir()
+    assert not list(history.parent.iterdir()), "isolated state dir must start empty"
     history.write_text("synthetic history", encoding="utf-8")
     original = snapshot(isolated_home)
     monkeypatch.setattr("builtins.input", lambda _: "n")
@@ -989,7 +997,8 @@ def test_normal_uninstall_preview_requires_owned_process_launch(
     import shlex
 
     state = isolated_home / ".local/state/ai-guardian"
-    state.mkdir(parents=True)
+    assert state.is_dir()
+    assert not list(state.iterdir()), "isolated state dir must start empty"
     (state / "daemon.pid").write_text("12345", encoding="utf-8")
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
