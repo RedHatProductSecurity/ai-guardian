@@ -714,7 +714,8 @@ def _show_tkinter_form(
     field_labels: Dict[str, list[ttk.Label]] = {}
     enabled_states: Dict[str, bool] = {}
     dynamic_defaults: Dict[str, str] = {}
-    required_checkbox_vars: list[Any] = []
+    required_checkbox_vars: list[tuple[str, Any]] = []
+    submit_updater: Optional[Callable[[], None]] = None
     result: Dict[str, Any] = {}
 
     root = create_tk_root()
@@ -774,7 +775,7 @@ def _show_tkinter_form(
         if kind == "bool":
             variable = tk.BooleanVar(value=bool(default))
             if field.get("required"):
-                required_checkbox_vars.append(variable)
+                required_checkbox_vars.append((name, variable))
             control = ttk.Checkbutton(frame, variable=variable)
             control.grid(row=row, column=1, sticky="w", pady=4)
             widgets = [control]
@@ -958,6 +959,8 @@ def _show_tkinter_form(
                     widget.state(["!disabled"] if enabled else ["disabled"])
             for widget in field_labels.get(name, ()):
                 widget.state(["!disabled"] if enabled else ["disabled"])
+        if submit_updater is not None:
+            submit_updater()
 
     def refresh_dynamic_defaults(*_args) -> None:
         """Update untouched defaults that depend on another field."""
@@ -1032,10 +1035,15 @@ def _show_tkinter_form(
     if required_checkbox_vars:
 
         def update_submit_state(*_args) -> None:
-            ready = all(variable.get() for variable in required_checkbox_vars)
+            """Require consent only for required checkboxes currently enabled."""
+            ready = all(
+                not enabled_states.get(name, True) or variable.get()
+                for name, variable in required_checkbox_vars
+            )
             submit_button.state(["!disabled"] if ready else ["disabled"])
 
-        for variable in required_checkbox_vars:
+        submit_updater = update_submit_state
+        for _name, variable in required_checkbox_vars:
             variable.trace_add("write", update_submit_state)
         update_submit_state()
     submit_button.grid(row=button_row, column=1, sticky="e", pady=(14, 0))

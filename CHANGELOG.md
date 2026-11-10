@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Saved SSH connection lifecycle:** Explain that stopping or uninstalling a remote
   daemon does not remove its workstation tray profile, and document how to remove the
   local pairing without changing remote files or stopping the daemon.
+- **Conditional required form fields:** Ignore required checkboxes while their
+  controlling field disables them, and refresh the submit gate when that state changes.
 - **KDE/AppIndicator daemon menu refresh:** Keep discovered SSH alias review
   callbacks within pystray's supported callback arity so a pending alias cannot
   abort rebuilding local and remote daemon entries.
