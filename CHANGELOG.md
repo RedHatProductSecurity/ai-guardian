@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Stable release reference checks:** Validate active source references without
   rewriting historical version mentions in the generated NotebookLM export.
+- **Patch release branch safety:** Require patch releases to use the matching,
+  remote-synchronized stable branch; reject main, mismatched release branches, and
+  divergent local histories before CI or release changes.
 
 ## [1.21.0] - 2026-11-08
 

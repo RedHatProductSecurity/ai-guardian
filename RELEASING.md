@@ -20,11 +20,16 @@ Run it as an authorized maintainer in your terminal, outside an active DAF agent
 session. Land release-script preparation changes through the normal feature-branch
 review workflow first; do not launch it from a DAF issue branch such as `2563`.
 
-Start from a clean `main` synchronized with `origin/main`, with current remote
-production tags. The script calculates the target from the latest local
-production `v*` tag, not the development package version. Preview with
-`scripts/release.sh minor` (dry-run is the default) and confirm the planned
-release version, branch, and next development version. Both the default preview
+For minor and major releases, start from a clean `main` synchronized with
+`origin/main`. For a patch release, switch to the matching existing stable branch
+(for example, `release-1.21`) and ensure it exactly matches `origin/release-1.21`;
+the script rejects patch releases from `main`, another release branch, or a
+diverged local branch. Apply and push the patch fix on that stable branch first.
+Keep local production tags current. The script calculates the target from the
+latest local production `v*` tag, not the development package version. Preview
+with the release type you intend to run (for example, `scripts/release.sh patch`
+from `release-1.21`; dry-run is the default) and confirm the planned release
+version, branch, and next development version. Both the default preview
 and `--dry-run` dispatch and await Release Readiness, Tests, Lint, and Integration
 Tests on the current source ref and commit; `--execute` runs the same gates before
 making release changes. Release Readiness already includes Smoke Tests, Scenario
@@ -483,8 +488,10 @@ main (v1.1.0-dev)
 
 ### Prerequisites
 
-1. All features for the release are merged to `main`
-2. All tests pass on `main`
+1. For minor/major releases, all features are merged and tests pass on `main`; for
+   patch releases, the fix is on the matching stable release branch and tests pass
+   for that source
+2. The selected source branch is synchronized with its remote
 3. CHANGELOG.md is up-to-date in the Unreleased section
 4. GitHub issues for the release are complete
 

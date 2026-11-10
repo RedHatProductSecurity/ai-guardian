@@ -181,10 +181,18 @@ with open(os.environ["RELEASE_TEST_LOG"], "a", encoding="utf-8") as log:
     log.write(json.dumps([program, *args]) + "\n")
 if program == "git":
     if args == ["branch", "--show-current"]:
-        print("main")
+        print(os.environ.get("RELEASE_CURRENT_BRANCH", "main"))
     elif args[0] == "rev-parse":
-        if args[1] in ("HEAD", "origin/main"):
-            print("same-commit")
+        if args[1] == "HEAD":
+            print(os.environ.get("RELEASE_HEAD_SHA", "same-commit"))
+        elif args[1] == "origin/main":
+            print(os.environ.get("RELEASE_MAIN_SHA", "same-commit"))
+        elif args[1] == "--verify" and args[2].startswith("origin/release-"):
+            remote_sha = os.environ.get("RELEASE_REMOTE_BRANCH_SHA", "")
+            if remote_sha:
+                print(remote_sha)
+            else:
+                sys.exit(1)
         else:
             sys.exit(1)
     elif args[:2] == ["tag", "--list"]:
@@ -240,7 +248,7 @@ elif program == "gh":
         workflow = workflow_for_run(run_id)
         details = {
             "headSha": "same-commit",
-            "headBranch": "main",
+            "headBranch": os.environ.get("RELEASE_CURRENT_BRANCH", "main"),
             "event": "workflow_dispatch",
             "status": "completed",
             "conclusion": outcomes.get(workflow, "success"),
@@ -307,11 +315,16 @@ elif program not in ("curl", "git-cliff", "sleep"):
         dispatch_failure="",
         run_metadata=None,
         empty_changelog=False,
+        release_type="minor",
+        current_branch="main",
+        head_sha="same-commit",
+        main_sha="same-commit",
+        remote_branch_sha="same-commit",
     ):
         if empty_changelog:
             (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n")
         result = subprocess.run(
-            ["bash", str(script), "--skip-cursor", *flags, "patch"],
+            ["bash", str(script), "--skip-cursor", *flags, release_type],
             input="y\ny\n",
             capture_output=True,
             text=True,
@@ -323,6 +336,10 @@ elif program not in ("curl", "git-cliff", "sleep"):
                 "RELEASE_TEST_LOG": str(log),
                 "ANNOUNCEMENT_TEST_OUTCOME": outcome,
                 "PIP_TEST_EXIT": str(pip_exit),
+                "RELEASE_CURRENT_BRANCH": current_branch,
+                "RELEASE_HEAD_SHA": head_sha,
+                "RELEASE_MAIN_SHA": main_sha,
+                "RELEASE_REMOTE_BRANCH_SHA": remote_branch_sha,
                 "RELEASE_WORKFLOW_RUN_IDS": json.dumps(WORKFLOW_RUN_IDS),
                 "RELEASE_WORKFLOW_OUTCOMES": json.dumps(workflow_outcomes or {}),
                 "RELEASE_PREEXISTING_RUNS": json.dumps(
@@ -404,6 +421,54 @@ def test_ci_failure_does_not_generate_changelog_before_gate(release_sandbox):
     assert result.returncode == 1
     assert not any(command[0] == "git-cliff" for command in commands)
     assert not _release_mutations(commands)
+
+
+def test_patch_release_from_main_is_rejected_before_ci_or_mutation(release_sandbox):
+    result, commands = release_sandbox("--execute", release_type="patch")
+
+    assert result.returncode == 1
+    assert "Patch releases must run from the matching stable branch release-1.2" in (
+        result.stderr
+    )
+    assert not _workflow_dispatches(commands)
+    assert not _release_mutations(commands)
+
+
+def test_patch_release_rejects_a_different_release_branch(release_sandbox):
+    result, commands = release_sandbox(
+        "--execute", release_type="patch", current_branch="release-1.1"
+    )
+
+    assert result.returncode == 1
+    assert "does not match the release target release-1.2" in result.stderr
+    assert not _workflow_dispatches(commands)
+    assert not _release_mutations(commands)
+
+
+def test_patch_release_rejects_a_diverged_local_stable_branch(release_sandbox):
+    result, commands = release_sandbox(
+        "--execute",
+        release_type="patch",
+        current_branch="release-1.2",
+        remote_branch_sha="remote-commit",
+    )
+
+    assert result.returncode == 1
+    assert "not synchronized with origin/release-1.2" in result.stderr
+    assert not _workflow_dispatches(commands)
+    assert not _release_mutations(commands)
+
+
+def test_patch_release_uses_matching_synchronized_stable_branch(release_sandbox):
+    result, commands = release_sandbox(
+        "--execute", release_type="patch", current_branch="release-1.2"
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert [
+        _option_value(command, "--ref") for command in _workflow_dispatches(commands)
+    ] == ["release-1.2"] * len(REQUIRED_CI_WORKFLOWS)
+    assert not any(command[:3] == ["git", "merge", "main"] for command in commands)
 
 
 def test_dispatch_failure_still_starts_and_awaits_other_required_workflows(
