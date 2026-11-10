@@ -320,8 +320,8 @@ access.
 
 ```bash
 # Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.21.0
-podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.21.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.21.1
+podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.21.1
 
 # Or build from source
 podman build -t ai-guardian container/

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-11-10
+
 ### Fixed
 - **Release test matrix reliability (#2700):** Measure redaction performance with
   repeated samples and initialize isolated recovery state before exposing test-home
@@ -4901,7 +4903,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.21.0...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.21.1...HEAD
+[1.21.1]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.21.1
 [1.21.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.21.0
 [1.20.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.20.0
 [1.19.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.19.0
