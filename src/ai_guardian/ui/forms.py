@@ -10,12 +10,19 @@ T = TypeVar("T")
 Form = Callable[..., dict[str, Any] | None]
 
 
-def run_form_flow(interaction: Callable[[Form], T], *, screen_bounds=None) -> T | None:
+def run_form_flow(
+    interaction: Callable[[Form], T],
+    *,
+    screen_bounds=None,
+    required_checkbox: bool = False,
+) -> T | None:
     """Bind one provider for an entire simple-form interaction.
 
-    Native supports a message or one text/checkbox field. Unsupported controls
-    before display can advance to Tk. A completed first step latches visibility,
-    so failure to start a later step can never restart the flow in another UI.
+    Native supports a message or one text/checkbox field. Set
+    ``required_checkbox=True`` when the entire interaction needs a required,
+    initially unchecked checkbox; provider eligibility is decided centrally.
+    Unsupported controls before display can advance to Tk. A completed first
+    step latches visibility, so a later step never restarts in another UI.
     Credentials and other private backend state stay in the caller's closure.
     """
     from ai_guardian.tray.sandbox_dialog import (
@@ -32,7 +39,7 @@ def run_form_flow(interaction: Callable[[Form], T], *, screen_bounds=None) -> T 
         return interaction(form)
 
     return run_modal(
-        "basic_form",
+        "required_checkbox_form" if required_checkbox else "basic_form",
         {
             "native": lambda: execute(NativeForm(screen_bounds=screen_bounds)),
             "tkinter": lambda: execute(

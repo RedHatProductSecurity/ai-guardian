@@ -2,18 +2,30 @@
 
 Manual qualification (requires an explicitly authorized disposable POSIX VM):
 1. Configure a loopback HTTPS daemon and verify its SSH host key independently.
-2. Select Add daemon via SSH in the tray; enter the existing SSH alias. Auto uses
-   Native → Tkinter → NiceGUI through the shared dispatcher, not the Web Console.
-3. Check the destination, SAN identity and fingerprint; Cancel must save nothing.
-4. Repeat, explicitly confirm trust, then restart the tray: it reconnects.
+2. Select Add daemon via SSH in the tray; enter the existing SSH alias. Use the
+   shared dispatcher, not the Web Console. Linux selects a gateable form provider
+   before host entry; macOS/Windows may use their capable native forms.
+3. Check the destination, SAN identity and fingerprint; verify the trust checkbox
+   is visible and initially unchecked, and Continue is disabled until checked.
+   Cancel must save nothing.
+4. Repeat, visibly check the explicit trust control, confirm, and verify the success
+   result. Restarting the tray loads the saved profile and starts its connection
+   worker automatically.
    Cancel/Close or a later-step failure must never open a different toolkit.
-5. Drop SSH connectivity, occupy the old local port, and restore connectivity:
-   offline/backoff is visible; no unrelated listener receives daemon credentials.
-6. Trigger a remote ask prompt and decide in the tray without inbound callbacks.
-7. Change the daemon certificate: saved trust must not change automatically.
-8. Remove the saved target; only owned tunnels/credentials disappear, not the VM
+5. Keep the encrypted SSH key locked in the workstation agent and verify the
+   offline status explains that the tray cannot prompt for its passphrase. Unlock
+   it through the normal SSH agent/keyring, then verify non-interactive SSH succeeds
+   and **Reconnect SSH tunnel** wakes the saved worker without pairing or starting
+   the remote daemon. No unrelated listener receives daemon credentials.
+6. With the SSH key unavailable, attempt to save remote HTTPS settings: the Console
+   reports that the SSH key must be unlocked and saves nothing. Restore the tunnel
+   and save again; only `daemon.rest_tls` changes, with all other global settings
+   preserved. Restart the daemon to apply listener changes.
+7. Trigger a remote ask prompt and decide in the tray without inbound callbacks.
+8. Change the daemon certificate: saved trust must not change automatically.
+9. Remove the saved target; only owned tunnels/credentials disappear, not the VM
     daemon. Repeat native Windows-client/DPAPI and macOS UI qualification separately.
-9. With discovery off and no enrolled daemons, choose Discover SSH aliases... next
+10. With discovery off and no enrolled daemons, choose Discover SSH aliases... next
    to Add daemon via SSH in the tray. Check the current enable value, Continue,
    edit the optional literal prefix, then Save. Cancel/Close at either step must
    save nothing. Try an invalid prefix and correct it without changing toolkit.
@@ -23,19 +35,19 @@ Manual qualification (requires an explicitly authorized disposable POSIX VM):
    reads/writes the same settings; its untouched fields follow tray changes while
    unsaved browser edits are retained. Discovery off/zero matches hides candidates,
    never the tray settings entry; existing pairings/tunnels remain usable.
-10. Review discovered daemon opens full identity review directly, with no host
+11. Review discovered daemon opens full identity review directly, with no host
     entry. Cancel saves nothing. Refresh never opens unsolicited trust dialogs.
-11. Edit the synthetic user SSH config; added aliases appear on refresh. Dismiss
+12. Edit the synthetic user SSH config; added aliases appear on refresh. Dismiss
     an alias or remove a paired daemon and restart: it is not re-offered. Explicit
     manual Add remains available. Missing config does not erase saved pairings.
-12. Verify unsupported/conditional includes show a safe notice without executing
+13. Verify unsupported/conditional includes show a safe notice without executing
     Match exec, contacting hosts, opening private keys or changing SSH config.
-13. Repeat discovery settings with auto, tkinter, nicegui and headless preferences.
+14. Repeat discovery settings with auto, tkinter, nicegui and headless preferences.
     Missing native/Tk startup may advance before display only. Cancel, Escape,
     title-bar Close or a later-step failure must not reopen in another provider;
     headless opens nothing and saves nothing. Saving never contacts a host or
      grants trust. Qualify macOS, Windows, GNOME/zenity and KDE/kdialog separately.
-14. Keep a local daemon and an enrolled VM connected simultaneously. Local is
+15. Keep a local daemon and an enrolled VM connected simultaneously. Local is
     first; other names sort alphabetically ignoring case. Verify the VM's Console,
     Violations, Metrics & Audit, Statistics, Terminal, Maintenance, MCP and About.
     CLI/scanner actions must affect only the VM's actual virtualenv installation.
@@ -48,14 +60,14 @@ Manual qualification (requires an explicitly authorized disposable POSIX VM):
     restart a remote daemon from main: its existing global config API still gives
     MCP state even without new stats fields. Linux procfs proves an older running
     daemon's venv interpreter; no guessed PATH installation may be executed.
-15. Select the VM's Working Dir. It is an optional absolute VM path, not a desktop
+16. Select the VM's Working Dir. It is an optional absolute VM path, not a desktop
     directory picker. Retry a relative path, then Save an absolute path; Cancel,
     Close and headless save nothing. Repeat native/Tk/NiceGUI and pre-display
     startup failure; never switch provider after validation or cancellation.
     With no saved directory, Terminal uses the SSH user's home, never the
     workstation home. Repeat discovery and reset to empty; explicitly saved VM
     directories survive, and their labels do not use workstation-home shortening.
-16. Enable alias discovery with zero unpaired aliases. No greyed `(0)` entry is
+17. Enable alias discovery with zero unpaired aliases. No greyed `(0)` entry is
     shown; Discover SSH aliases... remains. A discovery warning remains accessible
     as SSH alias discovery notice without inventing a pairing candidate.
 
@@ -450,9 +462,21 @@ def test_unknown_or_changed_ssh_host_key_is_not_accepted_or_echoed(pairing):
         probe_destination("known-alias")
     assert (
         str(error.value)
-        == "SSH connection failed. Check the host alias, agent authentication, and known host key using your SSH client. No identities were accepted automatically."
+        == "SSH connection failed. Check host reachability, the host alias, and the known host key. The tray cannot prompt for a password or key passphrase; unlock the required identity in ssh-agent and retry."
     )
     assert pairing.profile.token not in str(error.value)
+
+
+def test_https_save_error_explains_unavailable_ssh_agent():
+    """USER EXPERIENCE: SSH target unavailable → no silent config-write claim."""
+    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
+    from ai_guardian.web.pages.global_settings import HTTPS_SAVE_ERROR
+
+    assert HTTPS_SAVE_ERROR == (
+        "HTTPS settings could not be saved. Check that the selected daemon is "
+        "reachable and its configuration is writable. For SSH targets, unlock "
+        "the required key in your SSH agent and reconnect before saving."
+    )
 
 
 def test_offline_and_identity_change_messages_are_explicit():
@@ -474,6 +498,40 @@ def test_offline_and_identity_change_messages_are_explicit():
     )
 
 
+def test_offline_saved_ssh_menu_reconnects_without_pairing_or_starting_daemon():
+    """USER EXPERIENCE: offline saved target → immediate retry, same saved trust."""
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from tests.fixtures.ssh_tray import build, find, make_tray
+
+    target = DaemonTarget(
+        "ssh-vm",
+        "ssh",
+        status="offline",
+        ssh_id="saved-profile-id",
+        error_message=OFFLINE_ERROR,
+    )
+    tray = make_tray([target])
+    manager = mock.Mock()
+    tray._discovery = SimpleNamespace(ssh_manager=manager)
+    reconnect = find(build(tray), "Reconnect SSH tunnel")
+    assert reconnect.visible
+
+    with (
+        mock.patch("ai_guardian.tray.ssh_connections.threading.Thread") as worker,
+        mock.patch(
+            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
+            return_value=None,
+        ),
+    ):
+        reconnect.action(None, None)
+        worker.call_args.kwargs["target"]()
+
+    manager.reconnect.assert_called_once_with("saved-profile-id")
+    manager.enroll.assert_not_called()
+    tray._multi_client.send_restart.assert_not_called()
+    tray._refresh_event.set.assert_called_once()
+
+
 def test_pairing_only_prepares_until_user_confirms_and_no_secret_is_displayed(
     tmp_path, pairing
 ):
@@ -488,7 +546,8 @@ def test_pairing_only_prepares_until_user_confirms_and_no_secret_is_displayed(
     assert manager.store.load() == []
     summary = pairing_summary(draft)
     assert (
-        TRUST_LABEL == "I confirm this SSH destination and daemon certificate identity"
+        TRUST_LABEL
+        == "Check to confirm this SSH destination and daemon certificate identity"
     )
     assert f"TLS server identity: {pairing.profile.server_name}" in summary
     assert f"Certificate SHA-256: {pairing.profile.certificate_sha256}" in summary
@@ -497,13 +556,13 @@ def test_pairing_only_prepares_until_user_confirms_and_no_secret_is_displayed(
     manager.close()
 
 
-def test_tray_ssh_pairing_uses_native_first_without_opening_console(
+def test_tray_ssh_pairing_uses_gateable_checkbox_without_opening_console(
     monkeypatch, pairing
 ):
-    """USER EXPERIENCE: Add via SSH → desktop input, full identity, unchecked trust.
+    """USER EXPERIENCE: Add via SSH → desktop input and required unchecked trust.
 
-    Only explicit Trust and add daemon saves the private server-side draft.
-    Canceling identity review ends the flow without Tk/browser replacement.
+    Continue is disabled until the checkbox is checked. Cancel stays terminal and
+    does not save or open a replacement dialog.
     """
     from ai_guardian.tray.ssh_connections import open_enrollment
     from ai_guardian.ui.ssh_pairing import TRUST_LABEL
@@ -521,9 +580,9 @@ def test_tray_ssh_pairing_uses_native_first_without_opening_console(
         mock.patch("ai_guardian.tray.sandbox_dialog._show_nicegui_form") as browser,
         mock.patch("ai_guardian.tray.menu.open_web_console") as console,
     ):
-        native.return_value.side_effect = [{"host": "known-alias"}, None]
+        tk.side_effect = [{"host": "known-alias"}, None]
         open_enrollment(tray)
-    review = native.return_value.call_args
+    review = tk.call_args_list[1]
     assert review.args[0] == "Verify SSH daemon identity"
     assert review.args[2] == [
         {
@@ -535,11 +594,126 @@ def test_tray_ssh_pairing_uses_native_first_without_opening_console(
         }
     ]
     assert pairing.profile.certificate_sha256 in review.args[1]
-    assert pairing.profile.token not in str(native.return_value.call_args_list)
+    assert pairing.profile.token not in str(tk.call_args_list)
     tray._discovery.ssh_manager.enroll.assert_not_called()
-    tk.assert_not_called()
+    native.assert_not_called()
     browser.assert_not_called()
     console.assert_not_called()
+
+
+def test_pairing_rejects_unchecked_renderer_result_without_enrollment(
+    monkeypatch, pairing
+):
+    from ai_guardian.tray.ssh_connections import open_enrollment
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    tray = mock.Mock()
+    tray._discovery.ssh_manager.prepare.return_value = pairing
+    with mock.patch(
+        "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+    ) as tk:
+        tk.side_effect = [
+            {"host": "known-alias"},
+            {"trust": False},
+            None,
+        ]
+        open_enrollment(tray)
+
+    tray._discovery.ssh_manager.enroll.assert_not_called()
+    assert tk.call_args_list[2].args == (
+        "SSH daemon not paired",
+        "Select the identity-confirmation checkbox to pair this daemon. No connection was saved.",
+        [],
+    )
+
+
+def test_confirmed_pairing_shows_success(monkeypatch, pairing):
+    from ai_guardian.tray.ssh_connections import open_enrollment
+    from ai_guardian.ui.ssh_pairing import PAIRED_MESSAGE
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    tray = mock.Mock()
+    tray._discovery.ssh_manager.prepare.return_value = pairing
+    with mock.patch(
+        "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+    ) as tk:
+        tk.side_effect = [
+            {"host": "known-alias"},
+            {"trust": True},
+            None,
+        ]
+        open_enrollment(tray)
+
+    tray._discovery.ssh_manager.enroll.assert_called_once_with(pairing)
+    tray._refresh_event.set.assert_called_once()
+    assert tk.call_args_list[2].args == (
+        "Add daemon via SSH",
+        PAIRED_MESSAGE,
+        [],
+    )
+
+
+def test_pairing_failure_shows_actionable_error(monkeypatch, pairing):
+    from ai_guardian.daemon.ssh_storage import SSHConnectionError
+    from ai_guardian.daemon.ssh_tunnel import DAEMON_AUTH_ERROR
+    from ai_guardian.tray.ssh_connections import open_enrollment
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    tray = mock.Mock()
+    tray._discovery.ssh_manager.prepare.return_value = pairing
+    tray._discovery.ssh_manager.enroll.side_effect = SSHConnectionError(
+        DAEMON_AUTH_ERROR
+    )
+    with mock.patch(
+        "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+    ) as tk:
+        tk.side_effect = [
+            {"host": "known-alias"},
+            {"trust": True},
+            None,
+        ]
+        open_enrollment(tray)
+
+    assert tk.call_args_list[2].args == (
+        "Add daemon via SSH",
+        DAEMON_AUTH_ERROR,
+        [],
+    )
+    tray._refresh_event.set.assert_not_called()
+
+
+def test_unexpected_pairing_failure_shows_safe_error(monkeypatch, pairing):
+    from ai_guardian.tray.ssh_connections import open_enrollment
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("ai_guardian.ui.display._tkinter_available", lambda: True)
+    tray = mock.Mock()
+    tray._discovery.ssh_manager.prepare.return_value = pairing
+    tray._discovery.ssh_manager.enroll.side_effect = RuntimeError("private detail")
+    with mock.patch(
+        "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess"
+    ) as tk:
+        tk.side_effect = [
+            {"host": "known-alias"},
+            {"trust": True},
+            None,
+        ]
+        open_enrollment(tray)
+
+    assert tk.call_args_list[2].args == (
+        "SSH daemon enrollment failed",
+        "An unexpected error interrupted pairing. Check the workstation log and tray before retrying.",
+        [],
+    )
+    assert "private detail" not in str(tk.call_args_list)
+    tray._refresh_event.set.assert_not_called()
 
 
 def test_authenticated_poll_only_registration_needs_no_callback_or_workstation_token(

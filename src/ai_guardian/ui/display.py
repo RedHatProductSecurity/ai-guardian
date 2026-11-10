@@ -62,8 +62,10 @@ def ui_provider_order(
     """Return eligible tiers, not a guarantee that a provider can start.
 
     Native supports messages, confirmations and pickers on all desktop platforms,
-    single-field forms on all desktops, actions on Linux/macOS, and complete
-    setup controls only on macOS (Cocoa).
+    single-field forms on all desktops, and dynamically gated required-checkbox
+    forms on macOS/Windows. Linux zenity/KDialog checklists cannot gate submit, so
+    those forms start with isolated Tk or NiceGUI. Native actions are available on
+    Linux/macOS, and complete setup controls only on macOS (Cocoa).
     AppleScript cannot place a message/panel on a specified monitor. Rich forms,
     linked messages and streams skip native rather than losing controls.
     Callers intersect these tiers with their actual implementations. See
@@ -78,15 +80,28 @@ def ui_provider_order(
         "confirmation",
         "picker",
         "basic_form",
+        "required_checkbox_form",
     }
+    # Zenity and KDialog expose checkbox lists, but do not let callers disable
+    # their submit button until a required item is checked. Use isolated Tk or
+    # NiceGUI for that complete interaction on Linux.
+    if dialog_type == "required_checkbox_form" and system == "Linux":
+        native = False
     native |= dialog_type == "action" and system in {"Darwin", "Linux"}
     native |= dialog_type == "setup" and system == "Darwin"
     if screen_bounds is not None:
         # These native implementations have no positioned owner/window API.
         # Do not discard placement to retain a nominal native-first appearance.
         native = native and (
-            (system == "Darwin" and dialog_type in {"basic_form", "action", "setup"})
-            or (system == "Windows" and dialog_type == "basic_form")
+            (
+                system == "Darwin"
+                and dialog_type
+                in {"basic_form", "required_checkbox_form", "action", "setup"}
+            )
+            or (
+                system == "Windows"
+                and dialog_type in {"basic_form", "required_checkbox_form"}
+            )
         )
         from ai_guardian.ui.monitor import MonitorContext, restore_context
 

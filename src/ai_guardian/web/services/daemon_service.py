@@ -77,9 +77,13 @@ class DaemonService:
                 return t
         return None
 
-    def get_all_daemon_status(self) -> list:
+    def get_all_daemon_status(
+        self, targets: Optional[List[DaemonTarget]] = None
+    ) -> list:
+        """Return each target's available status without failing on offline daemons."""
         results = []
-        for target in self._targets:
+        target_list = self._targets if targets is None else targets
+        for target in target_list:
             if target.status in _NON_RUNNING_TARGET_STATES:
                 status = None
             else:

@@ -29,6 +29,35 @@ def remote():
     )
 
 
+def test_discovered_alias_menu_actions_use_pystray_supported_arity(remote, monkeypatch):
+    monkeypatch.setenv("PYSTRAY_BACKEND", "dummy")
+    pystray = pytest.importorskip("pystray")
+    tray = make_tray([DaemonTarget("local", "local", status="paused"), remote])
+    tray._discovery = mock.Mock()
+    tray._discovery.ssh_alias_discovery = {
+        "enabled": True,
+        "aliases": ["guardian-test"],
+        "notices": [],
+    }
+    tray._stopped_container_targets = []
+
+    with (
+        mock.patch("ai_guardian.tray.app.pystray", pystray),
+        mock.patch("ai_guardian.tray.menu_builder.pystray", pystray),
+        mock.patch("ai_guardian.tray.plugin_runner.pystray", pystray),
+    ):
+        menu = tray._build_tray_menu()
+
+    candidate = next(
+        item for item in menu if item.text == "SSH aliases available to pair (1)"
+    )
+    alias_item = candidate.submenu.items[0]
+    review = alias_item.submenu.items[0]
+    with mock.patch.object(tray, "_on_add_ssh_daemon") as add_daemon:
+        review._action("icon", "item")
+    add_daemon.assert_called_once_with("icon", "item", alias="guardian-test")
+
+
 @pytest.mark.parametrize("multi", [False, True])
 def test_standard_menu_structure_and_cached_selected_vm_statistics(remote, multi):
     tray = make_tray(([DaemonTarget("local", "local")] if multi else []) + [remote])
@@ -220,15 +249,29 @@ def test_ssh_upgrade_reports_unconfirmed_restart_without_clearing_version_warnin
 def test_offline_vm_keeps_terminal_start_management_and_explicit_status(remote):
     remote.status = "offline"
     remote.stats = None
+    remote.ssh_tunnel = None
     remote.error_message = "SSH daemon offline; reconnecting with backoff."
     tray = make_tray([remote])
     menu = build(tray)
     assert find(menu, "Terminal").enabled
     assert find(menu, "Start daemon")
+    assert find(menu, "Reconnect SSH tunnel").visible
     assert find(menu, "Manage SSH connection...")
     assert not find(menu, "Console").enabled
     assert "Offline" in tray._menu._daemon_status_details(remote)[1]
     assert "backoff" in tray._menu._daemon_status_details(remote)[3]
+
+
+def test_connected_ssh_target_hides_manual_reconnect_action(remote):
+    tray = make_tray([remote])
+    menu = build(tray)
+
+    reconnect = next(
+        item
+        for item in menu.items
+        if getattr(item, "text", None) == "Reconnect SSH tunnel"
+    )
+    assert not reconnect.visible
 
 
 def test_vm_directory_label_never_shortens_against_workstation_home(remote):

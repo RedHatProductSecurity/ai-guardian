@@ -2637,7 +2637,7 @@ class Doctor:
         )
 
     def check_daemon_rest_port(self) -> CheckResult:
-        """Warn if the running daemon's PID file is missing rest_port (REST API failed to bind)."""
+        """Report REST listener readiness and distinguish active HTTP from HTTPS."""
         try:
             from ai_guardian.daemon import get_pid_path, is_pid_alive
         except ImportError:
@@ -2647,12 +2647,23 @@ class Doctor:
                 message="Daemon module not available",
             )
 
+        tls_config_known = isinstance(self._config, dict)
+        daemon_config = (self._config or {}).get("daemon", {})
+        tls_config = (
+            daemon_config.get("rest_tls", {}) if isinstance(daemon_config, dict) else {}
+        )
+        tls_enabled = isinstance(tls_config, dict) and tls_config.get("enabled") is True
+
         pid_path = get_pid_path()
         if not pid_path.exists():
             return CheckResult(
                 name="daemon_rest_port",
                 status=CheckStatus.SKIP,
-                message="Daemon not running",
+                message=(
+                    "HTTPS is configured; daemon is not running, so active listener state is unknown"
+                    if tls_enabled
+                    else "Daemon not running"
+                ),
             )
 
         try:
@@ -2676,11 +2687,12 @@ class Doctor:
 
         rest_port = pid_info.get("rest_port", 0)
         if not rest_port:
+            detail = "HTTPS is configured, but " if tls_enabled else ""
             return CheckResult(
                 name="daemon_rest_port",
                 status=CheckStatus.WARN,
                 message=(
-                    "Daemon running but REST API did not start (rest_port missing from PID file). "
+                    f"{detail}daemon REST API did not start (rest_port missing from PID file). "
                     "Cache status, violations, and web console will be unavailable."
                 ),
                 fix_hint=(
@@ -2691,10 +2703,35 @@ class Doctor:
                 ),
             )
 
+        rest_scheme = pid_info.get("rest_scheme", "http")
+        if not isinstance(rest_scheme, str) or rest_scheme not in {"http", "https"}:
+            return CheckResult(
+                name="daemon_rest_port",
+                status=CheckStatus.WARN,
+                message=f"Daemon REST API is available on port {rest_port}, but its protocol is unknown",
+                fix_hint="Check the daemon status output and upgrade older daemon installations.",
+            )
+
+        if tls_config_known and tls_enabled != (rest_scheme == "https"):
+            configured = "enabled" if tls_enabled else "disabled"
+            active = rest_scheme.upper()
+            return CheckResult(
+                name="daemon_rest_port",
+                status=CheckStatus.WARN,
+                message=(
+                    f"Daemon REST API is active over {active} on port {rest_port}, "
+                    f"but HTTPS is {configured} in the current configuration"
+                ),
+                fix_hint="Restart the daemon after changing its REST HTTPS configuration.",
+            )
+
         return CheckResult(
             name="daemon_rest_port",
             status=CheckStatus.PASS,
-            message=f"Daemon REST API running on port {rest_port}",
+            message=(
+                f"Daemon REST API running over {rest_scheme.upper()} "
+                f"on port {rest_port}"
+            ),
         )
 
     def check_version_currency(self) -> CheckResult:

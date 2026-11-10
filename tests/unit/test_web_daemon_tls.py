@@ -8,7 +8,9 @@ pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 
 from ai_guardian.daemon.rest_transport import DaemonConnectionError
 from ai_guardian.web.pages.global_settings import (
+    HTTPS_SAVE_ERROR,
     _create_rest_tls_settings,
+    _save_rest_tls_config,
     _set_rest_tls_config,
 )
 
@@ -19,7 +21,7 @@ def test_tls_form_preserves_unrelated_settings_without_accessing_paths():
         "enabled": True,
         "cert_file": "/remote/server.pem",
         "key_file": "/remote/private.pem",
-        "client": {"server_name": "daemon.test"},
+        "client": {"server_name": "guardian-lab.test"},
     }
     with mock.patch(
         "pathlib.Path.read_bytes",
@@ -29,6 +31,60 @@ def test_tls_form_preserves_unrelated_settings_without_accessing_paths():
     assert config["daemon"]["rest_host"] == "127.0.0.1"
     assert config["name"] == "example"
     assert config["daemon"]["rest_tls"] == tls
+
+
+def test_https_save_writes_only_rest_tls_value():
+    tls = {
+        "enabled": True,
+        "cert_file": "/remote/server.pem",
+        "key_file": "/remote/private.pem",
+        "client": {"server_name": "guardian-lab.test"},
+    }
+    with mock.patch(
+        "ai_guardian.web.pages.global_settings.save_web_config_value",
+        return_value=True,
+    ) as save_value:
+        assert _save_rest_tls_config(tls) is True
+
+    save_value.assert_called_once_with("daemon", "rest_tls", tls, scope="global")
+
+
+def test_https_save_trims_whitespace_from_tls_text_fields():
+    pin = ":".join(["AB"] * 32)
+    tls = {
+        "enabled": True,
+        "cert_file": " \t/remote/server.pem \n",
+        "key_file": " /remote/private.pem ",
+        "client": {
+            "ca_file": "  /remote/ca.pem\t",
+            "server_name": " guardian-lab.test ",
+            "certificate_sha256": f" {pin} ",
+        },
+    }
+    expected = {
+        "enabled": True,
+        "cert_file": "/remote/server.pem",
+        "key_file": "/remote/private.pem",
+        "client": {
+            "ca_file": "/remote/ca.pem",
+            "server_name": "guardian-lab.test",
+            "certificate_sha256": pin,
+        },
+    }
+    with mock.patch(
+        "ai_guardian.web.pages.global_settings.save_web_config_value",
+        return_value=True,
+    ) as save_value:
+        assert _save_rest_tls_config(tls) is True
+
+    save_value.assert_called_once_with("daemon", "rest_tls", expected, scope="global")
+    assert tls["cert_file"] == " \t/remote/server.pem \n"
+
+
+def test_https_save_failure_message_explains_remote_and_ssh_requirements():
+    assert "selected daemon is reachable" in HTTPS_SAVE_ERROR
+    assert "configuration is writable" in HTTPS_SAVE_ERROR
+    assert "SSH agent" in HTTPS_SAVE_ERROR
 
 
 @pytest.mark.parametrize(
@@ -41,6 +97,12 @@ def test_tls_form_preserves_unrelated_settings_without_accessing_paths():
             "cert_file": "",
             "key_file": "",
             "client": {"certificate_sha256": "bad"},
+        },
+        {
+            "enabled": True,
+            "cert_file": "/remote/server.pem",
+            "key_file": "/remote/private.pem",
+            "client": {"server_name": ""},
         },
     ],
 )
@@ -57,6 +119,19 @@ def test_tls_form_defaults_and_scope(editable):
         _create_rest_tls_settings({}, editable=editable)
     ui.switch.assert_called_once_with("Enable native HTTPS", value=False)
     assert ui.input.call_count == 5
+    input_labels = [call.args[0] for call in ui.input.call_args_list]
+    assert any(
+        "Certificate chain PEM path" in label and "required" in label
+        for label in input_labels
+    )
+    assert any(
+        "Private-key PEM path" in label and "required" in label
+        for label in input_labels
+    )
+    assert any(
+        "Expected server SAN identity / SNI" in label and "required" in label
+        for label in input_labels
+    )
     assert bool(ui.switch.return_value.disable.call_count) is not editable
     assert bool(ui.button.return_value.disable.call_count) is not editable
 

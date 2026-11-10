@@ -256,7 +256,7 @@ def test_cli_context_published_only_after_remote_identity_and_authentication(
     with (
         mock.patch.object(manager, "prepare", return_value=pairing),
         mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel", return_value=tunnel),
-        mock.patch.object(connection.stop, "wait", side_effect=stop),
+        mock.patch.object(connection.retry_now, "wait", side_effect=stop),
     ):
         manager._run(connection)
     assert target.ssh_commands.cli == (commands.cli if authenticated else None)

@@ -177,6 +177,14 @@ class TrayMenuBuilder:
                 "The workstation Console is unavailable. Start the local Web Console and retry; no remote browser was launched."
             )
 
+    def _reconnect_ssh_target(self, target):
+        """Request an immediate retry without changing saved trust or starting the VM."""
+        from ai_guardian.daemon.ssh_storage import SSHConnectionError
+
+        if not target.ssh_id:
+            raise SSHConnectionError("This SSH daemon has no saved connection.")
+        self._tray._discovery.ssh_manager.reconnect(target.ssh_id)
+
     def _on_about(self, icon, item):
         """Show About info via OS dialog."""
 
@@ -3626,6 +3634,11 @@ class TrayMenuBuilder:
         from ai_guardian.tray.ssh_connections import open_management
 
         return [
+            pystray.MenuItem(
+                "Reconnect SSH tunnel",
+                self._ssh_action(target, self._reconnect_ssh_target),
+                visible=lambda _: target.ssh_tunnel is None,
+            ),
             pystray.MenuItem(
                 "Remote CLI unavailable — start the daemon and reconnect, or use Terminal",
                 None,
