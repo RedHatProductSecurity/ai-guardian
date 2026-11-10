@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Release test matrix reliability (#2700):** Measure redaction performance with
+  repeated samples and initialize isolated recovery state before exposing test-home
+  overrides, while checking for unexpected state files. Pin no-runtime OpenCode
+  recovery coverage to a deterministic configuration generation.
 - **SSH pairing consent control:** Keep identity consent unchecked initially and
   disable **Trust and add daemon** until the checkbox is selected. Linux uses an
   isolated form provider because zenity/KDialog cannot gate the submit button.

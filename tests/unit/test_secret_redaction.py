@@ -240,7 +240,8 @@ MIIEpAIBAAKCAQEA1234567890abcdefghijklmno
             assert "strategy" in r
 
     def test_performance(self):
-        """Test that redaction completes within 100ms for a 30KB input."""
+        """Test that median redaction time stays within 100ms for a 30KB input."""
+        import statistics
         import time
 
         redactor = SecretRedactor()
@@ -251,12 +252,20 @@ MIIEpAIBAAKCAQEA1234567890abcdefghijklmno
             + "Some more text. " * 100
         ) * 10
 
-        start = time.perf_counter()
-        result = redactor.redact(text)
-        elapsed = (time.perf_counter() - start) * 1000  # Convert to ms
+        # Ignore a single host-scheduling outlier while keeping the existing
+        # threshold capable of detecting sustained performance regressions.
+        redactor.redact(text)  # Warm up before collecting measurements.
+        elapsed_samples = []
+        for _ in range(5):
+            start = time.perf_counter()
+            result = redactor.redact(text)
+            elapsed_samples.append((time.perf_counter() - start) * 1000)
+        median_elapsed = statistics.median(elapsed_samples)
 
-        # Allow normal variation on slower CI runners while catching regressions.
-        assert elapsed < 100, f"Redaction took {elapsed}ms, expected <100ms"
+        assert median_elapsed < 100, (
+            f"Median redaction took {median_elapsed:.2f}ms across 5 samples "
+            f"({[round(sample, 2) for sample in elapsed_samples]}), expected <100ms"
+        )
         assert len(result["redactions"]) > 0
 
     def test_action_modes(self):
