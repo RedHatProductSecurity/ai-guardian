@@ -49,6 +49,38 @@ def test_https_save_writes_only_rest_tls_value():
     save_value.assert_called_once_with("daemon", "rest_tls", tls, scope="global")
 
 
+def test_https_save_trims_whitespace_from_tls_text_fields():
+    pin = ":".join(["AB"] * 32)
+    tls = {
+        "enabled": True,
+        "cert_file": " \t/remote/server.pem \n",
+        "key_file": " /remote/private.pem ",
+        "client": {
+            "ca_file": "  /remote/ca.pem\t",
+            "server_name": " guardian-lab.test ",
+            "certificate_sha256": f" {pin} ",
+        },
+    }
+    expected = {
+        "enabled": True,
+        "cert_file": "/remote/server.pem",
+        "key_file": "/remote/private.pem",
+        "client": {
+            "ca_file": "/remote/ca.pem",
+            "server_name": "guardian-lab.test",
+            "certificate_sha256": pin,
+        },
+    }
+    with mock.patch(
+        "ai_guardian.web.pages.global_settings.save_web_config_value",
+        return_value=True,
+    ) as save_value:
+        assert _save_rest_tls_config(tls) is True
+
+    save_value.assert_called_once_with("daemon", "rest_tls", expected, scope="global")
+    assert tls["cert_file"] == " \t/remote/server.pem \n"
+
+
 def test_https_save_failure_message_explains_remote_and_ssh_requirements():
     assert "selected daemon is reachable" in HTTPS_SAVE_ERROR
     assert "configuration is writable" in HTTPS_SAVE_ERROR

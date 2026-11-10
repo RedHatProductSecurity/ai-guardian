@@ -384,13 +384,25 @@ def _set_rest_tls_config(config, tls_config):
     """
     from ai_guardian.daemon.rest_transport import DaemonConnectionError, TLSOptions
 
+    tls_config = dict(tls_config)
+    for key in ("cert_file", "key_file"):
+        if isinstance(tls_config.get(key), str):
+            tls_config[key] = tls_config[key].strip()
+
+    client_config = tls_config.get("client", {})
+    if isinstance(client_config, dict):
+        client_config = dict(client_config)
+        for key in ("ca_file", "server_name", "certificate_sha256"):
+            if isinstance(client_config.get(key), str):
+                client_config[key] = client_config[key].strip()
+        tls_config["client"] = client_config
+
     if not isinstance(tls_config.get("enabled"), bool) or not all(
         isinstance(tls_config.get(key), str) for key in ("cert_file", "key_file")
     ):
         raise DaemonConnectionError(
             "Check the HTTPS certificate and private-key paths."
         )
-    client_config = tls_config.get("client", {})
     if tls_config["enabled"] and not all(
         tls_config[key].strip() for key in ("cert_file", "key_file")
     ):

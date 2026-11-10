@@ -5,7 +5,7 @@ The system tray client discovers and manages AI Guardian daemons across multiple
 ## Quick Start
 
 ```bash
-ai-guardian daemon start          # Start local daemon (headless)
+ai-guardian daemon start -b       # Start local daemon in background (headless)
 ai-guardian tray start            # Start tray (discovers all daemons)
 ai-guardian tray start -b         # Start tray in background
 ai-guardian tray stop             # Stop the tray

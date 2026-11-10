@@ -191,7 +191,7 @@ activate again or use the installed executable's absolute path:
 commands below use `"$HOME/.venvs/ai-guardian/bin/ai-guardian"` **inside the VM**.
 
 ```bash
-"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start
+"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start -b
 "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
 ```
 
@@ -509,7 +509,7 @@ reconnection are three different lifecycle mechanisms.
 3. **If stopped**, start the existing installation and check readiness:
 
    ```bash
-   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start
+   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start -b
    "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
    ```
 

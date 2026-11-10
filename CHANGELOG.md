@@ -20,8 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Remote HTTPS settings save:** Update only `daemon.rest_tls` instead of replacing
   the entire global config, and explain that remote SSH saves require a reachable
   tunnel and an identity unlocked in the workstation's SSH agent.
+- **HTTPS settings whitespace:** Trim surrounding whitespace from certificate,
+  key, CA, server-name and pin fields before saving.
 - **SSH authentication guidance:** Explain that tray tunnels cannot prompt for a
   password or encrypted-key passphrase; use the workstation's normal SSH agent/keyring.
+- **Daemon startup instructions:** Use `daemon start -b` in quick-start and remote
+  setup sequences so startup returns to the shell for status checks and follow-up steps.
+- **Saved SSH connection lifecycle:** Explain that stopping or uninstalling a remote
+  daemon does not remove its workstation tray profile, and document how to remove the
+  local pairing without changing remote files or stopping the daemon.
 - **KDE/AppIndicator daemon menu refresh:** Keep discovered SSH alias review
   callbacks within pystray's supported callback arity so a pending alias cannot
   abort rebuilding local and remote daemon entries.
