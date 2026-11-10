@@ -50,12 +50,14 @@ When invoked with arguments (e.g., `/release minor`), this skill guides you thro
 
 ### Regular Release (`/release major|minor|patch`)
 
-**Purpose**: Create a new production release from main branch
+**Purpose**: Create a new production release. Minor/major releases use `main`;
+patch releases use the matching existing stable `release-X.Y` branch.
 
 **Prerequisites**:
-- All tests pass on main
+- Minor/major: all tests pass on synchronized `main`
+- Patch: the fix is on the matching `release-X.Y` branch, which exactly matches
+  `origin/release-X.Y`; all tests pass on that source
 - CHANGELOG.md has Unreleased section with changes
-- Main branch is up-to-date
 
 **Steps**:
 1. Verify prerequisites (clean working directory, tests pass, CHANGELOG updated)
@@ -63,7 +65,8 @@ When invoked with arguments (e.g., `/release minor`), this skill guides you thro
 3. Documentation review (mandatory — see checklist below)
 4. Dependency security review (mandatory — merge open Dependabot CVE fixes)
 5. Cursor hook compatibility verification (mandatory — see section below)
-6. Create release branch (e.g., `release-1.2`)
+6. Create a release branch for minor/major releases; for patch releases, start on
+   the existing matching stable branch (never merge `main` into it)
 7. Determine new version based on release type
 8. Update version in all configured package files (remove `-dev` suffix)
 9. Update CHANGELOG.md (move Unreleased to version section with date)
