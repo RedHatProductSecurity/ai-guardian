@@ -321,6 +321,8 @@ class DaemonTray:
         self._appindicator_menu_open = False
         self._appindicator_menu_close_serial = 0
         self._menu_refresh_pending = False
+        self._appindicator_render_signature = None
+        self._appindicator_watch_state = None
         self._thread = None
         self._pause_timer = None
         self._status = "running"
@@ -958,8 +960,14 @@ class DaemonTray:
         """Refresh the tray menu (must be called on main thread)."""
         if self._icon:
             if self._appindicator_menu_open:
+                if not self._menu_refresh_pending:
+                    logger.info(
+                        "Deferring AppIndicator tray-menu refresh (target_count=%d)",
+                        len(self._targets),
+                    )
                 self._menu_refresh_pending = True
                 return
+            stage = "invalidate cached stats"
             try:
                 # Deferred updates must render current stats, not the snapshot
                 # cached before an action/expiry while the popup was open.
@@ -990,19 +998,41 @@ class DaemonTray:
                     # pystray's menu descriptors are immutable.  Replacing the
                     # menu lets discovery add or remove any number of daemon
                     # submenus; the menu property updates native backends.
-                    self._icon.menu = self._build_tray_menu()
+                    logger.info(
+                        "Rebuilding tray menu for %d target(s)", len(self._targets)
+                    )
+                    stage = "build menu descriptor"
+                    menu = self._build_tray_menu()
+                    stage = "assign menu descriptor"
+                    self._icon.menu = menu
+                    stage = "schedule DBusMenu watcher"
                     self._schedule_appindicator_menu_watch()
                 else:
+                    stage = "update existing menu"
                     self._icon.update_menu()
+                    stage = "schedule DBusMenu watcher"
                     self._schedule_appindicator_menu_watch()
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Tray menu refresh failed during %s (%s; origin=%s); attempting in-place update",
+                    stage,
+                    type(exc).__name__,
+                    self._pystray_exception_origin(exc),
+                )
                 # Preserve the old refresh path when a test double or an
                 # optional tray backend cannot rebuild the descriptor tree.
                 try:
+                    stage = "fallback menu update"
                     self._icon.update_menu()
+                    stage = "schedule DBusMenu watcher after fallback"
                     self._schedule_appindicator_menu_watch()
-                except Exception:
-                    pass  # intentionally silent — best-effort operation
+                except Exception as fallback_exc:
+                    logger.warning(
+                        "In-place tray menu refresh failed during %s (%s; origin=%s)",
+                        stage,
+                        type(fallback_exc).__name__,
+                        self._pystray_exception_origin(fallback_exc),
+                    )
 
     def _target_menu_identity(self):
         """Rebuild when targets reorder or their menu-bound identity changes."""
@@ -1040,6 +1070,19 @@ class DaemonTray:
             for t in self._targets
         )
 
+    @staticmethod
+    def _pystray_exception_origin(exc):
+        """Return a code-only pystray frame, never an exception message/path."""
+        origin = None
+        traceback = exc.__traceback__
+        while traceback is not None:
+            frame = traceback.tb_frame
+            module = frame.f_globals.get("__name__", "")
+            if module.startswith("pystray."):
+                origin = f"{module}.{frame.f_code.co_name}:{traceback.tb_lineno}"
+            traceback = traceback.tb_next
+        return origin or "unknown"
+
     def _schedule_appindicator_menu_watch(self):
         """Watch AppIndicator's exported menu for open/close events.
 
@@ -1071,10 +1114,22 @@ class DaemonTray:
         try:
             server = indicator.get_property("dbus-menu-server")
             root = server.get_property("root-node") if server else None
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            logger.debug("Unable to inspect the AppIndicator DBusMenu server")
+        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+            state = ("error", type(exc).__name__)
+            if self._appindicator_watch_state != state:
+                logger.warning(
+                    "Unable to inspect the AppIndicator DBusMenu server (%s)",
+                    type(exc).__name__,
+                )
+            self._appindicator_watch_state = state
             return False
-        if root is None or root is self._appindicator_menu_root:
+        self._log_appindicator_menu_snapshot()
+        if root is None:
+            if self._appindicator_watch_state != "missing-root":
+                logger.info("AppIndicator DBusMenu root is not available")
+            self._appindicator_watch_state = "missing-root"
+            return False
+        if root is self._appindicator_menu_root:
             return False
 
         if self._appindicator_menu_root is not None:
@@ -1087,15 +1142,40 @@ class DaemonTray:
             self._appindicator_menu_handler = root.connect(
                 "event", self._on_appindicator_menu_event
             )
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            logger.debug("Unable to watch AppIndicator menu events")
+        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+            logger.warning(
+                "Unable to watch AppIndicator menu events (%s)",
+                type(exc).__name__,
+            )
             self._appindicator_menu_root = None
             self._appindicator_menu_handler = None
             return False
 
         self._appindicator_menu_root = root
         self._appindicator_menu_open = False
+        self._appindicator_watch_state = "attached"
+        logger.info("Attached AppIndicator DBusMenu event watcher")
         return False
+
+    def _log_appindicator_menu_snapshot(self):
+        """Log only target/item counts when the native menu shape changes."""
+        menu_handle = getattr(self._icon, "_menu_handle", None)
+        try:
+            native_item_count = (
+                len(menu_handle.get_children()) if menu_handle is not None else None
+            )
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            native_item_count = None
+
+        signature = (len(self._targets), native_item_count)
+        if getattr(self, "_appindicator_render_signature", None) == signature:
+            return
+        self._appindicator_render_signature = signature
+        logger.info(
+            "AppIndicator menu snapshot: target_count=%d native_item_count=%s",
+            signature[0],
+            signature[1],
+        )
 
     def _on_appindicator_menu_event(
         self, _menu_item, event_name, _event_data, _timestamp
@@ -1104,6 +1184,7 @@ class DaemonTray:
         if event_name == "opened":
             self._appindicator_menu_close_serial += 1
             self._appindicator_menu_open = True
+            logger.debug("AppIndicator DBusMenu opened")
         elif event_name == "closed":
             self._appindicator_menu_close_serial += 1
             serial = self._appindicator_menu_close_serial
@@ -1111,13 +1192,17 @@ class DaemonTray:
             # Replacing the exported tree on closed deletes the selected ID
             # before its activation arrives. Guard new refreshes in this gap too.
             self._appindicator_menu_open = True
+            if self._menu_refresh_pending:
+                logger.info("AppIndicator DBusMenu closed with refresh pending")
 
             def finish_close():
                 if serial != self._appindicator_menu_close_serial:
+                    logger.debug("Ignoring stale AppIndicator menu-close callback")
                     return False  # A reopened popup must retain its native tree.
                 self._appindicator_menu_open = False
                 if self._menu_refresh_pending:
                     self._menu_refresh_pending = False
+                    logger.info("Applying deferred AppIndicator tray-menu refresh")
                     self._refresh_menu()
                 return False
 

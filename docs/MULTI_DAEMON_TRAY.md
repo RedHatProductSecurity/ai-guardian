@@ -201,7 +201,8 @@ or manual configuration:
 
 Runtime discovery refreshes in the background and on tray interaction. SSH alias
 inventory is opt-in; saved SSH targets reconnect independently of that inventory.
-The [Ubuntu VM guide](UBUNTU_VM.md) covers its upcoming-release PyPI prerequisites.
+The [Ubuntu VM guide](UBUNTU_VM.md) covers the released PyPI version requirement
+and the still-pending full walkthrough qualification.
 
 ### Container Discovery
 
@@ -319,9 +320,9 @@ removed by setting a broader base selector.
 
 **Fresh headless Ubuntu VM?** Start with the
 [ordered PyPI/venv HTTPS/SSH guide](UBUNTU_VM.md), including the release gate,
-VM-hosted Console bootstrap and workstation-side pairing. As of 2026-10-28,
-production PyPI 1.20.0 does not contain these features; the guide targets 1.21
-development until a supporting published artifact is qualified.
+VM-hosted Console bootstrap and workstation-side pairing. Production PyPI
+1.21.0 includes HTTPS and SSH-managed enrollment; fresh-install, desktop and
+lifecycle qualification for the complete walkthrough remains open in that guide.
 
 For an SSH-only VM (including a known AWS instance), choose **Add daemon via SSH**
 in the tray. The shared modal dispatcher tries **Native → Tkinter → NiceGUI**,
@@ -347,10 +348,14 @@ authentication is not offered by this non-interactive workflow.
    Certificate trust and the authorized daemon credential are retrieved only over
    authenticated, host-key-verified SSH as that user, without sudo. The fixed
    read-only Python probe cannot execute commands from remote metadata.
-3. Check **I confirm this SSH destination and daemon certificate identity**, then
-   choose **Trust and add daemon**. Cancel saves nothing. HTTPS verification and
-   authenticated status must succeed before saving. SSH private keys/passwords
-   are never read into or stored by AI Guardian; the daemon token is never shown.
+3. Verify the explicit identity checkbox is visible and initially unchecked;
+    **Trust and add daemon** stays disabled until it is checked. Check **Check to
+    confirm this SSH destination and daemon certificate identity**, then choose
+    **Trust and add daemon**. Cancel saves nothing. Success and pairing errors each
+    have a result dialog. HTTPS verification and authenticated status must succeed
+    before saving.
+   SSH private keys/passwords are never read into or stored by AI Guardian; the
+   daemon token is never shown.
 4. The target appears as `ssh-<destination>` with cached state and the standard
    **Console**, **Violations**, **Metrics & Audit**, **Statistics**, **Terminal**,
    **Maintenance** and applicable **MCP** controls. Actions run in background workers.
@@ -434,11 +439,15 @@ Permission responses stay bound to the tunnel generation that fetched them.
 Prompt IDs also contain a daemon-instance nonce, so a dialog left open across a
 daemon restart cannot approve a different invocation after a counter resets.
 
-Disconnected targets stay visible **offline** and retry with bounded timeouts
-and exponential backoff (2 seconds up to 60 seconds). New runtime ports can be
-detected on reconnect; changed certificate trust, TLS identity or daemon tokens
-are never adopted silently. Independently verify a renewal/rotation, then remove
-and explicitly pair again. Restarting the tray reconnects saved destinations.
+The tray starts workers for saved SSH destinations during its initial discovery,
+including at tray startup. Disconnected targets stay visible **offline** and retry
+with bounded timeouts and exponential backoff (2 seconds up to 60 seconds). When a
+saved tunnel is closed, **Reconnect SSH tunnel** appears in that daemon's tray menu;
+selecting it wakes the existing worker immediately, without pairing again or
+starting the remote daemon. New runtime ports can be detected on reconnect; changed
+certificate trust, TLS identity or daemon tokens are never adopted silently.
+Independently verify a renewal/rotation, then remove and explicitly pair again.
+Tray restart also reconnects saved destinations.
 Tray/Web Console shutdown and saved-target removal clean up their owned tunnels;
 another running local client observes removal on its next refresh, and every
 authenticated request also checks that its saved pairing still exists unchanged.
@@ -641,9 +650,9 @@ ai-guardian tray start --no-discover
 
 ### Native HTTPS and explicit certificate trust
 
-Native HTTPS is opt-in (`daemon.rest_tls`, targeting 1.21; not in PyPI 1.20.0).
+Native HTTPS is opt-in (`daemon.rest_tls`, available in PyPI 1.21.0 and newer).
 For a fresh headless guest, use the [Ubuntu VM HTTPS/SSH guide](UBUNTU_VM.md);
-it explicitly separates the upcoming release from published-PyPI qualification.
+it distinguishes published availability from full walkthrough qualification.
 The advanced trust/PKI reference below remains applicable to supporting builds.
 Existing localhost HTTP configurations need no changes. TLS does **not** change
 `rest_host`, publish
@@ -710,11 +719,17 @@ Select the **local daemon**, use **Global** scope, then open
 | Field | Value |
 |-------|-------|
 | Enable native HTTPS | On |
-| Certificate chain PEM path (on daemon host) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
-| Private-key PEM path (on daemon host) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-key.pem` |
+| Certificate chain PEM path on daemon host (required when enabled) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
+| Private-key PEM path on daemon host (required when enabled) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-key.pem` |
 | Trusted CA PEM path (empty: system trust) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
-| Expected server SAN identity / SNI | `localhost` |
+| Expected server SAN identity / SNI (required when enabled) | `localhost` |
 | Optional independently verified SHA-256 leaf pin | Leave empty for this initial local test |
+
+With HTTPS enabled, the certificate and private-key paths and expected server
+SAN identity/SNI are required. The server identity must match a certificate SAN;
+it is independent of the SSH destination. The Console validates settings without
+reading files from its host; the daemon reads its own certificate/key paths when
+restarted.
 
 Replace the example directory with **your exact printed directory**, including
 your username and random suffix. Use full absolute paths, not the literal
@@ -737,7 +752,9 @@ ai-guardian daemon restart
 
 Reload alone does **not** replace the live listener or certificate. After the
 restart, refresh the Console and tray so they pick up the HTTPS listener and
-saved trust. The Console webpage itself keeps its existing URL/scheme.
+saved trust. `ai-guardian daemon status` should report the REST API as available
+over HTTPS, and Doctor warns if active protocol and saved HTTPS setting differ.
+The Console webpage itself keeps its existing URL/scheme.
 
 ##### 4. Verify HTTPS and expected results
 

@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **SSH pairing consent control:** Keep identity consent unchecked initially and
+  disable **Trust and add daemon** until the checkbox is selected. Linux uses an
+  isolated form provider because zenity/KDialog cannot gate the submit button.
+- **Web Console daemon cards:** Request status for the exact target snapshot from
+  each discovery refresh, preventing overlapping SSH-settings and card refreshes
+  from hiding a connected daemon.
+- **Saved SSH reconnect:** Keep automatic bounded retries and add a per-daemon
+  **Reconnect SSH tunnel** action to wake the saved worker immediately when offline.
+  This does not re-pair, change trust, or start the remote daemon.
+- **Remote HTTPS settings save:** Update only `daemon.rest_tls` instead of replacing
+  the entire global config, and explain that remote SSH saves require a reachable
+  tunnel and an identity unlocked in the workstation's SSH agent.
+- **SSH authentication guidance:** Explain that tray tunnels cannot prompt for a
+  password or encrypted-key passphrase; use the workstation's normal SSH agent/keyring.
+- **KDE/AppIndicator daemon menu refresh:** Keep discovered SSH alias review
+  callbacks within pystray's supported callback arity so a pending alias cannot
+  abort rebuilding local and remote daemon entries.
+- **Remote HTTPS enrollment guidance and feedback:** Require the expected TLS SAN
+  identity and daemon-host certificate/key paths when enabling REST HTTPS. Pairing
+  requires explicit identity consent and reports success/errors; daemon status and
+  Doctor report the active REST protocol and configuration mismatches.
 - **Stable release reference checks:** Validate active source references without
   rewriting historical version mentions in the generated NotebookLM export.
 

@@ -1020,11 +1020,14 @@ class DaemonServer:
             status = "unavailable"
         else:
             status = "disabled"
-        return {
+        fields = {
             "rest_status": status,
             "rest_error": self._rest_error,
             "rest_port": self._rest_port,
         }
+        if self._rest_port:
+            fields["rest_scheme"] = getattr(self, "_rest_scheme", "http")
+        return fields
 
     def _write_pid_file(self):
         """Write PID file with process info."""

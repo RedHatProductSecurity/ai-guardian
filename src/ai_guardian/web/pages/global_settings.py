@@ -11,6 +11,7 @@ from ai_guardian.web.config_helpers import (
     load_web_config,
     load_web_config_global,
     save_web_config,
+    save_web_config_value,
     get_web_config_provenance,
     get_web_config_scope_label,
 )
@@ -389,13 +390,40 @@ def _set_rest_tls_config(config, tls_config):
         raise DaemonConnectionError(
             "Check the HTTPS certificate and private-key paths."
         )
+    client_config = tls_config.get("client", {})
     if tls_config["enabled"] and not all(
         tls_config[key].strip() for key in ("cert_file", "key_file")
     ):
         raise DaemonConnectionError("HTTPS requires certificate and private-key paths.")
-    TLSOptions.from_config(tls_config.get("client", {}))
+    if tls_config["enabled"] and (
+        not isinstance(client_config, dict)
+        or not isinstance(client_config.get("server_name"), str)
+        or not client_config["server_name"].strip()
+    ):
+        raise DaemonConnectionError(
+            "HTTPS requires an expected server SAN identity (SNI)."
+        )
+    TLSOptions.from_config(client_config)
     config.setdefault("daemon", {})["rest_tls"] = tls_config
     return config
+
+
+HTTPS_SAVE_ERROR = (
+    "HTTPS settings could not be saved. Check that the selected daemon is reachable "
+    "and its configuration is writable. For SSH targets, unlock the required key "
+    "in your SSH agent and reconnect before saving."
+)
+
+
+def _save_rest_tls_config(tls_config):
+    """Validate and update only daemon.rest_tls, preserving all other settings."""
+    config = _set_rest_tls_config({}, tls_config)
+    return save_web_config_value(
+        "daemon",
+        "rest_tls",
+        config["daemon"]["rest_tls"],
+        scope="global",
+    )
 
 
 def _create_rest_tls_settings(global_config, *, editable):
@@ -409,11 +437,12 @@ def _create_rest_tls_settings(global_config, *, editable):
         ).classes("text-xs text-grey-6")
         enabled = ui.switch("Enable native HTTPS", value=tls.get("enabled", False))
         cert = ui.input(
-            "Certificate chain PEM path (on daemon host)",
+            "Certificate chain PEM path on daemon host (required when enabled)",
             value=tls.get("cert_file", ""),
         ).classes("w-full")
         key = ui.input(
-            "Private-key PEM path (on daemon host)", value=tls.get("key_file", "")
+            "Private-key PEM path on daemon host (required when enabled)",
+            value=tls.get("key_file", ""),
         ).classes("w-full")
         ui.label(
             "Local REST client trust: provision an independently verified CA/certificate first. "
@@ -423,7 +452,8 @@ def _create_rest_tls_settings(global_config, *, editable):
             "Trusted CA PEM path (empty: system trust)", value=client.get("ca_file", "")
         ).classes("w-full")
         name = ui.input(
-            "Expected server SAN identity / SNI", value=client.get("server_name", "")
+            "Expected server SAN identity / SNI (required when enabled)",
+            value=client.get("server_name", ""),
         ).classes("w-full")
         pin = ui.input(
             "Optional independently verified SHA-256 leaf pin",
@@ -435,10 +465,9 @@ def _create_rest_tls_settings(global_config, *, editable):
 
             if not editable:
                 return
-            cfg = await run.io_bound(load_web_config_global)
             try:
-                _set_rest_tls_config(
-                    cfg,
+                saved = await run.io_bound(
+                    _save_rest_tls_config,
                     {
                         "enabled": enabled.value,
                         "cert_file": cert.value,
@@ -453,14 +482,13 @@ def _create_rest_tls_settings(global_config, *, editable):
             except DaemonConnectionError as exc:
                 ui.notify(str(exc), type="negative")
                 return
-            saved = await run.io_bound(save_web_config, cfg, scope="global")
             if saved:
                 ui.notify(
                     "HTTPS settings saved; restart the daemon to apply listener and certificate changes.",
                     type="positive",
                 )
             else:
-                ui.notify("HTTPS settings could not be saved.", type="negative")
+                ui.notify(HTTPS_SAVE_ERROR, type="negative")
 
         save = ui.button("Save HTTPS settings", on_click=save_tls)
         if not editable:

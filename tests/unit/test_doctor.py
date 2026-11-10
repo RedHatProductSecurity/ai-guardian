@@ -2409,6 +2409,53 @@ class TestDoctorCommand:
             # The Doctor instance is created inside doctor_command
 
 
+class TestDaemonRestHttpsDoctor:
+    def _doctor_with_pid(self, tmp_path, monkeypatch, metadata, *, enabled):
+        pid_path = tmp_path / "daemon.pid"
+        pid_path.write_text(json.dumps({"pid": os.getpid(), **metadata}))
+        monkeypatch.setattr("ai_guardian.daemon.get_pid_path", lambda: pid_path)
+        monkeypatch.setattr("ai_guardian.daemon.is_pid_alive", lambda _pid: True)
+        doctor = Doctor()
+        doctor._config = {"daemon": {"rest_tls": {"enabled": enabled}}}
+        return doctor.check_daemon_rest_port()
+
+    def test_reports_active_https_without_exposing_certificate_paths(
+        self, tmp_path, monkeypatch
+    ):
+        result = self._doctor_with_pid(
+            tmp_path,
+            monkeypatch,
+            {"rest_port": 63152, "rest_scheme": "https"},
+            enabled=True,
+        )
+        assert result.status == CheckStatus.PASS
+        assert result.message == "Daemon REST API running over HTTPS on port 63152"
+        assert "certificate" not in result.message.lower()
+
+    def test_warns_when_https_is_configured_but_listener_is_http(
+        self, tmp_path, monkeypatch
+    ):
+        result = self._doctor_with_pid(
+            tmp_path,
+            monkeypatch,
+            {"rest_port": 63152, "rest_scheme": "http"},
+            enabled=True,
+        )
+        assert result.status == CheckStatus.WARN
+        assert "HTTPS is enabled" in result.message
+        assert (
+            result.fix_hint
+            == "Restart the daemon after changing its REST HTTPS configuration."
+        )
+
+    def test_legacy_pid_metadata_defaults_to_http(self, tmp_path, monkeypatch):
+        result = self._doctor_with_pid(
+            tmp_path, monkeypatch, {"rest_port": 63152}, enabled=False
+        )
+        assert result.status == CheckStatus.PASS
+        assert result.message == "Daemon REST API running over HTTP on port 63152"
+
+
 class TestDoctorRunAll:
     def test_run_all_returns_report(self, _isolate_config_dir):
         doctor = Doctor()

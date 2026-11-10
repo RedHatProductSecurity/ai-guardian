@@ -9,6 +9,7 @@ from ai_guardian.web.config_helpers import (
     load_web_config,
     load_web_config_global,
     save_web_config,
+    save_web_config_value,
     get_web_config_provenance,
     get_web_config_scope_label,
     get_web_config_notice,
@@ -108,6 +109,34 @@ class TestSaveWebConfig:
         ):
             assert save_web_config({"changed": True}) is True
         assert json.loads(config_path.read_text(encoding="utf-8")) == {"changed": True}
+
+    def test_save_single_value_preserves_unrelated_global_config(self, tmp_path):
+        config_path = tmp_path / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps({"name": "remote", "daemon": {"rest_host": "127.0.0.1"}}),
+            encoding="utf-8",
+        )
+        with (
+            patch(
+                "ai_guardian.web.config_helpers._get_current_target", return_value=None
+            ),
+            patch(
+                "ai_guardian.web.config_helpers._is_target_expected", return_value=False
+            ),
+            patch("ai_guardian.config.utils.get_config_dir", return_value=tmp_path),
+            patch("ai_guardian.config.writer.get_config_dir", return_value=tmp_path),
+        ):
+            assert save_web_config_value(
+                "daemon", "rest_tls", {"enabled": True}, scope="global"
+            )
+
+        assert json.loads(config_path.read_text(encoding="utf-8")) == {
+            "name": "remote",
+            "daemon": {
+                "rest_host": "127.0.0.1",
+                "rest_tls": {"enabled": True},
+            },
+        }
 
 
 class TestWebConfigState:
@@ -235,6 +264,10 @@ class _FakeService:
         self.calls.append(("write_config_bulk", scope, config, project_dir))
         return {"status": "ok"}
 
+    def write_config(self, target, scope, section, key, value, project_dir=None):
+        self.calls.append(("write_config", scope, section, key, value, project_dir))
+        return {"status": "ok"}
+
     def refresh_targets(self):
         pass
 
@@ -302,6 +335,32 @@ class TestRemoteConfigRouting:
         config = {"secret_scanning": {"enabled": True}}
         save_web_config(config)
         assert ("write_config_bulk", "global", config, None) in self._svc.calls
+
+    def test_save_web_config_value_updates_only_selected_remote_key(self):
+        tls = {"enabled": True, "cert_file": "/remote/server.pem"}
+
+        assert save_web_config_value("daemon", "rest_tls", tls, scope="global")
+
+        assert (
+            "write_config",
+            "global",
+            "daemon",
+            "rest_tls",
+            tls,
+            None,
+        ) in self._svc.calls
+        assert not any(call[0] == "write_config_bulk" for call in self._svc.calls)
+
+    def test_save_web_config_value_fails_closed_when_remote_write_is_unavailable(self):
+        self._svc.write_config = MagicMock(return_value=None)
+
+        assert (
+            save_web_config_value(
+                "daemon", "rest_tls", {"enabled": True}, scope="global"
+            )
+            is False
+        )
+        self._svc.write_config.assert_called_once()
 
     def test_save_web_config_global_when_no_project_selected(self):
         set_current_project_dir("")

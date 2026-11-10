@@ -526,7 +526,14 @@ class TestDaemonStatusCommand:
     @pytest.mark.parametrize(
         "metadata,expected",
         [
-            ({"rest_port": 45678}, "REST API: available (port 45678)"),
+            (
+                {"rest_port": 45678, "rest_scheme": "https"},
+                "REST API: available (HTTPS, port 45678)",
+            ),
+            (
+                {"rest_port": 45678},
+                "REST API: available (HTTP, port 45678)",
+            ),
             (
                 {
                     "rest_status": "unavailable",

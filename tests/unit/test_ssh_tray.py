@@ -72,6 +72,7 @@ def test_enrollment_uses_shared_form_flow_not_web_console():
     ):
         ssh_connections.open_enrollment(tray)
     flow.assert_called_once()
+    assert flow.call_args.kwargs["required_checkbox"] is True
     open_console.assert_not_called()
     tray._ensure_web_console_ready.assert_not_called()
     tray._check_and_autostart_daemon.assert_not_called()

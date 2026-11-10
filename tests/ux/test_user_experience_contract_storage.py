@@ -3,7 +3,8 @@
 Manual qualification on a disposable POSIX account, never the user's storage:
 1. With umask 0002 and absent application storage, complete setup then start.
 2. Inspect directory/file modes without displaying token or configuration contents.
-3. Verify daemon status reports IPC running and REST available; pair using HTTPS.
+3. Verify daemon status reports IPC running and REST protocol/readiness; HTTPS
+   must be explicit in status and Doctor before pairing.
 4. Separately provision an existing 0775 ancestor. Setup must name that path and
    refuse to write config. Startup must not publish a token or start REST; if IPC
    starts, status must identify the unavailable listener and exact precondition.
@@ -31,6 +32,7 @@ from ai_guardian.daemon.protocol import (
     make_status_request,
 )
 from ai_guardian.daemon.server import DaemonServer
+from ai_guardian.doctor import CheckStatus, Doctor
 from ai_guardian.setup.config import create_default_config
 
 
@@ -65,8 +67,12 @@ def test_setup_names_existing_writable_ancestor_without_changing_it(
     "stats,expected",
     [
         (
-            {"rest_status": "available", "rest_port": 12345},
-            "REST API: available (port 12345)",
+            {"rest_status": "available", "rest_port": 12345, "rest_scheme": "https"},
+            "REST API: available (HTTPS, port 12345)",
+        ),
+        (
+            {"rest_status": "available", "rest_port": 12345, "rest_scheme": "http"},
+            "REST API: available (HTTP, port 12345)",
         ),
         (
             {
@@ -95,6 +101,40 @@ def test_status_separates_ipc_liveness_from_rest_readiness(stats, expected, caps
     assert expected in output
     if stats.get("rest_error"):
         assert "REST startup: Storage precondition not satisfied" in output
+
+
+@pytest.mark.parametrize(
+    "metadata,enabled,expected_status,expected_message",
+    [
+        (
+            {"rest_port": 12345, "rest_scheme": "https"},
+            True,
+            CheckStatus.PASS,
+            "Daemon REST API running over HTTPS on port 12345",
+        ),
+        (
+            {"rest_port": 12345, "rest_scheme": "http"},
+            True,
+            CheckStatus.WARN,
+            "Daemon REST API is active over HTTP on port 12345, but HTTPS is enabled in the current configuration",
+        ),
+    ],
+)
+def test_doctor_reports_active_https_and_configuration_mismatch(
+    tmp_path, monkeypatch, metadata, enabled, expected_status, expected_message
+):
+    """USER EXPERIENCE: Doctor reports active REST protocol, not only port readiness."""
+    pid_path = tmp_path / "daemon.pid"
+    pid_path.write_text(json.dumps({"pid": os.getpid(), **metadata}))
+    monkeypatch.setattr("ai_guardian.daemon.get_pid_path", lambda: pid_path)
+    monkeypatch.setattr("ai_guardian.daemon.is_pid_alive", lambda _pid: True)
+    doctor = Doctor()
+    doctor._config = {"daemon": {"rest_tls": {"enabled": enabled}}}
+
+    result = doctor.check_daemon_rest_port()
+
+    assert result.status == expected_status
+    assert result.message == expected_message
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX storage modes")
@@ -141,6 +181,8 @@ def test_actual_startup_publishes_truthful_ipc_and_pid_status(
                 == metadata["rest_status"]
                 == ("unavailable" if unsafe else "available")
             )
+            if not unsafe:
+                assert status["rest_scheme"] == metadata["rest_scheme"] == "http"
             assert "unit-sensitive-token" not in json.dumps(status)
             if unsafe:
                 expected = (

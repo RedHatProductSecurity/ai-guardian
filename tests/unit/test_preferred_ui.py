@@ -92,6 +92,7 @@ def test_tray_prompt_headless_rejects_interaction(monkeypatch):
         "confirmation",
         "picker",
         "basic_form",
+        "required_checkbox_form",
         "action",
         "setup",
         "form",
@@ -107,7 +108,15 @@ def test_automatic_capability_matrix(system, kind, monkeypatch):
         patch("ai_guardian.ui.display._tkinter_available", return_value=True),
     ):
         native = (
-            kind in {"simple", "confirmation", "picker", "basic_form"}
+            kind
+            in {
+                "simple",
+                "confirmation",
+                "picker",
+                "basic_form",
+                "required_checkbox_form",
+            }
+            and not (kind == "required_checkbox_form" and system == "Linux")
             or (kind == "action" and system != "Windows")
             or (kind == "setup" and system == "Darwin")
         )
@@ -124,6 +133,20 @@ def test_explicit_preferences_are_exclusive(preferred, monkeypatch):
     with patch("ai_guardian.ui.display._tkinter_available", return_value=True):
         assert ui_provider_order("simple") == (
             () if preferred == "headless" else (preferred,)
+        )
+
+
+def test_linux_required_checkbox_forms_skip_native_checklists(monkeypatch):
+    from ai_guardian.ui.display import ui_provider_order
+
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch("ai_guardian.ui.display._tkinter_available", return_value=True),
+    ):
+        assert ui_provider_order("required_checkbox_form") == (
+            "tkinter",
+            "nicegui",
         )
 
 
@@ -158,7 +181,16 @@ def test_only_explicit_startup_failure_advances(startup, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "kind", ["simple", "confirmation", "picker", "basic_form", "action", "setup"]
+    "kind",
+    [
+        "simple",
+        "confirmation",
+        "picker",
+        "basic_form",
+        "required_checkbox_form",
+        "action",
+        "setup",
+    ],
 )
 def test_macos_placement_policy_preserves_cocoa_capability(kind, monkeypatch):
     from ai_guardian.ui.display import ui_provider_order
@@ -171,7 +203,7 @@ def test_macos_placement_policy_preserves_cocoa_capability(kind, monkeypatch):
         order = ui_provider_order(kind, screen_bounds=(1920, 0, 1920, 1080))
     assert order == (
         ("native", "tkinter", "nicegui")
-        if kind in {"action", "setup", "basic_form"}
+        if kind in {"action", "setup", "basic_form", "required_checkbox_form"}
         else ("tkinter", "nicegui")
     )
 
