@@ -361,6 +361,64 @@ def save_web_config(config: dict, *, scope: Optional[str] = None) -> bool:
     return True
 
 
+def save_web_config_value(
+    section: str,
+    key: str,
+    value,
+    *,
+    scope: Optional[str] = None,
+) -> bool:
+    """Update one config value without replacing the rest of the config file."""
+    if is_web_config_read_only():
+        logger.warning(
+            "Web config value write rejected: configuration is host-managed and read-only"
+        )
+        return False
+
+    target = _get_current_target()
+    target_scope = scope or _get_current_scope()
+    project_dir = _get_remote_project_dir() if target_scope == "project" else None
+    if target is not None and _daemon_service is not None:
+        result = _daemon_service.write_config(
+            target,
+            target_scope,
+            section,
+            key,
+            value,
+            project_dir=project_dir,
+        )
+        if result is None or result.get("status") == "error":
+            return False
+        _invalidate_config_cache_after_save(target_scope, project_dir)
+        return True
+
+    if _is_target_expected():
+        logger.warning(
+            "Cannot save config value %s.%s: daemon '%s' unreachable",
+            section,
+            key,
+            _current_daemon_name,
+        )
+        return False
+
+    if target_scope == "project" and project_dir is None:
+        project_dir = _get_project_dir()
+
+    try:
+        from ai_guardian.config.writer import write_scoped_config
+
+        success, _message = write_scoped_config(
+            target_scope, section, key, value, project_dir
+        )
+        if not success:
+            return False
+        _invalidate_config_cache_after_save(target_scope, project_dir)
+        return True
+    except Exception:
+        logger.exception("Failed to save web config value %s.%s", section, key)
+        return False
+
+
 def _invalidate_config_cache_after_save(scope: str, project_dir: Optional[str]) -> None:
     """Invalidate the daemon config cache after a web console save.
 

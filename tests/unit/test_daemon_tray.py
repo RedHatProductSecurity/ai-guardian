@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 import json
+import logging
 import types
 from unittest import mock
 
@@ -2186,6 +2187,67 @@ class TestAppIndicatorMenuRefreshStability:
 
         assert root.callback == tray._on_appindicator_menu_event
         assert tray._appindicator_menu_root is root
+
+    def test_logs_aggregate_native_menu_snapshot_without_target_names(self, caplog):
+        tray, _ = self._make_tray()
+        tray._targets = [DaemonTarget("private-daemon-name", "local")]
+        tray._icon._menu_handle.get_children.return_value = [object(), object()]
+
+        with caplog.at_level(logging.INFO, logger="ai_guardian.tray.app"):
+            tray._watch_appindicator_menu()
+
+        assert "target_count=1 native_item_count=2" in caplog.text
+        assert "private-daemon-name" not in caplog.text
+
+    def test_logs_missing_appindicator_root_once(self, caplog):
+        tray, _ = self._make_tray()
+        tray._icon._appindicator.get_property.return_value.get_property.return_value = (
+            None
+        )
+
+        with caplog.at_level(logging.INFO, logger="ai_guardian.tray.app"):
+            tray._watch_appindicator_menu()
+            tray._watch_appindicator_menu()
+
+        assert caplog.text.count("AppIndicator DBusMenu root is not available") == 1
+        assert tray._appindicator_watch_state == "missing-root"
+
+    def test_refresh_failure_logs_exception_types_without_details(self, caplog):
+        class FailingIcon:
+            @property
+            def menu(self):
+                return None
+
+            @menu.setter
+            def menu(self, _value):
+                raise RuntimeError("private native backend detail")
+
+            def update_menu(self):
+                raise ValueError("private fallback detail")
+
+        tray, _ = self._make_tray()
+        tray._targets = [DaemonTarget("private-daemon-name", "local")]
+        tray._menu_target_count = 0
+        tray._menu_target_snapshot = ()
+        tray._icon = FailingIcon()
+        tray._build_tray_menu = mock.Mock(return_value=object())
+        tray._schedule_appindicator_menu_watch = mock.Mock()
+
+        with caplog.at_level(logging.INFO, logger="ai_guardian.tray.app"):
+            tray._refresh_menu()
+
+        assert "Rebuilding tray menu for 1 target(s)" in caplog.text
+        assert (
+            "Tray menu refresh failed during assign menu descriptor "
+            "(RuntimeError; origin=unknown)" in caplog.text
+        )
+        assert (
+            "In-place tray menu refresh failed during fallback menu update "
+            "(ValueError; origin=unknown)" in caplog.text
+        )
+        assert "private native backend detail" not in caplog.text
+        assert "private fallback detail" not in caplog.text
+        assert "private-daemon-name" not in caplog.text
 
     def test_defers_refresh_until_appindicator_menu_closes(self):
         tray, root = self._make_tray()

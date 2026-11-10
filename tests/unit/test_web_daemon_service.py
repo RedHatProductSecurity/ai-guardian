@@ -72,6 +72,19 @@ class TestDaemonServiceStatus:
         assert result[0]["target"] is mock_target
         assert result[0]["status"]["request_count"] == 42
 
+    def test_get_all_daemon_status_uses_the_callers_target_snapshot(
+        self, service, mock_target
+    ):
+        other_target = mock.MagicMock()
+        other_target.status = "running"
+        service._targets = [other_target]
+        service._client.get_status.return_value = {"request_count": 7}
+
+        result = service.get_all_daemon_status([mock_target])
+
+        assert [entry["target"] for entry in result] == [mock_target]
+        service._client.get_status.assert_called_once_with(mock_target)
+
     def test_get_all_daemon_status_handles_error(self, service, mock_target):
         service._targets = [mock_target]
         service._client.get_status.side_effect = Exception("connection failed")

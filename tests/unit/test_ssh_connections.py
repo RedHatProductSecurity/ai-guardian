@@ -111,6 +111,97 @@ def test_removal_invalidates_old_target_and_only_owned_tunnel(context):
     tunnel.close.assert_called_once()
 
 
+def test_manual_reconnect_wakes_existing_worker_without_repairing_trust(context):
+    manager, pairing = context
+    manager.store.create(pairing.profile)
+    with mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker:
+        target = manager.refresh()[0]
+        worker.return_value.is_alive.return_value = True
+
+        result = manager.reconnect(pairing.profile.id)
+
+    connection = manager._connections[pairing.profile.id]
+    assert result is target
+    assert target.status == "starting"
+    assert target.error_message == "Reconnecting to SSH daemon..."
+    assert connection.retry_now.is_set()
+    assert manager.store.load() == [pairing.profile]
+    worker.assert_called_once()
+
+
+def test_manual_reconnect_restarts_a_dead_worker(context):
+    manager, pairing = context
+    manager.store.create(pairing.profile)
+    with mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread") as worker:
+        target = manager.refresh()[0]
+        worker.return_value.is_alive.return_value = False
+
+        assert manager.reconnect(pairing.profile.id) is target
+
+    assert worker.call_count == 2
+    assert worker.return_value.start.call_count == 2
+
+
+def test_manual_reconnect_rejects_changed_saved_profile(context):
+    manager, pairing = context
+    manager.store.create(pairing.profile)
+    with mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread"):
+        target = manager.refresh()[0]
+        connection = manager._connections[pairing.profile.id]
+        with mock.patch.object(
+            manager.store,
+            "load",
+            return_value=[replace(pairing.profile, server_name="changed.invalid")],
+        ):
+            with pytest.raises(
+                SSHConnectionError, match="saved SSH connection changed"
+            ):
+                manager.reconnect(pairing.profile.id)
+
+    assert connection.retry_now.is_set() is False
+    assert target.status == "starting"
+
+
+def test_manual_retry_signal_skips_remaining_backoff(context):
+    manager, pairing = context
+    connection = _Connection(pairing.profile)
+    attempts = 0
+
+    def prepare(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            connection.retry_now.set()
+            raise SSHConnectionError(SSH_ERROR)
+        connection.stop.set()
+        return pairing
+
+    with mock.patch.object(manager, "prepare", side_effect=prepare):
+        manager._run(connection)
+
+    assert attempts == 2
+    assert connection.stop.is_set()
+    assert not connection.retry_now.is_set()
+
+
+def test_manual_reconnect_keeps_identity_change_terminal(context):
+    manager, pairing = context
+    manager.store.create(pairing.profile)
+    with mock.patch("ai_guardian.daemon.ssh_connections.threading.Thread"):
+        target = manager.refresh()[0]
+        connection = manager._connections[pairing.profile.id]
+        target.status = "error"
+        target.error_message = IDENTITY_CHANGED
+        connection.stop.set()
+
+        with pytest.raises(
+            SSHConnectionError, match="saved daemon identity or credential"
+        ):
+            manager.reconnect(pairing.profile.id)
+
+    assert connection.retry_now.is_set() is False
+
+
 def test_external_removal_closes_own_generation_on_refresh(context):
     manager, pairing = context
     manager.store.create(pairing.profile)
@@ -143,12 +234,20 @@ def test_offline_reconnect_uses_bounded_exponential_backoff(context):
     connection = _Connection(pairing.profile)
     connection.stop = mock.Mock()
     connection.stop.is_set.return_value = False
-    connection.stop.wait.side_effect = [False, False, True]
+    connection.retry_now = mock.Mock()
+
+    def wait(_timeout):
+        if connection.retry_now.wait.call_count == 3:
+            connection.stop.is_set.return_value = True
+            return True
+        return False
+
+    connection.retry_now.wait.side_effect = wait
     with mock.patch.object(
         manager, "prepare", side_effect=SSHConnectionError(SSH_ERROR)
     ):
         manager._run(connection)
-    assert connection.stop.wait.call_args_list == [
+    assert connection.retry_now.wait.call_args_list == [
         mock.call(2.0),
         mock.call(4.0),
         mock.call(8.0),
@@ -162,12 +261,20 @@ def test_offline_backoff_is_capped(context):
     connection = _Connection(pairing.profile)
     connection.stop = mock.Mock()
     connection.stop.is_set.return_value = False
-    connection.stop.wait.side_effect = [False] * 7 + [True]
+    connection.retry_now = mock.Mock()
+
+    def wait(_timeout):
+        if connection.retry_now.wait.call_count == 8:
+            connection.stop.is_set.return_value = True
+            return True
+        return False
+
+    connection.retry_now.wait.side_effect = wait
     with mock.patch.object(
         manager, "prepare", side_effect=SSHConnectionError(SSH_ERROR)
     ):
         manager._run(connection)
-    assert [call.args[0] for call in connection.stop.wait.call_args_list] == [
+    assert [call.args[0] for call in connection.retry_now.wait.call_args_list] == [
         2,
         4,
         8,
@@ -202,12 +309,13 @@ def test_old_stats_fields_and_dynamic_port_reconnect(context):
     connection = _Connection(pairing.profile)
     connection.stop = mock.Mock()
     connection.stop.is_set.return_value = False
+    connection.retry_now = mock.Mock()
 
     def stopped(_timeout):
         connection.stop.is_set.return_value = True
         return True
 
-    connection.stop.wait.side_effect = stopped
+    connection.retry_now.wait.side_effect = stopped
     pairing = replace(pairing, port=54321)
     with (
         mock.patch.object(manager, "prepare", return_value=pairing),
@@ -257,6 +365,7 @@ def test_current_main_daemon_mcp_state_uses_its_global_config_api(
     tunnel = mock.Mock()
     stats = {"request_count": 42, "mcp_installed": True}
     tunnel.request.side_effect = [dict(stats), {"mcp_server": mcp}]
+    connection.retry_now = mock.Mock()
 
     def stop(_timeout):
         connection.stop.set()
@@ -265,7 +374,7 @@ def test_current_main_daemon_mcp_state_uses_its_global_config_api(
     with (
         mock.patch.object(manager, "prepare", return_value=pairing),
         mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel", return_value=tunnel),
-        mock.patch.object(connection.stop, "wait", side_effect=stop),
+        mock.patch.object(connection.retry_now, "wait", side_effect=stop),
     ):
         manager._run(connection)
     assert connection.target.status == "running"
@@ -296,6 +405,7 @@ def test_optional_mcp_compatibility_failure_keeps_vm_online_without_inventing_st
     stats = {"request_count": 42, "mcp_installed": True}
     tunnel = mock.Mock()
     tunnel.request.side_effect = [stats, config]
+    connection.retry_now = mock.Mock()
 
     def stop(_timeout):
         connection.stop.set()
@@ -304,7 +414,7 @@ def test_optional_mcp_compatibility_failure_keeps_vm_online_without_inventing_st
     with (
         mock.patch.object(manager, "prepare", return_value=pairing),
         mock.patch("ai_guardian.daemon.ssh_connections.SSHTunnel", return_value=tunnel),
-        mock.patch.object(connection.stop, "wait", side_effect=stop),
+        mock.patch.object(connection.retry_now, "wait", side_effect=stop),
     ):
         manager._run(connection)
     assert connection.target.status == "running"

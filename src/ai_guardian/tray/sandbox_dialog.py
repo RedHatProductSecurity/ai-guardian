@@ -714,6 +714,7 @@ def _show_tkinter_form(
     field_labels: Dict[str, list[ttk.Label]] = {}
     enabled_states: Dict[str, bool] = {}
     dynamic_defaults: Dict[str, str] = {}
+    required_checkbox_vars: list[Any] = []
     result: Dict[str, Any] = {}
 
     root = create_tk_root()
@@ -772,6 +773,8 @@ def _show_tkinter_form(
         default = field.get("default", "")
         if kind == "bool":
             variable = tk.BooleanVar(value=bool(default))
+            if field.get("required"):
+                required_checkbox_vars.append(variable)
             control = ttk.Checkbutton(frame, variable=variable)
             control.grid(row=row, column=1, sticky="w", pady=4)
             widgets = [control]
@@ -1025,9 +1028,17 @@ def _show_tkinter_form(
     ttk.Button(frame, text="Cancel", command=cancel).grid(
         row=button_row, column=0, sticky="w", pady=(14, 0)
     )
-    ttk.Button(frame, text=submit_label, command=submit).grid(
-        row=button_row, column=1, sticky="e", pady=(14, 0)
-    )
+    submit_button = ttk.Button(frame, text=submit_label, command=submit)
+    if required_checkbox_vars:
+
+        def update_submit_state(*_args) -> None:
+            ready = all(variable.get() for variable in required_checkbox_vars)
+            submit_button.state(["!disabled"] if ready else ["disabled"])
+
+        for variable in required_checkbox_vars:
+            variable.trace_add("write", update_submit_state)
+        update_submit_state()
+    submit_button.grid(row=button_row, column=1, sticky="e", pady=(14, 0))
     root.protocol("WM_DELETE_WINDOW", cancel)
     root.bind("<Escape>", lambda _event: cancel())
     submit_key = (
@@ -1753,6 +1764,7 @@ def _render_nicegui_form(
 
     @ui.page("/")
     def _form_page() -> None:
+        submit_button: Any = None
         ui.query("body").style("background: #1a1a2e")
         with (
             ui.card()
@@ -1829,13 +1841,32 @@ def _render_nicegui_form(
                             )
                         widget.disable()
 
+                if submit_button is not None:
+                    required_checkboxes = [
+                        field
+                        for field in field_list
+                        if field.get("type") == "bool" and field.get("required")
+                    ]
+                    if required_checkboxes:
+                        ready = all(
+                            not enabled_states.get(str(field.get("name", "")), True)
+                            or bool(values.get(str(field.get("name", ""))))
+                            for field in required_checkboxes
+                        )
+                        if ready:
+                            submit_button.enable()
+                        else:
+                            submit_button.disable()
+
             for _kind, widget in widgets.values():
                 widget.on_value_change(lambda _event: refresh())
-            refresh()
             ui.separator()
             with ui.row().classes("w-full justify-end"):
                 ui.button("Cancel", on_click=close).props("flat")
-                ui.button(submit_label, on_click=submit, color="primary")
+                submit_button = ui.button(
+                    submit_label, on_click=submit, color="primary"
+                )
+            refresh()
 
     run_nicegui_modal(title, dark=True, screen_bounds=screen_bounds)
     return result_holder["value"]

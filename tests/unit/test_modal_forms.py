@@ -35,6 +35,15 @@ def test_forms_use_native_first_and_do_not_retry_cancel(forms):
     forms.browser.assert_not_called()
 
 
+def test_required_checkbox_flow_uses_its_capability_classification():
+    from ai_guardian.ui.forms import run_form_flow
+
+    with patch("ai_guardian.ui.forms.run_modal", return_value=None) as run:
+        run_form_flow(lambda _form: None, required_checkbox=True)
+
+    assert run.call_args.args[0] == "required_checkbox_form"
+
+
 def test_forms_advance_native_then_tk_then_browser_only_before_display(forms):
     from ai_guardian.ui.forms import run_form_flow
 
@@ -82,29 +91,32 @@ def test_ssh_pairing_needs_a_real_explicit_confirmation(forms, tmp_path, consent
     pairing = make_pairing(tmp_path)[0]
     tray = Mock()
     tray._discovery.ssh_manager.prepare.return_value = pairing
-    forms.native.side_effect = [{"host": "known-alias"}, consent]
+    forms.tk.side_effect = [{"host": "known-alias"}, consent, None]
     ssh_connections.open_enrollment(tray)
     tray._discovery.ssh_manager.prepare.assert_called_once_with("known-alias")
     tray._discovery.ssh_manager.enroll.assert_not_called()
-    forms.tk.assert_not_called()
+    if consent is not None:
+        assert forms.tk.call_args_list[2].args[0] == "SSH daemon not paired"
+    forms.native.assert_not_called()
     forms.browser.assert_not_called()
 
 
 def test_ssh_success_preserves_identity_checkbox_and_never_serializes_credentials(
     forms, tmp_path, monkeypatch
 ):
-    from ai_guardian.ui.ssh_pairing import TRUST_LABEL
+    from ai_guardian.ui.ssh_pairing import PAIRED_MESSAGE, TRUST_LABEL
 
     pairing = make_pairing(tmp_path)[0]
     tray = Mock()
     tray._discovery.ssh_manager.prepare.return_value = pairing
     forms.native.side_effect = [{"host": "known-alias"}, {"trust": True}, None]
     bounds = (1920, 0, 1920, 1080)
-    # Cocoa is placement-capable; Linux native tools now correctly defer to Tk.
+    # Cocoa is placement-capable; Linux native tools defer to Tk for this form.
     monkeypatch.setattr("platform.system", lambda: "Darwin")
     ssh_connections.open_enrollment(tray, screen_bounds=bounds)
     tray._discovery.ssh_manager.enroll.assert_called_once_with(pairing)
     tray._refresh_event.set.assert_called_once()
+    assert forms.native.call_args_list[2].args[1] == PAIRED_MESSAGE
     review = forms.native.call_args_list[1]
     assert review.args[0] == "Verify SSH daemon identity"
     assert pairing.profile.server_name in review.args[1]
@@ -124,9 +136,46 @@ def test_ssh_success_preserves_identity_checkbox_and_never_serializes_credential
     assert pairing.profile.ca_pem not in rendered
 
 
+def test_ssh_enrollment_unexpected_failure_shows_safe_result(forms, tmp_path, caplog):
+    pairing = make_pairing(tmp_path)[0]
+    tray = Mock()
+    tray._discovery.ssh_manager.prepare.return_value = pairing
+    tray._discovery.ssh_manager.enroll.side_effect = RuntimeError("private detail")
+    forms.tk.side_effect = [{"host": "known-alias"}, {"trust": True}, None]
+
+    with caplog.at_level("ERROR", logger="ai_guardian.tray.ssh_connections"):
+        ssh_connections.open_enrollment(tray)
+
+    assert forms.tk.call_args_list[2].args[0] == "SSH daemon enrollment failed"
+    assert "private detail" not in caplog.text
+    tray._refresh_event.set.assert_not_called()
+
+
+def test_ssh_enrollment_connection_error_shows_result_dialog(forms, tmp_path):
+    from ai_guardian.daemon.ssh_storage import SSHConnectionError
+    from ai_guardian.daemon.ssh_tunnel import DAEMON_AUTH_ERROR
+
+    pairing = make_pairing(tmp_path)[0]
+    tray = Mock()
+    tray._discovery.ssh_manager.prepare.return_value = pairing
+    tray._discovery.ssh_manager.enroll.side_effect = SSHConnectionError(
+        DAEMON_AUTH_ERROR
+    )
+    forms.tk.side_effect = [{"host": "known-alias"}, {"trust": True}, None]
+
+    ssh_connections.open_enrollment(tray)
+
+    assert forms.tk.call_args_list[2].args == (
+        "Add daemon via SSH",
+        DAEMON_AUTH_ERROR,
+        [],
+    )
+    tray._refresh_event.set.assert_not_called()
+
+
 def test_ssh_host_cancel_does_not_even_prepare(forms):
     tray = Mock()
-    forms.native.return_value = None
+    forms.tk.return_value = None
     ssh_connections.open_enrollment(tray)
     tray._discovery.ssh_manager.prepare.assert_not_called()
     tray._discovery.ssh_manager.enroll.assert_not_called()
@@ -138,18 +187,21 @@ def test_ssh_error_is_shown_in_the_selected_provider_without_replacement(forms):
 
     tray = Mock()
     tray._discovery.ssh_manager.prepare.side_effect = SSHConnectionError(SSH_ERROR)
-    forms.native.side_effect = [{"host": "known-alias"}, None]
+    forms.tk.side_effect = [{"host": "known-alias"}, None]
     ssh_connections.open_enrollment(tray)
-    assert forms.native.call_args.args[1] == SSH_ERROR
+    assert forms.tk.call_args.args[1] == SSH_ERROR
     tray._discovery.ssh_manager.enroll.assert_not_called()
-    forms.tk.assert_not_called()
+    forms.native.assert_not_called()
     forms.browser.assert_not_called()
 
 
-def test_discovered_review_falls_back_only_before_first_display(forms, tmp_path):
+def test_discovered_review_falls_back_only_before_first_display(
+    forms, tmp_path, monkeypatch
+):
     pairing = make_pairing(tmp_path)[0]
     tray = Mock()
     tray._discovery.ssh_manager.prepare_discovered.return_value = pairing
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
     forms.native.side_effect = UIUnavailable()
     forms.tk.return_value = None  # User cancels the first visible identity review.
     ssh_connections.open_enrollment(tray, alias="existing-vm")
@@ -172,8 +224,8 @@ def test_discovered_review_respects_preferences_and_does_not_probe_headless(
     ssh_connections.open_enrollment(tray, alias="existing-vm")
     if preference == "headless":
         tray._discovery.ssh_manager.prepare_discovered.assert_not_called()
-    assert forms.native.call_count == int(preference == "auto")
-    assert forms.tk.call_count == int(preference == "tkinter")
+    assert forms.native.call_count == 0
+    assert forms.tk.call_count == int(preference in {"auto", "tkinter"})
     assert forms.browser.call_count == int(preference == "nicegui")
     tray._discovery.ssh_manager.enroll.assert_not_called()
 
@@ -320,6 +372,47 @@ def test_linux_unchecked_confirmation_or_cancel_is_not_approval(
             is None
         )
     command.assert_called_once()
+
+
+@pytest.mark.parametrize("provider", ["zenity", "kdialog"])
+def test_linux_unchecked_checkbox_is_submitted_as_false_not_cancel(
+    monkeypatch, provider
+):
+    from ai_guardian.ui.native_form import NativeForm
+
+    label = "Check to confirm this SSH destination and daemon certificate identity"
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    with (
+        patch(
+            "ai_guardian.tray.plugins._linux_dialog_provider_order",
+            return_value=(provider,),
+        ),
+        patch(
+            "ai_guardian.ui.native_form.run_native_command",
+            return_value=subprocess.CompletedProcess([], 0, "", ""),
+        ) as command,
+    ):
+        result = NativeForm()(
+            "Verify SSH daemon identity",
+            "Check the destination and certificate identity.",
+            [
+                {
+                    "name": "trust",
+                    "label": label,
+                    "type": "bool",
+                    "default": False,
+                    "required": False,
+                }
+            ],
+            submit_label="Trust and add daemon",
+        )
+
+    assert result == {"trust": False}
+    args = command.call_args.args[0]
+    assert "--checklist" in args
+    assert label in args
+    assert ("FALSE" if provider == "zenity" else "off") in args
+    assert "Trust and add daemon" in args
 
 
 def test_linux_native_tool_is_pinned_across_steps(monkeypatch):

@@ -56,7 +56,7 @@ controls.
 | Password-likelihood Ask: existing `prompt --mode ask`, private decision-only variant | T → G; same Ask providers, values withheld, Allow Once / Block only | T → G | T → G |
 | Tray-forwarded remote ask on macOS 14+ | G in subprocess; existing tray focus-safety Tk suppression remains | As above | As above |
 | Plugin parameter forms: `TrayPromptApp.run` | T → G | T → G | T → G |
-| Simple form flows / tray Add daemon via SSH and discovered-alias review: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | N desktop-ordered zenity/kdialog input/checklist → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
+| Simple form flows / tray Add daemon via SSH and discovered-alias review: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | Required-consent SSH pairing: isolated T → G (KDialog/zenity cannot gate submit); other forms: N desktop-ordered zenity/kdialog → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
 | Tray Discover SSH aliases... settings: `run_form_flow` | N JXA/Cocoa two-step checkbox/prefix → isolated T → G | N desktop-ordered zenity/kdialog two-step checklist/prefix → isolated T → G | N PowerShell WinForms two-step checkbox/prefix → isolated T → G |
 | Multi-target plugin selection: `TrayTargetSelectorApp.run` | G only | G only | G only |
 | Working-directory picker: `working_dir.choose_directory` | N AppleScript choose folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms FolderBrowserDialog → isolated T |
@@ -154,20 +154,19 @@ controls.
   The local tray-host action stays independent. See [Support bundles](SUPPORT.md).
 - **SSH pairing:** the tray's Add action uses the reusable form-flow adapter, not
   the Web Console. All steps retain one provider, including failures and results.
-  The native Linux tool is likewise pinned after its first dialog. Only the
-  display-safe identity summary reaches renderers; credentials and certificate
-  objects remain in the tray-owned manager's closure. Trust starts unchecked and
-  is required before enrollment. Native Linux checklist buttons can remain
-  enabled while unchecked; submitting that state ends without saving or opening
-  another provider. **Manage SSH connection...** still opens the
-  existing local Web Console's saved-connection management page; its already-open
-  browser controls do not enter a new standalone-modal cascade.
+  Only the display-safe identity summary reaches renderers; credentials and
+  certificate objects remain in the tray-owned manager's closure. Trust starts
+  unchecked and is required before enrollment; Continue remains disabled until it
+  is checked. On Linux, select isolated Tk/NiceGUI before the first form because
+  native zenity/KDialog checklists cannot gate submit. **Manage SSH connection...**
+  still opens the existing local Web Console's saved-connection management page;
+  its already-open browser controls do not enter a new standalone-modal cascade.
   **Review discovered daemon** enters this same flow directly at the complete
   identity review, skipping host input only. Discovery never opens a modal itself.
-  The first native startup failure can still fall back, but cancellation/unchecked
-  consent and any later displayed-step failure remain terminal. Verify the direct
-  route on each supported desktop as well as manual Add; see the full SSH UX
-   contract for opt-in, cancellation, dismissal/restart and identity-change checks.
+  The first native startup failure can still fall back, but cancellation and any
+  later displayed-step failure remain terminal. Verify the direct route on each
+  supported desktop as well as manual Add; see the full SSH UX contract for opt-in,
+  cancellation, dismissal/restart and identity-change checks.
 - **SSH discovery settings:** **Discover SSH aliases...** is always available in
   the workstation tray, including discovery-off/zero-candidate/no-pairing states.
   Reuse `run_form_flow` for the complete two-step interaction: current enable

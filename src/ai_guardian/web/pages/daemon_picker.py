@@ -27,7 +27,7 @@ def create_daemon_picker_page(service):
                 return
             cards.clear()
             targets = await run.io_bound(service.refresh_targets)
-            statuses = await run.io_bound(service.get_all_daemon_status)
+            statuses = await run.io_bound(service.get_all_daemon_status, targets)
 
             if not statuses:
                 with cards:

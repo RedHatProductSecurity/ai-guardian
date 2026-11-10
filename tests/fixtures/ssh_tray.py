@@ -67,6 +67,8 @@ def make_tray(targets):
     tray._ensure_web_console_ready = mock.Mock(return_value=True)
     tray._dispatch_to_main = mock.Mock()
     tray._refresh_menu = mock.Mock()
+    tray._appindicator_menu_open = False
+    tray._menu_refresh_pending = False
     tray._health = mock.Mock()
     tray._health._daemon_versions = {}
     tray._health._version_mismatch_notified = set()

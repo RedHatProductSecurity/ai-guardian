@@ -3380,6 +3380,200 @@ class TestSandboxDialogFallback:
 
         assert result is None
 
+    def test_tk_form_disables_required_checkbox_submit_until_checked(self):
+        from types import ModuleType
+
+        from ai_guardian.tray.sandbox_dialog import _show_tkinter_form
+
+        class TracedVariable:
+            def __init__(self, value):
+                self.value = value
+                self.callbacks = []
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+                for callback in self.callbacks:
+                    callback()
+
+            def trace_add(self, _mode, callback):
+                self.callbacks.append(callback)
+
+        root = mock.MagicMock()
+        variables = []
+        buttons = []
+        tk_module = ModuleType("tkinter")
+        tk_module.Tk = mock.Mock(return_value=root)
+        tk_module.Canvas = mock.Mock(return_value=mock.MagicMock())
+        tk_module.StringVar = mock.Mock(
+            side_effect=lambda value="", **_kwargs: TracedVariable(value)
+        )
+        tk_module.BooleanVar = mock.Mock(
+            side_effect=lambda value=False, **_kwargs: variables.append(
+                TracedVariable(value)
+            )
+            or variables[-1]
+        )
+        tk_module.Text = mock.Mock(return_value=mock.MagicMock())
+        tk_module.TclError = type("TclError", (Exception,), {})
+        tk_module.filedialog = ModuleType("tkinter.filedialog")
+        ttk_module = ModuleType("tkinter.ttk")
+
+        def make_button(*_args, **_kwargs):
+            button = mock.MagicMock()
+            buttons.append(button)
+            return button
+
+        for widget in (
+            "Button",
+            "Checkbutton",
+            "Combobox",
+            "Entry",
+            "Frame",
+            "Label",
+            "Scrollbar",
+        ):
+            setattr(
+                ttk_module,
+                widget,
+                mock.Mock(
+                    side_effect=(
+                        make_button
+                        if widget == "Button"
+                        else lambda *_args, **_kwargs: mock.MagicMock()
+                    )
+                ),
+            )
+        tk_module.ttk = ttk_module
+
+        def run_form():
+            submit = buttons[-1]
+            assert submit.state.call_args_list == [mock.call(["disabled"])]
+            variables[0].set(True)
+            assert submit.state.call_args_list[-1] == mock.call(["!disabled"])
+            variables[0].set(False)
+            assert submit.state.call_args_list[-1] == mock.call(["disabled"])
+
+        root.mainloop.side_effect = run_form
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "tkinter": tk_module,
+                    "tkinter.filedialog": tk_module.filedialog,
+                    "tkinter.ttk": ttk_module,
+                },
+            ),
+            mock.patch("ai_guardian.ui.display._ensure_tcl_library"),
+            mock.patch("ai_guardian.tray.sandbox_dialog._place_window_on_screen"),
+            mock.patch("ai_guardian.tray.sandbox_dialog._present_tk_sandbox_form"),
+        ):
+            result = _show_tkinter_form(
+                "Verify SSH daemon identity",
+                "Review the daemon identity",
+                [
+                    {
+                        "name": "trust",
+                        "label": "Confirm the destination identity",
+                        "type": "bool",
+                        "default": False,
+                        "required": True,
+                    }
+                ],
+                submit_label="Trust and add daemon",
+            )
+
+        assert result is None
+
+    def test_nicegui_required_checkbox_disables_continue_until_checked(self):
+        from types import ModuleType
+
+        from ai_guardian.tray.sandbox_dialog import _render_nicegui_form
+
+        class Component:
+            def __init__(self, value=None):
+                self.value = value
+                self.disabled = False
+                self.callback = None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def classes(self, *_args):
+                return self
+
+            def style(self, *_args):
+                return self
+
+            def props(self, *_args):
+                return self
+
+            def on_value_change(self, callback):
+                self.callback = callback
+
+            def enable(self):
+                self.disabled = False
+
+            def disable(self):
+                self.disabled = True
+
+        checkbox = Component(False)
+        buttons = []
+        pages = {}
+        ui_module = ModuleType("nicegui.ui")
+        ui_module.page = lambda path: lambda callback: pages.setdefault(path, callback)
+        ui_module.query = mock.Mock(return_value=Component())
+        ui_module.card = Component
+        ui_module.row = Component
+        ui_module.label = mock.Mock(side_effect=lambda *_args, **_kwargs: Component())
+        ui_module.separator = mock.Mock()
+        ui_module.checkbox = mock.Mock(return_value=checkbox)
+        ui_module.button = mock.Mock(
+            side_effect=lambda *_args, **_kwargs: buttons.append(Component())
+            or buttons[-1]
+        )
+        app_module = ModuleType("nicegui.app")
+        app_module.shutdown = mock.Mock()
+        nicegui_module = ModuleType("nicegui")
+        nicegui_module.app = app_module
+        nicegui_module.ui = ui_module
+
+        with (
+            mock.patch.dict("sys.modules", {"nicegui": nicegui_module}),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.run_nicegui_modal",
+                side_effect=lambda *_args, **_kwargs: pages["/"](),
+            ),
+        ):
+            result = _render_nicegui_form(
+                "Verify SSH daemon identity",
+                "Review the daemon identity",
+                [
+                    {
+                        "name": "trust",
+                        "label": "Confirm the destination identity",
+                        "type": "bool",
+                        "default": False,
+                        "required": True,
+                    }
+                ],
+            )
+
+        submit = buttons[-1]
+        assert submit.disabled is True
+        checkbox.value = True
+        checkbox.callback(None)
+        assert submit.disabled is False
+        checkbox.value = False
+        checkbox.callback(None)
+        assert submit.disabled is True
+        assert result is None
+
     def test_tk_form_returns_edited_multiline_textarea(self):
         from types import ModuleType
 

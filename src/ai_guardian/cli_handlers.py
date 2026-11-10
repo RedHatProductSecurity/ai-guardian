@@ -418,8 +418,14 @@ def _handle_daemon_command(args):
                 "rest_status", pid_info.get("rest_status", "unknown")
             )
             rest_port = stats.get("rest_port", pid_info.get("rest_port", 0))
+            rest_scheme = stats.get("rest_scheme", pid_info.get("rest_scheme", "http"))
+            if not isinstance(rest_scheme, str) or rest_scheme not in {
+                "http",
+                "https",
+            }:
+                rest_scheme = "unknown"
             if rest_status == "available" or (rest_status == "unknown" and rest_port):
-                print(f"REST API: available (port {rest_port})")
+                print(f"REST API: available ({rest_scheme.upper()}, port {rest_port})")
             elif rest_status == "disabled":
                 print("REST API: disabled")
             else:

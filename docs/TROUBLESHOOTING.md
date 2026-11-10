@@ -624,6 +624,57 @@ To change the default port permanently:
 }
 ```
 
+### HTTPS REST Listener or SSH Pairing Problems
+
+When native REST HTTPS is enabled, the global settings need the certificate-chain
+path and private-key path on the daemon host, plus the expected server SAN identity
+(SNI). The identity must match a DNS/IP SAN in the certificate; it is separate from
+the SSH alias. A name used only for TLS verification over an SSH loopback tunnel
+does not need public DNS. The Console validates settings without reading remote
+files; restart the daemon to load its certificate and key.
+
+Check listener readiness and protocol:
+
+```bash
+ai-guardian daemon status
+ai-guardian doctor
+```
+
+Status should show `REST API: available (HTTPS, port N)` for an HTTPS listener.
+Doctor reports the active protocol and warns if it differs from the saved HTTPS
+setting. If HTTPS is configured but REST is unavailable, inspect the daemon's
+credential-free startup error and verify the daemon-host paths and certificate
+identity; TLS errors do not fall back to HTTP. For SSH enrollment, review the
+destination, TLS identity and fingerprint, visibly check the unchecked consent
+box, and select **Trust and add daemon**. Submitting unchecked saves nothing;
+Cancel/Close is not consent. Success and pairing errors are shown in a result
+dialog. Never disable certificate verification to troubleshoot enrollment. See
+the [multi-daemon HTTPS and SSH guide](MULTI_DAEMON_TRAY.md#native-https-and-explicit-certificate-trust)
+and [Ubuntu VM walkthrough](UBUNTU_VM.md).
+
+### Saved SSH Daemon Is Offline After Workstation Restart
+
+The tray starts workers for saved SSH destinations during its initial discovery
+and retries failed connections automatically with bounded exponential backoff.
+When the tunnel is not open, choose **Reconnect SSH tunnel** in that daemon's tray
+menu to wake the saved worker immediately. This retries the existing, verified
+connection; it does not pair again or start the daemon on the remote host. If the
+remote daemon is stopped, start it on that host using your normal approved
+procedure. If **Reconnect SSH tunnel** reports that the saved identity or
+credential changed, independently verify the remote identity before removing and
+explicitly pairing again; reconnect never accepts changed trust automatically.
+
+The tray uses system OpenSSH non-interactively: it cannot prompt for a password or
+an encrypted key's passphrase, and it never reads or stores private keys. Unlock the
+configured identity through the workstation's normal SSH agent/keyring, then verify
+that `ssh -o BatchMode=yes -T <user>@<saved-alias> true` succeeds from the
+workstation before reconnecting. Do not use the TLS SNI name as the SSH alias.
+
+Saving HTTPS settings for an SSH daemon also requires an active tunnel. If the
+target is offline, the Console reports that it could not save; unlock the SSH key
+and reconnect before saving again. The save updates only `daemon.rest_tls`, leaving
+other global settings untouched. Restart the remote daemon to apply listener changes.
+
 ### Config Reload Not Picking Up Changes
 
 **Symptom:** You edited `ai-guardian.json` but the daemon behavior hasn't changed.
