@@ -747,7 +747,36 @@ run git pull origin main
 
 # Merge: skip if release branch is already merged
 if $DRY_RUN || ! git merge-base --is-ancestor "$RELEASE_BRANCH" main 2>/dev/null; then
-    run git merge "$RELEASE_BRANCH" --no-ff -m "Merge ${RELEASE_BRANCH} into main"
+    if $DRY_RUN; then
+        run git -c merge.conflictStyle=merge merge --no-commit --no-ff "$RELEASE_BRANCH"
+        run git commit -m "Merge ${RELEASE_BRANCH} into main"
+    else
+        MERGE_STATUS=0
+        if git -c merge.conflictStyle=merge merge --no-commit --no-ff "$RELEASE_BRANCH"; then
+            MERGE_STATUS=0
+        else
+            MERGE_STATUS=$?
+        fi
+
+        MERGE_CONFLICTS=$(git diff --name-only --diff-filter=U)
+        if [[ -n "$MERGE_CONFLICTS" ]]; then
+            warn "Resolving validated release metadata conflicts"
+            python3 "${REPO_ROOT}/scripts/resolve_release_merge.py" \
+                --repo "${REPO_ROOT}" \
+                --release-version "${NEW_VERSION}" \
+                --next-dev-version "${NEXT_DEV_VERSION}"
+        elif [[ "$MERGE_STATUS" -ne 0 ]]; then
+            die "Merge from $RELEASE_BRANCH failed without resolvable file conflicts"
+        fi
+
+        MERGE_CONFLICTS=$(git diff --name-only --diff-filter=U)
+        if [[ -n "$MERGE_CONFLICTS" ]]; then
+            printf '%s\n' "$MERGE_CONFLICTS" >&2
+            die "Post-release merge still has unresolved conflicts"
+        fi
+
+        run git commit -m "Merge ${RELEASE_BRANCH} into main"
+    fi
 else
     warn "Branch $RELEASE_BRANCH already merged into main — skipping merge"
 fi

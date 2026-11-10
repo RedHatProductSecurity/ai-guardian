@@ -292,11 +292,18 @@
 - **2026-11-09 — Release classification:** Native HTTPS and SSH enrollment shipped
   yesterday. Follow-up fixes to those released behaviors, including saved-SSH
   reconnect, are patch-release scope; do not initiate publication unless asked.
+- **2026-11-10 — Post-release development version:** When merging a stable patch
+  release back to `main`, keep Python and Rust package metadata at the next
+  development version, `1.22.0-dev`, rather than restoring the released version.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
 
+- **2026-11-10 — Post-release merge-back:** Keep `main`'s unreleased changelog
+  notes and next-development version. Automatically resolve only validated
+  version-only, changelog, and OpenWolf-status conflicts; stop for all other
+  conflicts rather than choosing one branch wholesale.
 - **2026-11-09 — Remote HTTPS/SSH enrollment:** The TLS server identity must match
   a certificate SAN and is independent of the SSH alias and loopback destination;
   it need not resolve in public DNS for an SSH tunnel. Require the daemon-host

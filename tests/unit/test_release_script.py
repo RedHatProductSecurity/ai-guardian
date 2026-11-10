@@ -180,6 +180,8 @@ program, args = Path(sys.argv[0]).name, sys.argv[1:]
 with open(os.environ["RELEASE_TEST_LOG"], "a", encoding="utf-8") as log:
     log.write(json.dumps([program, *args]) + "\n")
 if program == "git":
+    if args[:2] == ["-c", "merge.conflictStyle=merge"]:
+        args = args[2:]
     if args == ["branch", "--show-current"]:
         print(os.environ.get("RELEASE_CURRENT_BRANCH", "main"))
     elif args[0] == "rev-parse":
@@ -197,6 +199,22 @@ if program == "git":
             sys.exit(1)
     elif args[:2] == ["tag", "--list"]:
         print("v1.2.2")
+    elif args[:3] == ["diff", "--name-only", "--diff-filter=U"]:
+        conflicts = json.loads(os.environ["RELEASE_MERGE_CONFLICTS"])
+        commands = [
+            json.loads(line)
+            for line in Path(os.environ["RELEASE_TEST_LOG"]).read_text().splitlines()
+        ]
+        resolver_ran = any(
+            command[0] == "python3"
+            and Path(command[1]).name == "resolve_release_merge.py"
+            for command in commands
+        )
+        if conflicts and not resolver_ran:
+            print("\n".join(conflicts))
+    elif args[0] == "merge":
+        if json.loads(os.environ["RELEASE_MERGE_CONFLICTS"]):
+            sys.exit(1)
     elif args[0] in ("diff", "merge-base"):
         sys.exit(1)
     elif args[0] not in ("status", "fetch", "checkout", "merge", "add", "commit", "push", "tag", "pull"):
@@ -268,7 +286,25 @@ elif program == "gh":
     else:
         raise AssertionError(args)
 elif program == "python3":
-    if Path(args[0]).name == "release_helper.py":
+    if Path(args[0]).name == "resolve_release_merge.py":
+        conflicts = json.loads(os.environ["RELEASE_MERGE_CONFLICTS"])
+        known = {
+            "CHANGELOG.md",
+            ".wolf/STATUS.md",
+            "pyproject.toml",
+            "src/ai_guardian/__init__.py",
+            "rust/openshell-middleware/Cargo.toml",
+            "rust/openshell-middleware/Cargo.lock",
+        }
+        unexpected = sorted(set(conflicts) - known)
+        if unexpected:
+            print(
+                "Release merge conflict resolution stopped: Unexpected merge "
+                "conflicts require manual resolution: " + ", ".join(unexpected),
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    elif Path(args[0]).name == "release_helper.py":
         command = args[3]
         if command == "get-version":
             print("Current version: 1.3.0-dev")
@@ -320,6 +356,7 @@ elif program not in ("curl", "git-cliff", "sleep"):
         head_sha="same-commit",
         main_sha="same-commit",
         remote_branch_sha="same-commit",
+        merge_conflicts=(),
     ):
         if empty_changelog:
             (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n")
@@ -348,6 +385,7 @@ elif program not in ("curl", "git-cliff", "sleep"):
                 "RELEASE_MISSING_WORKFLOW": missing_workflow,
                 "RELEASE_DISPATCH_FAILURE": dispatch_failure,
                 "RELEASE_RUN_METADATA": json.dumps(run_metadata or {}),
+                "RELEASE_MERGE_CONFLICTS": json.dumps(list(merge_conflicts)),
             },
         )
         commands = [json.loads(line) for line in log.read_text().splitlines()]
@@ -372,7 +410,10 @@ def _option_value(command, name):
 def _release_mutations(commands):
     mutations = []
     for command in commands:
-        if command[0] == "git" and command[1] in (
+        git_args = command[1:] if command[0] == "git" else []
+        while git_args[:1] == ["-c"]:
+            git_args = git_args[2:]
+        if git_args and git_args[0] in (
             "add",
             "checkout",
             "commit",
@@ -381,7 +422,7 @@ def _release_mutations(commands):
             "push",
             "tag",
         ):
-            if command[1:3] != ["tag", "--list"]:
+            if git_args[:2] != ["tag", "--list"]:
                 mutations.append(command)
         if command[0] == "python3" and any(
             operation in command for operation in ("update-version", "update-changelog")
@@ -655,6 +696,62 @@ def test_release_script_announces_after_verification_before_dev_bump(release_san
     assert (
         "Announcement: https://github.com/RedHatProductSecurity/ai-guardian/discussions/123"
         in result.stdout.split("Release Summary")[1]
+    )
+
+
+def test_post_release_merge_waits_for_resolution_before_committing(release_sandbox):
+    result, commands = release_sandbox("--execute")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    merge = next(
+        command for command in commands if command[0] == "git" and "merge" in command
+    )
+    merge_commit = next(
+        index
+        for index, command in enumerate(commands)
+        if command[:2] == ["git", "commit"]
+        and command[-1] == "Merge release-1.2 into main"
+    )
+    assert merge[:3] == ["git", "-c", "merge.conflictStyle=merge"]
+    assert "--no-commit" in merge
+    assert "--no-ff" in merge
+    assert merge_commit > commands.index(merge)
+
+
+def test_post_release_merge_resolves_known_metadata_conflicts(release_sandbox):
+    conflicts = ("CHANGELOG.md", "pyproject.toml", ".wolf/STATUS.md")
+    result, commands = release_sandbox("--execute", merge_conflicts=conflicts)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    resolver = next(
+        command
+        for command in commands
+        if command[0] == "python3"
+        and Path(command[1]).name == "resolve_release_merge.py"
+    )
+    assert _option_value(resolver, "--release-version") == "1.2.3"
+    assert _option_value(resolver, "--next-dev-version") == "1.3.0-dev"
+    assert any(
+        command[:2] == ["git", "commit"]
+        and command[-1] == "Merge release-1.2 into main"
+        for command in commands
+    )
+
+
+def test_unexpected_post_release_conflict_stops_before_merge_commit(release_sandbox):
+    result, commands = release_sandbox(
+        "--execute", merge_conflicts=("src/ai_guardian/unexpected.py",)
+    )
+
+    assert result.returncode == 1
+    assert "Unexpected merge conflicts require manual resolution" in result.stderr
+    assert not any(
+        command[:2] == ["git", "commit"]
+        and command[-1] == "Merge release-1.2 into main"
+        for command in commands
+    )
+    assert not any(
+        command[:2] == ["git", "push"] and command[-1] == "main" for command in commands
     )
 
 

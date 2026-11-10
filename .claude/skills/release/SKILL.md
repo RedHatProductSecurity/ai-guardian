@@ -592,6 +592,11 @@ categories or change its native user-only consent stages.
 14. [ ] Update NotebookLM sources — if the `notebooklm-mcp` MCP server is available, upload the generated `docs/notebooklm-export.md` and update other sources in the AI Guardian notebook using `source_add`
 15. [ ] Generate demo guide — create `X.Y-demo-guide.md` in the external docs directory (see AGENTS.md) documenting new features with step-by-step demonstrations for stakeholder walkthroughs
 
+The automated `scripts/release.sh` merge-back resolves only known metadata
+conflicts: it retains `main`'s unreleased changelog notes and status, inserts the
+release entry, and keeps version files at the next development version. Any
+unexpected or broader conflict stops for maintainer review.
+
 **If you are NOT authorized:**
 - ❌ DO NOT push the tag
 - ✅ Create PR with the release branch

@@ -707,6 +707,14 @@ grep 'raw.githubusercontent.com' README.md
 
 #### 9. Merge Back to Main and Bump Dev Version
 
+The automated release script creates the merge without committing immediately so
+it can safely resolve the expected release metadata conflicts: version-only hunks
+are set to the next development version, the release's versioned changelog section
+is combined with `main`'s `[Unreleased]` notes, and `.wolf/STATUS.md` keeps the
+`main` side. Conflicts outside those files, or conflicts containing additional
+changes in a version file, stop for manual resolution; do not choose `ours` or
+`theirs` for the whole merge.
+
 ```bash
 # Switch to main
 git checkout main

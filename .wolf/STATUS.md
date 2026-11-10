@@ -27,6 +27,20 @@ budget_tokens: 1000
   recovery state directory remains unidentified; the fixture now establishes it
   before publishing test-home overrides and fails if unexpected files exist.
 
+## Release script post-release merge conflict guard — 2026-11-10
+
+- Published `v1.21.1` and merged `release-1.21` into `main` in commit
+  `ade81361`, retaining the `1.22.0-dev` development versions.
+- Phase 8 now defers the merge commit until resolution. The new resolver
+  sets version-only conflicts to the next dev version, combines main's
+  `[Unreleased]` changelog with the release section, keeps main's OpenWolf status,
+  and stops for unexpected or broader conflicts.
+- Added shell-contract tests and temporary-Git merge regressions. Changes are
+  currently uncommitted on `main`.
+- **Validation:** 46 related unit tests pass. Ruff, Black, Pylint, Mypy, Bash
+  syntax, JSON validation, and diff checks pass.
+- **Next:** review the diff; script changes remain uncommitted and unpushed.
+
 ---
 
 ## PR #2694 review and CI follow-up — 2026-11-10
@@ -116,7 +130,6 @@ budget_tokens: 1000
 - Closed issue #2689 with all acceptance criteria checked. The unrelated local
   `main` checkout was preserved; release work remains in the isolated local
   worktree `/tmp/opencode/ai-guardian-2689-release-backport`.
-
 ## Issue #2685 implementation — 2026-11-08
 
 - Implemented on the existing managed DAF branch `2685`. `scripts/release.sh`
