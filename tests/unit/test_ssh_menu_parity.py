@@ -41,7 +41,11 @@ def test_discovered_alias_menu_actions_use_pystray_supported_arity(remote, monke
     }
     tray._stopped_container_targets = []
 
-    with mock.patch("ai_guardian.tray.app.pystray", pystray):
+    with (
+        mock.patch("ai_guardian.tray.app.pystray", pystray),
+        mock.patch("ai_guardian.tray.menu_builder.pystray", pystray),
+        mock.patch("ai_guardian.tray.plugin_runner.pystray", pystray),
+    ):
         menu = tray._build_tray_menu()
 
     candidate = next(
