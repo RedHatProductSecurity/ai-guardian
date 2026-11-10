@@ -24,6 +24,7 @@ class _Connection:
     def __init__(self, profile):
         self.profile = profile
         self.stop = threading.Event()
+        self.retry_now = threading.Event()
         self.target = DaemonTarget(
             name=profile.name,
             runtime="ssh",
@@ -36,6 +37,7 @@ class _Connection:
 
     def close(self):
         self.stop.set()
+        self.retry_now.set()
         tunnel = self.tunnel or self.target.ssh_tunnel
         if tunnel is not None:
             tunnel.close()
@@ -190,6 +192,16 @@ class SSHConnectionManager:
             if cancelled is connection.stop:
                 stop_owned_process(process)
 
+    def _start_connection_worker(self, connection):
+        """Start the background worker that maintains a saved SSH tunnel."""
+        connection.thread = threading.Thread(
+            target=self._run,
+            args=(connection,),
+            daemon=True,
+            name="ssh-daemon",
+        )
+        connection.thread.start()
+
     def refresh(self):
         with self._lock:
             if self._closed:
@@ -220,14 +232,45 @@ class SSHConnectionManager:
                         profile, self.store, connection.stop
                     )
                     self._connections[key] = connection
-                    connection.thread = threading.Thread(
-                        target=self._run,
-                        args=(connection,),
-                        daemon=True,
-                        name="ssh-daemon",
-                    )
-                    connection.thread.start()
+                    self._start_connection_worker(connection)
             return [connection.target for connection in self._connections.values()]
+
+    def reconnect(self, profile_id):
+        """Wake or restart the worker for an existing saved SSH connection."""
+        with self._lock:
+            if self._closed:
+                raise SSHConnectionError("SSH connection manager is closed.")
+            connection = self._connections.get(profile_id)
+            if connection is None:
+                raise SSHConnectionError(
+                    "This saved SSH connection is unavailable. Refresh the tray or pair the daemon again."
+                )
+            profiles = {profile.id: profile for profile in self.store.load()}
+            profile = profiles.get(profile_id)
+            if profile is None:
+                raise SSHConnectionError(
+                    "This saved SSH connection was removed. Refresh the tray before reconnecting."
+                )
+            if profile != connection.profile:
+                raise SSHConnectionError(
+                    "This saved SSH connection changed. Refresh the tray before reconnecting."
+                )
+            if connection.stop.is_set():
+                raise SSHConnectionError(
+                    connection.target.error_message
+                    or "This saved SSH connection cannot be restarted."
+                )
+
+            thread = connection.thread
+            connection.target.status = "starting"
+            connection.target.error_message = "Reconnecting to SSH daemon..."
+            connection.target.stats = None
+            if thread is None or not thread.is_alive():
+                connection.retry_now.clear()
+                self._start_connection_worker(connection)
+            else:
+                connection.retry_now.set()
+            return connection.target
 
     def _run(self, connection):
         target = connection.target
@@ -267,7 +310,7 @@ class SSHConnectionManager:
                     target.error_message = None
                     target.last_seen = time.monotonic()
                     delay = 2.0
-                    if connection.stop.wait(5):
+                    if connection.retry_now.wait(5):
                         break
             except (SSHConnectionError, DaemonConnectionError) as exc:
                 target.status = "error" if str(exc) == IDENTITY_CHANGED else "offline"
@@ -286,8 +329,14 @@ class SSHConnectionManager:
                 if tunnel is not None:
                     tunnel.close()
                 connection.tunnel = None
-            if connection.stop.wait(delay):
+            if connection.stop.is_set():
                 break
+            if connection.retry_now.wait(delay):
+                connection.retry_now.clear()
+                if connection.stop.is_set():
+                    break
+                delay = 2.0
+                continue
             delay = min(delay * 2, 60.0)
 
     @staticmethod

@@ -1,7 +1,10 @@
 """SSH tray menus use cached state; every action runs outside the GUI thread."""
 
+import logging
 import threading
 from copy import copy
+
+logger = logging.getLogger(__name__)
 
 
 def target_action(tray, target, callback):
@@ -145,36 +148,70 @@ def open_enrollment(tray, *, screen_bounds=None, alias=None):
             host = values["host"].strip()
             if not host:
                 return
+        manager = tray._discovery.ssh_manager
         try:
-            manager = tray._discovery.ssh_manager
             pairing = (
                 manager.prepare(host)
                 if alias is None
                 else manager.prepare_discovered(alias)
             )
-            consent = form(
-                "Verify SSH daemon identity",
-                pairing_summary(pairing),
-                [
-                    {
-                        "name": "trust",
-                        "label": TRUST_LABEL,
-                        "type": "bool",
-                        "default": False,
-                        "required": True,
-                    }
-                ],
-                submit_label="Trust and add daemon",
-            )
-            if not consent or consent.get("trust") is not True:
-                return
-            manager.enroll(pairing)
-            tray._refresh_event.set()
-            form("Add daemon via SSH", PAIRED_MESSAGE, [], submit_label="Close")
         except (SSHConnectionError, DaemonConnectionError) as exc:
             form("Add daemon via SSH", str(exc), [], submit_label="Close")
+            return
+        except Exception as exc:
+            _show_unexpected_enrollment_error(form, exc)
+            return
 
-    return run_form_flow(enroll, screen_bounds=screen_bounds)
+        consent = form(
+            "Verify SSH daemon identity",
+            pairing_summary(pairing),
+            [
+                {
+                    "name": "trust",
+                    "label": TRUST_LABEL,
+                    "type": "bool",
+                    "default": False,
+                    "required": True,
+                }
+            ],
+            submit_label="Trust and add daemon",
+        )
+        if consent is None:
+            return
+        if consent.get("trust") is not True:
+            form(
+                "SSH daemon not paired",
+                "Select the identity-confirmation checkbox to pair this daemon. No connection was saved.",
+                [],
+                submit_label="Close",
+            )
+            return
+        try:
+            manager.enroll(pairing)
+        except (SSHConnectionError, DaemonConnectionError) as exc:
+            form("Add daemon via SSH", str(exc), [], submit_label="Close")
+            return
+        except Exception as exc:
+            _show_unexpected_enrollment_error(form, exc)
+            return
+        tray._refresh_event.set()
+        form("Add daemon via SSH", PAIRED_MESSAGE, [], submit_label="Close")
+
+    return run_form_flow(enroll, screen_bounds=screen_bounds, required_checkbox=True)
+
+
+def _show_unexpected_enrollment_error(form, exc):
+    """Log an unexpected pairing failure and show a sanitized close-only dialog."""
+    logger.error(
+        "SSH daemon enrollment failed unexpectedly (%s)",
+        type(exc).__name__,
+    )
+    form(
+        "SSH daemon enrollment failed",
+        "An unexpected error interrupted pairing. Check the workstation log and tray before retrying.",
+        [],
+        submit_label="Close",
+    )
 
 
 def open_management(tray):
@@ -205,11 +242,18 @@ def build_candidate_items(tray, pystray):
     if not isinstance(state, dict) or not state.get("enabled"):
         return []
     children = []
-    for alias in state["aliases"]:
 
-        def review(icon=None, item=None, alias=alias):
+    def review_action(alias):
+        """Bind a discovered alias to its explicit review-and-pair action."""
+
+        def review(icon=None, item=None):
+            """Forward pystray's callback arguments with the captured alias."""
             # The tray callback captures monitor bounds before launching its worker.
             tray._on_add_ssh_daemon(icon, item, alias=alias)
+
+        return review
+
+    for alias in state["aliases"]:
 
         def dismiss(alias=alias):
             try:
@@ -222,7 +266,7 @@ def build_candidate_items(tray, pystray):
             pystray.MenuItem(
                 alias,
                 pystray.Menu(
-                    pystray.MenuItem("Review discovered daemon", review),
+                    pystray.MenuItem("Review discovered daemon", review_action(alias)),
                     pystray.MenuItem("Dismiss alias", _worker(dismiss)),
                 ),
             )

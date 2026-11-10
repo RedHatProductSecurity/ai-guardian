@@ -1,30 +1,29 @@
-# Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release)
+# Headless Ubuntu VM: HTTPS and SSH quickstart
 
-> **Upcoming-release guide — not supported by PyPI 1.20.0.** Checked on
-> **2026-10-28**: [production PyPI](https://pypi.org/pypi/ai-guardian/json) still
-> reports **1.20.0**, with no published `1.21.*`. Its wheel has neither native
-> daemon TLS nor SSH-managed enrollment. The first supporting **published**
-> version is therefore **not yet established**; these features target **1.21**.
-> The `>=1.21.0` constraints below are provisional and cannot succeed today.
-> Wait for a supporting production release; do not substitute a source checkout,
-> development dependencies, GitHub RC artifact or TestPyPI installation.
+> **Published-release guide.** Checked on **2026-11-09**: production PyPI publishes
+> [AI Guardian 1.21.0](https://pypi.org/project/ai-guardian/1.21.0/), the first
+> release containing native daemon HTTPS and SSH-managed enrollment. Use the
+> released package (`ai-guardian>=1.21.0`), not a source checkout, development
+> dependencies, GitHub RC artifact or TestPyPI package. Published availability
+> does not by itself qualify this entire fresh-VM/desktop walkthrough.
 
 This guide takes a fresh Ubuntu Server VM to a loopback HTTPS daemon controlled
 by the **workstation tray over SSH**, using only the released PyPI package in
 virtual environments. The earlier successful `1.21.0-dev` source-build VM
 walkthrough is useful evidence, **not** fresh-PyPI qualification. The
-[release checklist](#release-qualification) remains open.
+[release checklist](#release-qualification) remains open for fresh-install,
+desktop and lifecycle qualification.
 
-| Required feature | First production PyPI release |
+| Required feature | Minimum published PyPI version |
 |---|---|
-| Native daemon HTTPS (#2551) and SSH enrollment (#2552) | Not published; planned for 1.21 |
-| Private storage/setup diagnostics (#2584) | Not published; planned for 1.21 |
-| Alias discovery and native-first pairing (#2587 / #2589) | Not published; planned for 1.21 |
-| Tray discovery settings (#2591) and SSH menu parity (#2592) | Merged development changes, not published; planned for 1.21 |
+| Native daemon HTTPS (#2551) and SSH enrollment (#2552) | 1.21.0 |
+| Private storage/setup diagnostics (#2584) | 1.21.0 |
+| Alias discovery and native-first pairing (#2587 / #2589) | 1.21.0 |
+| Tray discovery settings (#2591) and SSH menu parity (#2592) | 1.21.0 |
 
-Recheck each feature against the actual released artifact before replacing this
-notice with a confirmed minimum version. A merged PR or a running development
-process does not prove PyPI availability.
+Use a tray version at least as new as the daemon. A merged PR or successful
+development build is not a substitute for installing the released package when
+qualifying the documented PyPI workflow.
 
 ## Which machine does what?
 
@@ -143,9 +142,9 @@ keys, daemon tokens or pairing records in diagnostics.
 
 ## 3. Install from PyPI and create global configuration
 
-**Release gate:** perform this step only once a supporting production version
-exists. Until then, the proposed install correctly finds no matching release;
-do not lower the constraint to 1.20.0 to continue this guide.
+**Version requirement:** this guide uses the published `ai-guardian>=1.21.0`.
+Do not lower the constraint to 1.20.0; that release lacks native HTTPS and SSH
+enrollment.
 
 **VM**, as `guardian`, before initial package invocation/setup/startup:
 
@@ -192,7 +191,7 @@ activate again or use the installed executable's absolute path:
 commands below use `"$HOME/.venvs/ai-guardian/bin/ai-guardian"` **inside the VM**.
 
 ```bash
-"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start
+"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start -b
 "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
 ```
 
@@ -297,11 +296,15 @@ If step 4 printed `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3`, enter:
 | Field | Value for this VM lab |
 |---|---|
 | Enable native HTTPS | On |
-| Certificate chain PEM path (on daemon host) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-cert.pem` |
-| Private-key PEM path (on daemon host) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-key.pem` |
+| Certificate chain PEM path on daemon host (required when enabled) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-cert.pem` |
+| Private-key PEM path on daemon host (required when enabled) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-key.pem` |
 | Trusted CA PEM path (empty: system trust) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-cert.pem` |
-| Expected server SAN identity / SNI | `guardian-vm.test` |
+| Expected server SAN identity / SNI (required when enabled) | `guardian-vm.test` |
 | Optional independently verified SHA-256 leaf pin | Leave empty for initial VM-local trust; workstation enrollment separately records the verified leaf pin |
+
+When HTTPS is enabled, the certificate chain path, private-key path, and expected
+server SAN identity/SNI are required. The identity must match the certificate SAN;
+it is not the SSH alias and does not need public DNS for the loopback SSH tunnel.
 
 Replace the example username/directory/suffix with the **exact printed absolute
 VM paths**. These inputs do not expand `$TLS_DIR`, `$HOME` or `~`, generate files,
@@ -321,7 +324,9 @@ settings**, then in the original **VM SSH shell** run:
 Saving or reloading alone does **not** replace the active listener/certificate.
 Refresh the VM Console after restart. If REST is unavailable, resolve its
 credential-free startup error before pairing; do not accept IPC liveness as TLS
-readiness. Invalid TLS material does not fall back to plaintext.
+readiness. `daemon status` should report `REST API: available (HTTPS, port N)`;
+`ai-guardian doctor` also reports the active protocol and warns if it differs from
+the saved HTTPS setting. Invalid TLS material does not fall back to plaintext.
 
 ## 7. Verify HTTPS before pairing
 
@@ -375,9 +380,10 @@ ai-guardian --version
 ai-guardian setup --create-config
 ```
 
-The same **unpublished-release gate** applies. If already installed, upgrade the
-intended workstation environment rather than creating a second competing one;
-preserve existing settings. For Linux tray support, satisfy your distribution's
+Use the published **1.21.0 or newer** on the workstation too; the tray version
+must be at least as new as the daemon. If already installed, upgrade the intended
+workstation environment rather than creating a second competing one; preserve
+existing settings. For Linux tray support, satisfy your distribution's
 GTK/AppIndicator and [PyGObject build prerequisites](https://pygobject.gnome.org/getting_started.html),
 then install the optional extra **in this workstation virtualenv**:
 
@@ -440,11 +446,10 @@ repeat testing, add `guardian-vm-test` as a second name in the same declaration
 verify `ssh -o BatchMode=yes guardian-vm-test true`. Manual **Add daemon via SSH**
 remains available for deliberate pairing of a dismissed alias.
 
-**Development UI update:** #2591 added **Discover SSH aliases...** directly in
-the tray, next to manual pairing; its enable/Continue and prefix/Save steps edit
-the same settings. It is merged, but not in production PyPI as of the date above.
-Do not expect that entry in 1.20.0. The Console path above remains available in
-the target development workflow; reconfirm both paths against the final release.
+**Released UI:** AI Guardian 1.21.0 includes **Discover SSH aliases...** directly
+in the tray, next to manual pairing; its enable/Continue and prefix/Save steps edit
+the same settings as the workstation Console. Restart an already-running tray
+after upgrading before checking for this entry.
 
 ### Review, explicitly trust, and connect
 
@@ -454,11 +459,13 @@ the target development workflow; reconfirm both paths against the final release.
    actual loopback port, SAN identity **`guardian-vm.test`** and certificate
    **SHA-256 fingerprint** against step 4's independently obtained values through
    verified SSH. Colons/case may differ in the fingerprint display, not its bytes.
-3. Only if these match, check **I confirm this SSH destination and daemon
-   certificate identity**, then **Trust and add daemon**. **Cancel/Close does not
-   enroll anything.** SSH host-key verification, TLS CA/SAN/validity/pin checks and
-   authenticated daemon status must all succeed before a pairing is saved.
-4. After discovery refresh, expect **`ssh-guardian-vm`** (or
+3. Only if these match, visibly check **Check to confirm this SSH destination and
+   daemon certificate identity**; **Trust and add daemon** stays disabled until it
+   is checked. **Cancel/Close does not enroll anything**. A successful pairing shows
+   an explicit confirmation; SSH host-key verification, TLS CA/SAN/validity/pin
+   checks and authenticated daemon status must all succeed before it is saved.
+   Pairing errors are shown in a result dialog.
+4. After success and discovery refresh, expect **`ssh-guardian-vm`** (or
    **`ssh-guardian-vm-test`** for that alias) with connected status. The pairing is
    saved privately on the **workstation**, not in global config or an SSH key file.
 
@@ -476,15 +483,13 @@ Console** and **Manage SSH connection...**. **Web Console** there was the same
 role as **Console** in local/container menus; fewer shortcuts did not mean failed
 pairing. Open it and select the remote target to use supported Console pages.
 
-[#2592](https://github.com/RedHatProductSecurity/ai-guardian/issues/2592) is now
-merged in development: SSH targets share applicable **Console**, **Violations**,
+AI Guardian 1.21.0 includes [#2592](https://github.com/RedHatProductSecurity/ai-guardian/issues/2592):
+SSH targets share applicable **Console**, **Violations**,
 **Metrics & Audit**, **Statistics**, **Terminal**, **Maintenance** and **MCP**
 entries. Runtime/capability/offline differences still apply; see the
-[menu audit](MULTI_DAEMON_TRAY.md#ssh-menuaction-parity-audit). Neither that parity
-nor [#2591](https://github.com/RedHatProductSecurity/ai-guardian/issues/2591) is yet
-a PyPI feature. Check the final published version's menus rather than promising
-the old reduced menu or every development shortcut. Never substitute local
-maintenance commands for a remote action.
+[menu audit](MULTI_DAEMON_TRAY.md#ssh-menuaction-parity-audit). Check that the
+workstation is running the released version before troubleshooting a missing
+entry. Never substitute local maintenance commands for a remote action.
 
 ## 9. Return after shutdown or reboot
 
@@ -504,7 +509,7 @@ reconnection are three different lifecycle mechanisms.
 3. **If stopped**, start the existing installation and check readiness:
 
    ```bash
-   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start
+   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start -b
    "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
    ```
 
@@ -578,12 +583,11 @@ blanket SSH/process kills or terminate an unrelated port owner.
 
 ## Release qualification
 
-**Status on 2026-10-28:** production PyPI metadata and the SHA-256-verified
-`ai_guardian-1.20.0-py3-none-any.whl` were inspected; that wheel lacks the native
-TLS/SSH modules and TLS schema. No qualifying published version exists to record
-for the VM or workstation. The earlier reporter walkthrough used **1.21.0-dev**
-source builds, not a fresh PyPI install; it did not establish boot-time startup
-or complete desktop/platform qualification.
+**Status on 2026-11-09:** production PyPI publishes **1.21.0**, the minimum
+version listed above. The earlier reporter walkthrough used **1.21.0-dev** source
+builds, not a fresh PyPI install; it did not establish boot-time startup or complete
+desktop/platform qualification. Fresh published-package qualification remains
+open.
 
 Documentation checks on Linux with Python **3.14.7**, OpenSSL **3.5.8** and curl
 **8.18.0** passed shell syntax, local links/navigation, exact UI-label checks and
@@ -593,8 +597,8 @@ lifecycles, native desktop behavior or a released VM/workstation installation.
 
 Before calling this a release-qualified reproducible PyPI walkthrough:
 
-- [ ] Identify each feature's first **production PyPI** version, update the table
-  and minimum constraints, and remove the upcoming notice only when justified.
+- [x] Identify the published minimum version for HTTPS/SSH enrollment and update
+  the table and installation constraints; the upcoming-release notice is removed.
 - [ ] Install the actual released package/dependencies into fresh VM and
   workstation virtualenvs; record Ubuntu/Python/OpenSSL versions, workstation
   OS/desktop and both AI Guardian versions/artifact identities. No source/editable

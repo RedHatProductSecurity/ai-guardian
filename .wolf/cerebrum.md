@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-07
+> Last updated: 2026-11-10
 
 ## User Preferences
 
@@ -286,10 +286,74 @@
 - Tray sandbox initial configuration uses one exclusive source choice:
   Host/default, Profile, Host config directory, or Latest saved snapshot. Show
   only the matching profile/directory input.
+- SSH pairing must visibly render an initially unchecked identity-consent control
+  and keep **Trust and add daemon** disabled until it is checked. Cancel saves
+  nothing; pairing success and every pairing error need an explicit result dialog.
+- **2026-11-09 — Release classification:** Native HTTPS and SSH enrollment shipped
+  yesterday. Follow-up fixes to those released behaviors, including saved-SSH
+  reconnect, are patch-release scope; do not initiate publication unless asked.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-09 — Remote HTTPS/SSH enrollment:** The TLS server identity must match
+  a certificate SAN and is independent of the SSH alias and loopback destination;
+  it need not resolve in public DNS for an SSH tunnel. Require the daemon-host
+  certificate/key paths and client SNI identity when enabling HTTPS. Report the
+  listener's active scheme in status and have Doctor compare it with saved TLS
+  configuration. Full fresh-PyPI, KDE/native UI and VM qualification remain
+  separate from unit/UX tests.
+
+- **2026-11-09 — Required Linux consent checkbox:** KDialog/zenity checklist rows
+  do not provide a submit-button gate. For a required, initially unchecked trust
+  checkbox, classify the whole multi-step form flow before its first display and
+  select isolated Tk/NiceGUI on Linux; never switch toolkit after host entry.
+  Keep Continue disabled until checked and retain the backend consent guard.
+
+- **2026-11-09 — Saved SSH restart/reconnect UX:** Initial tray discovery already
+  starts workers for saved profiles, whose failures retry with bounded exponential
+  backoff. A manual reconnect should wake that same worker immediately, only while
+  its tunnel is closed; verify the stored profile has not changed, and never re-pair,
+  alter trust, or start the remote daemon. A Status submenu may be only a symbol
+  legend, so do not rely on it as the troubleshooting action.
+
+- **2026-11-09 — SSH agent and remote HTTPS settings:** Saved SSH tunnels use
+  non-interactive OpenSSH (`BatchMode=yes`, stdin closed); encrypted identities
+  must be unlocked in the workstation's agent/keyring. Do not infer the SSH alias
+  from a remote shell prompt, and never prompt for or store passphrases. Remote
+  HTTPS settings are saved through that same SSH REST tunnel, so an unavailable key
+  can make both reconnect and config save fail. Update `daemon.rest_tls` with a
+  scoped key write, not a bulk replacement after a possibly empty/failed config read.
+  A successful HTTPS curl using the expected SNI and CA verifies the listener, while
+  ordinary v1.21.0 status only proves the port is reachable.
+
+- **2026-11-09 — Daemon startup command guidance:** `ai-guardian daemon start`
+  runs in the foreground by default; when a runbook needs the shell back for a
+  status check or subsequent setup step, use `ai-guardian daemon start -b`.
+  Keep foreground startup only when the operator is intentionally supervising that
+  process in the current terminal. This `-b` is distinct from `tray start -b`.
+
+- **2026-11-10 — HTTPS settings form whitespace:** Strip surrounding whitespace
+  from REST TLS file paths and textual trust fields at the form save boundary.
+  Terminal status can report a generic invalid TLS configuration when a saved
+  certificate/key path contains a trailing space; never weaken file permissions
+  when the reported modes and ownership are already safe.
+
+- **2026-11-10 — Conditional required form controls:** A required checkbox may be
+  disabled by `enabled_when`; the Tk submit gate must ignore it while disabled and
+  refresh after dependency changes, matching submit validation and NiceGUI. Preserve
+  explicit gating when the checkbox becomes enabled and clear stale consent when it
+  is disabled again.
+
+- **2026-11-10 — Headless pystray tests and SSH worker loops:** Tests that only need
+  pystray menu descriptors should set `PYSTRAY_BACKEND=dummy` before importing the
+  package; `importorskip` will not catch display initialization errors from Xorg/GTK.
+  If the real menu test uses modules imported before setting that environment, also
+  inject the module into every component that captured its own pystray reference
+  (`tray.app`, `tray.menu_builder`, and `tray.plugin_runner`).
+  When a worker's retry/backoff loop waits on `retry_now`, tests must patch that event
+  rather than the separate stop event's `wait` method.
 
 - **2026-11-08 — Release-image recovery (#2689):** A generated NotebookLM export
   can preserve intentional historical wheel/version mentions, so active release
@@ -2342,3 +2406,10 @@
   session pause state in memory and clear it on SessionEnd, inactivity expiry,
   or daemon restart. Expose only known stable-ID sessions and direct other
   callers to global or directory-wide controls.
+- [2026-11-09] **KDE/AppIndicator empty-menu root cause:** A pending discovered SSH
+  alias added a `Review discovered daemon` action with a third default-captured
+  positional parameter. pystray's `_assert_action` rejects callbacks with more
+  than two positional parameters, aborting the entire tray root-menu rebuild.
+  Capture the alias in a factory and return a callback with only `(icon, item)`;
+  regression coverage should use real pystray `MenuItem` validation, not only the
+  permissive test double. The live user restart restored local/remote entries.

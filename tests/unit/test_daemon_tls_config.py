@@ -136,6 +136,7 @@ def test_https_preserves_explicit_bind_and_pid_compatibility(tmp_path):
             server._start_rest_api()
             assert server._rest_port > 0
             assert server._rest_api._host == "127.0.0.1"
+            assert server._rest_status_fields()["rest_scheme"] == "https"
             server._write_pid_file()
             from ai_guardian.daemon import get_pid_path
 

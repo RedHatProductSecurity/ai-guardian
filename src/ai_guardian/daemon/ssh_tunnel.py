@@ -28,7 +28,11 @@ from ai_guardian.daemon.ssh_storage import (
     destination,
 )
 
-SSH_ERROR = "SSH connection failed. Check the host alias, agent authentication, and known host key using your SSH client. No identities were accepted automatically."
+SSH_ERROR = (
+    "SSH connection failed. Check host reachability, the host alias, and the known "
+    "host key. The tray cannot prompt for a password or key passphrase; unlock the "
+    "required identity in ssh-agent and retry."
+)
 SSH_MISSING = (
     "System OpenSSH is unavailable; install an SSH client before adding this daemon."
 )

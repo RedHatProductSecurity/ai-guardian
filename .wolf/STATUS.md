@@ -5,35 +5,97 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-08 (UTC)
+> Last updated: 2026-11-10 (UTC)
+
+---
+
+## PR #2694 review and CI follow-up — 2026-11-10
+
+- Original CI run `42737676198` failed across the Python matrix for two causes:
+  the SSH worker test patched `stop.wait` although the retry loop uses
+  `retry_now.wait`, so it never exited; and the real pystray import selected an
+  Xorg/GTK backend in headless Linux. The Tk sandbox submit gate also ignored
+  `enabled_when` for required checkboxes, preventing Codex submission when Claude
+  terms were disabled.
+- Fixed the SSH test to stop via the retry event and forced pystray's dummy backend
+  for the menu contract. Updated the Tk gate to associate required checkboxes with
+  field names, ignore disabled controls and refresh on dependency changes. Added
+  unit and UX regressions. Also corrected the published-version note in
+  `docs/UBUNTU_VM.md` and added docstrings to the new source helpers.
+- Follow-up `0769f142` fixed those issues, but CI run `42742503987` found a second
+  headless pystray test defect in all five Ubuntu Python jobs. The test replaced
+  `tray.app.pystray`, but `menu_builder` and `plugin_runner` retained their own
+  import-time `None` references. Fixed by injecting the dummy-backend pystray module
+  into all three menu-building modules; with `DISPLAY` unset, all 270 affected unit
+  tests now pass locally.
+- Pushed `09e2ee26` to `fix/remote-ssh-https-enrollment`; PR #2694 remains open:
+  https://github.com/RedHatProductSecurity/ai-guardian/pull/2694. Updated the PR
+  description with template sections and test evidence. OpenWolf status commits
+  `a338ab70` and `19b41575` are present on the branch.
+- **Validation:** 270 affected unit tests and 95 affected UX contracts pass.
+  Ruff, Black, Pylint, and project-environment Mypy (336 source files) pass.
+  Latest GitHub run `42744431892` is in progress; its initial Ruff, Mypy and scanner
+  version checks pass. **Next:** wait for the latest CI matrix before merging.
+
+---
+
+## Remote 1.22-dev reinstall and SSH/HTTPS retest — 2026-11-10
+
+- User completed a full remote AI Guardian reset, cloned branch
+  `fix/remote-ssh-https-enrollment`, installed its editable source in a fresh venv,
+  and generated a new TLS identity. The fresh daemon initially served HTTP on 63152.
+- HTTPS startup failure root cause: the Console had saved a trailing space in both
+  `cert_file` and `key_file`. The certificate/key pair, SAN, system clock, ownership
+  and permissions were valid. User trimmed the paths; `daemon status` then confirmed
+  `REST API: available (HTTPS, port 63152)`. Added save-time stripping of outer
+  whitespace from TLS paths and trust fields, with regression coverage.
+- User removed the old workstation test key/profile, created a fresh SSH identity,
+  restored the `guardian-itdove-rasp` SSH alias, verified BatchMode authentication,
+  and successfully paired in the tray. SSH alias and TLS SNI `guardian-lab.test` stay
+  separate. Stopping/uninstalling the remote daemon does not remove the workstation
+  saved pairing; added that distinction and removal steps to troubleshooting docs.
+- Verified the consent dialog uses `run_form_flow` → shared `run_modal` →
+  `ui_provider_order`. On Linux auto mode, required-checkbox forms skip Native
+  (zenity/KDialog cannot gate submit) and try Tkinter then NiceGUI; macOS/Windows may
+  use Native first. Only proven pre-display failure permits fallback.
+- Corrected quick-start and remote lifecycle examples to use `daemon start -b` when
+  a shell is needed for status/follow-up commands. Scoped HTTPS save and local save
+  guidance are also included in the branch.
+- **Published:** follow-up commit `8db5556d` pushed on
+  `fix/remote-ssh-https-enrollment`; PR #2694 is open against `main`:
+  https://github.com/RedHatProductSecurity/ai-guardian/pull/2694. `.wolf` handoff
+  files remain local and were not included in the commit.
+- **Validation:** 65 related HTTPS/config unit and UX tests pass; SSH unit/UX and REST
+  API/Web-service focused suites passed during implementation. Ruff, Black (Python
+  3.10 target), error-level Pylint, package Mypy (336 files), and diff checks pass.
+  **Next:** wait for PR CI/review. The remote editable clone remains at the earlier
+  branch commit until pulled; fetch/pull if the user wants to test save-time trimming
+  there. Do not release from this feature branch.
 
 ---
 
 ## Issue #2689 — 2026-11-08
 
-- Removed the generated `docs/notebooklm-export.md` from active release-reference
-  synchronization/checking. Its historical version mentions remain intact; the
-  source Dockerfiles/READMEs continue to be checked and the release process
-  regenerates the export after source updates. Added regression coverage for the
-  untouched historical export and stale active references. The corrected checker
-  passes on the workspace and against the `v1.21.0` release contents.
-- **Validation:** 108 related unit tests pass; changed-file Ruff/Black, source
-  Pylint/Mypy and `git diff --check` pass. Repository-wide Ruff/Black checks still
-  report unrelated existing issues in `scripts/check_parser_compat.py` and
-  `scripts/check_scanner_versions.py`.
-- Built and ran local `linux/amd64` images from the exact `v1.21.0` source:
-  `quay.io/redhatproductsecurity/ai-guardian:1.21.0` and
-  `quay.io/redhatproductsecurity/ai-guardian-openshell:1.21.0`. Both report AI
-  Guardian 1.21.0. These are local-only; Quay reports both remote tags missing
-  and this host has no Quay login. Local Podman lacks arm64 emulation, so its
-  multi-arch attempt failed with `Exec format error`; Release Readiness run
-  `42511390541` passed the CI Buildx/QEMU multi-arch validation.
-- The original tag workflow `42511626456` still reflects the old tagged checker
-  and failed before build/push. No registry push, commit, or branch push was made.
-  Existing local changes and the current `main` checkout were preserved. The issue
-  has a partial progress comment (#issuecomment-6726675018); criteria for public
-  image publication remain open pending a source-correct authenticated CI/push
-  path.
+- Removed generated `docs/notebooklm-export.md` from active release-reference
+  synchronization/checking. Historical mentions remain intact; source references
+  are still checked. Added regressions for untouched generated history and stale
+  active references.
+- The fix was already present on `main` at `83e4a6e`. Backported only the fix,
+  tests, and changelog to `release-1.21` in PR #2691 (`06421f5a`), which passed all
+  CI checks and merged as `505a5d4b8c857de668293b92dd4eff7824d5cf6a`. Closed
+  superseded PR #2690.
+- **Validation:** 108 related unit tests pass locally. PR CI passed tests across
+  supported Python/Windows versions, lint/type checks, integration tests, and the
+  multi-architecture Buildx/QEMU validation. Release reference check passes for
+  1.21.0.
+- Dispatched Build Container Image from `release-1.21` with `image_tag=1.21.0`.
+  Run `42532341445` succeeded and pushed both tags. Quay manifest inspection
+  verified `linux/amd64` and `linux/arm64` for:
+  - `quay.io/redhatproductsecurity/ai-guardian:1.21.0`
+  - `quay.io/redhatproductsecurity/ai-guardian-openshell:1.21.0`
+- Closed issue #2689 with all acceptance criteria checked. The unrelated local
+  `main` checkout was preserved; release work remains in the isolated local
+  worktree `/tmp/opencode/ai-guardian-2689-release-backport`.
 
 ## Issue #2685 implementation — 2026-11-08
 
