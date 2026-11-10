@@ -248,6 +248,28 @@ MINOR=$(echo "$NEW_VERSION" | cut -d. -f2)
 RELEASE_BRANCH="release-${MAJOR}.${MINOR}"
 TAG_NAME="v${NEW_VERSION}"
 
+# Patch releases belong to the existing stable line, never to main's newer
+# development tree. Require the exact matching release branch and a clean
+# synchronization with its remote before dispatching CI or preparing files.
+if [[ "$CURRENT_BRANCH" == release-* && "$CURRENT_BRANCH" != "$RELEASE_BRANCH" ]]; then
+    die "Current branch $CURRENT_BRANCH does not match the release target $RELEASE_BRANCH. Switch to the matching release branch and retry."
+fi
+
+if [[ "$RELEASE_TYPE" == "patch" ]]; then
+    if [[ "$CURRENT_BRANCH" != "$RELEASE_BRANCH" ]]; then
+        die "Patch releases must run from the matching stable branch $RELEASE_BRANCH, not $CURRENT_BRANCH. Switch to $RELEASE_BRANCH and retry."
+    fi
+
+    git fetch origin || die "Could not fetch origin to verify $RELEASE_BRANCH"
+    LOCAL_RELEASE_SHA=$(git rev-parse HEAD) || die "Could not determine local $RELEASE_BRANCH commit"
+    REMOTE_RELEASE_SHA=$(git rev-parse --verify "origin/$RELEASE_BRANCH" 2>/dev/null) || \
+        die "Remote branch origin/$RELEASE_BRANCH was not found. Restore the stable release branch before retrying."
+    if [[ "$LOCAL_RELEASE_SHA" != "$REMOTE_RELEASE_SHA" ]]; then
+        die "Local $RELEASE_BRANCH is not synchronized with origin/$RELEASE_BRANCH. Preserve or reconcile local commits, then retry from the remote stable tip."
+    fi
+    info "Patch release source verified: $RELEASE_BRANCH ($LOCAL_RELEASE_SHA)"
+fi
+
 # Next dev version (for post-release merge back)
 NEXT_MINOR=$((MINOR + 1))
 NEXT_DEV_VERSION="${MAJOR}.${NEXT_MINOR}.0-dev"
