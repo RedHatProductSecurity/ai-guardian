@@ -22,15 +22,20 @@ budget_tokens: 1000
   field names, ignore disabled controls and refresh on dependency changes. Added
   unit and UX regressions. Also corrected the published-version note in
   `docs/UBUNTU_VM.md` and added docstrings to the new source helpers.
-- Pushed `0769f142` to `fix/remote-ssh-https-enrollment`; PR #2694 remains open:
+- Follow-up `0769f142` fixed those issues, but CI run `42742503987` found a second
+  headless pystray test defect in all five Ubuntu Python jobs. The test replaced
+  `tray.app.pystray`, but `menu_builder` and `plugin_runner` retained their own
+  import-time `None` references. Fixed by injecting the dummy-backend pystray module
+  into all three menu-building modules; with `DISPLAY` unset, all 270 affected unit
+  tests now pass locally.
+- Pushed `09e2ee26` to `fix/remote-ssh-https-enrollment`; PR #2694 remains open:
   https://github.com/RedHatProductSecurity/ai-guardian/pull/2694. Updated the PR
-  description to include the template's issue/type/security/testing/commands and
-  checklist sections. `.wolf` records remain local and uncommitted.
+  description with template sections and test evidence. OpenWolf status commits
+  `a338ab70` and `19b41575` are present on the branch.
 - **Validation:** 270 affected unit tests and 95 affected UX contracts pass.
   Ruff, Black, Pylint, and project-environment Mypy (336 source files) pass.
-  The new GitHub CI run `42742273003` is in progress; initial Ruff, Black and
-  scanner-version checks pass. **Next:** wait for the new CI matrix and review
-  any remaining failures before merging.
+  Latest GitHub run `42744431892` is in progress; its initial Ruff, Mypy and scanner
+  version checks pass. **Next:** wait for the latest CI matrix before merging.
 
 ---
 

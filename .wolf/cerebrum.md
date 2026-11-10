@@ -349,6 +349,9 @@
 - **2026-11-10 — Headless pystray tests and SSH worker loops:** Tests that only need
   pystray menu descriptors should set `PYSTRAY_BACKEND=dummy` before importing the
   package; `importorskip` will not catch display initialization errors from Xorg/GTK.
+  If the real menu test uses modules imported before setting that environment, also
+  inject the module into every component that captured its own pystray reference
+  (`tray.app`, `tray.menu_builder`, and `tray.plugin_runner`).
   When a worker's retry/backoff loop waits on `retry_now`, tests must patch that event
   rather than the separate stop event's `wait` method.
 
