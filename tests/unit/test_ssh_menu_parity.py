@@ -29,7 +29,8 @@ def remote():
     )
 
 
-def test_discovered_alias_menu_actions_use_pystray_supported_arity(remote):
+def test_discovered_alias_menu_actions_use_pystray_supported_arity(remote, monkeypatch):
+    monkeypatch.setenv("PYSTRAY_BACKEND", "dummy")
     pystray = pytest.importorskip("pystray")
     tray = make_tray([DaemonTarget("local", "local", status="paused"), remote])
     tray._discovery = mock.Mock()

@@ -201,6 +201,7 @@ def open_enrollment(tray, *, screen_bounds=None, alias=None):
 
 
 def _show_unexpected_enrollment_error(form, exc):
+    """Log an unexpected pairing failure and show a sanitized close-only dialog."""
     logger.error(
         "SSH daemon enrollment failed unexpectedly (%s)",
         type(exc).__name__,
@@ -243,7 +244,10 @@ def build_candidate_items(tray, pystray):
     children = []
 
     def review_action(alias):
+        """Bind a discovered alias to its explicit review-and-pair action."""
+
         def review(icon=None, item=None):
+            """Forward pystray's callback arguments with the captured alias."""
             # The tray callback captures monitor bounds before launching its worker.
             tray._on_add_ssh_daemon(icon, item, alias=alias)
 

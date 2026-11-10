@@ -142,9 +142,9 @@ keys, daemon tokens or pairing records in diagnostics.
 
 ## 3. Install from PyPI and create global configuration
 
-**Release gate:** perform this step only once a supporting production version
-exists. Until then, the proposed install correctly finds no matching release;
-do not lower the constraint to 1.20.0 to continue this guide.
+**Version requirement:** this guide uses the published `ai-guardian>=1.21.0`.
+Do not lower the constraint to 1.20.0; that release lacks native HTTPS and SSH
+enrollment.
 
 **VM**, as `guardian`, before initial package invocation/setup/startup:
 

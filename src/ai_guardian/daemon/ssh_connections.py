@@ -193,6 +193,7 @@ class SSHConnectionManager:
                 stop_owned_process(process)
 
     def _start_connection_worker(self, connection):
+        """Start the background worker that maintains a saved SSH tunnel."""
         connection.thread = threading.Thread(
             target=self._run,
             args=(connection,),

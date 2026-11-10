@@ -3380,7 +3380,7 @@ class TestSandboxDialogFallback:
 
         assert result is None
 
-    def test_tk_form_disables_required_checkbox_submit_until_checked(self):
+    def test_tk_form_submit_gate_tracks_conditional_required_checkbox(self):
         from types import ModuleType
 
         from ai_guardian.tray.sandbox_dialog import _show_tkinter_form
@@ -3403,13 +3403,18 @@ class TestSandboxDialogFallback:
 
         root = mock.MagicMock()
         variables = []
+        choice_variables = []
         buttons = []
         tk_module = ModuleType("tkinter")
         tk_module.Tk = mock.Mock(return_value=root)
         tk_module.Canvas = mock.Mock(return_value=mock.MagicMock())
-        tk_module.StringVar = mock.Mock(
-            side_effect=lambda value="", **_kwargs: TracedVariable(value)
-        )
+
+        def make_string_variable(value="", **_kwargs):
+            variable = TracedVariable(value)
+            choice_variables.append(variable)
+            return variable
+
+        tk_module.StringVar = mock.Mock(side_effect=make_string_variable)
         tk_module.BooleanVar = mock.Mock(
             side_effect=lambda value=False, **_kwargs: variables.append(
                 TracedVariable(value)
@@ -3450,11 +3455,15 @@ class TestSandboxDialogFallback:
 
         def run_form():
             submit = buttons[-1]
-            assert submit.state.call_args_list == [mock.call(["disabled"])]
+            # Codex does not require Claude's TOS consent, so submit is available.
+            assert submit.state.call_args_list == [mock.call(["!disabled"])]
+            choice_variables[0].set("claude")
+            assert submit.state.call_args_list[-1] == mock.call(["disabled"])
             variables[0].set(True)
             assert submit.state.call_args_list[-1] == mock.call(["!disabled"])
-            variables[0].set(False)
-            assert submit.state.call_args_list[-1] == mock.call(["disabled"])
+            choice_variables[0].set("codex")
+            assert variables[0].get() is False
+            assert submit.state.call_args_list[-1] == mock.call(["!disabled"])
 
         root.mainloop.side_effect = run_form
         with (
@@ -3471,18 +3480,26 @@ class TestSandboxDialogFallback:
             mock.patch("ai_guardian.tray.sandbox_dialog._present_tk_sandbox_form"),
         ):
             result = _show_tkinter_form(
-                "Verify SSH daemon identity",
-                "Review the daemon identity",
+                "Create sandbox",
+                "Select a CLI and confirm its terms when required",
                 [
                     {
-                        "name": "trust",
-                        "label": "Confirm the destination identity",
+                        "name": "cli",
+                        "type": "choice",
+                        "choices": ("codex", "claude"),
+                        "default": "codex",
+                    },
+                    {
+                        "name": "accept_claude_tos",
+                        "label": "Accept Claude terms",
                         "type": "bool",
                         "default": False,
                         "required": True,
-                    }
+                        "enabled_when": {"field": "cli", "values": ("claude",)},
+                        "clear_when_disabled": True,
+                    },
                 ],
-                submit_label="Trust and add daemon",
+                submit_label="Create sandbox",
             )
 
         assert result is None

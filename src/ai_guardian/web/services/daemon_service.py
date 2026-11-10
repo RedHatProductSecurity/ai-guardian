@@ -80,6 +80,7 @@ class DaemonService:
     def get_all_daemon_status(
         self, targets: Optional[List[DaemonTarget]] = None
     ) -> list:
+        """Return each target's available status without failing on offline daemons."""
         results = []
         target_list = self._targets if targets is None else targets
         for target in target_list:

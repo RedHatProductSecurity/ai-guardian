@@ -401,6 +401,123 @@ def test_sandbox_create_form_restores_focus_after_kde_tray_menu_handoff(
     root.destroy.assert_called_once()
 
 
+def test_conditional_required_consent_blocks_only_the_matching_cli(monkeypatch):
+    """USER EXPERIENCE: Codex stays usable; Claude requires explicit TOS consent.
+
+    Manual check: open Create sandbox with Codex selected and verify submission is
+    available. Select Claude and verify submission stays disabled until its terms
+    checkbox is selected. Switch back to Codex and verify the consent is cleared
+    and the form can be submitted.
+    """
+    import sys
+    from types import ModuleType
+
+    class TracedVariable:
+        def __init__(self, value):
+            self.value = value
+            self.callbacks = []
+
+        def get(self):
+            return self.value
+
+        def set(self, value):
+            self.value = value
+            for callback in self.callbacks:
+                callback()
+
+        def trace_add(self, _mode, callback):
+            self.callbacks.append(callback)
+
+    root = Mock()
+    string_variables = []
+    boolean_variables = []
+    buttons = []
+    tk = ModuleType("tkinter")
+    tk.Tk = Mock(return_value=root)
+    tk.Canvas = Mock(return_value=Mock())
+    tk.Text = Mock(return_value=Mock())
+    tk.TclError = type("TclError", (Exception,), {})
+    tk.filedialog = ModuleType("tkinter.filedialog")
+
+    def make_variable(value, collection):
+        variable = TracedVariable(value)
+        collection.append(variable)
+        return variable
+
+    tk.StringVar = Mock(
+        side_effect=lambda value="", **_kwargs: make_variable(value, string_variables)
+    )
+    tk.BooleanVar = Mock(
+        side_effect=lambda value=False, **_kwargs: make_variable(
+            value, boolean_variables
+        )
+    )
+    ttk = ModuleType("tkinter.ttk")
+
+    def make_button(*_args, **_kwargs):
+        button = Mock()
+        buttons.append(button)
+        return button
+
+    for name in (
+        "Button",
+        "Checkbutton",
+        "Combobox",
+        "Entry",
+        "Frame",
+        "Label",
+        "Scrollbar",
+    ):
+        setattr(
+            ttk, name, make_button if name == "Button" else Mock(return_value=Mock())
+        )
+    tk.ttk = ttk
+
+    def exercise_submit_gate():
+        submit = buttons[-1]
+        assert submit.state.call_args_list == [call(["!disabled"])]
+        string_variables[0].set("claude")
+        assert submit.state.call_args_list[-1] == call(["disabled"])
+        boolean_variables[0].set(True)
+        assert submit.state.call_args_list[-1] == call(["!disabled"])
+        string_variables[0].set("codex")
+        assert boolean_variables[0].get() is False
+        assert submit.state.call_args_list[-1] == call(["!disabled"])
+
+    root.mainloop.side_effect = exercise_submit_gate
+    monkeypatch.setitem(sys.modules, "tkinter", tk)
+    monkeypatch.setitem(sys.modules, "tkinter.filedialog", tk.filedialog)
+    monkeypatch.setitem(sys.modules, "tkinter.ttk", ttk)
+    monkeypatch.setattr("ai_guardian.ui.display._ensure_tcl_library", lambda: None)
+    monkeypatch.setattr(sandbox_dialog, "_place_window_on_screen", Mock())
+    monkeypatch.setattr(sandbox_dialog, "_present_tk_sandbox_form", Mock())
+
+    result = sandbox_dialog._show_tkinter_form(
+        "Create sandbox",
+        "Select a CLI and confirm its terms when required",
+        [
+            {
+                "name": "cli",
+                "type": "choice",
+                "choices": ("codex", "claude"),
+                "default": "codex",
+            },
+            {
+                "name": "accept_claude_tos",
+                "label": "Accept Claude terms",
+                "type": "bool",
+                "default": False,
+                "required": True,
+                "enabled_when": {"field": "cli", "values": ("claude",)},
+                "clear_when_disabled": True,
+            },
+        ],
+        submit_label="Create sandbox",
+    )
+
+    assert result is None
+
+
 def test_sandbox_form_uses_only_the_next_provider_on_tk_startup_failure():
     """USER EXPERIENCE: Tk fails before display -> next eligible provider runs once."""
     from ai_guardian.ui.modal import UIUnavailable
