@@ -292,6 +292,9 @@
 - **2026-11-09 — Release classification:** Native HTTPS and SSH enrollment shipped
   yesterday. Follow-up fixes to those released behaviors, including saved-SSH
   reconnect, are patch-release scope; do not initiate publication unless asked.
+- **2026-11-10 — Post-release development version:** When merging a stable patch
+  release back to `main`, keep Python and Rust package metadata at the next
+  development version, `1.22.0-dev`, rather than restoring the released version.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 

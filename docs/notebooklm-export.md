@@ -327,8 +327,8 @@ access.
 
 ```bash
 # Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.21.0
-podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.21.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.21.1
+podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.21.1
 
 # Or build from source
 podman build -t ai-guardian container/
@@ -778,12 +778,12 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/redhatproductsecurity/ai-guardian:1.21.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.21.1
 ```
 
 Tag conventions:
 - `:latest` — tracks main branch (updated on every merge)
-- `:<version>` — pinned stable release (e.g. `1.21.0`)
+- `:<version>` — pinned stable release (e.g. `1.21.1`)
 
 ## Build Locally
 
@@ -792,10 +792,10 @@ Tag conventions:
 podman build -t ai-guardian container/
 
 # Specific version
-podman build --build-arg AI_GUARDIAN_VERSION=1.21.0 -t ai-guardian container/
+podman build --build-arg AI_GUARDIAN_VERSION=1.21.1 -t ai-guardian container/
 
 # Local wheel (copy the wheel into container/vendor/ first)
-WHEEL_PATH=dist/ai_guardian-1.21.0-py3-none-any.whl
+WHEEL_PATH=dist/ai_guardian-1.21.1-py3-none-any.whl
 WHEEL_NAME="$(basename "$WHEEL_PATH")"
 cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
 podman build --build-arg "AI_GUARDIAN_VERSION=$WHEEL_NAME" \
@@ -1967,7 +1967,7 @@ Access from the host: `http://localhost:63152`
 
 | Arg | Default | Description |
 |-----|---------|-------------|
-| `AI_GUARDIAN_VERSION` | `1.21.0` | PyPI version or `.whl` filename |
+| `AI_GUARDIAN_VERSION` | `1.21.1` | PyPI version or `.whl` filename |
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
 | `OPENCODE_VERSION` | `1.19.0` | OpenCode V1 version for both support images |
@@ -11284,7 +11284,7 @@ controls.
 | Password-likelihood Ask: existing `prompt --mode ask`, private decision-only variant | T → G; same Ask providers, values withheld, Allow Once / Block only | T → G | T → G |
 | Tray-forwarded remote ask on macOS 14+ | G in subprocess; existing tray focus-safety Tk suppression remains | As above | As above |
 | Plugin parameter forms: `TrayPromptApp.run` | T → G | T → G | T → G |
-| Simple form flows / tray Add daemon via SSH and discovered-alias review: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | N desktop-ordered zenity/kdialog input/checklist → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
+| Simple form flows / tray Add daemon via SSH and discovered-alias review: `run_form_flow` | N JXA/Cocoa input/checkbox/full review → isolated T → G | Required-consent SSH pairing: isolated T → G (KDialog/zenity cannot gate submit); other forms: N desktop-ordered zenity/kdialog → isolated T → G | N PowerShell WinForms input/checkbox/scrollable review → isolated T → G |
 | Tray Discover SSH aliases... settings: `run_form_flow` | N JXA/Cocoa two-step checkbox/prefix → isolated T → G | N desktop-ordered zenity/kdialog two-step checklist/prefix → isolated T → G | N PowerShell WinForms two-step checkbox/prefix → isolated T → G |
 | Multi-target plugin selection: `TrayTargetSelectorApp.run` | G only | G only | G only |
 | Working-directory picker: `working_dir.choose_directory` | N AppleScript choose folder → isolated T | N desktop-ordered zenity/kdialog → isolated T | N PowerShell WinForms FolderBrowserDialog → isolated T |
@@ -11382,20 +11382,19 @@ controls.
   The local tray-host action stays independent. See [Support bundles](SUPPORT.md).
 - **SSH pairing:** the tray's Add action uses the reusable form-flow adapter, not
   the Web Console. All steps retain one provider, including failures and results.
-  The native Linux tool is likewise pinned after its first dialog. Only the
-  display-safe identity summary reaches renderers; credentials and certificate
-  objects remain in the tray-owned manager's closure. Trust starts unchecked and
-  is required before enrollment. Native Linux checklist buttons can remain
-  enabled while unchecked; submitting that state ends without saving or opening
-  another provider. **Manage SSH connection...** still opens the
-  existing local Web Console's saved-connection management page; its already-open
-  browser controls do not enter a new standalone-modal cascade.
+  Only the display-safe identity summary reaches renderers; credentials and
+  certificate objects remain in the tray-owned manager's closure. Trust starts
+  unchecked and is required before enrollment; Continue remains disabled until it
+  is checked. On Linux, select isolated Tk/NiceGUI before the first form because
+  native zenity/KDialog checklists cannot gate submit. **Manage SSH connection...**
+  still opens the existing local Web Console's saved-connection management page;
+  its already-open browser controls do not enter a new standalone-modal cascade.
   **Review discovered daemon** enters this same flow directly at the complete
   identity review, skipping host input only. Discovery never opens a modal itself.
-  The first native startup failure can still fall back, but cancellation/unchecked
-  consent and any later displayed-step failure remain terminal. Verify the direct
-  route on each supported desktop as well as manual Add; see the full SSH UX
-   contract for opt-in, cancellation, dismissal/restart and identity-change checks.
+  The first native startup failure can still fall back, but cancellation and any
+  later displayed-step failure remain terminal. Verify the direct route on each
+  supported desktop as well as manual Add; see the full SSH UX contract for opt-in,
+  cancellation, dismissal/restart and identity-change checks.
 - **SSH discovery settings:** **Discover SSH aliases...** is always available in
   the workstation tray, including discovery-off/zero-candidate/no-pairing states.
   Reuse `run_form_flow` for the complete two-step interaction: current enable
@@ -11651,7 +11650,7 @@ The system tray client discovers and manages AI Guardian daemons across multiple
 ## Quick Start
 
 ```bash
-ai-guardian daemon start          # Start local daemon (headless)
+ai-guardian daemon start -b       # Start local daemon in background (headless)
 ai-guardian tray start            # Start tray (discovers all daemons)
 ai-guardian tray start -b         # Start tray in background
 ai-guardian tray stop             # Stop the tray
@@ -11847,7 +11846,8 @@ or manual configuration:
 
 Runtime discovery refreshes in the background and on tray interaction. SSH alias
 inventory is opt-in; saved SSH targets reconnect independently of that inventory.
-The [Ubuntu VM guide](UBUNTU_VM.md) covers its upcoming-release PyPI prerequisites.
+The [Ubuntu VM guide](UBUNTU_VM.md) covers the released PyPI version requirement
+and the still-pending full walkthrough qualification.
 
 ### Container Discovery
 
@@ -11965,9 +11965,9 @@ removed by setting a broader base selector.
 
 **Fresh headless Ubuntu VM?** Start with the
 [ordered PyPI/venv HTTPS/SSH guide](UBUNTU_VM.md), including the release gate,
-VM-hosted Console bootstrap and workstation-side pairing. As of 2026-10-28,
-production PyPI 1.20.0 does not contain these features; the guide targets 1.21
-development until a supporting published artifact is qualified.
+VM-hosted Console bootstrap and workstation-side pairing. Production PyPI
+1.21.0 includes HTTPS and SSH-managed enrollment; fresh-install, desktop and
+lifecycle qualification for the complete walkthrough remains open in that guide.
 
 For an SSH-only VM (including a known AWS instance), choose **Add daemon via SSH**
 in the tray. The shared modal dispatcher tries **Native → Tkinter → NiceGUI**,
@@ -11993,10 +11993,14 @@ authentication is not offered by this non-interactive workflow.
    Certificate trust and the authorized daemon credential are retrieved only over
    authenticated, host-key-verified SSH as that user, without sudo. The fixed
    read-only Python probe cannot execute commands from remote metadata.
-3. Check **I confirm this SSH destination and daemon certificate identity**, then
-   choose **Trust and add daemon**. Cancel saves nothing. HTTPS verification and
-   authenticated status must succeed before saving. SSH private keys/passwords
-   are never read into or stored by AI Guardian; the daemon token is never shown.
+3. Verify the explicit identity checkbox is visible and initially unchecked;
+    **Trust and add daemon** stays disabled until it is checked. Check **Check to
+    confirm this SSH destination and daemon certificate identity**, then choose
+    **Trust and add daemon**. Cancel saves nothing. Success and pairing errors each
+    have a result dialog. HTTPS verification and authenticated status must succeed
+    before saving.
+   SSH private keys/passwords are never read into or stored by AI Guardian; the
+   daemon token is never shown.
 4. The target appears as `ssh-<destination>` with cached state and the standard
    **Console**, **Violations**, **Metrics & Audit**, **Statistics**, **Terminal**,
    **Maintenance** and applicable **MCP** controls. Actions run in background workers.
@@ -12080,11 +12084,15 @@ Permission responses stay bound to the tunnel generation that fetched them.
 Prompt IDs also contain a daemon-instance nonce, so a dialog left open across a
 daemon restart cannot approve a different invocation after a counter resets.
 
-Disconnected targets stay visible **offline** and retry with bounded timeouts
-and exponential backoff (2 seconds up to 60 seconds). New runtime ports can be
-detected on reconnect; changed certificate trust, TLS identity or daemon tokens
-are never adopted silently. Independently verify a renewal/rotation, then remove
-and explicitly pair again. Restarting the tray reconnects saved destinations.
+The tray starts workers for saved SSH destinations during its initial discovery,
+including at tray startup. Disconnected targets stay visible **offline** and retry
+with bounded timeouts and exponential backoff (2 seconds up to 60 seconds). When a
+saved tunnel is closed, **Reconnect SSH tunnel** appears in that daemon's tray menu;
+selecting it wakes the existing worker immediately, without pairing again or
+starting the remote daemon. New runtime ports can be detected on reconnect; changed
+certificate trust, TLS identity or daemon tokens are never adopted silently.
+Independently verify a renewal/rotation, then remove and explicitly pair again.
+Tray restart also reconnects saved destinations.
 Tray/Web Console shutdown and saved-target removal clean up their owned tunnels;
 another running local client observes removal on its next refresh, and every
 authenticated request also checks that its saved pairing still exists unchanged.
@@ -12287,9 +12295,9 @@ ai-guardian tray start --no-discover
 
 ### Native HTTPS and explicit certificate trust
 
-Native HTTPS is opt-in (`daemon.rest_tls`, targeting 1.21; not in PyPI 1.20.0).
+Native HTTPS is opt-in (`daemon.rest_tls`, available in PyPI 1.21.0 and newer).
 For a fresh headless guest, use the [Ubuntu VM HTTPS/SSH guide](UBUNTU_VM.md);
-it explicitly separates the upcoming release from published-PyPI qualification.
+it distinguishes published availability from full walkthrough qualification.
 The advanced trust/PKI reference below remains applicable to supporting builds.
 Existing localhost HTTP configurations need no changes. TLS does **not** change
 `rest_host`, publish
@@ -12356,11 +12364,17 @@ Select the **local daemon**, use **Global** scope, then open
 | Field | Value |
 |-------|-------|
 | Enable native HTTPS | On |
-| Certificate chain PEM path (on daemon host) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
-| Private-key PEM path (on daemon host) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-key.pem` |
+| Certificate chain PEM path on daemon host (required when enabled) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
+| Private-key PEM path on daemon host (required when enabled) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-key.pem` |
 | Trusted CA PEM path (empty: system trust) | `/home/alex/.config/ai-guardian/tls-local.A1b2C3/server-cert.pem` |
-| Expected server SAN identity / SNI | `localhost` |
+| Expected server SAN identity / SNI (required when enabled) | `localhost` |
 | Optional independently verified SHA-256 leaf pin | Leave empty for this initial local test |
+
+With HTTPS enabled, the certificate and private-key paths and expected server
+SAN identity/SNI are required. The server identity must match a certificate SAN;
+it is independent of the SSH destination. The Console validates settings without
+reading files from its host; the daemon reads its own certificate/key paths when
+restarted.
 
 Replace the example directory with **your exact printed directory**, including
 your username and random suffix. Use full absolute paths, not the literal
@@ -12383,7 +12397,9 @@ ai-guardian daemon restart
 
 Reload alone does **not** replace the live listener or certificate. After the
 restart, refresh the Console and tray so they pick up the HTTPS listener and
-saved trust. The Console webpage itself keeps its existing URL/scheme.
+saved trust. `ai-guardian daemon status` should report the REST API as available
+over HTTPS, and Doctor warns if active protocol and saved HTTPS setting differ.
+The Console webpage itself keeps its existing URL/scheme.
 
 ##### 4. Verify HTTPS and expected results
 
@@ -30269,6 +30285,65 @@ To change the default port permanently:
 }
 ```
 
+### HTTPS REST Listener or SSH Pairing Problems
+
+When native REST HTTPS is enabled, the global settings need the certificate-chain
+path and private-key path on the daemon host, plus the expected server SAN identity
+(SNI). The identity must match a DNS/IP SAN in the certificate; it is separate from
+the SSH alias. A name used only for TLS verification over an SSH loopback tunnel
+does not need public DNS. The Console validates settings without reading remote
+files; restart the daemon to load its certificate and key.
+
+Check listener readiness and protocol:
+
+```bash
+ai-guardian daemon status
+ai-guardian doctor
+```
+
+Status should show `REST API: available (HTTPS, port N)` for an HTTPS listener.
+Doctor reports the active protocol and warns if it differs from the saved HTTPS
+setting. If HTTPS is configured but REST is unavailable, inspect the daemon's
+credential-free startup error and verify the daemon-host paths and certificate
+identity; TLS errors do not fall back to HTTP. For SSH enrollment, review the
+destination, TLS identity and fingerprint, visibly check the unchecked consent
+box, and select **Trust and add daemon**. Submitting unchecked saves nothing;
+Cancel/Close is not consent. Success and pairing errors are shown in a result
+dialog. Never disable certificate verification to troubleshoot enrollment. See
+the [multi-daemon HTTPS and SSH guide](MULTI_DAEMON_TRAY.md#native-https-and-explicit-certificate-trust)
+and [Ubuntu VM walkthrough](UBUNTU_VM.md).
+
+### Saved SSH Daemon Is Offline After Workstation Restart
+
+The tray starts workers for saved SSH destinations during its initial discovery
+and retries failed connections automatically with bounded exponential backoff.
+When the tunnel is not open, choose **Reconnect SSH tunnel** in that daemon's tray
+menu to wake the saved worker immediately. This retries the existing, verified
+connection; it does not pair again or start the daemon on the remote host. If the
+remote daemon is stopped, start it on that host using your normal approved
+procedure. If **Reconnect SSH tunnel** reports that the saved identity or
+credential changed, independently verify the remote identity before removing and
+explicitly pairing again; reconnect never accepts changed trust automatically.
+
+The tray uses system OpenSSH non-interactively: it cannot prompt for a password or
+an encrypted key's passphrase, and it never reads or stores private keys. Unlock the
+configured identity through the workstation's normal SSH agent/keyring, then verify
+that `ssh -o BatchMode=yes -T <user>@<saved-alias> true` succeeds from the
+workstation before reconnecting. Do not use the TLS SNI name as the SSH alias.
+
+Stopping or uninstalling the remote daemon does not remove its saved connection
+from the workstation tray; it remains listed as offline. To remove the local saved
+profile and trust, choose **Manage SSH connection...** from that daemon's tray menu,
+then **Remove...**, or use the workstation Console home `/` → **SSH daemon
+connections** → **Remove...**. This closes owned tunnels but does not stop the remote
+daemon or remove the remote account's `authorized_keys` entry, AI Guardian config,
+or TLS files; handle those separately if a full remote reset is intended.
+
+Saving HTTPS settings for an SSH daemon also requires an active tunnel. If the
+target is offline, the Console reports that it could not save; unlock the SSH key
+and reconnect before saving again. The save updates only `daemon.rest_tls`, leaving
+other global settings untouched. Restart the remote daemon to apply listener changes.
+
 ### Config Reload Not Picking Up Changes
 
 **Symptom:** You edited `ai-guardian.json` but the daemon behavior hasn't changed.
@@ -30454,33 +30529,32 @@ Paths are governed by XDG conventions and can be overridden with environment var
 
 # === docs/UBUNTU_VM.md ===
 
-# Headless Ubuntu VM: HTTPS and SSH quickstart (upcoming release)
+# Headless Ubuntu VM: HTTPS and SSH quickstart
 
-> **Upcoming-release guide — not supported by PyPI 1.20.0.** Checked on
-> **2026-10-28**: [production PyPI](https://pypi.org/pypi/ai-guardian/json) still
-> reports **1.20.0**, with no published `1.21.*`. Its wheel has neither native
-> daemon TLS nor SSH-managed enrollment. The first supporting **published**
-> version is therefore **not yet established**; these features target **1.21**.
-> The `>=1.21.0` constraints below are provisional and cannot succeed today.
-> Wait for a supporting production release; do not substitute a source checkout,
-> development dependencies, GitHub RC artifact or TestPyPI installation.
+> **Published-release guide.** Checked on **2026-11-09**: production PyPI publishes
+> [AI Guardian 1.21.0](https://pypi.org/project/ai-guardian/1.21.0/), the first
+> release containing native daemon HTTPS and SSH-managed enrollment. Use the
+> released package (`ai-guardian>=1.21.0`), not a source checkout, development
+> dependencies, GitHub RC artifact or TestPyPI package. Published availability
+> does not by itself qualify this entire fresh-VM/desktop walkthrough.
 
 This guide takes a fresh Ubuntu Server VM to a loopback HTTPS daemon controlled
 by the **workstation tray over SSH**, using only the released PyPI package in
 virtual environments. The earlier successful `1.21.0-dev` source-build VM
 walkthrough is useful evidence, **not** fresh-PyPI qualification. The
-[release checklist](#release-qualification) remains open.
+[release checklist](#release-qualification) remains open for fresh-install,
+desktop and lifecycle qualification.
 
-| Required feature | First production PyPI release |
+| Required feature | Minimum published PyPI version |
 |---|---|
-| Native daemon HTTPS (#2551) and SSH enrollment (#2552) | Not published; planned for 1.21 |
-| Private storage/setup diagnostics (#2584) | Not published; planned for 1.21 |
-| Alias discovery and native-first pairing (#2587 / #2589) | Not published; planned for 1.21 |
-| Tray discovery settings (#2591) and SSH menu parity (#2592) | Merged development changes, not published; planned for 1.21 |
+| Native daemon HTTPS (#2551) and SSH enrollment (#2552) | 1.21.0 |
+| Private storage/setup diagnostics (#2584) | 1.21.0 |
+| Alias discovery and native-first pairing (#2587 / #2589) | 1.21.0 |
+| Tray discovery settings (#2591) and SSH menu parity (#2592) | 1.21.0 |
 
-Recheck each feature against the actual released artifact before replacing this
-notice with a confirmed minimum version. A merged PR or a running development
-process does not prove PyPI availability.
+Use a tray version at least as new as the daemon. A merged PR or successful
+development build is not a substitute for installing the released package when
+qualifying the documented PyPI workflow.
 
 ## Which machine does what?
 
@@ -30599,9 +30673,9 @@ keys, daemon tokens or pairing records in diagnostics.
 
 ## 3. Install from PyPI and create global configuration
 
-**Release gate:** perform this step only once a supporting production version
-exists. Until then, the proposed install correctly finds no matching release;
-do not lower the constraint to 1.20.0 to continue this guide.
+**Version requirement:** this guide uses the published `ai-guardian>=1.21.0`.
+Do not lower the constraint to 1.20.0; that release lacks native HTTPS and SSH
+enrollment.
 
 **VM**, as `guardian`, before initial package invocation/setup/startup:
 
@@ -30648,7 +30722,7 @@ activate again or use the installed executable's absolute path:
 commands below use `"$HOME/.venvs/ai-guardian/bin/ai-guardian"` **inside the VM**.
 
 ```bash
-"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start
+"$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start -b
 "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
 ```
 
@@ -30753,11 +30827,15 @@ If step 4 printed `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3`, enter:
 | Field | Value for this VM lab |
 |---|---|
 | Enable native HTTPS | On |
-| Certificate chain PEM path (on daemon host) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-cert.pem` |
-| Private-key PEM path (on daemon host) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-key.pem` |
+| Certificate chain PEM path on daemon host (required when enabled) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-cert.pem` |
+| Private-key PEM path on daemon host (required when enabled) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-key.pem` |
 | Trusted CA PEM path (empty: system trust) | `/home/guardian/.config/ai-guardian/tls-vm.A1b2C3/server-cert.pem` |
-| Expected server SAN identity / SNI | `guardian-vm.test` |
+| Expected server SAN identity / SNI (required when enabled) | `guardian-vm.test` |
 | Optional independently verified SHA-256 leaf pin | Leave empty for initial VM-local trust; workstation enrollment separately records the verified leaf pin |
+
+When HTTPS is enabled, the certificate chain path, private-key path, and expected
+server SAN identity/SNI are required. The identity must match the certificate SAN;
+it is not the SSH alias and does not need public DNS for the loopback SSH tunnel.
 
 Replace the example username/directory/suffix with the **exact printed absolute
 VM paths**. These inputs do not expand `$TLS_DIR`, `$HOME` or `~`, generate files,
@@ -30777,7 +30855,9 @@ settings**, then in the original **VM SSH shell** run:
 Saving or reloading alone does **not** replace the active listener/certificate.
 Refresh the VM Console after restart. If REST is unavailable, resolve its
 credential-free startup error before pairing; do not accept IPC liveness as TLS
-readiness. Invalid TLS material does not fall back to plaintext.
+readiness. `daemon status` should report `REST API: available (HTTPS, port N)`;
+`ai-guardian doctor` also reports the active protocol and warns if it differs from
+the saved HTTPS setting. Invalid TLS material does not fall back to plaintext.
 
 ## 7. Verify HTTPS before pairing
 
@@ -30831,9 +30911,10 @@ ai-guardian --version
 ai-guardian setup --create-config
 ```
 
-The same **unpublished-release gate** applies. If already installed, upgrade the
-intended workstation environment rather than creating a second competing one;
-preserve existing settings. For Linux tray support, satisfy your distribution's
+Use the published **1.21.0 or newer** on the workstation too; the tray version
+must be at least as new as the daemon. If already installed, upgrade the intended
+workstation environment rather than creating a second competing one; preserve
+existing settings. For Linux tray support, satisfy your distribution's
 GTK/AppIndicator and [PyGObject build prerequisites](https://pygobject.gnome.org/getting_started.html),
 then install the optional extra **in this workstation virtualenv**:
 
@@ -30896,11 +30977,10 @@ repeat testing, add `guardian-vm-test` as a second name in the same declaration
 verify `ssh -o BatchMode=yes guardian-vm-test true`. Manual **Add daemon via SSH**
 remains available for deliberate pairing of a dismissed alias.
 
-**Development UI update:** #2591 added **Discover SSH aliases...** directly in
-the tray, next to manual pairing; its enable/Continue and prefix/Save steps edit
-the same settings. It is merged, but not in production PyPI as of the date above.
-Do not expect that entry in 1.20.0. The Console path above remains available in
-the target development workflow; reconfirm both paths against the final release.
+**Released UI:** AI Guardian 1.21.0 includes **Discover SSH aliases...** directly
+in the tray, next to manual pairing; its enable/Continue and prefix/Save steps edit
+the same settings as the workstation Console. Restart an already-running tray
+after upgrading before checking for this entry.
 
 ### Review, explicitly trust, and connect
 
@@ -30910,11 +30990,13 @@ the target development workflow; reconfirm both paths against the final release.
    actual loopback port, SAN identity **`guardian-vm.test`** and certificate
    **SHA-256 fingerprint** against step 4's independently obtained values through
    verified SSH. Colons/case may differ in the fingerprint display, not its bytes.
-3. Only if these match, check **I confirm this SSH destination and daemon
-   certificate identity**, then **Trust and add daemon**. **Cancel/Close does not
-   enroll anything.** SSH host-key verification, TLS CA/SAN/validity/pin checks and
-   authenticated daemon status must all succeed before a pairing is saved.
-4. After discovery refresh, expect **`ssh-guardian-vm`** (or
+3. Only if these match, visibly check **Check to confirm this SSH destination and
+   daemon certificate identity**; **Trust and add daemon** stays disabled until it
+   is checked. **Cancel/Close does not enroll anything**. A successful pairing shows
+   an explicit confirmation; SSH host-key verification, TLS CA/SAN/validity/pin
+   checks and authenticated daemon status must all succeed before it is saved.
+   Pairing errors are shown in a result dialog.
+4. After success and discovery refresh, expect **`ssh-guardian-vm`** (or
    **`ssh-guardian-vm-test`** for that alias) with connected status. The pairing is
    saved privately on the **workstation**, not in global config or an SSH key file.
 
@@ -30932,15 +31014,13 @@ Console** and **Manage SSH connection...**. **Web Console** there was the same
 role as **Console** in local/container menus; fewer shortcuts did not mean failed
 pairing. Open it and select the remote target to use supported Console pages.
 
-[#2592](https://github.com/RedHatProductSecurity/ai-guardian/issues/2592) is now
-merged in development: SSH targets share applicable **Console**, **Violations**,
+AI Guardian 1.21.0 includes [#2592](https://github.com/RedHatProductSecurity/ai-guardian/issues/2592):
+SSH targets share applicable **Console**, **Violations**,
 **Metrics & Audit**, **Statistics**, **Terminal**, **Maintenance** and **MCP**
 entries. Runtime/capability/offline differences still apply; see the
-[menu audit](MULTI_DAEMON_TRAY.md#ssh-menuaction-parity-audit). Neither that parity
-nor [#2591](https://github.com/RedHatProductSecurity/ai-guardian/issues/2591) is yet
-a PyPI feature. Check the final published version's menus rather than promising
-the old reduced menu or every development shortcut. Never substitute local
-maintenance commands for a remote action.
+[menu audit](MULTI_DAEMON_TRAY.md#ssh-menuaction-parity-audit). Check that the
+workstation is running the released version before troubleshooting a missing
+entry. Never substitute local maintenance commands for a remote action.
 
 ## 9. Return after shutdown or reboot
 
@@ -30960,7 +31040,7 @@ reconnection are three different lifecycle mechanisms.
 3. **If stopped**, start the existing installation and check readiness:
 
    ```bash
-   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start
+   "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon start -b
    "$HOME/.venvs/ai-guardian/bin/ai-guardian" daemon status
    ```
 
@@ -31034,12 +31114,11 @@ blanket SSH/process kills or terminate an unrelated port owner.
 
 ## Release qualification
 
-**Status on 2026-10-28:** production PyPI metadata and the SHA-256-verified
-`ai_guardian-1.20.0-py3-none-any.whl` were inspected; that wheel lacks the native
-TLS/SSH modules and TLS schema. No qualifying published version exists to record
-for the VM or workstation. The earlier reporter walkthrough used **1.21.0-dev**
-source builds, not a fresh PyPI install; it did not establish boot-time startup
-or complete desktop/platform qualification.
+**Status on 2026-11-09:** production PyPI publishes **1.21.0**, the minimum
+version listed above. The earlier reporter walkthrough used **1.21.0-dev** source
+builds, not a fresh PyPI install; it did not establish boot-time startup or complete
+desktop/platform qualification. Fresh published-package qualification remains
+open.
 
 Documentation checks on Linux with Python **3.14.7**, OpenSSL **3.5.8** and curl
 **8.18.0** passed shell syntax, local links/navigation, exact UI-label checks and
@@ -31049,8 +31128,8 @@ lifecycles, native desktop behavior or a released VM/workstation installation.
 
 Before calling this a release-qualified reproducible PyPI walkthrough:
 
-- [ ] Identify each feature's first **production PyPI** version, update the table
-  and minimum constraints, and remove the upcoming notice only when justified.
+- [x] Identify the published minimum version for HTTPS/SSH enrollment and update
+  the table and installation constraints; the upcoming-release notice is removed.
 - [ ] Install the actual released package/dependencies into fresh VM and
   workstation virtualenvs; record Ubuntu/Python/OpenSSL versions, workstation
   OS/desktop and both AI Guardian versions/artifact identities. No source/editable
@@ -37324,6 +37403,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-11-10
+
+### Fixed
+- **Release test matrix reliability (#2700):** Measure redaction performance with
+  repeated samples and initialize isolated recovery state before exposing test-home
+  overrides, while checking for unexpected state files. Pin no-runtime OpenCode
+  recovery coverage to a deterministic configuration generation.
+- **SSH pairing consent control:** Keep identity consent unchecked initially and
+  disable **Trust and add daemon** until the checkbox is selected. Linux uses an
+  isolated form provider because zenity/KDialog cannot gate the submit button.
+- **Web Console daemon cards:** Request status for the exact target snapshot from
+  each discovery refresh, preventing overlapping SSH-settings and card refreshes
+  from hiding a connected daemon.
+- **Saved SSH reconnect:** Keep automatic bounded retries and add a per-daemon
+  **Reconnect SSH tunnel** action to wake the saved worker immediately when offline.
+  This does not re-pair, change trust, or start the remote daemon.
+- **Remote HTTPS settings save:** Update only `daemon.rest_tls` instead of replacing
+  the entire global config, and explain that remote SSH saves require a reachable
+  tunnel and an identity unlocked in the workstation's SSH agent.
+- **HTTPS settings whitespace:** Trim surrounding whitespace from certificate,
+  key, CA, server-name and pin fields before saving.
+- **SSH authentication guidance:** Explain that tray tunnels cannot prompt for a
+  password or encrypted-key passphrase; use the workstation's normal SSH agent/keyring.
+- **Daemon startup instructions:** Use `daemon start -b` in quick-start and remote
+  setup sequences so startup returns to the shell for status checks and follow-up steps.
+- **Saved SSH connection lifecycle:** Explain that stopping or uninstalling a remote
+  daemon does not remove its workstation tray profile, and document how to remove the
+  local pairing without changing remote files or stopping the daemon.
+- **Conditional required form fields:** Ignore required checkboxes while their
+  controlling field disables them, and refresh the submit gate when that state changes.
+- **KDE/AppIndicator daemon menu refresh:** Keep discovered SSH alias review
+  callbacks within pystray's supported callback arity so a pending alias cannot
+  abort rebuilding local and remote daemon entries.
+- **Remote HTTPS enrollment guidance and feedback:** Require the expected TLS SAN
+  identity and daemon-host certificate/key paths when enabling REST HTTPS. Pairing
+  requires explicit identity consent and reports success/errors; daemon status and
+  Doctor report the active REST protocol and configuration mismatches.
+- **Stable release reference checks:** Validate active source references without
+  rewriting historical version mentions in the generated NotebookLM export.
+- **Patch release branch safety:** Require patch releases to use the matching,
+  remote-synchronized stable branch; reject main, mismatched release branches, and
+  divergent local histories before CI or release changes.
+
 ## [1.21.0] - 2026-11-08
 
 ### Added
@@ -37908,187 +38030,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hint is released so it does not flash and drop behind other windows on KDE.
   Keep it normally stackable after startup and tolerate early closure or rejected
   window-manager hints.
-
-## [1.20.0] - 2026-10-20
-
-### Changed
-- **Breaking: Python 3.10 minimum (#2419):** AI Guardian `1.20.0` requires
-  Python 3.10 or newer. `1.19.x` is the last Python 3.9-compatible line. Upgrade
-  Python before upgrading AI Guardian, or pin `ai-guardian<1.20`.
-- **Web Console migration (#2424):** Replace the Textual terminal console with
-  the NiceGUI browser console. `ai-guardian console` and the compatibility alias
-  `ai-guardian tui` open the browser; persisted `textual` dialog preferences
-  migrate to `nicegui`. NiceGUI is a core dependency and there is no interactive
-  terminal fallback. See the [Console migration guidance](docs/CONSOLE.md#upgrading-from-119x).
-- **Experimental OpenShell integration (#2531, #2564):** Require OpenShell CLI
-  and gateway `0.1.3` or a later `0.1.x` patch, with supervisor protocol `1.0`;
-  `0.1.2` and earlier are rejected. Upstream remains pre-1.0. Version/protocol
-  compatibility and service readiness do not qualify every client/provider path
-  or establish production stability.
-- **Support-image clients (#2478, #2555):** Bundle Codex `0.160.0` and OpenCode
-  V1 `1.19.0` (MIT) in the OpenShell image; the normal image also pins OpenCode V1
-  `1.19.0`. Claude Code is installed in OpenShell at runtime only after explicit
-  Anthropic Terms of Service consent. The OpenShell selector exposes Codex,
-  Claude Code, and OpenCode with an explicit agent profile; Pi remains excluded.
-- **Deferred Codex/OpenShell qualification (#2556):** Keep Codex at `0.160.0`.
-  Qualification of `0.162.1` is deferred to `1.22.0`, awaiting supported managed
-  app-server executable integration in NVIDIA/OpenShell#4751. Normal model
-  traffic under the attached middleware policy, actual provider-boundary threat
-  denial, and lifecycle checks remain incomplete. The retained pin is not a new
-  compatibility certification. Claude Code/Vertex and OpenCode/Vertex also
-  require credential-backed live qualification; see the
-  [deployment limitations](docs/Sandbox.md#openshell-maturity-and-compatibility).
-- **Ubuntu 26.04 CI (#2491):** Move Linux validation and publishing to the
-  explicit `ubuntu-26.04` runner, including reusable scanner, scenario, Buildx,
-  QEMU, and multi-architecture container validation in Release Readiness.
-- **Strict typing (#2401, #2510):** Enable strict Mypy checking and explicitly
-  annotate nullable defaults, retaining documented exceptions at dynamic API
-  boundaries.
-- **Release verification guidance (#2563):** Align maintainer instructions and
-  skill checklists with tag-routed TestPyPI publishing, actual package metadata,
-  source-matched CI evidence, pre-tag documentation preparation, and independent
-  verification of every release deliverable.
-
-### Added
-- **Standalone NuGet V4 and Sonar credential detection (#2558):** Add bundled
-  rules for NuGet V4 API keys and prefixed Sonar user/project/global-analysis
-  tokens, with service attribution, bounded formats, and normal output
-  redaction. Sources: NuGetGallery (Apache-2.0), Betterleaks (MIT), and vendor
-  documentation. Legacy unprefixed Sonar and Kong Konnect remain out of scope.
-- **Session-scoped pause/resume (#2534, #2547):** Pause one active hook session
-  without affecting other sessions in the same directory. Add CLI, tray, socket,
-  and REST controls, plus mutually exclusive `--dir` and `--session` selectors
-  on the short CLI commands. Preserve existing global/directory semantics,
-  stable session identities, pause lifetimes, and AI-session self-protection;
-  unsupported or failed scoped requests never broaden to global control.
-- **Readable tray session names (#2546):** Prefer optional hook/native session
-  titles in local, remote, and container pause controls, with safe bounded text,
-  ID fallback, duplicate-name disambiguation, and Windows-safe literal text.
-  OpenCode V2 forwards titles through bounded cached lookups; renames preserve
-  stable control keys and pause state.
-- **Tray sandbox creation Connect action (#2542):** Offer a Connect button after
-  successful container or OpenShell creation, launching the selected sandbox's
-  interactive connection without rerunning creation while preserving the output.
-- **Tray navigation and configuration (#2529):** Group directory controls under
-  **Directories...**, place sandbox **Connect** and **Manage sandbox** directly
-  after **Pause...**, and expose middleware readiness as a standalone action.
-  Use one exclusive initial-configuration source selector for host/default,
-  profile, host directory, or saved snapshot.
-- **OpenShell native Vertex authentication (#2473):** Implement Claude Code and
-  OpenCode's `claude` agent paths using gateway-owned Google Cloud ADC through
-  the supervisor metadata emulator. Bind Vertex endpoints to the attached
-  `google-cloud` provider without forwarding credentials into the workload.
-  These paths are implemented, not yet live-qualified for this release.
-- **OpenShell authentication selection:** Add explicit Codex OAuth/API-key
-  selection in the tray and CLI. OAuth selects the `codex` provider profile;
-  API keys select `openai`. Preserve the distinction when the tray does not
-  inherit the interactive shell environment.
-- **External Rust OpenShell middleware (#2484, #2525):** Add operator-managed
-  provider-content scanning and response redaction with protocol negotiation,
-  bounded HTTP and text-WebSocket inspection, scanner-ownership routing,
-  fail-closed control-plane behavior, and daemon-backed audit attribution without
-  provider payloads in diagnostics. Body-bearing responses require bounded
-  whole-body inspection; unsupported inspection modes deny delivery rather than
-  scanning independent stream fragments. Rust is the only middleware runtime;
-  there is no Python fallback or AI Guardian middleware lifecycle command.
-  The current service is plaintext-only and restricts listener binding by
-  default; deployment requires an appropriate private/authenticated transport
-  boundary. Explicit scanner ownership `both` remains unsupported.
-  OpenShell owns gateway registration and complete `network_middlewares`
-  policy activation. See the [middleware guide](docs/OPENSHELL_MIDDLEWARE.md).
-- **Middleware pause coupling (#2506):** Follow ordinary daemon global/project
-  pause state, with audited `middleware_paused` pass-through decisions and
-  per-message WebSocket resume checks. Hook-session pauses do not pause provider
-  middleware. An unavailable daemon remains fail-closed.
-- **Middleware tray workflow (#2527):** Probe configured gRPC endpoints with
-  `Describe`, report service identity separately from gateway activation, and
-  review a complete merged policy for the selected sandbox before explicit
-  replacement. Validate edits and preserve required base controls. Readiness
-  probes use grpcio (Apache-2.0) without a protobuf runtime dependency.
-- **Middleware release binaries (#2522):** Publish version-aligned Rust archives
-  for Linux x86_64/arm64 and macOS Intel/Apple Silicon, with SHA-256 checksums.
-  Keep these GitHub Release assets separate from Python distributions uploaded
-  to PyPI/TestPyPI.
-- **Automatic CLI/IDE setup discovery (#2494):** Make plain `ai-guardian setup`
-  reuse tray installation and integrity checks, skip healthy integrations,
-  prompt for a selectable subset when several need setup, and let `--yes` or
-  `--json` configure pending integrations non-interactively.
-- **Targeted setup overwrite confirmation (#2538):** Offer a default-No
-  overwrite prompt for already configured integrations in interactive
-  `setup --ide`; declining or cancelling preserves the existing setup.
-- **Two-step IDE/CLI setup postponement (#2496):** Add a Later action to the
-  setup prompt, open a separate 1h/6h/1d/1w delay chooser, default closed
-  prompts to a one-hour snooze, and preserve explicit permanent dismissal
-  across Tkinter, NiceGUI, macOS, and Linux tray dialog providers.
-- **OpenCode V2 support (#2470):** Detect OpenCode 1.x versus 2.x during
-  setup, generate the matching plugin lifecycle contract, and discover V2
-  database paths without replacing V1 support. Use V2 local-plugin discovery,
-  protect unrelated plugins during migration, preserve session pauses between
-  turns, and provide safe transcript feedback for blocked prompts/tools without
-  exposing withheld content. Doctor distinguishes configured files from verified
-  server activation. See [OpenCode support](docs/OPENCODE.md).
-- **Packaged TypeScript templates (#2535):** Include AI Guardian-owned bridge,
-  extension, and plugin resources in wheels and source distributions while
-  preserving their integration-specific generated paths and rendering.
-- **CLI version visibility in doctor:** Report detected versions for installed
-  CLI integrations in human-readable and structured hook health output. OpenCode
-  also reports whether the active CLI uses the V1 or V2 plugin contract.
-- **Biweekly Codex candidate smoke checks:** The support-image version-health
-  workflow checks candidate installation/version/help without credentials, then
-  records the remaining operator qualification steps. An offline smoke is not
-  OAuth or provider-boundary qualification; CI receives no ChatGPT OAuth tokens.
-
-### Fixed
-- **IPv6 embedded SSRF destinations (#2559):** Apply existing IP policy to
-  mapped IPv4, 6to4 routing endpoints, and both Teredo server/client addresses
-  consistently across literal URLs and caller-supplied DNS/redirect checks.
-  Share existing immutable numeric metadata protections with resolved and
-  embedded addresses; preserve public/native IPv6 controls, policy semantics,
-  and API contracts. Keep classifier debug diagnostics free of input-derived
-  addresses and ranges. Independently
-  authored using Python's standard library and RFC 3056/4380, following review
-  #2554 and CVE-2026-108115 in another product; no live exploit was tested.
-- **Linux tray reliability (#2532, #2549):** Defer native menu replacement while
-  a popup is open and preserve actions through KDE's close-before-click delivery
-  order. Refresh authoritative pause state after scoped operations and idle
-  transitions without losing the selected session, directory, or daemon target.
-- **GitGuardian installation verification:** Allow up to 60 seconds for
-  `ggshield --version` to initialize its bundled Python runtime on slow/emulated
-  ARM64 builds. Timeouts and nonzero exits still fail verification.
-- **OpenShell GitHub policy compatibility:** Remove unsupported TLS mode values
-  from bundled read-only and read/write GitHub endpoint overlays; OpenShell uses
-  automatic TLS termination when the field is omitted.
-- **Tracing Settings initialization (#2517):** Prevent initial control hydration
-  from saving the tracing configuration or displaying a save notification; edits
-  continue to save once after the page has loaded.
-- **Host CLI setup backups (#2505):** Back up existing hook and MCP JSON/JSONC/
-  TOML configurations byte-for-byte before every mutation, stop safely when a
-  backup fails, retain numbered snapshots across repeated writes, and surface
-  the affected path in CLI and tray setup results.
-- **Consistent Fedora tray setup prompts (#2497):** Keep structured Linux
-  setup and snooze flows on one rich UI provider, avoid silently dropping
-  install/profile choices in native dialogs, and serialize setup and upgrade
-  prompts so periodic refreshes cannot open competing modals.
-- **Scanner version CI checks:** Authenticate GitHub release lookups with the
-  read-only Actions token so public API rate limits do not turn valid pinned
-  scanner versions into false CI failures.
-- **Tray Console health runtime context:** Local Console health checks now run
-  through the active daemon REST endpoint before falling back to the Console
-  process, avoiding stale CLI version reports.
-- **ONNX Runtime install markers:** Avoid parsing non-PEP 440 Linux kernel
-  release strings as versions during dependency resolution. The installer
-  smoke test now builds and installs the wheel from the checked-out source.
-- **Rootless Podman sandbox config staging:** Use Podman `keep-id` user
-  namespaces for managed sandbox and launcher commands so user-only host
-  configuration snapshots remain readable without changing host permissions.
-- **OpenShell API-key provider refresh:** Keep Codex OAuth and OpenAI API-key
-  credentials in separate gateway provider instances so an existing OAuth
-  provider is not refreshed with an incompatible credential type.
-- **OpenShell workload identity:** Use a dedicated no-supplementary-groups
-  sandbox account in the OpenShell image so OpenShell's capability-free launch
-  accepts the resolved workload identity under Podman.
-- **Sandbox image picker timestamps:** Show local-time creation timestamps while
-  preserving the underlying container image reference used for selection.
 
 
 *(Earlier versions omitted — see CHANGELOG.md for full history)*

@@ -9,6 +9,17 @@ budget_tokens: 1000
 
 ---
 
+## v1.21.1 release and main merge-back — 2026-11-10
+
+- Published release `v1.21.1` from `release-1.21`; the release test-matrix
+  stabilization for #2700 is included. The post-release merge-back to `main` is
+  being resolved. Keep the main/Python/Rust development version at `1.22.0-dev`.
+- Resolved version, changelog, and status conflicts while preserving the release
+  entry and unreleased main changes. The merge remains uncommitted for review.
+- **Next:** review the resolved merge and commit it when ready.
+
+---
+
 ## PR #2694 review and CI follow-up — 2026-11-10
 
 - Original CI run `42737676198` failed across the Python matrix for two causes:
@@ -96,7 +107,6 @@ budget_tokens: 1000
 - Closed issue #2689 with all acceptance criteria checked. The unrelated local
   `main` checkout was preserved; release work remains in the isolated local
   worktree `/tmp/opencode/ai-guardian-2689-release-backport`.
-
 ## Issue #2685 implementation — 2026-11-08
 
 - Implemented on the existing managed DAF branch `2685`. `scripts/release.sh`
