@@ -300,6 +300,10 @@
 
 ## Key Learnings
 
+- **2026-11-10 — Post-release merge-back:** Keep `main`'s unreleased changelog
+  notes and next-development version. Automatically resolve only validated
+  version-only, changelog, and OpenWolf-status conflicts; stop for all other
+  conflicts rather than choosing one branch wholesale.
 - **2026-11-09 — Remote HTTPS/SSH enrollment:** The TLS server identity must match
   a certificate SAN and is independent of the SSH alias and loopback destination;
   it need not resolve in public DNS for an SSH tunnel. Require the daemon-host

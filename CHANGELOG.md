@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Post-release merge conflicts:** Resolve only validated version, changelog, and
+  OpenWolf status conflicts; preserve main's unreleased notes and next development
+  version, and stop for manual review of unexpected conflicts.
 - **SSH pairing consent control:** Keep identity consent unchecked initially and
   disable **Trust and add daemon** until the checkbox is selected. Linux uses an
   isolated form provider because zenity/KDialog cannot gate the submit button.

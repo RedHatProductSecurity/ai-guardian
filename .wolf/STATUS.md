@@ -9,14 +9,19 @@ budget_tokens: 1000
 
 ---
 
-## v1.21.1 release and main merge-back — 2026-11-10
+## Release script post-release merge conflict guard — 2026-11-10
 
-- Published release `v1.21.1` from `release-1.21`; the release test-matrix
-  stabilization for #2700 is included. The post-release merge-back to `main` is
-  being resolved. Keep the main/Python/Rust development version at `1.22.0-dev`.
-- Resolved version, changelog, and status conflicts while preserving the release
-  entry and unreleased main changes. The merge remains uncommitted for review.
-- **Next:** review the resolved merge and commit it when ready.
+- Published `v1.21.1` and merged `release-1.21` into `main` in commit
+  `ade81361`, retaining the `1.22.0-dev` development versions.
+- Phase 8 now defers the merge commit until resolution. The new resolver
+  sets version-only conflicts to the next dev version, combines main's
+  `[Unreleased]` changelog with the release section, keeps main's OpenWolf status,
+  and stops for unexpected or broader conflicts.
+- Added shell-contract tests and temporary-Git merge regressions. Changes are
+  currently uncommitted on `main`.
+- **Validation:** 46 related unit tests pass. Ruff, Black, Pylint, Mypy, Bash
+  syntax, JSON validation, and diff checks pass.
+- **Next:** review the diff; script changes remain uncommitted and unpushed.
 
 ---
 
