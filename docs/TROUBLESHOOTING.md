@@ -670,6 +670,14 @@ configured identity through the workstation's normal SSH agent/keyring, then ver
 that `ssh -o BatchMode=yes -T <user>@<saved-alias> true` succeeds from the
 workstation before reconnecting. Do not use the TLS SNI name as the SSH alias.
 
+Stopping or uninstalling the remote daemon does not remove its saved connection
+from the workstation tray; it remains listed as offline. To remove the local saved
+profile and trust, choose **Manage SSH connection...** from that daemon's tray menu,
+then **Remove...**, or use the workstation Console home `/` → **SSH daemon
+connections** → **Remove...**. This closes owned tunnels but does not stop the remote
+daemon or remove the remote account's `authorized_keys` entry, AI Guardian config,
+or TLS files; handle those separately if a full remote reset is intended.
+
 Saving HTTPS settings for an SSH daemon also requires an active tunnel. If the
 target is offline, the Console reports that it could not save; unlock the SSH key
 and reconnect before saving again. The save updates only `daemon.rest_tls`, leaving
