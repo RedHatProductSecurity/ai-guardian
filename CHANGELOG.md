@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **GitHub App stateless token redaction coverage (#2698):** Exercise an exact
+  520-character synthetic `ghs_` JWT-shaped token and verify its full span is
+  detected and redacted while retaining legacy-token coverage.
+
 ### Changed
 - **README documentation resources:** Shorten the root README into a landing page
   and surface the full documentation site, source index, and NotebookLM Q&A.

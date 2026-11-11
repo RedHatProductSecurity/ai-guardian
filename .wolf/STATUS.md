@@ -7,6 +7,24 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-11 (UTC)
 
+## Issue #2698 implementation — 2026-11-11
+
+- On the existing managed DAF branch `2698`, replaced the shorter GitHub
+  stateless-token example with an exact 520-character synthetic JWT-shaped value.
+  The test verifies a GitHub Secret Token match spans all 520 characters and that
+  the raw token, payload, and signature do not remain in redacted output. Updated
+  the class documentation to reflect the completed October 2, 2026 rollout and
+  added an Unreleased changelog entry.
+- The existing `ghs_` TOML rule passes the full-length regression, so no detection
+  rule change was needed. Legacy stateful-token tests remain unchanged.
+- **Validation:** all 72 tests in `tests/unit/test_secret_redaction.py` pass;
+  Black, Ruff, error-level Pylint, package Mypy (336 source files), and
+  `git diff --check` pass.
+- Updated GitHub acceptance criteria, added the `done` label and progress comment,
+  and saved a DAF note. Changes remain uncommitted on branch `2698`; no commit or
+  PR was created.
+- **Next:** user review and external `daf complete`.
+
 ## Issue #2708 README landing page — 2026-11-11
 
 - Replaced the 663-line README with a 116-line landing page. Prominent links to

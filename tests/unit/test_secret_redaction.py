@@ -486,10 +486,9 @@ class TestSecretRedactionIntegration:
 class TestGitHubStatelessJWTTokens:
     """Test GitHub token detection for both stateful and stateless JWT formats.
 
-    GitHub is rolling out stateless JWT tokens (mid-May to late-June 2026)
-    for App installation tokens (ghs_). The new format includes dots and
-    hyphens from base64url-encoded JWT payload. All four token types
-    (ghp_, gho_, ghr_, ghs_) are updated proactively.
+    GitHub completed its stateless App installation token (ghs_) rollout on
+    October 2, 2026. These tokens use a longer JWT-like format with dots and
+    base64url-compatible characters; legacy opaque formats remain supported.
     """
 
     @pytest.fixture
@@ -536,19 +535,24 @@ class TestGitHubStatelessJWTTokens:
         assert found, f"Expected {token_type} detection for JWT format"
         assert jwt_payload not in result["redacted_text"]
 
-    def test_ghs_real_world_jwt_length(self, redactor):
-        """New ghs_ tokens can be ~520 chars long with full JWT payload."""
+    def test_ghs_full_length_stateless_jwt_is_redacted(self, redactor):
+        """A full-length synthetic stateless token is matched and redacted."""
         header = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
-        payload = (
-            "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9." * 3
-        )
-        sig = "dGVzdHNpZ25hdHVyZWRhdGFmb3J0ZXN0aW5n"
-        token = f"ghs_12345_{header}.{payload}{sig}"  # notsecret
+        payload_prefix = "eyJzdWIiOiJub3QtYS1yZWFsLXVzZXIiLCJpc3MiOiJleGFtcGxlIn0"
+        payload = payload_prefix + "A" * (386 - len(payload_prefix))
+        signature = "A" * 86
+        token = f"ghs_12345_{header}.{payload}.{signature}"  # notsecret
+        assert len(token) == 520
+
         result = redactor.redact(f"Token: {token}")
-        assert len(result["redactions"]) >= 1
-        found = any(r["type"] == "GitHub Secret Token" for r in result["redactions"])
-        assert found
-        assert header not in result["redacted_text"]
+        matches = [
+            r for r in result["redactions"] if r["type"] == "GitHub Secret Token"
+        ]
+        assert len(matches) == 1
+        assert matches[0]["original_length"] == len(token)
+        assert token not in result["redacted_text"]
+        assert payload not in result["redacted_text"]
+        assert signature not in result["redacted_text"]
 
     def test_dots_and_hyphens_in_token(self, redactor):
         """Dots, hyphens, and underscores in the token body are matched."""
