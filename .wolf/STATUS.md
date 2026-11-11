@@ -9,6 +9,24 @@ budget_tokens: 1000
 
 ---
 
+## Issue #2702 implementation — 2026-11-10
+
+- Verified #2700's fix landed on `release-1.21` in merged PR #2703 (merge
+  `e9d67cba`, source `23630a78`). Ported the relevant reliability changes to the
+  existing `2702` branch: five-sample median redaction timing with warm-up,
+  deterministic recovery state setup and empty-directory assertions, and a pinned
+  OpenCode V1 no-runtime test. Added the Unreleased changelog entry; excluded the
+  release-branch-only `.wolf/STATUS.md` change.
+- **Validation:** both focused unit files pass (**191 passed, 8 skipped**); the
+  performance and cancellation tests each pass five repeated runs. Ruff, Black
+  (Python 3.10 target), error-level Pylint, package Mypy (336 source files), and
+  `git diff --check` pass. This is local Linux/Python 3.14 validation; Windows CI
+  remains pending.
+- No commit or PR was created. **Next:** create the PR toward `main` with the user,
+  then confirm the CI matrix. The exact process that originally initialized the
+  recovery state directory remains unidentified; the fixture now establishes it
+  before publishing test-home overrides and fails if unexpected files exist.
+
 ## Release script post-release merge conflict guard — 2026-11-10
 
 - Published `v1.21.1` and merged `release-1.21` into `main` in commit

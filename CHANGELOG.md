@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenCode PostToolUse filenames:** Reuse normalized native tool arguments so
   `filePath` and other supported path aliases are retained by post-tool scanners
   and violation records, including legacy handler calls.
+- **Release test matrix reliability (#2700):** Measure redaction performance with
+  repeated samples and initialize isolated recovery state before exposing test-home
+  overrides, while checking for unexpected state files. Pin no-runtime OpenCode
+  recovery coverage to a deterministic configuration generation.
 - **Post-release merge conflicts:** Resolve only validated version, changelog, and
   OpenWolf status conflicts; preserve main's unreleased notes and next development
   version, and stop for manual review of unexpected conflicts.
