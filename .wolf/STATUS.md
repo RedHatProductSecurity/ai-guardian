@@ -7,6 +7,30 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-11 (UTC)
 
+## Issue #2709 Read the Docs release versions — 2026-11-11
+
+- On the existing DAF branch `2709`, made release verification inspect both the
+  final HTTP status and effective URL, so redirects to `latest` do not count as
+  versioned-doc success. Inactive/misrouted and unavailable responses now give
+  distinct recovery steps and cause a nonzero final result after merge-back, without
+  rolling back publication or inviting a full release rerun.
+- Documented the dashboard-only SemVer tag activation rule, Read the Docs version
+  selector, and manual recovery. README now defaults to `/en/stable/` and explicitly
+  identifies `/en/latest/` as tracking `main`; this follows #2708, merged in PR #2710.
+- **Validation:** 44 focused release-script tests pass. Full Ruff, Black (Python
+  3.10 target), error-level Pylint, package Mypy (336 files), Bash syntax, and
+  `git diff --check` pass.
+- Updated #2709's acceptance checklist and progress comment; added a DAF note.
+  A read-only live check found `/en/v1.21.1/` and `/en/stable/` currently return
+  HTTP 404, while `/en/latest/` serves the docs. Dashboard rule and selector status
+  remain unverified without project access, so acceptance criteria 1–2 remain open.
+  No commit, push, or PR was created.
+- **Next:** maintainer configures/confirms **Admin → Automation Rules** as
+  **SemVer versions → Tag → Activate version**, then verifies the active tag and
+  all three documentation routes. Do not rerun the release script solely for docs.
+
+---
+
 ## Issue #2708 README landing page — 2026-11-11
 
 - Replaced the 663-line README with a 116-line landing page. Prominent links to

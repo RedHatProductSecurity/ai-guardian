@@ -323,13 +323,15 @@ restrictions and native user-only upload/publication consent are unchanged.
 
 ### One-time Read the Docs setup
 
-The release script pushes semantic version tags but does not manage Read the Docs project settings. Configure this once in **Read the Docs → Admin → Automation Rules**:
+This is a one-time **project dashboard** setting. Neither `.readthedocs.yaml` nor the release script manages Read the Docs automation rules. Configure the rule in **Read the Docs → Admin → Automation Rules**:
 
 1. Match: **SemVer versions**
 2. Version type: **Tag**
 3. Action: **Activate version**
 
-The GitHub integration then builds each `vX.Y.Z` tag automatically. Read the Docs maps the greatest stable semantic version to `/en/stable/`, while `/en/latest/` continues to track `main`. The release script waits for and verifies the exact `/en/vX.Y.Z/` URL after pushing the production tag.
+The GitHub integration then builds each `vX.Y.Z` tag automatically. Activated versions appear in the Read the Docs version selector. Read the Docs maps the greatest stable semantic version to `/en/stable/`, while `/en/latest/` continues to track `main`.
+
+After setting the rule, check **Read the Docs → Versions** and confirm a released `vX.Y.Z` is active and its build succeeds. If a tag was missed, activate that version there and inspect its build. The release script checks that the exact `/en/vX.Y.Z/` URL returns a successful response **without redirecting to another version**; it cannot create or activate the dashboard rule.
 
 ## Table of Contents
 
@@ -689,6 +691,8 @@ After pushing the tag:
 8. Record both container manifests/digests and runtime AI Guardian versions.
 9. Verify the exact versioned documentation at `https://ai-guardian.readthedocs.io/en/v<version>/`,
    `/en/stable/` at that release, and `/en/latest/` at `main`.
+
+If release verification reports that the version is inactive, redirected, or unavailable, inspect **Read the Docs → Versions** and the tag's build. Correct the automation rule under **Admin → Automation Rules** or activate the missed version, then verify all three URLs. The script completes its post-release merge-back before returning a failure for unresolved documentation verification; the tag and published artifacts are not rolled back. **Do not rerun the full release script** just to repair Read the Docs.
 
 If a workflow fails, stop and inspect the matching run before deciding recovery.
 Do not delete/repoint a published production tag or replace an uploaded PyPI
