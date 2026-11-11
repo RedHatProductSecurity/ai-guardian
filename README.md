@@ -12,7 +12,10 @@
 
 ## Documentation and Q&A
 
-- [Full documentation site](https://ai-guardian.readthedocs.io/en/latest/) — searchable, versioned guides.
+- [Full documentation site (latest stable release)](https://ai-guardian.readthedocs.io/en/stable/) — searchable,
+  versioned guides.
+- [Latest documentation (tracks `main`)](https://ai-guardian.readthedocs.io/en/latest/) — guides for upcoming
+  development changes.
 - [Source documentation index](docs/README.md) — browse the documentation in this repository.
 - [Ask questions about the documentation in NotebookLM](https://notebook.google.com/notebook/9b78ebca-d327-4df7-8f2e-64e518f2ddcb) — a Google account is required.
 

@@ -661,12 +661,17 @@ fi
 
 section "Phase 7: Wait and Verify"
 
+DOCS_URL="https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
+DOCS_VERSION_URL_PREFIX="$DOCS_URL"
+DOCS_AVAILABLE=false
+DOCS_VERIFICATION_STATUS="not checked (dry-run)"
+
 if $DRY_RUN; then
     echo "[dry-run] gh run watch (publish workflow)"
     echo "[dry-run] gh run watch (build-container workflow)"
     echo "[dry-run] pip install --dry-run ai-guardian==${NEW_VERSION}"
     echo "[dry-run] python3 ${CONTAINER_VERIFIER} ${NORMAL_CONTAINER_IMAGE} ${OPENSHELL_CONTAINER_IMAGE}"
-    echo "[dry-run] Verify https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
+    echo "[dry-run] Verify ${DOCS_URL}"
 else
     info "Waiting for publish workflow..."
     sleep 10
@@ -696,20 +701,45 @@ else
     fi
 
     info "Waiting for versioned documentation..."
-    DOCS_URL="https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
-    DOCS_AVAILABLE=false
+    DOCS_HTTP_STATUS="000"
+    DOCS_EFFECTIVE_URL=""
     for _attempt in {1..18}; do
-        if curl --fail --silent --location --max-time 10 --output /dev/null "$DOCS_URL"; then
+        DOCS_RESPONSE=$(curl --silent --location --max-time 10 \
+            --output /dev/null --write-out '%{http_code} %{url_effective}' \
+            "$DOCS_URL" 2>/dev/null || true)
+        DOCS_HTTP_STATUS="${DOCS_RESPONSE%% *}"
+        DOCS_EFFECTIVE_URL=""
+        if [[ "$DOCS_RESPONSE" == *" "* ]]; then
+            DOCS_EFFECTIVE_URL="${DOCS_RESPONSE#* }"
+        fi
+        [[ -n "$DOCS_HTTP_STATUS" ]] || DOCS_HTTP_STATUS="000"
+
+        if [[ "$DOCS_HTTP_STATUS" =~ ^2[0-9]{2}$ ]] && \
+            [[ "$DOCS_EFFECTIVE_URL" == "${DOCS_VERSION_URL_PREFIX}"* ]]; then
             DOCS_AVAILABLE=true
             break
         fi
         sleep 10
     done
     if $DOCS_AVAILABLE; then
-        info "Read the Docs: ${DOCS_URL} available"
+        DOCS_VERIFICATION_STATUS="verified (HTTP ${DOCS_HTTP_STATUS}; release version served)"
+        info "Read the Docs: ${DOCS_URL} available (HTTP ${DOCS_HTTP_STATUS})"
     else
-        warn "Read the Docs verification timed out: ${DOCS_URL}"
-        warn "Check the Read the Docs build and SemVer tag activation rule"
+        if [[ "$DOCS_HTTP_STATUS" == "404" ]] || \
+            { [[ "$DOCS_HTTP_STATUS" =~ ^2[0-9]{2}$ ]] && \
+                [[ "$DOCS_EFFECTIVE_URL" != "${DOCS_VERSION_URL_PREFIX}"* ]]; }; then
+            DOCS_VERIFICATION_STATUS="failed (inactive or wrong version served; HTTP ${DOCS_HTTP_STATUS})"
+            warn "Read the Docs did not serve ${TAG_NAME} as an active release version (HTTP ${DOCS_HTTP_STATUS}): ${DOCS_URL}"
+            if [[ -n "$DOCS_EFFECTIVE_URL" ]] && \
+                [[ "$DOCS_EFFECTIVE_URL" != "${DOCS_VERSION_URL_PREFIX}"* ]]; then
+                warn "The request ended at ${DOCS_EFFECTIVE_URL}; a redirect to another version does not verify ${TAG_NAME}."
+            fi
+            warn "Check Read the Docs → Versions and the ${TAG_NAME} build. Ensure Admin → Automation Rules matches SemVer versions / Tag / Activate version; activate ${TAG_NAME} if needed, then verify the release URL. Do not rerun scripts/release.sh."
+        else
+            DOCS_VERIFICATION_STATUS="failed (unavailable; HTTP ${DOCS_HTTP_STATUS})"
+            warn "Read the Docs did not make ${TAG_NAME} available after retries (HTTP ${DOCS_HTTP_STATUS}): ${DOCS_URL}"
+            warn "Inspect the ${TAG_NAME} build in Read the Docs → Versions and confirm Admin → Automation Rules is SemVer versions / Tag / Activate version. Do not rerun scripts/release.sh."
+        fi
     fi
 fi
 
@@ -837,12 +867,18 @@ echo "  OpenShell: ${OPENSHELL_CONTAINER_IMAGE}"
 echo "  Docs: https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
 echo "  Docs (stable): https://ai-guardian.readthedocs.io/en/stable/"
 echo "  Docs (latest): https://ai-guardian.readthedocs.io/en/latest/"
+echo "  Docs verification: ${DOCS_VERIFICATION_STATUS}"
 echo ""
 if $DRY_RUN; then
     info "Dry run complete; no announcement posted."
-elif [[ -n "$ANNOUNCEMENT_URL" ]]; then
+elif [[ -n "$ANNOUNCEMENT_URL" && "$DOCS_AVAILABLE" == true ]]; then
     info "Done!"
 else
-    warn "Release process finished with an unconfirmed announcement; retry the announcement only, not publication."
+    if [[ -z "$ANNOUNCEMENT_URL" ]]; then
+        warn "Release process finished with an unconfirmed announcement; retry the announcement only, not publication."
+    fi
+    if [[ "$DOCS_AVAILABLE" != true ]]; then
+        warn "Release publication and main-branch merge-back completed, but Read the Docs verification needs attention. Follow the guidance above; do not rerun the full release."
+    fi
     exit 1
 fi

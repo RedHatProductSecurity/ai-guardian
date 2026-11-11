@@ -300,6 +300,14 @@
 
 ## Key Learnings
 
+- **2026-11-11 — Read the Docs release verification (#2709):** A successful HTTP
+  status alone does not prove that a release tag is being served; inspect the
+  effective URL and require it to remain under the requested `/en/vX.Y.Z/` path.
+  Read the Docs SemVer tag activation rule is a project-dashboard setting, not
+  managed by `.readthedocs.yaml` or the release script. If verification remains
+  unresolved, finish post-release merge-back, report actionable activation/build
+  steps, and do not rerun the full release.
+
 - **2026-11-10 — Post-release merge-back:** Keep `main`'s unreleased changelog
   notes and next-development version. Automatically resolve only validated
   version-only, changelog, and OpenWolf-status conflicts; stop for all other

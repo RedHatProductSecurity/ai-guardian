@@ -11,6 +11,8 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RELEASE_SCRIPT = REPO_ROOT / "scripts" / "release.sh"
+README = REPO_ROOT / "README.md"
+RELEASING_DOC = REPO_ROOT / "RELEASING.md"
 RELEASE_READINESS_WORKFLOW = (
     REPO_ROOT / ".github" / "workflows" / "release-readiness.yml"
 )
@@ -55,11 +57,38 @@ def test_release_script_help_and_docs_verification_contract():
     assert help_result.returncode == 0
     assert "<minor|patch|major>" in help_result.stdout
     assert "https://ai-guardian.readthedocs.io/en/${TAG_NAME}/" in script
-    assert "curl --fail --silent --location" in script
+    assert "--write-out '%{http_code} %{url_effective}'" in script
+    assert "DOCS_VERSION_URL_PREFIX" in script
+    assert "DOCS_VERIFICATION_STATUS" in script
     assert "quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}" not in script
     assert "verify_container_images.py" in script
     assert "${NORMAL_CONTAINER_IMAGE}" in script
     assert "${OPENSHELL_CONTAINER_IMAGE}" in script
+
+
+def test_readme_links_to_stable_docs_and_labels_latest_as_development():
+    """The default documentation link is stable, with main docs separate."""
+    readme = README.read_text(encoding="utf-8")
+
+    assert "Full documentation site (latest stable release)" in readme
+    assert "https://ai-guardian.readthedocs.io/en/stable/" in readme
+    assert "Latest documentation (tracks `main`)" in readme
+    assert "https://ai-guardian.readthedocs.io/en/latest/" in readme
+
+
+def test_release_docs_explain_dashboard_activation_and_recovery():
+    """Maintainers can configure RTD once and recover a missed release version."""
+    releasing = RELEASING_DOC.read_text(encoding="utf-8")
+
+    assert "Neither `.readthedocs.yaml` nor the release script manages" in releasing
+    assert "Match: **SemVer versions**" in releasing
+    assert "Version type: **Tag**" in releasing
+    assert "Action: **Activate version**" in releasing
+    assert (
+        "Activated versions appear in the Read the Docs version selector" in releasing
+    )
+    assert "Read the Docs → Versions" in releasing
+    assert "Do not rerun the full release script" in releasing
 
 
 def test_release_script_synchronizes_stable_references_before_tagging():
@@ -330,6 +359,8 @@ elif program == "python3":
             raise AssertionError(args)
     elif Path(args[0]).name not in ("sync_release_versions.py", "sync_rust_middleware_version.py", "verify_container_images.py"):
         raise AssertionError(args)
+elif program == "curl":
+    print(os.environ["RTD_TEST_CURL_RESPONSE"])
 elif program == "pip":
     sys.exit(int(os.environ.get("PIP_TEST_EXIT", "0")))
 elif program == "git-cliff":
@@ -352,6 +383,7 @@ elif program not in ("curl", "git-cliff", "sleep"):
         run_metadata=None,
         empty_changelog=False,
         release_type="minor",
+        docs_response="200 https://ai-guardian.readthedocs.io/en/v1.2.3/",
         current_branch="main",
         head_sha="same-commit",
         main_sha="same-commit",
@@ -386,6 +418,7 @@ elif program not in ("curl", "git-cliff", "sleep"):
                 "RELEASE_DISPATCH_FAILURE": dispatch_failure,
                 "RELEASE_RUN_METADATA": json.dumps(run_metadata or {}),
                 "RELEASE_MERGE_CONFLICTS": json.dumps(list(merge_conflicts)),
+                "RTD_TEST_CURL_RESPONSE": docs_response,
             },
         )
         commands = [json.loads(line) for line in log.read_text().splitlines()]
@@ -697,6 +730,51 @@ def test_release_script_announces_after_verification_before_dev_bump(release_san
         "Announcement: https://github.com/RedHatProductSecurity/ai-guardian/discussions/123"
         in result.stdout.split("Release Summary")[1]
     )
+
+
+def test_release_script_verifies_the_exact_versioned_docs_url(release_sandbox):
+    result, _commands = release_sandbox("--execute")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        "Read the Docs: https://ai-guardian.readthedocs.io/en/v1.2.3/ available (HTTP 200)"
+        in result.stdout
+    )
+    assert "Docs verification: verified (HTTP 200; release version served)" in (
+        result.stdout
+    )
+
+
+@pytest.mark.parametrize(
+    ("docs_response", "expected_message"),
+    [
+        (
+            "404 https://ai-guardian.readthedocs.io/en/v1.2.3/",
+            "did not serve v1.2.3 as an active release version (HTTP 404)",
+        ),
+        (
+            "200 https://ai-guardian.readthedocs.io/en/latest/",
+            "a redirect to another version does not verify v1.2.3",
+        ),
+        (
+            "503 https://ai-guardian.readthedocs.io/en/v1.2.3/",
+            "did not make v1.2.3 available after retries (HTTP 503)",
+        ),
+    ],
+    ids=["inactive-version", "redirected-to-latest", "service-unavailable"],
+)
+def test_failed_docs_verification_is_actionable_and_fails_after_mergeback(
+    docs_response, expected_message, release_sandbox
+):
+    result, commands = release_sandbox("--execute", docs_response=docs_response)
+
+    assert result.returncode == 1
+    assert expected_message in result.stdout
+    assert "Do not rerun scripts/release.sh" in result.stdout
+    assert "Docs verification: failed" in result.stdout
+    assert "Main branch updated" in result.stdout
+    assert "Release publication and main-branch merge-back completed" in result.stdout
+    assert ["git", "push", "origin", "main"] in commands
 
 
 def test_post_release_merge_waits_for_resolution_before_committing(release_sandbox):
