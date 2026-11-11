@@ -167,14 +167,12 @@ def handle_post_tool_use(ctx=None, **kwargs):
     # For MCP tools: already have composite name like "mcp__notebooklm__chat"
     tool_identifier = tool_name
 
-    # Get tool_input from either tool_use.input or tool_input field
-    tool_input = {}
-    if "tool_use" in hook_data and isinstance(hook_data["tool_use"], dict):
-        tool_input = hook_data["tool_use"].get("input", {})
-    elif "tool_input" in hook_data and isinstance(hook_data["tool_input"], dict):
-        tool_input = hook_data["tool_input"]
-    elif "toolInput" in hook_data and isinstance(hook_data["toolInput"], dict):
-        tool_input = hook_data["toolInput"]
+    # Reuse the shared normalized input so native aliases such as OpenCode's
+    # filePath reach post-tool scanners as the canonical file_path.
+    normalized = getattr(ctx, "normalized", None) if ctx is not None else None
+    if normalized is None:
+        normalized = adapter.normalize_input(hook_data)
+    tool_input = normalized.tool_input or {}
 
     if tool_name == "Skill" and tool_input.get("skill"):
         tool_identifier = f"Skill:{tool_input['skill']}"
