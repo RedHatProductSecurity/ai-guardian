@@ -300,6 +300,14 @@
 
 ## Key Learnings
 
+- **2026-11-11 — Safe release CI resumption:** Correlate workflow-dispatch runs
+  with a unique input rendered in `run-name`; run-list order or timestamps are not
+  attempt identity. Persist dispatch intent before calling GitHub, then reconcile
+  uncertain outcomes by that ID and never retry an uncertain dispatch blindly.
+  Revalidate the exact workflow/source/input identity and uniqueness even for
+  already-saved run IDs. Preserve nullable conclusions/URLs as JSON fields rather
+  than TSV, and persist a release lifecycle guard before release mutations.
+
 - **2026-11-10 — Post-release merge-back:** Keep `main`'s unreleased changelog
   notes and next-development version. Automatically resolve only validated
   version-only, changelog, and OpenWolf-status conflicts; stop for all other

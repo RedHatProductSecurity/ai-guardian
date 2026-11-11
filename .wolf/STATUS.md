@@ -5,9 +5,32 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-10 (UTC)
+> Last updated: 2026-11-11 (UTC)
 
 ---
+
+## Issue #2701 implementation — 2026-11-11
+
+- Added `--resume` for the required-CI phase in `scripts/release.sh`. The gate
+  persists its attempt under Git metadata, keyed to release type/version/mode,
+  source branch and SHA. Each workflow receives a unique attempt input reflected
+  in its run name; resume verifies exact workflow/source/input metadata and
+  uniqueness before reusing runs. Successful runs are reused, active runs awaited,
+  only proven-undispatched workflows started, and uncertain dispatches never
+  automatically retried.
+- Persisted lifecycle transitions gate release mutations and prevent replay of an
+  active/completed release. `--resume` rejects changed identity, failed, stale,
+  ambiguous, successful-complete and release-lifecycle states. An intentional
+  normal invocation starts a distinct attempt after reviewing failed/stale/
+  ambiguous results; an active same-identity attempt must use `--resume`.
+- Added attempt inputs/run names to the four required workflows, release guidance,
+  changelog notes, and interruption/partial-success/stale/duplicate/empty-field
+  contract coverage. **53** `tests/unit/test_release_script.py` tests pass.
+- **Validation:** Ruff, Black (Python 3.10 target), error-level Pylint, package
+  plus helper Mypy (337 files), Bash syntax, buglog JSON and `git diff --check`
+  pass. No live GitHub workflows were dispatched. Changes are local on branch
+  `2701`; no commit, push, issue update or PR was made.
+- **Next:** review the diff and, if approved, complete the normal DAF/PR workflow.
 
 ## Issue #2702 implementation — 2026-11-10
 

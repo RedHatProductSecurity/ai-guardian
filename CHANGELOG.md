@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Safe release CI resume (#2701):** Persist and validate exact release CI
+  attempts so interrupted runs can be resumed without duplicate workflow dispatches.
+
 ### Fixed
 - **Release test matrix reliability (#2700):** Measure redaction performance with
   repeated samples and initialize isolated recovery state before exposing test-home
