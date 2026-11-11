@@ -24,6 +24,27 @@ budget_tokens: 1000
   and saved a DAF note. Changes remain uncommitted on branch `2698`; no commit or
   PR was created.
 - **Next:** user review and external `daf complete`.
+## Issue #2709 Read the Docs release versions — 2026-11-11
+
+- On the existing DAF branch `2709`, made release verification inspect both the
+  final HTTP status and effective URL, so redirects to `latest` do not count as
+  versioned-doc success. Inactive/misrouted and unavailable responses now give
+  distinct recovery steps and cause a nonzero final result after merge-back, without
+  rolling back publication or inviting a full release rerun.
+- Documented the dashboard-only SemVer tag activation rule, Read the Docs version
+  selector, and manual recovery. README now defaults to `/en/stable/` and explicitly
+  identifies `/en/latest/` as tracking `main`; this follows #2708, merged in PR #2710.
+- **Validation:** 44 focused release-script tests pass. Full Ruff, Black (Python
+  3.10 target), error-level Pylint, package Mypy (336 files), Bash syntax, and
+  `git diff --check` pass.
+- Updated #2709's acceptance checklist and progress comment; added a DAF note.
+  A read-only live check found `/en/v1.21.1/` and `/en/stable/` currently return
+  HTTP 404, while `/en/latest/` serves the docs. Dashboard rule and selector status
+  remain unverified without project access, so acceptance criteria 1–2 remain open.
+  No commit, push, or PR was created.
+- **Next:** maintainer configures/confirms **Admin → Automation Rules** as
+  **SemVer versions → Tag → Activate version**, then verifies the active tag and
+  all three documentation routes. Do not rerun the release script solely for docs.
 
 ## Issue #2708 README landing page — 2026-11-11
 
@@ -39,6 +60,29 @@ budget_tokens: 1000
 - **Next:** user review and external `daf complete`.
 
 ---
+
+## Issue #2701 implementation — 2026-11-11
+
+- Added `--resume` for the required-CI phase in `scripts/release.sh`. The gate
+  persists its attempt under Git metadata, keyed to release type/version/mode,
+  source branch and SHA. Each workflow receives a unique attempt input reflected
+  in its run name; resume verifies exact workflow/source/input metadata and
+  uniqueness before reusing runs. Successful runs are reused, active runs awaited,
+  only proven-undispatched workflows started, and uncertain dispatches never
+  automatically retried.
+- Persisted lifecycle transitions gate release mutations and prevent replay of an
+  active/completed release. `--resume` rejects changed identity, failed, stale,
+  ambiguous, successful-complete and release-lifecycle states. An intentional
+  normal invocation starts a distinct attempt after reviewing failed/stale/
+  ambiguous results; an active same-identity attempt must use `--resume`.
+- Added attempt inputs/run names to the four required workflows, release guidance,
+  changelog notes, and interruption/partial-success/stale/duplicate/empty-field
+  contract coverage. **53** `tests/unit/test_release_script.py` tests pass.
+- **Validation:** Ruff, Black (Python 3.10 target), error-level Pylint, package
+  plus helper Mypy (337 files), Bash syntax, buglog JSON and `git diff --check`
+  pass. No live GitHub workflows were dispatched. Changes are local on branch
+  `2701`; no commit, push, issue update or PR was made.
+- **Next:** review the diff and, if approved, complete the normal DAF/PR workflow.
 
 ## Issue #2702 implementation — 2026-11-10
 

@@ -11,6 +11,7 @@ scripts/release.sh minor                  # preview only (default)
 scripts/release.sh --execute minor        # create a minor release
 scripts/release.sh --execute patch        # create a patch release
 scripts/release.sh --execute major        # create a major release
+scripts/release.sh --execute --resume patch # resume this attempt's required CI
 ```
 
 The script automates prerequisite validation, Release Readiness and standard CI,
@@ -41,6 +42,19 @@ preview is not evidence of passing gates unless its matching run results succeed
 Only then run `scripts/release.sh --execute minor`. Complete all six Cursor events
 when prompted, and verify TestPyPI and the reviewed release notes before approving
 production.
+
+If the script exits while required CI is still running, resume only that exact
+attempt with `--resume` and the same release type, mode, branch, and source commit
+(for example, `scripts/release.sh --execute --resume patch`). The attempt record is
+stored in the repository's Git metadata, outside the worktree. Resume revalidates
+the unique attempt ID, branch, commit, event, workflow and inputs for each run; it
+waits on active runs, reuses successful runs, and dispatches only workflows proven
+not to have been dispatched. Failed, completed, stale, or ambiguous attempts are
+rejected. Use a normal invocation for a new source commit or release version. There
+is no option to skip required CI. After investigating a failed, stale, or ambiguous
+attempt, an intentional normal invocation starts a distinct CI attempt rather than
+reusing its runs. A same-identity active attempt must use `--resume`, and an
+in-progress or completed release cannot be replayed.
 
 **Do not blindly re-run after a partial or published release.** A newly created
 production tag changes the next calculated version. Reconcile the intended
@@ -309,13 +323,15 @@ restrictions and native user-only upload/publication consent are unchanged.
 
 ### One-time Read the Docs setup
 
-The release script pushes semantic version tags but does not manage Read the Docs project settings. Configure this once in **Read the Docs → Admin → Automation Rules**:
+This is a one-time **project dashboard** setting. Neither `.readthedocs.yaml` nor the release script manages Read the Docs automation rules. Configure the rule in **Read the Docs → Admin → Automation Rules**:
 
 1. Match: **SemVer versions**
 2. Version type: **Tag**
 3. Action: **Activate version**
 
-The GitHub integration then builds each `vX.Y.Z` tag automatically. Read the Docs maps the greatest stable semantic version to `/en/stable/`, while `/en/latest/` continues to track `main`. The release script waits for and verifies the exact `/en/vX.Y.Z/` URL after pushing the production tag.
+The GitHub integration then builds each `vX.Y.Z` tag automatically. Activated versions appear in the Read the Docs version selector. Read the Docs maps the greatest stable semantic version to `/en/stable/`, while `/en/latest/` continues to track `main`.
+
+After setting the rule, check **Read the Docs → Versions** and confirm a released `vX.Y.Z` is active and its build succeeds. If a tag was missed, activate that version there and inspect its build. The release script checks that the exact `/en/vX.Y.Z/` URL returns a successful response **without redirecting to another version**; it cannot create or activate the dashboard rule.
 
 ## Table of Contents
 
@@ -675,6 +691,8 @@ After pushing the tag:
 8. Record both container manifests/digests and runtime AI Guardian versions.
 9. Verify the exact versioned documentation at `https://ai-guardian.readthedocs.io/en/v<version>/`,
    `/en/stable/` at that release, and `/en/latest/` at `main`.
+
+If release verification reports that the version is inactive, redirected, or unavailable, inspect **Read the Docs → Versions** and the tag's build. Correct the automation rule under **Admin → Automation Rules** or activate the missed version, then verify all three URLs. The script completes its post-release merge-back before returning a failure for unresolved documentation verification; the tag and published artifacts are not rolled back. **Do not rerun the full release script** just to repair Read the Docs.
 
 If a workflow fails, stop and inspect the matching run before deciding recovery.
 Do not delete/repoint a published production tag or replace an uploaded PyPI

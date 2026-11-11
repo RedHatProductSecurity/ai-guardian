@@ -11,11 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub App stateless token redaction coverage (#2698):** Exercise an exact
   520-character synthetic `ghs_` JWT-shaped token and verify its full span is
   detected and redacted while retaining legacy-token coverage.
-
+- **Safe release CI resume (#2701):** Persist and validate exact release CI
+  attempts so interrupted runs can be resumed without duplicate workflow dispatches.
 ### Changed
 - **README documentation resources:** Shorten the root README into a landing page
   and surface the full documentation site, source index, and NotebookLM Q&A.
-
+- **Read the Docs release verification:** Link to stable documentation by default,
+  distinguish `latest` development docs, and report inactive or misrouted release
+  versions with actionable recovery guidance.
 ### Fixed
 - **OpenCode PostToolUse filenames:** Reuse normalized native tool arguments so
   `filePath` and other supported path aliases are retained by post-tool scanners
