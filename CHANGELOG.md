@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **README documentation resources:** Shorten the root README into a landing page
+  and surface the full documentation site, source index, and NotebookLM Q&A.
+
 ### Fixed
 - **OpenCode PostToolUse filenames:** Reuse normalized native tool arguments so
   `filePath` and other supported path aliases are retained by post-tool scanners
