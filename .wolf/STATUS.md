@@ -7,6 +7,19 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-11 (UTC)
 
+## Issue #2708 README landing page — 2026-11-11
+
+- Replaced the 663-line README with a 116-line landing page. Prominent links to
+  Read the Docs, the source documentation index, and NotebookLM Q&A appear near
+  the top; the Google-account requirement is stated. Kept the three-command quick
+  start and security disclaimer, and linked concise feature/setup/configuration
+  guidance to the existing docs.
+- Updated CHANGELOG. All local README link targets exist and `git diff --check`
+  passes; tests were not run because this is documentation-only.
+- GitHub acceptance criteria are checked and the `done` label/progress comment
+  were added. Changes are local and uncommitted on branch `2708`; no commit or PR.
+- **Next:** user review and external `daf complete`.
+
 ---
 
 ## Issue #2701 implementation — 2026-11-11

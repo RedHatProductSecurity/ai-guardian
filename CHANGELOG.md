@@ -10,8 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Safe release CI resume (#2701):** Persist and validate exact release CI
   attempts so interrupted runs can be resumed without duplicate workflow dispatches.
-
+### Changed
+- **README documentation resources:** Shorten the root README into a landing page
+  and surface the full documentation site, source index, and NotebookLM Q&A.
 ### Fixed
+- **OpenCode PostToolUse filenames:** Reuse normalized native tool arguments so
+  `filePath` and other supported path aliases are retained by post-tool scanners
+  and violation records, including legacy handler calls.
 - **Release test matrix reliability (#2700):** Measure redaction performance with
   repeated samples and initialize isolated recovery state before exposing test-home
   overrides, while checking for unexpected state files. Pin no-runtime OpenCode
