@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **GitHub App stateless token redaction coverage (#2698):** Exercise an exact
+  520-character synthetic `ghs_` JWT-shaped token and verify its full span is
+  detected and redacted while retaining legacy-token coverage.
 - **Safe release CI resume (#2701):** Persist and validate exact release CI
   attempts so interrupted runs can be resumed without duplicate workflow dispatches.
 ### Changed
