@@ -11,6 +11,7 @@ scripts/release.sh minor                  # preview only (default)
 scripts/release.sh --execute minor        # create a minor release
 scripts/release.sh --execute patch        # create a patch release
 scripts/release.sh --execute major        # create a major release
+scripts/release.sh --execute --resume patch # resume this attempt's required CI
 ```
 
 The script automates prerequisite validation, Release Readiness and standard CI,
@@ -41,6 +42,19 @@ preview is not evidence of passing gates unless its matching run results succeed
 Only then run `scripts/release.sh --execute minor`. Complete all six Cursor events
 when prompted, and verify TestPyPI and the reviewed release notes before approving
 production.
+
+If the script exits while required CI is still running, resume only that exact
+attempt with `--resume` and the same release type, mode, branch, and source commit
+(for example, `scripts/release.sh --execute --resume patch`). The attempt record is
+stored in the repository's Git metadata, outside the worktree. Resume revalidates
+the unique attempt ID, branch, commit, event, workflow and inputs for each run; it
+waits on active runs, reuses successful runs, and dispatches only workflows proven
+not to have been dispatched. Failed, completed, stale, or ambiguous attempts are
+rejected. Use a normal invocation for a new source commit or release version. There
+is no option to skip required CI. After investigating a failed, stale, or ambiguous
+attempt, an intentional normal invocation starts a distinct CI attempt rather than
+reusing its runs. A same-identity active attempt must use `--resume`, and an
+in-progress or completed release cannot be replayed.
 
 **Do not blindly re-run after a partial or published release.** A newly created
 production tag changes the next calculated version. Reconcile the intended

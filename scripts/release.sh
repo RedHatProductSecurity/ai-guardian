@@ -6,17 +6,20 @@
 #   scripts/release.sh minor                  # preview + required CI (default)
 #   scripts/release.sh --execute minor        # create a minor release
 #   scripts/release.sh --execute --skip-cursor patch
+#   scripts/release.sh --execute --resume patch # resume required CI for this attempt
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HELPER="python3 ${REPO_ROOT}/.claude/skills/release/release_helper.py --repo ${REPO_ROOT}"
 CONTAINER_VERIFIER="${REPO_ROOT}/scripts/verify_container_images.py"
+RELEASE_CI_GATE="${REPO_ROOT}/scripts/release_ci_gate.py"
 
 # --- CLI parsing -----------------------------------------------------------
 
 DRY_RUN=true
 RELEASE_MODE=""
 SKIP_CURSOR=false
+RESUME_CI=false
 RELEASE_TYPE=""
 
 usage() {
@@ -26,6 +29,7 @@ Usage: scripts/release.sh [OPTIONS] <minor|patch|major>
 Options:
   --dry-run        Preview release changes; required CI still runs (default)
   --execute        Execute the release; required for any release mutations
+  --resume         Resume the saved, incomplete required-CI attempt only
   --skip-cursor    Skip Cursor hook verification
   -h, --help       Show this help message
 
@@ -58,6 +62,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --skip-cursor) SKIP_CURSOR=true; shift ;;
+        --resume) RESUME_CI=true; shift ;;
         -h|--help)  usage ;;
         minor|patch|major) RELEASE_TYPE="$1"; shift ;;
         *) echo "Unknown argument: $1" >&2; usage ;;
@@ -103,75 +108,6 @@ run() {
     fi
 }
 
-list_release_workflow_runs() {
-    local workflow="$1"
-    gh run list \
-        --workflow "$workflow" \
-        --branch "$SOURCE_REF" \
-        --commit "$SOURCE_SHA" \
-        --event workflow_dispatch \
-        --limit 100 \
-        --json databaseId \
-        --jq '.[].databaseId'
-}
-
-wait_for_release_workflow_run() {
-    local workflow="$1"
-    local previous_ids="$2"
-    local current_ids new_ids candidate new_count attempt
-
-    for ((attempt = 1; attempt <= 30; attempt++)); do
-        if ! current_ids=$(list_release_workflow_runs "$workflow"); then
-            return 2
-        fi
-
-        new_ids=""
-        while IFS= read -r candidate; do
-            [[ -z "$candidate" ]] && continue
-            if ! grep -Fqx "$candidate" <<< "$previous_ids"; then
-                new_ids+="${candidate}"$'\n'
-            fi
-        done <<< "$current_ids"
-
-        new_count=$(printf '%s\n' "$new_ids" | awk 'NF { count++ } END { print count + 0 }')
-        if [[ "$new_count" -eq 1 ]]; then
-            printf '%s\n' "$new_ids" | awk 'NF { print; exit }'
-            return 0
-        fi
-        if [[ "$new_count" -gt 1 ]]; then
-            return 3
-        fi
-        sleep 2
-    done
-
-    return 1
-}
-
-inspect_release_workflow_run() {
-    local run_id="$1"
-    local label="$2"
-    local details
-
-    if ! details=$(gh run view "$run_id" \
-        --json headSha,headBranch,event,status,conclusion,url \
-        --jq '[.headSha, .headBranch, .event, .status, (.conclusion // ""), .url] | @tsv'); then
-        warn "Could not inspect $label run $run_id"
-        return 1
-    fi
-
-    IFS=$'\t' read -r \
-        CI_RUN_SHA CI_RUN_BRANCH CI_RUN_EVENT CI_RUN_STATUS \
-        CI_RUN_CONCLUSION CI_RUN_URL <<< "$details"
-
-    if [[ "$CI_RUN_SHA" != "$SOURCE_SHA" || \
-        "$CI_RUN_BRANCH" != "$SOURCE_REF" || \
-        "$CI_RUN_EVENT" != "workflow_dispatch" ]]; then
-        warn "$label run $run_id does not match the requested source ref, commit, and event"
-        return 1
-    fi
-    return 0
-}
-
 # macOS vs GNU sed in-place flag
 if sed --version >/dev/null 2>&1; then
     SED_INPLACE=(sed -i)
@@ -199,17 +135,17 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 CURRENT_BRANCH="$(git branch --show-current)"
-RESUMING=false
+ON_RELEASE_BRANCH=false
 if [[ "$CURRENT_BRANCH" != "main" ]]; then
     if [[ "$CURRENT_BRANCH" == release-* ]]; then
-        RESUMING=true
+        ON_RELEASE_BRANCH=true
         warn "Resuming on existing branch: $CURRENT_BRANCH"
     else
         die "Must be on main or a release-* branch (currently on: $CURRENT_BRANCH)"
     fi
 fi
 
-if ! $DRY_RUN && ! $RESUMING; then
+if ! $DRY_RUN && ! $ON_RELEASE_BRANCH; then
     git fetch origin
     LOCAL="$(git rev-parse HEAD)"
     REMOTE="$(git rev-parse origin/main)"
@@ -291,120 +227,40 @@ if $DRY_RUN; then
     warn "Preview mode still dispatches GitHub Actions workflows; no release changes are made."
 fi
 
-CI_WORKFLOW_FILES=(
-    "release-readiness.yml"
-    "test.yml"
-    "lint.yml"
-    "integration-tests.yml"
-)
-CI_WORKFLOW_LABELS=(
-    "Release Readiness"
-    "Tests"
-    "Lint"
-    "Integration Tests"
-)
-CI_PRIOR_RUN_IDS=()
-CI_DISPATCHED=()
-CI_RUN_IDS=()
-CI_FAILURES=()
-
-# Snapshot matching run IDs before dispatch so a prior successful run on the
-# same commit cannot be mistaken for the run started by this invocation.
-for index in "${!CI_WORKFLOW_FILES[@]}"; do
-    workflow="${CI_WORKFLOW_FILES[$index]}"
-    if prior_ids=$(list_release_workflow_runs "$workflow"); then
-        CI_PRIOR_RUN_IDS[$index]="$prior_ids"
-    else
-        die "Could not inspect existing ${CI_WORKFLOW_LABELS[$index]} runs; required CI was not started."
-    fi
-done
-
-# Start every required run before waiting for any one result. Release Readiness
-# itself calls Smoke Tests, Scenario Tests, and Container Build Validation.
-for index in "${!CI_WORKFLOW_FILES[@]}"; do
-    workflow="${CI_WORKFLOW_FILES[$index]}"
-    if [[ "$workflow" == "integration-tests.yml" ]]; then
-        if gh workflow run "$workflow" --ref "$SOURCE_REF" -f release_validation=true; then
-            CI_DISPATCHED[$index]=true
-            info "Started ${CI_WORKFLOW_LABELS[$index]}"
-        else
-            CI_DISPATCHED[$index]=false
-            warn "Could not start required workflow: ${CI_WORKFLOW_LABELS[$index]}"
-        fi
-    elif gh workflow run "$workflow" --ref "$SOURCE_REF"; then
-        CI_DISPATCHED[$index]=true
-        info "Started ${CI_WORKFLOW_LABELS[$index]}"
-    else
-        CI_DISPATCHED[$index]=false
-        warn "Could not start required workflow: ${CI_WORKFLOW_LABELS[$index]}"
-    fi
-done
-
-# Identify the newly-created run for this exact workflow/ref/commit/event, then
-# await it and independently verify the run metadata and final conclusion.
-for index in "${!CI_WORKFLOW_FILES[@]}"; do
-    workflow="${CI_WORKFLOW_FILES[$index]}"
-    label="${CI_WORKFLOW_LABELS[$index]}"
-    if [[ "${CI_DISPATCHED[$index]}" != true ]]; then
-        CI_FAILURES+=("${label} (dispatch failed)")
-        continue
-    fi
-
-    if run_id=$(wait_for_release_workflow_run "$workflow" "${CI_PRIOR_RUN_IDS[$index]}"); then
-        CI_RUN_IDS[$index]="$run_id"
-        info "Matched ${label} run ${run_id}"
-    else
-        wait_status=$?
-        case "$wait_status" in
-            2) warn "Could not query for the new ${label} run" ;;
-            3) warn "Found multiple new ${label} runs for the requested source" ;;
-            *) warn "No new ${label} run appeared for the requested source" ;;
-        esac
-        CI_FAILURES+=("${label} (missing or ambiguous run)")
-    fi
-done
-
-for index in "${!CI_WORKFLOW_FILES[@]}"; do
-    run_id="${CI_RUN_IDS[$index]-}"
-    [[ -z "$run_id" ]] && continue
-    label="${CI_WORKFLOW_LABELS[$index]}"
-
-    if ! inspect_release_workflow_run "$run_id" "$label"; then
-        CI_FAILURES+=("${label} (source verification failed)")
-        continue
-    fi
-
-    info "Waiting for ${label} (run ${run_id})..."
-    if gh run watch "$run_id" --exit-status; then
-        WATCH_SUCCEEDED=true
-    else
-        WATCH_SUCCEEDED=false
-    fi
-
-    if ! inspect_release_workflow_run "$run_id" "$label"; then
-        CI_FAILURES+=("${label} (final run verification failed)")
-    elif [[ "$WATCH_SUCCEEDED" != true || \
-        "$CI_RUN_STATUS" != "completed" || \
-        "$CI_RUN_CONCLUSION" != "success" ]]; then
-        warn "${label} did not succeed (status: ${CI_RUN_STATUS}, conclusion: ${CI_RUN_CONCLUSION:-none})"
-        CI_FAILURES+=("${label} (status ${CI_RUN_STATUS}, conclusion ${CI_RUN_CONCLUSION:-none})")
-    else
-        info "${label} passed: ${CI_RUN_URL}"
-    fi
-done
-
-if [[ "${#CI_FAILURES[@]}" -gt 0 ]]; then
-    echo "Required CI validation failed or was incomplete:" >&2
-    for failure in "${CI_FAILURES[@]}"; do
-        echo "  - ${failure}" >&2
-    done
-    die "Release changes were not made. Resolve the required CI results and retry."
+CI_STATE_FILE=$(git -C "$REPO_ROOT" rev-parse --git-path ai-guardian-release-attempt.json) || \
+    die "Could not locate repository state for the required-CI attempt"
+if [[ "$CI_STATE_FILE" != /* ]]; then
+    CI_STATE_FILE="${REPO_ROOT}/${CI_STATE_FILE}"
+fi
+CI_MODE="preview"
+$DRY_RUN || CI_MODE="execute"
+CI_RESUME_ARGS=()
+$RESUME_CI && CI_RESUME_ARGS+=(--resume)
+if ! python3 "$RELEASE_CI_GATE" \
+    --state-file "$CI_STATE_FILE" \
+    --release-type "$RELEASE_TYPE" \
+    --release-version "$NEW_VERSION" \
+    --release-mode "$CI_MODE" \
+    --source-ref "$SOURCE_REF" \
+    --source-sha "$SOURCE_SHA" \
+    "${CI_RESUME_ARGS[@]}"; then
+    die "Required CI validation failed or was incomplete."
 fi
 
-info "All required CI workflows passed for ${SOURCE_REF} (${SOURCE_SHA})"
+if ! $DRY_RUN; then
+    python3 "$RELEASE_CI_GATE" \
+        --state-file "$CI_STATE_FILE" \
+        --release-type "$RELEASE_TYPE" \
+        --release-version "$NEW_VERSION" \
+        --release-mode "$CI_MODE" \
+        --source-ref "$SOURCE_REF" \
+        --source-sha "$SOURCE_SHA" \
+        --mark-release-started || \
+        die "Could not mark this release attempt as started; no release files were prepared."
+fi
 
 # Defer release-file preparation until every required workflow has passed.
-if ! $DRY_RUN && ! $RESUMING; then
+if ! $DRY_RUN && ! $ON_RELEASE_BRANCH; then
     UNRELEASED_CONTENT=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' CHANGELOG.md | grep -v '^$' || true)
     if [[ -z "$UNRELEASED_CONTENT" ]]; then
         if command -v git-cliff >/dev/null 2>&1; then
@@ -468,7 +324,7 @@ fi
 section "Phase 4: Create Release Branch"
 
 # Branch: create or switch to existing
-if $RESUMING; then
+if $ON_RELEASE_BRANCH; then
     info "Already on $RELEASE_BRANCH"
 elif git rev-parse --verify "$RELEASE_BRANCH" >/dev/null 2>&1; then
     run git checkout "$RELEASE_BRANCH"
@@ -852,6 +708,18 @@ fi
 
 run git push origin main
 info "Main branch updated"
+
+if ! $DRY_RUN; then
+    python3 "$RELEASE_CI_GATE" \
+        --state-file "$CI_STATE_FILE" \
+        --release-type "$RELEASE_TYPE" \
+        --release-version "$NEW_VERSION" \
+        --release-mode "$CI_MODE" \
+        --source-ref "$SOURCE_REF" \
+        --source-sha "$SOURCE_SHA" \
+        --mark-release-completed || \
+        die "Release actions completed, but the saved CI attempt could not be marked complete. Do not replay this release."
+fi
 
 # --- Done -------------------------------------------------------------------
 

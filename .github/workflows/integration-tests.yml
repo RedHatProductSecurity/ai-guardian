@@ -1,8 +1,14 @@
 name: Integration Tests
+run-name: ${{ github.workflow }}${{ github.event.inputs.release_attempt_id && format(' [release-attempt:{0}; release_validation={1}]', github.event.inputs.release_attempt_id, github.event.inputs.release_validation) || '' }}
 
 on:
   workflow_dispatch:
     inputs:
+      release_attempt_id:
+        description: Unique release CI attempt identifier; leave blank for manual runs
+        required: false
+        type: string
+        default: ''
       release_validation:
         description: Run release validation without scanner update issue automation
         required: false

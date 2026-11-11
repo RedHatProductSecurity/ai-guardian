@@ -56,6 +56,7 @@ def test_release_script_help_and_docs_verification_contract():
 
     assert help_result.returncode == 0
     assert "<minor|patch|major>" in help_result.stdout
+    assert "--resume" in help_result.stdout
     assert "https://ai-guardian.readthedocs.io/en/${TAG_NAME}/" in script
     assert "--write-out '%{http_code} %{url_effective}'" in script
     assert "DOCS_VERSION_URL_PREFIX" in script
@@ -151,11 +152,13 @@ def test_release_ci_workflows_have_safe_manual_dispatch_contracts():
 
     test_events = events(REPO_ROOT / ".github" / "workflows" / "test.yml")
     lint_events = events(REPO_ROOT / ".github" / "workflows" / "lint.yml")
+    readiness_events = events(RELEASE_READINESS_WORKFLOW)
     integration_events = events(
         REPO_ROOT / ".github" / "workflows" / "integration-tests.yml"
     )
     assert "workflow_dispatch" in test_events
     assert "workflow_dispatch" in lint_events
+    assert "workflow_dispatch" in readiness_events
 
     release_validation = integration_events["workflow_dispatch"]["inputs"][
         "release_validation"
@@ -172,6 +175,26 @@ def test_release_ci_workflows_have_safe_manual_dispatch_contracts():
     assert "github.event.inputs.release_validation != 'true'" in health_check["if"]
 
     readiness = yaml.safe_load(RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8"))
+    workflows = (
+        (readiness, "Release Readiness"),
+        (
+            yaml.safe_load((REPO_ROOT / ".github/workflows/test.yml").read_text()),
+            "Tests",
+        ),
+        (
+            yaml.safe_load((REPO_ROOT / ".github/workflows/lint.yml").read_text()),
+            "Lint",
+        ),
+        (integration, "Integration Tests"),
+    )
+    for workflow, label in workflows:
+        workflow_events = workflow.get("on", workflow.get(True, {}))
+        inputs = workflow_events["workflow_dispatch"]["inputs"]
+        assert inputs["release_attempt_id"]["type"] == "string"
+        assert inputs["release_attempt_id"]["default"] == ""
+        assert "inputs.release_attempt_id" in workflow["run-name"]
+        assert workflow["name"] == label
+
     jobs = readiness["jobs"]
     assert jobs["smoke-tests"]["uses"] == "./.github/workflows/smoke-tests.yml"
     assert jobs["scenario-tests"]["uses"] == "./.github/workflows/scenario-tests.yml"
@@ -188,6 +211,10 @@ def release_sandbox(tmp_path):
     scripts.mkdir()
     script = scripts / "release.sh"
     script.write_bytes(RELEASE_SCRIPT.read_bytes())
+    (scripts / "release_ci_gate.py").write_bytes(
+        (REPO_ROOT / "scripts" / "release_ci_gate.py").read_bytes()
+    )
+    (tmp_path / ".git").mkdir()
     (tmp_path / "README.md").write_text(
         "https://github.com/ai-guardian/main/install.sh\n"
     )
@@ -209,12 +236,16 @@ program, args = Path(sys.argv[0]).name, sys.argv[1:]
 with open(os.environ["RELEASE_TEST_LOG"], "a", encoding="utf-8") as log:
     log.write(json.dumps([program, *args]) + "\n")
 if program == "git":
+    if args[:2] == ["-C", os.environ["RELEASE_REPO_ROOT"]]:
+        args = args[2:]
     if args[:2] == ["-c", "merge.conflictStyle=merge"]:
         args = args[2:]
     if args == ["branch", "--show-current"]:
         print(os.environ.get("RELEASE_CURRENT_BRANCH", "main"))
     elif args[0] == "rev-parse":
-        if args[1] == "HEAD":
+        if args[1] == "--git-path":
+            print(Path.cwd() / ".git" / args[2])
+        elif args[1] == "HEAD":
             print(os.environ.get("RELEASE_HEAD_SHA", "same-commit"))
         elif args[1] == "origin/main":
             print(os.environ.get("RELEASE_MAIN_SHA", "same-commit"))
@@ -253,8 +284,11 @@ elif program == "gh":
     outcomes = json.loads(os.environ["RELEASE_WORKFLOW_OUTCOMES"])
     previous_runs = json.loads(os.environ["RELEASE_PREEXISTING_RUNS"])
     metadata_overrides = json.loads(os.environ["RELEASE_RUN_METADATA"])
+    workflow_statuses = json.loads(os.environ["RELEASE_WORKFLOW_STATUSES"])
     missing_workflow = os.environ.get("RELEASE_MISSING_WORKFLOW", "")
     dispatch_failure = os.environ.get("RELEASE_DISPATCH_FAILURE", "")
+    duplicate_workflow = os.environ.get("RELEASE_DUPLICATE_WORKFLOW", "")
+    empty_run_url = os.environ.get("RELEASE_EMPTY_RUN_URL", "false") == "true"
 
     def option_value(name):
         for index, argument in enumerate(args):
@@ -265,10 +299,44 @@ elif program == "gh":
         return ""
 
     def workflow_for_run(run_id):
+        run_id = run_id.removesuffix("-duplicate")
         return next(
             (workflow for workflow, value in workflow_ids.items() if value == run_id),
             "",
         )
+
+    def label_for_workflow(workflow):
+        return {
+            "release-readiness.yml": "Release Readiness",
+            "test.yml": "Tests",
+            "lint.yml": "Lint",
+            "integration-tests.yml": "Integration Tests",
+        }[workflow]
+
+    def attempt_id_for_workflow(workflow):
+        state_path = Path(os.environ["RELEASE_TEST_STATE_FILE"])
+        if state_path.exists():
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            attempt_id = state.get("attempt_id")
+            if attempt_id:
+                return attempt_id
+        return "missing-attempt"
+
+    def run_was_watched(run_id):
+        logged = [
+            json.loads(line)
+            for line in Path(os.environ["RELEASE_TEST_LOG"]).read_text().splitlines()
+        ]
+        return any(command[:3] == ["gh", "run", "watch"] and command[3] == run_id
+                   for command in logged)
+
+    def has_saved_run_id(workflow):
+        state_path = Path(os.environ["RELEASE_TEST_STATE_FILE"])
+        if not state_path.exists():
+            return False
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        workflow_state = state.get("workflows", {}).get(workflow, {})
+        return bool(workflow_state.get("run_id"))
 
     if args[:2] == ["auth", "status"]:
         pass
@@ -286,36 +354,50 @@ elif program == "gh":
         was_dispatched = any(
             command[:3] == ["gh", "workflow", "run"] and command[3] == workflow
             for command in logged
-        )
+        ) or has_saved_run_id(workflow)
+        was_dispatched = was_dispatched and workflow != dispatch_failure
         if was_dispatched and workflow != missing_workflow:
             run_ids.append(workflow_ids.get(workflow, ""))
+            if workflow == duplicate_workflow:
+                run_ids.append(workflow_ids.get(workflow, "") + "-duplicate")
         print("\n".join(run_id for run_id in run_ids if run_id))
     elif args[:2] == ["run", "view"]:
         run_id = args[2]
         workflow = workflow_for_run(run_id)
+        status = workflow_statuses.get(workflow)
+        if status is None:
+            status = "completed" if run_was_watched(run_id) else "in_progress"
+        label = label_for_workflow(workflow)
+        attempt_id = attempt_id_for_workflow(workflow)
+        display_title = f"{label} [release-attempt:{attempt_id}"
+        if workflow == "integration-tests.yml":
+            display_title += "; release_validation=true"
+        display_title += "]"
         details = {
             "headSha": "same-commit",
             "headBranch": os.environ.get("RELEASE_CURRENT_BRANCH", "main"),
             "event": "workflow_dispatch",
-            "status": "completed",
-            "conclusion": outcomes.get(workflow, "success"),
-            "url": "https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/" + run_id,
+            "status": status,
+            "conclusion": outcomes.get(workflow, "success") if status == "completed" else None,
+            "url": "" if empty_run_url else "https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/" + run_id,
+            "workflowName": label,
+            "displayTitle": display_title,
         }
         details.update(metadata_overrides.get(workflow, {}))
-        if "--jq" in args and "@tsv" in args[args.index("--jq") + 1]:
-            print("\t".join(str(details[key]) for key in (
-                "headSha", "headBranch", "event", "status", "conclusion", "url"
-            )))
-        else:
-            raise AssertionError(args)
+        print(json.dumps(details))
     elif args[:2] == ["run", "watch"]:
         workflow = workflow_for_run(args[2])
-        if outcomes.get(workflow, "success") != "success":
+        if (
+            outcomes.get(workflow, "success") != "success"
+            or workflow_statuses.get(workflow) in ("queued", "in_progress")
+        ):
             sys.exit(1)
     else:
         raise AssertionError(args)
 elif program == "python3":
-    if Path(args[0]).name == "resolve_release_merge.py":
+    if Path(args[0]).name == "release_ci_gate.py":
+        os.execv(sys.executable, [sys.executable, *args, "--poll-attempts", "1"])
+    elif Path(args[0]).name == "resolve_release_merge.py":
         conflicts = json.loads(os.environ["RELEASE_MERGE_CONFLICTS"])
         known = {
             "CHANGELOG.md",
@@ -338,7 +420,7 @@ elif program == "python3":
         if command == "get-version":
             print("Current version: 1.3.0-dev")
         elif command == "calc-version":
-            print("1.2.3")
+            print(os.environ.get("RELEASE_CALCULATED_VERSION", "1.2.3"))
         elif command == "container-images":
             print("normal: quay.io/redhatproductsecurity/ai-guardian:1.2.3")
             print("openshell: quay.io/redhatproductsecurity/ai-guardian-openshell:1.2.3")
@@ -381,6 +463,9 @@ elif program not in ("curl", "git-cliff", "sleep"):
         missing_workflow="",
         dispatch_failure="",
         run_metadata=None,
+        workflow_statuses=None,
+        duplicate_workflow="",
+        empty_run_url=False,
         empty_changelog=False,
         release_type="minor",
         docs_response="200 https://ai-guardian.readthedocs.io/en/v1.2.3/",
@@ -389,6 +474,7 @@ elif program not in ("curl", "git-cliff", "sleep"):
         main_sha="same-commit",
         remote_branch_sha="same-commit",
         merge_conflicts=(),
+        calculated_version="1.2.3",
     ):
         if empty_changelog:
             (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n")
@@ -406,6 +492,8 @@ elif program not in ("curl", "git-cliff", "sleep"):
                 "ANNOUNCEMENT_TEST_OUTCOME": outcome,
                 "PIP_TEST_EXIT": str(pip_exit),
                 "RELEASE_CURRENT_BRANCH": current_branch,
+                "RELEASE_REPO_ROOT": str(tmp_path),
+                "RELEASE_CALCULATED_VERSION": calculated_version,
                 "RELEASE_HEAD_SHA": head_sha,
                 "RELEASE_MAIN_SHA": main_sha,
                 "RELEASE_REMOTE_BRANCH_SHA": remote_branch_sha,
@@ -417,13 +505,24 @@ elif program not in ("curl", "git-cliff", "sleep"):
                 "RELEASE_MISSING_WORKFLOW": missing_workflow,
                 "RELEASE_DISPATCH_FAILURE": dispatch_failure,
                 "RELEASE_RUN_METADATA": json.dumps(run_metadata or {}),
+                "RELEASE_WORKFLOW_STATUSES": json.dumps(workflow_statuses or {}),
+                "RELEASE_DUPLICATE_WORKFLOW": duplicate_workflow,
+                "RELEASE_EMPTY_RUN_URL": str(empty_run_url).lower(),
                 "RELEASE_MERGE_CONFLICTS": json.dumps(list(merge_conflicts)),
+                "RELEASE_TEST_STATE_FILE": str(
+                    tmp_path / ".git" / "ai-guardian-release-attempt.json"
+                ),
                 "RTD_TEST_CURL_RESPONSE": docs_response,
             },
         )
-        commands = [json.loads(line) for line in log.read_text().splitlines()]
+        commands = (
+            [json.loads(line) for line in log.read_text().splitlines()]
+            if log.exists()
+            else []
+        )
         return result, commands
 
+    run.state_file = tmp_path / ".git" / "ai-guardian-release-attempt.json"
     return run
 
 
@@ -438,6 +537,16 @@ def _option_value(command, name):
         if argument.startswith(name + "="):
             return argument.split("=", 1)[1]
     return ""
+
+
+def _workflow_inputs(command):
+    inputs = {}
+    for index, argument in enumerate(command):
+        if argument == "-f" and index + 1 < len(command):
+            name, separator, value = command[index + 1].partition("=")
+            if separator:
+                inputs[name] = value
+    return inputs
 
 
 def _release_mutations(commands):
@@ -551,14 +660,13 @@ def test_dispatch_failure_still_starts_and_awaits_other_required_workflows(
     result, commands = release_sandbox("--execute", dispatch_failure="lint.yml")
 
     assert result.returncode == 1
-    assert "Lint (dispatch failed)" in result.stderr
+    assert "dispatch outcome for Lint is uncertain" in result.stderr
     assert [command[3] for command in _workflow_dispatches(commands)] == list(
         REQUIRED_CI_WORKFLOWS
     )
-    assert (
-        len([command for command in commands if command[:3] == ["gh", "run", "watch"]])
-        == len(REQUIRED_CI_WORKFLOWS) - 1
-    )
+    assert not [
+        command for command in commands if command[:3] == ["gh", "run", "watch"]
+    ]
     assert not _release_mutations(commands)
 
 
@@ -574,21 +682,19 @@ def test_release_script_dispatches_and_awaits_required_ci_in_every_mode(
 
     assert result.returncode == 0, result.stdout + result.stderr
     dispatches = _workflow_dispatches(commands)
-    assert dispatches == [
-        ["gh", "workflow", "run", workflow, "--ref", "main"]
-        for workflow in REQUIRED_CI_WORKFLOWS[:3]
-    ] + [
-        [
-            "gh",
-            "workflow",
-            "run",
-            "integration-tests.yml",
-            "--ref",
-            "main",
-            "-f",
-            "release_validation=true",
-        ]
+    assert [command[3] for command in dispatches] == list(REQUIRED_CI_WORKFLOWS)
+    attempt_ids = [
+        _workflow_inputs(command).get("release_attempt_id") for command in dispatches
     ]
+    assert attempt_ids[0] and len(set(attempt_ids)) == 1
+    for command in dispatches[:3]:
+        assert _option_value(command, "--ref") == "main"
+        assert _workflow_inputs(command) == {"release_attempt_id": attempt_ids[0]}
+    assert _option_value(dispatches[3], "--ref") == "main"
+    assert _workflow_inputs(dispatches[3]) == {
+        "release_attempt_id": attempt_ids[0],
+        "release_validation": "true",
+    }
 
     watched_runs = [
         command[3] for command in commands if command[:3] == ["gh", "run", "watch"]
@@ -664,14 +770,13 @@ def test_missing_required_ci_run_blocks_release_mutations(release_sandbox):
     )
 
     assert result.returncode == 1
-    assert "missing or ambiguous run" in result.stderr
+    assert "No uniquely matching Integration Tests run appeared" in result.stderr
     assert [command[3] for command in _workflow_dispatches(commands)] == list(
         REQUIRED_CI_WORKFLOWS
     )
-    assert (
-        len([command for command in commands if command[:3] == ["gh", "run", "watch"]])
-        == len(REQUIRED_CI_WORKFLOWS) - 1
-    )
+    assert not [
+        command for command in commands if command[:3] == ["gh", "run", "watch"]
+    ]
     assert not _release_mutations(commands)
 
 
@@ -681,9 +786,325 @@ def test_mismatched_ci_source_commit_blocks_release_mutations(release_sandbox):
     )
 
     assert result.returncode == 1
-    assert "does not match the requested source ref, commit, and event" in result.stdout
-    assert "source verification failed" in result.stderr
+    assert "failed source or workflow-input verification (headSha)" in result.stderr
     assert not _release_mutations(commands)
+
+
+def test_stale_saved_run_cannot_be_resumed(release_sandbox):
+    first, first_commands = release_sandbox(
+        run_metadata={"lint.yml": {"headSha": "different-commit"}}
+    )
+    assert first.returncode == 1
+    assert json.loads(release_sandbox.state_file.read_text())["status"] == "stale"
+    dispatch_count = len(_workflow_dispatches(first_commands))
+
+    resumed, commands = release_sandbox("--resume")
+    assert resumed.returncode == 1
+    assert (
+        "a saved workflow run no longer matches its source or inputs" in resumed.stderr
+    )
+    assert len(_workflow_dispatches(commands)) == dispatch_count
+    assert not _release_mutations(commands)
+
+
+def test_resume_reuses_successes_and_waits_only_for_still_active_runs(release_sandbox):
+    first_statuses = {
+        "release-readiness.yml": "completed",
+        "test.yml": "completed",
+        "lint.yml": "in_progress",
+        "integration-tests.yml": "in_progress",
+    }
+    first, first_commands = release_sandbox(workflow_statuses=first_statuses)
+    assert first.returncode == 1
+    assert "Retry this exact attempt with --resume" in first.stderr
+
+    second_statuses = {
+        "release-readiness.yml": "completed",
+        "test.yml": "completed",
+        "lint.yml": "completed",
+        "integration-tests.yml": "in_progress",
+    }
+    second, second_commands = release_sandbox(
+        "--resume", workflow_statuses=second_statuses
+    )
+    assert second.returncode == 1
+    assert "Retry this exact attempt with --resume" in second.stderr
+
+    third, third_commands = release_sandbox(
+        "--resume",
+        workflow_statuses={workflow: "completed" for workflow in REQUIRED_CI_WORKFLOWS},
+    )
+    assert third.returncode == 0, third.stdout + third.stderr
+    assert len(_workflow_dispatches(third_commands)) == len(REQUIRED_CI_WORKFLOWS)
+    assert [
+        command[3]
+        for command in third_commands
+        if command[:3] == ["gh", "run", "watch"]
+    ] == [
+        "1003",
+        "1004",
+        "1004",
+    ]
+    assert not _release_mutations(third_commands)
+    assert (
+        json.loads(release_sandbox.state_file.read_text())["status"] == "ci_succeeded"
+    )
+
+    completed, completed_commands = release_sandbox("--resume")
+    assert completed.returncode == 1
+    assert "all required workflows already succeeded" in completed.stderr
+    assert len(_workflow_dispatches(completed_commands)) == len(REQUIRED_CI_WORKFLOWS)
+
+
+def test_normal_invocation_does_not_restart_an_active_same_identity(release_sandbox):
+    active = {workflow: "in_progress" for workflow in REQUIRED_CI_WORKFLOWS}
+    first, first_commands = release_sandbox(workflow_statuses=active)
+    assert first.returncode == 1
+    dispatch_count = len(_workflow_dispatches(first_commands))
+
+    second, commands = release_sandbox(workflow_statuses=active)
+    assert second.returncode == 1
+    assert (
+        "saved attempt for this exact release identity is already active"
+        in second.stderr
+    )
+    assert len(_workflow_dispatches(commands)) == dispatch_count
+    assert not _release_mutations(commands)
+
+
+@pytest.mark.parametrize(
+    "identity_change",
+    [
+        {"head_sha": "different-commit"},
+        {"current_branch": "release-1.2"},
+        {"calculated_version": "1.3.0"},
+    ],
+    ids=["source-sha", "branch", "version"],
+)
+def test_resume_rejects_stale_release_identity(identity_change, release_sandbox):
+    active = {workflow: "in_progress" for workflow in REQUIRED_CI_WORKFLOWS}
+    first, first_commands = release_sandbox(workflow_statuses=active)
+    assert first.returncode == 1
+    first_dispatch_count = len(_workflow_dispatches(first_commands))
+
+    resumed, commands = release_sandbox(
+        "--resume", workflow_statuses=active, **identity_change
+    )
+    assert resumed.returncode == 1
+    assert "identity does not match" in resumed.stderr
+    assert len(_workflow_dispatches(commands)) == first_dispatch_count
+    assert not _release_mutations(commands)
+
+
+def test_new_source_uses_a_fresh_attempt_instead_of_resuming_old_state(
+    release_sandbox,
+):
+    release_sandbox.state_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "release_completed",
+                "identity": {
+                    "release_type": "minor",
+                    "release_version": "1.2.3",
+                    "release_mode": "preview",
+                    "source_ref": "main",
+                    "source_sha": "old-source-commit",
+                    "event": "workflow_dispatch",
+                },
+                "attempt_id": "previous-attempt",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result, commands = release_sandbox()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert [command[3] for command in _workflow_dispatches(commands)] == list(
+        REQUIRED_CI_WORKFLOWS
+    )
+    state = json.loads(release_sandbox.state_file.read_text(encoding="utf-8"))
+    assert state["attempt_id"] != "previous-attempt"
+    assert state["identity"]["source_sha"] == "same-commit"
+
+
+def test_resume_dispatches_only_workflow_proven_not_dispatched(release_sandbox):
+    attempt_id = "test-attempt-2701"
+    inputs = {
+        workflow: {"release_attempt_id": attempt_id}
+        for workflow in REQUIRED_CI_WORKFLOWS
+    }
+    inputs["integration-tests.yml"]["release_validation"] = "true"
+    workflows = {}
+    for workflow in REQUIRED_CI_WORKFLOWS:
+        dispatched = workflow != "lint.yml"
+        workflows[workflow] = {
+            "label": {
+                "release-readiness.yml": "Release Readiness",
+                "test.yml": "Tests",
+                "lint.yml": "Lint",
+                "integration-tests.yml": "Integration Tests",
+            }[workflow],
+            "inputs": inputs[workflow],
+            "prior_run_ids": ["90"],
+            "dispatch_state": "dispatched" if dispatched else "not_dispatched",
+            "run_id": WORKFLOW_RUN_IDS[workflow] if dispatched else None,
+            "status": None,
+            "conclusion": None,
+            "url": None,
+        }
+    release_sandbox.state_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "active",
+                "identity": {
+                    "release_type": "minor",
+                    "release_version": "1.2.3",
+                    "release_mode": "preview",
+                    "source_ref": "main",
+                    "source_sha": "same-commit",
+                    "event": "workflow_dispatch",
+                },
+                "attempt_id": attempt_id,
+                "workflows": workflows,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result, commands = release_sandbox("--resume")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert [command[3] for command in _workflow_dispatches(commands)] == ["lint.yml"]
+    assert not _release_mutations(commands)
+
+
+def test_ambiguous_run_is_terminal_and_never_restarted(release_sandbox):
+    first, first_commands = release_sandbox(duplicate_workflow="release-readiness.yml")
+    assert first.returncode == 1
+    assert "multiple runs for this Release Readiness attempt" in first.stderr
+    assert json.loads(release_sandbox.state_file.read_text())["status"] == "ambiguous"
+
+    resumed, commands = release_sandbox("--resume")
+    assert resumed.returncode == 1
+    assert "ambiguous workflow runs" in resumed.stderr
+    assert len(_workflow_dispatches(commands)) == len(REQUIRED_CI_WORKFLOWS)
+    assert not _release_mutations(commands)
+
+
+def test_resume_detects_duplicate_created_after_run_id_was_saved(release_sandbox):
+    active = {workflow: "in_progress" for workflow in REQUIRED_CI_WORKFLOWS}
+    first, first_commands = release_sandbox(workflow_statuses=active)
+    assert first.returncode == 1
+    dispatch_count = len(_workflow_dispatches(first_commands))
+
+    resumed, commands = release_sandbox(
+        "--resume", workflow_statuses=active, duplicate_workflow="test.yml"
+    )
+    assert resumed.returncode == 1
+    assert "multiple runs for this Tests attempt" in resumed.stderr
+    assert json.loads(release_sandbox.state_file.read_text())["status"] == "ambiguous"
+    assert len(_workflow_dispatches(commands)) == dispatch_count
+    assert not _release_mutations(commands)
+
+
+def test_failed_attempt_cannot_be_resumed(release_sandbox):
+    first, first_commands = release_sandbox(
+        workflow_outcomes={"release-readiness.yml": "failure"}
+    )
+    assert first.returncode == 1
+    assert json.loads(release_sandbox.state_file.read_text())["status"] == "failed"
+
+    resumed, commands = release_sandbox("--resume")
+    assert resumed.returncode == 1
+    assert "failed workflow" in resumed.stderr
+    assert len(_workflow_dispatches(commands)) == len(REQUIRED_CI_WORKFLOWS)
+    assert not _release_mutations(commands)
+
+
+def test_explicit_fresh_invocation_replaces_failed_attempt_with_new_id(
+    release_sandbox,
+):
+    release_sandbox.state_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "failed",
+                "identity": {
+                    "release_type": "minor",
+                    "release_version": "1.2.3",
+                    "release_mode": "preview",
+                    "source_ref": "main",
+                    "source_sha": "same-commit",
+                    "event": "workflow_dispatch",
+                },
+                "attempt_id": "failed-attempt",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result, commands = release_sandbox()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(_workflow_dispatches(commands)) == len(REQUIRED_CI_WORKFLOWS)
+    state = json.loads(release_sandbox.state_file.read_text(encoding="utf-8"))
+    assert state["attempt_id"] != "failed-attempt"
+    assert state["status"] == "ci_succeeded"
+
+
+def test_completed_release_attempt_cannot_be_replayed(release_sandbox):
+    first, first_commands = release_sandbox("--execute")
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert (
+        json.loads(release_sandbox.state_file.read_text())["status"]
+        == "release_completed"
+    )
+    previous_count = len(first_commands)
+
+    resumed, commands = release_sandbox("--execute", "--resume")
+    assert resumed.returncode == 1
+    assert "release attempt already completed" in resumed.stderr
+    assert len(_workflow_dispatches(commands)) == len(REQUIRED_CI_WORKFLOWS)
+    assert not _release_mutations(commands[previous_count:])
+
+
+def test_new_identity_cannot_replace_an_in_progress_release(release_sandbox):
+    release_sandbox.state_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "release_in_progress",
+                "identity": {
+                    "release_type": "minor",
+                    "release_version": "1.2.3",
+                    "release_mode": "execute",
+                    "source_ref": "main",
+                    "source_sha": "older-commit",
+                    "event": "workflow_dispatch",
+                },
+                "attempt_id": "release-in-progress-attempt",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result, commands = release_sandbox("--execute", calculated_version="1.3.0")
+    assert result.returncode == 1
+    assert "release attempt is already in progress" in result.stderr
+    assert not _workflow_dispatches(commands)
+    assert not _release_mutations(commands)
+
+
+def test_empty_conclusion_and_url_remain_empty_fields(release_sandbox):
+    result, _commands = release_sandbox(
+        workflow_outcomes={"lint.yml": ""}, empty_run_url=True
+    )
+    assert result.returncode == 1
+    assert "Lint did not succeed (status: completed, conclusion: none)" in result.stdout
+    state = json.loads(release_sandbox.state_file.read_text(encoding="utf-8"))
+    lint_state = state["workflows"]["lint.yml"]
+    assert lint_state["conclusion"] == ""
+    assert lint_state["url"] == ""
 
 
 def test_release_script_rejects_conflicting_execution_modes():

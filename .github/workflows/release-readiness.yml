@@ -1,7 +1,14 @@
 name: Release Readiness
+run-name: ${{ github.workflow }}${{ github.event.inputs.release_attempt_id && format(' [release-attempt:{0}]', github.event.inputs.release_attempt_id) || '' }}
 
 on:
   workflow_dispatch:
+    inputs:
+      release_attempt_id:
+        description: Unique release CI attempt identifier; leave blank for manual runs
+        required: false
+        type: string
+        default: ''
   push:
     branches:
       - 'release-*'

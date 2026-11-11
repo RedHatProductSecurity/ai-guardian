@@ -257,7 +257,15 @@ EOF
 
 ## Release Readiness CI (mandatory)
 
-Before creating the release branch, trigger the automated release readiness workflow to validate install, upgrade, IDE setup, daemon, detection, config, and MCP server functionality.
+Before making release changes, required CI must pass for the exact release source.
+The canonical `scripts/release.sh` gate dispatches and awaits Release Readiness,
+Tests, Lint, and Integration Tests. Release Readiness includes the reusable smoke,
+scenario, and container checks. A single Readiness run is not a substitute for the
+four-workflow gate when using the automated script.
+
+When following the manual release procedure instead, trigger the Release Readiness
+workflow to validate install, upgrade, IDE setup, daemon, detection, config, and
+MCP server functionality.
 
 **Workflow**: `.github/workflows/release-readiness.yml`
 
@@ -300,6 +308,23 @@ Before creating the release branch, trigger the automated release readiness work
 **Skipping**: The readiness check may be skipped for hotfix releases (`/release hotfix`) when the fix is urgent, but this should be documented in the release notes.
 
 **Note**: The release readiness workflow includes smoke tests (`smoke-tests.yml`) as a reusable workflow — no need to run smoke tests separately.
+
+### Resume the automated CI gate
+
+If `scripts/release.sh` exits while its required workflows are still active, resume
+that attempt with the same release type, mode, branch, and source commit. For
+example, for an interrupted execute-mode patch release, run:
+
+```bash
+scripts/release.sh --execute --resume patch
+```
+
+The attempt record is stored in Git metadata outside the worktree. Resume verifies
+the unique attempt ID and exact workflow/source identity, reuses successful runs,
+waits on active runs, and starts only workflows proven not to have been dispatched.
+It never retries an uncertain dispatch. Failed, stale, ambiguous, or completed
+attempts are not resumable; investigate first, then use a normal invocation only
+when you intentionally want a new CI attempt. There is no required-CI skip option.
 
 ## Documentation Review (mandatory)
 
