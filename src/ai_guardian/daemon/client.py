@@ -612,12 +612,15 @@ def connect_subscriber(timeout=2.0):
         return None
 
 
-def start_daemon_background():
+def start_daemon_background(daemon_command=None):
     """Start daemon as a background process for lazy start in auto mode.
 
     Respects the stop-requested marker written by ``daemon stop``.
     Skips auto-start when AI_GUARDIAN_DAEMON_URL is set (remote daemon
     is managed externally).
+
+    Args:
+        daemon_command: Optional argument vector for an alternate daemon CLI.
 
     Returns:
         bool: True if daemon started successfully
@@ -639,9 +642,14 @@ def start_daemon_background():
             logger.warning("Daemon already running, refusing to start duplicate")
             return False
 
-        # Find the ai-guardian command
-        cmd = _find_executable()
-        daemon_cmd = cmd + ["daemon", "start"]
+        if daemon_command is None:
+            # Find the ai-guardian command
+            cmd = _find_executable()
+            daemon_cmd = cmd + ["daemon", "start"]
+        else:
+            daemon_cmd = list(daemon_command)
+            if not daemon_cmd:
+                raise ValueError("daemon_command must not be empty")
         logger.info(f"Starting daemon: {' '.join(daemon_cmd)}")
 
         # Start detached daemon process

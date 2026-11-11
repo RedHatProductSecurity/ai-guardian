@@ -330,6 +330,27 @@ class TestStartDaemonBackground:
                 assert not start_daemon_background()
             mock_popen.assert_not_called()
 
+    def test_uses_explicit_daemon_command(self, tmp_path, monkeypatch):
+        """Daemon-only installs can launch their own entry point in background."""
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        monkeypatch.setattr(
+            "ai_guardian.daemon.client.DAEMON_START_TIMEOUT_SECONDS", 0.1
+        )
+        monkeypatch.setattr(
+            "ai_guardian.daemon.client.get_socket_path",
+            lambda: tmp_path / "daemon.sock",
+        )
+        command = [sys.executable, "-m", "ai_guardian.daemon_cli", "start"]
+
+        with mock.patch(
+            "ai_guardian.daemon.client.is_daemon_running", return_value=False
+        ):
+            with mock.patch("ai_guardian.daemon.client.time.sleep"):
+                with mock.patch("subprocess.Popen") as mock_popen:
+                    assert not start_daemon_background(daemon_command=command)
+
+        assert mock_popen.call_args.args[0] == command
+
 
 class TestWaitForProcessDeath:
     def test_returns_true_when_pid_is_none(self):

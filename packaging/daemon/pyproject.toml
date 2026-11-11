@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-guardian-daemon"
+version = "0.0.0"
+description = "Minimal headless AI Guardian daemon and REST API"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+  "cryptography>=43.0.0",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+
+[project.scripts]
+ai-guardian-daemon = "ai_guardian.daemon_cli:main"
+
+[project.urls]
+Homepage = "https://github.com/RedHatProductSecurity/ai-guardian"
+"Source Code" = "https://github.com/RedHatProductSecurity/ai-guardian"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_guardian"]

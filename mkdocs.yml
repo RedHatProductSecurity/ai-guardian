@@ -73,7 +73,8 @@ nav:
   - Getting Started:
       - Documentation: documentation.md
       - Quick Start: index.md
-      - Headless Ubuntu VM (Upcoming): UBUNTU_VM.md
+      - Headless Ubuntu VM: UBUNTU_VM.md
+      - Daemon-only Server Install: DAEMON_ONLY_INSTALL.md
       - Developer Install: DEVELOPER_GUIDE.md
       - Configuration: CONFIGURATION.md
       - Configuration Cookbook: COOKBOOK.md

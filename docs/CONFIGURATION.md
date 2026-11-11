@@ -74,9 +74,10 @@ the Web Console webpage to HTTPS.
 
 **Setting up a headless Ubuntu VM from PyPI?** Follow the ordered
 [Ubuntu VM HTTPS/SSH guide](UBUNTU_VM.md) for setup, private certificates,
-VM Console bootstrap and workstation enrollment. It targets an **upcoming
-release**: PyPI 1.20.0 lacks this workflow; published-artifact qualification and
-the confirmed minimum supporting version remain pending.
+VM Console bootstrap and workstation enrollment. For a REST-only VM without a
+guest Web Console, use the separate [daemon-only installation](DAEMON_ONLY_INSTALL.md).
+The published HTTPS/SSH minimum is AI Guardian 1.21.0; fresh-artifact qualification
+of the full walkthrough remains pending.
 
 `daemon.rest_tls` enables optional native HTTPS without changing existing bind
 addresses, localhost HTTP defaults, REST fields or daemon-token authentication.

@@ -125,3 +125,36 @@ jobs:
           name: coverage-report-${{ matrix.python-version }}
           path: htmlcov/
           retention-days: 7
+
+  distribution-install-smoke:
+    name: Full and Daemon-only Distribution Install Smoke
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build both distributions
+        run: |
+          python -m pip install --upgrade pip build pytest
+          python -m build --wheel --outdir dist
+          python scripts/build_daemon_distribution.py --outdir dist
+
+      - name: Install and smoke-test full distribution
+        run: |
+          python -m venv .venv-full-smoke
+          .venv-full-smoke/bin/python -m pip install --upgrade pip pytest
+          .venv-full-smoke/bin/python -m pip install dist/ai_guardian-*.whl
+          AI_GUARDIAN_INSTALL_SMOKE=full .venv-full-smoke/bin/python -m pytest --confcutdir=tests/packaging tests/packaging/test_daemon_install.py -q
+
+      - name: Install and smoke-test daemon-only distribution
+        run: |
+          python -m venv .venv-daemon-smoke
+          .venv-daemon-smoke/bin/python -m pip install --upgrade pip pytest
+          .venv-daemon-smoke/bin/python -m pip install dist/ai_guardian_daemon-*.whl
+          AI_GUARDIAN_INSTALL_SMOKE=daemon .venv-daemon-smoke/bin/python -m pytest --confcutdir=tests/packaging tests/packaging/test_daemon_install.py -q

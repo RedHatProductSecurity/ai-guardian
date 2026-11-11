@@ -23,7 +23,8 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | Document | Description |
 |----------|-------------|
 | [Configuration Guide](CONFIGURATION.md) | Config file locations, options, precedence, and remote configs |
-| [Headless Ubuntu VM](UBUNTU_VM.md) | Upcoming-release PyPI/venv walkthrough: private HTTPS, Console bootstrap and workstation SSH enrollment; published-artifact qualification pending |
+| [Headless Ubuntu VM](UBUNTU_VM.md) | Published-PyPI/venv walkthrough: private HTTPS, Console bootstrap and workstation SSH enrollment; fresh-artifact qualification pending |
+| [Daemon-only server install](DAEMON_ONLY_INSTALL.md) | Minimal PyPI distribution for headless daemon lifecycle, REST and HTTPS without tray or Web Console dependencies |
 | [Configuration Cookbook](COOKBOOK.md) | Practical Q&A pairs for common configuration tasks |
 | [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage pinned secret scanner engines |
 | [TOML Pattern Engine](TOML_PATTERNS.md) | Built-in Python scanner with 267 pre-compiled TOML patterns |

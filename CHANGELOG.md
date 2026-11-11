@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Daemon-only server distribution (#2693):** Publish a separate minimal
+  `ai-guardian-daemon` package for headless daemon lifecycle and REST/TLS use;
+  preserve the full default `ai-guardian` installation and add fresh-install CI.
 - **GitHub App stateless token redaction coverage (#2698):** Exercise an exact
   520-character synthetic `ghs_` JWT-shaped token and verify its full span is
   detected and redacted while retaining legacy-token coverage.

@@ -14,6 +14,13 @@ walkthrough is useful evidence, **not** fresh-PyPI qualification. The
 [release checklist](#release-qualification) remains open for fresh-install,
 desktop and lifecycle qualification.
 
+This walkthrough uses the full `ai-guardian` package because its bootstrap step
+runs the Web Console on the VM. For a smaller guest install that provides only
+daemon lifecycle and REST/TLS management, use the
+[daemon-only installation guide](DAEMON_ONLY_INSTALL.md); that path has no guest
+Web Console and configures TLS in the JSON file instead. The workstation still
+uses the full package and tray.
+
 | Required feature | Minimum published PyPI version |
 |---|---|
 | Native daemon HTTPS (#2551) and SSH enrollment (#2552) | 1.21.0 |

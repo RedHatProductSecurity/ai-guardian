@@ -40,6 +40,15 @@ Setup detects supported IDEs and guides hook setup. Open your IDE to start using
 AI Guardian. For optional desktop controls, run `ai-guardian tray start -b`; open
 the browser console with `ai-guardian console`.
 
+For a headless server that needs only daemon lifecycle and REST/TLS management,
+install the smaller [daemon-only distribution](docs/DAEMON_ONLY_INSTALL.md):
+
+```bash
+uv tool install ai-guardian-daemon
+ai-guardian-daemon init-config
+ai-guardian-daemon start -b
+```
+
 > **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read,
 > Write, Edit) are allowed and scanned by hooks. See [Tool Policy](docs/TOOL_POLICY.md)
 > for the security posture and configuration.
@@ -49,6 +58,7 @@ the browser console with `ai-guardian console`.
 | Topic | Documentation |
 |-------|---------------|
 | Install and verify | [Getting started](docs/overview/01-what-is-ai-guardian-install-and-verify.md) |
+| Headless daemon-only server | [Daemon-only installation](docs/DAEMON_ONLY_INSTALL.md) |
 | Configuration and security profiles | [Configuration Guide](docs/CONFIGURATION.md) |
 | IDE and agent integrations | [Agent Support](docs/AGENT_SUPPORT.md) |
 | Scanners | [Scanner Installation](docs/SCANNER_INSTALLATION.md) |

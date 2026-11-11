@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-10
+> Last updated: 2026-11-11
 
 ## User Preferences
 
@@ -2254,6 +2254,17 @@
 - [2026-08-05] **Canary payload selection for smoke tests:** (1) `AKIAIOSFODNN7EXAMPLE` is in gitleaks allowlist — use `sk-proj-...` format instead for secret scanning. (2) Context poisoning requires BOTH persistence pattern (`from now on`, `remember`) AND dangerous pattern (`delete`, `ignore security`) — single-category text won't trigger. (3) ExfilDetectionScanner matches credential-specific patterns (credential_theft, key_file_exfil, base64_encoding, etc.), NOT general curl uploads — use `base64 ~/.aws/credentials` not `curl -d @/etc/passwd`. (4) Bandit does NOT flag `subprocess.call(input())` — use `os.system(input())` which triggers B605. (5) Secret redaction has its own patterns separate from gitleaks — `AKIAIOSFODNN7EXAMPLE` IS redacted even though gitleaks skips it.
 
 ## Decision Log
+
+- [2026-11-11] **Daemon-only install (#2693):** Keep the existing `ai-guardian`
+  distribution and its dependency set untouched. Publish a separately versioned
+  `ai-guardian-daemon` distribution with a dedicated lifecycle CLI and a staged
+  lightweight `ai_guardian` initializer; this avoids eager full-feature imports
+  while preserving the daemon's existing implementation. Its only declared runtime
+  dependency is `cryptography` for HTTPS. Do not install both distributions in one
+  environment because both own the `ai_guardian` import package. Validate each
+  wheel in its own fresh venv, and run the isolated package test with
+  `--confcutdir=tests/packaging` so the full-suite conftest does not import optional
+  scanner dependencies.
 
 - [2026-10-29] **Inline pause UI (#2620):** Use the shared `run_modal("form", ...)`
   dispatcher with complete isolated Tk/NiceGUI implementations; simple native

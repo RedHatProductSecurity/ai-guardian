@@ -7,6 +7,27 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-11 (UTC)
 
+## Issue #2693 implementation — 2026-11-11
+
+- On the existing branch `2693`, added a separately versioned
+  `ai-guardian-daemon` distribution with a restricted lifecycle CLI. Its build
+  stages the shared daemon source under a lightweight package initializer and
+  declares only `cryptography`; the existing `ai-guardian` metadata, CLI and full
+  dependency set remain unchanged. The publish workflow builds both distributions.
+- Added isolated fresh-install CI for both full and daemon-only wheels, plus a
+  release-readiness daemon-only build. The smoke starts the installed daemon,
+  checks REST health/status, enables a synthetic TLS identity, verifies HTTPS, and
+  checks that optional full-package modules are absent from the minimal venv.
+- Added daemon-only server documentation and README quick-start; clarified the
+  full Ubuntu VM path versus the smaller REST/TLS-only guest path.
+- **Validation:** 111 related unit tests pass; full and daemon-only artifact smoke
+  tests pass in separate fresh venvs (including certificate-verified HTTPS).
+  Both sdists/wheels pass `twine check`; full Ruff, Black, error-level Pylint,
+  package Mypy (338 files), workflow YAML parsing, buglog JSON parsing, and
+  `git diff --check` pass.
+- Changes remain uncommitted on branch `2693`; no commit, push or PR was created.
+  **Next:** user review, then follow the normal issue/PR completion flow.
+
 ## Issue #2698 implementation — 2026-11-11
 
 - On the existing managed DAF branch `2698`, replaced the shorter GitHub
