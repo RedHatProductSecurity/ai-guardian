@@ -66,6 +66,19 @@ budget_tokens: 1000
   note is saved. Changes remain uncommitted on branch `2719`; no PR was created.
   **Next:** user review and external `daf complete`.
 
+## Issue #2716 private LLM documentation export — 2026-11-12
+
+- Added a README link to `docs/notebooklm-export.md`, explaining that it is a
+  generated single-file documentation compilation users can upload to an
+  organization's approved private NotebookLM or another LLM search tool. Clarified
+  that the export is generated during releases and should not be edited directly;
+  the generated file itself was left untouched.
+- Updated CHANGELOG. Verified the export target exists and `git diff --check`
+  passes. No tests were run because this is documentation-only.
+- All three GitHub acceptance criteria are checked; the `done` label, progress
+  comment, and DAF note are recorded. Changes remain uncommitted on branch `2716`.
+  **Next:** user review and external `daf complete`.
+
 ## Issue #2713 runtime-organized tray sandbox actions — 2026-11-12
 
 - Grouped OpenShell middleware readiness, create, and stopped-sandbox actions in
