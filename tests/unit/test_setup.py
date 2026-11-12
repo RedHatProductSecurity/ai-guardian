@@ -4099,6 +4099,7 @@ class TestCreateDefaultConfig:
         config = _get_default_config_template(permissive=False)
 
         assert config["secret_scanning"]["enabled"] is True
+        assert config["secret_scanning"]["additional_patterns"] == []
         assert config["prompt_injection"]["enabled"] is True
         assert config["permissions"]["enabled"] is True
         assert len(config["permissions"]["rules"]) == 4

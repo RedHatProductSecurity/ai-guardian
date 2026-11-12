@@ -7,6 +7,7 @@ This guide explains how AI Guardian's secret scanning works, including configura
 - [Overview](#overview)
 - [Scanner Engines](#scanner-engines)
 - [Configuration](#configuration)
+- [Custom Detection Rules](#custom-detection-rules)
 - [Pattern Server Integration](#pattern-server-integration)
 - [Secret Redaction Security](#secret-redaction-security)
 - [False Positives](#false-positives)
@@ -91,6 +92,46 @@ of built-in TOML patterns):**
 - Tries BetterLeaks first (if installed)
 - Falls back to Gitleaks if BetterLeaks not found
 - Works on any system (automatic detection)
+
+### Custom Detection Rules
+
+Set `secret_scanning.additional_patterns` to add organization-specific regex rules
+without editing AI Guardian's bundled files or waiting for a package release. These
+rules **augment** the bundled patterns; they do not replace or disable them. They
+are evaluated only by the built-in `toml-patterns` engine. If an explicit
+`secret_scanning.engines` list omits `toml-patterns` (for example, an
+external-only list), these rules are not used.
+
+```json
+{
+  "secret_scanning": {
+    "additional_patterns": [
+      {
+        "id": "example-org-internal-token",
+        "match_type": "regex",
+        "regex": "ORG_INTERNAL_TOKEN_[A-Z0-9]{16}",
+        "description": "Example organization token (synthetic format)",
+        "keywords": ["ORG_INTERNAL_TOKEN_"],
+        "flags": "i"
+      }
+    ]
+  }
+}
+```
+
+`id`, `match_type`, and `regex` are required. Rule IDs must be unique and use
+letters, digits, `.`, `_`, or `-`; `match_type` currently supports only `regex`.
+Regexes must use syntax compatible with Go RE2. Optional `description` labels
+findings, `keywords` provide a literal prefilter, and `flags` accepts `i`, `m`,
+and/or `s`. The Console validates the JSON and rule structure before saving and
+shows entry-specific errors. A malformed rule in a directly edited config is
+skipped with a value-free warning pointing to the setting; valid rules and bundled
+detection remain active.
+
+This detection setting is distinct from
+`secret_redaction.additional_patterns`, which configures **output redaction only**
+and does not add blocking/detection rules. After changing the config file directly,
+use the normal daemon configuration reload flow.
 
 **Three external scanners (also explicitly opts out of built-in TOML patterns):**
 ```json

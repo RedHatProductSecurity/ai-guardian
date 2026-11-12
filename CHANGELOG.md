@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Custom secret detection rules (#2721):** Expose validated organization-local
+  regex rules in `secret_scanning.additional_patterns`, the Secret Scanning Console,
+  generated/example configuration, and documentation. Rules augment bundled
+  detection and require the built-in `toml-patterns` engine.
 - **Integration hook capability matrix (#2724):** Document per-surface prompt,
   pre-tool, and post-tool enforcement, observation, and transformation behavior;
   add registry-to-matrix parity coverage and clarify Copilot prompt-hook limits.

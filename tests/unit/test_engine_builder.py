@@ -561,6 +561,12 @@ class TestParentConfigPassthrough(unittest.TestCase):
                 for finding in scanner.scan(marker)
             )
         )
+        self.assertFalse(
+            any(
+                finding.rule_id == "synthetic-hook-output-marker"
+                for finding in scanner.scan("ordinary non-sensitive content")
+            )
+        )
 
     def test_scanner_config_overrides_parent_config(self):
         from ai_guardian.scanners.engine_builder import _build_python_preset

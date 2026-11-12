@@ -60,7 +60,7 @@ the browser console with `ai-guardian console`.
 
 | Feature | Guide |
 |---------|-------|
-| Secret scanning | [Secret Scanning](docs/security/SECRET_SCANNING.md) |
+| Secret scanning and custom detection rules | [Secret Scanning](docs/security/SECRET_SCANNING.md) |
 | PII detection | [Secret Scanning](docs/security/SECRET_SCANNING.md) |
 | Prompt injection detection | [Prompt Injection](docs/security/PROMPT_INJECTION.md) |
 | Context poisoning detection | [Context Poisoning](docs/security/CONTEXT_POISONING.md) |

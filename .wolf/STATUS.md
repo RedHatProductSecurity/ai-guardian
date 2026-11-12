@@ -7,6 +7,31 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-12 (UTC)
 
+## Issue #2721 custom secret detection rules — 2026-11-12
+
+- Formalized `secret_scanning.additional_patterns` for user-managed regex rules.
+  The schema and shared Console/runtime validator require a unique safe ID,
+  `match_type: regex`, valid RE2-compatible regex, and validate optional description,
+  keywords, and flags. Invalid entries are skipped individually with value-free
+  warnings; bundled rules remain active.
+- Added the empty generated-config default, a synthetic example rule, and a
+  structured JSON editor on the Secret Scanning Console page. Documented that the
+  rules augment bundled detection, require the built-in `toml-patterns` engine, and
+  are distinct from output-only `secret_redaction.additional_patterns`.
+- **Validation:** 682 related unit/UX tests pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint, project-managed Mypy (337 files), and `git diff --check` pass.
+  Bare global Mypy still reports the known 14 errors in untouched
+  `skill_discovery.py` and `secret_validator.py`.
+- Updated issue #2721 acceptance criteria, added the `done` label and progress
+  comments, and saved a DAF note. PR #2727 is open from commit `435629c1`.
+- **CodeQL follow-up:** PR comment/alert #355 flags dynamic custom-rule diagnostics
+  reaching `logger.warning` at `toml_patterns.py:204`. Replaced the dynamic warning
+  with a fixed value-free message; detailed entry errors stay in the Console.
+  **198** related scanner/engine/UX tests and Ruff, Black, Pylint, project-managed
+  Mypy, and diff checks pass. The follow-up is local and uncommitted; the existing
+  PR alert remains until an updated commit is analyzed.
+- **Next:** user review, publish the CodeQL follow-up if approved, then external
+  `daf complete`.
 ## Issue #2719 tray MCP proactive pause label — 2026-11-12
 
 - The tray's **MCP Proactive** label now follows the configured level for local

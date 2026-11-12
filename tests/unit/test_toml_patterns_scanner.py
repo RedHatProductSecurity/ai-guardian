@@ -53,21 +53,81 @@ class TestTomlPatternsScanner:
         scanner = TomlPatternsScanner()
         assert scanner._cache.rule_count > 0
 
-    def test_configure_additional_patterns(self):
+    def test_configure_additional_patterns_detect_custom_rule(self):
         scanner = TomlPatternsScanner()
         initial_count = scanner._cache.rule_count
         scanner.configure(
             {
                 "additional_patterns": [
                     {
-                        "id": "custom-1",
+                        "id": "org-internal-token",
                         "match_type": "regex",
-                        "regex": "custom-secret-[0-9]+",
+                        "regex": r"ORG_INTERNAL_TOKEN_[A-Z0-9]{16}",
+                        "description": "Synthetic organization token",
+                        "keywords": ["ORG_INTERNAL_TOKEN_"],
                     }
                 ]
             }
         )
         assert scanner._cache.rule_count == initial_count + 1
+        findings = scanner.scan("ORG_INTERNAL_TOKEN_0123456789ABCDEF")
+        assert any(f.rule_id == "org-internal-token" for f in findings)
+
+        safe_findings = scanner.scan("ORG_INTERNAL_TOKEN_short")
+        assert not any(f.rule_id == "org-internal-token" for f in safe_findings)
+
+    def test_malformed_custom_rule_does_not_disable_bundled_detection(self, caplog):
+        scanner = TomlPatternsScanner()
+        initial_count = scanner._cache.rule_count
+
+        with caplog.at_level("WARNING"):
+            scanner.configure(
+                {
+                    "additional_patterns": [
+                        {
+                            "id": "broken-org-rule",
+                            "match_type": "regex",
+                            "regex": "[",
+                        }
+                    ]
+                }
+            )
+
+        assert scanner._cache.rule_count == initial_count
+        assert any(
+            rule.id == "openai-api-key"
+            for rule in scanner._cache.get_rules(category="secrets")
+        )
+        # Synthetic, nonfunctional placeholder used only to verify the bundled rule.
+        findings = scanner.scan("sk-abcdefghijklmnopqrstuvwxyz")
+        assert any(f.rule_id == "openai-api-key" for f in findings)
+        assert "Invalid custom secret detection rules were skipped" in caplog.text
+        assert "secret_scanning.additional_patterns" in caplog.text
+        assert "broken-org-rule" not in caplog.text
+        assert "regex is invalid" not in caplog.text
+
+    def test_invalid_rule_structure_is_reported_and_skipped(self, caplog):
+        scanner = TomlPatternsScanner()
+        initial_count = scanner._cache.rule_count
+
+        with caplog.at_level("WARNING"):
+            scanner.configure(
+                {
+                    "additional_patterns": [
+                        {
+                            "id": "org-literal-rule",
+                            "match_type": "literal",
+                            "regex": "ORG_INTERNAL_TOKEN_",
+                        },
+                        "not-an-object",
+                    ]
+                }
+            )
+
+        assert scanner._cache.rule_count == initial_count
+        assert "Invalid custom secret detection rules were skipped" in caplog.text
+        assert "org-literal-rule" not in caplog.text
+        assert "not-an-object" not in caplog.text
 
 
 class TestTomlPatternsPiiFiltering:

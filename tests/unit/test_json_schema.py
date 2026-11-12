@@ -101,6 +101,50 @@ def test_secret_scanning_schema_and_example_default_to_toml_patterns(
 
 
 @pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_custom_secret_detection_rules_are_defined_and_validated(
+    schema, example_config
+):
+    rules_schema = schema["properties"]["secret_scanning"]["properties"][
+        "additional_patterns"
+    ]
+    assert rules_schema["default"] == []
+    assert "augment bundled" in rules_schema["description"]
+    assert rules_schema["items"]["required"] == ["id", "match_type", "regex"]
+
+    example_rules = example_config["secret_scanning"]["additional_patterns"]
+    validate(
+        instance={"secret_scanning": {"additional_patterns": example_rules}},
+        schema=schema,
+    )
+
+    invalid_rules = [
+        {"match_type": "regex", "regex": "ORG_INTERNAL_TOKEN_[A-Z]+"},
+        {
+            "id": "bad id",
+            "match_type": "regex",
+            "regex": "ORG_INTERNAL_TOKEN_[A-Z]+",
+        },
+        {
+            "id": "org-demo-token",
+            "match_type": "literal",
+            "regex": "ORG_INTERNAL_TOKEN_[A-Z]+",
+        },
+        {
+            "id": "org-demo-token",
+            "match_type": "regex",
+            "regex": "ORG_INTERNAL_TOKEN_[A-Z]+",
+            "strategy": "full_redact",
+        },
+    ]
+    for rule in invalid_rules:
+        with pytest.raises(ValidationError):
+            validate(
+                instance={"secret_scanning": {"additional_patterns": [rule]}},
+                schema=schema,
+            )
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
 def test_valid_config_validates(schema, valid_config):
     """Test that a clean configuration (without comments) validates against the schema."""
     try:
