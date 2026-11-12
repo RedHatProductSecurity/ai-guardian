@@ -5,9 +5,9 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-11 (UTC)
+> Last updated: 2026-11-12 (UTC)
 
-## Issue #2693 implementation — 2026-11-11
+## Issue #2693 implementation and CI retrigger — 2026-11-11–12
 
 - On the existing branch `2693`, added a separately versioned
   `ai-guardian-daemon` distribution with a restricted lifecycle CLI. Its build
@@ -25,8 +25,20 @@ budget_tokens: 1000
   Both sdists/wheels pass `twine check`; full Ruff, Black, error-level Pylint,
   package Mypy (338 files), workflow YAML parsing, buglog JSON parsing, and
   `git diff --check` pass.
-- Changes remain uncommitted on branch `2693`; no commit, push or PR was created.
-  **Next:** user review, then follow the normal issue/PR completion flow.
+- Implementation commit `277b5bc1` is on branch `2693`; draft PR #2714 is open.
+- At the user's request, pushed empty CI-retrigger commit `6d29e26c` on 2026-11-12;
+  it contains no source changes. New runs for the updated PR commit were observed:
+  Integration Tests #1980, Build Wheel #2425, Container Build Validation #240,
+  and CodeQL #259 were in progress; Lint #2038, Scenario Tests #1212, Tests #3065,
+  and Smoke Tests #1430 were queued. The original run set remained queued.
+- Addressed the GitHub Advanced Security review comment about implicit token
+  permissions by setting workflow-wide `contents: read` in `.github/workflows/test.yml`
+  and adding `tests/unit/test_github_workflow_permissions.py`. The focused test,
+  Ruff, Black, and diff checks pass. Pushed `69eeb099`; the new PR checks, including
+  CodeQL #260, were observed in progress. The bot's original review thread is still
+  present pending the new scan.
+- **Next:** monitor the new and original run sets; avoid another trigger unless
+  needed, since the original runs may still dispatch.
 
 ## Issue #2698 implementation — 2026-11-11
 
