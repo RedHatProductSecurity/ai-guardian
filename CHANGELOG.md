@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Custom secret detection rules (#2721):** Expose validated organization-local
+  regex rules in `secret_scanning.additional_patterns`, the Secret Scanning Console,
+  generated/example configuration, and documentation. Rules augment bundled
+  detection and require the built-in `toml-patterns` engine.
 - **Runtime-organized tray sandbox actions (#2713):** Group OpenShell middleware,
   sandbox creation, and stopped-sandbox actions separately from Docker/Podman actions;
   runtime shortcuts preselect the matching option in the complete create form. Group

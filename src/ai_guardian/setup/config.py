@@ -146,6 +146,8 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "ignore_files": [],
             "ignore_tools": [],
             "allowlist_patterns": [],
+            "_comment_additional_patterns": "Custom regex rules augment bundled secret detection and run only with the built-in toml-patterns engine. External-only engine lists do not use these rules; see docs/security/SECRET_SCANNING.md.",
+            "additional_patterns": [],
             "_comment_engines": "Default engines, in order: built-in toml-patterns then gitleaks. An explicit list replaces this default; omit toml-patterns to opt out. Other supported engines: betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian. Python-based custom scanners: {type: python, module/path: ..., class: ...}. Cloud engines (gitguardian) require consent: ai-guardian engine consent gitguardian",
             "engines": [
                 {"type": "toml-patterns"},

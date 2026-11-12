@@ -550,6 +550,56 @@
           },
           "default": []
         },
+        "additional_patterns": {
+          "type": "array",
+          "description": "User-managed regex rules that augment bundled secret detection patterns. Applied only by the built-in toml-patterns engine; external-only engine lists do not use them. This is distinct from secret_redaction.additional_patterns, which configures output redaction only.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                "description": "Unique rule identifier, using letters, digits, '.', '_' or '-'."
+              },
+              "match_type": {
+                "type": "string",
+                "const": "regex",
+                "description": "Custom secret detection rules currently support regex matching."
+              },
+              "regex": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Python regular expression to match a custom secret format. Must use syntax compatible with Go RE2."
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable name for findings from this rule."
+              },
+              "keywords": {
+                "type": "array",
+                "description": "Optional literal prefilter terms; the regex is evaluated only when at least one term occurs in the scanned content.",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "flags": {
+                "type": "string",
+                "pattern": "^[ims]*$",
+                "description": "Optional regex flags: i (ignore case), m (multiline), and s (dot matches newline)."
+              }
+            },
+            "required": [
+              "id",
+              "match_type",
+              "regex"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
         "pattern_server": {
           "type": [
             "object",

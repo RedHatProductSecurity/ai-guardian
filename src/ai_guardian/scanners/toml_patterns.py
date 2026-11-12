@@ -14,7 +14,7 @@ Usage in ai-guardian.json:
 import logging
 import os
 import re
-from typing import List, Optional
+from typing import Any, List, Optional, Set, Tuple
 
 from ai_guardian.patterns import BUNDLED_FILES
 from ai_guardian.patterns.cache import PatternCache
@@ -22,6 +22,130 @@ from ai_guardian.patterns.validators import load_stopwords
 from ai_guardian.scanners.sdk import Finding, Scanner
 
 logger = logging.getLogger(__name__)
+
+_CUSTOM_SECRET_RULE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+_CUSTOM_SECRET_RULE_FIELDS = {
+    "id",
+    "match_type",
+    "regex",
+    "description",
+    "keywords",
+    "flags",
+}
+
+
+def validate_custom_secret_patterns(
+    patterns: Any, existing_rule_ids: Optional[Set[str]] = None
+) -> Tuple[List[dict], List[str]]:
+    """Validate user-managed regex rules for the built-in secret scanner.
+
+    Returns valid rules and value-free diagnostics. The Console and runtime use
+    this validation; the JSON schema mirrors its structural constraints so
+    malformed rules cannot reach the scanner or leak regex contents in diagnostics.
+    """
+    if not isinstance(patterns, list):
+        return [], [
+            "secret_scanning.additional_patterns must be an array; custom rules were ignored"
+        ]
+
+    valid_rules: List[dict] = []
+    errors: List[str] = []
+    seen_ids = set(existing_rule_ids or ())
+
+    for index, raw_rule in enumerate(patterns):
+        location = f"secret_scanning.additional_patterns[{index}]"
+        rule_errors: List[str] = []
+        if not isinstance(raw_rule, dict):
+            errors.append(f"{location} must be an object; this rule was ignored")
+            continue
+
+        unknown_fields = any(
+            not isinstance(field, str) or field not in _CUSTOM_SECRET_RULE_FIELDS
+            for field in raw_rule
+        )
+        if unknown_fields:
+            rule_errors.append(
+                "contains unsupported fields; supported fields are id, match_type, "
+                "regex, description, keywords, and flags"
+            )
+
+        rule_id = raw_rule.get("id")
+        if not isinstance(rule_id, str) or not _CUSTOM_SECRET_RULE_ID.fullmatch(
+            rule_id
+        ):
+            rule_errors.append(
+                "id must start with a letter or digit and contain only letters, "
+                "digits, '.', '_' or '-' (maximum 128 characters)"
+            )
+        else:
+            location += f" ({rule_id})"
+            if rule_id in seen_ids:
+                rule_errors.append("id must be unique among bundled and custom rules")
+
+        if raw_rule.get("match_type") != "regex":
+            rule_errors.append("match_type must be 'regex'")
+
+        regex = raw_rule.get("regex")
+        if not isinstance(regex, str) or not regex:
+            rule_errors.append("regex must be a non-empty string")
+
+        description = raw_rule.get("description")
+        if "description" in raw_rule and not isinstance(description, str):
+            rule_errors.append("description must be a string")
+
+        keywords = raw_rule.get("keywords")
+        if "keywords" in raw_rule and (
+            not isinstance(keywords, list)
+            or any(not isinstance(keyword, str) or not keyword for keyword in keywords)
+        ):
+            rule_errors.append("keywords must be an array of non-empty strings")
+
+        flags = raw_rule.get("flags", "")
+        if not isinstance(flags, str) or re.fullmatch(r"[ims]*", flags) is None:
+            rule_errors.append("flags may contain only 'i', 'm' and 's'")
+            flags = ""
+
+        if isinstance(regex, str) and regex:
+            regex_flags = 0
+            if "i" in flags:
+                regex_flags |= re.IGNORECASE
+            if "m" in flags:
+                regex_flags |= re.MULTILINE
+            if "s" in flags:
+                regex_flags |= re.DOTALL
+            try:
+                re.compile(regex, regex_flags)
+            except re.error as exc:
+                position = getattr(exc, "pos", None)
+                suffix = f" at position {position}" if position is not None else ""
+                rule_errors.append(
+                    f"regex is invalid{suffix}; correct the regex syntax"
+                )
+            else:
+                from ai_guardian.patterns.toml_parser import validate_re2_compatible
+
+                compatible, reason = validate_re2_compatible(regex)
+                if not compatible:
+                    rule_errors.append(f"regex uses unsupported syntax: {reason}")
+
+        if rule_errors:
+            errors.extend(
+                f"{location}: {message}; this rule was ignored"
+                for message in rule_errors
+            )
+            continue
+
+        valid_rules.append(
+            {
+                field: value
+                for field, value in raw_rule.items()
+                if field in _CUSTOM_SECRET_RULE_FIELDS
+            }
+        )
+        if isinstance(rule_id, str):
+            seen_ids.add(rule_id)
+
+    return valid_rules, errors
 
 
 class TomlPatternsScanner(Scanner):
@@ -69,9 +193,17 @@ class TomlPatternsScanner(Scanner):
         for server_config in servers:
             self._load_from_server(server_config)
 
-        additional = config.get("additional_patterns", [])
-        if additional:
-            self._cache.load_rules(additional, category="secrets")
+        if "additional_patterns" in config:
+            existing_rule_ids = {
+                rule.id for rule in self._cache.get_rules(category="secrets")
+            }
+            additional, errors = validate_custom_secret_patterns(
+                config["additional_patterns"], existing_rule_ids
+            )
+            for error in errors:
+                logger.warning("Ignoring custom secret detection rule: %s", error)
+            if additional:
+                self._cache.load_rules(additional, category="secrets")
 
         allowlist_raw = config.get("allowlist_patterns")
         if allowlist_raw:

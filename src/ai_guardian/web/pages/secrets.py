@@ -1,6 +1,7 @@
 """Secret Scanning page — secret detection settings and allowlist config."""
 
 import asyncio
+import json
 import re as re_mod
 from datetime import datetime, timedelta, timezone
 
@@ -14,6 +15,7 @@ from ai_guardian.web.config_helpers import (
     load_web_config_global,
     save_web_config,
 )
+from ai_guardian.scanners.toml_patterns import validate_custom_secret_patterns
 
 DURATION_RE = re_mod.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?$", re_mod.IGNORECASE)
 
@@ -436,6 +438,86 @@ def create_secrets_page(service, daemon_name: str):
                         ui.button("Add", icon="add", on_click=add_allowlist).props(
                             "dense"
                         )
+
+                # --- Custom Secret Detection Rules ---
+                with ui.card().classes("w-full"):
+                    ui.label("Custom Secret Detection Rules").classes(
+                        "text-lg font-bold"
+                    )
+                    ui.label(
+                        "These regex rules augment bundled detection patterns and "
+                        "run only when the built-in toml-patterns engine is selected. "
+                        "External-only engines do not use them. This is separate from "
+                        "secret_redaction.additional_patterns, which only configures "
+                        "tool-output redaction."
+                    ).classes("text-xs text-grey-6")
+
+                    custom_patterns_input = (
+                        ui.textarea(
+                            label="Rules (JSON array)",
+                            value=json.dumps(
+                                ss.get("additional_patterns", []), indent=2
+                            ),
+                            placeholder=(
+                                '[{"id":"org-internal-token","match_type":"regex",'
+                                '"regex":"ORG_INTERNAL_TOKEN_[A-Z0-9]{16}"}]'
+                            ),
+                        )
+                        .props("outlined autogrow")
+                        .classes("w-full font-mono")
+                    )
+
+                    async def save_custom_patterns():
+                        try:
+                            submitted_patterns = json.loads(custom_patterns_input.value)
+                        except (json.JSONDecodeError, TypeError) as exc:
+                            if isinstance(exc, json.JSONDecodeError):
+                                detail = f"line {exc.lineno}, column {exc.colno}"
+                            else:
+                                detail = "enter a JSON array"
+                            ui.notify(
+                                f"Custom detection rules were not saved: invalid JSON ({detail})",
+                                type="negative",
+                            )
+                            return
+
+                        valid_patterns, errors = validate_custom_secret_patterns(
+                            submitted_patterns
+                        )
+                        if errors:
+                            ui.notify(
+                                "Custom detection rules were not saved: "
+                                + "; ".join(errors),
+                                type="negative",
+                            )
+                            return
+
+                        cfg = await run.io_bound(load_web_config)
+                        sect = cfg.get("secret_scanning", {})
+                        if not isinstance(sect, dict):
+                            sect = {}
+                        sect["additional_patterns"] = valid_patterns
+                        cfg["secret_scanning"] = sect
+                        saved = await run.io_bound(save_web_config, cfg)
+                        if not saved:
+                            ui.notify(
+                                "Could not save custom secret detection rules",
+                                type="negative",
+                            )
+                            return
+
+                        ui.notify(
+                            "Custom secret detection rules saved", type="positive"
+                        )
+                        await refresh()
+
+                    save_patterns_button = ui.button(
+                        "Save custom rules",
+                        icon="save",
+                        on_click=save_custom_patterns,
+                    ).props("dense")
+                    if is_web_config_read_only():
+                        save_patterns_button.disable()
 
                 # --- False Positive Filtering: Entropy (Issue #1091) ---
                 with ui.card().classes("w-full"):

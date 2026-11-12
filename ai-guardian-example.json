@@ -209,6 +209,16 @@
       "EXAMPLE_API_KEY_[A-Z0-9]+",
       {"pattern": "sk_test_temp_[A-Za-z0-9]+", "valid_until": "2026-06-01T00:00:00Z"}
     ],
+    "_additional_patterns_comment": "Custom regex detection rules augment bundled patterns and apply only when the built-in toml-patterns engine is selected. External-only engine lists do not use them. This is separate from secret_redaction.additional_patterns, which only configures output redaction.",
+    "additional_patterns": [
+      {
+        "id": "example-org-internal-token",
+        "match_type": "regex",
+        "regex": "ORG_INTERNAL_TOKEN_[A-Z0-9]{16}",
+        "description": "Example organization token (synthetic format)",
+        "keywords": ["ORG_INTERNAL_TOKEN_"]
+      }
+    ],
     "_engines_comment": "Default engines are built-in toml-patterns followed by gitleaks. An explicit list replaces this default; omit toml-patterns to opt out, including through the Console Engine Configuration checkbox.",
     "_engines_comment2": "Configure multiple scanner engines with different strategies for combining results",
     "_engines_comment3": "pattern_server is now per-engine (Issue #530) — put it inside the engine object",
@@ -558,7 +568,7 @@
     "log_redactions": true,
     "_log_redactions_note": "Log each redaction event to violations.jsonl for audit",
     "additional_patterns": [],
-    "_additional_patterns_note": "Extra regex patterns for custom secret types beyond built-in detection"
+    "_additional_patterns_note": "Custom patterns used only to redact secrets from tool outputs; this does not add secret_scanning detection rules. See secret_scanning.additional_patterns for built-in TOML detection rules."
   },
 
   "scan_pii": {

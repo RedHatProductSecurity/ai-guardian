@@ -300,6 +300,11 @@
 
 ## Key Learnings
 
+- **2026-11-12 — Custom secret rules (#2721):** Positive scanner fixtures must
+  avoid bundled placeholder stopwords such as `demo`; otherwise the intended
+  entropy/placeholder filtering suppresses a valid custom regex match. Use a
+  synthetic but non-placeholder prefix such as `ORG_INTERNAL_TOKEN_`.
+
 - **2026-11-12 — #2699 CI contracts:** `check_command` runs the command-credential
   scanner before the generic `ToolPolicyChecker`; tests meant to isolate generic
   secret scanning should place synthetic values in an unrelated request-body

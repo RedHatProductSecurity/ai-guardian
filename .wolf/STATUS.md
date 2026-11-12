@@ -7,6 +7,26 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-12 (UTC)
 
+## Issue #2721 custom secret detection rules — 2026-11-12
+
+- Formalized `secret_scanning.additional_patterns` for user-managed regex rules.
+  The schema and shared Console/runtime validator require a unique safe ID,
+  `match_type: regex`, valid RE2-compatible regex, and validate optional description,
+  keywords, and flags. Invalid entries are skipped individually with value-free
+  warnings; bundled rules remain active.
+- Added the empty generated-config default, a synthetic example rule, and a
+  structured JSON editor on the Secret Scanning Console page. Documented that the
+  rules augment bundled detection, require the built-in `toml-patterns` engine, and
+  are distinct from output-only `secret_redaction.additional_patterns`.
+- **Validation:** 682 related unit/UX tests pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint, project-managed Mypy (337 files), and `git diff --check` pass.
+  Bare global Mypy still reports the known 14 errors in untouched
+  `skill_discovery.py` and `secret_validator.py`.
+- Updated issue #2721 acceptance criteria, added the `done` label and progress
+  comments, and saved a DAF note. Changes are local on branch `2721`; no commit,
+  push, or PR was created.
+- **Next:** user review and external `daf complete`.
+
 ## Issue #2713 runtime-organized tray sandbox actions — 2026-11-12
 
 - Grouped OpenShell middleware readiness, create, and stopped-sandbox actions in
