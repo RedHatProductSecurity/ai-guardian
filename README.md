@@ -18,6 +18,7 @@
   development changes.
 - [Source documentation index](docs/README.md) — browse the documentation in this repository.
 - [Ask questions about the documentation in NotebookLM](https://notebook.google.com/notebook/9b78ebca-d327-4df7-8f2e-64e518f2ddcb) — a Google account is required.
+- [Use the combined documentation export with a private LLM tool](docs/notebooklm-export.md) — upload this generated single-file compilation to your organization's approved private NotebookLM instance or other LLM search tool. It is generated during releases; do not edit it directly.
 
 ## Security Disclaimer
 

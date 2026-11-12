@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Safe release CI resume (#2701):** Persist and validate exact release CI
   attempts so interrupted runs can be resumed without duplicate workflow dispatches.
 ### Changed
+- **Private documentation search (#2716):** Link to the generated combined export
+  from the README and explain uploading it to an organization's approved private
+  NotebookLM or other LLM search tool; clarify that the export is release-generated
+  and should not be edited directly.
 - **README documentation resources:** Shorten the root README into a landing page
   and surface the full documentation site, source index, and NotebookLM Q&A.
 - **Read the Docs release verification:** Link to stable documentation by default,
