@@ -17,7 +17,10 @@ keys are `claude`, `cursor`, `copilot`, `grok`, `codex`, `windsurf`, `gemini`,
 [`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py) then
 requires setup, adapter aliases, MCP/rules capability, transcript/session
 registries, installer text, support documentation, and the release-readiness
-matrices to stay synchronized.
+matrices to stay synchronized. The separate [per-integration behavior
+matrix](AGENT_SUPPORT.md#per-integration-behavior-matrix) records whether each
+prompt/pre-tool/post-tool stage blocks, observes, transforms, is conditional,
+or is unverified; the registry parity test requires one row for every key.
 
 ## Support model
 
@@ -159,6 +162,16 @@ even when the integration also has GUI, plugin, or MCP surfaces.
   channels, exit-code behavior, and whether the agent accepts modified output.
 - [ ] Record the response contract for allow, block, warning, and redaction
   paths, including which messages reach the user and the agent.
+- [ ] For `UserPromptSubmit`, `PreToolUse`, and `PostToolUse`, distinguish host
+  enforcement from event presence: record gate, observation, advice, rewrite,
+  replacement/withholding, unsupported, and unverified behavior separately.
+- [ ] Record each relevant host variant (for example local vs cloud, CLI vs
+  IDE, or plugin generation), the hook protocol/timing, timeout and process
+  failure defaults, required trust/configuration, upstream references, and any
+  limits on output replacement or post-action side effects.
+- [ ] Add a row for the canonical registry key to the per-integration behavior
+  matrix in `docs/AGENT_SUPPORT.md`; add/extend its registry-to-matrix contract
+  in `tests/unit/test_ide_registry.py`.
 - [ ] Identify configuration files, environment-variable overrides, project
   files, and whether the integration must preserve unrelated user settings.
 - [ ] Identify transcript format and path behavior, including whether the
@@ -261,7 +274,7 @@ fixtures synthetic and isolated from the user's configuration.
 
 | Test group | Tests that must be implemented | Minimum scenarios and evidence |
 |------------|--------------------------------|--------------------------------|
-| Canonical registration and parity | Add the IDE to `SUPPORTED_IDE_REGISTRY`; extend `tests/unit/test_ide_registry.py` only when a new capability shape needs a contract | Stable key/display name, all aliases, adapter class, setup mode, managed event manifest, transcript/session declaration, and release-readiness/docs/installer parity must pass |
+| Canonical registration and parity | Add the IDE to `SUPPORTED_IDE_REGISTRY`; extend `tests/unit/test_ide_registry.py` for registry-to-capability-matrix coverage | Stable key/display name, all aliases, adapter class, setup mode, managed event manifest, transcript/session declaration, capability behavior row, and release-readiness/docs/installer parity must pass |
 | Adapter detection and normalization | Focused adapter unit tests plus shared registry/precedence tests | Explicit `--ide` and environment-alias detection, auto-detection precedence, every supported lifecycle event, tool-name mapping, missing fields, wrong types, malformed JSON, and unknown events normalize safely or return the documented error |
 | Response contract | Adapter and hook-pipeline tests | Benign allow, security block, warning/log-only, post-tool redaction/output transform, user-facing and agent-facing fields, exit codes, stdout/stderr shape, invalid response handling, timeout, missing executable, non-zero process failure, and fail-open/fail-closed behavior |
 | Hook lifecycle and UX | `tests/unit/test_hook_processing.py` and an applicable `tests/ux/` contract | Invoke every event AI Guardian installs. Test clean input, a blockable threat, warning, output transformation, malformed input, and the exact permission/message flow. If the upstream exposes an event that AI Guardian does not install, record the exclusion and test that it is not reported as missing |
@@ -371,7 +384,8 @@ because executing generated `.bat` hooks requires a Windows command host.
 ## 4. Documentation and release bookkeeping
 
 - [ ] Update every applicable reference table in `docs/AGENT_SUPPORT.md`:
-  Supported Agents, Hook Capability Matrix, Violation Type Coverage Matrix,
+  Supported Agents, Hook Capability Matrix, per-integration behavior matrix,
+  Violation Type Coverage Matrix,
   Agent Confidence Levels, Hook Event Name Mapping, Response Format
   Differences, and Config File Locations.
 - [ ] Update the architecture, setup, transcript, and known-limitations

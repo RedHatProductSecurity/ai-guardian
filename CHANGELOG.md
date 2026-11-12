@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Integration hook capability matrix (#2724):** Document per-surface prompt,
+  pre-tool, and post-tool enforcement, observation, and transformation behavior;
+  add registry-to-matrix parity coverage and clarify Copilot prompt-hook limits.
 - **Command credential argument scanning (#2699):** Add a separate, default-on
   scanner that blocks literal credentials in supported curl, wget, and PowerShell
   web-request arguments before shell execution. Credential references stay advisory;
