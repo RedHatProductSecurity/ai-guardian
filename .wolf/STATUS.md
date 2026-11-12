@@ -28,6 +28,10 @@ budget_tokens: 1000
   for static analysis of hard-coded credentials flowing into HTTP request code.
   It scopes a Python-first, non-executing source analysis and value-free
   pre-tool findings; implementation remains separate from #2699.
+- Created language follow-up [#2722](https://github.com/RedHatProductSecurity/ai-guardian/issues/2722)
+  to extend that analysis to JavaScript and TypeScript HTTP request APIs, with
+  explicit source-only, value-free, pre-tool enforcement and language/client
+  coverage requirements.
 - The repository now has open PR [#2718](https://github.com/RedHatProductSecurity/ai-guardian/pull/2718)
   at `b589921c`. Its first CI run failed because an older MCP integration fixture
   used a curl Authorization header now intercepted by the new scanner, and the
