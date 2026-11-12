@@ -154,6 +154,7 @@ class ConfigDisplay:
             ("directory_rules", "Directory Access Rules"),
             ("secret_scanning", "Secret Scanning"),
             ("password_likelihood", "Password Likelihood (Opt-in Heuristic)"),
+            ("command_credential_scanning", "Command Credential Scanning"),
             ("prompt_injection", "Prompt Injection Detection"),
             ("ssrf_protection", "SSRF Protection"),
             ("config_file_scanning", "Config File Scanning"),

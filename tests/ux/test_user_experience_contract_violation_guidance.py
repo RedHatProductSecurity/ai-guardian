@@ -49,6 +49,7 @@ def test_every_violation_type_has_user_facing_resolution_guidance(violation_type
     if violation_type not in {
         "canary_detected",
         "suspected_password",
+        "command_credential_detected",
         "sensitive_finding",
     }:
         assert snippet

@@ -56,11 +56,14 @@ class AskViolationInfo:
 
     @property
     def decision_only(self) -> bool:
-        """This heuristic supports only private, operation-scoped decisions."""
-        return self.violation_type == "suspected_password"
+        """These scanners expose only private, operation-scoped decisions."""
+        return self.violation_type in {
+            "suspected_password",
+            "command_credential_detected",
+        }
 
     def __post_init__(self):
-        if self.decision_only:
+        if self.violation_type == "suspected_password":
             from ai_guardian.scanners.password_likelihood import (
                 MESSAGE,
                 INCOMPLETE_MESSAGE,
@@ -77,6 +80,13 @@ class AskViolationInfo:
             self.matched_text = "[Candidate values withheld]"
             self.matched_pattern = ""
             self.config_section = "password_likelihood"
+            self.finding_index = None
+            self.total_findings = None
+        elif self.violation_type == "command_credential_detected":
+            self.summary = self.error_message
+            self.matched_text = ""
+            self.matched_pattern = ""
+            self.config_section = "command_credential_scanning"
             self.finding_index = None
             self.total_findings = None
 

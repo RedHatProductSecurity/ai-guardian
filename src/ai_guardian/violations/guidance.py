@@ -55,6 +55,14 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
             "exception is generated for this finding.",
             "",
         )
+    if vtype == "command_credential_detected":
+        return (
+            "Review the command credential finding privately. Argument values and "
+            "the full command are intentionally withheld. Replace inline literals "
+            "with a credential reference or interactive authentication. No source "
+            "or persistent exception is generated for this finding.",
+            "",
+        )
     if vtype == "sensitive_finding":
         return (
             "A secret or personal-data finding was recorded. Per-finding details "

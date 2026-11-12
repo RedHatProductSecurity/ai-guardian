@@ -85,6 +85,7 @@ nav:
       - Overview: security/README.md
       - Secret Scanning: security/SECRET_SCANNING.md
       - Password Likelihood (Experimental): security/PASSWORD_LIKELIHOOD.md
+      - Command Credential Scanning: security/COMMAND_CREDENTIAL_SCANNING.md
       - Secret Redaction: security/SECRET_REDACTION.md
       - Prompt Injection: security/PROMPT_INJECTION.md
       - Context Poisoning: security/CONTEXT_POISONING.md

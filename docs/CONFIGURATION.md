@@ -36,6 +36,12 @@ remain advisory; SDK checks deny unresolved Ask without opening a UI.
 Real-host pre-model prevention remains unqualified. Project overlays,
 tool payloads and project exclusions cannot activate or weaken this policy.
 
+[Command credential scanning](security/COMMAND_CREDENTIAL_SCANNING.md) is a
+separate global-only, default-on policy. Project-local overlays cannot disable
+or weaken it; the default action blocks supported inline literal credentials and
+applies the configured action to incomplete command analysis. Credential
+references remain advisory.
+
 AI Guardian loads configuration from multiple sources in a specific priority order:
 
 ### 1. User Configuration (Default)

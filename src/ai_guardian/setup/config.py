@@ -134,6 +134,13 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "_comment_action": "ask (default) requests private Allow Once / Block approval for contextual candidates or incomplete analysis; unavailable approval blocks. warn is advisory; block requests denial. Ambiguous candidates remain advisory. Host model-boundary qualification is required.",
             "action": "ask",
         },
+        "_comment_command_credential_scanning": "Default-on command-aware detection for literal credentials in supported curl, wget, and PowerShell web-request arguments. Values are never retained. References are advisory. Blocking execution cannot retract command text already seen by the model.",
+        "command_credential_scanning": {
+            "_comment_enabled": "Enabled by default. Set false only in global policy to disable this independent command scanner.",
+            "enabled": True,
+            "_comment_action": "Default block stops supported commands containing inline literal credentials before execution. ask provides one-operation approval and blocks if approval is unavailable. warn may proceed with a warning; log-only records a value-free finding silently. Credential references and interactive/no-value authentication are advisory; incomplete parsing follows this action and is not reported as a confirmed credential.",
+            "action": "block",
+        },
         "secret_scanning": {
             "enabled": True,
             "ignore_files": [],

@@ -346,14 +346,22 @@ def _handle_ask_mode_auto(
     findings=None,
 ):
     """Route to multi or single ask dialog based on findings count."""
-    if violation_type == ViolationType.HEURISTIC_CANDIDATE:
+    if violation_type in (
+        ViolationType.HEURISTIC_CANDIDATE,
+        ViolationType.COMMAND_CREDENTIAL_DETECTED,
+    ):
         # One private decision covers the current operation, including incomplete
         # analysis. Do not deduplicate by values or prompt for ambiguous spans.
+        private_config_section = (
+            "password_likelihood"
+            if violation_type == ViolationType.HEURISTIC_CANDIDATE
+            else "command_credential_scanning"
+        )
         return _handle_ask_mode(
             action_str,
             violation_type,
             "",
-            "password_likelihood",
+            private_config_section,
             error_msg,
             file_path=file_path,
             line_number=line_number,
@@ -406,6 +414,7 @@ def _handle_ask_mode_auto(
 _ASK_VIOLATION_LABELS = {
     ViolationType.SECRET_DETECTED: "Secret detection",
     ViolationType.HEURISTIC_CANDIDATE: "Password-likelihood review",
+    ViolationType.COMMAND_CREDENTIAL_DETECTED: "Command credential detection",
     ViolationType.PII_DETECTED: "PII detection",
     ViolationType.TOOL_PERMISSION: "Permission rule",
     ViolationType.DIRECTORY_BLOCKING: "Directory access",
@@ -467,6 +476,9 @@ def _log_ask_decision(
 
         matched_text = ""
         error_msg = INCOMPLETE_MESSAGE if error_msg == INCOMPLETE_MESSAGE else MESSAGE
+    elif violation_type == ViolationType.COMMAND_CREDENTIAL_DETECTED:
+        # Argument values must never enter the Ask audit path.
+        matched_text = ""
     try:
         from ai_guardian.ui.ask_dialog import AskDecision
 

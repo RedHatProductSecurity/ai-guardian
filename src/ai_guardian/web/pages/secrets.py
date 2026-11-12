@@ -228,6 +228,86 @@ def _render_password_likelihood(config):
             action.disable()
 
 
+def _save_command_credential_setting(key, value):
+    """Save only a human-changed command scanner setting to global policy."""
+    if is_web_config_read_only() or not (
+        (key == "enabled" and isinstance(value, bool))
+        or (key == "action" and value in ("block", "ask", "warn", "log-only"))
+    ):
+        return False
+    config = load_web_config_global()
+    section = config.get("command_credential_scanning", {})
+    section = dict(section) if isinstance(section, dict) else {}
+    section[key] = value
+    config["command_credential_scanning"] = section
+    return save_web_config(config, scope="global")
+
+
+def _render_command_credential_scanning(config):
+    section = config.get("command_credential_scanning", {})
+    if not isinstance(section, dict):
+        section = {}
+    with ui.card().classes("w-full"):
+        with ui.row().classes("items-center gap-2"):
+            ui.label("Command Credential Scanning (Default On)").classes(
+                "text-lg font-bold"
+            )
+            add_help_button("command_credential_scanning")
+        ui.label(
+            "Separate command-aware scanner for supported curl, wget, and PowerShell "
+            "web-request arguments. The default Block action stops inline literal "
+            "credentials before execution. Credential references and interactive "
+            "authentication remain advisory. No values are retained, and a pre-tool "
+            "block cannot retract command text already seen by the model."
+        ).classes("text-xs text-grey-6")
+        with ui.row().classes("items-center gap-2"):
+            enabled = ui.checkbox(
+                "Enable command credential scanning",
+                value=section.get("enabled") is not False,
+            )
+            field_help_icon("command_credential_scanning.enabled")
+        with ui.row().classes("items-center gap-2"):
+            selected_action = section.get("action", "block")
+            action = ui.select(
+                ["block", "ask", "warn", "log-only"],
+                value=(
+                    selected_action
+                    if selected_action in ("block", "ask", "warn", "log-only")
+                    else "block"
+                ),
+                label="Inline credential / incomplete analysis action",
+            )
+            field_help_icon("command_credential_scanning.action")
+
+        save_lock = asyncio.Lock()
+
+        async def save(key, value):
+            async with save_lock:
+                success = await run.io_bound(
+                    _save_command_credential_setting, key, value
+                )
+                ui.notify(
+                    (
+                        "Global command credential settings saved"
+                        if success
+                        else "Could not save global command credential settings"
+                    ),
+                    type="positive" if success else "negative",
+                )
+
+        async def save_enabled(event):
+            await save("enabled", event.value)
+
+        async def save_action(event):
+            await save("action", event.value)
+
+        enabled.on_value_change(save_enabled)
+        action.on_value_change(save_action)
+        if is_web_config_read_only():
+            enabled.disable()
+            action.disable()
+
+
 def create_secrets_page(service, daemon_name: str):
     """Create the Secret Scanning settings page."""
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/secrets")
@@ -246,9 +326,11 @@ def create_secrets_page(service, daemon_name: str):
         async def refresh():
             content.clear()
             config = await run.io_bound(load_web_config)
+            global_config = await run.io_bound(load_web_config_global)
 
             with content:
                 _render_password_likelihood(config)
+                _render_command_credential_scanning(global_config)
                 ss = config.get("secret_scanning", {})
                 if not isinstance(ss, dict):
                     ss = {}

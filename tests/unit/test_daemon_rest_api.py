@@ -407,6 +407,8 @@ class TestConfigEndpoint:
         assert "secret_scanning" not in scanner_actions
         assert scanner_actions["prompt_injection"] == "warn"
         assert scanner_actions["scan_pii"] == "log"  # falls back to global
+        assert scanner_actions["command_credential_scanning"] == "block"
+        assert data["features"]["command_credential_scanning"] is True
 
     def test_get_config_includes_proactive_level(self, rest_api):
         api, port, state = rest_api

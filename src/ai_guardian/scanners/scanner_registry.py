@@ -29,6 +29,7 @@ class ScannerName(str, enum.Enum):
     CONFIG_FILE = "config_file"
     SECRET = "secret"
     PASSWORD_LIKELIHOOD = "password_likelihood"
+    COMMAND_CREDENTIAL_SCANNING = "command_credential_scanning"
     PII = "pii"
     CODE_SECURITY = "code_security"
     BASH_EXFIL = "bash_exfil"
@@ -149,6 +150,7 @@ def _build_default_registry() -> ScannerRegistry:
     )
 
     from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
+    from ai_guardian.scanners.command_credentials import run_command_credential_scan
 
     registry = ScannerRegistry()
 
@@ -172,6 +174,25 @@ def _build_default_registry() -> ScannerRegistry:
             order=1,
             supports_ask_mode=False,
             config_section="image_scanning",
+        )
+    )
+
+    registry.register(
+        ScannerEntry(
+            name=ScannerName.COMMAND_CREDENTIAL_SCANNING,
+            run_fn=run_command_credential_scan,
+            violation_type=ViolationType.COMMAND_CREDENTIAL_DETECTED,
+            hook_events={HookEvent.PRE_TOOL_USE, HookEvent.PERMISSION_REQUEST},
+            requires_content=False,
+            requires_command=True,
+            order=4,
+            config_section="command_credential_scanning",
+            supports_ask_mode=True,
+            violation_severity="high",
+            violation_suggestion={
+                "action": "remove_inline_credential",
+                "note": "Use an environment variable or credential store; command values are not retained.",
+            },
         )
     )
 
