@@ -1844,6 +1844,7 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
         "multi-agent-setup": "IDE Registry, Setup & Documentation Parity",
         "ide-hook-e2e": "IDE Hook Integration E2E (${{ matrix.variant }})",
         "daemon-lifecycle": "Daemon, REST, SSH, Tray, Support & Release Checks",
+        "daemon-only-distribution": "Daemon-only Distribution and REST Readiness",
         "smoke-tests": "Detection, Hook, False-Positive, Initialization & Lifecycle Smokes",
         "scenario-tests": "Container Agent Scenarios (minimal, standard, strict)",
         "container-build-validation": "Container Smoke, Scenarios & Multi-Arch Builds",
