@@ -7,6 +7,24 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-12 (UTC)
 
+## Issue #2719 tray MCP proactive pause label — 2026-11-12
+
+- The tray's **MCP Proactive** label now follows the configured level for local
+  and selected daemon targets, and appends `(daemon paused)` during a temporary
+  daemon scanning pause. An explicitly configured `paused` level still displays
+  as paused (with the daemon annotation only when that pause is also active).
+- Added local unit coverage and expanded the SSH daemon UX contract for running and
+  paused targets with both `medium` and configured `paused` levels; each checks the
+  displayed label against the selected radio option. Updated CHANGELOG and buglog.
+- **Validation:** all **571** tests in `tests/unit/test_daemon_tray.py` and the
+  complete `tests/ux/test_user_experience_contract_ssh_daemons.py` pass. Ruff,
+  Black (Python 3.10 target), error-level Pylint, JSON validation, and
+  `git diff --check` pass. Package-wide Mypy still reports the known 14 errors in
+  untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+- GitHub issue #2719 has a completed-criteria comment and the `done` label; a DAF
+  note is saved. Changes remain uncommitted on branch `2719`; no PR was created.
+  **Next:** user review and external `daf complete`.
+
 ## Issue #2713 runtime-organized tray sandbox actions — 2026-11-12
 
 - Grouped OpenShell middleware readiness, create, and stopped-sandbox actions in

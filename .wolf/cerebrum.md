@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-10
+> Last updated: 2026-11-12
 
 ## User Preferences
 
@@ -295,6 +295,11 @@
 - **2026-11-10 — Post-release development version:** When merging a stable patch
   release back to `main`, keep Python and Rust package metadata at the next
   development version, `1.22.0-dev`, rather than restoring the released version.
+
+- **2026-11-12 — Tray MCP pause status (#2719):** Keep the configured MCP proactive
+  level visible and append `(daemon paused)` when daemon scanning is temporarily
+  paused. An explicitly configured MCP `paused` level must remain distinguishable;
+  do not conflate MCP configuration with daemon pause state.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 

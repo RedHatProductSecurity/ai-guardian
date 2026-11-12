@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distinguish `latest` development docs, and report inactive or misrouted release
   versions with actionable recovery guidance.
 ### Fixed
+- **Tray MCP proactive label during daemon pauses (#2719):** Keep the label aligned
+  with the configured level and selected radio option, while separately identifying
+  a temporary daemon pause.
 - **OpenCode PostToolUse filenames:** Reuse normalized native tool arguments so
   `filePath` and other supported path aliases are retained by post-tool scanners
   and violation records, including legacy handler calls.

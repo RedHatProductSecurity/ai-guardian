@@ -3068,16 +3068,44 @@ class TestTrayStartAlreadyRunningMessage:
 class TestMcpProactiveMenuVisibility:
     """Tests for MCP Proactive menu visibility based on MCP installation (issue #726)."""
 
-    def test_mcp_proactive_label_reflects_global_pause(self):
-        """The tray shows the paused effective MCP level during a daemon pause."""
+    @pytest.mark.parametrize("daemon_paused", [False, True])
+    @pytest.mark.parametrize("configured_level", ["medium", "paused"])
+    def test_mcp_proactive_label_shows_configured_level_and_pause_source(
+        self, configured_level, daemon_paused
+    ):
+        """Show the configured level and separately identify a daemon pause."""
         tray = DaemonTray(
-            get_stats_callback=lambda: {"paused": True},
+            get_stats_callback=lambda: {"paused": daemon_paused},
             stop_callback=lambda: None,
             pause_callback=lambda mins: None,
         )
-        tray._proactive_level = "medium"
+        tray._proactive_level = configured_level
 
-        assert tray._menu._mcp_proactive_label() == "MCP Proactive: paused"
+        pause_status = " (daemon paused)" if daemon_paused else ""
+        assert (
+            tray._menu._mcp_proactive_label()
+            == f"MCP Proactive: {configured_level}{pause_status}"
+        )
+
+        with (
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_single_daemon_menu_items()
+
+            selected_option = next(
+                call
+                for call in mock_pystray.MenuItem.call_args_list
+                if call.args
+                and call.args[0] == configured_level
+                and call.kwargs.get("radio") is True
+            )
+
+        assert selected_option.kwargs["checked"](None) is True
 
     def test_is_mcp_installed_returns_true_when_ide_config_has_entry(self, tmp_path):
         """Detects ai-guardian MCP server entry in an IDE config file."""
