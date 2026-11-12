@@ -200,8 +200,11 @@ class TomlPatternsScanner(Scanner):
             additional, errors = validate_custom_secret_patterns(
                 config["additional_patterns"], existing_rule_ids
             )
-            for error in errors:
-                logger.warning("Ignoring custom secret detection rule: %s", error)
+            if errors:
+                logger.warning(
+                    "Invalid custom secret detection rules were skipped. Check "
+                    "secret_scanning.additional_patterns in the Console or config."
+                )
             if additional:
                 self._cache.load_rules(additional, category="secrets")
 

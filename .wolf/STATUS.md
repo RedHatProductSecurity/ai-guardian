@@ -23,9 +23,15 @@ budget_tokens: 1000
   Bare global Mypy still reports the known 14 errors in untouched
   `skill_discovery.py` and `secret_validator.py`.
 - Updated issue #2721 acceptance criteria, added the `done` label and progress
-  comments, and saved a DAF note. Changes are local on branch `2721`; no commit,
-  push, or PR was created.
-- **Next:** user review and external `daf complete`.
+  comments, and saved a DAF note. PR #2727 is open from commit `435629c1`.
+- **CodeQL follow-up:** PR comment/alert #355 flags dynamic custom-rule diagnostics
+  reaching `logger.warning` at `toml_patterns.py:204`. Replaced the dynamic warning
+  with a fixed value-free message; detailed entry errors stay in the Console.
+  **198** related scanner/engine/UX tests and Ruff, Black, Pylint, project-managed
+  Mypy, and diff checks pass. The follow-up is local and uncommitted; the existing
+  PR alert remains until an updated commit is analyzed.
+- **Next:** user review, publish the CodeQL follow-up if approved, then external
+  `daf complete`.
 
 ## Issue #2713 runtime-organized tray sandbox actions — 2026-11-12
 

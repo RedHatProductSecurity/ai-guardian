@@ -123,9 +123,10 @@ external-only list), these rules are not used.
 letters, digits, `.`, `_`, or `-`; `match_type` currently supports only `regex`.
 Regexes must use syntax compatible with Go RE2. Optional `description` labels
 findings, `keywords` provide a literal prefilter, and `flags` accepts `i`, `m`,
-and/or `s`. The Console validates the JSON and rule structure before saving. A
-malformed rule in a directly edited config is skipped with a warning; valid rules
-and bundled detection remain active.
+and/or `s`. The Console validates the JSON and rule structure before saving and
+shows entry-specific errors. A malformed rule in a directly edited config is
+skipped with a value-free warning pointing to the setting; valid rules and bundled
+detection remain active.
 
 This detection setting is distinct from
 `secret_redaction.additional_patterns`, which configures **output redaction only**

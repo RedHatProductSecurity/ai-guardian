@@ -300,6 +300,11 @@
 
 ## Key Learnings
 
+- **2026-11-12 — Custom secret-rule diagnostics / CodeQL (#2727):** Even a
+  regex-validated custom rule ID is tainted to CodeQL when interpolated into a log
+  message. Keep runtime warnings fixed and value-free; preserve entry-specific
+  validation details in the Console, not logs.
+
 - **2026-11-12 — Custom secret rules (#2721):** Positive scanner fixtures must
   avoid bundled placeholder stopwords such as `demo`; otherwise the intended
   entropy/placeholder filtering suppresses a valid custom regex match. Use a

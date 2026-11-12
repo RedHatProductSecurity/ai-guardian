@@ -101,8 +101,10 @@ class TestTomlPatternsScanner:
         # Synthetic, nonfunctional placeholder used only to verify the bundled rule.
         findings = scanner.scan("sk-abcdefghijklmnopqrstuvwxyz")
         assert any(f.rule_id == "openai-api-key" for f in findings)
-        assert "secret_scanning.additional_patterns[0] (broken-org-rule)" in caplog.text
-        assert "regex is invalid" in caplog.text
+        assert "Invalid custom secret detection rules were skipped" in caplog.text
+        assert "secret_scanning.additional_patterns" in caplog.text
+        assert "broken-org-rule" not in caplog.text
+        assert "regex is invalid" not in caplog.text
 
     def test_invalid_rule_structure_is_reported_and_skipped(self, caplog):
         scanner = TomlPatternsScanner()
@@ -123,8 +125,9 @@ class TestTomlPatternsScanner:
             )
 
         assert scanner._cache.rule_count == initial_count
-        assert "match_type must be 'regex'" in caplog.text
-        assert "additional_patterns[1] must be an object" in caplog.text
+        assert "Invalid custom secret detection rules were skipped" in caplog.text
+        assert "org-literal-rule" not in caplog.text
+        assert "not-an-object" not in caplog.text
 
 
 class TestTomlPatternsPiiFiltering:
