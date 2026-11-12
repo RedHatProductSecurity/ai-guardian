@@ -28,8 +28,15 @@ budget_tokens: 1000
   for static analysis of hard-coded credentials flowing into HTTP request code.
   It scopes a Python-first, non-executing source analysis and value-free
   pre-tool findings; implementation remains separate from #2699.
-- Changes remain uncommitted on branch `2699`; no commit, push, or #2699 issue
-  update. **Next:** user review and external DAF completion.
+- The repository now has open PR [#2718](https://github.com/RedHatProductSecurity/ai-guardian/pull/2718)
+  at `b589921c`. Its first CI run failed because an older MCP integration fixture
+  used a curl Authorization header now intercepted by the new scanner, and the
+  complete violation-guidance UX contract did not classify this private finding as
+  intentionally having no copyable snippet. The Performance Check reused the same
+  failing integration test; the 102-test subset itself now passes locally in 8.43s
+  (101 passed, 1 skipped). Updated both test contracts; 263 affected tests, Ruff,
+  Black and diff checks pass. Changes are local and uncommitted; no commit or push
+  was made. **Next:** publish the test-only correction and rerun PR CI after approval.
 
 ## Issue #2698 implementation — 2026-11-11
 

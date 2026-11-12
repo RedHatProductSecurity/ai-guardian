@@ -300,6 +300,16 @@
 
 ## Key Learnings
 
+- **2026-11-12 — #2699 CI contracts:** `check_command` runs the command-credential
+  scanner before the generic `ToolPolicyChecker`; tests meant to isolate generic
+  secret scanning should place synthetic values in an unrelated request-body
+  argument (such as curl `--data`), not a supported credential option. The full
+  violation-guidance UX contract also needs to classify `command_credential_detected`
+  with private finding types that intentionally have no copyable exception snippet.
+  Release Performance Check reruns the MCP integration test, so a test assertion
+  failure can surface as a performance-job failure even when elapsed time is below
+  its threshold.
+
 - **2026-11-11 — Safe release CI resumption:** Correlate workflow-dispatch runs
   with a unique input rendered in `run-name`; run-list order or timestamps are not
   attempt identity. Persist dispatch intent before calling GitHub, then reconcile
