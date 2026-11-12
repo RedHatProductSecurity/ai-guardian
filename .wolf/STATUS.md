@@ -7,6 +7,24 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-12 (UTC)
 
+## Issue #2720 OpenShift AI MaaS API key detection — 2026-11-12
+
+- On the existing DAF branch `2720`, added a dedicated bundled TOML rule for
+  `sk-oai-{key_id}_{secret}` values, constrained to the generated Base62 component
+  shapes. Added synthetic standalone/assignment and safe-lookalike coverage.
+- Documented the upstream format/generator sources and clarified static scan bounds
+  versus the upstream format validator. The requested
+  `secret_scanning.additional_patterns` schema, generated default, example, engine
+  scope, and redaction distinction already existed from #2721/#2729; their related
+  schema, profile, generated-config, and complete custom-rule UX tests pass.
+- Updated `CHANGELOG.md`. Validation: **151** TOML-pattern scanner tests pass after
+  final changes; **268** related scanner/schema/profile/UX tests and **1** generated-
+  config test pass. Black, Ruff, error-level Pylint, project Mypy, buglog JSON, and
+  `git diff --check` pass.
+- Posted the completed acceptance checklist on GitHub #2720, added the `done` label,
+  and saved a DAF note. No commit or PR was created. **Next:** user review and
+  external `daf complete`.
+
 ## Issue #2729 CI regression — 2026-11-12
 
 - Fixed the malformed IDE E2E custom-secret fixture: the secret-scanning rule now

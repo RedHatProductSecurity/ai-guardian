@@ -423,6 +423,44 @@ class TestTomlPatternsGapFillingRules:
     def test_azure_ad_short_not_matched(self):
         assert not self._find("shortQ~val", "azure-ad-client-secret")
 
+    # --- Issue #2720: OpenShift AI MaaS API keys ---
+
+    def test_openshift_ai_maas_api_key_detected_standalone(self):
+        token = "sk-oai-A1b2C3d4E5f6_" "aB3kQ9xLm7Zy2pR4wE6t5V8cN1hG6uD3sK9jF2bM7qX"
+        assert self._find(token, "openshift-ai-maas-api-key")
+
+    def test_openshift_ai_maas_api_key_detected_in_assignment(self):
+        token = "sk-oai-A1b2C3d4E5f6_" "aB3kQ9xLm7Zy2pR4wE6t5V8cN1hG6uD3sK9jF2bM7qX"
+        assert self._find(
+            f"OPENSHIFT_AI_MAAS_API_KEY={token}", "openshift-ai-maas-api-key"
+        )
+
+    def test_openshift_ai_maas_bare_prefix_and_docs_not_matched(self):
+        assert not self._find("sk-oai-", "openshift-ai-maas-api-key")
+        assert not self._find(
+            "The OpenShift AI MaaS key prefix is documented as sk-oai-.",
+            "openshift-ai-maas-api-key",
+        )
+        assert not self._find(
+            "sk-abcdefghijklmnopqrstuvwxyz0123456789",
+            "openshift-ai-maas-api-key",
+        )
+
+    def test_openshift_ai_maas_incomplete_or_malformed_values_not_matched(self):
+        secret = "aB3kQ9xLm7Zy2pR4wE6t5V8cN1hG6uD3sK9jF2bM7qX"
+        invalid_values = (
+            "sk-oai-A1b2C3d4E5f6",  # no separator or secret
+            "sk-oai-A1b2C3d4E5f6_",  # empty secret
+            "sk-oai-A1b2C3d4E5f6_" + secret[:31],  # short secret
+            "sk-oai-A1b2C3d4E5f_" + secret,  # short key ID
+            "sk-oai-A1b2C3d4E5f6G7h8J9_" + secret,  # long key ID
+            "sk-oai-A1b2C3d4E5f6_" + secret + "a",  # long secret
+            "sk-oai-A1b2C3d4E5f-6_" + secret,  # non-Base62 key-ID character
+            "sk-oai-A1b2C3d4E5f6_" + secret[:16] + "-" + secret[17:],
+        )
+        for value in invalid_values:
+            assert not self._find(value, "openshift-ai-maas-api-key")
+
     # --- Issue #1986: Cloudflare, Figma, GitLab, Salesforce ---
 
     def test_cloudflare_user_api_token_detected(self):

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenShift AI MaaS API key detection (#2720):** Detect generated `sk-oai-`
+  credentials using their Base62 key-ID/secret structure without broadening generic
+  `sk-*` matching; document the vendor format and its source.
 - **Custom secret detection rules (#2721):** Expose validated organization-local
   regex rules in `secret_scanning.additional_patterns`, the Secret Scanning Console,
   generated/example configuration, and documentation. Rules augment bundled

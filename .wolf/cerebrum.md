@@ -305,6 +305,14 @@
 
 ## Key Learnings
 
+- **2026-11-12 — OpenShift AI MaaS key format (#2720):** Red Hat/ODH docs
+  establish the `sk-oai-` prefix; the upstream generator confirms
+  `sk-oai-{key_id}_{secret}` with Base62 components separated by one underscore,
+  generated from 12-byte and 32-byte random inputs. The upstream format validator
+  requires non-empty Base62 components; document static detection bounds separately
+  rather than claiming they are service-side validation limits. Use synthetic
+  fixtures only; no live keys or validation endpoints are needed.
+
 - **2026-11-12 — Custom secret-rule diagnostics / CodeQL (#2727):** Even a
   regex-validated custom rule ID is tainted to CodeQL when interpolated into a log
   message. Keep runtime warnings fixed and value-free; preserve entry-specific

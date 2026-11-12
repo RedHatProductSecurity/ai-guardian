@@ -166,6 +166,21 @@ and [MIT-licensed Betterleaks rules](https://github.com/betterleaks/betterleaks/
 These bundled rules perform format matching, not live credential validation; the
 Tailscale SCIM format remains excluded because its key-ID layout is undocumented.
 
+OpenShift AI Models-as-a-Service (MaaS) keys use the `sk-oai-` prefix. The MaaS
+API documentation and upstream generator define the value as
+`sk-oai-{key_id}_{secret}`: Base62 (alphanumeric) key-ID and secret components
+separated by one underscore. The upstream format validator requires non-empty
+Base62 components; the current generator derives the key ID from 12 random bytes
+and the secret from 32 random bytes. For high-confidence static matching, the
+bundled rule bounds the components to a 12–17-character key ID and a 32–43-character
+secret, focusing on generated credentials rather than every structurally parseable
+string. It does not match the bare prefix, incomplete values, or unrelated `sk-*`
+formats. This is format detection, not live key validation. See the [Red Hat
+OpenShift AI guide](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/use-models-as-a-service_maas-deploy),
+[MaaS API key guide](https://opendatahub-io.github.io/models-as-a-service/latest/user-guide/api-key-management/),
+and the upstream [key generator](https://github.com/opendatahub-io/models-as-a-service/blob/main/maas-api/internal/api_keys/keygen.go)
+and [format tests](https://github.com/opendatahub-io/models-as-a-service/blob/main/maas-api/internal/api_keys/keygen_test.go).
+
 **Credentials in git remote URLs** — AI Guardian detects credentials embedded in git remote URLs (e.g., `https://user:token@github.com/org/repo`). This pattern catches a common source of credential leaks where tokens are hardcoded into remote URLs instead of using credential helpers. The detection runs automatically as part of the secret scanning pipeline.
 
 ### Advanced Configuration
