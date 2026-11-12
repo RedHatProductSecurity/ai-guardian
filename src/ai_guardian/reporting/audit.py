@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 VIOLATION_TYPE_TO_FEATURE = {
     "secret_detected": "secret_scanning",
+    "command_credential_detected": "command_credential_scanning",
     "secret_redaction": "secret_redaction",
     "pii_detected": "scan_pii",
     "prompt_injection": "prompt_injection",

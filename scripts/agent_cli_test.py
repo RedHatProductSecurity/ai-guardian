@@ -99,6 +99,13 @@ CASES = (
         True,
     ),
     SmokeCase(
+        "command_credential",
+        "AGENT_CLI_SMOKE_CASE: command_credential\n"
+        "Run the local diagnostic requested by the test provider.",
+        "command_credential_detected",
+        True,
+    ),
+    SmokeCase(
         "clean_tool",
         "AGENT_CLI_SMOKE_CASE: clean_tool\nRun the local diagnostic requested by the test provider.",
         None,
@@ -315,7 +322,7 @@ _READ_TOOL_EVIDENCE = r"""
 import json,sys,urllib.request
 from pathlib import Path
 case=sys.argv[2]
-if case not in ('ssrf','config_exfil','clean_tool','tool_output_secret','tool_output_pii'):
+if case not in ('ssrf','config_exfil','command_credential','clean_tool','tool_output_secret','tool_output_pii'):
     raise SystemExit(1)
 opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with opener.open(sys.argv[1],timeout=2) as r: stats=json.loads(r.read())
@@ -1798,7 +1805,11 @@ def _run_case(
     old_violations = _violation_counts(engine, name, timeout, diagnostics)
     old_requests = _provider_stats(engine, name, timeout, diagnostics)
     old_hooks = _hook_counts(engine, name, timeout, diagnostics)
-    is_tool_case = case.name in OUTPUT_CASES or case.name in ("ssrf", "config_exfil")
+    is_tool_case = case.name in OUTPUT_CASES or case.name in (
+        "ssrf",
+        "config_exfil",
+        "command_credential",
+    )
     old_tools = (
         _tool_evidence(engine, name, case.name, timeout, diagnostics)
         if is_tool_case
@@ -1887,10 +1898,12 @@ def _run_case(
         return fail(f"expected {expected_hook} hook event was not recorded")
     if is_tool_case and tool_deltas.get("tool_offers", 0) < 1:
         return fail("the local mock did not issue the expected tool call")
-    if case.name in ("ssrf", "config_exfil") and hook_deltas.get("posttooluse", 0) != 0:
+    if case.name in ("ssrf", "config_exfil", "command_credential") and hook_deltas.get("posttooluse", 0) != 0:
         return fail(
             "pre-tool blocking was not confirmed; a post-tool event was recorded"
         )
+    if case.name == "command_credential" and tool_deltas.get("executed", 0) != 0:
+        return fail("command credential probe executed despite pre-tool denial")
     if case.name in OUTPUT_CASES:
         if tool_deltas.get("executed", 0) != 1:
             return fail("the expected tool did not execute exactly once")

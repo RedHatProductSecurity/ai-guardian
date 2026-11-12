@@ -166,7 +166,10 @@ def log_violation(
             )
             return
 
-        private_candidate = result.violation_type == "suspected_password"
+        private_candidate = result.violation_type in {
+            "suspected_password",
+            "command_credential_detected",
+        }
         blocked = result.to_blocked_dict(source=source)
         if blocked_overrides and not private_candidate:
             blocked.update(blocked_overrides)
@@ -242,9 +245,14 @@ def log_violation(
             or sensitive_type == "pii_detected"
         ):
             logger.critical("Failed to persist sensitive finding; details withheld")
-        elif result.violation_type == "suspected_password":
+        elif result.violation_type in {
+            "suspected_password",
+            "command_credential_detected",
+        }:
             logger.critical(
                 "Failed to persist suspected-password violation; details withheld"
+                if result.violation_type == "suspected_password"
+                else "Failed to persist command-credential violation; details withheld"
             )
         else:
             logger.error("Failed to log %s violation: %s", result.violation_type, e)

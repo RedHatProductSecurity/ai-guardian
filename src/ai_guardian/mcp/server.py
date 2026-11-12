@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 _SAFE_SUGGESTIONS: Dict[str, str] = {
     "suspected_password": "Review the indicated location; this heuristic is not proof of a password",
+    "command_credential_detected": (
+        "Review the supported command's credential finding; values are withheld and "
+        "references are advisory"
+    ),
     "secret_detected": "Remove the secret and use environment variables or a secret manager",
     "pii_detected": "Remove PII from the file or use anonymized test data",
     "directory_blocking": "This path is protected by security policy",
@@ -429,9 +433,10 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         """Check a Bash command in the caller's effective project context.
 
         ``project_dir`` is optional for MCP clients that can provide the active
-        workspace.  When omitted, the MCP server launch directory is used.
-        Results are advisory; hooks provide enforcement. An active daemon or
-        directory pause skips this proactive check without changing hooks.
+        workspace. When omitted, the MCP server launch directory is used. Results
+        are advisory; native pre-tool hooks provide execution enforcement. An
+        active daemon or directory pause skips this proactive check without
+        changing hooks.
         """
         try:
             pause_source = _mcp_pause_source(project_dir)
@@ -451,6 +456,37 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                         ),
                     }
 
+            from ai_guardian.scanners.command_credentials import (
+                run_command_credential_scan,
+            )
+
+            credential_result = run_command_credential_scan(command)
+            credential_finding = (
+                credential_result.to_blocked_dict()
+                if credential_result is not None
+                else None
+            )
+            if credential_result is not None and credential_result.should_block:
+                classes = set(credential_result.extra.get("finding_classes", []))
+                message = (
+                    "Inline credential argument detected; this MCP check recommends "
+                    "blocking. Values are withheld."
+                    if "inline_literal" in classes
+                    else "Command credential analysis is incomplete; no credential is "
+                    "confirmed. This MCP check recommends blocking."
+                )
+                return {
+                    "status": "blocked",
+                    "reason": "command_credential_detected",
+                    "message": message,
+                    "suggestion": _SAFE_SUGGESTIONS["command_credential_detected"],
+                    "finding": credential_finding,
+                    "enforcement": "advisory",
+                    "policy_decision": _mcp_policy_metadata(
+                        "mcp_check_command", "block", "command_credential_detected"
+                    ),
+                }
+
             from ai_guardian.tools.policy import ToolPolicyChecker
 
             with _mcp_project_context(project_dir) as effective_project_dir:
@@ -464,12 +500,27 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                 }
                 allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
             if allowed:
-                return {
+                response: Dict[str, Any] = {
                     "status": "allowed",
                     "policy_decision": _mcp_policy_metadata(
                         "mcp_check_command", "allow", "policy_allow"
                     ),
                 }
+                if (
+                    credential_result is not None
+                    and credential_result.extra.get("action") != "log-only"
+                ):
+                    response.update(
+                        {
+                            "warning": credential_result.error_message,
+                            "suggestion": _SAFE_SUGGESTIONS[
+                                "command_credential_detected"
+                            ],
+                            "finding": credential_finding,
+                            "enforcement": "advisory",
+                        }
+                    )
+                return response
             reason = _command_denial_reason(checker, error_msg)
             return {
                 "status": "blocked",
@@ -776,6 +827,11 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
             features["password_likelihood"] = (
                 isinstance(heuristic, dict) and heuristic.get("enabled") is True
             )
+            command_credentials = config.get("command_credential_scanning")
+            features["command_credential_scanning"] = not (
+                isinstance(command_credentials, dict)
+                and command_credentials.get("enabled") is False
+            )
 
             si_section = config.get("security_instructions", {})
             features["security_instructions"] = is_feature_enabled(
@@ -807,6 +863,11 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
             features["scanner_actions"] = scanner_actions
             scanner_actions["password_likelihood"] = (
                 heuristic.get("action", "ask") if isinstance(heuristic, dict) else "ask"
+            )
+            scanner_actions["command_credential_scanning"] = (
+                command_credentials.get("action", "block")
+                if isinstance(command_credentials, dict)
+                else "block"
             )
 
             mcp_section = config.get("mcp_server", {})

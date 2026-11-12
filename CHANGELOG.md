@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Command credential argument scanning (#2699):** Add a separate, default-on
+  scanner that blocks literal credentials in supported curl, wget, and PowerShell
+  web-request arguments before shell execution. Credential references stay advisory;
+  command values are withheld from findings and logs.
 - **GitHub App stateless token redaction coverage (#2698):** Exercise an exact
   520-character synthetic `ghs_` JWT-shaped token and verify its full span is
   detected and redacted while retaining legacy-token coverage.

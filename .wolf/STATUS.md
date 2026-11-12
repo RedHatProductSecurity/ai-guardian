@@ -5,7 +5,31 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-11 (UTC)
+> Last updated: 2026-11-12 (UTC)
+
+## Issue #2699 implementation — 2026-11-12
+
+- Added a default-on, command-aware credential scanner for supported curl, wget,
+  and PowerShell web-request arguments, separate from password-likelihood
+  heuristics. Inline literals follow the configured block/Ask/warn/log-only
+  policy; references remain advisory, and incomplete parsing follows policy.
+  The policy is global-only. Values are excluded from findings, logs, and MCP
+  responses.
+- Integrated native pre-tool enforcement, value-free violation handling, config
+  templates/profiles/schema, Doctor, Console, MCP capability metadata, and an
+  advisory MCP `check_command` result. Added a synthetic CLI smoke case with an
+  execution witness, UX contracts, documentation, changelog, and release-readiness
+  coverage.
+- **Validation:** 557 focused scanner/config/violation unit tests, 492 MCP/REST/CLI
+  unit tests, and 43 affected UX tests pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint, package Mypy (337 source files), and `git diff --check` pass.
+  No real-agent container smoke was run.
+- Created follow-up issue [#2717](https://github.com/RedHatProductSecurity/ai-guardian/issues/2717)
+  for static analysis of hard-coded credentials flowing into HTTP request code.
+  It scopes a Python-first, non-executing source analysis and value-free
+  pre-tool findings; implementation remains separate from #2699.
+- Changes remain uncommitted on branch `2699`; no commit, push, or #2699 issue
+  update. **Next:** user review and external DAF completion.
 
 ## Issue #2698 implementation — 2026-11-11
 

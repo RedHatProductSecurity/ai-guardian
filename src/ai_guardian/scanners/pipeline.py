@@ -249,6 +249,19 @@ def scan_command(
 
     results = []
 
+    # Independent command-semantic scanner. It intentionally does not reuse the
+    # experimental password-likelihood heuristic below.
+    from ai_guardian.scanners.command_credentials import run_command_credential_scan
+
+    command_credential_config = None
+    if isinstance(config, dict):
+        command_credential_config = config.get("command_credential_scanning") or {}
+    command_credential_result = run_command_credential_scan(
+        command, config=command_credential_config
+    )
+    if command_credential_result is not None and command_credential_result.detected:
+        results.append(command_credential_result)
+
     # Independent password stage; command data never supplies policy.
     from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
 

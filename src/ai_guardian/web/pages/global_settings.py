@@ -27,6 +27,11 @@ FEATURE_GROUPS = [
                 "Secret Scanning",
                 "Scan for API keys, tokens, credentials",
             ),
+            (
+                "command_credential_scanning",
+                "Command Credential Scanning",
+                "Block inline credentials in supported HTTP command arguments",
+            ),
             ("scan_pii", "PII Detection", "GDPR/CCPA compliance scanning"),
             (
                 "image_scanning",
@@ -135,6 +140,12 @@ FEATURE_GROUPS = [
 ]
 
 FEATURE_ACTIONS = {
+    "command_credential_scanning": {
+        "block": "Block",
+        "ask": "Ask (block if approval is unavailable)",
+        "warn": "Warn",
+        "log-only": "Log Only",
+    },
     "prompt_injection": {
         "block": "Block",
         "ask": "Ask (block if headless)",
@@ -215,6 +226,7 @@ FEATURE_ACTIONS = {
 }
 
 ACTION_DEFAULTS = {
+    "command_credential_scanning": "block",
     "prompt_injection": "block",
     "ssrf_protection": "block",
     "config_file_scanning": "block",

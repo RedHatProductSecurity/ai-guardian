@@ -187,6 +187,26 @@
       },
       "additionalProperties": false
     },
+    "command_credential_scanning": {
+      "type": "object",
+      "description": "Independent default-on, command-aware scanner for credential-bearing arguments in supported curl, wget, and PowerShell web-request commands. It never executes commands or retains values. Blocking happens before tool execution, not before the model sees the command.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable command-aware credential argument detection. Enabled by default."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["block", "ask", "warn", "log-only"],
+          "default": "block",
+          "description": "Action for inline literal credentials and incomplete analysis. block denies before execution; ask permits only operation-scoped Allow Once / Block and denies if approval is unavailable; warn is advisory; log-only is silent. Credential references and interactive/no-value authentication remain advisory and do not prove a literal secret was disclosed."
+        },
+        "_comment_enabled": {"type": "string"},
+        "_comment_action": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
     "secret_scanning": {
       "type": "object",
       "description": "Secret scanning with multi-engine support (v1.4.0+). Object with 'enabled' property that supports boolean (permanent) or time-based (temporary) formats. Multi-engine support added in v1.5.0 - configure multiple engines with automatic fallback.",
@@ -2039,6 +2059,7 @@
               "directory_blocking",
               "secret_detected",
               "suspected_password",
+              "command_credential_detected",
               "secret_redaction",
               "prompt_injection",
               "jailbreak_detected",
@@ -2065,6 +2086,7 @@
             "directory_blocking",
             "secret_detected",
             "suspected_password",
+            "command_credential_detected",
             "secret_redaction",
             "prompt_injection",
             "jailbreak_detected",
@@ -2099,6 +2121,7 @@
               "tool_permission",
               "directory_blocking",
               "secret_detected",
+              "command_credential_detected",
               "image_secret_detected",
               "pii_detected",
               "image_pii_detected",

@@ -60,6 +60,7 @@ class ViolationType(str, Enum):
 
     SECRET_DETECTED = "secret_detected"
     HEURISTIC_CANDIDATE = "suspected_password"  # public category, never a value
+    COMMAND_CREDENTIAL_DETECTED = "command_credential_detected"
     PII_DETECTED = "pii_detected"
     DIRECTORY_BLOCKING = "directory_blocking"
     TOOL_PERMISSION = "tool_permission"
@@ -435,6 +436,11 @@ VIOLATION_FILTER_TYPES = [
         "Optional local password-likelihood heuristic; not a confirmed secret",
     ),
     (
+        "Command Credential",
+        "command_credential_detected",
+        "Credential-bearing command arguments detected or command analysis incomplete",
+    ),
+    (
         "Directories",
         "directory_blocking",
         "File access blocked by directory protection rules",
@@ -517,6 +523,7 @@ ALL_ACTION_MODES = tuple(a.value for a in ActionMode)
 RULE_ID_LABELS = {
     "SECRET-001": "Secrets",
     "PASSWORD-001": "Suspected Password (Heuristic)",
+    "COMMAND-CREDENTIAL-001": "Command Credential Argument",
     "PII-001": "PII",
     "PROMPT-INJECTION-001": "Prompt Injection",
     "SSRF-001": "SSRF",
@@ -531,6 +538,7 @@ RULE_ID_LABELS = {
 
 RULE_ID_TO_SCANNER = {
     "SECRET-001": "secret_scanning",
+    "COMMAND-CREDENTIAL-001": "command_credential_scanning",
     "PII-001": "scan_pii",
     "PROMPT-INJECTION-001": "prompt_injection",
     "SSRF-001": "ssrf_protection",
@@ -542,6 +550,7 @@ RULE_ID_TO_SCANNER = {
 RULE_ID_TO_VIOLATION_TYPE = {
     "SECRET-001": "secret_detected",
     "PASSWORD-001": "suspected_password",
+    "COMMAND-CREDENTIAL-001": "command_credential_detected",
     "PII-001": "pii_detected",
     "PROMPT-INJECTION-001": "prompt_injection",
     "SSRF-001": "ssrf_blocked",
@@ -557,6 +566,7 @@ RULE_ID_TO_VIOLATION_TYPE = {
 RULE_ID_TO_CONFIG_SECTION = {
     "SECRET-001": "secret_scanning",
     "PASSWORD-001": "password_likelihood",
+    "COMMAND-CREDENTIAL-001": "command_credential_scanning",
     "PII-001": "scan_pii",
     "PROMPT-INJECTION-001": "prompt_injection",
     "SSRF-001": "ssrf_protection",
@@ -601,6 +611,7 @@ for _slug, _section in SLUG_TO_CONFIG_SECTION.items():
 del _slug, _section
 # This opt-in control shares the Secrets page rather than adding navigation.
 _SECTION_TO_SLUG["password_likelihood"] = "/secrets"
+_SECTION_TO_SLUG["command_credential_scanning"] = "/secrets"
 
 RULE_ID_TO_SLUG = {
     rule_id: ("/pi-unicode" if rule_id == "UNICODE-001" else _SECTION_TO_SLUG[section])

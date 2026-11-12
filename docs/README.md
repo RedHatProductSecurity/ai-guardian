@@ -47,6 +47,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Unicode Attacks](security/UNICODE_ATTACKS.md) | Zero-width chars, bidi override, homoglyphs |
 | [Directory Rules](security/DIRECTORY_RULES.md) | `.ai-read-deny` markers and config-based rules |
 | [Credential Exfiltration](security/CREDENTIAL_EXFILTRATION.md) | Config file scanning for exfiltration patterns |
+| [Command Credential Scanning](security/COMMAND_CREDENTIAL_SCANNING.md) | Default-on pre-execution checks for literal credentials in supported command arguments |
 | [Secret Redaction](security/SECRET_REDACTION.md) | Masking secrets in tool outputs |
 | [Image Scanning (OCR)](security/IMAGE_SCANNING.md) | OCR-based secret/PII detection in images, IDE limitations |
 | [Inline Annotations](ANNOTATIONS.md) | Suppress false positives with per-line or block annotations |

@@ -16,7 +16,11 @@ Manual qualification on Linux/macOS Podman:
    the source is read-only, the active copy is writable and no live policy edit
    is required. Normal @strict and other containers retain their own policies.
 9. Command probes must target an advertised native shell, not an advisory MCP
-   checker. Findings from a checker do not qualify native pre/post-tool delivery.
+    checker. Findings from a checker do not qualify native pre/post-tool delivery.
+   The command-credential probe must be denied by PreToolUse before its execution
+   witness is written; its synthetic value must never appear in hook output or
+   violation diagnostics. If execution regresses, its .invalid request is fenced
+   by the smoke egress firewall.
 10. Use --cli-name opencode --cli-version 1.19.0 or --cli-version 2.0.24 to
     pin a temporary image. Confirm the installed version before cases; V1 warms
     one backend, V2 uses private servers. --image cannot be combined with the pin.
@@ -454,7 +458,7 @@ def test_codex_smoke_trust_override_is_one_invocation_and_hook_scoped(
     assert "FAIL Codex hook scope: installed CLI rejected" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("case_name", ("ssrf", "config_exfil"))
+@pytest.mark.parametrize("case_name", ("ssrf", "config_exfil", "command_credential"))
 def test_advisory_findings_without_native_pre_tool_events_remain_failures(
     runner, monkeypatch, capsys, case_name
 ):
@@ -471,6 +475,48 @@ def test_advisory_findings_without_native_pre_tool_events_remain_failures(
     assert "hook_event_deltas=prompt=+1" in output
     assert "PASS" not in output
     assert "private" not in output
+
+
+def test_command_credential_violation_blocks_before_native_tool_execution(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: the synthetic literal is denied before shell execution.
+
+    Manual verification: run the supported-CLI smoke with its local mock provider.
+    The native tool must be offered, PreToolUse must record the command finding,
+    and neither its execution witness nor PostToolUse may occur. If the scanner
+    regresses, the reserved .invalid destination is fenced by the smoke egress
+    firewall; the synthetic value must not appear in diagnostics.
+    """
+    case = stub_tool_case(
+        runner,
+        monkeypatch,
+        "command_credential",
+        post_hook=0,
+        executed=0,
+    )
+    assert runner._run_case("podman", "smoke", "opencode", "build", case, 30)
+    output = capsys.readouterr().out
+    assert "PASS command_credential" in output
+    assert "executed=1" not in output
+    assert case.prompt not in output
+    assert "synthetic_command_credential_2699" not in output
+
+
+def test_command_credential_execution_witness_fails_smoke(runner, monkeypatch, capsys):
+    """A finding count cannot qualify the smoke if the shell ran the probe."""
+    case = stub_tool_case(
+        runner,
+        monkeypatch,
+        "command_credential",
+        post_hook=0,
+        executed=1,
+    )
+    assert not runner._run_case("podman", "smoke", "opencode", "build", case, 30)
+    assert (
+        "FAIL command_credential: command credential probe executed despite pre-tool denial"
+        in capsys.readouterr().out
+    )
 
 
 @pytest.mark.parametrize(

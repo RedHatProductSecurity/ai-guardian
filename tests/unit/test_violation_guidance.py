@@ -338,6 +338,7 @@ class TestAllKnownTypesHaveInstructions:
             if vtype not in {
                 "canary_detected",
                 "suspected_password",
+                "command_credential_detected",
                 "sensitive_finding",
             }:
                 assert snippet, f"{vtype} should produce a config snippet"

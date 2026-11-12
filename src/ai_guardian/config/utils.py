@@ -92,6 +92,7 @@ GLOBAL_ONLY_SECTIONS: FrozenSet[str] = frozenset(
         "agent_config_protection",
         "self_protection",
         "password_likelihood",
+        "command_credential_scanning",
         "violation_notifications",
     }
 )
@@ -931,6 +932,11 @@ def get_feature_flags(cfg: Dict) -> Dict[str, bool]:
     heuristic = cfg.get("password_likelihood")
     features["password_likelihood"] = (
         isinstance(heuristic, dict) and heuristic.get("enabled") is True
+    )
+    command_credentials = cfg.get("command_credential_scanning")
+    features["command_credential_scanning"] = not (
+        isinstance(command_credentials, dict)
+        and command_credentials.get("enabled") is False
     )
     return features
 
