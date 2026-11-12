@@ -191,15 +191,18 @@ def test_vm_has_standard_menu_labels_and_only_its_cached_data(multi):
 
 
 @pytest.mark.parametrize("paused", [False, True])
-def test_main_daemon_with_healthy_mcp_does_not_need_unreleased_stats_fields(paused):
-    """USER EXPERIENCE: Doctor says MCP healthy → tray reads VM-global settings."""
+@pytest.mark.parametrize("configured_level", ["medium", "paused"])
+def test_selected_daemon_pause_does_not_override_configured_mcp_level(
+    paused, configured_level
+):
+    """USER EXPERIENCE: VM pause status stays separate from its MCP setting."""
     from ai_guardian.daemon.discovery import DaemonTarget
     from ai_guardian.daemon.ssh_connections import SSHConnectionManager
     from tests.fixtures.ssh_tray import build, find, make_tray
 
     stats = {"paused": paused, "mcp_installed": True}
     tunnel = mock.Mock()
-    tunnel.request.return_value = {"mcp_server": {"proactive_level": "medium"}}
+    tunnel.request.return_value = {"mcp_server": {"proactive_level": configured_level}}
     target = DaemonTarget(
         "ssh-vm",
         "ssh",
@@ -208,11 +211,12 @@ def test_main_daemon_with_healthy_mcp_does_not_need_unreleased_stats_fields(paus
     )
     tray = make_tray([target])
     tray._proactive_level = "high"  # workstation's choice must not leak into VM
-    label = "MCP Proactive: paused" if paused else "MCP Proactive: medium"
+    pause_status = " (daemon paused)" if paused else ""
+    label = f"MCP Proactive: {configured_level}{pause_status}"
     menu = find(build(tray), label)
-    assert find(menu.submenu, "medium").checked
-    assert find(menu.submenu, "medium").enabled
-    assert target.stats["mcp_proactive_level"] == "medium"
+    assert find(menu.submenu, configured_level).checked
+    assert find(menu.submenu, configured_level).enabled
+    assert target.stats["mcp_proactive_level"] == configured_level
     tunnel.request.assert_called_once_with("GET", "/api/config?scope=global")
 
 

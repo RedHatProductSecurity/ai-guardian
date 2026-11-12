@@ -325,7 +325,7 @@ class TrayMenuBuilder:
         return "\n".join(lines)
 
     def _mcp_proactive_label(self, slot=None):
-        """Show the effective MCP level for the selected daemon."""
+        """Show the configured MCP level and its daemon's pause state."""
         if slot is not None and not isinstance(slot, int):
             stats = slot.stats or {}
             installed = stats.get("mcp_installed")
@@ -334,9 +334,8 @@ class TrayMenuBuilder:
             if stats.get("mcp_enabled") is False:
                 return "MCP: disabled"
             level = stats.get("mcp_proactive_level", "unavailable")
-            if slot.status == "paused" and level != "unavailable":
-                level = "paused"
-            return f"MCP Proactive: {level}"
+            pause_status = " (daemon paused)" if slot.status == "paused" else ""
+            return f"MCP Proactive: {level}{pause_status}"
         paused = False
         if slot is None:
             try:
@@ -346,8 +345,9 @@ class TrayMenuBuilder:
                 paused = getattr(self._tray, "_status", "") == "paused"
         elif slot < len(self._tray._targets):
             paused = self._tray._targets[slot].status == "paused"
-        level = "paused" if paused else self._tray._proactive_level
-        return f"MCP Proactive: {level}"
+        level = self._tray._proactive_level
+        pause_status = " (daemon paused)" if paused else ""
+        return f"MCP Proactive: {level}{pause_status}"
 
     def _proactive_for_slot(self, slot):
         if isinstance(slot, int):

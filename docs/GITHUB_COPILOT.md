@@ -4,14 +4,17 @@ This guide explains how to integrate AI Guardian with [GitHub Copilot](https://g
 
 ## Overview
 
-AI Guardian integrates with GitHub Copilot through **native hooks** that intercept prompts and tool usage before they're sent to the AI. This provides **real-time protection** by scanning for secrets and enforcing security policies during AI interactions.
+AI Guardian integrates with GitHub Copilot through command hooks. The
+`userPromptSubmitted` hook receives prompts, but Copilot drops command-hook
+output for that event; it cannot block or rewrite the submitted prompt. The
+`preToolUse` hook can deny tool calls before execution.
 
 ### Protection Levels
 
-✅ **Real-time scanning**:
-- Scans user prompts before submission (`userPromptSubmitted` hook)
+✅ **Hook coverage**:
+- Observes submitted prompts (`userPromptSubmitted`); command-hook output is ignored, so this is not a prompt gate
 - Scans tool inputs before execution (`preToolUse` hook)
-- Blocks operations containing secrets or accessing denied directories
+- Denies tool calls containing secrets or accessing denied directories
 - Enforces MCP/Skill permissions
 
 ## Prerequisites
@@ -148,7 +151,7 @@ GitHub Copilot supports these hooks:
 
 | Hook | Purpose | AI Guardian Support |
 |------|---------|-------------------|
-| `userPromptSubmitted` | Before sending prompt to AI | ✅ Supported |
+| `userPromptSubmitted` | Before sending prompt to AI | ⚠️ Observed only; command-hook output is ignored |
 | `preToolUse` | Before tool execution | ✅ Supported |
 | `postToolUse` | After tool execution | ⏭️ Future |
 
@@ -185,40 +188,18 @@ Once installed, AI Guardian runs automatically:
 
 When you use GitHub Copilot:
 
-1. **Type a prompt**: AI Guardian scans for secrets
+1. **Type a prompt**: AI Guardian's command hook receives it, but the prompt is still submitted
 2. **Copilot suggests code**: AI Guardian checks tool usage
 3. **Clean content**: Request proceeds normally
-4. **Secrets detected**: Request blocked with error message
+4. **A secret is detected in the prompt**: the hook may surface a warning, but this command-hook integration cannot stop the prompt; do not include credentials in prompts
 
-### Example: Blocked Request
+### Prompt Hook Limitation
 
-```
-User prompt: "Deploy using API key: sk_live_abc123..."
-
-🛡️ Secret Detected
-
-Protection: Secret Scanning
-Secret Type: stripe-api-key
-Location: prompt:line 1
-Scanner: Gitleaks
-Pattern source: Default Gitleaks rules
-
-Why blocked: Hard-coded secrets in prompts create security risks.
-Secrets should never be included in AI prompts or source code.
-
-This operation has been blocked for security.
-DO NOT attempt to bypass this protection - it prevents credential leaks.
-
-Recommendation:
-- Store secrets in environment variables or secret managers
-- Use placeholder values in examples (e.g., "sk_test_example_key")
-- Never paste real API keys, tokens, or passwords
-
-⚠️ Secret value NOT shown in this message for security
-
-Config: ~/.config/ai-guardian/ai-guardian.json
-Section: secret_scanning.enabled
-```
+Copilot's current command-hook contract drops `userPromptSubmitted` output,
+including `modifiedPrompt`. An exit code of 2 is a warning for this event, not a
+block. Prompt rewriting is honored only by SDK programmatic hooks, which AI
+Guardian does not install. Use `preToolUse` for tool-call enforcement and keep
+credentials out of prompts. See the [Copilot hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference).
 
 ### Example: Allowed Request
 
@@ -246,8 +227,8 @@ GitHub Copilot expects specific JSON responses:
 ```
 
 **AI Guardian Response** (exit code only):
-- Exit code 0: Allow prompt
-- Exit code 2: Block prompt (with error message on stderr)
+- Exit code 0: Hook completed; Copilot continues submitting the prompt
+- Exit code 2: Copilot surfaces a warning, but the prompt still proceeds
 
 ### preToolUse Hook
 
@@ -381,7 +362,7 @@ Then check stderr output for details.
 ### Defense in Depth
 
 **Recommended layers**:
-1. **AI Guardian hooks** - Real-time prompt/tool scanning
+1. **AI Guardian hooks** - Prompt observation and pre-tool enforcement
 2. **Git pre-commit hooks** - Commit-time verification
 3. **CI/CD scanning** - Build-time secret detection
 4. **Secret rotation** - Regular credential updates

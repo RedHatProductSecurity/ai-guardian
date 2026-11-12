@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regex rules in `secret_scanning.additional_patterns`, the Secret Scanning Console,
   generated/example configuration, and documentation. Rules augment bundled
   detection and require the built-in `toml-patterns` engine.
+- **Integration hook capability matrix (#2724):** Document per-surface prompt,
+  pre-tool, and post-tool enforcement, observation, and transformation behavior;
+  add registry-to-matrix parity coverage and clarify Copilot prompt-hook limits.
 - **Runtime-organized tray sandbox actions (#2713):** Group OpenShell middleware,
   sandbox creation, and stopped-sandbox actions separately from Docker/Podman actions;
   runtime shortcuts preselect the matching option in the complete create form. Group
@@ -32,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distinguish `latest` development docs, and report inactive or misrouted release
   versions with actionable recovery guidance.
 ### Fixed
+- **Tray MCP proactive label during daemon pauses (#2719):** Keep the label aligned
+  with the configured level and selected radio option, while separately identifying
+  a temporary daemon pause.
 - **OpenCode PostToolUse filenames:** Reuse normalized native tool arguments so
   `filePath` and other supported path aliases are retained by post-tool scanners
   and violation records, including legacy handler calls.

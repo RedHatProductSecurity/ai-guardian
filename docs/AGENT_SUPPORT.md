@@ -151,6 +151,10 @@ future integrations. For this repository, the main evidence paths are
 
 ## Hook Capability Matrix
 
+This inventory records configured or recognized lifecycle events, not whether a
+host enforces each response. The behavior matrix below is authoritative for
+blocking, observation, context injection, and output transformation.
+
 | Agent | SessionStart | UserPromptSubmit | PreToolUse | PostToolUse | BeforeReadFile | PostCompact | SessionEnd |
 |-------|-------------|-----------------|------------|-------------|----------------|-------------|------------|
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
@@ -177,6 +181,66 @@ remain available to callers without stable session identities.
 
 The Codex row applies to Codex CLI and desktop Codex mode only. Regular
 ChatGPT mode does not run these Codex lifecycle hooks.
+
+### Capability overview
+
+These profiles summarize the **configured integration**, not relative security
+or assurance. A gate applies only when the hook is installed, enabled, trusted
+where required, and present in the execution scope. Post-tool processing cannot
+undo side effects that already occurred. The detailed table below is the source
+of truth for host/version limitations and failure behavior.
+
+| Profile | Integrations |
+|---|---|
+| **Prompt control and pre-tool gate** | Claude Code; Cursor desktop/local CLI; Codex CLI and desktop Codex mode; Windsurf; Gemini CLI; Kiro IDE; AiderDesk; OpenCode V1/V2; Pi. OpenCode replaces the submitted draft with a fixed refusal rather than returning a native prompt denial. |
+| **Pre-tool gate; prompt gate absent, advisory, conditional, or unverified** | Copilot command hooks; Grok Build; Antigravity CLI; Cline; Cursor Cloud Agent; Kiro CLI; OpenClaw; ZooCode; Augment; Crush. Copilot's command prompt-hook output is ignored; Antigravity injects advice but does not terminate the model request. |
+| **MCP-only advisory checks** | Junie. MCP availability does not itself enforce a check; the agent must call and follow it. |
+
+Post-tool result handling is a separate capability. Claude Code supports
+model-visible output replacement, but a post-tool `block` alone leaves the
+original result visible. Cursor replacement is documented for supported MCP
+results only. Codex can replace a completed result with feedback, not a
+sanitized copy of that result. Gemini can withhold a sensitive result using a
+fixed refusal. AiderDesk, OpenCode, and Pi have host-side result transformation
+paths; OpenCode V1 block behavior is not counted as a verified redaction
+guarantee. Other paths are observation/context-only, not installed, or
+unverified as detailed below.
+
+### Per-integration behavior matrix
+
+`UserPromptSubmit` includes the closest host-native equivalent. **Gate** means
+the host can stop an action before it starts; **replace** changes what the next
+model request receives; **withhold** substitutes a refusal/error; **advice**
+adds context without stopping the action; **observe** has no enforced decision
+effect; **not installed** means AI Guardian does not register that stage;
+**unverified** must not be relied on for enforcement. Output changes happen
+after the tool has run. Failure defaults below describe the host contract, not
+a guarantee that every installed version behaves identically.
+
+| Registry key | Surface or variant | UserPromptSubmit equivalent | PreToolUse equivalent | PostToolUse equivalent | Protocol, timing, prerequisite, failure behavior, references, and limits |
+|---|---|---|---|---|---|
+| `claude` | Claude Code in the scope where hooks are configured, including CLI, desktop, or hosted execution | **Gate**; AI Guardian does not rewrite prompts. | **Gate** via permission decision; a clean response leaves Claude's normal permission flow in place. | **Feedback or replace**: `decision: block` alone leaves the original result visible; `updatedToolOutput` can replace supported model-visible results when the returned shape matches the tool. Claude Code currently ignores this replacement for Bash output ([upstream issue #64326](https://github.com/anthropics/claude-code/issues/64326)). | Command hooks exchange JSON on stdin/stdout. Prompt timeout defaults to 30s; most other hooks default to 600s. The generated config does not set `onFailure: block`, so command failures/timeouts generally fail open. Install/configure hooks in the actual execution scope. A post-hook cannot undo tool side effects. [Hooks reference](https://code.claude.com/docs/en/hooks). |
+| `cursor` | Desktop and local CLI | **Gate** through `beforeSubmitPrompt`; no in-place prompt rewrite. | **Gate** through permission decisions and before-read hooks. | **Replace only supported MCP results** through `updated_mcp_tool_output`; generic `modifiedToolOutput` is not a documented replacement contract. | Command JSON on stdin/stdout. AI Guardian sets `failClosed: true` on generated prompt/pre-decision hooks; post hooks remain fail-open. No timeout is pinned in AI Guardian config. Install in the local/user or selected project scope. HTTP MCP results running on Cursor's backend can arrive already redacted and cannot be replaced by the local hook. [Hooks reference](https://cursor.com/docs/hooks). |
+| `cursor` | Cloud Agent / cloud workspace | **Unavailable**: `beforeSubmitPrompt` runs before the cloud VM exists. | **Conditional gate** only when the applicable project/cloud-workspace hook is present and loaded; local user hooks do not protect a remote run. | Cursor documents replacement for supported MCP results, but backend-hosted HTTP MCP results cannot be replaced; no general built-in result replacement is claimed. | Cloud protection requires explicit workspace/project configuration. Generated decision hooks request fail-closed handling, but the cloud run must actually load that configuration. Timeout is not pinned by AI Guardian. [Hooks reference](https://cursor.com/docs/hooks). |
+| `copilot` | Copilot CLI / command-hook configuration | **Observe only**: `userPromptSubmitted` command output, including `modifiedPrompt`, is dropped; exit 2 is a warning and does not block the prompt. | **Gate** via `permissionDecision: deny`. | **Not installed** by AI Guardian. | Command JSON on stdin/stdout. The command prompt event is not an enforcement point; `modifiedPrompt` is honored by SDK programmatic hooks only. For `preToolUse`, non-timeout hook errors fail closed; timeout is fail-open. AI Guardian installs the local Copilot hook configuration, not remote cloud-job hooks. [Hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference). |
+| `copilot` | Copilot cloud coding-agent job | **Not installed** by AI Guardian. | **Not installed** by AI Guardian. | **Not installed** by AI Guardian. | The local `COPILOT_HOME`/user command-hook setup does not provision a repository's remote `.github/hooks/` policy. Do not infer cloud enforcement from a local CLI/IDE installation. [Hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference). |
+| `grok` | Grok Build command hooks | **Observe only** in AI Guardian; the adapter emits no prompt decision or context. | **Gate** on an explicit deny. | **Observe only**; passive-event output is ignored, so no result replacement. | Command hooks receive event JSON on stdin and return JSON/exit status. AI Guardian does not set a timeout; Grok's documented default is 5s. Only an explicit deny blocks; crashes, malformed output, non-deny exit codes, and timeouts fail open. Project hooks require the project to be trusted. [Hooks reference](https://docs.x.ai/build/features/hooks). |
+| `codex` | Codex CLI and desktop **Codex mode** only; not regular ChatGPT mode | **Gate** with a block decision or exit 2; no prompt rewrite. | **Gate**; the deny response includes Codex's required sanitized `permissionDecisionReason`. | **Replace with feedback** when blocked; Codex can substitute the completed result with feedback, but AI Guardian does not claim a sanitized replacement of the original result. | Command hooks use JSON stdin/stdout. Generated timeout is 300s for prompt/pre-tool and 60s for post-tool. Hooks must be reviewed/trusted by Codex; ordinary hook failures continue rather than deny. Post-tool runs after side effects. [Codex hooks](https://learn.chatgpt.com/docs/hooks); [scope note](#codex-and-chatgpt-desktop-scope). |
+| `windsurf` | Cascade hooks in the configured user/project scope | **Gate** through `pre_user_prompt` (exit 2). | **Gate** through installed pre-command, pre-read, pre-write, and pre-MCP events (exit 2). | **Observe only**; post-hooks cannot block or replace completed tool results. | Command receives event JSON on stdin; exit 2 blocks pre-hooks, other errors continue. AI Guardian does not set a timeout or `show_output`. Hook files must be present in the actual Cascade scope. [Cascade hooks](https://docs.windsurf.com/windsurf/cascade/hooks). |
+| `gemini` | Gemini CLI | **Gate** through `BeforeAgent`; no prompt rewrite. | **Gate** through `BeforeTool`. | **Withhold by refusal** on a sensitive result; Gemini replaces the model-visible result with a fixed refusal, not AI Guardian's sanitized copy. | Command hooks use JSON stdin/stdout. Host default timeout is 60s; exit 2 blocks, while other nonzero exits warn and continue. Requires the generated Gemini settings hook config to be loaded. [Hooks reference](https://geminicli.com/docs/hooks/reference/). |
+| `antigravity` | Antigravity CLI (`agy`) | **Advice only** through `PreInvocation`, the closest equivalent; AI Guardian does not set the host's `terminationBehavior: terminate`. | **Gate** on explicit deny; a clean check returns `ask` to preserve the host permission flow. | **Observe only** for tool output: Antigravity's `PostToolUse` payload has no result content. | CamelCase JSON on stdin/stdout. AI Guardian configures 300s for `PreToolUse` and 60s for `PostToolUse`/`PreInvocation`. Requires `~/.gemini/config/hooks.json` (or the configured hook file) and `agy`. Host handling of hook process failure is not relied on; verify the target version. [Hooks reference](https://antigravity.google/docs/hooks/). |
+| `cline` | Cline file/script hooks | **Observe only**: the prompt event is delivered, but the documented file-hook response has no prompt-denial or rewrite field; AI Guardian's `cancel` response is not a prompt gate. | **Gate** using the documented `cancel: true` response. | **No verified result replacement**: AI Guardian emits `modifiedResult`, which is not in the documented file-hook output contract; treat the stage as observation-only. | File hooks receive JSON on stdin and return JSON on stdout. The cited file-hook contract does not specify a script timeout or failure default; AI Guardian pins neither. Enable hooks in the intended Cline scope; Cline documents that hooks are disabled in `--yolo` mode. CLI and IDE use different hook paths. Do not infer file-hook behavior from the separate SDK plugin-hook contract. [File hook reference and examples](https://github.com/cline/cline/blob/main/sdk/examples/hooks/README.md). |
+| `zoocode` | ZooCode using the shared Cline adapter and `.clinerules/hooks` scripts | **Unverified**: AI Guardian emits the Cline `cancel` response, but this host/version mapping is not independently qualified. | **Intended gate** using the shared Cline `cancel: true` response; verify the exact ZooCode runtime. | **Unverified**: no safe `modifiedResult` replacement is established. | The setup writes Cline-format event scripts; ZooCode's acceptance, timing, and failure semantics are not independently qualified by this integration. Do not rely on prompt denial or result replacement without host-specific verification. [ZooCode hooks](https://zcode.z.ai/en/docs/hooks). |
+| `kiro` | Kiro IDE | **Gate**: nonzero command result blocks IDE Prompt Submit; AI Guardian exits 1 on a finding. | **Gate**: AI Guardian exits 2 on a finding. | **Advice/context only**; stdout may be added to agent context, not a result replacement. | Shell command action receives JSON on stdin; successful stdout is context. Default timeout is 60s. For IDE Prompt Submit and Pre Tool Use, a nonzero result blocks; other hook errors are surfaced. Install the project `.kiro/hooks` scripts. [Hook actions](https://kiro.dev/docs/hooks/actions/); [hook triggers](https://kiro.dev/docs/hooks/types/). |
+| `kiro` | Kiro CLI (including documented CLI hook surfaces) | **Observe/advice only**: CLI Prompt Submit hooks cannot block, even though the trigger exists. | **Gate** on explicit exit 2. | **Advice/context only**; no safe output replacement. | Command JSON on stdin; default timeout is 60s. CLI Prompt Submit nonzero exits are warnings; Pre Tool Use exit 2 blocks. Standalone hook files and exact event availability vary by CLI generation; verify the installed version. [Hook actions](https://kiro.dev/docs/hooks/actions/); [hook triggers](https://kiro.dev/docs/hooks/types/). |
+| `aiderdesk` | AiderDesk extension v0.55.0+ with the AI Guardian extension enabled | **Gate** via `onPromptStarted` returning `{ blocked: true }`. | **Conditional gate** through `onToolApproval`/`onToolCalled`; host execution paths can differ in which callbacks fire. | **Replace output** through `onToolFinished` where that callback runs; tool side effects have already occurred. | Extension callback invokes the shared process bridge synchronously; bridge timeout is 30s. Explicit exit 1/2 findings block; spawn errors/timeouts fail open. Requires the extension and `ai-guardian` executable in the extension environment. [Extension events](https://aiderdesk.dev/docs/extensions/events); [AI Guardian setup](AIDERDESK.md). |
+| `openclaw` | OpenClaw Gateway plugin | **Observe only**: AI Guardian scans `message_received`, but that event ignores returned handler values, so `cancel` is not a prompt gate. | **Gate** through `before_tool_call`. | **Observe only**: `after_tool_call` is an observe hook and the plugin discards the scan result. | Plugin calls the shared process bridge synchronously with JSON; 30s timeout. Explicit exit 1/2 findings block pre-tool calls; other bridge failures fail open. Requires the plugin to be loaded by the Gateway. [Hook reference](https://docs.openclaw.ai/plugins/hooks/reference); [AI Guardian setup](#ide-specific-home-and-configuration-paths). |
+| `opencode` | OpenCode V1 (`opencode-ai` 1.x) | **Replace** submitted prompt parts with a fixed refusal before model submission; not a native prompt-cancel result. | **Gate** by throwing from `tool.execute.before`. | **Conditional transformation**: the V1 callback applies an explicit returned replacement; a blocked post-hook throws, which is not counted as a verified safe-redaction guarantee. | Plugin invokes shared JSON process bridge; 30s timeout. OpenCode bridge failures and missing workspace identity fail closed. Requires V1 plugin registration and its adjacent bridge. Tool side effects precede post-tool handling. [OpenCode guide](OPENCODE.md); [plugin hooks](https://opencode.ai/docs/plugins/). |
+| `opencode` | OpenCode V2 (`@opencode/cli` 2.x) | **Replace** prompt draft with a fixed refusal and clear attachments/mentions; not a native prompt denial. | **Gate** by throwing from `execute.before`. | **Replace/withhold** the completed model-visible result; V2 updates the owned result before reporting a block. | Plugin invokes shared JSON process bridge; 30s timeout. Missing workspace identity and bridge failures fail closed. Requires V2 plugin discovery and V2 artifacts; V1 plugin code does not run in V2. [OpenCode guide](OPENCODE.md); [migration guide](https://opencode.ai/docs/build/plugins/migrate-v1/). |
+| `pi` | Pi extension in user or project scope | **Gate** through `input` returning `action: handled`; extension commands handled earlier are outside this event. | **Gate** through `tool_call` and the native `user_bash` callback. | **Replace or mark as error** through `tool_result`; assistant output is also checked at `message_end`. | Extension invokes `ai-guardian` synchronously with JSON and a 30s timeout. Explicit exit 1/2 findings block; other child-process failures/timeouts fail open. Requires the extension to be loaded and the executable available. [Extensions reference](https://pi.dev/docs/latest/extensions). |
+| `augment` | Augment/Auggie local command hooks | **Not installed as a gate**: upstream `PromptSubmit` is asynchronous and cannot block or change the prompt. | **Gate** on explicit deny for the installed matcher set. | **Feedback only**; post hooks cannot deny or replace results. | Synchronous command hooks use JSON stdin/stdout; AI Guardian sets a 5s timeout. Only exit 2 or a deny blocks; crashes/timeouts fail open. Installed matchers cover selected process, edit, save, view, and remove-files tools, not every possible tool. [Hooks reference](https://docs.augmentcode.com/cli/hooks). |
+| `crush` | Current AI Guardian project hook installs only `PreToolUse` | **Not installed**. | **Gate** using the Claude-compatible deny response or exit 2. | **Not installed** by AI Guardian. | Command receives JSON on stdin; AI Guardian configures a 30s timeout. Only an explicit deny is relied on; other process-failure behavior is not qualified here. This describes AI Guardian's installed surface, not every hook available in newer Crush releases. [Crush hooks](https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md). |
+| `junie` | Junie MCP-only integration | **Not available**. | **Not available**. | **Not available**. | AI Guardian installs no lifecycle hook protocol. MCP checks are advisory and depend on the agent choosing to call and follow them; no hook timing or hook failure default applies. [Junie environment and configuration](https://junie.jetbrains.com/docs/environment-variables.html). |
 
 ## Hook Latency Support Matrix
 
@@ -219,14 +283,13 @@ Junie's MCP calls and Aider CLI's commit-time `ai-guardian scan` do not enter
 the hook pipeline, so they do not create latency entries. A paused daemon also
 does not create entries because it intentionally skips hook processing.
 
-## Protection Level by Hook Availability
+## Interpreting violation coverage
 
-| Hooks Available | AI Guardian Capabilities |
-|----------------|------------------------|
-| **Full hooks** (Prompt + Pre + Post) | Secret scanning, PII detection, prompt injection, SSRF, directory blocking, config scanning, redaction, tool permissions |
-| **Pre + Post only** (no Prompt) | All above except prompt scanning and transcript scanning |
-| **MCP only** (no hooks) | Advisory checks only — check_path, check_command, check_mcp_trust, sanitize_text. No enforcement (agent must cooperate) |
-| **None** | No protection available |
+Scanner coverage depends on the event and on the host actually enforcing the
+response. An event listed in the inventory is not automatically a block or a
+safe result replacement. Use the [capability overview](#capability-overview)
+and [per-integration behavior matrix](#per-integration-behavior-matrix) for
+stage behavior; the following table describes violation/scanner coverage.
 
 ## Violation Type Coverage Matrix
 
@@ -234,14 +297,24 @@ Coverage per agent depends on which hooks are available. This table shows repres
 
 Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
 
-Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus the equivalent prompt event where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Gemini uses its `BeforeAgent` event for prompt checks; sensitive tool output is refused rather than replaced (see below). Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
+The Copilot column refers to the installed local CLI/IDE command hooks, not
+Copilot's cloud coding-agent jobs. Prompt/transcript findings can be reported,
+but command prompt-hook output is not enforced and AI Guardian does not install
+a Copilot `PostToolUse` hook.
 
-| Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
+The detailed behavior matrix intentionally avoids assuming that agents with a
+shared adapter or event name have the same enforcement behavior. Gemini refuses
+sensitive tool results rather than returning a sanitized copy; Grok's prompt
+and post-tool callbacks are observation-only in AI Guardian; Copilot command
+prompt output is ignored by the host. Copilot CLI and Codex support transcript
+scanning via adapter-resolved default paths (Issue #935).
+
+| Violation Type | Requires | Claude Code | Cursor | Copilot CLI | Antigravity | Junie (MCP) |
 |---|---|---|---|---|---|---|
-| secret_detected | Pre+Post | Enforce | Enforce | Enforce | Enforce | Advisory |
+| secret_detected | Pre+Post | Enforce | Partial | Partial | Partial | Advisory |
 | suspected_password (opt-in experimental) | Prompt/Pre/Post where exposed | Unqualified* | Unqualified* | Unqualified* | No post output; unqualified* | Advisory only |
 | command_credential_detected (supported CLI subset) | Pre (Bash/Shell) or MCP `check_command` | Enforce | Enforce | Enforce | Enforce | Advisory |
-| secret_redaction | Post | Enforce | Enforce | Enforce | No (no tool output) | No |
+| secret_redaction | Post | Partial | Partial | No (PostToolUse not installed) | No (no tool output) | No |
 | pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
 | directory_blocking | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
 | tool_permission | Pre | Enforce | Enforce | Enforce | Enforce | No |
@@ -249,8 +322,8 @@ Agents with full hook support not shown individually (Windsurf, Gemini CLI, Clin
 | jailbreak_detected | Pre+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
 | ssrf_blocked | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
 | config_file_exfil | Pre | Enforce | Enforce | Enforce | Enforce | No |
-| secret_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
-| pii_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
+| secret_in_transcript | Prompt | Enforce | Enforce | Observe only | No | No |
+| pii_in_transcript | Prompt | Enforce | Enforce | Observe only | No | No |
 | image_secret | Pre | Caution | Caution | Caution | Caution | No |
 | image_pii | Pre | Caution | Caution | Caution | Caution | No |
 | offensive_language | Pre+Post | Enforce | Enforce | Partial | Partial | Advisory |
@@ -259,9 +332,10 @@ Agents with full hook support not shown individually (Windsurf, Gemini CLI, Clin
 
 **Legend:**
 
-- **Enforce** — fully tested and working
+- **Enforce** — AI Guardian emits a supported denial/replacement response for the applicable stage; host/version limits still apply
 - **Advisory** — MCP only, agent must cooperate (no enforcement)
-- **Partial** — no UserPromptSubmit, only file content scanned
+- **Partial** — enforcement is available at some applicable stages, but one or more required stages are unavailable, observation-only, or limited
+- **Observe only** — scanning may run, but the host does not enforce the prompt-hook response
 - **Caution** — known limitations (see [Image scanning](#image-scanning-all-agents) below)
 - **No** — not supported
 

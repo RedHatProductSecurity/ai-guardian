@@ -317,6 +317,33 @@ def test_installers_and_support_docs_mention_every_supported_ide():
         assert ide_type in checklist_text
 
 
+def test_support_capability_matrix_covers_registry_and_variants():
+    support_text = (ROOT / "docs" / "AGENT_SUPPORT.md").read_text()
+    matrix_text = support_text.split("### Per-integration behavior matrix", 1)[1]
+    matrix_text = matrix_text.split("\n## Hook Latency Support Matrix", 1)[0]
+    rows = [line for line in matrix_text.splitlines() if line.startswith("| `")]
+
+    row_keys = {
+        match.group(1)
+        for row in rows
+        if (match := re.match(r"\| `([^`]+)` \|", row)) is not None
+    }
+    assert row_keys == set(SUPPORTED_IDE_TYPES)
+    assert all(row.count("|") == 7 for row in rows)
+
+    variant_requirements = {
+        "cursor": ("Desktop and local CLI", "Cloud Agent"),
+        "copilot": ("Copilot CLI", "cloud coding-agent job"),
+        "codex": ("Codex mode",),
+        "kiro": ("Kiro IDE", "Kiro CLI"),
+        "opencode": ("V1", "V2"),
+    }
+    for ide_type, variants in variant_requirements.items():
+        integration_rows = [row for row in rows if row.startswith(f"| `{ide_type}` |")]
+        for variant in variants:
+            assert any(variant in row for row in integration_rows)
+
+
 def test_explicit_cursor_project_scope_uses_selected_workspace(tmp_path):
     """A parent .cursor directory cannot redirect an explicit project target."""
     parent_cursor = tmp_path / ".cursor"
