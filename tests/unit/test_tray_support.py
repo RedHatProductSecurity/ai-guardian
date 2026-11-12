@@ -69,9 +69,7 @@ def test_host_support_entry_is_only_shown_without_daemon_targets(monkeypatch, ta
         "_build_single_daemon_menu_items",
         "_build_single_daemon_daemon_items",
         "_build_multi_daemon_menu_items",
-        "_build_openshell_middleware_menu_items",
-        "_build_sandbox_create_menu_items",
-        "_build_sandbox_start_menu_items",
+        "_build_sandbox_runtime_menu_items",
         "_build_ide_setup_menu_items",
     ):
         monkeypatch.setattr(tray._menu, method, lambda: [])

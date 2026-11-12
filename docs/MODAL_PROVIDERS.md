@@ -167,8 +167,8 @@ controls.
   later displayed-step failure remain terminal. Verify the direct route on each
   supported desktop as well as manual Add; see the full SSH UX contract for opt-in,
   cancellation, dismissal/restart and identity-change checks.
-- **SSH discovery settings:** **Discover SSH aliases...** is always available in
-  the workstation tray, including discovery-off/zero-candidate/no-pairing states.
+- **SSH discovery settings:** **Discover SSH aliases...** under the tray's **SSH**
+  submenu is always available, including discovery-off/zero-candidate/no-pairing states.
   Reuse `run_form_flow` for the complete two-step interaction: current enable
   checkbox and **Continue**, then current optional literal prefix and **Save**.
   All providers retain both controls, explanations, validation feedback and
@@ -370,7 +370,8 @@ monitor, result and sanitized screenshots/timing for each matrix row.
    origin through source delays and provider startup errors. No placement test may
    auto-check consent, upload a Gist, publish a Discussion or duplicate a send.
 8. SSH discovery settings: with discovery off, zero matches and no enrolled
-   daemons, find **Discover SSH aliases...** next to **Add daemon via SSH**.
+   daemons, find **Discover SSH aliases...** beside **Add daemon via SSH** under
+   the tray's **SSH** submenu.
    Check both current values, cancel/close either step, and confirm no persistence.
    Save a custom `guardian-` prefix, then an empty prefix; reject wildcard/invalid
    input with feedback without switching toolkit. Confirm candidates refresh

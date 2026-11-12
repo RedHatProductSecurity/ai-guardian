@@ -324,7 +324,7 @@ VM-hosted Console bootstrap and workstation-side pairing. Production PyPI
 1.21.0 includes HTTPS and SSH-managed enrollment; fresh-install, desktop and
 lifecycle qualification for the complete walkthrough remains open in that guide.
 
-For an SSH-only VM (including a known AWS instance), choose **Add daemon via SSH**
+For an SSH-only VM (including a known AWS instance), choose **SSH → Add daemon via SSH**
 in the tray. The shared modal dispatcher tries **Native → Tkinter → NiceGUI**,
 respecting explicit preferences and advancing only after proven pre-display
 startup failure. It never switches toolkit after host input or cancellation.
@@ -475,9 +475,9 @@ user-identified hosts only: it does not enumerate AWS instances or use AWS APIs.
 #### Discover SSH aliases
 
 Discovery is **off by default**, independent of saved SSH connections. Choose
-**Discover SSH aliases...** directly in the workstation tray, next to **Add daemon
-via SSH**. This settings entry is always available—even with discovery disabled,
-zero matching aliases, or no enrolled daemons. **Add daemon via SSH** remains the
+**SSH → Discover SSH aliases...** in the workstation tray. This settings entry is
+always available—even with discovery disabled, zero matching aliases, or no enrolled
+daemons. **Add daemon via SSH** is beside it in the same submenu and remains the
 separate pairing action, not the discovery settings form.
 
 1. Check or uncheck **Enable SSH alias discovery**, reflecting the current saved
@@ -523,11 +523,11 @@ searched. Actual connections still delegate users, ports, keys, jump hosts and
 connection predicates to the system OpenSSH client.
 
 At tray startup and each background refresh, **SSH aliases available to pair (N)**
-appears as a pending-enrollment menu only when aliases are available, separate
+appears under the tray's **SSH** submenu only when aliases are available, separate
 from saved/connected targets. With zero aliases it disappears, not a greyed `(0)`
-entry; discovery warnings remain accessible as **SSH alias discovery notice**.
-The **Discover SSH aliases...** settings entry remains available in either case. Each
-alias offers **Review discovered daemon** and **Dismiss alias**. The loopback Web
+entry; discovery warnings remain accessible as **SSH alias discovery notice** there.
+The **SSH → Discover SSH aliases...** settings entry remains available in either case.
+Each alias offers **Review discovered daemon** and **Dismiss alias**. The loopback Web
 Console picker refreshes the equivalent list automatically. Changing either the
 SSH config or these discovery settings takes effect on the next refresh, without
 restarting the daemon or tray. Saving from the tray requests that refresh; scanning

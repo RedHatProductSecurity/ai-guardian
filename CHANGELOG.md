@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Runtime-organized tray sandbox actions (#2713):** Group OpenShell middleware,
+  sandbox creation, and stopped-sandbox actions separately from Docker/Podman actions;
+  runtime shortcuts preselect the matching option in the complete create form. Group
+  SSH pairing, alias discovery and discovered-alias actions under an SSH submenu.
 - **Command credential argument scanning (#2699):** Add a separate, default-on
   scanner that blocks literal credentials in supported curl, wget, and PowerShell
   web-request arguments before shell execution. Credential references stay advisory;

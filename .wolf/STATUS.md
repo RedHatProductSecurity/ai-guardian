@@ -7,6 +7,30 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-12 (UTC)
 
+## Issue #2713 runtime-organized tray sandbox actions — 2026-11-12
+
+- Grouped OpenShell middleware readiness, create, and stopped-sandbox actions in
+  an **OpenShell** submenu; grouped runtime-specific container actions under
+  **Containers (Docker/Podman)**. Grouped SSH enrollment, alias discovery settings,
+  and discovered aliases under **SSH**. Per-sandbox management and unrelated root
+  actions remain in place.
+- Runtime create shortcuts reuse the complete existing form and preselect
+  `openshell` or `container`; the runtime remains editable in the form.
+- Added layout, stopped-target placement, and runtime-default unit coverage; updated
+  tray test doubles and CHANGELOG.
+- **Validation:** 912 affected unit/UX tests pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint, package Mypy (336 source files), buglog JSON, and
+  `git diff --check` pass. The initial separator-sentinel test failure and the CI
+  regression below are recorded in `.wolf/buglog.json`.
+- **CI follow-up:** PR #2715 at `ff1f8fc9` failed the Tests matrix because
+  `test_discovered_alias_menu_actions_use_pystray_supported_arity` still searched
+  the root for a discovered-alias item moved under **SSH**. Updated the test to
+  locate the nested item; the complete affected suite passes locally. Other CI
+  workflows passed. The remote PR still needs this local fix published and a fresh
+  CI run.
+- All five acceptance criteria are met. GitHub issue #2713 and DAF notes are
+  updated; PR #2715 remains open. The follow-up test fix is local on branch `2713`.
+  **Next:** publish through external DAF completion and verify the new CI run.
 ## Issue #2699 implementation — 2026-11-12
 
 - Added a default-on, command-aware credential scanner for supported curl, wget,
