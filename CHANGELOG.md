@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distinguish `latest` development docs, and report inactive or misrouted release
   versions with actionable recovery guidance.
 ### Fixed
+- **Custom secret-rule configuration defaults (#2729):** Include the new
+  `secret_scanning.additional_patterns` setting and guidance in all built-in profiles.
+  Keep the IDE hook E2E fixture schema-valid so config warnings do not obscure JSON responses.
 - **Tray MCP proactive label during daemon pauses (#2719):** Keep the label aligned
   with the configured level and selected radio option, while separately identifying
   a temporary daemon pause.

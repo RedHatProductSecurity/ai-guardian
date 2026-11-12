@@ -7,6 +7,22 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-12 (UTC)
 
+## Issue #2729 CI regression — 2026-11-12
+
+- Fixed the malformed IDE E2E custom-secret fixture: the secret-scanning rule now
+  uses only supported fields, separate from the redaction rule. The old shape caused
+  schema warnings on hook stdout, obscuring JSON responses and making deny assertions
+  appear to allow blocked paths.
+- Added the `secret_scanning.additional_patterns` default and its generated-config
+  comment to all four built-in profiles. Added parity checks for every profile.
+- **Validation:** 51 profile-manager, 147 TOML-pattern scanner, 29 directory-rule,
+  35 hook-processing, and 72 redaction unit tests pass. The E2E fixture passes the
+  current JSON schema. Ruff, Black, Pylint, project Mypy, and diff checks pass.
+  The integration E2E matrix was not run locally per project guidance; CI confirmation
+  remains pending.
+- Changes are local on branch `2729`; no commit or push was made. **Next:** review and
+  complete through the external DAF workflow after CI confirms the E2E matrix.
+
 ## Issue #2721 custom secret detection rules — 2026-11-12
 
 - Formalized `secret_scanning.additional_patterns` for user-managed regex rules.
