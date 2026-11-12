@@ -48,8 +48,11 @@ def test_discovered_alias_menu_actions_use_pystray_supported_arity(remote, monke
     ):
         menu = tray._build_tray_menu()
 
+    ssh_menu = next(item for item in menu if item.text == "SSH")
     candidate = next(
-        item for item in menu if item.text == "SSH aliases available to pair (1)"
+        item
+        for item in ssh_menu.submenu.items
+        if item.text == "SSH aliases available to pair (1)"
     )
     alias_item = candidate.submenu.items[0]
     review = alias_item.submenu.items[0]

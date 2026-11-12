@@ -18,13 +18,19 @@ budget_tokens: 1000
   `openshell` or `container`; the runtime remains editable in the form.
 - Added layout, stopped-target placement, and runtime-default unit coverage; updated
   tray test doubles and CHANGELOG.
-- **Validation:** 875 affected unit/UX tests pass. Ruff, Black (Python 3.10 target),
+- **Validation:** 912 affected unit/UX tests pass. Ruff, Black (Python 3.10 target),
   error-level Pylint, package Mypy (336 source files), buglog JSON, and
-  `git diff --check` pass. Initial test failure was a separator-sentinel assumption
-  in the new test and is recorded in `.wolf/buglog.json`.
-- All five acceptance criteria are met. GitHub issue #2713 and DAF note updated;
-  changes remain uncommitted on branch `2713`. **Next:** user review and external
-  `daf complete`.
+  `git diff --check` pass. The initial separator-sentinel test failure and the CI
+  regression below are recorded in `.wolf/buglog.json`.
+- **CI follow-up:** PR #2715 at `ff1f8fc9` failed the Tests matrix because
+  `test_discovered_alias_menu_actions_use_pystray_supported_arity` still searched
+  the root for a discovered-alias item moved under **SSH**. Updated the test to
+  locate the nested item; the complete affected suite passes locally. Other CI
+  workflows passed. The remote PR still needs this local fix published and a fresh
+  CI run.
+- All five acceptance criteria are met. GitHub issue #2713 and DAF notes are
+  updated; PR #2715 remains open. The follow-up test fix is local on branch `2713`.
+  **Next:** publish through external DAF completion and verify the new CI run.
 
 ## Issue #2698 implementation — 2026-11-11
 
