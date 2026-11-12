@@ -22,6 +22,9 @@ on:
       - 'dev/*'
       - 'release-*'
 
+permissions:
+  contents: read
+
 jobs:
   version-check:
     name: Verify Scanner Versions Exist
