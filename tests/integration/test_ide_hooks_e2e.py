@@ -100,12 +100,14 @@ def _walk_commands(value: Any) -> Iterable[str]:
 
 def _write_guardian_config(config_dir: Path, blocked_dir: Path) -> None:
     """Write a scanner-only config with deterministic synthetic fixtures."""
-    custom_pattern = {
+    custom_secret_pattern = {
         "id": "synthetic-hook-output-marker",
         "match_type": "regex",
         "regex": POST_OUTPUT_PATTERN,
-        "pattern": POST_OUTPUT_PATTERN,
         "description": "synthetic hook-output marker",
+    }
+    custom_redaction_pattern = {
+        "pattern": POST_OUTPUT_PATTERN,
         "redaction_strategy": "full_redact",
         "strategy": "full_redact",
         "type": "synthetic hook-output marker",
@@ -117,14 +119,14 @@ def _write_guardian_config(config_dir: Path, blocked_dir: Path) -> None:
             "execution_strategy": "first-match",
             "min_entropy": 0.0,
             "stopwords": [],
-            "additional_patterns": [custom_pattern],
+            "additional_patterns": [custom_secret_pattern],
         },
         "secret_redaction": {
             "enabled": True,
             "action": "warn",
             "preserve_format": False,
             "log_redactions": False,
-            "additional_patterns": [custom_pattern],
+            "additional_patterns": [custom_redaction_pattern],
         },
         "directory_rules": {
             "action": "block",
