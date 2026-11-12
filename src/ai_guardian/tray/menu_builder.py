@@ -1134,8 +1134,8 @@ class TrayMenuBuilder:
             logger.exception("Unable to show sandbox progress dialog")
             return None
 
-    def _mk_sandbox_create_action(self):
-        """Create the main-menu callback for sandbox creation."""
+    def _mk_sandbox_create_action(self, runtime):
+        """Create a runtime-scoped callback for sandbox creation."""
 
         def action(icon, __):
             if not self._begin_sandbox_create():
@@ -1155,7 +1155,7 @@ class TrayMenuBuilder:
                     "runs in the background; failures show the captured runtime log.",
                     # The complete form is built in one place so its defaults stay
                     # aligned with the current environment at click time.
-                    self._sandbox_create_fields(),
+                    self._sandbox_create_fields(runtime=runtime),
                     complete,
                     name="sandbox-create-form",
                     icon=icon,
@@ -1168,8 +1168,8 @@ class TrayMenuBuilder:
 
         return action
 
-    def _sandbox_create_fields(self, values=None):
-        """Return the create form fields used by the main tray menu."""
+    def _sandbox_create_fields(self, values=None, *, runtime=None):
+        """Return fields for the complete runtime-preselected create form."""
         form_values = values if isinstance(values, dict) else {}
         config_source_value = form_values.get("config_source")
         if not config_source_value:
@@ -1178,8 +1178,10 @@ class TrayMenuBuilder:
             elif form_values.get("config_dir"):
                 config_source_value = "Host config directory"
         config_source = _normalize_sandbox_config_source(config_source_value)
-        runtime = form_values.get(
-            "runtime", os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
+        runtime = (
+            form_values.get("runtime")
+            or runtime
+            or os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
         )
         if runtime not in {"container", "openshell"}:
             runtime = "openshell"
@@ -2176,10 +2178,10 @@ class TrayMenuBuilder:
         return action
 
     def _build_openshell_middleware_menu_items(self):
-        """Build the standalone middleware readiness action."""
+        """Build the OpenShell middleware readiness action."""
         return [
             pystray.MenuItem(
-                "Check middleware readiness...",
+                "Check OpenShell middleware readiness...",
                 self._mk_openshell_middleware_readiness_action(),
             )
         ]
@@ -2634,31 +2636,33 @@ class TrayMenuBuilder:
             visible=visible,
         )
 
-    def _build_sandbox_create_menu_items(self):
-        """Build the always-available main-menu sandbox create action."""
+    def _build_sandbox_create_menu_items(self, runtime):
+        """Build a create shortcut with the selected runtime preselected."""
+        runtime_label = "OpenShell" if runtime == "openshell" else "container"
         return [
             pystray.MenuItem(
-                "Create sandbox...",
-                self._mk_sandbox_create_action(),
+                f"Create {runtime_label} sandbox...",
+                self._mk_sandbox_create_action(runtime),
                 enabled=lambda _item: not self._sandbox_create_is_in_progress(),
             )
         ]
 
-    def _stopped_container_targets(self):
-        """Return stopped container-engine sandboxes for the start menu."""
+    def _stopped_container_targets(self, runtime=None):
+        """Return stopped runtime sandboxes for the matching start menu."""
         return tuple(
             sorted(
                 (
                     target
                     for target in getattr(self._tray, "_stopped_container_targets", ())
                     if self._sandbox_runtime(target) in {"container", "openshell"}
+                    and (runtime is None or self._sandbox_runtime(target) == runtime)
                 ),
                 key=lambda target: target.name.casefold(),
             )
         )
 
     def _mk_sandbox_start_container_action(self, target):
-        """Create the main-menu action for one stopped container."""
+        """Create the main-menu action for one stopped sandbox."""
 
         def action(icon, __):
             screen_bounds = self._capture_sandbox_screen_bounds(icon)
@@ -2671,12 +2675,13 @@ class TrayMenuBuilder:
 
         return action
 
-    def _build_sandbox_start_menu_items(self):
-        """Build the main-menu submenu for stopped container-engine sandboxes."""
-        targets = self._stopped_container_targets()
+    def _build_sandbox_start_menu_items(self, runtime):
+        """Build the stopped-sandbox submenu for one runtime."""
+        runtime_label = "OpenShell" if runtime == "openshell" else "container"
+        targets = self._stopped_container_targets(runtime)
         items = [
             pystray.MenuItem(
-                f"{target.name} ({self._sandbox_runtime(target)})",
+                target.name,
                 self._mk_sandbox_start_container_action(target),
             )
             for target in targets
@@ -2684,7 +2689,7 @@ class TrayMenuBuilder:
         if not items:
             items = [
                 pystray.MenuItem(
-                    "No stopped containers",
+                    f"No stopped {runtime_label} sandboxes",
                     None,
                     enabled=False,
                 )
@@ -2692,10 +2697,30 @@ class TrayMenuBuilder:
 
         return [
             pystray.MenuItem(
-                "Start stopped sandbox...",
+                f"Start stopped {runtime_label} sandbox...",
                 pystray.Menu(*items),
-                visible=lambda _item: bool(self._stopped_container_targets()),
+                visible=lambda _item, runtime=runtime: bool(
+                    self._stopped_container_targets(runtime)
+                ),
             )
+        ]
+
+    def _build_sandbox_runtime_menu_items(self):
+        """Group runtime-specific sandbox actions beneath their runtime labels."""
+        openshell_items = [
+            *self._build_openshell_middleware_menu_items(),
+            *self._build_sandbox_create_menu_items("openshell"),
+            *self._build_sandbox_start_menu_items("openshell"),
+        ]
+        container_items = [
+            *self._build_sandbox_create_menu_items("container"),
+            *self._build_sandbox_start_menu_items("container"),
+        ]
+        return [
+            pystray.MenuItem("OpenShell", pystray.Menu(*openshell_items)),
+            pystray.MenuItem(
+                "Containers (Docker/Podman)", pystray.Menu(*container_items)
+            ),
         ]
 
     def _build_single_daemon_menu_items(self):

@@ -165,9 +165,7 @@ def test_tray_support_menu_has_one_action_per_daemon_target(monkeypatch, runtime
 
     for owner, method in (
         (tray, "_build_ssh_menu_items"),
-        (tray._menu, "_build_openshell_middleware_menu_items"),
-        (tray._menu, "_build_sandbox_create_menu_items"),
-        (tray._menu, "_build_sandbox_start_menu_items"),
+        (tray._menu, "_build_sandbox_runtime_menu_items"),
         (tray._menu, "_build_ide_setup_menu_items"),
         (tray._plugins, "_build_global_plugin_items"),
     ):

@@ -405,7 +405,7 @@ an existing process. Start the workstation tray in its own desktop terminal:
 
 ### Choose a pairing entry point
 
-- **Direct tray:** choose **Add daemon via SSH** and enter `guardian-vm`.
+- **Direct tray:** choose **SSH → Add daemon via SSH** and enter `guardian-vm`.
   It uses the shared **native-first pairing flow** (Native → Tkinter → NiceGUI
   where eligible), not necessarily the Web Console. No discovery opt-in is needed.
 - **Browser alternative:** in a separate **workstation terminal, not through SSH**,
@@ -446,10 +446,10 @@ repeat testing, add `guardian-vm-test` as a second name in the same declaration
 verify `ssh -o BatchMode=yes guardian-vm-test true`. Manual **Add daemon via SSH**
 remains available for deliberate pairing of a dismissed alias.
 
-**Released UI:** AI Guardian 1.21.0 includes **Discover SSH aliases...** directly
-in the tray, next to manual pairing; its enable/Continue and prefix/Save steps edit
-the same settings as the workstation Console. Restart an already-running tray
-after upgrading before checking for this entry.
+**Released UI:** AI Guardian 1.21.0 includes **Discover SSH aliases...** under the
+tray's **SSH** submenu, alongside manual pairing; its enable/Continue and prefix/Save
+steps edit the same settings as the workstation Console. Restart an already-running
+tray after upgrading before checking for this entry.
 
 ### Review, explicitly trust, and connect
 

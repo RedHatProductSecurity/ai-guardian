@@ -2,9 +2,9 @@
 
 Manual qualification (requires an explicitly authorized disposable POSIX VM):
 1. Configure a loopback HTTPS daemon and verify its SSH host key independently.
-2. Select Add daemon via SSH in the tray; enter the existing SSH alias. Use the
-   shared dispatcher, not the Web Console. Linux selects a gateable form provider
-   before host entry; macOS/Windows may use their capable native forms.
+2. Select **SSH → Add daemon via SSH** in the tray; enter the existing SSH alias.
+   Use the shared dispatcher, not the Web Console. Linux selects a gateable form
+   provider before host entry; macOS/Windows may use their capable native forms.
 3. Check the destination, SAN identity and fingerprint; verify the trust checkbox
    is visible and initially unchecked, and Continue is disabled until checked.
    Cancel must save nothing.
@@ -25,10 +25,10 @@ Manual qualification (requires an explicitly authorized disposable POSIX VM):
 8. Change the daemon certificate: saved trust must not change automatically.
 9. Remove the saved target; only owned tunnels/credentials disappear, not the VM
     daemon. Repeat native Windows-client/DPAPI and macOS UI qualification separately.
-10. With discovery off and no enrolled daemons, choose Discover SSH aliases... next
-   to Add daemon via SSH in the tray. Check the current enable value, Continue,
-   edit the optional literal prefix, then Save. Cancel/Close at either step must
-   save nothing. Try an invalid prefix and correct it without changing toolkit.
+10. With discovery off and no enrolled daemons, choose **SSH → Discover SSH
+    aliases...** in the tray. Check the current enable value, Continue, edit the
+    optional literal prefix, then Save. Cancel/Close at either step must save
+    nothing. Try an invalid prefix and correct it without changing toolkit.
    A custom guardian- prefix or an empty prefix requires no alias renaming. The
    next refresh, without a restart, shows SSH aliases available to pair as a count,
    not targets. Restart and reopen: values persist. The local Web Console picker
@@ -68,8 +68,8 @@ Manual qualification (requires an explicitly authorized disposable POSIX VM):
     workstation home. Repeat discovery and reset to empty; explicitly saved VM
     directories survive, and their labels do not use workstation-home shortening.
 17. Enable alias discovery with zero unpaired aliases. No greyed `(0)` entry is
-    shown; Discover SSH aliases... remains. A discovery warning remains accessible
-    as SSH alias discovery notice without inventing a pairing candidate.
+    shown; **SSH → Discover SSH aliases...** remains available. A discovery warning
+    remains accessible as SSH alias discovery notice without inventing a candidate.
 
 Automated tests use synthetic certificates, explicit storage and mock SSH only;
 they never load the user's configuration or contact a live SSH destination.

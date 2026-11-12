@@ -599,18 +599,25 @@ class DaemonTray:
 
     def _build_tray_menu(self):
         """Build the native tray menu for the currently discovered targets."""
+        ssh_menu_items = list(self._build_ssh_menu_items())
+        if ssh_menu_items:
+            ssh_menu_items.append(pystray.Menu.SEPARATOR)
+        ssh_menu_items.extend(
+            [
+                pystray.MenuItem("Add daemon via SSH", self._on_add_ssh_daemon),
+                pystray.MenuItem(
+                    "Discover SSH aliases...", self._on_discover_ssh_aliases
+                ),
+            ]
+        )
         menu = pystray.Menu(
             *self._menu._build_single_daemon_menu_items(),
             *self._plugins._build_single_daemon_plugin_items(),
             *self._menu._build_single_daemon_daemon_items(),
             *self._menu._build_multi_daemon_menu_items(),
-            *self._build_ssh_menu_items(),
             pystray.Menu.SEPARATOR,
-            *self._menu._build_openshell_middleware_menu_items(),
-            *self._menu._build_sandbox_create_menu_items(),
-            *self._menu._build_sandbox_start_menu_items(),
-            pystray.MenuItem("Add daemon via SSH", self._on_add_ssh_daemon),
-            pystray.MenuItem("Discover SSH aliases...", self._on_discover_ssh_aliases),
+            *self._menu._build_sandbox_runtime_menu_items(),
+            pystray.MenuItem("SSH", pystray.Menu(*ssh_menu_items)),
             pystray.Menu.SEPARATOR,
             *self._plugins._build_global_plugin_items(),
             *self._menu._build_ide_setup_menu_items(),
