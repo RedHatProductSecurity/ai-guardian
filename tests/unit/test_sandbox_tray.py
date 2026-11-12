@@ -960,17 +960,80 @@ class TestSandboxTrayMenu:
         )
         assert start_item.kwargs["visible"](None) is False
 
-    def test_create_action_is_in_the_main_menu(self):
+    def test_runtime_menu_groups_sandbox_actions(self):
         tray = _make_tray([])
+        tray._stopped_container_targets = [
+            DaemonTarget(
+                name="docker-stopped",
+                runtime="container",
+                container_engine="docker",
+                status="stopped",
+            ),
+            DaemonTarget(
+                name="openshell-stopped",
+                runtime="container",
+                runtime_type="openshell",
+                status="stopped",
+            ),
+            DaemonTarget(
+                name="podman-stopped",
+                runtime="container",
+                container_engine="podman",
+                status="stopped",
+            ),
+        ]
         with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
-            items = tray._menu._build_sandbox_create_menu_items()
+            items = tray._menu._build_sandbox_runtime_menu_items()
 
-        assert [item.label for item in items] == ["Create sandbox..."]
-        assert items[0].kwargs["enabled"](None) is True
+        assert [item.label for item in items] == [
+            "OpenShell",
+            "Containers (Docker/Podman)",
+        ]
+        openshell_labels = [item.label for item in items[0].submenu.items]
+        container_labels = [item.label for item in items[1].submenu.items]
+        assert "Check OpenShell middleware readiness..." in openshell_labels
+        assert "Create OpenShell sandbox..." in openshell_labels
+        assert "Create container sandbox..." in container_labels
+        assert "Check OpenShell middleware readiness..." not in container_labels
+        openshell_start = next(
+            item for item in items[0].submenu.items if item.label.startswith("Start ")
+        )
+        container_start = next(
+            item for item in items[1].submenu.items if item.label.startswith("Start ")
+        )
+        assert openshell_start.kwargs["visible"](None) is True
+        assert container_start.kwargs["visible"](None) is True
+        assert [item.label for item in openshell_start.submenu.items] == [
+            "openshell-stopped"
+        ]
+        assert [item.label for item in container_start.submenu.items] == [
+            "docker-stopped",
+            "podman-stopped",
+        ]
+
+    @pytest.mark.parametrize("runtime", ["openshell", "container"])
+    def test_runtime_create_shortcut_preselects_runtime_in_full_form(self, runtime):
+        tray = _make_tray([])
+        action = tray._menu._mk_sandbox_create_action(runtime)
+
+        with mock.patch.object(tray._menu, "_start_sandbox_form") as start_form:
+            action(None, None)
+            fields = start_form.call_args.args[2]
+            tray._menu._end_sandbox_create()
+
+        runtime_field = next(field for field in fields if field["name"] == "runtime")
+        assert runtime_field["default"] == runtime
+        assert runtime_field["choices"] == ("container", "openshell")
+        assert {field["name"] for field in fields} >= {
+            "runtime",
+            "cli",
+            "repo",
+            "config_source",
+        }
 
     def test_create_action_ignores_repeated_click_while_form_is_open(self):
         tray = _make_tray([])
-        action = tray._menu._mk_sandbox_create_action()
+        action = tray._menu._mk_sandbox_create_action("openshell")
 
         with mock.patch.object(tray._menu, "_start_sandbox_form") as start_form:
             action(None, None)
@@ -1116,7 +1179,7 @@ class TestSandboxTrayMenu:
         assert snapshot.views[0].find("dir", "/single-project-paused").paused is True
         assert sum(row["level"] == 0 for row in snapshot.payload()["rows"]) == 1
 
-    def test_start_menu_lists_stopped_container_and_openshell_sandboxes(self):
+    def test_start_menus_group_stopped_sandboxes_by_runtime(self):
         stopped_container = DaemonTarget(
             name="stopped-container",
             runtime="container",
@@ -1139,17 +1202,19 @@ class TestSandboxTrayMenu:
             ),
             mock.patch.object(tray._menu, "_start_sandbox_command") as start,
         ):
-            items = tray._menu._build_sandbox_start_menu_items()
-            start_menu = items[0]
-            container_child = start_menu.action.items[0]
-            openshell_child = start_menu.action.items[1]
+            container_menu = tray._menu._build_sandbox_start_menu_items("container")[0]
+            openshell_menu = tray._menu._build_sandbox_start_menu_items("openshell")[0]
+            container_child = container_menu.action.items[0]
+            openshell_child = openshell_menu.action.items[0]
             container_child.action(None, None)
             openshell_child.action(None, None)
 
-        assert start_menu.label == "Start stopped sandbox..."
-        assert start_menu.kwargs["visible"](None) is True
-        assert container_child.label == "stopped-container (container)"
-        assert openshell_child.label == "stopped-openshell (openshell)"
+        assert container_menu.label == "Start stopped container sandbox..."
+        assert openshell_menu.label == "Start stopped OpenShell sandbox..."
+        assert container_menu.kwargs["visible"](None) is True
+        assert openshell_menu.kwargs["visible"](None) is True
+        assert container_child.label == "stopped-container"
+        assert openshell_child.label == "stopped-openshell"
         assert start.call_args_list == [
             mock.call(stopped_container, "start", ["stopped-container"]),
             mock.call(stopped_openshell, "start", ["stopped-openshell"]),
@@ -1240,7 +1305,7 @@ class TestSandboxTrayMenu:
             ),
             mock.patch.object(tray._menu, "_start_sandbox_command") as start,
         ):
-            item = tray._menu._build_sandbox_start_menu_items()[0]
+            item = tray._menu._build_sandbox_start_menu_items("container")[0]
             item.action.items[0].action(None, None)
 
         start.assert_called_once_with(
@@ -2146,7 +2211,9 @@ class TestSandboxTrayMenu:
         with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
             items = tray._menu._build_openshell_middleware_menu_items()
 
-        assert [item.label for item in items] == ["Check middleware readiness..."]
+        assert [item.label for item in items] == [
+            "Check OpenShell middleware readiness..."
+        ]
         assert callable(items[0].action)
 
     def test_multi_daemon_policy_action_is_scoped_to_the_selected_openshell_target(
@@ -2598,12 +2665,12 @@ class TestSandboxTrayMenu:
         )
         launch.assert_not_called()
 
-    def test_main_tray_menu_includes_create_item(self):
+    def test_main_tray_menu_keeps_runtime_actions_nested(self):
         tray = _make_tray([])
-        sentinel = object()
         with (
             mock.patch("ai_guardian.tray.app.pystray", FAKE_PYSTRAY, create=True),
             mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch.object(tray, "_build_ssh_menu_items", return_value=[]),
             mock.patch.object(
                 tray._menu, "_build_single_daemon_menu_items", return_value=[]
             ),
@@ -2622,15 +2689,42 @@ class TestSandboxTrayMenu:
             mock.patch.object(
                 tray._menu, "_build_ide_setup_menu_items", return_value=[]
             ),
-            mock.patch.object(
-                tray._menu,
-                "_build_sandbox_create_menu_items",
-                return_value=[sentinel],
-            ),
         ):
             menu = tray._build_tray_menu()
 
-        assert sentinel in menu.items
+        root_labels = [
+            item.label for item in menu.items if isinstance(item, FakeMenuItem)
+        ]
+        assert "OpenShell" in root_labels
+        assert "Containers (Docker/Podman)" in root_labels
+        assert "Check OpenShell middleware readiness..." not in root_labels
+        assert "Create OpenShell sandbox..." not in root_labels
+        assert "Create container sandbox..." not in root_labels
+        assert "Add daemon via SSH" in root_labels
+        assert "Restart" in root_labels
+        assert "Quit" in root_labels
+        assert "Contact supports — local tray host" in root_labels
+
+        openshell_menu = next(
+            item
+            for item in menu.items
+            if isinstance(item, FakeMenuItem) and item.label == "OpenShell"
+        )
+        container_menu = next(
+            item
+            for item in menu.items
+            if isinstance(item, FakeMenuItem)
+            and item.label == "Containers (Docker/Podman)"
+        )
+        assert "Check OpenShell middleware readiness..." in [
+            item.label for item in openshell_menu.submenu.items
+        ]
+        assert "Create OpenShell sandbox..." in [
+            item.label for item in openshell_menu.submenu.items
+        ]
+        assert "Create container sandbox..." in [
+            item.label for item in container_menu.submenu.items
+        ]
 
 
 class TestSandboxDialogFallback:

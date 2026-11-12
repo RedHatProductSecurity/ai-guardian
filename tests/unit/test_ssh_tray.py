@@ -260,9 +260,7 @@ def test_discovery_settings_entry_is_global_and_building_it_never_reads_config(
         "_build_single_daemon_menu_items",
         "_build_single_daemon_daemon_items",
         "_build_multi_daemon_menu_items",
-        "_build_openshell_middleware_menu_items",
-        "_build_sandbox_create_menu_items",
-        "_build_sandbox_start_menu_items",
+        "_build_sandbox_runtime_menu_items",
         "_build_ide_setup_menu_items",
     ):
         monkeypatch.setattr(tray._menu, method, lambda: [])

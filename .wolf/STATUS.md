@@ -5,7 +5,25 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-11 (UTC)
+> Last updated: 2026-11-12 (UTC)
+
+## Issue #2713 runtime-organized tray sandbox actions — 2026-11-12
+
+- Grouped OpenShell middleware readiness, create, and stopped-sandbox actions in
+  an **OpenShell** submenu; grouped runtime-specific container actions under
+  **Containers (Docker/Podman)**. Per-sandbox management and unrelated root actions
+  remain in place.
+- Runtime create shortcuts reuse the complete existing form and preselect
+  `openshell` or `container`; the runtime remains editable in the form.
+- Added layout, stopped-target placement, and runtime-default unit coverage; updated
+  tray test doubles and CHANGELOG.
+- **Validation:** 801 affected unit/UX tests pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint, package Mypy (336 source files), buglog JSON, and
+  `git diff --check` pass. Initial test failure was a separator-sentinel assumption
+  in the new test and is recorded in `.wolf/buglog.json`.
+- All five acceptance criteria are met. GitHub issue #2713 and DAF note updated;
+  changes remain uncommitted on branch `2713`. **Next:** user review and external
+  `daf complete`.
 
 ## Issue #2698 implementation — 2026-11-11
 

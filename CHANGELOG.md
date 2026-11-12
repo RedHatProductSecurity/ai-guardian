@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Runtime-organized tray sandbox actions (#2713):** Group OpenShell middleware,
+  sandbox creation, and stopped-sandbox actions separately from Docker/Podman actions;
+  runtime shortcuts preselect the matching option in the complete create form.
 - **GitHub App stateless token redaction coverage (#2698):** Exercise an exact
   520-character synthetic `ghs_` JWT-shaped token and verify its full span is
   detected and redacted while retaining legacy-token coverage.
