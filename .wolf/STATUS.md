@@ -11,13 +11,14 @@ budget_tokens: 1000
 
 - Grouped OpenShell middleware readiness, create, and stopped-sandbox actions in
   an **OpenShell** submenu; grouped runtime-specific container actions under
-  **Containers (Docker/Podman)**. Per-sandbox management and unrelated root actions
-  remain in place.
+  **Containers (Docker/Podman)**. Grouped SSH enrollment, alias discovery settings,
+  and discovered aliases under **SSH**. Per-sandbox management and unrelated root
+  actions remain in place.
 - Runtime create shortcuts reuse the complete existing form and preselect
   `openshell` or `container`; the runtime remains editable in the form.
 - Added layout, stopped-target placement, and runtime-default unit coverage; updated
   tray test doubles and CHANGELOG.
-- **Validation:** 801 affected unit/UX tests pass. Ruff, Black (Python 3.10 target),
+- **Validation:** 875 affected unit/UX tests pass. Ruff, Black (Python 3.10 target),
   error-level Pylint, package Mypy (336 source files), buglog JSON, and
   `git diff --check` pass. Initial test failure was a separator-sentinel assumption
   in the new test and is recorded in `.wolf/buglog.json`.

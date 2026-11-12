@@ -112,7 +112,7 @@ aliases at tray startup/refresh and in the loopback Web Console picker. The opti
 without renaming. Save these settings in the **workstation Console home `/` → SSH
 daemon connections** card (from a dashboard, click the **AI Guardian** header),
 not a remote daemon/project settings page. The development tray also offers
-**Discover SSH aliases...**; see the VM guide's release gate before assuming
+**SSH → Discover SSH aliases...**; see the VM guide's release gate before assuming
 availability in a published build. Discovery never probes hosts or grants
 trust; review and explicit identity confirmation remain mandatory. See
 [SSH config locations, bounded Includes, Match behavior and persistent dismissal](MULTI_DAEMON_TRAY.md#discover-ssh-aliases).

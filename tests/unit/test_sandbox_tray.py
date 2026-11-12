@@ -2700,7 +2700,7 @@ class TestSandboxTrayMenu:
         assert "Check OpenShell middleware readiness..." not in root_labels
         assert "Create OpenShell sandbox..." not in root_labels
         assert "Create container sandbox..." not in root_labels
-        assert "Add daemon via SSH" in root_labels
+        assert "SSH" in root_labels
         assert "Restart" in root_labels
         assert "Quit" in root_labels
         assert "Contact supports — local tray host" in root_labels
@@ -2724,6 +2724,15 @@ class TestSandboxTrayMenu:
         ]
         assert "Create container sandbox..." in [
             item.label for item in container_menu.submenu.items
+        ]
+        ssh_menu = next(
+            item
+            for item in menu.items
+            if isinstance(item, FakeMenuItem) and item.label == "SSH"
+        )
+        assert [item.label for item in ssh_menu.submenu.items] == [
+            "Add daemon via SSH",
+            "Discover SSH aliases...",
         ]
 
 

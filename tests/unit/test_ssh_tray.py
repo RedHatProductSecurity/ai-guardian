@@ -271,18 +271,25 @@ def test_discovery_settings_entry_is_global_and_building_it_never_reads_config(
         mock.patch("ai_guardian.daemon.ssh_config.scan_aliases") as scan,
     ):
         entries = tray._build_tray_menu()
+    ssh_menu = next(entry for entry in entries if getattr(entry, "text", "") == "SSH")
     settings = [
         entry
-        for entry in entries
+        for entry in ssh_menu.action
         if getattr(entry, "text", "") == "Discover SSH aliases..."
     ]
     assert len(settings) == 1
     assert settings[0].enabled is True
     assert settings[0].action == tray._on_discover_ssh_aliases
-    labels = [getattr(entry, "text", "") for entry in entries]
+    labels = [getattr(entry, "text", "") for entry in ssh_menu.action]
     assert (
         labels.index("Discover SSH aliases...")
         == labels.index("Add daemon via SSH") + 1
+    )
+    if enabled and aliases:
+        assert f"SSH aliases available to pair ({len(aliases)})" in labels
+    assert not any(
+        getattr(entry, "text", "") in {"Add daemon via SSH", "Discover SSH aliases..."}
+        for entry in entries
     )
     read.assert_not_called()
     scan.assert_not_called()
