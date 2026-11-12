@@ -193,7 +193,7 @@ class TestDefaultRegistry:
 
     def test_has_all_registered_scanners(self):
         reg = get_default_registry()
-        assert len(reg) == len(ScannerName) == 14
+        assert len(reg) == len(ScannerName) == 15
         for name in ScannerName:
             assert reg.get(name) is not None, f"Missing scanner: {name}"
 
@@ -302,6 +302,7 @@ class TestDefaultRegistry:
         names = [e.name for e in pipeline]
         expected_order = [
             ScannerName.IMAGE,
+            ScannerName.COMMAND_CREDENTIAL_SCANNING,
             ScannerName.BASH_EXFIL,
             ScannerName.EXFIL_DETECTION,
             ScannerName.CODE_SECURITY,

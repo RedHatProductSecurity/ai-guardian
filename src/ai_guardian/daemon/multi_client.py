@@ -746,6 +746,16 @@ class MultiDaemonClient:
         scanner_actions["password_likelihood"] = (
             heuristic.get("action", "ask") if isinstance(heuristic, dict) else "ask"
         )
+        command_credentials = cfg.get("command_credential_scanning")
+        scanner_actions["command_credential_scanning"] = (
+            command_credentials.get("action", "block")
+            if isinstance(command_credentials, dict)
+            else "block"
+        )
+        features["command_credential_scanning"] = not (
+            isinstance(command_credentials, dict)
+            and command_credentials.get("enabled") is False
+        )
         if isinstance(mcp_cfg, dict):
             features["proactive_level"] = mcp_cfg.get("proactive_level", "low")
         else:

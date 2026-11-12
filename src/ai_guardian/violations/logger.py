@@ -52,6 +52,8 @@ def _safe_violation_label(violation_type: str) -> str:
         return "secret_redaction"
     if violation_type == "suspected_password":
         return "suspected_password"
+    if violation_type == "command_credential_detected":
+        return "command_credential_detected"
     if violation_type == "directory_blocking":
         return "directory_blocking"
     if violation_type == "prompt_injection":
@@ -307,9 +309,14 @@ class ViolationLogger:
 
                 ViolationCounter().increment(violation_type)
             except Exception as counter_err:
-                if violation_type == "suspected_password":
+                if violation_type in {
+                    "suspected_password",
+                    "command_credential_detected",
+                }:
                     logger.warning(
                         "Failed to increment suspected-password counter; details withheld"
+                        if violation_type == "suspected_password"
+                        else "Failed to increment command-credential counter; details withheld"
                     )
                 else:
                     logger.warning(
@@ -318,9 +325,14 @@ class ViolationLogger:
 
         except Exception as e:
             # Fail-open: don't block operations if logging fails
-            if violation_type == "suspected_password":
+            if violation_type in {
+                "suspected_password",
+                "command_credential_detected",
+            }:
                 logger.critical(
                     "Failed to persist suspected-password violation; details withheld"
+                    if violation_type == "suspected_password"
+                    else "Failed to persist command-credential violation; details withheld"
                 )
             else:
                 logger.warning(f"Failed to log violation: {e}")

@@ -2577,6 +2577,46 @@ def _process_hook_data(hook_data, daemon_state=None):
                         violation_type=ViolationType.HEURISTIC_CANDIDATE,
                         security_message=security_message,
                     )
+            if tool_name in {"Bash", "Shell"} and hook_event in (
+                HookEvent.PRE_TOOL_USE,
+                HookEvent.PERMISSION_REQUEST,
+            ):
+                from ai_guardian.scanners.command_credentials import (
+                    run_command_credential_scan,
+                )
+
+                shell_command = (
+                    tool_input.get("command", "")
+                    if isinstance(tool_input, dict)
+                    else ""
+                )
+                command_credential_result = run_command_credential_scan(shell_command)
+                if command_credential_result is not None:
+                    command_credential_decision = apply_post_scan_pipeline(
+                        _registry.get(ScannerName.COMMAND_CREDENTIAL_SCANNING),
+                        command_credential_result,
+                        _post_scan_ctx,
+                        severity_override=command_credential_result.severity,
+                    )
+                    warning_messages.extend(command_credential_decision.warnings)
+                    if command_credential_decision.warnings:
+                        warn_violation_types.append(
+                            ViolationType.COMMAND_CREDENTIAL_DETECTED
+                        )
+                    if command_credential_decision.should_block:
+                        return _format_response(
+                            adapter,
+                            has_secrets=True,
+                            hook_event=hook_event,
+                            error_message=command_credential_decision.error_message,
+                            warning_message=(
+                                "\n\n".join(warning_messages)
+                                if warning_messages
+                                else None
+                            ),
+                            violation_type=ViolationType.COMMAND_CREDENTIAL_DETECTED,
+                            security_message=security_message,
+                        )
             # Bash command exfiltration detection (Issue #1100)
             if (
                 hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.PERMISSION_REQUEST)

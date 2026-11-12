@@ -240,6 +240,7 @@ Agents with full hook support not shown individually (Windsurf, Gemini CLI, Clin
 |---|---|---|---|---|---|---|
 | secret_detected | Pre+Post | Enforce | Enforce | Enforce | Enforce | Advisory |
 | suspected_password (opt-in experimental) | Prompt/Pre/Post where exposed | Unqualified* | Unqualified* | Unqualified* | No post output; unqualified* | Advisory only |
+| command_credential_detected (supported CLI subset) | Pre (Bash/Shell) or MCP `check_command` | Enforce | Enforce | Enforce | Enforce | Advisory |
 | secret_redaction | Post | Enforce | Enforce | Enforce | No (no tool output) | No |
 | pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
 | directory_blocking | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |

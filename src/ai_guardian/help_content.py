@@ -23,6 +23,29 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
         "config_summary": "Global-only password_likelihood.enabled (default false) and action (ask by default, warn or block). Ambiguous findings remain advisory; SDK checks deny unresolved Ask without opening a dialog. Host pre-model enforcement needs separate qualification.",
         "doc_url": f"{_GITHUB_DOCS}/security/PASSWORD_LIKELIHOOD.md",
     },
+    "command_credential_scanning": {
+        "title": "Command Credential Scanning",
+        "summary": (
+            "Default-on, command-aware detection for inline credentials in supported "
+            "curl, wget, and PowerShell web-request arguments. The default action is block."
+        ),
+        "catches": [
+            "Literal credentials in supported user/password options, authorization headers, and URL userinfo",
+            "Credential file/store references and interactive authentication as distinct advisory findings",
+            "Unsupported or incomplete parses as unqualified analysis, not as clean commands",
+        ],
+        "does_not_catch": [
+            "Every CLI, alias, wrapper, shell construct, or authentication scheme",
+            "The value stored behind environment variables or credential files",
+            "Command text already seen by the AI model before a pre-tool hook runs",
+        ],
+        "config_summary": (
+            "command_credential_scanning.enabled (default true) and action "
+            "(default block; ask, warn, and log-only are available). Credential "
+            "references and interactive/no-value authentication are advisory."
+        ),
+        "doc_url": f"{_GITHUB_DOCS}/security/COMMAND_CREDENTIAL_SCANNING.md",
+    },
     "secret_scanning": {
         "title": "Secret Scanning",
         "summary": (

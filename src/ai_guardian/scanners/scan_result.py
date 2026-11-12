@@ -421,6 +421,108 @@ class ScanResult:
             blocked["findings"] = self.findings or []
             blocked["total_findings"] = self.total_findings
             return blocked
+        if self.violation_type == "command_credential_detected":
+            # Command arguments are private input. Persist only fixed labels and
+            # bounded integer locations, never values, command text, or snippets.
+            allowed_classes = {
+                "inline_literal",
+                "credential_reference",
+                "interactive_no_value_authentication",
+                "unsupported_or_incomplete_parse",
+            }
+            allowed_families = {"curl", "wget", "powershell-web", "unknown"}
+            allowed_options = {
+                "--user",
+                "--proxy-user",
+                "--oauth2-bearer",
+                "--header",
+                "--proxy-header",
+                "--netrc-file",
+                "--config",
+                "--netrc",
+                "--netrc-optional",
+                "--password",
+                "--http-user",
+                "--http-password",
+                "--ftp-user",
+                "--ftp-password",
+                "--password-file",
+                "--ask-password",
+                "--use-askpass",
+                "-u",
+                "-U",
+                "-H",
+                "-K",
+                "-Headers",
+                "-Token",
+                "-BearerToken",
+                "-Credential",
+                "url-userinfo",
+                "ConvertTo-SecureString -AsPlainText",
+                "unsupported-wrapper",
+                "unsupported-syntax",
+                "command-size-limit",
+                "parser-failure",
+            }
+            safe_findings = []
+            safe_classes: set[str] = set()
+            for finding in self.findings or []:
+                if not isinstance(finding, dict):
+                    continue
+                command_index = finding.get("command_index")
+                argument_index = finding.get("argument_index")
+                finding_class = finding.get("finding_class")
+                if type(command_index) is not int or type(argument_index) is not int:
+                    continue
+                if command_index < 0 or argument_index < 0:
+                    continue
+                if (
+                    not isinstance(finding_class, str)
+                    or finding_class not in allowed_classes
+                ):
+                    continue
+                safe_classes.add(finding_class)
+                family = finding.get("command_family")
+                option = finding.get("option")
+                safe_findings.append(
+                    {
+                        "command_index": command_index,
+                        "argument_index": argument_index,
+                        "command_family": (
+                            family
+                            if isinstance(family, str) and family in allowed_families
+                            else "unknown"
+                        ),
+                        "option": (
+                            option
+                            if isinstance(option, str) and option in allowed_options
+                            else "unsupported-option"
+                        ),
+                        "finding_class": finding_class,
+                    }
+                )
+            classes = sorted(safe_classes)
+            reason = (
+                "Inline credential argument detected; value withheld."
+                if "inline_literal" in classes
+                else (
+                    "Command credential analysis incomplete; no credential confirmed."
+                    if "unsupported_or_incomplete_parse" in classes
+                    else "Credential reference or interactive authentication; no literal value found."
+                )
+            )
+            blocked["reason"] = reason
+            blocked["action"] = (
+                self.extra.get("action")
+                if isinstance(self.extra.get("action"), str)
+                and self.extra.get("action")
+                in {"block", "ask", "warn", "log-only", "allow"}
+                else "block" if self.should_block else "warn"
+            )
+            blocked["finding_classes"] = classes
+            blocked["findings"] = safe_findings
+            blocked["total_findings"] = len(safe_findings)
+            return blocked
         if self.matched_text:
             from ai_guardian.violations.redact import (
                 REDACT_VIOLATION_TYPES,

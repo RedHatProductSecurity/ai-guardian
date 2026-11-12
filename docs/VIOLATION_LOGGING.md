@@ -27,6 +27,7 @@ Every time AI Guardian blocks something, it creates a log entry:
 | **Tool Permission** | Blocked command execution | Command, tool name, policy rule |
 | **Directory Blocking** | Restricted path access | File path, requested operation |
 | **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, and timestamp only; no per-finding details |
+| **Command Credential** | Literal credential in a supported command argument, or incomplete command analysis | Fixed option/classification labels and argument positions only; no argument values or full command |
 | **Secret Redaction** | Secret masked in output | Secret type, masking strategy |
 | **Prompt Injection** | Malicious prompt detected | Pattern matched, confidence score |
 | **SSRF Protection** | Dangerous network request | URL, reason (private IP, metadata, etc.) |
@@ -373,7 +374,8 @@ Notification options are separate from that history configuration:
 The supported `<type>` keys are `tool_permission`, `directory_blocking`,
 `secret_detected`, `image_secret_detected`, `pii_detected`, `image_pii_detected`,
 `secret_in_transcript`, `pii_in_transcript`, `suspected_password`,
-`secret_redaction`, `prompt_injection`, `jailbreak_detected`, `ssrf_blocked`,
+`command_credential_detected`, `secret_redaction`, `prompt_injection`,
+`jailbreak_detected`, `ssrf_blocked`,
 `config_file_exfil`, `prompt_injection_in_transcript`, `annotation_suppressed`,
 `middleware_paused`, `bash_exfil`, `scan_finding`, `canary_detection`,
 `context_poisoning`, `supply_chain`, `code_security`, `offensive_language`,

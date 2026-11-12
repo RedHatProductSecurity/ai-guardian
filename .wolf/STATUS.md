@@ -5,7 +5,42 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-11 (UTC)
+> Last updated: 2026-11-12 (UTC)
+
+## Issue #2699 implementation — 2026-11-12
+
+- Added a default-on, command-aware credential scanner for supported curl, wget,
+  and PowerShell web-request arguments, separate from password-likelihood
+  heuristics. Inline literals follow the configured block/Ask/warn/log-only
+  policy; references remain advisory, and incomplete parsing follows policy.
+  The policy is global-only. Values are excluded from findings, logs, and MCP
+  responses.
+- Integrated native pre-tool enforcement, value-free violation handling, config
+  templates/profiles/schema, Doctor, Console, MCP capability metadata, and an
+  advisory MCP `check_command` result. Added a synthetic CLI smoke case with an
+  execution witness, UX contracts, documentation, changelog, and release-readiness
+  coverage.
+- **Validation:** 557 focused scanner/config/violation unit tests, 492 MCP/REST/CLI
+  unit tests, and 43 affected UX tests pass. Ruff, Black (Python 3.10 target),
+  error-level Pylint, package Mypy (337 source files), and `git diff --check` pass.
+  No real-agent container smoke was run.
+- Created follow-up issue [#2717](https://github.com/RedHatProductSecurity/ai-guardian/issues/2717)
+  for static analysis of hard-coded credentials flowing into HTTP request code.
+  It scopes a Python-first, non-executing source analysis and value-free
+  pre-tool findings; implementation remains separate from #2699.
+- Created language follow-up [#2722](https://github.com/RedHatProductSecurity/ai-guardian/issues/2722)
+  to extend that analysis to JavaScript and TypeScript HTTP request APIs, with
+  explicit source-only, value-free, pre-tool enforcement and language/client
+  coverage requirements.
+- The repository now has open PR [#2718](https://github.com/RedHatProductSecurity/ai-guardian/pull/2718)
+  at `b589921c`. Its first CI run failed because an older MCP integration fixture
+  used a curl Authorization header now intercepted by the new scanner, and the
+  complete violation-guidance UX contract did not classify this private finding as
+  intentionally having no copyable snippet. The Performance Check reused the same
+  failing integration test; the 102-test subset itself now passes locally in 8.43s
+  (101 passed, 1 skipped). Updated both test contracts; 263 affected tests, Ruff,
+  Black and diff checks pass. Changes are local and uncommitted; no commit or push
+  was made. **Next:** publish the test-only correction and rerun PR CI after approval.
 
 ## Issue #2698 implementation — 2026-11-11
 

@@ -17,6 +17,11 @@ FEATURE_GROUPS = [
                 "Secret Scanning",
                 "Scan for API keys, tokens, credentials",
             ),
+            (
+                "command_credential_scanning",
+                "Command Credential Scanning",
+                "Block inline credentials in supported HTTP command arguments",
+            ),
             ("scan_pii", "PII Detection", "GDPR/CCPA compliance scanning"),
             (
                 "image_scanning",
@@ -131,6 +136,7 @@ FEATURE_GROUPS = [
 
 FEATURE_PAGE_SLUGS = {
     "secret_scanning": "secrets",
+    "command_credential_scanning": "secrets",
     "scan_pii": "scan-pii",
     "prompt_injection": "pi-detection",
     "ssrf_protection": "ssrf",
@@ -187,6 +193,7 @@ def _parse_enabled(status):
 
 
 _DEFAULT_ACTIONS = {
+    "command_credential_scanning": "block",
     "secret_scanning": "block",
     "image_scanning": "block",
     "scan_pii": "block",
@@ -222,6 +229,8 @@ def _get_action(config, key):
 
 def _categorize_violation(reason):
     r = (reason or "").lower()
+    if "command credential" in r or "inline credential argument" in r:
+        return "Command Credential Scanning"
     if "ssrf" in r:
         return "SSRF Protection"
     if "jailbreak" in r:

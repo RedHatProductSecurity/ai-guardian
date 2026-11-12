@@ -98,7 +98,14 @@ def offered_command(provider, protocol, payload, case, request_numbers):
 )
 @pytest.mark.parametrize(
     "case",
-    ("ssrf", "config_exfil", "clean_tool", "tool_output_secret", "tool_output_pii"),
+    (
+        "ssrf",
+        "config_exfil",
+        "command_credential",
+        "clean_tool",
+        "tool_output_secret",
+        "tool_output_pii",
+    ),
 )
 def test_mock_selects_native_shell_instead_of_an_earlier_advisory_checker(
     provider, protocol, native_name, argument, field_type, case

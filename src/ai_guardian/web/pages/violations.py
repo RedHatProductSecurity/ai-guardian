@@ -41,6 +41,11 @@ DETAIL_FIELDS = {
         ("Findings", "total_findings"),
         ("Reason", "reason"),
     ],
+    "command_credential_detected": [
+        ("Action", "action"),
+        ("Findings", "total_findings"),
+        ("Reason", "reason"),
+    ],
     "tool_permission": [
         ("Tool", "tool_name"),
         ("File", "tool_value"),
@@ -1114,6 +1119,11 @@ def _extract_matched_from_violation(violation: dict) -> str:
     if not isinstance(blocked, dict):
         blocked = {}
     vtype = violation.get("violation_type", "")
+
+    # Command argument values are never suitable for pattern-editor display,
+    # even if a malformed or legacy record contains a matched-text field.
+    if vtype == "command_credential_detected":
+        return ""
 
     if blocked.get("matched_text"):
         return str(blocked["matched_text"])

@@ -115,6 +115,7 @@ class Doctor:
             self.check_unknown_config_keys,
             self.check_global_pattern_server,
             self.check_scanners,
+            self.check_command_credential_scanning,
             self.check_pattern_server,
             self.check_ps_cache_path,
             self.check_ps_auth,
@@ -639,6 +640,58 @@ class Doctor:
                 if missing_builtin_warning
                 else None
             ),
+        )
+
+    def check_command_credential_scanning(self) -> CheckResult:
+        """Report the command-aware credential scanner's effective policy."""
+        self._ensure_config()
+        section = (self._config or {}).get("command_credential_scanning", {})
+        if section is None:
+            section = {}
+        if not isinstance(section, dict):
+            return CheckResult(
+                name="command_credential_scanning",
+                status=CheckStatus.FAIL,
+                message="Invalid command_credential_scanning configuration",
+                detail="Expected an object with enabled and action fields.",
+            )
+
+        enabled = section.get("enabled", True)
+        action = section.get("action", "block")
+        if enabled is not False and enabled is not True:
+            return CheckResult(
+                name="command_credential_scanning",
+                status=CheckStatus.FAIL,
+                message="Invalid command credential scanner enabled setting",
+                detail="Expected a boolean; malformed values do not disable scanning.",
+            )
+        if action not in ("block", "ask", "warn", "log-only"):
+            return CheckResult(
+                name="command_credential_scanning",
+                status=CheckStatus.FAIL,
+                message="Invalid command credential scanner action",
+                detail="Expected block, ask, warn, or log-only.",
+            )
+
+        if not enabled:
+            return CheckResult(
+                name="command_credential_scanning",
+                status=CheckStatus.WARN,
+                message="Command credential scanning is disabled",
+                detail="The default is enabled with block action.",
+            )
+        if action in ("warn", "log-only"):
+            return CheckResult(
+                name="command_credential_scanning",
+                status=CheckStatus.WARN,
+                message=f"Command credential scanning is enabled with {action} action",
+                detail="Inline literals and incomplete parses may proceed under this policy.",
+            )
+        return CheckResult(
+            name="command_credential_scanning",
+            status=CheckStatus.PASS,
+            message=f"Command credential scanning enabled ({action})",
+            detail="Inline literals and incomplete parses follow this action; references remain advisory.",
         )
 
     def _get_ps_configs(self) -> List[Tuple[str, Dict]]:
@@ -2820,6 +2873,7 @@ _CHECK_DISPLAY_NAMES = {
     "unknown_config_keys": "Unknown config keys",
     "global_pattern_server": "Global pattern server",
     "scanners": "Scanners",
+    "command_credential_scanning": "Command credential scanning",
     "pattern_server": "Pattern server",
     "ps_cache_path": "PS cache path",
     "ps_auth": "PS auth",

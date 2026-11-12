@@ -44,6 +44,13 @@ A scanner is a new detection engine that integrates into the hook pipeline and
 #828) as reference implementations. Every item below is required — missing any
 one causes a broken or incomplete feature.
 
+For a **command-semantic scanner** that analyzes pre-execution tool arguments
+rather than file contents, adapt the batch-scan and file-finding items below:
+integrate with the command pipeline/SDK and native pre-tool hook, but do not add
+`FileScanner`, SARIF, or `.aiguardignore` support unless the detector also scans
+stored file content. Document this scope and retain synthetic supported-CLI
+pre-execution coverage.
+
 ### 1. Dependency
 - [ ] `pyproject.toml` — add fixed or optional dependency
 
