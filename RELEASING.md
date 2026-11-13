@@ -424,10 +424,13 @@ scripts/release.sh --execute major       # Create a major version release
 The `/release` skill is also available for AI-assisted releases via Claude Code.
 
 The automated script also runs `scripts/sync_release_versions.py` so the
-normal and OpenShell container defaults, pinned container examples, and root
-README release image references move to the new stable version together. The
-script fails if one of those active references is missing. CI repeats the
-guard with:
+normal and OpenShell container defaults and pinned examples in
+`container/README.md` move to the new stable version together. The link-only root
+README and historical generated NotebookLM export are not active version sources.
+The script fails if a required active reference is missing. The lightweight
+**Release References** workflow checks the real repository on pull requests and
+pushes to `main` and release branches, including documentation-only changes;
+container publishing repeats the same guard before preparing either image:
 
 ```bash
 python scripts/sync_release_versions.py --check

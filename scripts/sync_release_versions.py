@@ -58,7 +58,8 @@ def _release_reference_rules(
 
     The generated NotebookLM export is intentionally excluded: it contains
     historical version references and is regenerated from these source files
-    during the release process.
+    during the release process. The root README is a link-only landing page;
+    pinned container examples live in container/README.md instead.
     """
     replacement = r"\g<1>" + stable_version
     replacement_with_suffix = r"\g<1>" + stable_version + r"\g<2>"
@@ -80,16 +81,6 @@ def _release_reference_rules(
                     rf"(AI_GUARDIAN_VERSION=){STABLE_VERSION_PATTERN}",
                     replacement,
                     "OpenShell Dockerfile version reference",
-                )
-            ],
-        ),
-        (
-            "README.md",
-            [
-                (
-                    rf"(quay\.io/redhatproductsecurity/ai-guardian:v){STABLE_VERSION_PATTERN}",
-                    replacement,
-                    "root README pinned image references",
                 )
             ],
         ),
