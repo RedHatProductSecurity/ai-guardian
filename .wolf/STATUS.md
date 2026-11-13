@@ -7,6 +7,28 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-13 (UTC)
 
+## Issue #2735 README integration behavior summary — 2026-11-13
+
+- Added the five-column **Per-integration behavior and limitations** table near
+  Quick Start. Its 23 rows cover all 22 detailed integration surfaces plus an
+  explicit regular-ChatGPT-mode exclusion. Preserve conditional/unverified paths,
+  MCP-only advice, cloud scope, Claude Bash replacement limits, and post-tool
+  side-effect boundaries; no runtime behavior changed.
+- Kept the detailed behavior matrix rows and anchor unchanged, added reciprocal
+  links, updated the integration checklist's synchronization requirements, and
+  added an Unreleased changelog entry. Converted the 69 existing source-relative
+  README links to 41 absolute reference definitions so they also resolve on the
+  documentation homepage; new cross-links likewise use absolute repository URLs.
+- **Validation:** README is 213 lines; all original link targets are preserved,
+  no rendered README links remain relative, all cross-links have valid target
+  anchors, and summary rows render as five complete cells with the existing
+  markdown2 renderer, including the README expansion from `docs/index.md`.
+  Static checks confirm detailed rows are unchanged and the release-generated
+  export is untouched. `git diff --check` passes. Runtime tests and a local
+  MkDocs build were not run for this documentation-only change.
+- Changes remain uncommitted on branch `2735`; no push or PR was made.
+  **Next:** user review and external DAF completion.
+
 ## Issue #2722 JavaScript/TypeScript HTTP credential scanning — 2026-11-13
 
 - Extended the non-executing HTTP credential-flow scanner to JavaScript and

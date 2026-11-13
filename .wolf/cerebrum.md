@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-12
+> Last updated: 2026-11-13
 
 ## User Preferences
 
@@ -309,6 +309,14 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-13 — README integration summary (#2735):** Keep the concise README
+  behavior table synchronized with the detailed per-integration reference in
+  `docs/AGENT_SUPPORT.md`, not the lifecycle-event inventory. `docs/index.md`
+  includes the root README without rebasing relative links; its 41 absolute
+  repository reference definitions preserve the 69 original source-link targets
+  in both contexts, and summary/reference cross-links also use absolute URLs. Preserve
+  the detailed matrix anchor and keep protocol/failure details in the guide.
 
 - **2026-11-13 — JS/TS scanner Mypy contracts (#2722):** A `kind` string does not
   narrow an `object` payload on a generic resolved-value record; centralize

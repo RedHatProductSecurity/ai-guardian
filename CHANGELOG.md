@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Safe release CI resume (#2701):** Persist and validate exact release CI
   attempts so interrupted runs can be resumed without duplicate workflow dispatches.
 ### Changed
+- **README integration limitations (#2735):** Surface a compact per-integration
+  prompt, pre-tool, and result-handling table near Quick Start, including cloud,
+  mode, and plugin-generation boundaries. Keep the detailed behavior matrix as the
+  reference and require contributors to synchronize the README summary. Make README
+  links portable between GitHub and the documentation homepage.
 - **Private documentation search (#2716):** Link to the generated combined export
   from the README and explain uploading it to an organization's approved private
   NotebookLM or other LLM search tool; clarify that the export is release-generated

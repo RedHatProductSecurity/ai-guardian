@@ -21,6 +21,8 @@ matrices to stay synchronized. The separate [per-integration behavior
 matrix](AGENT_SUPPORT.md#per-integration-behavior-matrix) records whether each
 prompt/pre-tool/post-tool stage blocks, observes, transforms, is conditional,
 or is unverified; the registry parity test requires one row for every key.
+Keep the [README summary](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/README.md#per-integration-behavior-and-limitations)
+aligned with that detailed matrix, including materially different host surfaces.
 
 ## Support model
 
@@ -171,7 +173,9 @@ even when the integration also has GUI, plugin, or MCP surfaces.
   limits on output replacement or post-action side effects.
 - [ ] Add a row for the canonical registry key to the per-integration behavior
   matrix in `docs/AGENT_SUPPORT.md`; add/extend its registry-to-matrix contract
-  in `tests/unit/test_ide_registry.py`.
+  in `tests/unit/test_ide_registry.py`. Add the corresponding user-facing README
+  summary row(s), separating materially different local/cloud, CLI/IDE, and
+  plugin-generation surfaces or explicitly qualifying them.
 - [ ] Identify configuration files, environment-variable overrides, project
   files, and whether the integration must preserve unrelated user settings.
 - [ ] Identify transcript format and path behavior, including whether the
@@ -394,8 +398,15 @@ because executing generated `.bat` hooks requires a Windows command host.
   cannot be explained clearly in the shared support reference.
 - [ ] Update `docs/README.md` and `mkdocs.yml` when creating a new document or
   adding a new integration guide.
-- [ ] Keep `README.md` concise: link to the shared support reference and this
-  checklist instead of duplicating capability tables.
+- [ ] Keep `README.md` at approximately 300 lines or fewer. Synchronize its
+  **Per-integration behavior and limitations** summary whenever prompt handling,
+  pre-tool enforcement, result handling, prerequisites, or execution scope changes.
+  Preserve its legend and limitations; keep protocol, timing, version, and failure
+  details in the linked `docs/AGENT_SUPPORT.md` reference rather than copying the
+  full matrix. Keep `docs/AGENT_SUPPORT.md#per-integration-behavior-matrix` stable.
+- [ ] Verify summary/reference links and anchors on GitHub and on the documentation
+  homepage, which includes `README.md` through `docs/index.md`; included relative
+  links are resolved from the homepage, not automatically from the source README.
 - [ ] Update `AGENTS.md`, `docs/DEVELOPER_GUIDE.md`, or contributor guidance
   when the integration workflow changes.
 - [ ] Add a `[Unreleased]` entry to `CHANGELOG.md` for notable integration or
@@ -443,7 +454,8 @@ expand it when a shared component is touched:
 - [ ] Run the focused tests for the changed surface and all tests that cover
   shared adapter or hook-processing code.
 - [ ] Re-check every row in the support matrix affected by the change, rather
-  than updating only the Supported Agents table.
+  than updating only the Supported Agents table. Update the matching README
+  summary rows and limitations in the same change.
 - [ ] Re-check independent health renderers and launchers (doctor and tray
   menu actions) when setup paths, config scopes, or MCP registration change.
   Verify that setup remains user/desktop-scoped by default even when a

@@ -208,6 +208,11 @@ unverified as detailed below.
 
 ### Per-integration behavior matrix
 
+For a compact onboarding view, see the
+[README behavior and limitations summary](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/README.md#per-integration-behavior-and-limitations).
+Keep that summary synchronized with the detailed reference below when integration
+behavior or scope changes.
+
 `UserPromptSubmit` includes the closest host-native equivalent. **Gate** means
 the host can stop an action before it starts; **replace** changes what the next
 model request receives; **withhold** substitutes a refusal/error; **advice**
