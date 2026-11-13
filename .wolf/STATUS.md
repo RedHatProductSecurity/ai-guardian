@@ -23,6 +23,10 @@ budget_tokens: 1000
   contract review. Static checks pass: Ruff, Black, Pylint, Mypy, and diff check.
   Unit/UX tests were not run under the task's static-only/no-source-execution
   constraint. No commit or push was made; changes remain local on branch `2717`.
+- Reviewed all nine linked CodeRabbit inline findings. Eight scanner/Edit findings
+  are covered by the fixes and regressions above. Added explicit Claude native
+  `Write` permission to the smoke settings and an exact generated-config regression;
+  the focused test was not run under the static-only constraint.
 
 ## Issue #2717 HTTP request credential scanning — 2026-11-13
 

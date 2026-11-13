@@ -1349,6 +1349,7 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
             if cli_name == "claude":
                 assert config["permissions"]["allow"] == [
                     "Bash(printf *)",
+                    "Write",
                     *[
                         f"Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case {case})"
                         for case in (

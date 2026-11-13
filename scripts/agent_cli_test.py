@@ -230,6 +230,7 @@ elif cli == 'claude':
     allowed=permissions.setdefault('allow', [])
     if not isinstance(allowed, list): allowed=[]; permissions['allow']=allowed
     if 'Bash(printf *)' not in allowed: allowed.append('Bash(printf *)')
+    if 'Write' not in allowed: allowed.append('Write')
     for case in ('clean_tool','tool_output_secret','tool_output_pii'):
         probe=f'Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case {case})'
         if probe not in allowed: allowed.append(probe)
@@ -1838,11 +1839,16 @@ def _run_case(
     old_violations = _violation_counts(engine, name, timeout, diagnostics)
     old_requests = _provider_stats(engine, name, timeout, diagnostics)
     old_hooks = _hook_counts(engine, name, timeout, diagnostics)
-    is_tool_case = case.name in OUTPUT_CASES or case.name in (
-        "ssrf",
-        "config_exfil",
-        "command_credential",
-    ) or case.name in HTTP_REQUEST_CREDENTIAL_CASES
+    is_tool_case = (
+        case.name in OUTPUT_CASES
+        or case.name
+        in (
+            "ssrf",
+            "config_exfil",
+            "command_credential",
+        )
+        or case.name in HTTP_REQUEST_CREDENTIAL_CASES
+    )
     old_tools = (
         _tool_evidence(engine, name, case.name, timeout, diagnostics)
         if is_tool_case
@@ -1931,12 +1937,16 @@ def _run_case(
         return fail(f"expected {expected_hook} hook event was not recorded")
     if is_tool_case and tool_deltas.get("tool_offers", 0) < 1:
         return fail("the local mock did not issue the expected tool call")
-    if case.name in (
-        "ssrf",
-        "config_exfil",
-        "command_credential",
-        "http_request_credential",
-    ) and hook_deltas.get("posttooluse", 0) != 0:
+    if (
+        case.name
+        in (
+            "ssrf",
+            "config_exfil",
+            "command_credential",
+            "http_request_credential",
+        )
+        and hook_deltas.get("posttooluse", 0) != 0
+    ):
         return fail(
             "pre-tool blocking was not confirmed; a post-tool event was recorded"
         )
@@ -1944,7 +1954,9 @@ def _run_case(
         return fail("command credential probe executed despite pre-tool denial")
     if case.name == "http_request_credential":
         if tool_deltas.get("file_written", 0) != 0:
-            return fail("HTTP credential source file was written despite pre-tool denial")
+            return fail(
+                "HTTP credential source file was written despite pre-tool denial"
+            )
         if tool_deltas.get("native_file_write_tool_name_write", 0) < 1:
             return fail("the native Write tool was not confirmed by the local mock")
     if case.name == "http_request_credential_clean":

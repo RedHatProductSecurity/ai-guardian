@@ -6,6 +6,11 @@
 
 ## User Preferences
 
+- **2026-11-13 — Claude native Write smoke permission:** Claude's `--print` smoke
+  configuration needs an explicit `Write` entry in its isolated settings
+  `permissions.allow` list for the clean native Write case; preserving Bash probe
+  permissions alone does not authorize that tool.
+
 - **2026-11-06 — Codex smoke runtime comparison:** User selected matching the
   regular rootless Podman container defaults for the disposable smoke. This
   authorizes removing the smoke-only all-capability drop/no-new-privileges flags
