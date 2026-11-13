@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distinguish `latest` development docs, and report inactive or misrouted release
   versions with actionable recovery guidance.
 ### Fixed
+- **HTTP request credential scanner hardening (#2717):** Bound aggregate value,
+  string, URL and branch-state analysis; preserve possible credential flows across
+  branches and client context managers; inspect complete prospective Edit content;
+  and include blocked findings in default violation logs.
 - **Custom secret-rule configuration defaults (#2729):** Include the new
   `secret_scanning.additional_patterns` setting and guidance in all built-in profiles.
   Keep the IDE hook E2E fixture schema-valid so config warnings do not obscure JSON responses.

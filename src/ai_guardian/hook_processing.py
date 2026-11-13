@@ -173,6 +173,61 @@ def _get_on_scan_error_action():
     return _loaders._get_on_scan_error_action()
 
 
+def _prospective_http_edit_source(tool_input: dict, file_path: str) -> str:
+    """Build bounded source context for an Edit without executing its contents."""
+    from ai_guardian.scanners.http_request_credentials import MAX_SOURCE_CHARS
+
+    replacement = tool_input.get("new_string", "")
+    if not isinstance(replacement, str):
+        return ""
+    old_string = tool_input.get("old_string", "")
+    if not isinstance(old_string, str):
+        return replacement
+
+    try:
+        with open(file_path, "rb") as stream:
+            file_size = os.fstat(stream.fileno()).st_size
+            if file_size <= MAX_SOURCE_CHARS:
+                existing = stream.read(MAX_SOURCE_CHARS + 1).decode(
+                    "utf-8", errors="replace"
+                )
+            else:
+                excerpt_size = MAX_SOURCE_CHARS // 2
+                prefix = stream.read(excerpt_size).decode("utf-8", errors="replace")
+                stream.seek(max(0, file_size - excerpt_size))
+                suffix = stream.read(excerpt_size).decode("utf-8", errors="replace")
+                replacement_excerpt = (
+                    replacement
+                    if len(replacement) <= MAX_SOURCE_CHARS
+                    else replacement[:excerpt_size] + replacement[-excerpt_size:]
+                )
+                return f"{prefix}\n{replacement_excerpt}\n{suffix}"
+    except (OSError, ValueError):
+        return replacement
+
+    if old_string and old_string in existing:
+        replace_all = tool_input.get("replace_all") is True
+        replace_count = existing.count(old_string) if replace_all else 1
+        prospective_length = len(existing) + replace_count * (
+            len(replacement) - len(old_string)
+        )
+        if prospective_length <= MAX_SOURCE_CHARS:
+            return existing.replace(old_string, replacement, -1 if replace_all else 1)
+        prefix = existing[: MAX_SOURCE_CHARS // 3]
+        suffix = existing[-(MAX_SOURCE_CHARS // 3) :]
+    else:
+        prefix = existing[: MAX_SOURCE_CHARS // 3]
+        suffix = existing[-(MAX_SOURCE_CHARS // 3) :]
+
+    replacement_excerpt = (
+        replacement
+        if len(replacement) <= MAX_SOURCE_CHARS
+        else replacement[: MAX_SOURCE_CHARS // 2]
+        + replacement[-(MAX_SOURCE_CHARS // 2) :]
+    )
+    return f"{prefix}\n{replacement_excerpt}\n{suffix}"
+
+
 def _hook_failure_response(hook_data=None):
     """Build a policy-aware response when the hook pipeline cannot continue."""
     return build_failure_response(hook_data, _hook_failure_action())
@@ -3042,13 +3097,18 @@ def _process_hook_data(hook_data, daemon_state=None):
                             if tool_name == "Write"
                             else tool_input.get("new_string", "")
                         )
-                        if cs_content:
+                        http_content = (
+                            cs_content
+                            if tool_name == "Write"
+                            else _prospective_http_edit_source(tool_input, cs_file_path)
+                        )
+                        if http_content:
                             from ai_guardian.scanners.http_request_credentials import (
                                 run_http_request_credential_scan,
                             )
 
                             http_credential_result = run_http_request_credential_scan(
-                                cs_content,
+                                http_content,
                                 file_path=cs_file_path,
                             )
                             if http_credential_result is not None:
@@ -3089,6 +3149,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                                         security_message=security_message,
                                     )
 
+                        if cs_content:
                             try:
                                 cs_config, cs_config_err = _load_code_scanning_config()
                                 if cs_config_err:

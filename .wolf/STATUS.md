@@ -7,6 +7,23 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-13 (UTC)
 
+## PR #2732 / issue #2717 CodeRabbit follow-up — 2026-11-13
+
+- Added aggregate budgets for resolution, container traversal, derived/scanned
+  strings, URL parsing, branch alternatives, and state snapshots. Oversized URL
+  userinfo relevance is detected without using unrelated `@` characters as a hint.
+- Preserve possible values and client bindings across control-flow branches;
+  handle function/parameter shadowing, context-manager clients, and expanded
+  `**options` authentication.
+- Pre-tool Edit credential scanning now uses bounded prospective-file context
+  instead of scanning only `new_string`. Default violation logs and the Console
+  logging selector include `http_request_credential_detected`.
+- Added unit and UX regressions, including environment-backed safety, branch
+  merges, resource exhaustion, Edit context, logging, and native Write smoke
+  contract review. Static checks pass: Ruff, Black, Pylint, Mypy, and diff check.
+  Unit/UX tests were not run under the task's static-only/no-source-execution
+  constraint. No commit or push was made; changes remain local on branch `2717`.
+
 ## Issue #2717 HTTP request credential scanning — 2026-11-13
 
 - Added a default-on, global-only, non-executing Python AST scanner for literal

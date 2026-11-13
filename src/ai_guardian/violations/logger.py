@@ -766,6 +766,7 @@ class ViolationLogger:
                 "image_secret_detected",
                 "image_pii_detected",
                 "context_poisoning",
+                "http_request_credential_detected",
             ],
         }
 

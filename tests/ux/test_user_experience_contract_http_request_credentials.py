@@ -74,6 +74,42 @@ def test_hard_coded_http_credential_denies_source_write_without_echo(tool_name):
     assert SYNTHETIC_CREDENTIAL not in json.dumps(response)
 
 
+def test_edit_replacement_is_checked_in_the_prospective_file(tmp_path):
+    """USER EXPERIENCE: a value-only Edit is checked with its surrounding source."""
+    target = tmp_path / "client.py"
+    target.write_text(
+        "import requests\n"
+        "requests.get(url, auth=('service-user', 'OLD_SYNTHETIC_VALUE'))\n",
+        encoding="utf-8",
+    )
+    hook_data = create_hook_data(
+        tool_name="Edit",
+        tool_input={
+            "file_path": str(target),
+            "old_string": "OLD_SYNTHETIC_VALUE",
+            "new_string": SYNTHETIC_CREDENTIAL,
+        },
+    )
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=({}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_http_request_credential_scanning_config",
+            return_value=({"enabled": True, "action": "block"}, None),
+        ),
+    ):
+        response = json.loads(process_hook_data(hook_data)["output"])
+
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert response["systemMessage"] == (
+        "Hard-coded HTTP request credential detected in Python source; the write "
+        "was blocked. Credential values and source snippets are withheld."
+    )
+    assert SYNTHETIC_CREDENTIAL not in json.dumps(response)
+
+
 def test_opencode_native_write_is_normalized_and_scanned_before_apply():
     hook_data = create_hook_data(tool_name="Write", tool_input={})
     hook_data.update(

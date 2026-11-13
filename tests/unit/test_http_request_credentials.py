@@ -11,6 +11,8 @@ import pytest
 from ai_guardian.scanners.http_request_credentials import (
     INCOMPLETE_ANALYSIS,
     INLINE_LITERAL,
+    MAX_CONTAINER_TRAVERSAL,
+    MAX_RESOLVED_STRING_CHARS,
     MAX_SOURCE_CHARS,
     analyze_http_request_credentials,
     run_http_request_credential_scan,
@@ -109,6 +111,35 @@ def test_same_scope_assignments_and_aliases_flow_to_request_sinks():
     assert all(finding.finding_class == INLINE_LITERAL for finding in result.findings)
 
 
+def test_branch_merge_keeps_possible_literal_flows_and_environment_only_is_safe():
+    literal_branch = (
+        "import requests\n"
+        "import os\n"
+        "if choose_inline:\n"
+        "    token = '" + SYNTHETIC_VALUE + "'\n"
+        "else:\n"
+        "    token = os.environ['API_TOKEN']\n"
+        "requests.get(url, headers={'Authorization': token})\n"
+    )
+    environment_branches = (
+        "import requests\n"
+        "import os\n"
+        "if choose_first:\n"
+        "    token = os.environ['FIRST_TOKEN']\n"
+        "else:\n"
+        "    token = os.getenv('SECOND_TOKEN')\n"
+        "requests.get(url, headers={'Authorization': token})\n"
+    )
+
+    inline_result = analyze_http_request_credentials(literal_branch)
+    environment_result = analyze_http_request_credentials(environment_branches)
+
+    assert [finding.sink for finding in inline_result.findings] == [
+        "authorization_header"
+    ]
+    assert environment_result.findings == ()
+
+
 def test_client_instance_and_basic_auth_assignment_are_supported():
     source = (
         "import httpx\n"
@@ -121,6 +152,35 @@ def test_client_instance_and_basic_auth_assignment_are_supported():
 
     assert len(result.findings) == 1
     assert result.findings[0].client == "httpx"
+    assert result.findings[0].sink == "authentication"
+
+
+def test_context_manager_client_instance_is_scanned_inside_with_body():
+    source = (
+        "import httpx\n"
+        "with httpx.Client() as client:\n"
+        "    client.get(url, auth=('service-user', '" + SYNTHETIC_VALUE + "'))\n"
+    )
+
+    result = analyze_http_request_credentials(source)
+
+    assert len(result.findings) == 1
+    assert result.findings[0].client == "httpx"
+    assert result.findings[0].sink == "authentication"
+
+
+def test_expanded_request_options_scan_auth_constructor_password():
+    source = (
+        "import httpx\n"
+        "options = {'auth': httpx.BasicAuth('service-user', '"
+        + SYNTHETIC_VALUE
+        + "')}\n"
+        "httpx.get(url, **options)\n"
+    )
+
+    result = analyze_http_request_credentials(source)
+
+    assert len(result.findings) == 1
     assert result.findings[0].sink == "authentication"
 
 
@@ -253,6 +313,9 @@ def test_ordinary_or_placeholder_url_query_is_not_reported(source):
     (
         "import requests\nrequests.get(url, auth=('user', os.environ['TOKEN']))\n",
         "import httpx\nhttpx.post(url, headers={'Authorization': os.getenv('TOKEN')})\n",
+        "import httpx\n"
+        "options = {'auth': httpx.BasicAuth('user', os.getenv('API_TOKEN'))}\n"
+        "httpx.get(url, **options)\n",
         "import aiohttp\n"
         "aiohttp.request('POST', url, json={'password': getpass.getpass()})\n",
         "import requests\n"
@@ -276,6 +339,39 @@ def test_interprocedural_helper_values_are_outside_the_dataflow_boundary():
     )
 
     assert analyze_http_request_credentials(source).findings == ()
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "from requests import get\n"
+        "def send(get):\n"
+        "    get(url, auth=('user', '" + SYNTHETIC_VALUE + "'))\n",
+        "import requests\n"
+        "def send(requests):\n"
+        "    requests.get(url, auth=('user', '" + SYNTHETIC_VALUE + "'))\n",
+        "import requests\n"
+        "def requests():\n"
+        "    return None\n"
+        "requests.get(url, auth=('user', '" + SYNTHETIC_VALUE + "'))\n",
+    ),
+)
+def test_function_parameters_shadow_imported_request_aliases(source):
+    assert analyze_http_request_credentials(source).findings == ()
+
+
+def test_branch_merge_preserves_possible_module_alias_binding():
+    source = (
+        "import requests\n"
+        "if choose_other_client:\n"
+        "    requests = None\n"
+        "requests.get(url, auth=('user', '" + SYNTHETIC_VALUE + "'))\n"
+    )
+
+    analysis = analyze_http_request_credentials(source)
+
+    assert len(analysis.findings) == 1
+    assert analysis.findings[0].sink == "authentication"
 
 
 def test_parse_failure_is_incomplete_only_for_recognized_request_code():
@@ -306,6 +402,62 @@ def test_source_and_ast_limits_report_value_free_incomplete_analysis():
     assert result is not None and result.should_block
     assert result.extra["analysis_incomplete"] is True
     assert SYNTHETIC_VALUE not in repr(result)
+
+
+def test_string_resolution_budget_returns_incomplete_without_materializing_value():
+    half = MAX_RESOLVED_STRING_CHARS // 2 + 1
+    first = "A" * half
+    second = "B" * half
+    source = (
+        "import requests\n"
+        "value = "
+        + repr(first)
+        + " + "
+        + repr(second)
+        + "\nrequests.post(url, headers={'Authorization': value})\n"
+    )
+
+    analysis = analyze_http_request_credentials(source)
+
+    assert analysis.incomplete
+    assert analysis.findings[0].finding_class == INCOMPLETE_ANALYSIS
+    assert first not in repr(analysis)
+    assert second not in repr(analysis)
+
+
+def test_container_traversal_budget_is_aggregate_across_request_sinks():
+    item_count = MAX_CONTAINER_TRAVERSAL // 2 + 1
+    items = ", ".join("'ordinary'" for _ in range(item_count))
+    source = (
+        "import requests\n"
+        "import os\n"
+        "payload = {'padding': ["
+        + items
+        + "], 'password': os.getenv('API_PASSWORD')}\n"
+        "requests.post(url, json=payload)\n"
+        "requests.post(url, json=payload)\n"
+        "requests.post(url, json=payload)\n"
+    )
+
+    analysis = analyze_http_request_credentials(source)
+
+    assert analysis.incomplete
+    assert analysis.findings[0].finding_class == INCOMPLETE_ANALYSIS
+
+
+def test_oversized_url_userinfo_is_relevant_without_credential_field_name():
+    source = (
+        "import requests\n"
+        "requests.get('https://user:"
+        + ("u" * MAX_SOURCE_CHARS)
+        + "@example.invalid/')\n"
+    )
+
+    analysis = analyze_http_request_credentials(source)
+
+    assert len(source) > MAX_SOURCE_CHARS
+    assert analysis.incomplete
+    assert analysis.findings[0].finding_class == INCOMPLETE_ANALYSIS
 
 
 def test_oversized_source_with_relevant_sink_after_analysis_limit_is_incomplete():
@@ -621,6 +773,43 @@ def test_pretool_hook_denies_python_write_with_http_credential(tool_name):
     parsed = json.loads(output)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "HTTP request credential" in parsed["systemMessage"]
+    assert SYNTHETIC_VALUE not in output
+
+
+def test_pretool_edit_scans_full_prospective_file_not_only_replacement(tmp_path):
+    from ai_guardian.hook_processing import process_hook_data
+    from tests.fixtures.mock_mcp_server import create_hook_data
+
+    target = tmp_path / "client.py"
+    target.write_text(
+        "import requests\n"
+        "requests.get(url, auth=('service-user', 'OLD_SYNTHETIC_VALUE'))\n",
+        encoding="utf-8",
+    )
+    hook_data = create_hook_data(
+        tool_name="Edit",
+        tool_input={
+            "file_path": str(target),
+            "old_string": "OLD_SYNTHETIC_VALUE",
+            "new_string": SYNTHETIC_VALUE,
+        },
+    )
+
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=({}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_http_request_credential_scanning_config",
+            return_value=({"enabled": True, "action": "block"}, None),
+        ),
+    ):
+        response = process_hook_data(hook_data)
+
+    output = response["output"]
+    parsed = json.loads(output)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert SYNTHETIC_VALUE not in output
 
 

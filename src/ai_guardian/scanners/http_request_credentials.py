@@ -29,6 +29,14 @@ MAX_SOURCE_CHARS = 131_072
 MAX_AST_NODES = 20_000
 MAX_FINDINGS = 128
 MAX_RESOLUTION_DEPTH = 12
+MAX_RESOLVED_STRING_CHARS = 65_536
+MAX_TOTAL_RESOLVED_STRING_CHARS = 131_072
+MAX_RESOLUTION_OPERATIONS = 40_000
+MAX_CONTAINER_TRAVERSAL = 20_000
+MAX_STATE_SNAPSHOT_ENTRIES = 100_000
+MAX_URL_CHARS = 16_384
+MAX_TOTAL_URL_PARSE_CHARS = 262_144
+MAX_BRANCH_ALTERNATIVES = 128
 
 INLINE_LITERAL = "inline_literal"
 INCOMPLETE_ANALYSIS = "unsupported_or_incomplete_analysis"
@@ -150,26 +158,40 @@ _PLACEHOLDERS = frozenset(
         "todo",
     }
 )
-_RELEVANT_SOURCE = re.compile(
-    r"(?is)\b(?:requests|httpx|aiohttp|urllib(?:\.request)?)\b"
-    r".{0,4096}\b(?:auth|headers?|authorization|x-api-key|password|passwd|"
+_REQUEST_SOURCE = re.compile(r"(?i)\b(?:requests|httpx|aiohttp|urllib(?:\.request)?)\b")
+_CREDENTIAL_SOURCE = re.compile(
+    r"(?i)\b(?:auth|headers?|authorization|x-api-key|password|passwd|"
     r"token|secret|api[_-]?key|credential)\b"
-    r"|\b(?:auth|headers?|authorization|x-api-key|password|passwd|token|secret|"
-    r"api[_-]?key|credential)\b.{0,4096}"
-    r"\b(?:requests|httpx|aiohttp|urllib(?:\.request)?)\b"
 )
+_URL_USERINFO_SOURCE = re.compile(r"(?i)https?://[^/\s?#\"'<>]*@")
 
 
 def _has_relevant_source(source: str) -> bool:
     """Search bounded overlapping chunks so oversized suffixes fail closed."""
-    if len(source) <= MAX_SOURCE_CHARS:
-        return _RELEVANT_SOURCE.search(source) is not None
     overlap = 4096
     stride = MAX_SOURCE_CHARS - overlap
-    return any(
-        _RELEVANT_SOURCE.search(source[start : start + MAX_SOURCE_CHARS]) is not None
-        for start in range(0, len(source), stride)
-    )
+    request_source = False
+    has_url_userinfo = _URL_USERINFO_SOURCE.search(source) is not None
+    for start in range(0, len(source), stride):
+        chunk = source[start : start + MAX_SOURCE_CHARS]
+        request_matches = iter(_REQUEST_SOURCE.finditer(chunk))
+        credential_matches = iter(_CREDENTIAL_SOURCE.finditer(chunk))
+        request_match = next(request_matches, None)
+        chunk_has_request = request_match is not None
+        credential_match = next(credential_matches, None)
+        while request_match is not None and credential_match is not None:
+            if abs(request_match.start() - credential_match.start()) <= overlap:
+                return True
+            if request_match.start() < credential_match.start():
+                request_match = next(request_matches, None)
+            else:
+                credential_match = next(credential_matches, None)
+        request_source = request_source or chunk_has_request
+        if chunk_has_request and _URL_USERINFO_SOURCE.search(chunk) is not None:
+            return True
+    # Search the complete source for URL userinfo so a very long authority can
+    # cross chunk boundaries without treating unrelated @ characters as evidence.
+    return request_source and has_url_userinfo
 
 
 @dataclass(frozen=True)
@@ -199,6 +221,90 @@ _REFERENCE = _Value("reference")
 
 
 @dataclass
+class _AnalysisBudget:
+    """Aggregate work limits shared by all scopes and branch snapshots."""
+
+    resolution_operations: int = 0
+    container_visits: int = 0
+    resolved_string_chars: int = 0
+    url_parse_chars: int = 0
+    state_snapshot_entries: int = 0
+    exhausted: bool = False
+
+    def is_exhausted(self) -> bool:
+        """Return the mutable exhaustion state without stale static narrowing."""
+        return self.exhausted
+
+    def _consume(self, current: int, amount: int, limit: int) -> bool:
+        if self.exhausted or amount < 0 or current + amount > limit:
+            self.exhausted = True
+            return False
+        return True
+
+    def consume_resolution(self, amount: int = 1) -> bool:
+        if not self._consume(
+            self.resolution_operations, amount, MAX_RESOLUTION_OPERATIONS
+        ):
+            return False
+        self.resolution_operations += amount
+        return True
+
+    def consume_container(self) -> bool:
+        if not self._consume(self.container_visits, 1, MAX_CONTAINER_TRAVERSAL):
+            return False
+        self.container_visits += 1
+        return True
+
+    def consume_string_chars(self, amount: int) -> bool:
+        if amount > MAX_RESOLVED_STRING_CHARS or not self._consume(
+            self.resolved_string_chars, amount, MAX_TOTAL_RESOLVED_STRING_CHARS
+        ):
+            self.exhausted = True
+            return False
+        self.resolved_string_chars += amount
+        return True
+
+    def consume_url_parse_chars(self, amount: int) -> bool:
+        if not self._consume(self.url_parse_chars, amount, MAX_TOTAL_URL_PARSE_CHARS):
+            return False
+        self.url_parse_chars += amount
+        return True
+
+    def consume_snapshot_entries(self, amount: int) -> bool:
+        if not self._consume(
+            self.state_snapshot_entries, amount, MAX_STATE_SNAPSHOT_ENTRIES
+        ):
+            return False
+        self.state_snapshot_entries += amount
+        return True
+
+
+def _alternatives(
+    values: tuple[_Value, ...], budget: Optional[_AnalysisBudget] = None
+) -> _Value:
+    unique: list[_Value] = []
+    seen: set[_Value] = set()
+    for value in values:
+        candidates = value.value if value.kind == "alternatives" else (value,)
+        for candidate in candidates:
+            if budget is not None and not budget.consume_resolution():
+                return _UNKNOWN
+            if candidate in seen:
+                continue
+            if len(unique) >= MAX_BRANCH_ALTERNATIVES:
+                if budget is not None:
+                    budget.exhausted = True
+                return _UNKNOWN
+            unique.append(candidate)
+            seen.add(candidate)
+    if not unique:
+        return _UNKNOWN
+    if len(unique) == 1:
+        return unique[0]
+    return _Value("alternatives", tuple(unique))
+
+
+@dataclass
 class _State:
     modules: dict[str, str]
     functions: dict[str, tuple[str, str]]
@@ -206,8 +312,21 @@ class _State:
     auth_constructors: set[str]
     values: dict[str, _Value]
     instances: dict[str, str]
+    shadowed: set[str]
+    budget: _AnalysisBudget
 
     def fork(self) -> "_State":
+        entry_count = (
+            len(self.modules)
+            + len(self.functions)
+            + len(self.constructors)
+            + len(self.auth_constructors)
+            + len(self.values)
+            + len(self.instances)
+            + len(self.shadowed)
+        )
+        if not self.budget.consume_snapshot_entries(entry_count):
+            return _State({}, {}, {}, set(), {}, {}, set(), self.budget)
         return _State(
             modules=dict(self.modules),
             functions=dict(self.functions),
@@ -215,6 +334,8 @@ class _State:
             auth_constructors=set(self.auth_constructors),
             values=dict(self.values),
             instances=dict(self.instances),
+            shadowed=set(self.shadowed),
+            budget=self.budget,
         )
 
 
@@ -250,6 +371,8 @@ def _expanded_name(node: ast.AST, state: _State) -> Optional[str]:
     if not name:
         return None
     root, separator, suffix = name.partition(".")
+    if root in state.shadowed:
+        return None
     module = state.modules.get(root)
     if module:
         return module + (f".{suffix}" if separator else "")
@@ -267,17 +390,41 @@ def _module_family(name: Optional[str]) -> Optional[str]:
     return None
 
 
+def _shadow_aliases(name: str, state: _State, *, clear_instance: bool = False) -> None:
+    """Remove import/value bindings when Python reuses a name."""
+    state.modules.pop(name, None)
+    state.functions.pop(name, None)
+    state.constructors.pop(name, None)
+    state.auth_constructors.discard(name)
+    state.values.pop(name, None)
+    state.shadowed.add(name)
+    if clear_instance:
+        state.instances.pop(name, None)
+
+
 def _target_name(node: ast.AST) -> Optional[str]:
     return _dotted_name(node)
 
 
 def _resolve_value(node: ast.AST, state: _State, depth: int = 0) -> _Value:
+    budget = state.budget
+    if budget.exhausted:
+        return _UNKNOWN
     if depth > MAX_RESOLUTION_DEPTH:
+        budget.exhausted = True
+        return _UNKNOWN
+    if not budget.consume_resolution():
         return _UNKNOWN
     if isinstance(node, ast.Constant):
         if isinstance(node.value, str):
+            if len(node.value) > MAX_RESOLVED_STRING_CHARS:
+                budget.exhausted = True
+                return _UNKNOWN
             return _Value("literal", node.value)
         if isinstance(node.value, bytes):
+            if len(node.value) > MAX_RESOLVED_STRING_CHARS:
+                budget.exhausted = True
+                return _UNKNOWN
             try:
                 return _Value("literal", node.value.decode("ascii"))
             except UnicodeDecodeError:
@@ -286,13 +433,17 @@ def _resolve_value(node: ast.AST, state: _State, depth: int = 0) -> _Value:
     if isinstance(node, ast.Name):
         return state.values.get(node.id, _UNKNOWN)
     if isinstance(node, (ast.Tuple, ast.List)):
-        return _Value(
-            "sequence",
-            tuple(_resolve_value(item, state, depth + 1) for item in node.elts),
-        )
+        items = []
+        for item in node.elts:
+            if budget.is_exhausted():
+                return _UNKNOWN
+            items.append(_resolve_value(item, state, depth + 1))
+        return _Value("sequence", tuple(items))
     if isinstance(node, ast.Dict):
         entries = []
         for dictionary_key, dictionary_value in zip(node.keys, node.values):
+            if budget.is_exhausted():
+                return _UNKNOWN
             resolved_key = (
                 _resolve_value(dictionary_key, state, depth + 1)
                 if dictionary_key
@@ -311,30 +462,55 @@ def _resolve_value(node: ast.AST, state: _State, depth: int = 0) -> _Value:
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
         left = _resolve_value(node.left, state, depth + 1)
         right = _resolve_value(node.right, state, depth + 1)
+        if budget.is_exhausted():
+            return _UNKNOWN
         if left.kind == right.kind == "literal":
-            return _Value("literal", str(left.value) + str(right.value))
+            value_length = len(left.value) + len(right.value)
+            if not budget.consume_string_chars(value_length):
+                return _UNKNOWN
+            return _Value("literal", left.value + right.value)
         if left.kind == "reference" or right.kind == "reference":
             return _REFERENCE
         return _UNKNOWN
     if isinstance(node, ast.JoinedStr):
         parts = []
+        total_length = 0
         for item in node.values:
+            if budget.is_exhausted():
+                return _UNKNOWN
             if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                total_length += len(item.value)
+                if total_length > MAX_RESOLVED_STRING_CHARS:
+                    budget.exhausted = True
+                    return _UNKNOWN
                 parts.append(item.value)
                 continue
             if isinstance(item, ast.FormattedValue):
                 resolved = _resolve_value(item.value, state, depth + 1)
+                if budget.is_exhausted():
+                    return _UNKNOWN
                 if resolved.kind == "literal":
-                    parts.append(str(resolved.value))
+                    part = str(resolved.value)
+                    total_length += len(part)
+                    if total_length > MAX_RESOLVED_STRING_CHARS:
+                        budget.exhausted = True
+                        return _UNKNOWN
+                    parts.append(part)
                     continue
                 return _REFERENCE if resolved.kind == "reference" else _UNKNOWN
+            return _UNKNOWN
+        if not budget.consume_string_chars(total_length):
             return _UNKNOWN
         return _Value("literal", "".join(parts))
     if isinstance(node, ast.Subscript):
         container = _resolve_value(node.value, state, depth + 1)
         subscript_key = _resolve_value(node.slice, state, depth + 1)
+        if budget.is_exhausted():
+            return _UNKNOWN
         if container.kind == "mapping" and subscript_key.kind == "literal":
             for entry_key, entry_value in container.value:
+                if not budget.consume_container():
+                    return _UNKNOWN
                 if entry_key == subscript_key.value:
                     return entry_value
             return _UNKNOWN
@@ -359,7 +535,9 @@ def _resolve_value(node: ast.AST, state: _State, depth: int = 0) -> _Value:
     if isinstance(node, ast.IfExp):
         left = _resolve_value(node.body, state, depth + 1)
         right = _resolve_value(node.orelse, state, depth + 1)
-        return left if left == right else _UNKNOWN
+        if budget.is_exhausted():
+            return _UNKNOWN
+        return _alternatives((left, right), budget)
     return _UNKNOWN
 
 
@@ -367,11 +545,15 @@ def _register_import(node: ast.AST, state: _State) -> None:
     if isinstance(node, ast.Import):
         for alias in node.names:
             module = alias.name
+            bound = alias.asname or module.split(".", 1)[0]
+            _shadow_aliases(bound, state, clear_instance=True)
             if module in _SUPPORTED_MODULES or module.startswith("urllib."):
-                bound = alias.asname or module.split(".", 1)[0]
+                state.shadowed.discard(bound)
                 state.modules[bound] = module if alias.asname else bound
     elif isinstance(node, ast.ImportFrom) and node.module:
         module = node.module
+        for alias in node.names:
+            _shadow_aliases(alias.asname or alias.name, state, clear_instance=True)
         if module in _SUPPORTED_MODULES or module in {
             "requests.auth",
             "urllib",
@@ -381,22 +563,32 @@ def _register_import(node: ast.AST, state: _State) -> None:
                 full_name = f"{module}.{alias.name}"
                 family = _module_family(full_name)
                 if alias.name in _REQUEST_METHODS and family in {"requests", "httpx"}:
+                    state.shadowed.discard(bound)
                     state.functions[bound] = (family, alias.name)
                 elif alias.name == "request" and family == "aiohttp":
+                    state.shadowed.discard(bound)
                     state.functions[bound] = (family, alias.name)
                 elif alias.name == "urlopen" and family == "urllib.request":
+                    state.shadowed.discard(bound)
                     state.functions[bound] = (family, alias.name)
                 elif full_name in _REQUEST_CONSTRUCTORS:
+                    state.shadowed.discard(bound)
                     state.constructors[bound] = full_name
                 elif full_name in _CLIENT_CONSTRUCTORS:
+                    state.shadowed.discard(bound)
                     state.constructors[bound] = full_name
                 elif full_name in _AUTH_CONSTRUCTORS or alias.name in {
                     "HTTPBasicAuth",
                     "BasicAuth",
                 }:
+                    state.shadowed.discard(bound)
                     state.auth_constructors.add(bound)
                 elif module == "urllib.request" and alias.name == "Request":
+                    state.shadowed.discard(bound)
                     state.constructors[bound] = "urllib.request"
+                elif module == "urllib" and alias.name == "request":
+                    state.shadowed.discard(bound)
+                    state.modules[bound] = "urllib.request"
 
 
 def _expanded_function_name(node: ast.AST, state: _State) -> Optional[str]:
@@ -448,6 +640,7 @@ def _is_auth_constructor(node: ast.Call, state: _State) -> bool:
 
 class _Analyzer:
     def __init__(self) -> None:
+        self.budget = _AnalysisBudget()
         self.findings: list[HttpRequestCredentialFinding] = []
         self._seen: set[HttpRequestCredentialFinding] = set()
         self.incomplete = False
@@ -479,6 +672,8 @@ class _Analyzer:
 
     def _check_literal(self, value: _Value, node: ast.AST, client: str, sink: str):
         if value.kind == "literal" and isinstance(value.value, str):
+            if not self.budget.consume_string_chars(len(value.value)):
+                return
             if not _is_placeholder(value.value):
                 self.add(node, client, sink, INLINE_LITERAL)
 
@@ -491,15 +686,33 @@ class _Analyzer:
         *,
         depth: int = 0,
     ) -> None:
+        if self.budget.is_exhausted():
+            return
         if depth > MAX_RESOLUTION_DEPTH:
+            self.budget.exhausted = True
+            return
+        if not self.budget.consume_container():
             return
         if value.kind == "literal":
             self._check_literal(value, node, client, sink)
+        elif value.kind == "alternatives":
+            for item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                self._check_sensitive_value(item, node, client, sink, depth=depth + 1)
         elif value.kind == "sequence":
             for item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                if not self.budget.consume_container():
+                    return
                 self._check_sensitive_value(item, node, client, sink, depth=depth + 1)
         elif value.kind == "mapping":
             for key, item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                if not self.budget.consume_container():
+                    return
                 if key is not None and _normalized_name(key) in _CREDENTIAL_FIELDS:
                     self._check_sensitive_value(
                         item,
@@ -522,10 +735,26 @@ class _Analyzer:
         depth: int = 0,
     ) -> None:
         """Search request data for explicitly credential-named fields only."""
-        if depth > MAX_RESOLUTION_DEPTH:
+        if self.budget.is_exhausted():
             return
-        if value.kind == "mapping":
+        if depth > MAX_RESOLUTION_DEPTH:
+            self.budget.exhausted = True
+            return
+        if value.kind not in {"mapping", "sequence", "alternatives"}:
+            return
+        if not self.budget.consume_container():
+            return
+        if value.kind == "alternatives":
+            for item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                self._scan_credential_fields(item, node, client, depth=depth + 1)
+        elif value.kind == "mapping":
             for key, item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                if not self.budget.consume_container():
+                    return
                 if key is None:
                     continue
                 if _normalized_name(key) in _CREDENTIAL_FIELDS:
@@ -536,10 +765,14 @@ class _Analyzer:
                         self._field_sink(key),
                         depth=depth + 1,
                     )
-                elif item.kind in {"mapping", "sequence"}:
+                elif item.kind in {"mapping", "sequence", "alternatives"}:
                     self._scan_credential_fields(item, node, client, depth=depth + 1)
         elif value.kind == "sequence":
             for item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                if not self.budget.consume_container():
+                    return
                 self._scan_credential_fields(item, node, client, depth=depth + 1)
 
     @staticmethod
@@ -558,15 +791,28 @@ class _Analyzer:
     def _scan_auth(self, node: ast.AST, state: _State, client: str) -> None:
         value = _resolve_value(node, state)
         if value.kind == "authentication":
-            self._check_literal(value.value, node, client, "authentication")
+            self._check_sensitive_value(value.value, node, client, "authentication")
         else:
             self._scan_auth_value(value, node, client)
 
     def _scan_auth_value(self, value: _Value, node: ast.AST, client: str) -> None:
-        if value.kind == "sequence":
+        if self.budget.is_exhausted():
+            return
+        if not self.budget.consume_container():
+            return
+        if value.kind == "authentication":
+            self._check_sensitive_value(value.value, node, client, "authentication")
+        elif value.kind == "alternatives":
+            for item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                self._scan_auth_value(item, node, client)
+        elif value.kind == "sequence":
             parts = value.value
             if len(parts) > 1:
-                self._check_literal(parts[1], node, client, "authentication")
+                self._check_sensitive_value(
+                    parts[1], node, client, "authentication", depth=1
+                )
         else:
             self._check_literal(value, node, client, "authentication")
 
@@ -574,8 +820,24 @@ class _Analyzer:
         self._scan_headers_value(_resolve_value(node, state), node, client)
 
     def _scan_headers_value(self, value: _Value, node: ast.AST, client: str) -> None:
+        if self.budget.is_exhausted():
+            return
+        if value.kind not in {"sequence", "mapping", "alternatives"}:
+            return
+        if not self.budget.consume_container():
+            return
+        if value.kind == "alternatives":
+            for item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                self._scan_headers_value(item, node, client)
+            return
         if value.kind == "sequence":
             for pair in value.value:
+                if self.budget.is_exhausted():
+                    return
+                if not self.budget.consume_container():
+                    return
                 if pair.kind != "sequence" or len(pair.value) != 2:
                     continue
                 key, item = pair.value
@@ -589,6 +851,10 @@ class _Analyzer:
         if value.kind != "mapping":
             return
         for key, item in value.value:
+            if self.budget.is_exhausted():
+                return
+            if not self.budget.consume_container():
+                return
             if key is None or key.casefold().strip() not in _AUTH_HEADERS:
                 continue
             normalized = key.casefold().strip()
@@ -605,12 +871,18 @@ class _Analyzer:
 
     def _scan_request_options(self, call: ast.Call, state: _State, client: str) -> None:
         for keyword in call.keywords:
+            if self.budget.is_exhausted():
+                return
             name = keyword.arg.casefold() if isinstance(keyword.arg, str) else None
             if name is None:
                 expanded = _resolve_value(keyword.value, state)
                 if expanded.kind != "mapping":
                     continue
                 for key, value in expanded.value:
+                    if self.budget.is_exhausted():
+                        return
+                    if not self.budget.consume_container():
+                        return
                     if key == "auth":
                         self._scan_auth_value(value, keyword.value, client)
                     elif key == "headers":
@@ -630,7 +902,11 @@ class _Analyzer:
 
     def _scan_request_url(self, call: ast.Call, state: _State, client: str) -> None:
         name = _expanded_function_name(call.func, state) or ""
-        leaf = name.rsplit(".", 1)[-1]
+        leaf = (
+            call.func.attr
+            if isinstance(call.func, ast.Attribute)
+            else name.rsplit(".", 1)[-1]
+        )
         if leaf == "Request":
             index = 0 if client == "urllib.request" else 1
         elif leaf == "request":
@@ -644,7 +920,31 @@ class _Analyzer:
         if value_node is None:
             return
         value = _resolve_value(value_node, state)
+        self._scan_url_value(value, value_node, client)
+
+    def _scan_url_value(
+        self, value: _Value, value_node: ast.AST, client: str, depth: int = 0
+    ) -> None:
+        if self.budget.is_exhausted():
+            return
+        if depth > MAX_RESOLUTION_DEPTH:
+            self.budget.exhausted = True
+            return
+        if value.kind == "alternatives":
+            for item in value.value:
+                if self.budget.is_exhausted():
+                    return
+                if not self.budget.consume_container():
+                    return
+                self._scan_url_value(item, value_node, client, depth + 1)
+            return
         if value.kind != "literal" or not isinstance(value.value, str):
+            return
+        if len(value.value) > MAX_URL_CHARS:
+            self.budget.exhausted = True
+            return
+        query_length = len(value.value.partition("?")[2])
+        if not self.budget.consume_url_parse_chars(len(value.value) + query_length):
             return
         try:
             parsed = urlsplit(value.value)
@@ -658,7 +958,18 @@ class _Analyzer:
             password is not None and not _is_placeholder(password)
         ):
             self.add(value_node, client, "url_userinfo", INLINE_LITERAL)
-        for key, query_value in parse_qsl(parsed.query, keep_blank_values=True):
+        try:
+            query_fields = parse_qsl(
+                parsed.query,
+                keep_blank_values=True,
+                max_num_fields=MAX_CONTAINER_TRAVERSAL,
+            )
+        except ValueError:
+            self.budget.exhausted = True
+            return
+        for key, query_value in query_fields:
+            if not self.budget.consume_container():
+                return
             if _normalized_name(key) not in _CREDENTIAL_FIELDS:
                 continue
             self._check_literal(
@@ -769,7 +1080,107 @@ class _Analyzer:
                 else:
                     self._scan_headers(value, state, client)
 
+    @staticmethod
+    def _shadow_function_parameters(arguments: ast.arguments, state: _State) -> None:
+        parameters = [*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs]
+        if arguments.vararg is not None:
+            parameters.append(arguments.vararg)
+        if arguments.kwarg is not None:
+            parameters.append(arguments.kwarg)
+        for parameter in parameters:
+            _shadow_aliases(parameter.arg, state, clear_instance=True)
+
+    @staticmethod
+    def _merge_state(target: _State, branches: list[_State]) -> None:
+        if not branches:
+            return
+
+        def possible_mapping(attribute: str) -> dict[Any, Any]:
+            mappings = [getattr(branch, attribute) for branch in branches]
+            entry_count = sum(len(mapping) for mapping in mappings)
+            if not target.budget.consume_resolution(max(1, entry_count)):
+                return {}
+            names = set().union(*(set(mapping) for mapping in mappings))
+            possible: dict[Any, Any] = {}
+            for name in names:
+                for mapping in mappings:
+                    if not target.budget.consume_resolution():
+                        return possible
+                    if name in mapping:
+                        # Any branch may be taken at runtime. Preserve a known
+                        # supported binding rather than losing it at the merge.
+                        possible[name] = mapping[name]
+                        break
+            return possible
+
+        target.modules = possible_mapping("modules")
+        target.functions = possible_mapping("functions")
+        target.constructors = possible_mapping("constructors")
+        auth_entries = sum(len(branch.auth_constructors) for branch in branches)
+        shadowed_entries = sum(len(branch.shadowed) for branch in branches)
+        if target.budget.consume_resolution(max(1, auth_entries)):
+            target.auth_constructors = set().union(
+                *(set(branch.auth_constructors) for branch in branches)
+            )
+        else:
+            target.auth_constructors = set()
+        if target.budget.consume_resolution(max(1, shadowed_entries)):
+            target.shadowed = set().union(
+                *(set(branch.shadowed) for branch in branches)
+            )
+        else:
+            target.shadowed = set()
+        target.shadowed.difference_update(
+            target.modules,
+            target.functions,
+            target.constructors,
+            target.auth_constructors,
+        )
+
+        value_entries = sum(len(branch.values) for branch in branches)
+        if not target.budget.consume_resolution(max(1, value_entries)):
+            target.values = {}
+            target.instances = {}
+            return
+        names = set().union(*(set(branch.values) for branch in branches))
+        merged_values = {}
+        for name in names:
+            candidates = []
+            for branch in branches:
+                if not target.budget.consume_resolution():
+                    break
+                candidates.append(branch.values.get(name, _UNKNOWN))
+            if target.budget.is_exhausted():
+                break
+            value = _alternatives(tuple(candidates), target.budget)
+            if value.kind != "unknown":
+                merged_values[name] = value
+        target.values = merged_values
+
+        instance_entries = sum(len(branch.instances) for branch in branches)
+        if not target.budget.consume_resolution(max(1, instance_entries)):
+            target.instances = {}
+            return
+        instance_names = set().union(*(set(branch.instances) for branch in branches))
+        merged_instances = {}
+        for name in instance_names:
+            if not target.budget.consume_resolution():
+                break
+            families = set()
+            for branch in branches:
+                if not target.budget.consume_resolution():
+                    break
+                if name in branch.instances:
+                    families.add(branch.instances[name])
+            if target.budget.is_exhausted():
+                break
+            if len(families) == 1:
+                merged_instances[name] = next(iter(families))
+        target.instances = merged_instances
+
     def _scan_expr(self, node: ast.AST, state: _State) -> None:
+        if self.budget.is_exhausted():
+            return
         if isinstance(
             node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
         ):
@@ -777,10 +1188,14 @@ class _Analyzer:
         if isinstance(node, ast.Call):
             self._scan_call(node, state)
         for child in ast.iter_child_nodes(node):
+            if self.budget.is_exhausted():
+                return
             self._scan_expr(child, state)
 
     def _process_suite(self, statements: list[ast.stmt], state: _State) -> None:
         for statement in statements:
+            if self.budget.is_exhausted():
+                return
             if isinstance(statement, (ast.Import, ast.ImportFrom)):
                 _register_import(statement, state)
                 continue
@@ -793,7 +1208,11 @@ class _Analyzer:
                 ]:
                     if expression is not None:
                         self._scan_expr(expression, state)
-                self.pending_scopes.append((statement.body, state.fork()))
+                function_state = state.fork()
+                _shadow_aliases(statement.name, function_state, clear_instance=True)
+                self._shadow_function_parameters(statement.args, function_state)
+                self.pending_scopes.append((statement.body, function_state))
+                _shadow_aliases(statement.name, state, clear_instance=True)
                 continue
 
             if isinstance(statement, ast.ClassDef):
@@ -805,6 +1224,7 @@ class _Analyzer:
                 for class_expression in class_expressions:
                     self._scan_expr(class_expression, state)
                 self.pending_scopes.append((statement.body, state.fork()))
+                _shadow_aliases(statement.name, state, clear_instance=True)
                 continue
 
             if isinstance(statement, ast.Assign):
@@ -815,6 +1235,8 @@ class _Analyzer:
                     self._scan_header_subscript_assignment(
                         target, statement.value, state
                     )
+                    if isinstance(target, ast.Name):
+                        _shadow_aliases(target.id, state)
                     name = _target_name(target)
                     if name and isinstance(target, ast.Name):
                         state.values[name] = resolved
@@ -823,6 +1245,7 @@ class _Analyzer:
             if isinstance(statement, ast.AnnAssign):
                 if statement.value is not None:
                     self._scan_expr(statement.value, state)
+                    resolved = _resolve_value(statement.value, state)
                     self._scan_session_assignment(
                         statement.target, statement.value, state
                     )
@@ -831,21 +1254,29 @@ class _Analyzer:
                     )
                     name = _target_name(statement.target)
                     if name and isinstance(statement.target, ast.Name):
-                        state.values[name] = _resolve_value(statement.value, state)
+                        _shadow_aliases(name, state)
+                        state.values[name] = resolved
                 continue
 
             if isinstance(statement, ast.AugAssign):
                 self._scan_expr(statement.value, state)
                 name = _target_name(statement.target)
                 if name:
-                    state.values.pop(name, None)
-                    state.instances.pop(name, None)
+                    _shadow_aliases(name, state, clear_instance=True)
                 continue
 
             if isinstance(statement, ast.If):
                 self._scan_expr(statement.test, state)
-                self._process_suite(statement.body, state.fork())
-                self._process_suite(statement.orelse, state.fork())
+                body_state = state.fork()
+                self._process_suite(statement.body, body_state)
+                branches = [body_state]
+                if statement.orelse:
+                    else_state = state.fork()
+                    self._process_suite(statement.orelse, else_state)
+                    branches.append(else_state)
+                else:
+                    branches.append(state.fork())
+                self._merge_state(state, branches)
                 continue
 
             if isinstance(statement, (ast.For, ast.AsyncFor, ast.While)):
@@ -857,32 +1288,50 @@ class _Analyzer:
                     ),
                     state,
                 )
-                self._process_suite(statement.body, state.fork())
-                self._process_suite(statement.orelse, state.fork())
+                body_state = state.fork()
+                self._process_suite(statement.body, body_state)
+                else_state = state.fork()
+                self._process_suite(statement.orelse, else_state)
+                self._merge_state(state, [state.fork(), body_state, else_state])
                 continue
 
             if isinstance(statement, (ast.With, ast.AsyncWith)):
                 for item in statement.items:
                     self._scan_expr(item.context_expr, state)
-                self._process_suite(statement.body, state.fork())
+                    if item.optional_vars is not None:
+                        self._scan_session_assignment(
+                            item.optional_vars, item.context_expr, state
+                        )
+                        if isinstance(item.optional_vars, ast.Name):
+                            _shadow_aliases(item.optional_vars.id, state)
+                self._process_suite(statement.body, state)
                 continue
 
             if isinstance(statement, ast.Try):
-                self._process_suite(statement.body, state.fork())
+                try_state = state.fork()
+                self._process_suite(statement.body, try_state)
+                self._process_suite(statement.orelse, try_state)
+                branches = [try_state]
                 for handler in statement.handlers:
+                    handler_state = state.fork()
                     if handler.type:
-                        self._scan_expr(handler.type, state)
-                    self._process_suite(handler.body, state.fork())
-                self._process_suite(statement.orelse, state.fork())
-                self._process_suite(statement.finalbody, state.fork())
+                        self._scan_expr(handler.type, handler_state)
+                    self._process_suite(handler.body, handler_state)
+                    branches.append(handler_state)
+                self._merge_state(state, branches)
+                self._process_suite(statement.finalbody, state)
                 continue
 
             if isinstance(statement, ast.Match):
                 self._scan_expr(statement.subject, state)
+                branches = [state.fork()]
                 for case in statement.cases:
+                    case_state = state.fork()
                     if case.guard:
-                        self._scan_expr(case.guard, state)
-                    self._process_suite(case.body, state.fork())
+                        self._scan_expr(case.guard, case_state)
+                    self._process_suite(case.body, case_state)
+                    branches.append(case_state)
+                self._merge_state(state, branches)
                 continue
 
             self._scan_expr(statement, state)
@@ -894,23 +1343,26 @@ class _Analyzer:
             return self._incomplete_if_relevant(source)
         try:
             tree = ast.parse(source, mode="exec")
-            if sum(1 for _ in ast.walk(tree)) > MAX_AST_NODES:
-                return self._incomplete_if_relevant(source)
+            for node_count, _ in enumerate(ast.walk(tree), start=1):
+                if node_count > MAX_AST_NODES:
+                    return self._incomplete_if_relevant(source)
         except (SyntaxError, ValueError, TypeError, RecursionError):
             return self._incomplete_if_relevant(source)
 
-        state = _State({}, {}, {}, set(), {}, {})
+        state = _State({}, {}, {}, set(), {}, {}, set(), self.budget)
         self._process_suite(tree.body, state)
         index = 0
-        while index < len(self.pending_scopes):
+        while index < len(self.pending_scopes) and not self.budget.is_exhausted():
             body, outer_state = self.pending_scopes[index]
             index += 1
             self._process_suite(body, outer_state)
+        if self.budget.is_exhausted():
+            return self._incomplete_if_relevant(source)
         return HttpRequestCredentialAnalysis(tuple(self.findings), self.incomplete)
 
     def _incomplete_if_relevant(self, source: str) -> HttpRequestCredentialAnalysis:
         if not _has_relevant_source(source):
-            return HttpRequestCredentialAnalysis()
+            return HttpRequestCredentialAnalysis(tuple(self.findings), self.incomplete)
         self.incomplete = True
         self.add(
             ast.Module(body=[], type_ignores=[]),
