@@ -155,6 +155,7 @@ class ConfigDisplay:
             ("secret_scanning", "Secret Scanning"),
             ("password_likelihood", "Password Likelihood (Opt-in Heuristic)"),
             ("command_credential_scanning", "Command Credential Scanning"),
+            ("http_request_credential_scanning", "HTTP Request Credential Scanning"),
             ("prompt_injection", "Prompt Injection Detection"),
             ("ssrf_protection", "SSRF Protection"),
             ("config_file_scanning", "Config File Scanning"),

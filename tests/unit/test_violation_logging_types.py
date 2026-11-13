@@ -25,6 +25,7 @@ ALL_LOG_TYPES = [
     "image_secret_detected",
     "image_pii_detected",
     "context_poisoning",
+    "http_request_credential_detected",
 ]
 
 
@@ -56,6 +57,14 @@ class TestViolationLoggerDefaults:
                 vl = ViolationLogger()
                 defaults = vl._get_default_config()
                 assert "config_file_exfil" in defaults["log_types"]
+
+    def test_default_config_includes_http_request_credential_findings(self):
+        from ai_guardian.violations.logger import ViolationLogger
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": tmp}):
+                defaults = ViolationLogger()._get_default_config()
+                assert "http_request_credential_detected" in defaults["log_types"]
 
     def test_default_config_has_all_log_types(self):
         from ai_guardian.violations.logger import ViolationLogger
@@ -155,6 +164,18 @@ class TestSetupDefaults:
         assert "ssrf_blocked" in log_types
         assert "config_file_exfil" in log_types
         assert "middleware_paused" in log_types
+
+
+class TestConsoleLoggingTypes:
+    def test_console_exposes_http_request_credential_log_type(self):
+        pytest.importorskip("nicegui", reason="NiceGUI is required by web pages")
+        from ai_guardian.web.pages.violation_logging import (
+            ALL_LOG_TYPES as console_types,
+        )
+
+        assert "http_request_credential_detected" in {
+            log_type for log_type, _ in console_types
+        }
 
 
 class TestSchemaValidation:
@@ -321,6 +342,24 @@ class TestViolationLogging:
                 violations = vl.get_recent_violations(limit=10)
                 assert len(violations) == 1
                 assert violations[0]["violation_type"] == "config_file_exfil"
+
+    def test_http_request_credential_violation_is_logged_by_default(self):
+        from ai_guardian.violations.logger import ViolationLogger
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": tmp}):
+                vl = ViolationLogger()
+                vl.log_violation(
+                    violation_type="http_request_credential_detected",
+                    blocked={"reason": "synthetic value withheld"},
+                    context={"hook_event": "pretooluse"},
+                )
+                violations = vl.get_recent_violations(limit=10)
+                assert len(violations) == 1
+                assert (
+                    violations[0]["violation_type"]
+                    == "http_request_credential_detected"
+                )
 
     def test_non_default_type_not_logged_when_excluded_from_config(self):
         from ai_guardian.violations.logger import ViolationLogger

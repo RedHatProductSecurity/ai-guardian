@@ -54,6 +54,7 @@ class SmokeCase:
     prompt: str
     expected_violation: Optional[str]
     expects_provider: bool
+    cli_names: Optional[Sequence[str]] = None
 
 
 def _fake_access_key() -> str:
@@ -106,6 +107,22 @@ CASES = (
         True,
     ),
     SmokeCase(
+        "http_request_credential",
+        "AGENT_CLI_SMOKE_CASE: http_request_credential\n"
+        "Use the native Write tool to create the requested local diagnostic.",
+        "http_request_credential_detected",
+        True,
+        ("claude", "opencode"),
+    ),
+    SmokeCase(
+        "http_request_credential_clean",
+        "AGENT_CLI_SMOKE_CASE: http_request_credential_clean\n"
+        "Use the native Write tool to create the requested local diagnostic.",
+        None,
+        True,
+        ("claude", "opencode"),
+    ),
+    SmokeCase(
         "clean_tool",
         "AGENT_CLI_SMOKE_CASE: clean_tool\nRun the local diagnostic requested by the test provider.",
         None,
@@ -132,6 +149,9 @@ CASES = (
     ),
 )
 OUTPUT_CASES = frozenset({"clean_tool", "tool_output_secret", "tool_output_pii"})
+HTTP_REQUEST_CREDENTIAL_CASES = frozenset(
+    {"http_request_credential", "http_request_credential_clean"}
+)
 CODEX_BWRAP_PERMISSION_GUIDANCE = (
     "Codex reported a Bubblewrap permission denial; this case remains failed and "
     "tool execution was not verified. Keep `workspace-write` and the smoke "
@@ -210,6 +230,7 @@ elif cli == 'claude':
     allowed=permissions.setdefault('allow', [])
     if not isinstance(allowed, list): allowed=[]; permissions['allow']=allowed
     if 'Bash(printf *)' not in allowed: allowed.append('Bash(printf *)')
+    if 'Write' not in allowed: allowed.append('Write')
     for case in ('clean_tool','tool_output_secret','tool_output_pii'):
         probe=f'Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case {case})'
         if probe not in allowed: allowed.append(probe)
@@ -322,7 +343,8 @@ _READ_TOOL_EVIDENCE = r"""
 import json,sys,urllib.request
 from pathlib import Path
 case=sys.argv[2]
-if case not in ('ssrf','config_exfil','command_credential','clean_tool','tool_output_secret','tool_output_pii'):
+if case not in ('ssrf','config_exfil','command_credential','http_request_credential',
+                'http_request_credential_clean','clean_tool','tool_output_secret','tool_output_pii'):
     raise SystemExit(1)
 opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with opener.open(sys.argv[1],timeout=2) as r: stats=json.loads(r.read())
@@ -352,10 +374,20 @@ if not isinstance(tool_names,dict): tool_names={}
 for name in ('bash','shell','exec_command','shell_command','run_shell_command'):
     value=tool_names.get(name,0)
     out['native_tool_name_'+name]=value if type(value) is int and value >= 0 else 0
+file_tool_names=stats.get('file_write_tool_names',{}).get(case,{})
+if not isinstance(file_tool_names,dict): file_tool_names={}
+for name in ('write',):
+    value=file_tool_names.get(name,0)
+    out['native_file_write_tool_name_'+name]=value if type(value) is int and value >= 0 else 0
 # Process-wide total: a prior delivery failure must never become a new baseline.
 out['raw_tool_output_requests']=sum(stats['raw_tool_output_requests'].values())
 path=Path('/sandbox/repo/.agent-cli-smoke-results')/(case+'.executed')
 out['executed']=int(path.is_file() and path.read_text(encoding='ascii') == 'executed\n')
+written_paths={
+    'http_request_credential':'/sandbox/repo/.agent-cli-smoke-results/http_request_credential.py',
+    'http_request_credential_clean':'/sandbox/repo/.agent-cli-smoke-results/http_request_credential_clean.py',
+}
+out['file_written']=int(case in written_paths and Path(written_paths.get(case, '')).is_file())
 print(json.dumps(out,sort_keys=True))
 """
 
@@ -1345,11 +1377,13 @@ def _tool_evidence(
         "function_call_output_category_error_text",
         "function_call_output_category_other_text",
         "function_call_output_category_empty",
+        "file_written",
         "native_tool_name_bash",
         "native_tool_name_shell",
         "native_tool_name_exec_command",
         "native_tool_name_shell_command",
         "native_tool_name_run_shell_command",
+        "native_file_write_tool_name_write",
     }
     try:
         values = json.loads(result.stdout) if result.returncode == 0 else None
@@ -1805,10 +1839,15 @@ def _run_case(
     old_violations = _violation_counts(engine, name, timeout, diagnostics)
     old_requests = _provider_stats(engine, name, timeout, diagnostics)
     old_hooks = _hook_counts(engine, name, timeout, diagnostics)
-    is_tool_case = case.name in OUTPUT_CASES or case.name in (
-        "ssrf",
-        "config_exfil",
-        "command_credential",
+    is_tool_case = (
+        case.name in OUTPUT_CASES
+        or case.name
+        in (
+            "ssrf",
+            "config_exfil",
+            "command_credential",
+        )
+        or case.name in HTTP_REQUEST_CREDENTIAL_CASES
     )
     old_tools = (
         _tool_evidence(engine, name, case.name, timeout, diagnostics)
@@ -1898,12 +1937,35 @@ def _run_case(
         return fail(f"expected {expected_hook} hook event was not recorded")
     if is_tool_case and tool_deltas.get("tool_offers", 0) < 1:
         return fail("the local mock did not issue the expected tool call")
-    if case.name in ("ssrf", "config_exfil", "command_credential") and hook_deltas.get("posttooluse", 0) != 0:
+    if (
+        case.name
+        in (
+            "ssrf",
+            "config_exfil",
+            "command_credential",
+            "http_request_credential",
+        )
+        and hook_deltas.get("posttooluse", 0) != 0
+    ):
         return fail(
             "pre-tool blocking was not confirmed; a post-tool event was recorded"
         )
     if case.name == "command_credential" and tool_deltas.get("executed", 0) != 0:
         return fail("command credential probe executed despite pre-tool denial")
+    if case.name == "http_request_credential":
+        if tool_deltas.get("file_written", 0) != 0:
+            return fail(
+                "HTTP credential source file was written despite pre-tool denial"
+            )
+        if tool_deltas.get("native_file_write_tool_name_write", 0) < 1:
+            return fail("the native Write tool was not confirmed by the local mock")
+    if case.name == "http_request_credential_clean":
+        if tool_deltas.get("file_written", 0) != 1:
+            return fail("the clean HTTP source file did not execute exactly once")
+        if tool_deltas.get("native_file_write_tool_name_write", 0) < 1:
+            return fail("the native Write tool was not confirmed by the local mock")
+        if hook_deltas.get("posttooluse", 0) < 1:
+            return fail("clean HTTP source write did not reach its post-tool hook")
     if case.name in OUTPUT_CASES:
         if tool_deltas.get("executed", 0) != 1:
             return fail("the expected tool did not execute exactly once")
@@ -2504,6 +2566,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 return 1
         passed = True
         for case in CASES:
+            if case.cli_names and args.cli_name not in case.cli_names:
+                _progress(
+                    f"SKIP {case.name}: native Write tool smoke is not configured for {args.cli_name}"
+                )
+                continue
             passed = (
                 _run_case(
                     args.container_engine,

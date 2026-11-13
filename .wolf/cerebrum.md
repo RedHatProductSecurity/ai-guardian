@@ -6,6 +6,11 @@
 
 ## User Preferences
 
+- **2026-11-13 — Claude native Write smoke permission:** Claude's `--print` smoke
+  configuration needs an explicit `Write` entry in its isolated settings
+  `permissions.allow` list for the clean native Write case; preserving Bash probe
+  permissions alone does not authorize that tool.
+
 - **2026-11-06 — Codex smoke runtime comparison:** User selected matching the
   regular rootless Podman container defaults for the disposable smoke. This
   authorizes removing the smoke-only all-capability drop/no-new-privileges flags
@@ -317,6 +322,12 @@
   requires non-empty Base62 components; document static detection bounds separately
   rather than claiming they are service-side validation limits. Use synthetic
   fixtures only; no live keys or validation endpoints are needed.
+
+- **2026-11-13 — Bounded source scanner limits (#2717):** When parsing is capped,
+  relevance checks must inspect the whole submitted source in bounded overlapping
+  chunks; checking only the parse prefix lets padded source hide a relevant sink
+  after the cap. Include stdlib network entry points such as `urllib.request.urlopen`
+  when documenting `urllib.request` coverage.
 
 - **2026-11-12 — Custom secret-rule diagnostics / CodeQL (#2727):** Even a
   regex-validated custom rule ID is tainted to CodeQL when interpolated into a log

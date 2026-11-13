@@ -169,6 +169,7 @@ def log_violation(
         private_candidate = result.violation_type in {
             "suspected_password",
             "command_credential_detected",
+            "http_request_credential_detected",
         }
         blocked = result.to_blocked_dict(source=source)
         if blocked_overrides and not private_candidate:
@@ -248,11 +249,16 @@ def log_violation(
         elif result.violation_type in {
             "suspected_password",
             "command_credential_detected",
+            "http_request_credential_detected",
         }:
             logger.critical(
                 "Failed to persist suspected-password violation; details withheld"
                 if result.violation_type == "suspected_password"
-                else "Failed to persist command-credential violation; details withheld"
+                else (
+                    "Failed to persist command-credential violation; details withheld"
+                    if result.violation_type == "command_credential_detected"
+                    else "Failed to persist HTTP request credential finding; details withheld"
+                )
             )
         else:
             logger.error("Failed to log %s violation: %s", result.violation_type, e)

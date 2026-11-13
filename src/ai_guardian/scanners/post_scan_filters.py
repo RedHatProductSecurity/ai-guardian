@@ -23,6 +23,7 @@ _VIOLATION_LABELS = {
     "secret_detected": "Secret",
     "suspected_password": "Suspected password-like content",
     "command_credential_detected": "Command credential finding",
+    "http_request_credential_detected": "HTTP request credential finding",
     "pii_detected": "PII",
     "ssrf_blocked": "SSRF threat",
     "config_file_exfil": "Config file threat",
@@ -91,6 +92,8 @@ def build_detailed_warn_message(
     if result.violation_type == "suspected_password":
         return result.error_message + " Advisory only; content was not blocked."
     if result.violation_type == "command_credential_detected":
+        return result.error_message
+    if result.violation_type == "http_request_credential_detected":
         return result.error_message
     label = _VIOLATION_LABELS.get(
         getattr(entry, "violation_type", "") or "", "Security violation"
@@ -264,6 +267,7 @@ def apply_post_scan_pipeline(
     private_candidate = result.violation_type in {
         "suspected_password",
         "command_credential_detected",
+        "http_request_credential_detected",
     }
     if not result.detected and not (
         private_candidate and result.extra.get("incomplete")

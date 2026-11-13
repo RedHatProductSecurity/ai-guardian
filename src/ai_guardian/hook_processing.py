@@ -173,6 +173,61 @@ def _get_on_scan_error_action():
     return _loaders._get_on_scan_error_action()
 
 
+def _prospective_http_edit_source(tool_input: dict, file_path: str) -> str:
+    """Build bounded source context for an Edit without executing its contents."""
+    from ai_guardian.scanners.http_request_credentials import MAX_SOURCE_CHARS
+
+    replacement = tool_input.get("new_string", "")
+    if not isinstance(replacement, str):
+        return ""
+    old_string = tool_input.get("old_string", "")
+    if not isinstance(old_string, str):
+        return replacement
+
+    try:
+        with open(file_path, "rb") as stream:
+            file_size = os.fstat(stream.fileno()).st_size
+            if file_size <= MAX_SOURCE_CHARS:
+                existing = stream.read(MAX_SOURCE_CHARS + 1).decode(
+                    "utf-8", errors="replace"
+                )
+            else:
+                excerpt_size = MAX_SOURCE_CHARS // 2
+                prefix = stream.read(excerpt_size).decode("utf-8", errors="replace")
+                stream.seek(max(0, file_size - excerpt_size))
+                suffix = stream.read(excerpt_size).decode("utf-8", errors="replace")
+                replacement_excerpt = (
+                    replacement
+                    if len(replacement) <= MAX_SOURCE_CHARS
+                    else replacement[:excerpt_size] + replacement[-excerpt_size:]
+                )
+                return f"{prefix}\n{replacement_excerpt}\n{suffix}"
+    except (OSError, ValueError):
+        return replacement
+
+    if old_string and old_string in existing:
+        replace_all = tool_input.get("replace_all") is True
+        replace_count = existing.count(old_string) if replace_all else 1
+        prospective_length = len(existing) + replace_count * (
+            len(replacement) - len(old_string)
+        )
+        if prospective_length <= MAX_SOURCE_CHARS:
+            return existing.replace(old_string, replacement, -1 if replace_all else 1)
+        prefix = existing[: MAX_SOURCE_CHARS // 3]
+        suffix = existing[-(MAX_SOURCE_CHARS // 3) :]
+    else:
+        prefix = existing[: MAX_SOURCE_CHARS // 3]
+        suffix = existing[-(MAX_SOURCE_CHARS // 3) :]
+
+    replacement_excerpt = (
+        replacement
+        if len(replacement) <= MAX_SOURCE_CHARS
+        else replacement[: MAX_SOURCE_CHARS // 2]
+        + replacement[-(MAX_SOURCE_CHARS // 2) :]
+    )
+    return f"{prefix}\n{replacement_excerpt}\n{suffix}"
+
+
 def _hook_failure_response(hook_data=None):
     """Build a policy-aware response when the hook pipeline cannot continue."""
     return build_failure_response(hook_data, _hook_failure_action())
@@ -3033,12 +3088,67 @@ def _process_hook_data(hook_data, daemon_state=None):
                 # Code security scan for Write/Edit writing Python files
                 if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
                     cs_file_path = tool_input.get("file_path", "") or ""
-                    if cs_file_path.endswith(".py"):
+                    if (
+                        isinstance(cs_file_path, str)
+                        and os.path.splitext(cs_file_path)[1].casefold() == ".py"
+                    ):
                         cs_content = (
                             tool_input.get("content", "")
                             if tool_name == "Write"
                             else tool_input.get("new_string", "")
                         )
+                        http_content = (
+                            cs_content
+                            if tool_name == "Write"
+                            else _prospective_http_edit_source(tool_input, cs_file_path)
+                        )
+                        if http_content:
+                            from ai_guardian.scanners.http_request_credentials import (
+                                run_http_request_credential_scan,
+                            )
+
+                            http_credential_result = run_http_request_credential_scan(
+                                http_content,
+                                file_path=cs_file_path,
+                            )
+                            if http_credential_result is not None:
+                                http_credential_decision = apply_post_scan_pipeline(
+                                    _registry.get(
+                                        ScannerName.HTTP_REQUEST_CREDENTIAL_SCANNING
+                                    ),
+                                    http_credential_result,
+                                    _post_scan_ctx,
+                                    file_path=cs_file_path,
+                                    filename=os.path.basename(cs_file_path),
+                                )
+                                warning_messages.extend(
+                                    http_credential_decision.warnings
+                                )
+                                if (
+                                    http_credential_decision.warnings
+                                    and warn_violation_types is not None
+                                ):
+                                    warn_violation_types.append(
+                                        ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED
+                                    )
+                                if http_credential_decision.should_block:
+                                    combined_warning = (
+                                        "\n\n".join(warning_messages)
+                                        if warning_messages
+                                        else None
+                                    )
+                                    return _format_response(
+                                        adapter,
+                                        has_secrets=True,
+                                        error_message=http_credential_result.error_message,
+                                        hook_event=hook_event,
+                                        warning_message=combined_warning,
+                                        violation_type=(
+                                            ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED
+                                        ),
+                                        security_message=security_message,
+                                    )
+
                         if cs_content:
                             try:
                                 cs_config, cs_config_err = _load_code_scanning_config()

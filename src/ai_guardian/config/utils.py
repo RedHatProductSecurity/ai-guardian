@@ -93,6 +93,7 @@ GLOBAL_ONLY_SECTIONS: FrozenSet[str] = frozenset(
         "self_protection",
         "password_likelihood",
         "command_credential_scanning",
+        "http_request_credential_scanning",
         "violation_notifications",
     }
 )
@@ -937,6 +938,10 @@ def get_feature_flags(cfg: Dict) -> Dict[str, bool]:
     features["command_credential_scanning"] = not (
         isinstance(command_credentials, dict)
         and command_credentials.get("enabled") is False
+    )
+    http_credentials = cfg.get("http_request_credential_scanning")
+    features["http_request_credential_scanning"] = not (
+        isinstance(http_credentials, dict) and http_credentials.get("enabled") is False
     )
     return features
 

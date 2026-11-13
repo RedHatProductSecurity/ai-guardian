@@ -2464,6 +2464,13 @@ class TestDoctorRunAll:
         doctor._config_loaded = True
         return doctor
 
+    @staticmethod
+    def _doctor_with_http_request_credential_policy(section):
+        doctor = Doctor()
+        doctor._config = {"http_request_credential_scanning": section}
+        doctor._config_loaded = True
+        return doctor
+
     def test_command_credential_check_defaults_to_enabled_block(self):
         result = self._doctor_with_command_credential_policy(
             {}
@@ -2491,11 +2498,38 @@ class TestDoctorRunAll:
         assert invalid_enabled.status == CheckStatus.FAIL
         assert invalid_action.status == CheckStatus.FAIL
 
+    def test_http_request_credential_check_defaults_to_enabled_block(self):
+        result = self._doctor_with_http_request_credential_policy(
+            {}
+        ).check_http_request_credential_scanning()
+        assert result.status == CheckStatus.PASS
+        assert "enabled (block)" in result.message
+
+    def test_http_request_credential_check_warns_for_disabled_or_advisory_policy(self):
+        disabled = self._doctor_with_http_request_credential_policy(
+            {"enabled": False, "action": "block"}
+        ).check_http_request_credential_scanning()
+        advisory = self._doctor_with_http_request_credential_policy(
+            {"enabled": True, "action": "warn"}
+        ).check_http_request_credential_scanning()
+        assert disabled.status == CheckStatus.WARN
+        assert advisory.status == CheckStatus.WARN
+
+    def test_http_request_credential_check_rejects_malformed_policy(self):
+        invalid_enabled = self._doctor_with_http_request_credential_policy(
+            {"enabled": "false"}
+        ).check_http_request_credential_scanning()
+        invalid_action = self._doctor_with_http_request_credential_policy(
+            {"action": "ignore"}
+        ).check_http_request_credential_scanning()
+        assert invalid_enabled.status == CheckStatus.FAIL
+        assert invalid_action.status == CheckStatus.FAIL
+
     def test_run_all_returns_report(self, _isolate_config_dir):
         doctor = Doctor()
         report = doctor.run_all()
         assert isinstance(report, DoctorReport)
-        assert len(report.checks) == 36
+        assert len(report.checks) == 37
         assert report.version != ""
 
     def test_check_crash_handled(self, _isolate_config_dir):

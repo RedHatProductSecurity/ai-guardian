@@ -5,7 +5,60 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-12 (UTC)
+> Last updated: 2026-11-13 (UTC)
+
+## PR #2732 / issue #2717 CodeRabbit follow-up — 2026-11-13
+
+- Added aggregate budgets for resolution, container traversal, derived/scanned
+  strings, URL parsing, branch alternatives, and state snapshots. Oversized URL
+  userinfo relevance is detected without using unrelated `@` characters as a hint.
+- Preserve possible values and client bindings across control-flow branches;
+  handle function/parameter shadowing, context-manager clients, and expanded
+  `**options` authentication.
+- Pre-tool Edit credential scanning now uses bounded prospective-file context
+  instead of scanning only `new_string`. Default violation logs and the Console
+  logging selector include `http_request_credential_detected`.
+- Added unit and UX regressions, including environment-backed safety, branch
+  merges, resource exhaustion, Edit context, logging, and native Write smoke
+  contract review. Static checks pass: Ruff, Black, Pylint, Mypy, and diff check.
+  Unit/UX tests were not run under the task's static-only/no-source-execution
+  constraint. No commit or push was made; changes remain local on branch `2717`.
+- Reviewed all nine linked CodeRabbit inline findings. Eight scanner/Edit findings
+  are covered by the fixes and regressions above. Added explicit Claude native
+  `Write` permission to the smoke settings and an exact generated-config regression;
+  the focused test was not run under the static-only constraint.
+
+## Issue #2717 HTTP request credential scanning — 2026-11-13
+
+- Added a default-on, global-only, non-executing Python AST scanner for literal
+  credentials flowing into supported `requests`, `httpx`, `aiohttp`, and
+  `urllib.request` request sinks. It follows bounded same-scope assignments,
+  recognizes auth/header/body fields, URL userinfo/query credentials, session
+  header mutation, and `urllib.request.urlopen`. Oversized relevant source fails
+  closed even when the sink appears after the parse-size cap.
+- Enforced before supported Python `Write`/`Edit` operations with `block`, private
+  operation-scoped `ask`, `warn`, and `log-only` actions. Values/source snippets are
+  excluded from findings, Ask prompts, violation logs, messages, and Console details.
+  Added schema, generated/example/profile defaults, Doctor, config/feature reporting,
+  Console controls, docs, and Unreleased changelog entry.
+- Added Claude/OpenCode native Write mock smoke cases for denied inline source and
+  allowed environment-backed source, with aggregate-only counters and file-existence
+  evidence; real container/agent scenarios were not run locally per project guidance.
+- Added an OpenCode-native `write` UX contract confirming its `filePath`/content
+  input normalizes to the shared pre-tool scanner path.
+- **Validation:** 1,835 related unit/UX tests pass, 1 skipped (3 existing
+  deprecation warnings). Ruff, Black (Python 3.10 target), error-level Pylint,
+  package Mypy (338 source files), JSON validation, and `git diff --check` pass.
+- **CI follow-up:** Tests run `43351649236` failed five distinct assertions on
+  commit `23620e0`: generated-profile comment parity, missing HTTP-credential
+  violation type in generated/profile logging defaults and schema enums, and
+  three Windows mock-write path checks that assumed POSIX `/` separators. Added
+  the missing defaults/schema values and changed those assertions to compare path
+  basenames. All **406** tests across the five affected unit files pass locally;
+  Ruff, Black, Pylint, and package Mypy pass. Other workflows on that CI commit
+  passed. Fixes are local and uncommitted; no push or new CI run yet.
+- Changes remain uncommitted on branch `2717`; no issue/PR update or push was made.
+  **Next:** user review, then external DAF completion if requested.
 
 ## Issue #2720 OpenShift AI MaaS API key detection — 2026-11-12
 

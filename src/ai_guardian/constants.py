@@ -61,6 +61,7 @@ class ViolationType(str, Enum):
     SECRET_DETECTED = "secret_detected"
     HEURISTIC_CANDIDATE = "suspected_password"  # public category, never a value
     COMMAND_CREDENTIAL_DETECTED = "command_credential_detected"
+    HTTP_REQUEST_CREDENTIAL_DETECTED = "http_request_credential_detected"
     PII_DETECTED = "pii_detected"
     DIRECTORY_BLOCKING = "directory_blocking"
     TOOL_PERMISSION = "tool_permission"
@@ -441,6 +442,11 @@ VIOLATION_FILTER_TYPES = [
         "Credential-bearing command arguments detected or command analysis incomplete",
     ),
     (
+        "HTTP Request Credential",
+        "http_request_credential_detected",
+        "Hard-coded credential flow detected in supported Python HTTP request source",
+    ),
+    (
         "Directories",
         "directory_blocking",
         "File access blocked by directory protection rules",
@@ -524,6 +530,7 @@ RULE_ID_LABELS = {
     "SECRET-001": "Secrets",
     "PASSWORD-001": "Suspected Password (Heuristic)",
     "COMMAND-CREDENTIAL-001": "Command Credential Argument",
+    "HTTP-REQUEST-CREDENTIAL-001": "HTTP Request Credential Flow",
     "PII-001": "PII",
     "PROMPT-INJECTION-001": "Prompt Injection",
     "SSRF-001": "SSRF",
@@ -539,6 +546,7 @@ RULE_ID_LABELS = {
 RULE_ID_TO_SCANNER = {
     "SECRET-001": "secret_scanning",
     "COMMAND-CREDENTIAL-001": "command_credential_scanning",
+    "HTTP-REQUEST-CREDENTIAL-001": "http_request_credential_scanning",
     "PII-001": "scan_pii",
     "PROMPT-INJECTION-001": "prompt_injection",
     "SSRF-001": "ssrf_protection",
@@ -551,6 +559,7 @@ RULE_ID_TO_VIOLATION_TYPE = {
     "SECRET-001": "secret_detected",
     "PASSWORD-001": "suspected_password",
     "COMMAND-CREDENTIAL-001": "command_credential_detected",
+    "HTTP-REQUEST-CREDENTIAL-001": "http_request_credential_detected",
     "PII-001": "pii_detected",
     "PROMPT-INJECTION-001": "prompt_injection",
     "SSRF-001": "ssrf_blocked",
@@ -567,6 +576,7 @@ RULE_ID_TO_CONFIG_SECTION = {
     "SECRET-001": "secret_scanning",
     "PASSWORD-001": "password_likelihood",
     "COMMAND-CREDENTIAL-001": "command_credential_scanning",
+    "HTTP-REQUEST-CREDENTIAL-001": "http_request_credential_scanning",
     "PII-001": "scan_pii",
     "PROMPT-INJECTION-001": "prompt_injection",
     "SSRF-001": "ssrf_protection",
@@ -612,6 +622,7 @@ del _slug, _section
 # This opt-in control shares the Secrets page rather than adding navigation.
 _SECTION_TO_SLUG["password_likelihood"] = "/secrets"
 _SECTION_TO_SLUG["command_credential_scanning"] = "/secrets"
+_SECTION_TO_SLUG["http_request_credential_scanning"] = "/secrets"
 
 RULE_ID_TO_SLUG = {
     rule_id: ("/pi-unicode" if rule_id == "UNICODE-001" else _SECTION_TO_SLUG[section])

@@ -46,6 +46,13 @@ DETAIL_FIELDS = {
         ("Findings", "total_findings"),
         ("Reason", "reason"),
     ],
+    "http_request_credential_detected": [
+        ("File", "file_path"),
+        ("Line", "line_number"),
+        ("Action", "action"),
+        ("Findings", "total_findings"),
+        ("Reason", "reason"),
+    ],
     "tool_permission": [
         ("Tool", "tool_name"),
         ("File", "tool_value"),
@@ -1123,6 +1130,8 @@ def _extract_matched_from_violation(violation: dict) -> str:
     # Command argument values are never suitable for pattern-editor display,
     # even if a malformed or legacy record contains a matched-text field.
     if vtype == "command_credential_detected":
+        return ""
+    if vtype == "http_request_credential_detected":
         return ""
 
     if blocked.get("matched_text"):

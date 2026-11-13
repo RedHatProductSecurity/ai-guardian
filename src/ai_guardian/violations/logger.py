@@ -54,6 +54,8 @@ def _safe_violation_label(violation_type: str) -> str:
         return "suspected_password"
     if violation_type == "command_credential_detected":
         return "command_credential_detected"
+    if violation_type == "http_request_credential_detected":
+        return "http_request_credential_detected"
     if violation_type == "directory_blocking":
         return "directory_blocking"
     if violation_type == "prompt_injection":
@@ -312,11 +314,16 @@ class ViolationLogger:
                 if violation_type in {
                     "suspected_password",
                     "command_credential_detected",
+                    "http_request_credential_detected",
                 }:
                     logger.warning(
                         "Failed to increment suspected-password counter; details withheld"
                         if violation_type == "suspected_password"
-                        else "Failed to increment command-credential counter; details withheld"
+                        else (
+                            "Failed to increment command-credential counter; details withheld"
+                            if violation_type == "command_credential_detected"
+                            else "Failed to increment HTTP request credential counter; details withheld"
+                        )
                     )
                 else:
                     logger.warning(
@@ -328,11 +335,16 @@ class ViolationLogger:
             if violation_type in {
                 "suspected_password",
                 "command_credential_detected",
+                "http_request_credential_detected",
             }:
                 logger.critical(
                     "Failed to persist suspected-password violation; details withheld"
                     if violation_type == "suspected_password"
-                    else "Failed to persist command-credential violation; details withheld"
+                    else (
+                        "Failed to persist command-credential violation; details withheld"
+                        if violation_type == "command_credential_detected"
+                        else "Failed to persist HTTP request credential finding; details withheld"
+                    )
                 )
             else:
                 logger.warning(f"Failed to log violation: {e}")
@@ -754,6 +766,7 @@ class ViolationLogger:
                 "image_secret_detected",
                 "image_pii_detected",
                 "context_poisoning",
+                "http_request_credential_detected",
             ],
         }
 

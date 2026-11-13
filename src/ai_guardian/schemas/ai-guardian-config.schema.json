@@ -207,6 +207,26 @@
       },
       "additionalProperties": false
     },
+    "http_request_credential_scanning": {
+      "type": "object",
+      "description": "Independent default-on static analysis of Python source supplied to supported Write/Edit pre-tool hooks. Parses source without importing or executing it and detects literal credentials flowing into supported HTTP request authentication, authorization/API-key headers, and explicitly credential-named request fields. Only simple assignments within a single module/function scope are followed; helper/inter-procedural flows and unsupported write integrations are outside the boundary. Values and source snippets are never retained.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Python HTTP request credential source analysis. Enabled by default. Global-only policy."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["block", "ask", "warn", "log-only"],
+          "default": "block",
+          "description": "Action for inline literal findings and relevant incomplete analysis. block denies before a supported Write/Edit is applied; ask permits only operation-scoped Allow Once / Block and denies if approval is unavailable; warn is advisory; log-only is silent."
+        },
+        "_comment_enabled": {"type": "string"},
+        "_comment_action": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
     "secret_scanning": {
       "type": "object",
       "description": "Secret scanning with multi-engine support (v1.4.0+). Object with 'enabled' property that supports boolean (permanent) or time-based (temporary) formats. Multi-engine support added in v1.5.0 - configure multiple engines with automatic fallback.",
@@ -2110,6 +2130,7 @@
               "secret_detected",
               "suspected_password",
               "command_credential_detected",
+              "http_request_credential_detected",
               "secret_redaction",
               "prompt_injection",
               "jailbreak_detected",
@@ -2137,6 +2158,7 @@
             "secret_detected",
             "suspected_password",
             "command_credential_detected",
+            "http_request_credential_detected",
             "secret_redaction",
             "prompt_injection",
             "jailbreak_detected",
@@ -2172,6 +2194,7 @@
               "directory_blocking",
               "secret_detected",
               "command_credential_detected",
+              "http_request_credential_detected",
               "image_secret_detected",
               "pii_detected",
               "image_pii_detected",

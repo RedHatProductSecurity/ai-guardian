@@ -595,6 +595,14 @@ def _load_command_credential_scanning_config():
     )
 
 
+def _load_http_request_credential_scanning_config():
+    """Load the global-only, default-on Python HTTP credential scanner policy."""
+    return _load_config_section(
+        "http_request_credential_scanning",
+        defaults={"enabled": True, "action": "block"},
+    )
+
+
 def _load_audit_logging_config():
     """Load the general compliance audit logging configuration."""
     return _load_config_section("audit_logging")

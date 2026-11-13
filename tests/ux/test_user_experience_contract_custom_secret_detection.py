@@ -145,6 +145,7 @@ def _install_console_fakes(monkeypatch, config):
     monkeypatch.setattr(secrets, "is_web_config_read_only", lambda: False)
     monkeypatch.setattr(secrets, "_render_password_likelihood", Mock())
     monkeypatch.setattr(secrets, "_render_command_credential_scanning", Mock())
+    monkeypatch.setattr(secrets, "_render_http_request_credential_scanning", Mock())
     return ui, saved_configs
 
 

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenShift AI MaaS API key detection (#2720):** Detect generated `sk-oai-`
   credentials using their Base62 key-ID/secret structure without broadening generic
   `sk-*` matching; document the vendor format and its source.
+- **HTTP request credential flow scanning (#2717):** Add default-on, non-executing
+  Python source analysis for literal credentials flowing into supported HTTP
+  authentication, headers, and credential-named request fields. Enforce before
+  supported Write/Edit operations; findings and logs withhold source values/snippets.
 - **Custom secret detection rules (#2721):** Expose validated organization-local
   regex rules in `secret_scanning.additional_patterns`, the Secret Scanning Console,
   generated/example configuration, and documentation. Rules augment bundled
@@ -42,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distinguish `latest` development docs, and report inactive or misrouted release
   versions with actionable recovery guidance.
 ### Fixed
+- **HTTP request credential scanner hardening (#2717):** Bound aggregate value,
+  string, URL and branch-state analysis; preserve possible credential flows across
+  branches and client context managers; inspect complete prospective Edit content;
+  and include blocked findings in default violation logs.
 - **Custom secret-rule configuration defaults (#2729):** Include the new
   `secret_scanning.additional_patterns` setting and guidance in all built-in profiles.
   Keep the IDE hook E2E fixture schema-valid so config warnings do not obscure JSON responses.

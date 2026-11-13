@@ -376,6 +376,7 @@ class TestConfigEndpoint:
             with urlopen(url, timeout=5) as resp:
                 data = json.loads(resp.read())
         assert "features" in data
+        assert data["features"]["http_request_credential_scanning"] is True
         assert data["features"]["secret_scanning"] is True
         assert data["features"]["scan_pii"] is False
 
@@ -395,6 +396,10 @@ class TestConfigEndpoint:
         cfg = {
             "action": {"mode": "log"},
             "prompt_injection": {"action": "warn"},
+            "http_request_credential_scanning": {
+                "enabled": False,
+                "action": "warn",
+            },
         }
         with mock.patch(
             "ai_guardian.config.loaders._load_config_file",
@@ -409,6 +414,8 @@ class TestConfigEndpoint:
         assert scanner_actions["scan_pii"] == "log"  # falls back to global
         assert scanner_actions["command_credential_scanning"] == "block"
         assert data["features"]["command_credential_scanning"] is True
+        assert scanner_actions["http_request_credential_scanning"] == "warn"
+        assert data["features"]["http_request_credential_scanning"] is False
 
     def test_get_config_includes_proactive_level(self, rest_api):
         api, port, state = rest_api

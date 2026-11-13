@@ -16,6 +16,13 @@
     "_comment_action": "Default block stops supported commands containing inline literal credentials before execution. ask provides one-operation approval and blocks if approval is unavailable. warn may proceed with a warning; log-only records a value-free finding silently. Credential references and interactive/no-value authentication are advisory; incomplete parsing follows this action and is not reported as a confirmed credential.",
     "action": "block"
   },
+  "_comment_http_request_credential_scanning": "Default-on static analysis of Python source written by supported Write/Edit tools. It detects literal credentials in supported HTTP request authentication, header, and credential-named request fields. Source is parsed only; it is never imported or executed, and values/snippets are never retained. See docs/security/HTTP_REQUEST_CREDENTIAL_SCANNING.md for supported clients and limitations.",
+  "http_request_credential_scanning": {
+    "_comment_enabled": "Enabled by default. Set false only in global policy to disable this independent source scanner.",
+    "enabled": true,
+    "_comment_action": "Default block denies supported writes containing inline literals or relevant source that cannot be fully analyzed. ask permits only operation-scoped Allow Once / Block and denies if approval is unavailable. warn may proceed with a value-free warning; log-only records a value-free finding silently. Environment/config/secret-manager references and interactive retrieval are not treated as inline literals.",
+    "action": "block"
+  },
   "secret_scanning": {
     "enabled": true,
     "ignore_files": [],
@@ -340,6 +347,7 @@
       "tool_permission",
       "directory_blocking",
       "secret_detected",
+      "http_request_credential_detected",
       "secret_redaction",
       "prompt_injection",
       "jailbreak_detected",

@@ -70,6 +70,7 @@ the browser console with `ai-guardian console`.
 | SSRF protection | [SSRF Protection](docs/security/SSRF_PROTECTION.md) |
 | Config-file and credential exfiltration detection | [Credential Exfiltration](docs/security/CREDENTIAL_EXFILTRATION.md) |
 | Command credential argument scanning | [Command Credential Scanning](docs/security/COMMAND_CREDENTIAL_SCANNING.md) |
+| HTTP request credential source scanning | [HTTP Request Credential Scanning](docs/security/HTTP_REQUEST_CREDENTIAL_SCANNING.md) |
 | Directory blocking | [Directory Rules](docs/security/DIRECTORY_RULES.md) |
 | Tool, MCP, and Skill permissions | [Tool Policy](docs/TOOL_POLICY.md) |
 | MCP security advisor and scanning | [MCP Server](docs/MCP_SERVER.md) |

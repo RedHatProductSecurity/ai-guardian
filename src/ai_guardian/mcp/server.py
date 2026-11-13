@@ -832,6 +832,11 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                 isinstance(command_credentials, dict)
                 and command_credentials.get("enabled") is False
             )
+            http_credentials = config.get("http_request_credential_scanning")
+            features["http_request_credential_scanning"] = not (
+                isinstance(http_credentials, dict)
+                and http_credentials.get("enabled") is False
+            )
 
             si_section = config.get("security_instructions", {})
             features["security_instructions"] = is_feature_enabled(
@@ -867,6 +872,12 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
             scanner_actions["command_credential_scanning"] = (
                 command_credentials.get("action", "block")
                 if isinstance(command_credentials, dict)
+                else "block"
+            )
+            http_credentials = config.get("http_request_credential_scanning")
+            scanner_actions["http_request_credential_scanning"] = (
+                http_credentials.get("action", "block")
+                if isinstance(http_credentials, dict)
                 else "block"
             )
 

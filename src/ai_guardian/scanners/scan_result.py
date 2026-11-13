@@ -523,6 +523,84 @@ class ScanResult:
             blocked["findings"] = safe_findings
             blocked["total_findings"] = len(safe_findings)
             return blocked
+        if self.violation_type == "http_request_credential_detected":
+            # Python source and credential literals are private. Persist only
+            # allowlisted sink/client labels and bounded line locations.
+            allowed_classes = {
+                "inline_literal",
+                "unsupported_or_incomplete_analysis",
+            }
+            allowed_clients = {
+                "requests",
+                "httpx",
+                "aiohttp",
+                "urllib.request",
+                "unknown",
+            }
+            allowed_sinks = {
+                "authentication",
+                "authorization_header",
+                "api_key_header",
+                "cookie_header",
+                "url_userinfo",
+                "password_field",
+                "token_field",
+                "api_key_field",
+                "secret_field",
+                "credential_field",
+                "unknown",
+            }
+            safe_findings = []
+            http_classes: set[str] = set()
+            for finding in self.findings or []:
+                if not isinstance(finding, dict):
+                    continue
+                line_number = finding.get("line_number")
+                finding_class = finding.get("finding_class")
+                if line_number is not None and (
+                    type(line_number) is not int or line_number < 1
+                ):
+                    continue
+                if (
+                    not isinstance(finding_class, str)
+                    or finding_class not in allowed_classes
+                ):
+                    continue
+                http_classes.add(finding_class)
+                client = finding.get("client")
+                sink = finding.get("sink")
+                safe_findings.append(
+                    {
+                        "line_number": line_number,
+                        "client": (
+                            client
+                            if isinstance(client, str) and client in allowed_clients
+                            else "unknown"
+                        ),
+                        "sink": (
+                            sink
+                            if isinstance(sink, str) and sink in allowed_sinks
+                            else "unknown"
+                        ),
+                        "finding_class": finding_class,
+                    }
+                )
+            blocked["reason"] = (
+                "Hard-coded HTTP request credential detected; source values withheld."
+                if "inline_literal" in http_classes
+                else "HTTP request credential analysis incomplete; no credential confirmed."
+            )
+            blocked["action"] = (
+                self.extra.get("action")
+                if isinstance(self.extra.get("action"), str)
+                and self.extra.get("action")
+                in {"block", "ask", "warn", "log-only", "allow"}
+                else "block" if self.should_block else "warn"
+            )
+            blocked["finding_classes"] = sorted(http_classes)
+            blocked["findings"] = safe_findings
+            blocked["total_findings"] = len(safe_findings)
+            return blocked
         if self.matched_text:
             from ai_guardian.violations.redact import (
                 REDACT_VIOLATION_TYPES,

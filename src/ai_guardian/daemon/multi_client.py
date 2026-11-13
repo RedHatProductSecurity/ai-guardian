@@ -752,9 +752,19 @@ class MultiDaemonClient:
             if isinstance(command_credentials, dict)
             else "block"
         )
+        http_credentials = cfg.get("http_request_credential_scanning")
+        scanner_actions["http_request_credential_scanning"] = (
+            http_credentials.get("action", "block")
+            if isinstance(http_credentials, dict)
+            else "block"
+        )
         features["command_credential_scanning"] = not (
             isinstance(command_credentials, dict)
             and command_credentials.get("enabled") is False
+        )
+        features["http_request_credential_scanning"] = not (
+            isinstance(http_credentials, dict)
+            and http_credentials.get("enabled") is False
         )
         if isinstance(mcp_cfg, dict):
             features["proactive_level"] = mcp_cfg.get("proactive_level", "low")
