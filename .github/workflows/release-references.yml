@@ -1,0 +1,37 @@
+name: Release References
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release-*'
+  push:
+    branches:
+      - main
+      - 'release-*'
+  workflow_dispatch:
+
+# Keep documentation-only changes covered: the real documentation layout is
+# part of the release-reference contract. No project dependencies are needed.
+permissions:
+  contents: read
+
+jobs:
+  release-references:
+    name: Verify Stable Release References
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Check current repository release references
+        run: python3 -B scripts/sync_release_versions.py --repo . --check

@@ -64,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scanner-only E2E denial fixture with Goose's native file-read surface. Reserve
   hook-control paths before installation without request-driven plugin-directory
   existence checks (CodeQL #359).
+- **Container release-reference gate (#2737):** Accept the link-only root README
+  while retaining strict validation and synchronization of active container
+  references. Check the real repository layout in lightweight CI, including
+  documentation-only changes, without rewriting generated history or dev wheels.
 - **HTTP request credential scanner hardening (#2717):** Bound aggregate value,
   string, URL and branch-state analysis; preserve possible credential flows across
   branches and client context managers; inspect complete prospective Edit content;

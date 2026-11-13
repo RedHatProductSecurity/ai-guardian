@@ -315,6 +315,13 @@
 
 ## Key Learnings
 
+- **2026-11-13 — Release-reference source layout (#2737):** The root README is
+  now a link-only landing page, not a required pinned-image source. Keep both
+  Dockerfile defaults and all five stable-reference categories in
+  `container/README.md` strict. Validate the real checkout as well as synthetic
+  fixtures, and run the stdlib-only read-only guard for documentation-only PRs;
+  generated NotebookLM history and development-wheel references stay excluded.
+
 - **2026-11-13 — README integration summary (#2735):** Keep the concise README
   behavior table synchronized with the detailed per-integration reference in
   `docs/AGENT_SUPPORT.md`, not the lifecycle-event inventory. `docs/index.md`

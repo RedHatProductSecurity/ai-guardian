@@ -7,6 +7,28 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-13 (UTC)
 
+## Issue #2737 container release-reference gate — 2026-11-13
+
+- Initialized managed DAF `open` session on existing clean branch `2737`; loaded
+  the qualified GitHub issue once. No hierarchical context files or additional
+  relevant global skills were present; no temporary-clone synchronization applies.
+- Reproduced the obsolete root-README-reference failure, then removed that required
+  source from `scripts/sync_release_versions.py`. Both Dockerfiles and all five
+  container README reference categories remain mandatory. Generated NotebookLM
+  history and development-wheel examples are untouched.
+- Updated landing-page fixtures and added stale/missing-source-pattern, atomic
+  update, read-only check, actual-repository-layout and publishing-order regressions.
+  Added a dependency-free **Release References** workflow on PRs/pushes to main and
+  release branches, with no documentation path exclusions. Updated RELEASING/CHANGELOG.
+- **Validation:** 169 related unit tests pass; all 27 synchronizer tests pass again
+  after simplifying shared test cases. The real `--check` gate passes for `1.21.1`.
+  Full Black (Python 3.10 target), Ruff, error-level Pylint and project-managed Mypy
+  (340 source files including the helper) pass. No local container build/publication.
+- Changes remain local and uncommitted. **Next:** user review and external DAF
+  completion; after publication/merge, verify a Build Container Image run passes
+  the reference gate and publishes both normal/OpenShell images. That final
+  acceptance criterion remains unverified; do not mark the whole issue done.
+
 ## Issue #2735 README integration behavior summary — 2026-11-13
 
 - Added the five-column **Per-integration behavior and limitations** table near
