@@ -459,6 +459,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
                 "tool_permission",
                 "directory_blocking",
                 "secret_detected",
+                "http_request_credential_detected",
                 "secret_redaction",
                 "prompt_injection",
                 "jailbreak_detected",

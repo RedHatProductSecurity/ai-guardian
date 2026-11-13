@@ -28,6 +28,14 @@ budget_tokens: 1000
 - **Validation:** 1,835 related unit/UX tests pass, 1 skipped (3 existing
   deprecation warnings). Ruff, Black (Python 3.10 target), error-level Pylint,
   package Mypy (338 source files), JSON validation, and `git diff --check` pass.
+- **CI follow-up:** Tests run `43351649236` failed five distinct assertions on
+  commit `23620e0`: generated-profile comment parity, missing HTTP-credential
+  violation type in generated/profile logging defaults and schema enums, and
+  three Windows mock-write path checks that assumed POSIX `/` separators. Added
+  the missing defaults/schema values and changed those assertions to compare path
+  basenames. All **406** tests across the five affected unit files pass locally;
+  Ruff, Black, Pylint, and package Mypy pass. Other workflows on that CI commit
+  passed. Fixes are local and uncommitted; no push or new CI run yet.
 - Changes remain uncommitted on branch `2717`; no issue/PR update or push was made.
   **Next:** user review, then external DAF completion if requested.
 

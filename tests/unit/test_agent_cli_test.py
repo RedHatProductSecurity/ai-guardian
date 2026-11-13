@@ -1565,7 +1565,7 @@ def test_local_mock_offers_native_write_for_http_credential_cases():
     tool_use = response["content"][0]
     assert tool_use["type"] == "tool_use"
     assert tool_use["name"] == "Write"
-    assert tool_use["input"]["file_path"].endswith("/http_request_credential.py")
+    assert Path(tool_use["input"]["file_path"]).name == "http_request_credential.py"
     source = tool_use["input"]["content"]
     assert "Authorization" in source
     assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" in source
@@ -1598,7 +1598,7 @@ def test_local_mock_offers_native_write_for_http_credential_cases():
     openai_call = openai_response["choices"][0]["message"]["tool_calls"][0]
     openai_arguments = json.loads(openai_call["function"]["arguments"])
     assert openai_call["function"]["name"] == "write"
-    assert openai_arguments["filePath"].endswith("/http_request_credential.py")
+    assert Path(openai_arguments["filePath"]).name == "http_request_credential.py"
     assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" in openai_arguments["content"]
 
 

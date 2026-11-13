@@ -108,7 +108,7 @@ def test_http_credential_cases_use_native_file_write_and_value_free_clean_source
         provider, protocol, payload, "http_request_credential", (1, 1)
     )
     assert name == native_name
-    assert arguments[path_key].endswith("/http_request_credential.py")
+    assert Path(arguments[path_key]).name == "http_request_credential.py"
     assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" in arguments["content"]
 
     clean_name, clean_arguments = offered_command(
