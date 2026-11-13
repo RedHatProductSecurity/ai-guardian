@@ -49,17 +49,17 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
     "http_request_credential_scanning": {
         "title": "HTTP Request Credential Scanning",
         "summary": (
-            "Default-on, non-executing Python source analysis for hard-coded "
+            "Default-on, non-executing Python, JavaScript, and TypeScript source analysis for hard-coded "
             "credentials flowing into supported HTTP request authentication, "
             "headers, and credential-named fields."
         ),
         "catches": [
             "Literal auth/password values and recognized authorization/API-key headers",
             "Literal credentials through bounded simple assignments in one source scope",
-            "Relevant Python source that cannot be parsed within configured analysis limits",
+            "Relevant source that cannot be parsed within configured analysis limits",
         ],
         "does_not_catch": [
-            "JavaScript/TypeScript, unsupported HTTP clients, helper/inter-procedural flows, or dynamic source",
+            "Unsupported HTTP clients, helper/inter-procedural flows, or dynamic source",
             "Values loaded from environment variables, configuration, or secret managers",
             "Source submitted through unsupported tools or writes after the pre-tool hook boundary",
         ],

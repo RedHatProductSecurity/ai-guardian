@@ -524,7 +524,7 @@ class ScanResult:
             blocked["total_findings"] = len(safe_findings)
             return blocked
         if self.violation_type == "http_request_credential_detected":
-            # Python source and credential literals are private. Persist only
+            # Source text and credential literals are private. Persist only
             # allowlisted sink/client labels and bounded line locations.
             allowed_classes = {
                 "inline_literal",
@@ -535,6 +535,11 @@ class ScanResult:
                 "httpx",
                 "aiohttp",
                 "urllib.request",
+                "fetch",
+                "axios",
+                "http",
+                "https",
+                "xhr",
                 "unknown",
             }
             allowed_sinks = {
@@ -542,6 +547,7 @@ class ScanResult:
                 "authorization_header",
                 "api_key_header",
                 "cookie_header",
+                "url_userinfo",
                 "url_userinfo",
                 "password_field",
                 "token_field",

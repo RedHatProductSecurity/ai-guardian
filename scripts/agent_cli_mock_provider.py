@@ -19,7 +19,12 @@ MODEL = "ag-smoke"
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
 GEMINI_MODEL = "gemini-2.5-flash"
 OUTPUT_CASES = {"clean_tool", "tool_output_secret", "tool_output_pii"}
-FILE_WRITE_CASES = {"http_request_credential", "http_request_credential_clean"}
+FILE_WRITE_CASES = {
+    "http_request_credential",
+    "http_request_credential_clean",
+    "http_request_credential_js",
+    "http_request_credential_ts_clean",
+}
 TOOL_CASES = {
     "ssrf",
     "config_exfil",
@@ -39,6 +44,12 @@ FILE_WRITE_TARGETS = {
     "http_request_credential_clean": str(
         TOOL_WITNESS_DIR / "http_request_credential_clean.py"
     ),
+    "http_request_credential_js": str(
+        TOOL_WITNESS_DIR / "http_request_credential_js.js"
+    ),
+    "http_request_credential_ts_clean": str(
+        TOOL_WITNESS_DIR / "http_request_credential_ts_clean.ts"
+    ),
 }
 FILE_WRITE_SOURCES = {
     "http_request_credential": (
@@ -53,6 +64,18 @@ FILE_WRITE_SOURCES = {
         "requests.get('https://example.invalid/', "
         "headers={'Authorization': 'Bearer ' + os.environ['SMOKE_HTTP_TOKEN']}, "
         "timeout=2)\n"
+    ),
+    "http_request_credential_js": (
+        "const token = 'SYNTHETIC_HTTP_FLOW_SMOKE_JS_2722';\n"
+        "fetch('https://example.invalid/', {\n"
+        "  headers: { Authorization: `Bearer ${token}` },\n"
+        "});\n"
+    ),
+    "http_request_credential_ts_clean": (
+        "const token: string = process.env.SMOKE_HTTP_TOKEN;\n"
+        "fetch('https://example.invalid/', {\n"
+        "  headers: { Authorization: token },\n"
+        "});\n"
     ),
 }
 TOOL_COMMANDS = {

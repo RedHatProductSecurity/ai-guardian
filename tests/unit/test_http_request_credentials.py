@@ -1,4 +1,4 @@
-"""Synthetic tests for Python HTTP request credential source analysis."""
+"""Synthetic tests for HTTP request credential source analysis."""
 
 import builtins
 import json
@@ -88,6 +88,158 @@ def test_supported_http_clients_detect_inline_credentials(source, client, sink):
     assert finding.sink == sink
     assert finding.finding_class == INLINE_LITERAL
     assert finding.line_number is not None
+    assert SYNTHETIC_VALUE not in repr(result)
+
+
+@pytest.mark.parametrize(
+    ("source", "file_path", "client", "sink"),
+    (
+        (
+            "const token = '" + SYNTHETIC_VALUE + "';\n"
+            "fetch('/api', { headers: { Authorization: `Bearer ${token}` } });\n",
+            "client.js",
+            "fetch",
+            "authorization_header",
+        ),
+        (
+            "import axios from 'axios';\n"
+            "const token = '" + SYNTHETIC_VALUE + "';\n"
+            "const send = axios.post;\n"
+            "send('/api', { accessToken: token });\n",
+            "client.ts",
+            "axios",
+            "token_field",
+        ),
+        (
+            "const https = require('node:https');\n"
+            "const token = '" + SYNTHETIC_VALUE + "';\n"
+            "https.request('/api', { headers: { 'X-API-Key': token } });\n",
+            "client.cjs",
+            "https",
+            "api_key_header",
+        ),
+        (
+            "const xhr = new XMLHttpRequest();\n"
+            "const token = '" + SYNTHETIC_VALUE + "';\n"
+            "xhr.setRequestHeader('Authorization', token);\n",
+            "client.tsx",
+            "xhr",
+            "authorization_header",
+        ),
+        (
+            "import { request as send } from 'node:http';\n"
+            "send({ auth: 'service-user:" + SYNTHETIC_VALUE + "' });\n",
+            "client.mts",
+            "http",
+            "authentication",
+        ),
+        (
+            "const token = '" + SYNTHETIC_VALUE + "';\n"
+            "fetch('/api', { body: JSON.stringify({ password: token }) });\n",
+            "client.ts",
+            "fetch",
+            "password_field",
+        ),
+    ),
+)
+def test_javascript_and_typescript_request_clients_detect_inline_credentials(
+    source, file_path, client, sink
+):
+    result = run_http_request_credential_scan(source, file_path=file_path, config={})
+
+    assert result is not None
+    assert result.should_block
+    assert result.findings[0]["client"] == client
+    assert result.findings[0]["sink"] == sink
+    assert result.findings[0]["finding_class"] == INLINE_LITERAL
+    assert SYNTHETIC_VALUE not in repr(result)
+    blocked = result.to_blocked_dict()
+    assert blocked["findings"][0]["client"] == client
+    assert blocked["findings"][0]["sink"] == sink
+    assert SYNTHETIC_VALUE not in repr(blocked)
+
+
+@pytest.mark.parametrize(
+    ("source", "file_path"),
+    (
+        (
+            "const token = process.env.API_TOKEN;\n"
+            "fetch('/api', { headers: { Authorization: token } });\n",
+            "client.js",
+        ),
+        (
+            "const token: string = import.meta.env.VITE_API_TOKEN;\n"
+            "fetch('/api', { headers: { Authorization: token } });\n",
+            "client.ts",
+        ),
+        (
+            "import axios from 'axios';\n"
+            "axios.post('/api', { password: getSecret(), note: 'ordinary data' });\n",
+            "client.tsx",
+        ),
+        (
+            "fetch('/api', { headers: { Authorization: 'Bearer ${TOKEN}' }, "
+            "body: JSON.stringify({ note: 'ordinary data' }) });\n",
+            "client.mjs",
+        ),
+    ),
+)
+def test_javascript_and_typescript_references_placeholders_and_ordinary_data_are_safe(
+    source, file_path
+):
+    assert (
+        run_http_request_credential_scan(source, file_path=file_path, config={}) is None
+    )
+
+
+def test_javascript_and_typescript_incomplete_parse_is_value_free_and_policy_applies():
+    source = "fetch('/api', { headers: { Authorization: '" + SYNTHETIC_VALUE + "' }\n"
+
+    result = run_http_request_credential_scan(
+        source, file_path="client.ts", config={"action": "block"}
+    )
+
+    assert result is not None and result.should_block
+    assert result.extra["analysis_incomplete"] is True
+    assert result.findings[0]["finding_class"] == INCOMPLETE_ANALYSIS
+    assert SYNTHETIC_VALUE not in repr(result)
+
+
+def test_javascript_and_typescript_oversized_relevant_source_is_incomplete():
+    source = (
+        "// padding\n" * (MAX_SOURCE_CHARS // 10)
+        + "fetch('/api', { headers: { Authorization: '"
+        + SYNTHETIC_VALUE
+        + "' } });\n"
+    )
+
+    result = run_http_request_credential_scan(
+        source, file_path="client.ts", config={"action": "block"}
+    )
+
+    assert result is not None and result.should_block
+    assert result.extra["analysis_incomplete"] is True
+    assert SYNTHETIC_VALUE not in repr(result)
+
+
+def test_javascript_source_is_never_imported_or_executed(monkeypatch):
+    source = (
+        "import axios from 'axios';\n"
+        "axios.post('/api', { token: '" + SYNTHETIC_VALUE + "' });\n"
+    )
+    original_import = builtins.__import__
+
+    def guarded_import(name, *args, **kwargs):
+        if name == "axios":
+            raise AssertionError("analyzed source was imported")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    result = run_http_request_credential_scan(
+        source, file_path="generated.ts", config={}
+    )
+
+    assert result is not None and result.should_block
     assert SYNTHETIC_VALUE not in repr(result)
 
 
@@ -774,6 +926,87 @@ def test_pretool_hook_denies_python_write_with_http_credential(tool_name):
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "HTTP request credential" in parsed["systemMessage"]
     assert SYNTHETIC_VALUE not in output
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "file_path", "source"),
+    (
+        (
+            "Write",
+            "client.js",
+            "const token = '" + SYNTHETIC_VALUE + "';\n"
+            "fetch('/api', { headers: { Authorization: token } });\n",
+        ),
+        (
+            "Edit",
+            "client.ts",
+            "const token: string = '" + SYNTHETIC_VALUE + "';\n"
+            "fetch('/api', { headers: { Authorization: token } });\n",
+        ),
+    ),
+)
+def test_pretool_hook_denies_javascript_typescript_write_before_apply(
+    tool_name, file_path, source
+):
+    from ai_guardian.hook_processing import process_hook_data
+    from tests.fixtures.mock_mcp_server import create_hook_data
+
+    tool_input = (
+        {"file_path": file_path, "content": source}
+        if tool_name == "Write"
+        else {
+            "file_path": file_path,
+            "old_string": "old_call()",
+            "new_string": source,
+        }
+    )
+    hook_data = create_hook_data(tool_name=tool_name, tool_input=tool_input)
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=({}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_http_request_credential_scanning_config",
+            return_value=({"enabled": True, "action": "block"}, None),
+        ),
+    ):
+        response = process_hook_data(hook_data)
+
+    parsed = json.loads(response["output"])
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "source code" in parsed["systemMessage"]
+    assert SYNTHETIC_VALUE not in response["output"]
+
+
+@pytest.mark.parametrize("file_path", ("client.js", "client.ts"))
+def test_pretool_hook_allows_environment_backed_javascript_request(file_path):
+    from ai_guardian.hook_processing import process_hook_data
+    from tests.fixtures.mock_mcp_server import create_hook_data
+
+    source = (
+        "const token = process.env.API_TOKEN;\n"
+        "fetch('/api', { headers: { Authorization: token } });\n"
+    )
+    hook_data = create_hook_data(
+        tool_name="Write",
+        tool_input={"file_path": file_path, "content": source},
+    )
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=({}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_http_request_credential_scanning_config",
+            return_value=({"enabled": True, "action": "block"}, None),
+        ),
+    ):
+        response = process_hook_data(hook_data)
+
+    parsed = json.loads(response["output"])
+    assert "permissionDecision" not in parsed.get("hookSpecificOutput", {})
+    assert "HTTP request credential" not in parsed.get("systemMessage", "")
 
 
 def test_pretool_edit_scans_full_prospective_file_not_only_replacement(tmp_path):

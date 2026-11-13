@@ -3085,13 +3085,26 @@ def _process_hook_data(hook_data, daemon_state=None):
                     except Exception:
                         pass  # intentionally silent — best-effort operation
 
-                # Code security scan for Write/Edit writing Python files
+                # Scan source writes for HTTP request credentials. Code-security
+                # analysis remains Python-only in this hook path.
                 if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
                     cs_file_path = tool_input.get("file_path", "") or ""
-                    if (
-                        isinstance(cs_file_path, str)
-                        and os.path.splitext(cs_file_path)[1].casefold() == ".py"
-                    ):
+                    cs_extension = (
+                        os.path.splitext(cs_file_path)[1].casefold()
+                        if isinstance(cs_file_path, str)
+                        else ""
+                    )
+                    if cs_extension in {
+                        ".py",
+                        ".js",
+                        ".jsx",
+                        ".mjs",
+                        ".cjs",
+                        ".ts",
+                        ".tsx",
+                        ".mts",
+                        ".cts",
+                    }:
                         cs_content = (
                             tool_input.get("content", "")
                             if tool_name == "Write"
@@ -3149,7 +3162,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                                         security_message=security_message,
                                     )
 
-                        if cs_content:
+                        if cs_content and cs_extension == ".py":
                             try:
                                 cs_config, cs_config_err = _load_code_scanning_config()
                                 if cs_config_err:

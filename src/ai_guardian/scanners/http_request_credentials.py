@@ -24,6 +24,9 @@ CONFIG_SECTION = "http_request_credential_scanning"
 VIOLATION_TYPE = "http_request_credential_detected"
 ENGINE = "local-http-request-credential-analyzer"
 RULE_ID = "HTTP-REQUEST-CREDENTIAL-001"
+HTTP_CREDENTIAL_SOURCE_EXTENSIONS = frozenset(
+    {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"}
+)
 
 MAX_SOURCE_CHARS = 131_072
 MAX_AST_NODES = 20_000
@@ -43,15 +46,15 @@ INCOMPLETE_ANALYSIS = "unsupported_or_incomplete_analysis"
 _VALID_ACTIONS = frozenset({"ask", "block", "warn", "log-only"})
 
 BLOCK_MESSAGE = (
-    "Hard-coded HTTP request credential detected in Python source; the write was "
+    "Hard-coded HTTP request credential detected in source code; the write was "
     "blocked. Credential values and source snippets are withheld."
 )
 WARN_MESSAGE = (
-    "Hard-coded HTTP request credential detected in Python source. The configured "
+    "Hard-coded HTTP request credential detected in source code. The configured "
     "warn action allows this write; credential values and source snippets are withheld."
 )
 ASK_MESSAGE = (
-    "Hard-coded HTTP request credential detected in Python source. Approve Once "
+    "Hard-coded HTTP request credential detected in source code. Approve Once "
     "allows this write only; credential values and source snippets are withheld."
 )
 INCOMPLETE_MESSAGE = (
@@ -1467,10 +1470,20 @@ def run_http_request_credential_scan(
     config: Optional[dict] = None,
     **_kwargs,
 ) -> Optional[ScanResult]:
-    """Return a value-free finding for supported Python source request sinks."""
-    if not isinstance(file_path, str) or PurePath(file_path).suffix.casefold() != ".py":
+    """Return a value-free finding for supported source request sinks."""
+    if not isinstance(file_path, str):
         return None
-    analysis = analyze_http_request_credentials(source)
+    extension = PurePath(file_path).suffix.casefold()
+    if extension == ".py":
+        analysis = analyze_http_request_credentials(source)
+    elif extension in HTTP_CREDENTIAL_SOURCE_EXTENSIONS:
+        from ai_guardian.scanners.http_request_credentials_js import (
+            analyze_js_ts_http_request_credentials,
+        )
+
+        analysis = analyze_js_ts_http_request_credentials(source, file_path)
+    else:
+        return None
     if not analysis.findings:
         return None
     if config is None:

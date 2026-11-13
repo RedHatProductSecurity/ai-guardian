@@ -55,11 +55,12 @@ Manual qualification on Linux/macOS Podman:
     runner prints a fixed explanation and links `docs/CODEX_SANDBOX_RUNTIME.md`.
     The affected case remains failed; the message never exposes raw error text or
     recommends bypassing `workspace-write` or smoke isolation.
-18. Claude/OpenCode's advertised native Write tool is used for two Python source cases:
-    an inline Authorization credential must be denied before the target file is
-    written, while an environment-backed Authorization value must be allowed and
-    reach PostToolUse. The witness records only file existence; counters contain
-    only fixed tool-name labels and never retain the source or synthetic value.
+18. Claude/OpenCode's advertised native Write tool is used for Python,
+    JavaScript, and TypeScript source cases: inline Authorization credentials
+    must be denied before the target file is written, while environment-backed
+    values must be allowed and reach PostToolUse. The witness records only file
+    existence; counters contain fixed tool-name labels and never retain source
+    or synthetic values.
 """
 
 import importlib.util

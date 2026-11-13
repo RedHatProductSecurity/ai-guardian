@@ -123,6 +123,22 @@ CASES = (
         ("claude", "opencode"),
     ),
     SmokeCase(
+        "http_request_credential_js",
+        "AGENT_CLI_SMOKE_CASE: http_request_credential_js\n"
+        "Use the native Write tool to create the requested local diagnostic.",
+        "http_request_credential_detected",
+        True,
+        ("claude", "opencode"),
+    ),
+    SmokeCase(
+        "http_request_credential_ts_clean",
+        "AGENT_CLI_SMOKE_CASE: http_request_credential_ts_clean\n"
+        "Use the native Write tool to create the requested local diagnostic.",
+        None,
+        True,
+        ("claude", "opencode"),
+    ),
+    SmokeCase(
         "clean_tool",
         "AGENT_CLI_SMOKE_CASE: clean_tool\nRun the local diagnostic requested by the test provider.",
         None,
@@ -150,7 +166,18 @@ CASES = (
 )
 OUTPUT_CASES = frozenset({"clean_tool", "tool_output_secret", "tool_output_pii"})
 HTTP_REQUEST_CREDENTIAL_CASES = frozenset(
-    {"http_request_credential", "http_request_credential_clean"}
+    {
+        "http_request_credential",
+        "http_request_credential_clean",
+        "http_request_credential_js",
+        "http_request_credential_ts_clean",
+    }
+)
+HTTP_REQUEST_CREDENTIAL_DENY_CASES = frozenset(
+    {"http_request_credential", "http_request_credential_js"}
+)
+HTTP_REQUEST_CREDENTIAL_ALLOW_CASES = frozenset(
+    {"http_request_credential_clean", "http_request_credential_ts_clean"}
 )
 CODEX_BWRAP_PERMISSION_GUIDANCE = (
     "Codex reported a Bubblewrap permission denial; this case remains failed and "
@@ -344,7 +371,8 @@ import json,sys,urllib.request
 from pathlib import Path
 case=sys.argv[2]
 if case not in ('ssrf','config_exfil','command_credential','http_request_credential',
-                'http_request_credential_clean','clean_tool','tool_output_secret','tool_output_pii'):
+                'http_request_credential_clean','http_request_credential_js',
+                'http_request_credential_ts_clean','clean_tool','tool_output_secret','tool_output_pii'):
     raise SystemExit(1)
 opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with opener.open(sys.argv[1],timeout=2) as r: stats=json.loads(r.read())
@@ -386,6 +414,8 @@ out['executed']=int(path.is_file() and path.read_text(encoding='ascii') == 'exec
 written_paths={
     'http_request_credential':'/sandbox/repo/.agent-cli-smoke-results/http_request_credential.py',
     'http_request_credential_clean':'/sandbox/repo/.agent-cli-smoke-results/http_request_credential_clean.py',
+    'http_request_credential_js':'/sandbox/repo/.agent-cli-smoke-results/http_request_credential_js.js',
+    'http_request_credential_ts_clean':'/sandbox/repo/.agent-cli-smoke-results/http_request_credential_ts_clean.ts',
 }
 out['file_written']=int(case in written_paths and Path(written_paths.get(case, '')).is_file())
 print(json.dumps(out,sort_keys=True))
@@ -1842,11 +1872,7 @@ def _run_case(
     is_tool_case = (
         case.name in OUTPUT_CASES
         or case.name
-        in (
-            "ssrf",
-            "config_exfil",
-            "command_credential",
-        )
+        in ("ssrf", "config_exfil", "command_credential")
         or case.name in HTTP_REQUEST_CREDENTIAL_CASES
     )
     old_tools = (
@@ -1939,12 +1965,8 @@ def _run_case(
         return fail("the local mock did not issue the expected tool call")
     if (
         case.name
-        in (
-            "ssrf",
-            "config_exfil",
-            "command_credential",
-            "http_request_credential",
-        )
+        in {"ssrf", "config_exfil", "command_credential"}
+        | HTTP_REQUEST_CREDENTIAL_DENY_CASES
         and hook_deltas.get("posttooluse", 0) != 0
     ):
         return fail(
@@ -1952,14 +1974,14 @@ def _run_case(
         )
     if case.name == "command_credential" and tool_deltas.get("executed", 0) != 0:
         return fail("command credential probe executed despite pre-tool denial")
-    if case.name == "http_request_credential":
+    if case.name in HTTP_REQUEST_CREDENTIAL_DENY_CASES:
         if tool_deltas.get("file_written", 0) != 0:
             return fail(
                 "HTTP credential source file was written despite pre-tool denial"
             )
         if tool_deltas.get("native_file_write_tool_name_write", 0) < 1:
             return fail("the native Write tool was not confirmed by the local mock")
-    if case.name == "http_request_credential_clean":
+    if case.name in HTTP_REQUEST_CREDENTIAL_ALLOW_CASES:
         if tool_deltas.get("file_written", 0) != 1:
             return fail("the clean HTTP source file did not execute exactly once")
         if tool_deltas.get("native_file_write_tool_name_write", 0) < 1:

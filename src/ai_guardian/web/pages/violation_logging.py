@@ -47,7 +47,7 @@ ALL_LOG_TYPES = [
     ("image_pii_detected", "Image PII — PII found in images via OCR"),
     (
         "http_request_credential_detected",
-        "HTTP Request Credential — hard-coded credentials in Python HTTP requests",
+        "HTTP Request Credential — hard-coded credentials in supported HTTP requests",
     ),
 ]
 _NOTIFICATION_CONFIG_LOCK = threading.Lock()
