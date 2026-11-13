@@ -1325,12 +1325,14 @@ class TestGetConfig:
         assert features["prompt_injection"] is False
         assert features["security_instructions"] is True
         assert features["command_credential_scanning"] is True
+        assert features["http_request_credential_scanning"] is True
         assert "action_mode" not in features
         scanner_actions = features["scanner_actions"]
         assert "secret_scanning" not in scanner_actions
         assert scanner_actions["prompt_injection"] == "warn"
         assert scanner_actions["scan_pii"] == "block"  # falls back to global
         assert scanner_actions["command_credential_scanning"] == "block"
+        assert scanner_actions["http_request_credential_scanning"] == "block"
 
     @patch("ai_guardian.config.loaders._load_config_file")
     def test_no_rules_or_patterns_exposed(self, mock_config):

@@ -50,11 +50,31 @@ def test_every_violation_type_has_user_facing_resolution_guidance(violation_type
         "canary_detected",
         "suspected_password",
         "command_credential_detected",
+        "http_request_credential_detected",
         "sensitive_finding",
     }:
         assert snippet
     else:
         assert snippet == ""
+
+
+def test_http_request_credential_guidance_is_private_and_non_persistent():
+    """USER EXPERIENCE: private source finding → review without a reusable exception."""
+    instructions, snippet = get_resolution_instructions(
+        {
+            "violation_type": "http_request_credential_detected",
+            "blocked": {"matched_text": "SYNTHETIC_VALUE", "file_path": "client.py"},
+            "suggestion": {"pattern": "SYNTHETIC_VALUE"},
+        }
+    )
+
+    assert (
+        "credential values and source snippets are intentionally withheld"
+        in instructions.casefold()
+    )
+    assert "persistent exception" in instructions
+    assert "SYNTHETIC_VALUE" not in instructions
+    assert snippet == ""
 
 
 def test_heuristic_details_offer_private_review_not_candidate_enrollment():

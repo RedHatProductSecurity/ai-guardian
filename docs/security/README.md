@@ -14,6 +14,7 @@ This directory contains detailed documentation for AI Guardian's security detect
 | **Context Poisoning** | Detect persistent malicious instructions injected into conversation context (LLM03) | [CONTEXT_POISONING.md](CONTEXT_POISONING.md) |
 | **Credential Exfiltration** | Scan config files for credential theft commands | [CREDENTIAL_EXFILTRATION.md](CREDENTIAL_EXFILTRATION.md) |
 | **Command Credential Scanning** | Block literal credentials in supported command arguments before execution | [COMMAND_CREDENTIAL_SCANNING.md](COMMAND_CREDENTIAL_SCANNING.md) |
+| **HTTP Request Credential Scanning** | Block hard-coded credentials in supported Python HTTP request source before file writes | [HTTP_REQUEST_CREDENTIAL_SCANNING.md](HTTP_REQUEST_CREDENTIAL_SCANNING.md) |
 | **Directory Rules** | Control which files and directories AI can access | [DIRECTORY_RULES.md](DIRECTORY_RULES.md) |
 
 ### Image & Media Scanning

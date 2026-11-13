@@ -819,8 +819,10 @@ jobs:
           test "$opencode_v2_version" = "2.0.24"
 
       # Each invocation prepares a strict-derived config before creation: prompt /
-      # pre-tool deny (including command credential arguments), clean-tool and
-      # sensitive-output sanitization cases. This is
+      # pre-tool deny (including command credential arguments and Claude/OpenCode native
+      # Write HTTP-source credential flow), an environment-backed clean Write case,
+      # clean-tool and sensitive-output sanitization cases. The Write cases run only
+      # for clients exposing a recognized native Write tool. This is
       # not unmodified @strict post-tool qualification. Keep each client in its own
       # named step and continue after an individual failure so all results are
       # visible. Codex's unresolved smoke failure is temporarily non-blocking for

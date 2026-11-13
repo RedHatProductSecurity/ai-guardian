@@ -46,6 +46,30 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
         ),
         "doc_url": f"{_GITHUB_DOCS}/security/COMMAND_CREDENTIAL_SCANNING.md",
     },
+    "http_request_credential_scanning": {
+        "title": "HTTP Request Credential Scanning",
+        "summary": (
+            "Default-on, non-executing Python source analysis for hard-coded "
+            "credentials flowing into supported HTTP request authentication, "
+            "headers, and credential-named fields."
+        ),
+        "catches": [
+            "Literal auth/password values and recognized authorization/API-key headers",
+            "Literal credentials through bounded simple assignments in one source scope",
+            "Relevant Python source that cannot be parsed within configured analysis limits",
+        ],
+        "does_not_catch": [
+            "JavaScript/TypeScript, unsupported HTTP clients, helper/inter-procedural flows, or dynamic source",
+            "Values loaded from environment variables, configuration, or secret managers",
+            "Source submitted through unsupported tools or writes after the pre-tool hook boundary",
+        ],
+        "config_summary": (
+            "Global-only http_request_credential_scanning.enabled (default true) and "
+            "action (default block; ask, warn, and log-only are available). The source "
+            "is parsed but never imported or executed; values and snippets are withheld."
+        ),
+        "doc_url": f"{_GITHUB_DOCS}/security/HTTP_REQUEST_CREDENTIAL_SCANNING.md",
+    },
     "secret_scanning": {
         "title": "Secret Scanning",
         "summary": (

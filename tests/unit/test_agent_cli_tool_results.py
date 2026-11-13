@@ -85,6 +85,41 @@ def offered_command(provider, protocol, payload, case, request_numbers):
 
 
 @pytest.mark.parametrize(
+    ("protocol", "native_name", "path_key"),
+    (
+        ("anthropic", "Write", "file_path"),
+        ("chat", "write", "filePath"),
+    ),
+)
+def test_http_credential_cases_use_native_file_write_and_value_free_clean_source(
+    provider, protocol, native_name, path_key
+):
+    schema = {
+        "type": "object",
+        "properties": {
+            path_key: {"type": "string"},
+            "content": {"type": "string"},
+        },
+        "required": [path_key, "content"],
+    }
+    payload = command_catalog(protocol, [(native_name, schema)])
+
+    name, arguments = offered_command(
+        provider, protocol, payload, "http_request_credential", (1, 1)
+    )
+    assert name == native_name
+    assert arguments[path_key].endswith("/http_request_credential.py")
+    assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" in arguments["content"]
+
+    clean_name, clean_arguments = offered_command(
+        provider, protocol, payload, "http_request_credential_clean", (1, 1)
+    )
+    assert clean_name == native_name
+    assert "os.environ['SMOKE_HTTP_TOKEN']" in clean_arguments["content"]
+    assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" not in clean_arguments["content"]
+
+
+@pytest.mark.parametrize(
     ("protocol", "native_name", "argument", "field_type"),
     (
         ("chat", "bash", "command", "string"),
@@ -979,11 +1014,13 @@ def test_tool_evidence_reader_accepts_only_aggregate_counts(monkeypatch):
         "function_call_output_category_error_text": 0,
         "function_call_output_category_other_text": 0,
         "function_call_output_category_empty": 0,
+        "file_written": 0,
         "native_tool_name_bash": 0,
         "native_tool_name_shell": 0,
         "native_tool_name_exec_command": 0,
         "native_tool_name_shell_command": 0,
         "native_tool_name_run_shell_command": 0,
+        "native_file_write_tool_name_write": 0,
     }
     monkeypatch.setattr(
         runner,

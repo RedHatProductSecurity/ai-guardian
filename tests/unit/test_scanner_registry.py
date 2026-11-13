@@ -193,7 +193,7 @@ class TestDefaultRegistry:
 
     def test_has_all_registered_scanners(self):
         reg = get_default_registry()
-        assert len(reg) == len(ScannerName) == 15
+        assert len(reg) == len(ScannerName) == 16
         for name in ScannerName:
             assert reg.get(name) is not None, f"Missing scanner: {name}"
 
@@ -306,6 +306,7 @@ class TestDefaultRegistry:
             ScannerName.BASH_EXFIL,
             ScannerName.EXFIL_DETECTION,
             ScannerName.CODE_SECURITY,
+            ScannerName.HTTP_REQUEST_CREDENTIAL_SCANNING,
             ScannerName.PROMPT_INJECTION,
             ScannerName.CONTEXT_POISONING,
             ScannerName.SUPPLY_CHAIN,

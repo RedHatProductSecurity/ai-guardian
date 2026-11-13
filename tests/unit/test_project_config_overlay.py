@@ -600,6 +600,7 @@ class TestGlobalOnlySections:
             "self_protection",
             "password_likelihood",
             "command_credential_scanning",
+            "http_request_credential_scanning",
             "violation_notifications",
         }
         assert GLOBAL_ONLY_SECTIONS == expected

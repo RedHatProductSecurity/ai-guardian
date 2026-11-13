@@ -63,6 +63,14 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
             "or persistent exception is generated for this finding.",
             "",
         )
+    if vtype == "http_request_credential_detected":
+        return (
+            "Review the HTTP request credential finding privately. Credential values "
+            "and source snippets are intentionally withheld. Replace inline literals "
+            "with an environment/configuration/secret-manager reference. No source or "
+            "persistent exception is generated for this finding.",
+            "",
+        )
     if vtype == "sensitive_finding":
         return (
             "A secret or personal-data finding was recorded. Per-finding details "

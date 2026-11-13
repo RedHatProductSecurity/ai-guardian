@@ -116,6 +116,7 @@ class Doctor:
             self.check_global_pattern_server,
             self.check_scanners,
             self.check_command_credential_scanning,
+            self.check_http_request_credential_scanning,
             self.check_pattern_server,
             self.check_ps_cache_path,
             self.check_ps_auth,
@@ -692,6 +693,57 @@ class Doctor:
             status=CheckStatus.PASS,
             message=f"Command credential scanning enabled ({action})",
             detail="Inline literals and incomplete parses follow this action; references remain advisory.",
+        )
+
+    def check_http_request_credential_scanning(self) -> CheckResult:
+        """Report the Python HTTP request credential scanner's effective policy."""
+        self._ensure_config()
+        section = (self._config or {}).get("http_request_credential_scanning", {})
+        if section is None:
+            section = {}
+        if not isinstance(section, dict):
+            return CheckResult(
+                name="http_request_credential_scanning",
+                status=CheckStatus.FAIL,
+                message="Invalid HTTP request credential scanning configuration",
+                detail="Expected an object with enabled and action fields.",
+            )
+
+        enabled = section.get("enabled", True)
+        action = section.get("action", "block")
+        if type(enabled) is not bool:
+            return CheckResult(
+                name="http_request_credential_scanning",
+                status=CheckStatus.FAIL,
+                message="Invalid HTTP request credential scanner enabled setting",
+                detail="Expected a boolean; malformed values do not disable scanning.",
+            )
+        if action not in ("block", "ask", "warn", "log-only"):
+            return CheckResult(
+                name="http_request_credential_scanning",
+                status=CheckStatus.FAIL,
+                message="Invalid HTTP request credential scanner action",
+                detail="Expected block, ask, warn, or log-only.",
+            )
+        if not enabled:
+            return CheckResult(
+                name="http_request_credential_scanning",
+                status=CheckStatus.WARN,
+                message="HTTP request credential scanning is disabled",
+                detail="The default is enabled with block action.",
+            )
+        if action in ("warn", "log-only"):
+            return CheckResult(
+                name="http_request_credential_scanning",
+                status=CheckStatus.WARN,
+                message=f"HTTP request credential scanning is enabled with {action} action",
+                detail="Inline literals may proceed under this policy.",
+            )
+        return CheckResult(
+            name="http_request_credential_scanning",
+            status=CheckStatus.PASS,
+            message=f"HTTP request credential scanning enabled ({action})",
+            detail="Inline literals and relevant incomplete analysis follow this action.",
         )
 
     def _get_ps_configs(self) -> List[Tuple[str, Dict]]:
@@ -2874,6 +2926,7 @@ _CHECK_DISPLAY_NAMES = {
     "global_pattern_server": "Global pattern server",
     "scanners": "Scanners",
     "command_credential_scanning": "Command credential scanning",
+    "http_request_credential_scanning": "HTTP request credential scanning",
     "pattern_server": "Pattern server",
     "ps_cache_path": "PS cache path",
     "ps_auth": "PS auth",

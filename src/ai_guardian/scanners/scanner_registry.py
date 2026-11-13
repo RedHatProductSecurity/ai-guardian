@@ -30,6 +30,7 @@ class ScannerName(str, enum.Enum):
     SECRET = "secret"
     PASSWORD_LIKELIHOOD = "password_likelihood"
     COMMAND_CREDENTIAL_SCANNING = "command_credential_scanning"
+    HTTP_REQUEST_CREDENTIAL_SCANNING = "http_request_credential_scanning"
     PII = "pii"
     CODE_SECURITY = "code_security"
     BASH_EXFIL = "bash_exfil"
@@ -151,6 +152,9 @@ def _build_default_registry() -> ScannerRegistry:
 
     from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
     from ai_guardian.scanners.command_credentials import run_command_credential_scan
+    from ai_guardian.scanners.http_request_credentials import (
+        run_http_request_credential_scan,
+    )
 
     registry = ScannerRegistry()
 
@@ -192,6 +196,28 @@ def _build_default_registry() -> ScannerRegistry:
             violation_suggestion={
                 "action": "remove_inline_credential",
                 "note": "Use an environment variable or credential store; command values are not retained.",
+            },
+        )
+    )
+
+    registry.register(
+        ScannerEntry(
+            name=ScannerName.HTTP_REQUEST_CREDENTIAL_SCANNING,
+            run_fn=run_http_request_credential_scan,
+            violation_type=ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED,
+            hook_events={HookEvent.PRE_TOOL_USE, HookEvent.PERMISSION_REQUEST},
+            requires_content=True,
+            requires_file_path=True,
+            order=8,
+            config_section="http_request_credential_scanning",
+            supports_ask_mode=True,
+            violation_severity="high",
+            violation_suggestion={
+                "action": "replace_inline_http_credential",
+                "note": (
+                    "Use an environment variable, configuration provider, or secret "
+                    "manager; source values and snippets are not retained."
+                ),
             },
         )
     )

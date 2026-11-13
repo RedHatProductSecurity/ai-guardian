@@ -3033,13 +3033,62 @@ def _process_hook_data(hook_data, daemon_state=None):
                 # Code security scan for Write/Edit writing Python files
                 if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
                     cs_file_path = tool_input.get("file_path", "") or ""
-                    if cs_file_path.endswith(".py"):
+                    if (
+                        isinstance(cs_file_path, str)
+                        and os.path.splitext(cs_file_path)[1].casefold() == ".py"
+                    ):
                         cs_content = (
                             tool_input.get("content", "")
                             if tool_name == "Write"
                             else tool_input.get("new_string", "")
                         )
                         if cs_content:
+                            from ai_guardian.scanners.http_request_credentials import (
+                                run_http_request_credential_scan,
+                            )
+
+                            http_credential_result = run_http_request_credential_scan(
+                                cs_content,
+                                file_path=cs_file_path,
+                            )
+                            if http_credential_result is not None:
+                                http_credential_decision = apply_post_scan_pipeline(
+                                    _registry.get(
+                                        ScannerName.HTTP_REQUEST_CREDENTIAL_SCANNING
+                                    ),
+                                    http_credential_result,
+                                    _post_scan_ctx,
+                                    file_path=cs_file_path,
+                                    filename=os.path.basename(cs_file_path),
+                                )
+                                warning_messages.extend(
+                                    http_credential_decision.warnings
+                                )
+                                if (
+                                    http_credential_decision.warnings
+                                    and warn_violation_types is not None
+                                ):
+                                    warn_violation_types.append(
+                                        ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED
+                                    )
+                                if http_credential_decision.should_block:
+                                    combined_warning = (
+                                        "\n\n".join(warning_messages)
+                                        if warning_messages
+                                        else None
+                                    )
+                                    return _format_response(
+                                        adapter,
+                                        has_secrets=True,
+                                        error_message=http_credential_result.error_message,
+                                        hook_event=hook_event,
+                                        warning_message=combined_warning,
+                                        violation_type=(
+                                            ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED
+                                        ),
+                                        security_message=security_message,
+                                    )
+
                             try:
                                 cs_config, cs_config_err = _load_code_scanning_config()
                                 if cs_config_err:

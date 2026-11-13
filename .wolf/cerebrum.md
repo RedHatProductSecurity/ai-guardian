@@ -318,6 +318,12 @@
   rather than claiming they are service-side validation limits. Use synthetic
   fixtures only; no live keys or validation endpoints are needed.
 
+- **2026-11-13 — Bounded source scanner limits (#2717):** When parsing is capped,
+  relevance checks must inspect the whole submitted source in bounded overlapping
+  chunks; checking only the parse prefix lets padded source hide a relevant sink
+  after the cap. Include stdlib network entry points such as `urllib.request.urlopen`
+  when documenting `urllib.request` coverage.
+
 - **2026-11-12 — Custom secret-rule diagnostics / CodeQL (#2727):** Even a
   regex-validated custom rule ID is tainted to CodeQL when interpolated into a log
   message. Keep runtime warnings fixed and value-free; preserve entry-specific

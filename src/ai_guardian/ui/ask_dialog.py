@@ -60,6 +60,7 @@ class AskViolationInfo:
         return self.violation_type in {
             "suspected_password",
             "command_credential_detected",
+            "http_request_credential_detected",
         }
 
     def __post_init__(self):
@@ -87,6 +88,13 @@ class AskViolationInfo:
             self.matched_text = ""
             self.matched_pattern = ""
             self.config_section = "command_credential_scanning"
+            self.finding_index = None
+            self.total_findings = None
+        elif self.violation_type == "http_request_credential_detected":
+            self.summary = self.error_message
+            self.matched_text = ""
+            self.matched_pattern = ""
+            self.config_section = "http_request_credential_scanning"
             self.finding_index = None
             self.total_findings = None
 

@@ -32,6 +32,11 @@ FEATURE_GROUPS = [
                 "Command Credential Scanning",
                 "Block inline credentials in supported HTTP command arguments",
             ),
+            (
+                "http_request_credential_scanning",
+                "HTTP Request Credential Scanning",
+                "Block hard-coded credentials in supported Python HTTP request source",
+            ),
             ("scan_pii", "PII Detection", "GDPR/CCPA compliance scanning"),
             (
                 "image_scanning",
@@ -146,6 +151,12 @@ FEATURE_ACTIONS = {
         "warn": "Warn",
         "log-only": "Log Only",
     },
+    "http_request_credential_scanning": {
+        "block": "Block",
+        "ask": "Ask (block if approval is unavailable)",
+        "warn": "Warn",
+        "log-only": "Log Only",
+    },
     "prompt_injection": {
         "block": "Block",
         "ask": "Ask (block if headless)",
@@ -227,6 +238,7 @@ FEATURE_ACTIONS = {
 
 ACTION_DEFAULTS = {
     "command_credential_scanning": "block",
+    "http_request_credential_scanning": "block",
     "prompt_injection": "block",
     "ssrf_protection": "block",
     "config_file_scanning": "block",

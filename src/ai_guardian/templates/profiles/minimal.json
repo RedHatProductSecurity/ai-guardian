@@ -15,6 +15,13 @@
     "_comment_action": "Default block stops supported commands containing inline literal credentials before execution. ask provides one-operation approval and blocks if approval is unavailable. warn may proceed with a warning; log-only records a value-free finding silently. Credential references and interactive/no-value authentication are advisory; incomplete parsing follows this action and is not reported as a confirmed credential.",
     "action": "block"
   },
+  "_comment_http_request_credential_scanning": "Default-on static analysis of Python source written by supported Write/Edit tools. Values and source snippets are never retained.",
+  "http_request_credential_scanning": {
+    "_comment_enabled": "Enabled by default; global-only policy.",
+    "enabled": true,
+    "_comment_action": "Block inline credentials and relevant incomplete analysis by default; supported alternatives are ask, warn, and log-only.",
+    "action": "block"
+  },
   "secret_scanning": {
     "enabled": true,
     "ignore_files": [],

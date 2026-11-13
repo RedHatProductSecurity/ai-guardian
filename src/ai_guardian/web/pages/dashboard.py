@@ -22,6 +22,11 @@ FEATURE_GROUPS = [
                 "Command Credential Scanning",
                 "Block inline credentials in supported HTTP command arguments",
             ),
+            (
+                "http_request_credential_scanning",
+                "HTTP Request Credential Scanning",
+                "Block hard-coded credentials in supported Python HTTP request source",
+            ),
             ("scan_pii", "PII Detection", "GDPR/CCPA compliance scanning"),
             (
                 "image_scanning",
@@ -137,6 +142,7 @@ FEATURE_GROUPS = [
 FEATURE_PAGE_SLUGS = {
     "secret_scanning": "secrets",
     "command_credential_scanning": "secrets",
+    "http_request_credential_scanning": "secrets",
     "scan_pii": "scan-pii",
     "prompt_injection": "pi-detection",
     "ssrf_protection": "ssrf",
@@ -194,6 +200,7 @@ def _parse_enabled(status):
 
 _DEFAULT_ACTIONS = {
     "command_credential_scanning": "block",
+    "http_request_credential_scanning": "block",
     "secret_scanning": "block",
     "image_scanning": "block",
     "scan_pii": "block",
@@ -229,6 +236,8 @@ def _get_action(config, key):
 
 def _categorize_violation(reason):
     r = (reason or "").lower()
+    if "http request credential" in r:
+        return "HTTP Request Credential Scanning"
     if "command credential" in r or "inline credential argument" in r:
         return "Command Credential Scanning"
     if "ssrf" in r:

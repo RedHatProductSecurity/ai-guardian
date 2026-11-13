@@ -50,6 +50,8 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
         "ssrf",
         "config_exfil",
         "command_credential",
+        "http_request_credential",
+        "http_request_credential_clean",
         "clean_tool",
         "tool_output_secret",
         "tool_output_pii",
@@ -58,13 +60,18 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
     assert all(
         case.expected_violation
         for case in runner.CASES
-        if case.name not in ("allowed", "clean_tool")
+        if case.name not in ("allowed", "clean_tool", "http_request_credential_clean")
     )
     assert runner.CASES[-1].expected_violation is None
+    for case_name in ("http_request_credential", "http_request_credential_clean"):
+        case = next(case for case in runner.CASES if case.name == case_name)
+        assert case.cli_names == ("claude", "opencode")
     assert [case.expects_provider for case in runner.CASES] == [
         False,
         False,
         False,
+        True,
+        True,
         True,
         True,
         True,
@@ -682,7 +689,12 @@ def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path)
     assert server_starts[0][0] == "podman"
     assert len(warmups) == 1
     assert warmups[0][0] == "podman"
-    assert len(case_calls) == len(runner.CASES)
+    expected_cases = [
+        case
+        for case in runner.CASES
+        if not case.cli_names or "opencode" in case.cli_names
+    ]
+    assert len(case_calls) == len(expected_cases)
     assert all(
         call["opencode_attach_url"] == runner.OPENCODE_SERVER_URL for call in case_calls
     )
@@ -899,7 +911,12 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
     else:
         v2 = installed.startswith("2.")
         assert len(starts) == len(warmups) == (0 if v2 else 1)
-        assert len(cases) == len(runner.CASES)
+        expected_cases = [
+            case
+            for case in runner.CASES
+            if not case.cli_names or "opencode" in case.cli_names
+        ]
+        assert len(cases) == len(expected_cases)
         assert all(call["opencode_v2"] is v2 for call in cases)
         assert all(
             call["opencode_attach_url"] == (None if v2 else runner.OPENCODE_SERVER_URL)
@@ -1526,6 +1543,65 @@ def test_local_mock_returns_native_tool_calls_for_only_fixed_probe_cases():
     )
 
 
+def test_local_mock_offers_native_write_for_http_credential_cases():
+    mock = _load(MOCK_PATH, "agent_cli_local_http_write_mock")
+    tools = [
+        {
+            "name": "Write",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+                "required": ["file_path", "content"],
+            },
+        }
+    ]
+
+    response = mock.anthropic_response(
+        {"tools": tools}, "http_request_credential", 1, 1
+    )
+    tool_use = response["content"][0]
+    assert tool_use["type"] == "tool_use"
+    assert tool_use["name"] == "Write"
+    assert tool_use["input"]["file_path"].endswith("/http_request_credential.py")
+    source = tool_use["input"]["content"]
+    assert "Authorization" in source
+    assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" in source
+
+    clean_source = mock.anthropic_response(
+        {"tools": tools}, "http_request_credential_clean", 1, 1
+    )["content"][0]["input"]["content"]
+    assert "os.environ['SMOKE_HTTP_TOKEN']" in clean_source
+    assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" not in clean_source
+
+    openai_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "write",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "filePath": {"type": "string"},
+                        "content": {"type": "string"},
+                    },
+                    "required": ["filePath", "content"],
+                },
+            },
+        }
+    ]
+    openai_response = mock.chat_response(
+        {"tools": openai_tools}, "http_request_credential", 1, 1
+    )
+    openai_call = openai_response["choices"][0]["message"]["tool_calls"][0]
+    openai_arguments = json.loads(openai_call["function"]["arguments"])
+    assert openai_call["function"]["name"] == "write"
+    assert openai_arguments["filePath"].endswith("/http_request_credential.py")
+    assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" in openai_arguments["content"]
+
+
 def test_local_mock_stats_report_tool_availability_without_payloads():
     mock = _load(MOCK_PATH, "agent_cli_mock_tool_stats")
     tools = [
@@ -1549,8 +1625,10 @@ def test_local_mock_stats_report_tool_availability_without_payloads():
     assert stats == {
         "requests": {"ssrf": 2},
         "command_tool_requests": {"ssrf": 1},
+        "file_write_tool_requests": {},
         "tool_offers": {"ssrf": 1},
         "command_tool_names": {"ssrf": {"bash": 1}},
+        "file_write_tool_names": {},
         "clean_tool_results": {},
         "raw_tool_output_requests": {},
         "function_call_outputs": {},
@@ -1565,6 +1643,30 @@ def test_local_mock_stats_report_tool_availability_without_payloads():
         {"tools": tools}, "ssrf", call_number=2, tool_call_number=1
     )
     assert response["choices"][0]["finish_reason"] == "tool_calls"
+
+
+def test_local_mock_file_write_stats_keep_source_out_of_counters():
+    mock = _load(MOCK_PATH, "agent_cli_local_write_stats")
+    tool = {
+        "name": "Write",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string"},
+                "content": {"type": "string"},
+            },
+        },
+    }
+
+    assert mock._record_request("http_request_credential", {"tools": [tool]}) == (
+        1,
+        1,
+    )
+    stats = mock._stats()
+
+    assert stats["file_write_tool_requests"] == {"http_request_credential": 1}
+    assert stats["file_write_tool_names"] == {"http_request_credential": {"write": 1}}
+    assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" not in json.dumps(stats)
 
 
 def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypatch):
@@ -1601,11 +1703,13 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
         "function_call_output_category_error_text": 0,
         "function_call_output_category_other_text": 0,
         "function_call_output_category_empty": 0,
+        "file_written": 0,
         "native_tool_name_bash": 0,
         "native_tool_name_shell": 1,
         "native_tool_name_exec_command": 0,
         "native_tool_name_shell_command": 0,
         "native_tool_name_run_shell_command": 0,
+        "native_file_write_tool_name_write": 0,
     }
     calls = {}
 
@@ -1622,6 +1726,8 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
     assert "out['native_tool_name_'+name]" in calls["reader"]
     assert "out['function_call_output_'+shape]" in calls["reader"]
     assert "out['function_call_output_category_'+category]" in calls["reader"]
+    assert "out['native_file_write_tool_name_'+name]" in calls["reader"]
+    assert "out['file_written']" in calls["reader"]
     assert "private-tool-name" not in calls["reader"]
 
 

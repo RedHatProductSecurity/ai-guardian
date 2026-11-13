@@ -48,6 +48,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Directory Rules](security/DIRECTORY_RULES.md) | `.ai-read-deny` markers and config-based rules |
 | [Credential Exfiltration](security/CREDENTIAL_EXFILTRATION.md) | Config file scanning for exfiltration patterns |
 | [Command Credential Scanning](security/COMMAND_CREDENTIAL_SCANNING.md) | Default-on pre-execution checks for literal credentials in supported command arguments |
+| [HTTP Request Credential Scanning](security/HTTP_REQUEST_CREDENTIAL_SCANNING.md) | Default-on static Python source checks for literal credentials flowing into supported HTTP request sinks |
 | [Secret Redaction](security/SECRET_REDACTION.md) | Masking secrets in tool outputs |
 | [Image Scanning (OCR)](security/IMAGE_SCANNING.md) | OCR-based secret/PII detection in images, IDE limitations |
 | [Inline Annotations](ANNOTATIONS.md) | Suppress false positives with per-line or block annotations |

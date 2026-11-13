@@ -5,7 +5,31 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-12 (UTC)
+> Last updated: 2026-11-13 (UTC)
+
+## Issue #2717 HTTP request credential scanning — 2026-11-13
+
+- Added a default-on, global-only, non-executing Python AST scanner for literal
+  credentials flowing into supported `requests`, `httpx`, `aiohttp`, and
+  `urllib.request` request sinks. It follows bounded same-scope assignments,
+  recognizes auth/header/body fields, URL userinfo/query credentials, session
+  header mutation, and `urllib.request.urlopen`. Oversized relevant source fails
+  closed even when the sink appears after the parse-size cap.
+- Enforced before supported Python `Write`/`Edit` operations with `block`, private
+  operation-scoped `ask`, `warn`, and `log-only` actions. Values/source snippets are
+  excluded from findings, Ask prompts, violation logs, messages, and Console details.
+  Added schema, generated/example/profile defaults, Doctor, config/feature reporting,
+  Console controls, docs, and Unreleased changelog entry.
+- Added Claude/OpenCode native Write mock smoke cases for denied inline source and
+  allowed environment-backed source, with aggregate-only counters and file-existence
+  evidence; real container/agent scenarios were not run locally per project guidance.
+- Added an OpenCode-native `write` UX contract confirming its `filePath`/content
+  input normalizes to the shared pre-tool scanner path.
+- **Validation:** 1,835 related unit/UX tests pass, 1 skipped (3 existing
+  deprecation warnings). Ruff, Black (Python 3.10 target), error-level Pylint,
+  package Mypy (338 source files), JSON validation, and `git diff --check` pass.
+- Changes remain uncommitted on branch `2717`; no issue/PR update or push was made.
+  **Next:** user review, then external DAF completion if requested.
 
 ## Issue #2720 OpenShift AI MaaS API key detection — 2026-11-12
 

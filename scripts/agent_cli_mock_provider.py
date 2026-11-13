@@ -19,13 +19,42 @@ MODEL = "ag-smoke"
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
 GEMINI_MODEL = "gemini-2.5-flash"
 OUTPUT_CASES = {"clean_tool", "tool_output_secret", "tool_output_pii"}
-TOOL_CASES = {"ssrf", "config_exfil", "command_credential", *OUTPUT_CASES}
+FILE_WRITE_CASES = {"http_request_credential", "http_request_credential_clean"}
+TOOL_CASES = {
+    "ssrf",
+    "config_exfil",
+    "command_credential",
+    *OUTPUT_CASES,
+    *FILE_WRITE_CASES,
+}
 # Exact native names used by the supported CLIs. A command-shaped MCP/custom
 # tool is not execution evidence, even if it logs the expected security finding.
 NATIVE_COMMAND_TOOLS = frozenset(
     {"bash", "shell", "exec_command", "shell_command", "run_shell_command"}
 )
+NATIVE_FILE_WRITE_TOOLS = frozenset({"write"})
 TOOL_WITNESS_DIR = Path("/sandbox/repo/.agent-cli-smoke-results")
+FILE_WRITE_TARGETS = {
+    "http_request_credential": str(TOOL_WITNESS_DIR / "http_request_credential.py"),
+    "http_request_credential_clean": str(
+        TOOL_WITNESS_DIR / "http_request_credential_clean.py"
+    ),
+}
+FILE_WRITE_SOURCES = {
+    "http_request_credential": (
+        "import requests\n"
+        "requests.get('https://example.invalid/', "
+        "headers={'Authorization': 'Bearer SYNTHETIC_HTTP_FLOW_SMOKE_2717'}, "
+        "timeout=2)\n"
+    ),
+    "http_request_credential_clean": (
+        "import os\n"
+        "import requests\n"
+        "requests.get('https://example.invalid/', "
+        "headers={'Authorization': 'Bearer ' + os.environ['SMOKE_HTTP_TOKEN']}, "
+        "timeout=2)\n"
+    ),
+}
 TOOL_COMMANDS = {
     # Both commands only print text; neither performs network or file I/O.
     "ssrf": "printf '%s\\n' 'curl http://169.254.169.254/latest/meta-data/'",
@@ -63,6 +92,8 @@ REQUEST_COUNTS: Counter = Counter()
 COMMAND_TOOL_REQUEST_COUNTS: Counter = Counter()
 TOOL_OFFER_COUNTS: Counter = Counter()
 COMMAND_TOOL_NAME_COUNTS: Dict[str, Counter] = {}
+FILE_WRITE_TOOL_REQUEST_COUNTS: Counter = Counter()
+FILE_WRITE_TOOL_NAME_COUNTS: Dict[str, Counter] = {}
 CLEAN_TOOL_RESULT_COUNTS: Counter = Counter()
 RAW_TOOL_OUTPUT_COUNTS: Counter = Counter()
 FUNCTION_CALL_OUTPUT_COUNTS: Counter = Counter()
@@ -365,21 +396,104 @@ def _find_command_tool(payload: Dict[str, Any]) -> Optional[Tuple[str, Dict[str,
     return None
 
 
+def _file_write_tool(tool: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
+    function_value = tool.get("function")
+    function = function_value if isinstance(function_value, dict) else {}
+    name = tool.get("name") or function.get("name")
+    if not isinstance(name, str) or name.casefold() not in NATIVE_FILE_WRITE_TOOLS:
+        return None, {}
+    schema = (
+        tool.get("input_schema")
+        or tool.get("parametersJsonSchema")
+        or tool.get("parameters_json_schema")
+        or tool.get("parameters")
+        or tool.get("inputSchema")
+        or function.get("parameters")
+        or {}
+    )
+    if not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict):
+        return None, {}
+    properties = schema["properties"]
+    if not {"file_path", "filePath", "path"}.intersection(properties):
+        return None, {}
+    if not {"content", "text"}.intersection(properties):
+        return None, {}
+    return name, schema
+
+
+def _find_file_write_tool(
+    payload: Dict[str, Any],
+) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Select only an advertised native file Write tool, not MCP/custom tools."""
+    tools = payload.get("tools", [])
+    tool_entries = tools if isinstance(tools, list) else [tools]
+    for tool in tool_entries:
+        if not isinstance(tool, dict):
+            continue
+        name, schema = _file_write_tool(tool)
+        if name:
+            return name, schema
+        declarations = tool.get("functionDeclarations") or tool.get(
+            "function_declarations", []
+        )
+        if isinstance(declarations, list):
+            for declaration in declarations:
+                if isinstance(declaration, dict):
+                    name, schema = _file_write_tool(declaration)
+                    if name:
+                        return name, schema
+    return None
+
+
+def _find_case_tool(
+    payload: Dict[str, Any], case: str
+) -> Optional[Tuple[str, Dict[str, Any]]]:
+    if case in FILE_WRITE_CASES:
+        return _find_file_write_tool(payload)
+    return _find_command_tool(payload)
+
+
+def _file_write_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
+    properties = schema.get("properties", {})
+    arguments: Dict[str, Any] = {}
+    for key in ("file_path", "filePath", "path"):
+        if key in properties:
+            arguments[key] = FILE_WRITE_TARGETS[case]
+            break
+    for key in ("content", "text"):
+        if key in properties:
+            arguments[key] = FILE_WRITE_SOURCES[case]
+            break
+    return arguments
+
+
+def _case_tool_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
+    if case in FILE_WRITE_CASES:
+        return _file_write_arguments(schema, case)
+    return _command_arguments(schema, TOOL_COMMANDS[case])
+
+
 def _record_request(case: str, payload: Dict[str, Any]) -> Tuple[int, int]:
-    """Track request and native-shell schema counts without retaining payloads."""
-    command_tool = _find_command_tool(payload)
-    has_command_tool = command_tool is not None
+    """Track native tool availability without retaining request payloads."""
+    case_tool = _find_case_tool(payload, case)
     with COUNTS_LOCK:
         REQUEST_COUNTS[case] += 1
         call_number = REQUEST_COUNTS[case]
         tool_call_number = 0
-        if has_command_tool:
+        if case in FILE_WRITE_CASES and case_tool is not None:
+            FILE_WRITE_TOOL_REQUEST_COUNTS[case] += 1
+            tool_call_number = FILE_WRITE_TOOL_REQUEST_COUNTS[case]
+            if tool_call_number == 1:
+                TOOL_OFFER_COUNTS[case] += 1
+                name = case_tool[0].casefold()
+                if name in NATIVE_FILE_WRITE_TOOLS:
+                    FILE_WRITE_TOOL_NAME_COUNTS.setdefault(case, Counter())[name] += 1
+        elif case_tool is not None:
             COMMAND_TOOL_REQUEST_COUNTS[case] += 1
             tool_call_number = COMMAND_TOOL_REQUEST_COUNTS[case]
             if case in TOOL_CASES and tool_call_number == 1:
                 TOOL_OFFER_COUNTS[case] += 1
-                assert command_tool is not None
-                name = command_tool[0].casefold()
+                name = case_tool[0].casefold()
                 if name in NATIVE_COMMAND_TOOL_NAMES:
                     COMMAND_TOOL_NAME_COUNTS.setdefault(case, Counter())[name] += 1
     return call_number, tool_call_number
@@ -391,9 +505,13 @@ def _stats() -> Dict[str, Dict[str, int]]:
         return {
             "requests": dict(REQUEST_COUNTS),
             "command_tool_requests": dict(COMMAND_TOOL_REQUEST_COUNTS),
+            "file_write_tool_requests": dict(FILE_WRITE_TOOL_REQUEST_COUNTS),
             "tool_offers": dict(TOOL_OFFER_COUNTS),
             "command_tool_names": {
                 case: dict(counts) for case, counts in COMMAND_TOOL_NAME_COUNTS.items()
+            },
+            "file_write_tool_names": {
+                case: dict(counts) for case, counts in FILE_WRITE_TOOL_NAME_COUNTS.items()
             },
             "clean_tool_results": dict(CLEAN_TOOL_RESULT_COUNTS),
             "raw_tool_output_requests": dict(RAW_TOOL_OUTPUT_COUNTS),
@@ -455,7 +573,7 @@ def chat_response(
 ) -> Dict[str, Any]:
     if tool_call_number is None:
         tool_call_number = call_number
-    tool = _find_command_tool(payload)
+    tool = _find_case_tool(payload, case)
     if case in TOOL_CASES and tool_call_number == 1 and tool:
         name, schema = tool
         message = {
@@ -468,7 +586,7 @@ def chat_response(
                     "function": {
                         "name": name,
                         "arguments": json.dumps(
-                            _command_arguments(schema, TOOL_COMMANDS[case])
+                            _case_tool_arguments(schema, case)
                         ),
                     },
                 }
@@ -496,7 +614,7 @@ def responses_response(
 ) -> Dict[str, Any]:
     if tool_call_number is None:
         tool_call_number = call_number
-    tool = _find_command_tool(payload)
+    tool = _find_case_tool(payload, case)
     item: Dict[str, Any]
     if case in TOOL_CASES and tool_call_number == 1 and tool:
         name, schema = tool
@@ -505,7 +623,7 @@ def responses_response(
             "type": "function_call",
             "status": "completed",
             "name": name,
-            "arguments": json.dumps(_command_arguments(schema, TOOL_COMMANDS[case])),
+            "arguments": json.dumps(_case_tool_arguments(schema, case)),
             "call_id": _issued_tool_id(case, "call_"),
         }
     else:
@@ -551,7 +669,7 @@ def anthropic_response(
     """Build an Anthropic Messages API response for Claude Code."""
     if tool_call_number is None:
         tool_call_number = call_number
-    tool = _find_command_tool(payload)
+    tool = _find_case_tool(payload, case)
     content: List[Dict[str, Any]]
     if case in TOOL_CASES and tool_call_number == 1 and tool:
         name, schema = tool
@@ -560,7 +678,7 @@ def anthropic_response(
                 "type": "tool_use",
                 "id": _issued_tool_id(case, "toolu_"),
                 "name": name,
-                "input": _command_arguments(schema, TOOL_COMMANDS[case]),
+                "input": _case_tool_arguments(schema, case),
             }
         ]
         stop_reason = "tool_use"
@@ -604,7 +722,7 @@ def gemini_response(
     """Build a Google Generative Language API response for Gemini CLI."""
     if tool_call_number is None:
         tool_call_number = call_number
-    tool = _find_command_tool(payload)
+    tool = _find_case_tool(payload, case)
     part: Dict[str, Any] = {"text": "Local smoke response: OK."}
     if case in TOOL_CASES and tool_call_number == 1 and tool:
         name, schema = tool
@@ -614,7 +732,7 @@ def gemini_response(
         part = {
             "functionCall": {
                 "name": name,
-                "args": _command_arguments(schema, TOOL_COMMANDS[case]),
+                "args": _case_tool_arguments(schema, case),
             }
         }
     return {

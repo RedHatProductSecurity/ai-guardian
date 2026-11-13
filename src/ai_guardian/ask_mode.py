@@ -349,13 +349,18 @@ def _handle_ask_mode_auto(
     if violation_type in (
         ViolationType.HEURISTIC_CANDIDATE,
         ViolationType.COMMAND_CREDENTIAL_DETECTED,
+        ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED,
     ):
         # One private decision covers the current operation, including incomplete
         # analysis. Do not deduplicate by values or prompt for ambiguous spans.
         private_config_section = (
             "password_likelihood"
             if violation_type == ViolationType.HEURISTIC_CANDIDATE
-            else "command_credential_scanning"
+            else (
+                "command_credential_scanning"
+                if violation_type == ViolationType.COMMAND_CREDENTIAL_DETECTED
+                else "http_request_credential_scanning"
+            )
         )
         return _handle_ask_mode(
             action_str,
@@ -415,6 +420,7 @@ _ASK_VIOLATION_LABELS = {
     ViolationType.SECRET_DETECTED: "Secret detection",
     ViolationType.HEURISTIC_CANDIDATE: "Password-likelihood review",
     ViolationType.COMMAND_CREDENTIAL_DETECTED: "Command credential detection",
+    ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED: "HTTP request credential detection",
     ViolationType.PII_DETECTED: "PII detection",
     ViolationType.TOOL_PERMISSION: "Permission rule",
     ViolationType.DIRECTORY_BLOCKING: "Directory access",
@@ -470,14 +476,21 @@ def _log_ask_decision(
     """
     if not HAS_VIOLATION_LOGGER:
         return
-    private_candidate = violation_type == ViolationType.HEURISTIC_CANDIDATE
-    if private_candidate:
+    private_candidate = violation_type in {
+        ViolationType.HEURISTIC_CANDIDATE,
+        ViolationType.COMMAND_CREDENTIAL_DETECTED,
+        ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED,
+    }
+    if violation_type == ViolationType.HEURISTIC_CANDIDATE:
         from ai_guardian.scanners.password_likelihood import MESSAGE, INCOMPLETE_MESSAGE
 
         matched_text = ""
         error_msg = INCOMPLETE_MESSAGE if error_msg == INCOMPLETE_MESSAGE else MESSAGE
     elif violation_type == ViolationType.COMMAND_CREDENTIAL_DETECTED:
         # Argument values must never enter the Ask audit path.
+        matched_text = ""
+    elif violation_type == ViolationType.HTTP_REQUEST_CREDENTIAL_DETECTED:
+        # Source values and snippets must never enter the Ask audit path.
         matched_text = ""
     try:
         from ai_guardian.ui.ask_dialog import AskDecision
@@ -557,9 +570,14 @@ def _log_ask_decision(
             )
     except Exception as e:
         if private_candidate:
-            logger.critical(
-                "Failed to persist password-likelihood Ask decision; details withheld"
-            )
+            if violation_type == ViolationType.HEURISTIC_CANDIDATE:
+                logger.critical(
+                    "Failed to persist password-likelihood Ask decision; details withheld"
+                )
+            else:
+                logger.critical(
+                    "Failed to persist private credential Ask decision; details withheld"
+                )
         else:
             logger.error(f"Failed to log ask decision: {e}")
 
