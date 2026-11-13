@@ -86,6 +86,7 @@ cloud jobs.
 | Pi extension | Gate | Gate | Replace or mark as error | Requires a loaded extension; commands handled before the input event are outside its prompt gate. |
 | Augment / Auggie local hooks | Not installed | Gate for selected tools | Feedback only; no replacement | Installed matchers do not cover every tool. |
 | Crush | Not installed | Gate | Not installed | AI Guardian installs only the pre-tool stage. |
+| Goose host CLI | Observe only | Gate | Observe only | v1.59.0 Linux/macOS only; requires an enabled plugin with the fail-closed pre-tool action. Desktop/native Windows and product container/OpenShell runtimes are unqualified. |
 | Junie | Not installed | Not installed | Not installed | MCP-only advisory checks depend on the agent choosing to call and follow them; no enforced hooks. |
 
 **Post-tool processing cannot undo completed tool side effects.** See the

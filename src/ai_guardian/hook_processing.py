@@ -79,10 +79,7 @@ from ai_guardian.constants import (
     HookEvent,
     ViolationType,
 )
-from ai_guardian.agent_config_protection import (
-    is_agent_config_mutation_tool,
-    is_agent_config_protection_enabled,
-)
+from ai_guardian.agent_config_protection import is_agent_config_mutation_tool
 from ai_guardian.developer_session import is_trusted_developer_session
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.utils.path_matching import match_leading_doublestar_pattern
@@ -2359,9 +2356,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                 if config_error:
                     warning_messages.append(config_error)
 
-                agent_config_section, agent_config_error = (
-                    _load_agent_config_protection_config()
-                )
+                _, agent_config_error = _load_agent_config_protection_config()
                 if agent_config_error:
                     warning_messages.append(agent_config_error)
 
@@ -2371,13 +2366,11 @@ def _process_hook_data(hook_data, daemon_state=None):
                     now,
                     default=True,
                 )
-                agent_config_protection_enabled = is_agent_config_protection_enabled(
-                    {"agent_config_protection": agent_config_section}
-                )
+                # Mutations still need the immutable reserved-control inventory
+                # when the broader agent-configuration preference is off. The
+                # policy checker selects the applicable inventory itself.
                 agent_config_check_required = bool(
-                    agent_config_protection_enabled
-                    and tool_name
-                    and is_agent_config_mutation_tool(tool_name)
+                    tool_name and is_agent_config_mutation_tool(tool_name)
                 )
                 # Identity verification remains mandatory even when the user
                 # disables ordinary permission rules.
@@ -2425,6 +2418,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                         (
                             immutable_shell_check_required
                             or immutable_file_check_required
+                            or agent_config_check_required
                         )
                         and not permissions_enabled
                         and not identity_required

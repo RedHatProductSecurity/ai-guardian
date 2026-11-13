@@ -9,11 +9,60 @@ import json
 import os
 from io import StringIO
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+
+import pytest
 
 from tests.fixtures.mock_mcp_server import create_hook_data
 from tests.fixtures import attack_constants
 import ai_guardian
+
+
+@pytest.mark.parametrize(
+    "tool_name,tool_input",
+    [
+        ("Write", {"file_path": "notes.txt", "content": "safe notes"}),
+        ("Edit", {"file_path": "notes.txt", "old_string": "old", "new_string": "new"}),
+        ("Delete", {"path": "notes.txt"}),
+    ],
+)
+def test_mutations_reach_immutable_checks_with_configurable_guards_off(
+    tool_name, tool_input
+):
+    checker = Mock()
+    checker.check_tool_allowed.return_value = (True, None, tool_name)
+    data = create_hook_data(tool_name=tool_name, tool_input=tool_input)
+    data["_ide_type"] = "claude"
+    with (
+        patch("ai_guardian.hook_processing.ToolPolicyChecker", return_value=checker),
+        patch(
+            "ai_guardian.hook_processing._load_permissions_config",
+            return_value=({"enabled": False}, None),
+        ),
+        patch(
+            "ai_guardian.hook_processing._load_agent_config_protection_config",
+            return_value=({"enabled": False}, None),
+        ),
+        patch(
+            "ai_guardian.hook_processing._load_pattern_server_config", return_value=None
+        ),
+        patch(
+            "ai_guardian.hook_processing._load_secret_scanning_config",
+            return_value=({"enabled": False}, None),
+        ),
+        patch(
+            "ai_guardian.hook_processing.is_trusted_developer_session",
+            return_value=False,
+        ),
+    ):
+        result = ai_guardian.process_hook_data(data)
+
+    checker.check_tool_allowed.assert_called_once()
+    checked_data = checker.check_tool_allowed.call_args.args[0]
+    assert checked_data["tool_name"] == tool_name
+    assert checked_data["tool_input"] == tool_input
+    assert checker.check_tool_allowed.call_args.kwargs == {"immutable_only": True}
+    assert result.get("_blocked") is not True
 
 
 class HookInputParsingTests(TestCase):

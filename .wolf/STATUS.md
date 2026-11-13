@@ -63,16 +63,37 @@ budget_tokens: 1000
   Added fixture-shape, portable URL, no-premature-lookup, directory deny/allow,
   and symlink-parent traversal regressions. **1,238 related unit/UX tests pass**
   (3 existing deprecation warnings); Black, Ruff, error-level Pylint, Mypy (342
-  package files), buglog JSON, and diff checks pass. The follow-up is local and
-  uncommitted; the existing remote CI/CodeQL results still describe `d2231b79`.
+  package files), buglog JSON, and diff checks pass. That follow-up was published
+  as `a5dcb312`; the remote branch later merged main as `6c093fa0`.
   Posted [PR follow-up details](https://github.com/RedHatProductSecurity/ai-guardian/pull/2738#issuecomment-6862328186)
   and saved a DAF note.
-- **Limits / next:** publish the follow-up through external DAF completion and
-  confirm fresh Windows, installed-command E2E, and CodeQL results. Real Goose
-  execution remains for CI; no local
+- **Rebase:** replayed the two Goose commits onto `origin/main` (`6e3121bf`), now
+  `0b9d843e` and `125f3f0d`. Preserved main's README reference links and both
+  sets of OpenWolf notes through conflicts. Before new local fixes, the rebased
+  tree differed from the old merged head only in README and the two note files.
+  Backup: `backup/2723-before-rebase-20261113T193652Z`. No push was made.
+- **CodeQL #359:** the remaining high path-injection alert points to the
+  request-selected plugin directory's `is_dir()` check, not the previously fixed
+  adapter probes. User explicitly approved reserving all four Goose control-file
+  paths before installation. Removed the probe and added each control once with
+  its proper user/project scope. Honest disabled-guard UX mocks also exposed a
+  native-write routing gap: mutations now always reach immutable policy checks.
+  Added absent/user/project/both inventory, no-probe, native write/edit/shell
+  deny, unrelated allow, and routing regressions. Added Goose to main's new
+  README integration summary with a five-column limitation contract.
+- **Latest validation:** **1,384 related unit/UX tests passed, 1 skipped**, with
+  3 existing deprecation warnings; inventory-module coverage is **88%** (data:
+  `/tmp/opencode/goose-codeql359.coverage`). Black, Ruff, error-level Pylint,
+  Mypy (342 source files), and diff checks pass. New fixes remain uncommitted.
+  Saved a DAF note and [PR progress comment](https://github.com/RedHatProductSecurity/ai-guardian/pull/2738#issuecomment-6867949957).
+- **Limits / next:** review/publish the rebased history and local fixes through
+  external DAF completion; the remote still has the old merged history, so a
+  normal fast-forward push will not suffice. Confirm fresh Windows,
+  installed-command E2E, and CodeQL results; #359 is not yet verified closed.
+  Real Goose execution remains for CI; no local
   container/integration scenarios ran. Live macOS, desktop/native Windows, hosted
   execution, transcripts, prompt/output containment, and product runtimes are not
-  qualified. No follow-up commit or push was made.
+  qualified. No new fix commit or push was made.
 
 ## Issue #2722 JavaScript/TypeScript HTTP credential scanning — 2026-11-13
 

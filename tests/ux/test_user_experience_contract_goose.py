@@ -6,6 +6,8 @@ configuration mutation. The first executes; the latter returns the generic
 native policy denial before execution. A failed/missing hook executable or
 timeout must prevent the tool. Prompt and post-tool notifications cannot
 withhold content or replace results. Desktop/native Windows are unqualified.
+With enforcement active, repeat control-file mutation checks in a workspace
+without an installed Goose plugin: the reserved controls still deny mutations.
 """
 
 import json
@@ -59,6 +61,13 @@ def run_hook(data, config=None):
         patch(
             "ai_guardian.hook_processing._load_permissions_config",
             return_value=({"enabled": False}, None),
+        ),
+        patch(
+            "ai_guardian.hook_processing._load_agent_config_protection_config",
+            return_value=(
+                config.get("agent_config_protection", {"enabled": True}),
+                None,
+            ),
         ),
         patch(
             "ai_guardian.hook_processing.ToolPolicyChecker",
@@ -239,17 +248,68 @@ def test_native_source_write_receives_http_credential_enforcement(tool):
     assert not (Path.cwd() / "client.py").exists()
 
 
-def test_installed_plugin_controls_remain_protected_with_general_guard_off(
-    isolated_goose,
+@pytest.mark.parametrize("installed_scope", [None, "user", "project"])
+@pytest.mark.parametrize(
+    "control", ["user-config", "user-settings", "project-settings", "local-settings"]
+)
+@pytest.mark.parametrize("tool", ["write", "edit", "shell"])
+def test_reserved_plugin_controls_remain_protected_before_and_after_installation(
+    isolated_goose, installed_scope, control, tool
 ):
-    home, _ = isolated_goose
-    (home / ".agents/plugins/ai-guardian-goose").mkdir(parents=True)
+    """USER EXPERIENCE: reserved controls deny mutations regardless of installation.
+
+    Ordinary permissions and the broader configuration preference do not remove
+    this immutable boundary. The model sees only the generic denial, not paths
+    or control contents. This does not claim that an absent plugin enforces hooks.
+    """
+    home, project = isolated_goose
+    if installed_scope:
+        root = home if installed_scope == "user" else project
+        (root / ".agents/plugins/ai-guardian-goose").mkdir(parents=True)
+    target = {
+        "user-config": home / "config/config.yaml",
+        "user-settings": home / ".config/goose/settings.json",
+        "project-settings": project / ".config/goose/settings.json",
+        "local-settings": project / ".config/goose/settings.local.json",
+    }[control]
     config = {
         "agent_config_protection": {"enabled": False},
         "permissions": {"enabled": False},
     }
-    result = run_hook(
-        hook("write", {"path": ".config/goose/settings.json", "content": "changed"}),
-        config,
+    args = (
+        {"command": f"rm -f '{target.as_posix()}'"}
+        if tool == "shell"
+        else {
+            "path": str(target),
+            "content": "changed",
+            "before": "old",
+            "after": "new",
+        }
     )
-    assert json.loads(result["output"])["decision"] == "block"
+    result = run_hook(hook(tool, args), config)
+    assert json.loads(result["output"]) == {
+        "decision": "block",
+        "reason": "Operation blocked by ai-guardian: tool permission denied",
+    }
+    assert result["_blocked"] is True
+    assert result["exit_code"] == 0
+    assert not target.exists()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".goosehints",
+        ".agents/plugins/other/hooks/hooks.json",
+        ".config/goose/preferences.json",
+        "clean.py",
+    ],
+)
+def test_reserved_controls_do_not_expand_to_unrelated_files(path):
+    """USER EXPERIENCE: the narrow immutable scope leaves unrelated files alone."""
+    config = {
+        "agent_config_protection": {"enabled": False},
+        "permissions": {"enabled": False},
+    }
+    result = run_hook(hook("write", {"path": path, "content": "safe notes"}), config)
+    assert json.loads(result["output"]) == {"decision": "allow"}

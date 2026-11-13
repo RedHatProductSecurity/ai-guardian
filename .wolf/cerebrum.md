@@ -6,6 +6,11 @@
 
 ## User Preferences
 
+- **2026-11-13 — Goose control reservation (#2723, CodeQL #359):** User explicitly
+  chose to reserve all four hook-control file paths as immutable before plugin
+  installation, accepting that this covers the entire Goose `config.yaml` and
+  settings files. Do not restore installation-dependent directory probes.
+
 - **2026-11-13 — Claude native Write smoke permission:** Claude's `--print` smoke
   configuration needs an explicit `Write` entry in its isolated settings
   `permissions.allow` list for the clean native Write case; preserving Bash probe
@@ -335,6 +340,14 @@
   semantics. Use pure path construction before policy; preserve linked `..`
   segments until shared guards canonicalize the target instead of collapsing them
   lexically or probing untrusted paths early with `Path.resolve`/`expanduser`.
+  CodeQL #359 then flagged `root.is_dir()` in the managed-control inventory.
+  Reserve controls without that probe and add them once with explicit scopes.
+  UX helpers must mock the configuration-guard loader consistently with the
+  checker's explicit configuration: its default enabled value had masked the
+  pipeline skipping native mutations when both configurable guards were off.
+  Mutations must always reach the immutable policy, while unrelated files remain
+  allowed. Rebase conflicts must preserve main's absolute README link references;
+  add Goose to its new behavior summary without overwriting the existing rows.
 
 - **2026-11-13 — JS/TS scanner Mypy contracts (#2722):** A `kind` string does not
   narrow an `object` payload on a generic resolved-value record; centralize

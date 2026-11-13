@@ -671,9 +671,10 @@ def build_managed_goose_inventory(
     """Protect the owned Goose plugin even when general agent config guards are off.
 
     Goose's plugin settings can deactivate command hooks, so their controlling
-    files remain immutable while the managed plugin is installed. Unrelated
-    plugins, provider settings without an installation, and project hints are
-    governed only by the configurable, general inventory above.
+    file paths are reserved even before installation. Inventory construction must
+    not probe a request-selected plugin directory to decide this boundary.
+    Unrelated plugins, other provider files, and project hints are governed only
+    by the configurable, general inventory above.
     """
     from ai_guardian.goose_support import (
         goose_config_dir,
@@ -696,24 +697,22 @@ def build_managed_goose_inventory(
             recursive=True,
             kind="managed security plugin",
         )
-        if not root.is_dir():
-            continue
-        controls = [
-            goose_config_dir() / "config.yaml",
-            goose_user_settings_path(),
-            Path(active_project) / ".config/goose/settings.json",
-            Path(active_project) / ".config/goose/settings.local.json",
-        ]
-        for path in controls:
-            _add_path(
-                paths,
-                seen,
-                str(path),
-                "goose",
-                scope,
-                active_project,
-                kind="security plugin control",
-            )
+    controls = (
+        (goose_config_dir() / "config.yaml", "user"),
+        (goose_user_settings_path(), "user"),
+        (Path(active_project) / ".config/goose/settings.json", "project"),
+        (Path(active_project) / ".config/goose/settings.local.json", "project"),
+    )
+    for path, scope in controls:
+        _add_path(
+            paths,
+            seen,
+            str(path),
+            "goose",
+            scope,
+            active_project,
+            kind="security plugin control",
+        )
     return AgentConfigInventory(paths, active_project)
 
 

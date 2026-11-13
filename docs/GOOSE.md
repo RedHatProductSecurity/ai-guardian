@@ -105,10 +105,16 @@ are preserved unless replacement was requested. There is no AI Guardian
 transcript/session adapter: Goose's session storage is not compatible JSONL.
 
 The general configuration inventory covers Goose configuration, plugin controls,
-project hints, and user/project plugin trees. The owned security plugin and its
-installed enablement controls remain protected independently of the broader
-agent-configuration preference. Attempts to invoke the active `goose` CLI from
-agent tools receive shared host-CLI protection. Operator-only
+project hints, and user/project plugin trees. The owned security plugin and all
+four hook-control file paths listed above remain immutable for agent-originated
+mutations independently of the broader agent-configuration preference, **even
+before plugin installation**. This includes the entire `config.yaml`, not just
+its plugin settings. The inventory does not probe the request-selected plugin
+directory to determine installation. Unrelated plugins, other provider files,
+and project hints are outside this narrow immutable scope. This reserves paths;
+it does not make an absent or unloaded plugin enforce hooks.
+Attempts to invoke the active `goose` CLI from agent tools receive shared host-CLI
+protection. Operator-only
 [recovery](UNINSTALL.md) removes recognized owned hook/MCP actions and manifests,
 not unrelated plugins, preferences, hints, or session data. A missing executable
 **blocks pre-tool calls** until the operator repairs/removes the registration.
