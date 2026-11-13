@@ -336,7 +336,7 @@ def _render_http_request_credential_scanning(config):
             )
             add_help_button("http_request_credential_scanning")
         ui.label(
-            "Statically analyzes Python source submitted through supported Write/Edit "
+            "Statically analyzes Python, JavaScript, and TypeScript source submitted through supported Write/Edit "
             "pre-tool hooks for inline credentials in HTTP authentication, "
             "authorization/API-key headers, and credential-named request fields. "
             "Source is never imported or executed; values and snippets are withheld. "

@@ -52,6 +52,8 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
         "command_credential",
         "http_request_credential",
         "http_request_credential_clean",
+        "http_request_credential_js",
+        "http_request_credential_ts_clean",
         "clean_tool",
         "tool_output_secret",
         "tool_output_pii",
@@ -60,16 +62,29 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
     assert all(
         case.expected_violation
         for case in runner.CASES
-        if case.name not in ("allowed", "clean_tool", "http_request_credential_clean")
+        if case.name
+        not in (
+            "allowed",
+            "clean_tool",
+            "http_request_credential_clean",
+            "http_request_credential_ts_clean",
+        )
     )
     assert runner.CASES[-1].expected_violation is None
-    for case_name in ("http_request_credential", "http_request_credential_clean"):
+    for case_name in (
+        "http_request_credential",
+        "http_request_credential_clean",
+        "http_request_credential_js",
+        "http_request_credential_ts_clean",
+    ):
         case = next(case for case in runner.CASES if case.name == case_name)
         assert case.cli_names == ("claude", "opencode")
     assert [case.expects_provider for case in runner.CASES] == [
         False,
         False,
         False,
+        True,
+        True,
         True,
         True,
         True,
@@ -1576,6 +1591,21 @@ def test_local_mock_offers_native_write_for_http_credential_cases():
     )["content"][0]["input"]["content"]
     assert "os.environ['SMOKE_HTTP_TOKEN']" in clean_source
     assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" not in clean_source
+
+    js_response = mock.anthropic_response(
+        {"tools": tools}, "http_request_credential_js", 1, 1
+    )
+    js_tool = js_response["content"][0]
+    assert js_tool["type"] == "tool_use"
+    assert Path(js_tool["input"]["file_path"]).name == "http_request_credential_js.js"
+    assert "Authorization" in js_tool["input"]["content"]
+    assert "SYNTHETIC_HTTP_FLOW_SMOKE_JS_2722" in js_tool["input"]["content"]
+
+    ts_clean_source = mock.anthropic_response(
+        {"tools": tools}, "http_request_credential_ts_clean", 1, 1
+    )["content"][0]["input"]["content"]
+    assert "process.env.SMOKE_HTTP_TOKEN" in ts_clean_source
+    assert "SYNTHETIC_HTTP_FLOW_SMOKE_JS_2722" not in ts_clean_source
 
     openai_tools = [
         {

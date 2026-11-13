@@ -444,7 +444,7 @@ VIOLATION_FILTER_TYPES = [
     (
         "HTTP Request Credential",
         "http_request_credential_detected",
-        "Hard-coded credential flow detected in supported Python HTTP request source",
+        "Hard-coded credential flow detected in supported HTTP request source code",
     ),
     (
         "Directories",

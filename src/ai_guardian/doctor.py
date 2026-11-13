@@ -696,7 +696,7 @@ class Doctor:
         )
 
     def check_http_request_credential_scanning(self) -> CheckResult:
-        """Report the Python HTTP request credential scanner's effective policy."""
+        """Report the source HTTP request credential scanner's effective policy."""
         self._ensure_config()
         section = (self._config or {}).get("http_request_credential_scanning", {})
         if section is None:

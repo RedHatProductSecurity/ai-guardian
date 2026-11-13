@@ -25,7 +25,7 @@ FEATURE_GROUPS = [
             (
                 "http_request_credential_scanning",
                 "HTTP Request Credential Scanning",
-                "Block hard-coded credentials in supported Python HTTP request source",
+                "Block hard-coded credentials in supported HTTP request source code",
             ),
             ("scan_pii", "PII Detection", "GDPR/CCPA compliance scanning"),
             (

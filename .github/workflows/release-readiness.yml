@@ -820,8 +820,9 @@ jobs:
 
       # Each invocation prepares a strict-derived config before creation: prompt /
       # pre-tool deny (including command credential arguments and Claude/OpenCode native
-      # Write HTTP-source credential flow), an environment-backed clean Write case,
-      # clean-tool and sensitive-output sanitization cases. The Write cases run only
+      # Write HTTP-source credential flows in Python, JavaScript, and TypeScript),
+      # environment-backed clean Write cases, clean-tool and sensitive-output
+      # sanitization cases. The Write cases run only
       # for clients exposing a recognized native Write tool. This is
       # not unmodified @strict post-tool qualification. Keep each client in its own
       # named step and continue after an individual failure so all results are

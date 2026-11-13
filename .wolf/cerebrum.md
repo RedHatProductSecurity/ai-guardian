@@ -310,6 +310,12 @@
 
 ## Key Learnings
 
+- **2026-11-13 — JS/TS scanner Mypy contracts (#2722):** A `kind` string does not
+  narrow an `object` payload on a generic resolved-value record; centralize
+  sequence/mapping payload access and keep locals distinct across mutually
+  exclusive AST branches. Mypy may also retain a mutable flag's initial narrowing
+  across a method that mutates it, so query that state through a helper method.
+
 - **2026-11-13 — Bundled rule-count CI (#2720):** Adding a TOML rule requires
   updating `EXPECTED_COUNTS` in `tests/unit/test_bundled_toml.py`. The aggregate
   total is computed from that mapping, so updating the per-file expectation also

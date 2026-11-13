@@ -7,6 +7,22 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-13 (UTC)
 
+## Issue #2722 JavaScript/TypeScript HTTP credential scanning — 2026-11-13
+
+- Extended the non-executing HTTP credential-flow scanner to JavaScript and
+  TypeScript and enforced it before supported source-file writes. Updated
+  configuration/Console surfaces, docs, changelog, UX contracts, and synthetic
+  Claude/OpenCode native Write smoke coverage.
+- Fixed project-managed Mypy errors in the JS/TS analyzer with an explicit value
+  payload union, typed container accessors, distinct branch locals, and a
+  method-based check for mutable budget state.
+- **Validation:** all **275** directly affected unit/UX tests pass (3 existing
+  deprecation warnings). Ruff, Black (Python 3.10 target), error-level Pylint,
+  project Mypy (339 source files), `py_compile`, and `git diff --check` pass.
+  Real-agent container smoke was not run locally.
+- Changes remain uncommitted on branch `2722`; no push or GitHub issue update was
+  made. **Next:** user review and external DAF completion.
+
 ## PR #2732 / issue #2717 CodeRabbit follow-up — 2026-11-13
 
 - Added aggregate budgets for resolution, container traversal, derived/scanned

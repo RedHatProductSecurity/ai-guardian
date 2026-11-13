@@ -268,9 +268,10 @@ than leaving them implicit.
   a correlated clean tool result too. Cover the smoke UX contract in
   `tests/ux/test_user_experience_contract_agent_cli_smoke.py`; client limitations
   and unapproved hooks must fail rather than silently qualify.
-- [ ] The Python HTTP request credential scanner has real-agent native Write
-  violation and environment-reference clean cases for Claude Code and OpenCode;
-  other CLI lanes are not claimed by this Write-specific smoke probe.
+- [ ] The Python, JavaScript, and TypeScript HTTP request credential scanner has
+  real-agent native Write violation and environment-reference clean cases for
+  Claude Code and OpenCode; other CLI lanes are not claimed by this Write-specific
+  smoke probe.
 - [ ] Keep release-readiness runtime coverage explicit about image/version lanes:
   Gemini CLI runs in the normal support image; OpenCode runs against the bundled
   V1 image and a separate V2 smoke-only image. The V2 image must not be described
