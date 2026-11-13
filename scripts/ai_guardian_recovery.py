@@ -444,8 +444,18 @@ def inventory(
             ]
         )
 
+    def goose(base: Path) -> None:
+        config("goose", base / "hooks/hooks.json", base / ".mcp.json")
+        artifacts.append(Artifact(base / "plugin.json", "goose-manifest"))
+
     if scope in {"user", "both"}:
         home = Path.home()
+
+        goose_root = os.environ.get("GOOSE_PATH_ROOT", "")
+        goose_home = (
+            Path(goose_root) if goose_root and Path(goose_root).is_absolute() else home
+        )
+        goose(goose_home / ".agents/plugins/ai-guardian-goose")
 
         def root(default: str, *variables: str) -> Path:
             return next(
@@ -535,6 +545,7 @@ def inventory(
         if os.environ.get("CRUSH_GLOBAL_CONFIG"):
             config("crush", expanded(os.environ["CRUSH_GLOBAL_CONFIG"]))
     for project in projects:
+        goose(project / ".agents/plugins/ai-guardian-goose")
         for host, paths in {
             "claude": (
                 ".claude/settings.json",
@@ -657,6 +668,17 @@ class Change:
 
 def artifact_owned(artifact: Artifact, data: bytes) -> bool:
     text = data.decode("utf-8-sig")
+    if artifact.kind == "goose-manifest":
+        manifest = load_json(text)
+        return (
+            isinstance(manifest, dict)
+            and manifest.get("name") == "ai-guardian-goose"
+            and manifest.get("_ai_guardian_managed")
+            == "ai-guardian-goose-command-hooks"
+            and set(manifest).issubset(
+                {"name", "version", "description", "_ai_guardian_managed"}
+            )
+        )
     if artifact.kind == "package":
         package = load_json(text)
         return (

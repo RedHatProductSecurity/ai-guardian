@@ -1089,6 +1089,21 @@ def extract_tool_result(hook_data):
         tuple: (output: str or None, tool_name: str)
     """
     try:
+        goose_adapter = detect_adapter(hook_data)
+        if goose_adapter.agent_type == "goose":
+            normalized = goose_adapter.normalize_input(hook_data)
+            goose_tool_name = normalized.tool_name or "unknown"
+            if goose_tool_name in STATE_MODIFY_TOOLS:
+                return None, goose_tool_name
+            value = normalized.tool_response
+            return (
+                (
+                    json.dumps(value, ensure_ascii=False)
+                    if isinstance(value, (dict, list))
+                    else value if isinstance(value, str) else None
+                ),
+                goose_tool_name,
+            )
         # Get tool name from multiple possible locations
         tool_name = hook_data.get("tool_name") or hook_data.get("toolName")
         logger.info(
@@ -2015,6 +2030,11 @@ def inject_security_only(hook_data, daemon_state=None):
     """
     try:
         adapter = detect_adapter(hook_data)
+        if adapter.agent_type == "goose":
+            # A paused pre-tool hook must still acknowledge the host's
+            # decision protocol; generic {} stdout is a Goose hook failure.
+            event = adapter.normalize_input(hook_data).event
+            return adapter.format_response(False, hook_event=event)
         if adapter.ide_type not in (
             IDEType.CLAUDE_CODE,
             IDEType.ANTIGRAVITY,
@@ -2767,7 +2787,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             ):
                 # Extract file content for tools that read files
                 file_hook_data = hook_data
-                if agent_type == "opencode" and tool_name == "Read":
+                if agent_type in ("opencode", "goose") and tool_name == "Read":
                     # The native payload remains available for audit, but file
                     # checks must consume the same resolved target as policy,
                     # never re-extract a relative/conflicting native alias.

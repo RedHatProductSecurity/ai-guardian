@@ -1236,15 +1236,20 @@ class Doctor:
 
             config_path = Path(raw_config_path).expanduser()
 
-            if ide_type == "codex":
+            if ide_type in ("codex", "goose"):
                 verification = setup.verify_ide_setup(ide_type)
                 events = verification.get("events", {})
                 hook_count = sum(status == "healthy" for status in events.values())
-                total = len(setup.expected_hook_manifest("codex"))
+                total = len(setup.expected_hook_manifest(ide_type))
                 mcp_status = verification.get("mcp_status", "missing")
+                coverage_note = (
+                    CODEX_COVERAGE_NOTE
+                    if ide_type == "codex"
+                    else "Only PreToolUse enforces decisions; prompt/post-tool hooks are observational"
+                )
                 message = (
                     f"{hook_count}/{total} hooks; MCP: {mcp_status}; "
-                    f"{CODEX_COVERAGE_NOTE}"
+                    f"{coverage_note}"
                 )
                 results.append(f"{ide_name}: {message}")
                 detail = self._hook_verification_detail(verification)
@@ -1536,6 +1541,8 @@ class Doctor:
         setup, ide_type: str, raw_config_path: str, cursor_layers: List[Dict]
     ) -> bool:
         """Return whether a detected integration has local installation evidence."""
+        if ide_type == "goose":
+            return setup._ide_has_install_evidence(ide_type)
         if ide_type == "cursor":
             return any(
                 layer.get("exists")

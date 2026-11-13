@@ -30,6 +30,7 @@ _JSON_PROTOCOLS = {
     "opencode",
     "augment",
     "crush",
+    "goose",
     "unknown",
 }
 
@@ -147,6 +148,20 @@ def _protocol_for_hook(hook_data: Optional[Dict[str, Any]]) -> str:
         return "opencode"
     if "pi_version" in hook_data:
         return "pi"
+    if (
+        hook_data.get("event")
+        in (
+            "SessionStart",
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "SessionEnd",
+            "Stop",
+        )
+        and isinstance(hook_data.get("session_id"), str)
+        and "hook_event_name" not in hook_data
+    ):
+        return "goose"
 
     event = _compact(
         hook_data.get("hook_event_name")
@@ -288,6 +303,13 @@ def build_failure_response(
     kind = _event_kind(hook_data)
     result: Dict[str, Any] = {"output": None, "exit_code": 0, "_hook_failure": True}
 
+    if protocol == "goose":
+        # The installed Goose action promises fail-closed PreToolUse even when
+        # the package cannot import or the global scan-error policy is allow.
+        # Return an undecided failure (nonzero), letting Goose's on_failure
+        # enforce that promise. Passive events and Stop have no such promise.
+        result["exit_code"] = 1
+        return result
     if protocol == "cursor":
         if kind in ("pre", "read"):
             payload: Dict[str, Any] = {"permission": "deny" if blocked else "allow"}
@@ -377,6 +399,30 @@ def ensure_hook_response(
     protocol = _protocol_for_hook(hook_data)
     kind = _event_kind(hook_data)
     json_protocol = protocol in _JSON_PROTOCOLS
+
+    if protocol == "goose" and response.get("_hook_failure"):
+        return build_failure_response(hook_data, action)
+
+    if protocol == "goose" and kind == "pre":
+        if isinstance(output, dict):
+            parsed_goose = output
+        elif isinstance(output, str) and output.strip():
+            try:
+                parsed_goose = json.loads(output)
+            except ValueError:
+                return build_failure_response(hook_data, action)
+        elif output is None and exit_code == 0:
+            # Goose accepts empty stdout on successful allow (unlike {}).
+            return normalized
+        else:
+            return build_failure_response(hook_data, action)
+        if not isinstance(parsed_goose, dict) or parsed_goose.get("decision") not in (
+            "allow",
+            "block",
+        ):
+            return build_failure_response(hook_data, action)
+        if exit_code != 0 and parsed_goose.get("decision") != "block":
+            return build_failure_response(hook_data, action)
 
     if isinstance(output, dict):
         if not json_protocol:

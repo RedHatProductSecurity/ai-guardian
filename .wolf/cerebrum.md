@@ -318,6 +318,18 @@
   in both contexts, and summary/reference cross-links also use absolute URLs. Preserve
   the detailed matrix anchor and keep protocol/failure details in the guide.
 
+- **2026-11-13 — Goose v1.59.0 (#2723):** Only managed PreToolUse command hooks
+  are enforcement; prompt/post hooks observe, and Stop denial continues generation.
+  Install the owned Open Plugins plugin with explicit user/project scope and
+  pre-tool `on_failure: block`; return only generic safe reasons. Config-path
+  disabled plugins are filtered before project/user name deduplication. macOS uses
+  `~/Library/Application Support/Block/goose`, while plugin settings remain under
+  `.config/goose`; absolute `GOOSE_PATH_ROOT` relocates the process root. Developer
+  file tools treat `~` literally. A malformed sibling action/server can invalidate
+  the whole file, so health must inspect more than the generated entry. Keep the
+  two-case real-CLI smoke separate from unsupported product container/OpenShell
+  runtimes, create its workspace explicitly, and leave live execution to CI.
+
 - **2026-11-13 — JS/TS scanner Mypy contracts (#2722):** A `kind` string does not
   narrow an `object` payload on a generic resolved-value record; centralize
   sequence/mapping payload access and keep locals distinct across mutually

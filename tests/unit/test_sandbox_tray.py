@@ -12,7 +12,7 @@ import pytest
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.ide_registry import (
     SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
-    SUPPORTED_CLI_IDE_TYPES,
+    SUPPORTED_CONTAINER_CLI_IDE_TYPES,
     SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
 )
 from ai_guardian.tray.app import DaemonTray
@@ -2110,7 +2110,7 @@ class TestSandboxTrayMenu:
             fields = tray._menu._sandbox_create_fields()
 
         cli_field = next(field for field in fields if field["name"] == "cli")
-        assert cli_field["choices"] == SUPPORTED_CLI_IDE_TYPES
+        assert cli_field["choices"] == SUPPORTED_CONTAINER_CLI_IDE_TYPES
         assert cli_field["choices_by"]["field"] == "runtime"
         provider_field = next(
             field for field in fields if field["name"] == "agent_provider"

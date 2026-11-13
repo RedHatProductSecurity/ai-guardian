@@ -97,6 +97,250 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
     ]
 
 
+def test_goose_smoke_uses_only_enforceable_cases_and_a_network_none_test_image():
+    runner = _load(RUNNER_PATH, "agent_cli_goose_contract")
+    assert runner.GOOSE_SMOKE_CASE_NAMES == {"command_credential", "clean_tool"}
+    command = runner.build_goose_smoke_command(
+        "docker", "goose-smoke:local", "owned-test"
+    )
+    assert command[:2] == ["docker", "run"]
+    assert "--network=none" in command
+    assert "--cap-drop=ALL" in command
+    assert "--security-opt=no-new-privileges" in command
+    assert command[command.index("--user") + 1] == "1000:1000"
+    assert command[-2:] == ["goose-smoke:local", "infinity"]
+    assert not set(command).intersection(
+        {"--volume", "--publish", "--privileged", "sandbox"}
+    )
+    assert "GOOSE_PATH_ROOT=/sandbox/goose-smoke" in command
+    assert runner.build_agent_command("goose", "default", "clean prompt") == [
+        "goose",
+        "run",
+        "--no-session",
+        "--provider",
+        "openai",
+        "--model",
+        "ag-smoke",
+        "--output-format",
+        "json",
+        "--text",
+        "clean prompt",
+    ]
+    env = runner.build_agent_environment("goose")
+    assert f"OPENAI_BASE_URL={runner.MOCK_URL}" in env
+    assert f"OPENAI_API_KEY={runner.MOCK_KEY}" in env
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        [],
+        ["--image", "test", "--keep"],
+        ["--image", "test", "--accept-proprietary-tos"],
+        ["--image", "test", "--agent", "other"],
+    ],
+)
+def test_goose_smoke_preflight_rejects_unqualified_modes_before_execution(
+    extra, monkeypatch
+):
+    runner = _load(RUNNER_PATH, "agent_cli_goose_preflight")
+    monkeypatch.setattr(
+        runner, "_run", lambda *_args, **_kwargs: pytest.fail("unexpected execution")
+    )
+    with pytest.raises(SystemExit) as error:
+        runner.main(["--cli-name", "goose", "--agent", "default", *extra])
+    assert error.value.code == 2
+
+
+def test_goose_mock_protocol_issues_native_blocked_and_clean_shell_calls():
+    mock = _load(MOCK_PATH, "agent_cli_goose_provider")
+    schema = {
+        "type": "object",
+        "properties": {"command": {"type": "string"}},
+        "required": ["command"],
+    }
+    tools = [{"type": "function", "function": {"name": "shell", "parameters": schema}}]
+    for case in ("command_credential", "clean_tool"):
+        data = {
+            "messages": [{"role": "user", "content": f"AGENT_CLI_SMOKE_CASE: {case}"}],
+            "tools": tools,
+        }
+        assert mock._find_command_tool(data) == ("shell", schema)
+        response = mock.chat_response(data, case, 1)
+        call = response["choices"][0]["message"]["tool_calls"][0]["function"]
+        assert call["name"] == "shell"
+        assert json.loads(call["arguments"])["command"] == mock.TOOL_COMMANDS[case]
+    assert mock._command_tool({"name": "advisory__shell", "parameters": schema}) == (
+        None,
+        {},
+    )
+
+
+def test_goose_configuration_uses_disposable_root_without_live_provider_values(
+    tmp_path, monkeypatch
+):
+    runner = _load(RUNNER_PATH, "agent_cli_goose_config")
+    monkeypatch.setenv("GOOSE_PATH_ROOT", str(tmp_path))
+    payload = {
+        "cli_name": "goose",
+        "agent": "default",
+        "workspace": str(tmp_path / "new-workspace"),
+        "base_url": runner.MOCK_URL,
+        "api_key": runner.MOCK_KEY,
+        "model": runner.MOCK_MODEL,
+    }
+    monkeypatch.setattr(sys, "argv", ["configure", json.dumps(payload)])
+    exec(runner._CONFIGURE_AGENT, {})
+    config = json.loads((tmp_path / "config/config.yaml").read_text())
+    assert config["GOOSE_PROVIDER"] == "openai"
+    assert config["GOOSE_MODEL"] == runner.MOCK_MODEL
+    assert config["extensions"]["developer"]["type"] == "platform"
+    assert "OPENAI_API_KEY" not in config
+    assert (tmp_path / "new-workspace").is_dir()
+
+
+def test_goose_smoke_failure_cleans_only_owned_container(tmp_path, monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_goose_cleanup")
+    calls = []
+
+    def run(command, *args, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_run", run)
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            [], 0, "goose 1.58.0", "private details"
+        ),
+    )
+    args = runner.argparse.Namespace(
+        container_engine="docker", image="local-image", timeout=2
+    )
+    assert runner._run_goose_smoke(args) == 1
+    assert len(calls) == 2
+    assert calls[1][:3] == ["docker", "rm", "--force"]
+    assert calls[1][-1] == calls[0][calls[0].index("--name") + 1]
+
+
+def test_goose_smoke_runs_only_the_two_qualified_cases_and_always_cleans_up(
+    monkeypatch,
+):
+    runner = _load(RUNNER_PATH, "agent_cli_goose_flow")
+    commands = []
+    cases = []
+
+    def run(command, *args, **kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_run", run)
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            [], 0, f"goose {runner.GOOSE_VERSION}", ""
+        ),
+    )
+    monkeypatch.setattr(runner, "_write_file", lambda *args: True)
+    monkeypatch.setattr(runner, "_configure_agent", lambda *args: True)
+    monkeypatch.setattr(runner, "_start_mock", lambda *args: True)
+
+    def case(*args):
+        cases.append(args[4].name)
+        return True
+
+    monkeypatch.setattr(runner, "_run_case", case)
+    args = runner.argparse.Namespace(
+        container_engine="docker", image="test-only", timeout=2
+    )
+    assert runner._run_goose_smoke(args) == 0
+    assert cases == ["command_credential", "clean_tool"]
+    assert commands[-1][:3] == ["docker", "rm", "--force"]
+    assert commands[-1][-1] == commands[0][commands[0].index("--name") + 1]
+
+
+@pytest.mark.parametrize(
+    "case_name,missing",
+    [
+        ("command_credential", "none"),
+        ("clean_tool", "none"),
+        ("command_credential", "violation"),
+        ("command_credential", "executed"),
+        ("command_credential", "native"),
+        ("command_credential", "requests"),
+        ("command_credential", "exit"),
+        ("command_credential", "prehook"),
+        ("command_credential", "posthook"),
+        ("clean_tool", "executed"),
+        ("clean_tool", "result"),
+        ("clean_tool", "posthook"),
+    ],
+)
+def test_goose_smoke_requires_hook_native_tool_execution_and_result_evidence(
+    monkeypatch, capsys, case_name, missing
+):
+    runner = _load(RUNNER_PATH, "agent_cli_goose_evidence")
+    case = next(case for case in runner.CASES if case.name == case_name)
+    violation = (
+        {case.expected_violation: 1}
+        if case.expected_violation and missing != "violation"
+        else {}
+    )
+    hooks = {"pretooluse": 0 if missing == "prehook" else 1}
+    if (case_name == "clean_tool") != (missing == "posthook"):
+        hooks["posttooluse"] = 1
+    tools = {
+        "tool_offers": 1,
+        "native_tool_name_shell": 0 if missing == "native" else 1,
+        "executed": int((case_name == "clean_tool") != (missing == "executed")),
+        "clean_tool_results": int(case_name == "clean_tool" and missing != "result"),
+    }
+    for method, after in [
+        ("_violation_counts", violation),
+        ("_hook_counts", hooks),
+        ("_tool_evidence", tools),
+        ("_provider_stats", {case_name: 1 if missing == "requests" else 2}),
+    ]:
+        reads = iter(({}, after))
+        monkeypatch.setattr(
+            runner, method, lambda *args, _reads=reads, **kwargs: next(_reads)
+        )
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            [], int(missing == "exit"), "private output", "private failure"
+        ),
+    )
+    assert runner._run_case("docker", "owned", "goose", "default", case, 2) == (
+        missing == "none"
+    )
+    output = capsys.readouterr().out
+    assert "private output" not in output
+    assert "private failure" not in output
+
+
+def test_goose_readiness_image_remains_separate_pinned_and_license_preserving():
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text())
+    steps = workflow["jobs"]["container-images"]["steps"]
+    build = next(step for step in steps if step.get("id") == "goose_smoke_image")
+    assert "FROM ai-guardian-readiness" in build["run"]
+    assert "v1.59.0/goose-x86_64-unknown-linux-musl.tar.gz" in build["run"]
+    assert (
+        "6da57ce8775f712ab146bcf244b69e2b15f85368836bff2ba3306fdefdac8f31"
+        in build["run"]
+    )
+    assert "sha256sum -c -" in build["run"]
+    assert "/usr/share/licenses/goose/LICENSE" in build["run"]
+    assert "USER sandbox" in build["run"]
+    assert "goose-x86_64" not in (ROOT / "container/Dockerfile").read_text()
+    smoke = next(step for step in steps if step.get("id") == "goose_smoke")
+    assert "--image ai-guardian-goose-smoke" in smoke["run"]
+    assert "sandbox create" not in smoke["run"]
+
+
 def test_agent_cli_invocations_use_native_noninteractive_clients():
     runner = _load(RUNNER_PATH, "agent_cli_smoke_commands")
 
@@ -2025,6 +2269,11 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
             "gemini_smoke",
             "--cli-name gemini --agent default",
             "--image ai-guardian-readiness",
+        ),
+        "Goose host CLI Smoke (local mock; not runtime qualification)": (
+            "goose_smoke",
+            "--cli-name goose --agent default",
+            "--image ai-guardian-goose-smoke",
         ),
         "OpenCode V1 CLI Smoke (local mock provider)": (
             "opencode_v1_smoke",

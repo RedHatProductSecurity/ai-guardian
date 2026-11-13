@@ -321,7 +321,7 @@ jobs:
 
       - name: Test IDE adapter setup
         run: |
-          IDES="claude cursor copilot grok codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode pi augment crush junie"
+          IDES="claude cursor copilot grok codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode pi augment crush junie goose"
           FAILED=""
           for ide in $IDES; do
             echo "--- Testing setup --ide $ide ---"
@@ -359,6 +359,16 @@ jobs:
               (cd "$WORK_DIR" && ai-guardian setup --ide grok --project "$GROK_PROJECT" --yes)
               test -f "$GROK_PROJECT/.grok/hooks/ai-guardian.json"
               test -f "$GROK_PROJECT/.grok/config.toml"
+            fi
+            if [ "$ide" = "goose" ]; then
+              test -f "$HOME/.agents/plugins/ai-guardian-goose/hooks/hooks.json"
+              test -f "$HOME/.agents/plugins/ai-guardian-goose/.mcp.json"
+              test ! -d "$WORK_DIR/.agents"
+              GOOSE_PROJECT="$WORK_DIR/goose-project"
+              mkdir -p "$GOOSE_PROJECT"
+              (cd "$WORK_DIR" && ai-guardian setup --ide goose --project "$GOOSE_PROJECT" --yes)
+              test -f "$GOOSE_PROJECT/.agents/plugins/ai-guardian-goose/hooks/hooks.json"
+              test -f "$GOOSE_PROJECT/.agents/plugins/ai-guardian-goose/.mcp.json"
             fi
             rm -rf "$WORK_DIR"
           done
@@ -424,6 +434,8 @@ jobs:
             variant: crush
           - ide: junie
             variant: junie
+          - ide: goose
+            variant: goose
 
     steps:
       - name: Checkout code
@@ -445,6 +457,13 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '24'
+
+      - name: Verify Goose protocol and host-only boundary
+        if: matrix.ide == 'goose'
+        run: >-
+          python -m pytest tests/unit/test_goose_support.py
+          tests/unit/test_goose_setup.py
+          tests/ux/test_user_experience_contract_goose.py -q
 
       - name: Verify shared OpenCode paths, workspace routing and safe diagnostics
         if: matrix.ide == 'opencode' && matrix.opencode_generation == 'v1'
@@ -860,6 +879,34 @@ jobs:
         run: |
           scripts/agent-cli-test --cli-name gemini --agent default \
             --image ai-guardian-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
+
+      - name: Build Goose host-CLI smoke-only image (Apache-2.0)
+        id: goose_smoke_image
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
+        run: |
+          # Test-only overlay, not part of either published runtime image.
+          mkdir -p "$RUNNER_TEMP/goose-smoke"
+          cat > "$RUNNER_TEMP/goose-smoke/Dockerfile" <<'EOF'
+          FROM ai-guardian-readiness
+          USER root
+          RUN curl -fL https://github.com/aaif-goose/goose/releases/download/v1.59.0/goose-x86_64-unknown-linux-musl.tar.gz -o /tmp/goose.tar.gz \
+              && echo '6da57ce8775f712ab146bcf244b69e2b15f85368836bff2ba3306fdefdac8f31  /tmp/goose.tar.gz' | sha256sum -c - \
+              && tar -xzf /tmp/goose.tar.gz -C /usr/local/bin \
+              && mkdir -p /usr/share/licenses/goose \
+              && curl -fL https://raw.githubusercontent.com/aaif-goose/goose/v1.59.0/LICENSE -o /usr/share/licenses/goose/LICENSE \
+              && rm /tmp/goose.tar.gz
+          USER sandbox
+          RUN goose --version
+          EOF
+          docker build -t ai-guardian-goose-smoke "$RUNNER_TEMP/goose-smoke"
+
+      - name: Goose host CLI Smoke (local mock; not runtime qualification)
+        id: goose_smoke
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
+        run: |
+          scripts/agent-cli-test --cli-name goose --agent default \
+            --image ai-guardian-goose-smoke --container-engine docker \
             --ai-guardian-command ai-guardian
 
       - name: OpenCode V1 CLI Smoke (local mock provider)

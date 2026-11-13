@@ -1111,6 +1111,10 @@ class TestIDESetupParametrized:
                 configured_events = tuple(config["hook_scripts"])
             elif ide_name == "gemini":
                 configured_events = tuple(config["hooks"]["hooks"])
+            elif ide_name == "goose":
+                from ai_guardian.setup.goose import expected_hooks
+
+                configured_events = tuple(expected_hooks())
             else:
                 hooks = config["hooks"]
                 if ide_name == "antigravity":

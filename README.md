@@ -142,6 +142,7 @@ upstream references. That guide is the source of truth for this summary.
 | Agent CLI maturity advisories | [Agent Support][agent-support] |
 | OpenCode support | [OpenCode][opencode] |
 | Pi and Crush support | [Agent Support][agent-support] |
+| Goose host CLI pre-tool enforcement | [Goose Support][goose] |
 | Dummy agent for hook testing | [Agent Support][agent-support] |
 | Container image | [Container Guide][container] |
 | Docker, Podman, and OpenShell sandboxes | [Sandbox Guide][sandbox] |
@@ -177,6 +178,7 @@ For production use, install a stable release from PyPI. The `main` branch contai
 [getting-started]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/overview/01-what-is-ai-guardian-install-and-verify.md
 [configuration]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md
 [agent-support]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md
+[goose]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GOOSE.md
 [scanners]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md
 [console]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md
 [troubleshooting]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TROUBLESHOOTING.md

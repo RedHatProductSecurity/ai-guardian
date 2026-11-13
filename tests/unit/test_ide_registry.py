@@ -374,6 +374,12 @@ def test_registered_adapters_handle_malformed_payloads(ide_type):
         "cwd": 7,
     }
 
+    if ide_type == "goose":
+        # Goose's fail-closed PreToolUse action treats bad/unknown event data as
+        # process failure, rather than silently normalizing it to an empty scan.
+        with pytest.raises(ValueError, match="Goose hook event"):
+            adapter.normalize_input(payload)
+        return
     normalized = adapter.normalize_input(payload)
 
     assert isinstance(normalized, NormalizedHookInput), ide_type

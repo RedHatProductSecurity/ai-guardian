@@ -304,6 +304,14 @@ GROK_MANAGED_HOOK_EVENTS = (
     "PostCompact",
 )
 
+GOOSE_MANAGED_HOOK_EVENTS = (
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "SessionEnd",
+)
+
 CODEX_MANAGED_HOOK_EVENTS = (
     "UserPromptSubmit",
     "PreToolUse",
@@ -361,6 +369,7 @@ MANAGED_HOOK_EVENTS_BY_IDE = {
     "cursor": CURSOR_MANAGED_HOOK_EVENTS,
     "copilot": COPILOT_MANAGED_HOOK_EVENTS,
     "grok": GROK_MANAGED_HOOK_EVENTS,
+    "goose": GOOSE_MANAGED_HOOK_EVENTS,
     "codex": CODEX_MANAGED_HOOK_EVENTS,
     "windsurf": WINDSURF_MANAGED_HOOK_EVENTS,
     "gemini": GEMINI_MANAGED_HOOK_EVENTS,

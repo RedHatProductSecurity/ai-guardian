@@ -16,6 +16,7 @@ from ai_guardian.hook_adapters.gemini import GeminiCLIAdapter
 from ai_guardian.hook_adapters.windsurf import WindsurfAdapter
 from ai_guardian.hook_adapters.copilot import CopilotAdapter
 from ai_guardian.hook_adapters.grok import GrokAdapter
+from ai_guardian.hook_adapters.goose import GooseAdapter
 from ai_guardian.hook_adapters.cursor import CursorAdapter
 from ai_guardian.hook_adapters.kiro import KiroAdapter
 from ai_guardian.hook_adapters.augment import AugmentAdapter
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Ordered by detection specificity: most unique fields first.
 # Claude Code is last because it is the default fallback.
 ADAPTER_CLASSES = [
+    GooseAdapter,  # event + session_id; before Crush's generic event payload
     AntigravityAdapter,  # conversationId + workspacePaths (camelCase protojson)
     ClineAdapter,  # clineVersion field
     GeminiCLIAdapter,  # transcript_path field
@@ -67,6 +69,7 @@ _ADAPTER_CLASSES_BY_NAME = {
         CursorAdapter,
         CopilotAdapter,
         GrokAdapter,
+        GooseAdapter,
         CodexAdapter,
         WindsurfAdapter,
         GeminiCLIAdapter,
@@ -175,6 +178,7 @@ def get_adapter_by_ide_type(ide_type) -> HookAdapter:
         IDEType.CURSOR: "cursor",
         IDEType.GITHUB_COPILOT: "copilot",
         IDEType.GROK: "grok",
+        IDEType.GOOSE: "goose",
         IDEType.GEMINI_CLI: "gemini",
         IDEType.CLINE: "cline",
         IDEType.KIRO: "kiro",
@@ -198,6 +202,7 @@ __all__ = [
     "CursorAdapter",
     "CopilotAdapter",
     "GrokAdapter",
+    "GooseAdapter",
     "CodexAdapter",
     "WindsurfAdapter",
     "GeminiCLIAdapter",

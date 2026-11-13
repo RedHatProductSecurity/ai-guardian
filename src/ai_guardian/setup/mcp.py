@@ -512,6 +512,11 @@ _MCP_IDE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "config_key": "mcp",
         "skill_dir": ".crush/skills",
     },
+    "goose": {
+        "config_file": "~/.agents/plugins/ai-guardian-goose/.mcp.json",
+        "config_key": "mcpServers",
+        "skill_dir": ".agents/skills",
+    },
 }
 
 _MCP_SERVER_ENTRY: Dict[str, object] = {
@@ -836,6 +841,19 @@ def get_mcp_config_path(
     project_dir: Optional[str] = None,
 ) -> Optional[Path]:
     """Return an IDE's user or project MCP configuration path."""
+    if ide_type == "goose":
+        from ai_guardian.goose_support import goose_hook_path
+
+        if scope == "auto":
+            from ai_guardian.setup.goose import verify_goose_hooks
+
+            return (
+                Path(
+                    verify_goose_hooks(scope, project_dir)["config_path"]
+                ).parent.parent
+                / ".mcp.json"
+            )
+        return goose_hook_path(scope, project_dir).parent.parent / ".mcp.json"
     if ide_type == "codex":
         return get_codex_mcp_config_path()
 
@@ -1062,6 +1080,48 @@ def verify_mcp_config(
     entry = servers.get("ai-guardian")
     if not isinstance(entry, dict):
         return base
+    if ide_type == "goose":
+        from ai_guardian.setup.goose import (
+            validate_goose_mcp_target,
+            verify_goose_hooks,
+        )
+
+        try:
+            validate_goose_mcp_target(config_path)
+        except (OSError, ValueError) as exc:
+            base["mcp_status"] = "invalid"
+            base["mcp_diagnostic"] = str(exc)
+            return base
+        for server in servers.values():
+            if (
+                not isinstance(server, dict)
+                or not isinstance(server.get("command"), str)
+                or not isinstance(server.get("args", []), list)
+                or not all(isinstance(arg, str) for arg in server.get("args", []))
+                or not isinstance(server.get("env", {}), dict)
+                or not all(
+                    isinstance(key, str) and isinstance(value, str)
+                    for key, value in server.get("env", {}).items()
+                )
+                or (
+                    server.get("cwd") is not None and not isinstance(server["cwd"], str)
+                )
+            ):
+                base["mcp_status"] = "invalid"
+                base["mcp_diagnostic"] = (
+                    "Goose plugin MCP server configuration is malformed"
+                )
+                return base
+
+        hooks = verify_goose_hooks(scope, project_dir)
+        if not hooks["healthy"]:
+            base["mcp_status"] = "inactive"
+            return base
+        if entry.get("command") != _resolve_binary_path() or entry.get("args") != [
+            "mcp-server"
+        ]:
+            base["mcp_status"] = "invalid"
+            return base
     disabled = entry.get("enabled") is False
     if disabled:
         base["mcp_status"] = "disabled"
@@ -1316,6 +1376,17 @@ def _install_mcp_config(
     config_path = get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
     if config_path is None:
         return
+
+    if ide_type == "goose":
+        from ai_guardian.setup.goose import validate_goose_mcp_target
+
+        try:
+            validate_goose_mcp_target(config_path)
+        except (OSError, ValueError):
+            logger.warning(
+                "Goose MCP setup stopped: managed plugin layout cannot be verified"
+            )
+            return
 
     if ide_type == "codex":
         _install_codex_mcp_config(config_path, dry_run=dry_run, setup=setup)
@@ -1604,6 +1675,17 @@ def _remove_mcp_config(
     config_path = get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
     if config_path is None:
         return
+
+    if ide_type == "goose":
+        from ai_guardian.setup.goose import validate_goose_mcp_target
+
+        try:
+            validate_goose_mcp_target(config_path)
+        except (OSError, ValueError):
+            logger.warning(
+                "Goose MCP removal stopped: managed plugin layout cannot be verified"
+            )
+            return
 
     if ide_type == "codex":
         _remove_codex_mcp_config(config_path, dry_run=dry_run, setup=setup)

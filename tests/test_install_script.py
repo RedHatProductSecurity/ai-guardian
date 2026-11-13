@@ -210,6 +210,7 @@ class TestInstallScriptAgentDetection:
             ".aider-desk/extensions",
             ".openclaw/plugins",
             "PI_CODING_AGENT_DIR",
+            "GOOSE_PATH_ROOT",
         ],
     )
     def test_detection_checks_agent_path(self, script_content, agent_path):
@@ -245,6 +246,47 @@ class TestInstallScriptAgentDetection:
         assert "Detected installed IDEs, setting up hooks" in script_content
         assert "--install-scanner --force --yes" in script_content
 
+    @pytest.mark.parametrize(
+        "system,relocated", [("Linux", False), ("Darwin", False), ("Linux", True)]
+    )
+    def test_goose_detection_uses_native_or_relocated_config(
+        self, tmp_path, script_content, system, relocated
+    ):
+        home = tmp_path / "home"
+        xdg = tmp_path / "xdg"
+        root = tmp_path / "goose-root"
+        target = (
+            root / "config"
+            if relocated
+            else (
+                home / "Library/Application Support/Block/goose"
+                if system == "Darwin"
+                else xdg / "goose"
+            )
+        )
+        target.mkdir(parents=True)
+        (target / "config.yaml").write_text("{}")
+        environment = {
+            "HOME": str(home),
+            "PATH": str(tmp_path / "empty-path"),
+            "XDG_CONFIG_HOME": str(xdg),
+            "GOOSE_PATH_ROOT": str(root) if relocated else "",
+        }
+        result = subprocess.run(
+            [
+                shutil.which("bash"),
+                "-c",
+                f'uname() {{ printf "%s" "{system}"; }}\n'
+                + self._detection_function(script_content)
+                + "\ndetect_installed_agents",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "goose"
+
 
 @_skip_no_bash
 @pytest.mark.skipif(
@@ -259,7 +301,7 @@ class TestUninstallScript:
             "CLAUDE_CONFIG_DIR CURSOR_CONFIG_DIR COPILOT_HOME GROK_HOME CODEX_HOME "
             "GEMINI_CLI_HOME CLINE_DATA_DIR KIRO_HOME JUNIE_HOME AIDER_DESK_DIR "
             "AIDER_DESK_HOME_DIR OPENCLAW_STATE_DIR OPENCLAW_HOME OPENCLAW_CONFIG_PATH "
-            "OPENCODE_CONFIG_DIR OPENCODE_CONFIG CRUSH_GLOBAL_CONFIG PI_CODING_AGENT_DIR"
+            "OPENCODE_CONFIG_DIR OPENCODE_CONFIG CRUSH_GLOBAL_CONFIG PI_CODING_AGENT_DIR GOOSE_PATH_ROOT"
         ).split():
             monkeypatch.delenv(name, raising=False)
 

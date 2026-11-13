@@ -51,6 +51,7 @@ from ai_guardian.config.loaders import _load_json_config
 from ai_guardian.constants import ViolationType
 from ai_guardian.agent_config_protection import (
     build_agent_config_inventory,
+    build_managed_goose_inventory,
     is_agent_config_mutation_tool,
     is_agent_config_protection_enabled,
 )
@@ -550,12 +551,21 @@ class ToolPolicyChecker:
         self, hook_data: Dict, tool_name: str, tool_input: Dict
     ) -> Optional[Tuple[bool, Optional[str], Optional[str]]]:
         """Block agent-originated mutations of supported agent configuration."""
-        if not is_agent_config_protection_enabled(self.config):
-            return None
         if not is_agent_config_mutation_tool(tool_name):
             return None
 
-        inventory = build_agent_config_inventory()
+        workspace = (
+            hook_data.get("working_dir")
+            if self._detect_ide_type(hook_data) == "goose"
+            else None
+        )
+        if not isinstance(workspace, str) or not os.path.isabs(workspace):
+            workspace = None
+        inventory = (
+            build_agent_config_inventory(workspace)
+            if is_agent_config_protection_enabled(self.config)
+            else build_managed_goose_inventory(workspace)
+        )
         protected_target = inventory.match_mutation(tool_name, tool_input, hook_data)
         if protected_target is None:
             return None
@@ -1154,6 +1164,13 @@ class ToolPolicyChecker:
             tuple: (tool_name, tool_input)
         """
         try:
+            from ai_guardian.hook_adapters.goose import GooseAdapter
+
+            if hook_data.get("_ide_type") == "goose" or GooseAdapter.can_handle(
+                hook_data
+            ):
+                normalized = GooseAdapter().normalize_input(hook_data)
+                return normalized.tool_name, normalized.tool_input
             tool_name = None
             # Cursor event-based hooks may provide tool_input at the payload
             # root without a nested ``tool`` object.

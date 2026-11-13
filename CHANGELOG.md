@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Goose host CLI support (#2723):** Add v1.59.0 Linux/macOS command-hook plugin
+  setup, scoped health/reconciliation, advisory MCP and optional user hints,
+  native-tool normalization, sanitized pre-tool decisions, and fail-closed hook
+  failures. Prompt/post-tool events remain observational; Stop, transcripts,
+  desktop/native Windows, and product container/OpenShell support are excluded.
+  Add isolated contracts and a credential-free, smoke-only CI CLI path.
 - **OpenShift AI MaaS API key detection (#2720):** Detect generated `sk-oai-`
   credentials using their Base62 key-ID/secret structure without broadening generic
   `sk-*` matching; document the vendor format and its source.

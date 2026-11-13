@@ -34,6 +34,7 @@ class IDEType(Enum):
     CURSOR = "cursor"  # JSON: {"continue": bool, "user_message": str}
     GITHUB_COPILOT = "github_copilot"  # JSON: {"permissionDecision": "allow"|"deny"}
     GROK = "grok"  # JSON: {"decision": "deny", "reason": str}
+    GOOSE = "goose"  # PreToolUse JSON: {"decision": "block"|"allow"}
     GEMINI_CLI = "gemini_cli"  # JSON: {"decision": "deny", "reason": str}
     CLINE = "cline"  # JSON: {"cancel": true, "reason": str}
     ANTIGRAVITY = "antigravity"  # JSON: {"decision": "deny", "reason": str}

@@ -827,6 +827,15 @@ class IDESetup:
             "config_filename": None,
             "hooks": {},
         },
+        "goose": {
+            "name": "Goose",
+            "mcp_client_name": "goose",
+            "executable": "goose",
+            "config_path": "~/.agents/plugins/ai-guardian-goose/hooks/hooks.json",
+            "config_dir_env_var": "GOOSE_PATH_ROOT",
+            "config_filename": "hooks.json",
+            "hooks": {},  # Rendered by setup.goose, not a TypeScript plugin.
+        },
     }
 
     @staticmethod
@@ -919,6 +928,11 @@ class IDESetup:
         """
         if ide_type not in self.IDE_CONFIGS:
             return None
+
+        if ide_type == "goose":
+            from ai_guardian.goose_support import goose_hook_path
+
+            return str(goose_hook_path(scope, project_dir))
 
         if ide_type == "cursor" and scope == "project":
             # An explicit project target is already the workspace selected by
@@ -1137,7 +1151,9 @@ class IDESetup:
         if ide_config.get("mcp_only"):
             return True, f"{ide_name}: MCP-only (no hooks needed)"
 
-        if ide_type in ("cursor", "pi"):
+        if ide_type == "goose" and integrity and scope == "user" and not project_dir:
+            scope = "auto"
+        if ide_type in ("cursor", "pi", "goose"):
             config_path_str = self.get_config_path(
                 ide_type, scope=scope, project_dir=project_dir
             )
@@ -1148,9 +1164,9 @@ class IDESetup:
 
         config_path = Path(config_path_str).expanduser()
         if not integrity:
-            if (
-                self.check_hooks_configured(config_path, ide_type)
-                and ide_type != "opencode"
+            if self.check_hooks_configured(config_path, ide_type) and ide_type not in (
+                "opencode",
+                "goose",
             ):
                 return True, f"{ide_name}: configured"
             verification = self.verify_hooks_for_ide(
@@ -1159,7 +1175,10 @@ class IDESetup:
             diagnostics = verification.get("diagnostics", [])
             if diagnostics:
                 return False, f"{ide_name}: needs attention ({diagnostics[0]})"
-            if ide_type == "opencode" and verification.get("healthy") is True:
+            if (
+                ide_type in ("opencode", "goose")
+                and verification.get("healthy") is True
+            ):
                 # OpenCode must always be verified instead of using the older
                 # marker-only fast path so runtime/plugin generation mismatches
                 # are detected. V2 artifact checks cannot confirm that the host
@@ -1323,6 +1342,10 @@ class IDESetup:
         ``missing``, or ``changed``; ``obsolete`` contains only events that
         still contain AI Guardian-owned entries.
         """
+        if ide_type == "goose":
+            from ai_guardian.setup.goose import verify_goose_hooks
+
+            return verify_goose_hooks(scope, project_dir)
         manifest = self.expected_hook_manifest(ide_type)
         config = self.IDE_CONFIGS.get(ide_type, {})
         result: Dict[str, Any] = {
@@ -1829,7 +1852,12 @@ class IDESetup:
         return removed
 
     def reconcile_hooks_for_ide(
-        self, ide_type: str, dry_run: bool = False
+        self,
+        ide_type: str,
+        dry_run: bool = False,
+        *,
+        scope: str = "user",
+        project_dir: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """Bring a drifted IDE adapter back to the current manifest.
 
@@ -1837,11 +1865,16 @@ class IDESetup:
         A forced setup is used only after verification reports drift, and its
         existing backup/merge behavior protects unrelated user hooks.
         """
-        status = self.verify_hooks_for_ide(ide_type)
+        target: Dict[str, Any] = (
+            {"scope": scope, "project_dir": project_dir}
+            if scope != "user" or project_dir
+            else {}
+        )
+        status = self.verify_hooks_for_ide(ide_type, **target)
         if status["healthy"]:
             name = self.IDE_CONFIGS.get(ide_type, {}).get("name", ide_type)
             return True, f"{name}: hooks already current"
-        return self.setup_ide_hooks(ide_type, dry_run=dry_run, force=True)
+        return self.setup_ide_hooks(ide_type, dry_run=dry_run, force=True, **target)
 
     def _typescript_artifact_paths(
         self, ide_type: str, config_path: Path
@@ -2094,6 +2127,16 @@ class IDESetup:
             return False
 
         config_path = Path(raw_path).expanduser()
+
+        if ide_type == "goose":
+            from ai_guardian.goose_support import goose_config_dir, goose_hook_path
+
+            return platform.system() != "Windows" and (
+                config_path.is_file()
+                or goose_hook_path("project").is_file()
+                or (goose_config_dir() / "config.yaml").is_file()
+                or shutil.which("goose") is not None
+            )
 
         if ide_type == "cursor":
             return any(
@@ -3437,7 +3480,7 @@ class IDESetup:
             if ide_type not in self.IDE_CONFIGS:
                 return False, f"Unknown IDE type: {ide_type}"
 
-            if ide_type in ("cursor", "pi"):
+            if ide_type in ("cursor", "pi", "goose"):
                 if project_dir and scope == "user":
                     scope = "project"
                 if scope not in ("user", "project"):
@@ -3482,6 +3525,11 @@ class IDESetup:
                 return False, f"Unknown IDE type: {ide_type}"
             config_path = Path(config_path_value).expanduser()
             ide_name = ide_config["name"]
+
+            if ide_type == "goose":
+                from ai_guardian.setup.goose import setup_goose_hooks
+
+                return setup_goose_hooks(self, config_path, dry_run=dry_run)
 
             if ide_config.get("mcp_only"):
                 msg = (

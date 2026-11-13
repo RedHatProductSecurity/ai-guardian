@@ -29,6 +29,36 @@ budget_tokens: 1000
 - Changes remain uncommitted on branch `2735`; no push or PR was made.
   **Next:** user review and external DAF completion.
 
+## Issue #2723 Goose agent support — 2026-11-13
+
+- Implemented Goose v1.59.0 Linux/macOS host CLI support on existing branch
+  `2723`: registry, native tool normalization, sanitized PreToolUse decisions,
+  dependency-light fail-closed errors, and passive lifecycle/prompt/post events.
+- Added the owned Open Plugins plugin with explicit user/project scope, backups,
+  idempotence, effective enablement/health/reconciliation, advisory MCP, optional
+  user hints, configuration/CLI self-protection, and preservation-aware recovery.
+  macOS uses its native config path; absolute `GOOSE_PATH_ROOT` relocates the
+  process root. File tools preserve literal `~` semantics.
+- Updated installers, support docs (`docs/GOOSE.md`), changelog, release setup/E2E
+  matrices, and a separate pinned, network-isolated real-CLI smoke image. The
+  smoke requires native shell/hook/denial and clean execution/result evidence;
+  Goose remains excluded from product container/OpenShell selectors.
+- Final review fixed malformed sibling hook/MCP health and missing-manifest
+  ownership traversal, custom/symlinked MCP preservation, effective project-only
+  Doctor detection, and smoke workspace/cleanup/evidence regressions.
+- **Validation:** **2,455 related unit/UX tests passed, 12 skipped** (4 existing
+  deprecation warnings). The 105 focused Goose tests pass with **94%** combined
+  coverage of the three Goose modules. Black (Python 3.10 target), Ruff,
+  error-level Pylint, Mypy (342 package files), and `git diff --check` pass.
+- Posted the implementation checklist and validation in [issue #2723's progress
+  comment](https://github.com/RedHatProductSecurity/ai-guardian/issues/2723#issuecomment-6860999877)
+  and saved a DAF note. No completion label was added while CI evidence is pending.
+- **Limits / next:** real Goose and installed-command E2E remain for CI; no local
+  container/integration scenarios ran. Live macOS, desktop/native Windows, hosted
+  execution, transcripts, prompt/output containment, and product runtimes are not
+  qualified. Review/publish through external DAF completion, then verify CI.
+  Changes remain uncommitted; no push or PR was made.
+
 ## Issue #2722 JavaScript/TypeScript HTTP credential scanning — 2026-11-13
 
 - Extended the non-executing HTTP credential-flow scanner to JavaScript and

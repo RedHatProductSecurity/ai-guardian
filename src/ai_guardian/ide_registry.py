@@ -392,6 +392,29 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "none",
         rules_supported=True,
     ),
+    IDEIntegration(
+        "goose",
+        "Goose",
+        "GooseAdapter",
+        ("goose",),
+        "command-hooks",
+        "local",
+        (),
+        "none",
+        (
+            ("SessionStart", ("allow",)),
+            ("UserPromptSubmit", ("allow",)),
+            ("PreToolUse", ("allow", "block")),
+            ("PostToolUse", ("allow",)),
+            ("SessionEnd", ("allow",)),
+        ),
+        rules_supported=True,
+        project_scope=True,
+        post_output_transform=False,
+        platform_contract="Goose v1.59.0 Linux/macOS host CLI; desktop and native Windows unqualified",
+        cli_capable=True,
+        cli_executables=("goose",),
+    ),
 )
 
 
@@ -420,6 +443,11 @@ SUPPORTED_IDE_TYPES: Tuple[str, ...] = tuple(
 SUPPORTED_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in SUPPORTED_IDE_REGISTRY if integration.cli_capable
 )
+# Host CLI support is independent of image contents. Goose is not distributed
+# in either published image and must not leak into sandbox/tray selectors.
+SUPPORTED_CONTAINER_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
+    key for key in SUPPORTED_CLI_IDE_TYPES if key != "goose"
+)
 # The OpenShell image bundles OpenCode and Codex; Claude Code is installed at
 # runtime only after explicit ToS consent. Keep this separate from the broader
 # host/container registry so the OpenShell selector reflects its image/runtime.
@@ -428,7 +456,7 @@ SUPPORTED_OPENSHELL_CLI_IDE_TYPES: Tuple[str, ...] = ("codex", "claude", "openco
 # CLI registry so the CLI validator and tray form cannot advertise different
 # runtime capabilities.
 SANDBOX_CLI_IDE_TYPES_BY_RUNTIME = {
-    "container": SUPPORTED_CLI_IDE_TYPES,
+    "container": SUPPORTED_CONTAINER_CLI_IDE_TYPES,
     "openshell": SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
 }
 SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME = {
@@ -491,6 +519,7 @@ __all__ = [
     "INTERNAL_IDE_REGISTRY",
     "SUPPORTED_IDES",
     "SUPPORTED_CLI_IDE_TYPES",
+    "SUPPORTED_CONTAINER_CLI_IDE_TYPES",
     "SUPPORTED_OPENSHELL_CLI_IDE_TYPES",
     "SUPPORTED_IDE_REGISTRY",
     "SUPPORTED_IDE_TYPES",
