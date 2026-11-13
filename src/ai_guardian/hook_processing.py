@@ -2789,7 +2789,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                 file_hook_data = hook_data
                 if agent_type in ("opencode", "goose") and tool_name == "Read":
                     # The native payload remains available for audit, but file
-                    # checks must consume the same resolved target as policy,
+                    # checks must consume the same normalized target as policy,
                     # never re-extract a relative/conflicting native alias.
                     file_hook_data = {"tool_input": tool_input}
                 with _latency_timer.check("directory_rules"):

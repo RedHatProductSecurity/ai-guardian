@@ -9,6 +9,7 @@ withhold content or replace results. Desktop/native Windows are unqualified.
 """
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -118,6 +119,57 @@ def test_clean_shell_and_documentation_mentions_remain_allowed(command):
     result = run_hook(hook(args={"command": command}))
     assert json.loads(result["output"]) == {"decision": "allow"}
     assert result["exit_code"] == 0
+
+
+def test_native_image_read_obeys_directory_rules_without_ordinary_permissions(
+    isolated_goose,
+):
+    """USER EXPERIENCE: a native file read is denied before exposing a blocked path."""
+    _, project = isolated_goose
+    blocked = project / "blocked-fixture"
+    blocked.mkdir()
+    image = blocked / "synthetic.png"
+    image.write_text("synthetic fixture", encoding="utf-8")
+    clean = project / "clean.png"
+    clean.write_text("synthetic fixture", encoding="utf-8")
+    config = {
+        "permissions": {"enabled": False},
+        "directory_rules": {
+            "action": "block",
+            "rules": [{"mode": "deny", "paths": [str(blocked)]}],
+        },
+    }
+    result = run_hook(hook("read_image", {"source": str(image)}), config)
+    assert json.loads(result["output"]) == {
+        "decision": "block",
+        "reason": "Operation blocked by ai-guardian: directory access blocked",
+    }
+    assert result["_violation_type"] == "directory_blocking"
+    allowed = run_hook(hook("read_image", {"source": str(clean)}), config)
+    assert json.loads(allowed["output"]) == {"decision": "allow"}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlink traversal contract")
+def test_native_path_keeps_link_parent_traversal_for_the_directory_guard(
+    isolated_goose, tmp_path
+):
+    """USER EXPERIENCE: linked/.. must not hide the actual denied directory."""
+    _, project = isolated_goose
+    blocked = tmp_path / "blocked"
+    child = blocked / "child"
+    child.mkdir(parents=True)
+    (blocked / "synthetic.png").write_text("synthetic fixture", encoding="utf-8")
+    (project / "linked").symlink_to(child, target_is_directory=True)
+    config = {
+        "permissions": {"enabled": False},
+        "directory_rules": {
+            "action": "block",
+            "rules": [{"mode": "deny", "paths": [str(blocked)]}],
+        },
+    }
+    result = run_hook(hook("read_image", {"source": "linked/../synthetic.png"}), config)
+    assert json.loads(result["output"])["decision"] == "block"
+    assert result["_violation_type"] == "directory_blocking"
 
 
 def test_general_config_opt_out_cannot_remove_owned_security_hooks(isolated_goose):

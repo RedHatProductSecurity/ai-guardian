@@ -39,9 +39,10 @@ def goose_plugins_dir() -> Path:
 
 def goose_hook_path(scope: str = "user", project_dir: Optional[str] = None) -> Path:
     if scope == "project":
-        base = (
-            Path(project_dir).expanduser().resolve() if project_dir else Path.cwd()
-        ) / ".agents/plugins"
+        # Construct only: callers apply their own canonical path guards before
+        # filesystem access. Do not resolve an untrusted hook working directory.
+        project = os.path.join(os.getcwd(), os.path.expanduser(project_dir or "."))
+        base = Path(project) / ".agents/plugins"
     elif scope in ("user", "auto"):
         base = goose_plugins_dir()
     else:

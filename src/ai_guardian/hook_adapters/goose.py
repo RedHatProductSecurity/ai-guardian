@@ -5,9 +5,11 @@ continue the turn, not withhold a response, and is deliberately not installed.
 """
 
 import json
-from pathlib import Path
+import os
+from pathlib import PurePath
 from typing import ClassVar, Dict, List, Optional
-from urllib.parse import unquote, urlsplit
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 from ai_guardian.constants import GOOSE_MANAGED_HOOK_EVENTS, HookEvent
 from ai_guardian.hook_adapters.base import HookAdapter, NormalizedHookInput
@@ -90,18 +92,23 @@ class GooseAdapter(HookAdapter):
                 parsed = urlsplit(path)
                 if parsed.netloc not in ("", "localhost"):
                     raise ValueError("Unsupported Goose image file URL")
-                path = unquote(parsed.path)
+                path = url2pathname(parsed.path)
         if path:
             # Goose's developer file tools treat '~' literally, unlike a shell.
-            target = (
-                Path(path) if native_name in self.TOOL_MAP else Path(path).expanduser()
+            target = PurePath(
+                path if native_name in self.TOOL_MAP else os.path.expanduser(path)
             )
             working_dir = self._string(hook_data.get("working_dir"))
             if not target.is_absolute() and working_dir:
-                if not Path(working_dir).is_absolute():
+                if not PurePath(working_dir).is_absolute():
                     raise ValueError("Goose working directory must be absolute")
-                target = Path(working_dir) / target
-            path = str(target.resolve())
+                target = PurePath(working_dir) / target
+            elif not target.is_absolute():
+                target = PurePath(os.getcwd()) / target
+            # Normalize the native shape without probing untrusted paths.
+            # Preserve linked/.. for canonicalization by the shared policy and
+            # directory guards, before those guards authorize any file read.
+            path = str(target)
             tool_input["file_path"] = path
         if native_name == "edit":
             tool_input["old_string"] = tool_input.get("before")

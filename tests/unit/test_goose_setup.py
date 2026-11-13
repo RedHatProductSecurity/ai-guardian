@@ -116,6 +116,29 @@ def test_macos_uses_native_configuration_but_shared_plugin_paths(monkeypatch):
     assert goose_user_settings_path() == Path.home() / ".config/goose/settings.json"
 
 
+def test_project_hook_path_is_constructed_without_filesystem_discovery(tmp_path):
+    project = tmp_path / "linked" / ".." / "repo"
+    expected = project / ".agents/plugins" / GOOSE_PLUGIN_NAME / "hooks/hooks.json"
+    with (
+        patch.object(
+            Path, "resolve", side_effect=AssertionError("premature path lookup")
+        ),
+        patch.object(
+            Path, "expanduser", side_effect=AssertionError("premature path lookup")
+        ),
+    ):
+        assert goose_hook_path("project", str(project)) == expected
+
+
+@pytest.mark.parametrize("project_dir", ["nested", "~/nested"])
+def test_project_hook_path_keeps_relative_and_home_expansion(project_dir):
+    parent = Path.home() if project_dir.startswith("~") else Path.cwd()
+    expected = (
+        parent / "nested/.agents/plugins" / GOOSE_PLUGIN_NAME / "hooks/hooks.json"
+    )
+    assert goose_hook_path("project", project_dir) == expected
+
+
 def test_disabled_project_copy_does_not_shadow_enabled_user_plugin(isolated_goose):
     _, project = isolated_goose
     setup = install()

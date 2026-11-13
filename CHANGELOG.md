@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distinguish `latest` development docs, and report inactive or misrouted release
   versions with actionable recovery guidance.
 ### Fixed
+- **Goose CI regressions (#2723):** Decode local image file URLs with platform
+  drive-path semantics, construct hook paths without premature filesystem probes,
+  and preserve symlink-parent traversal for shared security checks. Align the
+  scanner-only E2E denial fixture with Goose's native file-read surface.
 - **HTTP request credential scanner hardening (#2717):** Bound aggregate value,
   string, URL and branch-state analysis; preserve possible credential flows across
   branches and client context managers; inspect complete prospective Edit content;

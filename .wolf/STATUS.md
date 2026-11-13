@@ -46,18 +46,33 @@ budget_tokens: 1000
 - Final review fixed malformed sibling hook/MCP health and missing-manifest
   ownership traversal, custom/symlinked MCP preservation, effective project-only
   Doctor detection, and smoke workspace/cleanup/evidence regressions.
-- **Validation:** **2,455 related unit/UX tests passed, 12 skipped** (4 existing
+- **Initial validation:** **2,455 related unit/UX tests passed, 12 skipped** (4 existing
   deprecation warnings). The 105 focused Goose tests pass with **94%** combined
   coverage of the three Goose modules. Black (Python 3.10 target), Ruff,
   error-level Pylint, Mypy (342 package files), and `git diff --check` pass.
 - Posted the implementation checklist and validation in [issue #2723's progress
   comment](https://github.com/RedHatProductSecurity/ai-guardian/issues/2723#issuecomment-6860999877)
   and saved a DAF note. No completion label was added while CI evidence is pending.
-- **Limits / next:** real Goose and installed-command E2E remain for CI; no local
+- **CI follow-up:** implementation commit `d2231b79` is published in PR #2738.
+  Tests run `43479882114` failed the Linux Goose directory-denial E2E fixture and
+  Windows image file-URL normalization; the CodeQL check reported three high
+  `py/path-injection` locations in Goose path construction.
+  Changed the scanner-only E2E fixture to native `read_image`/Read, use the platform
+  file-URL decoder, and construct paths without early filesystem discovery. Keep
+  linked `..` segments intact until shared guards check the canonical target.
+  Added fixture-shape, portable URL, no-premature-lookup, directory deny/allow,
+  and symlink-parent traversal regressions. **1,238 related unit/UX tests pass**
+  (3 existing deprecation warnings); Black, Ruff, error-level Pylint, Mypy (342
+  package files), buglog JSON, and diff checks pass. The follow-up is local and
+  uncommitted; the existing remote CI/CodeQL results still describe `d2231b79`.
+  Posted [PR follow-up details](https://github.com/RedHatProductSecurity/ai-guardian/pull/2738#issuecomment-6862328186)
+  and saved a DAF note.
+- **Limits / next:** publish the follow-up through external DAF completion and
+  confirm fresh Windows, installed-command E2E, and CodeQL results. Real Goose
+  execution remains for CI; no local
   container/integration scenarios ran. Live macOS, desktop/native Windows, hosted
   execution, transcripts, prompt/output containment, and product runtimes are not
-  qualified. Review/publish through external DAF completion, then verify CI.
-  Changes remain uncommitted; no push or PR was made.
+  qualified. No follow-up commit or push was made.
 
 ## Issue #2722 JavaScript/TypeScript HTTP credential scanning — 2026-11-13
 

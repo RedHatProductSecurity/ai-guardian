@@ -365,13 +365,16 @@ def _payload(
         if event_name == "PreToolUse":
             payload.update(
                 {
-                    "tool_name": "shell",
+                    # This scanner-only fixture disables ordinary permissions.
+                    # Exercise directory_rules through a native file-read tool,
+                    # as for the other IDEs, not an ungoverned shell command.
+                    "tool_name": "read_image" if case_name == "block" else "shell",
                     "tool_call_id": "e2e-call",
-                    "tool_input": {
-                        "command": (
-                            f"cat {blocked_file}" if case_name == "block" else "pwd"
-                        )
-                    },
+                    "tool_input": (
+                        {"source": str(blocked_file)}
+                        if case_name == "block"
+                        else {"command": "pwd"}
+                    ),
                 }
             )
         elif event_name == "PostToolUse":

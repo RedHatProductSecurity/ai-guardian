@@ -3,7 +3,9 @@
 import builtins
 import json
 from io import StringIO
-from unittest.mock import patch
+from pathlib import Path, PureWindowsPath
+from runpy import run_path
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -249,6 +251,31 @@ def test_host_cli_registration_does_not_advertise_unshipped_sandbox_runtimes():
         assert "goose" not in SANDBOX_CLI_IDE_TYPES_BY_RUNTIME[runtime]
 
 
+def test_goose_e2e_denial_payload_targets_the_directory_checked_native_read(
+    tmp_path, monkeypatch
+):
+    # Inspect the fixture builder only; do not execute integration scenarios.
+    monkeypatch.setenv("AI_GUARDIAN_TEST_IDE", "goose")
+    monkeypatch.delenv("AI_GUARDIAN_TEST_OPENCODE_GENERATION", raising=False)
+    fixtures = run_path(
+        str(Path(__file__).parents[1] / "integration/test_ide_hooks_e2e.py")
+    )
+    target = tmp_path / "blocked-fixture/synthetic.txt"
+    data = fixtures["_payload"](
+        "goose",
+        "block",
+        "PreToolUse",
+        {
+            "project": tmp_path,
+            "blocked_file": target,
+        },
+    )
+    assert data["tool_name"] == "read_image"
+    normalized = GooseAdapter().normalize_input(data)
+    assert normalized.tool_name == "Read"
+    assert normalized.file_path == str(target)
+
+
 @pytest.mark.parametrize("tool", ["write", "edit", "tree"])
 def test_native_path_not_unknown_alias_selects_the_real_target(tmp_path, tool):
     result = GooseAdapter().normalize_input(
@@ -289,6 +316,28 @@ def test_relative_workspace_is_not_used_to_guess_a_native_file_target():
         )
 
 
+@pytest.mark.parametrize("tool", ["write", "database__read_file"])
+def test_path_normalization_does_not_probe_the_filesystem_before_policy(tmp_path, tool):
+    expected = str(tmp_path / "linked" / ".." / "notes.txt")
+    with (
+        patch.object(
+            Path, "resolve", side_effect=AssertionError("premature path lookup")
+        ),
+        patch.object(
+            Path, "expanduser", side_effect=AssertionError("premature path lookup")
+        ),
+    ):
+        normalized = GooseAdapter().normalize_input(
+            payload(
+                tool_name=tool,
+                tool_input={"path": "linked/../notes.txt"},
+                working_dir=str(tmp_path),
+            )
+        )
+    # Keep linked/.. intact for the shared guard's canonical target check.
+    assert normalized.file_path == expected
+
+
 @pytest.mark.parametrize("tool", ["write", "edit", "tree", "read_image"])
 def test_native_file_tools_keep_tilde_literal_like_the_host(tmp_path, tool):
     normalized = GooseAdapter().normalize_input(
@@ -302,8 +351,11 @@ def test_native_file_tools_keep_tilde_literal_like_the_host(tmp_path, tool):
     assert normalized.file_path == str(tmp_path / "~" / filename)
 
 
-def test_image_file_url_resolves_the_decoded_local_target(tmp_path):
-    path = tmp_path / "an image.png"
+@pytest.mark.parametrize(
+    "filename", ["an image.png", "percent%20image.png", "image日本語.png"]
+)
+def test_image_file_url_resolves_the_decoded_local_target(tmp_path, filename):
+    path = tmp_path / filename
     normalized = GooseAdapter().normalize_input(
         payload(tool_name="read_image", tool_input={"source": path.as_uri()})
     )
@@ -315,3 +367,21 @@ def test_image_file_url_resolves_the_decoded_local_target(tmp_path):
                 tool_input={"source": "file://elsewhere.test/image.png"},
             )
         )
+
+
+def test_file_url_decoding_uses_the_platform_decoder_for_windows_drive_paths(
+    monkeypatch,
+):
+    decoded = r"C:\images\an image.png"
+    decoder = Mock(return_value=decoded)
+    monkeypatch.setattr("ai_guardian.hook_adapters.goose.url2pathname", decoder)
+    monkeypatch.setattr("ai_guardian.hook_adapters.goose.PurePath", PureWindowsPath)
+    normalized = GooseAdapter().normalize_input(
+        payload(
+            tool_name="read_image",
+            tool_input={"source": "file:///C:/images/an%20image.png"},
+        )
+    )
+    assert normalized.file_path == decoded
+    assert normalized.tool_input["file_path"] == decoded
+    decoder.assert_called_once_with("/C:/images/an%20image.png")

@@ -72,6 +72,9 @@ become old/new content. Relative file paths use `working_dir`; remote images
 receive URL checks. Namespaced extension tools retain MCP identity rather than
 being mistaken for native shell/file tools.
 Native file paths keep `~` literal, matching Goose rather than shell expansion.
+Adapter normalization and managed hook-path construction do not probe input paths.
+Native paths retain linked `..` components until the shared security guards
+canonicalize and check the actual target; file URLs use the platform's decoder.
 
 The managed pre-tool action pins **360 seconds** and `on_failure: "block"`.
 Nonzero startup/scan failures, malformed requests/responses, missing executable,

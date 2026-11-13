@@ -329,6 +329,12 @@
   the whole file, so health must inspect more than the generated entry. Keep the
   two-case real-CLI smoke separate from unsupported product container/OpenShell
   runtimes, create its workspace explicitly, and leave live execution to CI.
+  CI follow-up (#2738): the scanner-only E2E fixture disables ordinary permissions,
+  so its directory denial must use native `read_image`/Read, not shell `cat`.
+  Decode local file URLs with `urllib.request.url2pathname` for Windows drive
+  semantics. Use pure path construction before policy; preserve linked `..`
+  segments until shared guards canonicalize the target instead of collapsing them
+  lexically or probing untrusted paths early with `Path.resolve`/`expanduser`.
 
 - **2026-11-13 — JS/TS scanner Mypy contracts (#2722):** A `kind` string does not
   narrow an `object` payload on a generic resolved-value record; centralize
