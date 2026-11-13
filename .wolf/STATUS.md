@@ -22,8 +22,12 @@ budget_tokens: 1000
   config test pass. Black, Ruff, error-level Pylint, project Mypy, buglog JSON, and
   `git diff --check` pass.
 - Posted the completed acceptance checklist on GitHub #2720, added the `done` label,
-  and saved a DAF note. No commit or PR was created. **Next:** user review and
-  external `daf complete`.
+  and saved a DAF note. PR #2731 was opened from commit `0d4824c1`.
+- **CI follow-up (2026-11-13):** The first CI run found only stale bundled TOML
+  count expectations (137 secrets / 367 total). Updated the secrets count to 138;
+  all **243** tests in `tests/unit/test_bundled_toml.py` pass. Pushed
+  `d8249159` to PR #2731; the updated CI runs are in progress. **Next:** confirm
+  latest CI completes successfully, then user review and external `daf complete`.
 
 ## Issue #2729 CI regression — 2026-11-12
 

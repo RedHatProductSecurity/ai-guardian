@@ -305,6 +305,11 @@
 
 ## Key Learnings
 
+- **2026-11-13 — Bundled rule-count CI (#2720):** Adding a TOML rule requires
+  updating `EXPECTED_COUNTS` in `tests/unit/test_bundled_toml.py`. The aggregate
+  total is computed from that mapping, so updating the per-file expectation also
+  fixes the total assertion; run the complete bundled-TOML test file.
+
 - **2026-11-12 — OpenShift AI MaaS key format (#2720):** Red Hat/ODH docs
   establish the `sk-oai-` prefix; the upstream generator confirms
   `sk-oai-{key_id}_{secret}` with Base62 components separated by one underscore,
