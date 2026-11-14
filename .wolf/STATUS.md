@@ -5,7 +5,70 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-13 (UTC)
+> Last updated: 2026-11-14 (UTC)
+
+## Issue #2673 all-CLI coverage — independent CLI jobs, native CI pending
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2673`, existing
+  branch `2673`. User requested implementation and explicitly added Goose to
+  the audit. Earlier implementation is published in PR #2742; this workflow
+  follow-up is local/uncommitted. No commit, push or CI dispatch in this follow-up.
+  Earlier partial progress/blockers are in issue comment
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2673#issuecomment-6870627229.
+- **Latest user request:** one directly named job per CLI, not scattered steps
+  in a combined job. Replaced `container-images` with eight independent CLI/version
+  jobs (Codex, Gemini, Grok, Goose, OpenCode V1/V2, Pi, Claude) plus standalone
+  OpenShell image validation. No cross-CLI `needs` or V2 prerequisite gates.
+  `.github/actions/prepare-cli-smoke/action.yml` shares wheel/install and optional
+  support-image builds; each job has its own runner, image and prerequisites.
+  Native commands, version pins, Goose overlay and runner cleanup stay unchanged.
+  Claude is visibly skipped at job level without maintainer consent; Codex retains
+  only its temporary smoke-step tolerance plus failed-outcome warning/summary.
+  Ledger tests scan all jobs; complete UX contracts require one invocation per job.
+  Updated release guide, coverage ledger docs, checklist and changelog.
+- Added `scripts/agent_cli_coverage.json`, `--coverage`, and
+  `docs/REAL_AGENT_CLI_COVERAGE.md`: all twelve canonical host CLIs, actual
+  runner/Release Readiness lane parity, seven versioned capability/terms audits,
+  explicit exclusions/priorities, and a CI inventory summary, never qualification.
+- Grok 1.0.41 now has a local Chat Completions pre-tool lane through the existing
+  normal smoke lifecycle. Only a private model table is appended, generated
+  hook/MCP settings are preserved, the exact installed version is checked and
+  drift fails without replacing/rebuilding supplied images. No native hook trust
+  is granted. Goose 1.59.0 keeps its separate network-none test-only image and
+  expands from two to five cases: SSRF/config-exfil/command-credential denial,
+  clean tool and clean prompt. Both announce pre-tool-only scope; prompt denial
+  and sensitive-output containment remain NOT QUALIFIED.
+- Added native `run_terminal_command` recognition, all-issued-tool result/denial
+  correlation counters, inert SSRF/config witnesses, stronger partial evidence
+  and host-variable stripping. Existing full-client case/assertion, process-wide
+  raw-delivery, credential/ToS, firewall/REST/discovery, runtime and cleanup
+  contracts are retained. No product-runtime selector or shared hook code changed.
+- Remaining explicit exclusions: Copilot 1.0.112 (consent/native qualification),
+  Antigravity CLI 1.5.8 (consent/pinned install), Kiro 3.3.0 (no documented local
+  provider), OpenClaw 2026.11.3 (shared setup emits no required native manifest),
+  Crush 0.101.0 (FSL-1.1-MIT legal review). OpenClaw's required
+  `openclaw.plugin.json` is missing from generated setup; a structural exclusion
+  regression prevents inventing a substitute smoke-only plugin. Its local
+  providers exist; post-tool/channel-message callbacks are observational.
+- **Earlier implementation validation:** 508 related unit/complete smoke UX tests
+  pass. Runner
+  and mock focused coverage both 81% (combined 81%); data is
+  `/tmp/opencode/2673-cli-smoke.coverage`. Coverage 7.17.3 (Apache-2.0) was supplied
+  ephemerally with `uv --with`, not added as a project dependency. Ruff, Black
+  py310, error-only Pylint, package/script Mypy (344 files), and diff checks pass.
+  Manual simplification/privacy review completed; no `/simplify` skill exists.
+- **Latest follow-up validation:** 362 directly affected tests pass across
+  `test_agent_cli_test.py`, `test_agent_cli_coverage.py`, `test_container_scripts.py`
+  and the complete smoke UX contract. Two independence regressions first failed
+  against the grouped job. New Bash tests use a fake Docker function, never a
+  container engine, and explicitly skip Windows. YAML and 21 shell scripts pass
+  syntax checks; Black py310, Ruff, error-only Pylint and Mypy (342 source files)
+  pass. `actionlint` is unavailable. No product source or runner behavior changed.
+- No real CLI/container, provider credentials, external model or firewall changes
+   ran locally. **Next:** user review/publication of the job split, native CI for
+   the independent jobs and Grok/expanded Goose, then address or split the five
+   prerequisites. This is not all-client
+  runtime qualification and the whole issue must not be marked complete.
 
 ## Issue #2737 container release-reference gate — 2026-11-13
 

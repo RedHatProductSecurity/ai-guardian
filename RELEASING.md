@@ -72,7 +72,12 @@ the release issue open until that evidence and the post-release checks exist.
 ### Real-agent hook smoke test
 
 Release Readiness also invokes the bundled Codex, Gemini, OpenCode, and Pi CLIs in
-fresh, strict-derived smoke sandboxes using the current wheel. Claude Code uses an
+fresh, strict-derived smoke sandboxes using the current wheel. Grok and Goose have
+explicit **pre-tool-only** subsets described below. The [all-CLI coverage
+ledger](docs/REAL_AGENT_CLI_COVERAGE.md) records every supported host CLI, exact
+audited versions, CI lanes and actionable exclusions; `scripts/agent-cli-test
+--coverage` prints the inventory without running or qualifying an agent.
+Claude Code uses an
 Anthropic Messages API adapter and is run only when an authorized maintainer has explicitly enabled
 the CI ToS-consent variable described below. Clients point at local, loopback-only
 mock providers: malicious prompts must be blocked before reaching the provider,
@@ -80,15 +85,38 @@ tool-call probes must be blocked by the normal client hooks, and clean prompts
 and tool output must be allowed. Runtime egress is blocked before any client/model
 request, and the runner removes host provider credentials before sandbox creation.
 These checks do not contact a model provider or incur inference
-charges. Each invocation runs all nine cases:
+charges. Full-profile invocations run the ten common cases below; Claude/OpenCode
+also run their four applicable native Write HTTP-credential cases. Partial profiles
+must not be reported as full prompt/output protection.
+
+Each CLI has a dedicated Release Readiness job, with separate **OpenCode V1**
+and **OpenCode V2** jobs. Setup, version checks, native execution and runner-owned
+cleanup stay with that client; a failed CLI or image build cannot skip another
+client. The local `prepare-cli-smoke` action shares the current-wheel/image build
+recipe, not runners or cross-CLI prerequisites. **OpenShell Image Validation** is
+a separate job. Claude's entire job is visibly skipped without maintainer consent;
+Codex alone retains its explicitly reported, temporary smoke-failure exception.
 
 | Cases | Required evidence |
 | --- | --- |
 | `prompt_injection`, `secret`, `pii` | Prompt hook event, expected finding, no provider request |
 | `ssrf`, `config_exfil` | Native tool offer, pre-tool hook and expected finding, no post-tool event |
+| `command_credential` | Native shell offer, command-credential finding and PreToolUse denial, no execution witness or post-tool event |
 | `clean_tool` | Real execution witness, pre/post-tool hooks, clean correlated tool result received by the mock, no violation and successful CLI exit |
 | `tool_output_secret`, `tool_output_pii` | Real execution witness, pre/post-tool hooks, `sensitive_finding`, no original synthetic value in any mock request |
 | `allowed` | Prompt hook, successful CLI exit, provider request and no violation |
+
+Grok **1.0.41** and Goose **1.59.0** run only `ssrf`, `config_exfil`,
+`command_credential`, `clean_tool`, and `allowed`. Denied probes require native
+tool/result correlation and non-execution; clean tools require real execution,
+pre/post hooks, correlated clean output and exit zero. Prompt and post-tool hooks
+are observational for these integrations: **prompt denial and sensitive-output
+containment are NOT QUALIFIED**. The process-wide raw-delivery check is retained.
+Grok uses the existing normal smoke lifecycle/local Chat Completions mock and
+fails on version drift without changing a supplied image. Goose retains its
+separate network-none, mount-free smoke-only image; neither lane qualifies a new
+product runtime. Five other clients currently fail preflight with a documented
+blocker, not a passing skip. See the ledger before selecting a client.
 
 The output probes generate public synthetic test data inside a harmless local
 Python tool; neither their prompts nor tool commands contain the values. The

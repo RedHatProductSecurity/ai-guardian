@@ -234,8 +234,13 @@ class TestContainerLaunchers:
         workflow = RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8")
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
 
-        assert "container-images:" in workflow
-        assert "Build normal support image" in workflow
+        assert "openshell-image-validation:" in workflow
+        preparation = (
+            REPO_ROOT / ".github/actions/prepare-cli-smoke/action.yml"
+        ).read_text(encoding="utf-8")
+        assert "Build normal support image" in preparation
+        assert "docker build" in preparation
+        assert "./.github/actions/prepare-cli-smoke" in workflow
         assert "Build OpenShell support image" in workflow
         assert "ai-guardian-readiness" in workflow
         assert "ai-guardian-openshell-readiness" in workflow

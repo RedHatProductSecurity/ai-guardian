@@ -276,6 +276,12 @@ behavior is truly identical, but the test output and evidence must identify the
 new IDE. “The adapter is similar to another IDE” is not an exclusion. Keep
 fixtures synthetic and isolated from the user's configuration.
 
+For a canonical host CLI, also synchronize the [real-agent CLI coverage
+ledger](REAL_AGENT_CLI_COVERAGE.md), its runner and Release Readiness steps. Retain
+an exact-version audit and actionable exclusion when native execution is blocked;
+generated bridge/unit evidence is not a real-agent pass. Pre-tool-only and
+observation-only scopes must remain explicit.
+
 | Test group | Tests that must be implemented | Minimum scenarios and evidence |
 |------------|--------------------------------|--------------------------------|
 | Canonical registration and parity | Add the IDE to `SUPPORTED_IDE_REGISTRY`; extend `tests/unit/test_ide_registry.py` for registry-to-capability-matrix coverage | Stable key/display name, all aliases, adapter class, setup mode, managed event manifest, transcript/session declaration, capability behavior row, and release-readiness/docs/installer parity must pass |

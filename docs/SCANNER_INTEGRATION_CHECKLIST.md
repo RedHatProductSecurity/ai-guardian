@@ -118,6 +118,9 @@ pre-execution coverage.
   must verify pre/post hook events and containment at the mock boundary, not just
   finding counts. If no supported CLI hook exercises this
   scanner, record the reason and retain focused scanner/UX coverage.
+  Consult the [all-CLI coverage ledger](REAL_AGENT_CLI_COVERAGE.md): a pre-tool-only
+  lane cannot validate a prompt/output protection, and a blocked CLI selection
+  must not become a passing skip. Keep its versioned audit and CI record in sync.
 
 ### 11. Help tooltips
 - [ ] `src/ai_guardian/setup/config.py` — add `_comment_*` keys inside the scanner dict in `_get_default_config_template()` for each configurable field so they surface automatically as Web Console tooltips

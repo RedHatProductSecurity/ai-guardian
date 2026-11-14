@@ -114,6 +114,12 @@ relocation variable deliberately keep their existing defaults.
 
 ## Coverage-to-test matrix
 
+For actual CLI invocation coverage, see the separate [real-agent CLI coverage
+ledger](REAL_AGENT_CLI_COVERAGE.md). It includes all twelve canonical host CLIs
+(including Goose), partial pre-tool lanes, explicit blockers and CI drift tests.
+This matrix's adapter/generated-bridge evidence does not establish native CLI
+execution, output containment or product-runtime qualification.
+
 This matrix is keyed by the canonical registry rather than by display-name
 groupings. Shared implementations still have one row per public key, so a
 Cline/ZooCode or Kiro/AiderDesk/OpenClaw change cannot hide a missing setup,
