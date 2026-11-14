@@ -3079,6 +3079,11 @@ def test_hook_counts_expose_normalized_shell_and_command_scan_counts(
                         "hook_event": "pretooluse",
                         "tool": "Bash",
                         "checks": {"command_credential_scanning": 0.12},
+                        "counts": {
+                            "command_credential_scan_attempts": 1,
+                            "command_credential_scan_results": 1,
+                            "command_credential_scan_blocks": 1,
+                        },
                     }
                 ),
                 json.dumps({"hook_event": "prompt", "tool": ""}),
@@ -3102,6 +3107,11 @@ def test_hook_counts_expose_normalized_shell_and_command_scan_counts(
         "normalized_tool_bash": 1,
         "normalized_tool_shell": 0,
         "command_credential_scan_calls": 1,
+        "command_credential_scan_attempts": 1,
+        "command_credential_scan_empty_results": 0,
+        "command_credential_scan_results": 1,
+        "command_credential_scan_blocks": 1,
+        "command_credential_scan_nonblocks": 0,
     }
 
 

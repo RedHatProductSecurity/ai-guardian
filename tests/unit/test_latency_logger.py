@@ -34,6 +34,16 @@ class TestCheckTimer:
         with timer.check("test"):
             time.sleep(0.005)
         assert timer.to_dict() == {}
+        timer.add_count("scan")
+        assert timer.counts() == {}
+
+    def test_enabled_accumulates_value_free_counts(self):
+        timer = _CheckTimer(enabled=True)
+        timer.add_count("scan")
+        timer.add_count("scan", 2)
+        timer.add_count("invalid_bool", True)
+
+        assert timer.counts() == {"scan": 3}
 
     def test_disabled_total_ms_zero(self):
         timer = _CheckTimer(enabled=False)

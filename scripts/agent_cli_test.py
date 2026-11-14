@@ -409,6 +409,10 @@ _READ_HOOK_COUNTS = r"""
 import collections,json,sys
 from pathlib import Path
 events=collections.Counter(); shell_tools=collections.Counter(); command_scans=0
+scan_counts=collections.Counter()
+scan_count_fields=('command_credential_scan_attempts','command_credential_scan_empty_results',
+                   'command_credential_scan_results','command_credential_scan_blocks',
+                   'command_credential_scan_nonblocks')
 p=Path(sys.argv[1])
 if p.is_file():
   for line in p.read_text(encoding='utf-8').splitlines():
@@ -423,9 +427,17 @@ if p.is_file():
     checks=item.get('checks')
     if isinstance(checks,dict) and 'command_credential_scanning' in checks:
       command_scans+=1
+    counts=item.get('counts')
+    if isinstance(counts,dict):
+      for key in scan_count_fields:
+        value=counts.get(key)
+        if type(value) is int and value >= 0:
+          scan_counts[key]+=value
 events['normalized_tool_bash']=shell_tools.get('Bash',0)
 events['normalized_tool_shell']=shell_tools.get('Shell',0)
 events['command_credential_scan_calls']=command_scans
+for key in scan_count_fields:
+  events[key]=scan_counts[key]
 print(json.dumps(dict(events),sort_keys=True))
 """
 
@@ -1476,6 +1488,11 @@ def _hook_counts(
             "normalized_tool_bash",
             "normalized_tool_shell",
             "command_credential_scan_calls",
+            "command_credential_scan_attempts",
+            "command_credential_scan_empty_results",
+            "command_credential_scan_results",
+            "command_credential_scan_blocks",
+            "command_credential_scan_nonblocks",
         )
         and type(value) is int
         and value >= 0

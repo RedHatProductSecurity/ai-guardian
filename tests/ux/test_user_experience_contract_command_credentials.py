@@ -106,6 +106,7 @@ def test_argv_shell_script_blocks_credential_after_harmless_setup():
         tool_name="Bash",
         tool_input={"command": ["bash", "-lc", command]},
     )
+    latency_entries = []
     with (
         patch(
             "ai_guardian.config.loaders._load_config_file",
@@ -119,6 +120,11 @@ def test_argv_shell_script_blocks_credential_after_harmless_setup():
             "ai_guardian.config.loaders._load_password_likelihood_config",
             return_value=({"enabled": False, "action": "ask"}, None),
         ),
+        patch("ai_guardian.hook_processing._is_latency_enabled", return_value=True),
+        patch(
+            "ai_guardian.reporting.latency.LatencyLogger.log_timing",
+            new=lambda _logger, entry: latency_entries.append(entry),
+        ),
     ):
         result = process_hook_data(hook_data)
 
@@ -130,6 +136,12 @@ def test_argv_shell_script_blocks_credential_after_harmless_setup():
     )
     assert value not in result["output"]
     assert "curl --user" not in result["output"]
+    assert latency_entries[0]["counts"] == {
+        "command_credential_scan_attempts": 1,
+        "command_credential_scan_results": 1,
+        "command_credential_scan_blocks": 1,
+    }
+    assert value not in json.dumps(latency_entries[0])
 
 
 def test_opencode_shell_argv_is_normalized_before_policy_and_credential_scans():

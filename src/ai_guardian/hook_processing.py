@@ -512,6 +512,9 @@ def _finalize_latency(
             "processing_ms": round(timer.processing_ms(), 2),
             "checks": {k: round(v, 2) for k, v in timer.to_dict().items()},
         }
+        counts = timer.counts()
+        if counts:
+            entry["counts"] = counts
         if timer.ask_wait_total_ms > 0:
             entry["ask_dialog_ms"] = round(timer.ask_wait_total_ms, 2)
         if correlation_id:
@@ -2682,17 +2685,27 @@ def _process_hook_data(hook_data, daemon_state=None):
                             shell_commands.append(shell_command)
 
                 for shell_command in shell_commands:
+                    _latency_timer.add_count("command_credential_scan_attempts")
                     with _latency_timer.check("command_credential_scanning"):
                         command_credential_result = run_command_credential_scan(
                             shell_command
                         )
                     if command_credential_result is None:
+                        _latency_timer.add_count(
+                            "command_credential_scan_empty_results"
+                        )
                         continue
+                    _latency_timer.add_count("command_credential_scan_results")
                     command_credential_decision = apply_post_scan_pipeline(
                         _registry.get(ScannerName.COMMAND_CREDENTIAL_SCANNING),
                         command_credential_result,
                         _post_scan_ctx,
                         severity_override=command_credential_result.severity,
+                    )
+                    _latency_timer.add_count(
+                        "command_credential_scan_blocks"
+                        if command_credential_decision.should_block
+                        else "command_credential_scan_nonblocks"
                     )
                     warning_messages.extend(command_credential_decision.warnings)
                     if command_credential_decision.warnings:
