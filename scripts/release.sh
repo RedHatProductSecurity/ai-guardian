@@ -624,6 +624,27 @@ else
     fi
 fi
 
+# --- Phase 7c: Optional NotebookLM release-export replacement -----------------
+
+section "Phase 7c: Optional NotebookLM Refresh"
+
+NOTEBOOKLM_STATUS="failed/unconfirmed (retry refresh only; release unchanged)"
+NOTEBOOKLM_ARGS=()
+$DRY_RUN && NOTEBOOKLM_ARGS+=(--dry-run)
+if NOTEBOOKLM_RESULT=$($HELPER refresh-notebooklm "$NEW_VERSION" "${NOTEBOOKLM_ARGS[@]}"); then
+    case "$NOTEBOOKLM_RESULT" in
+        updated\ \(*|skipped\ \(*) NOTEBOOKLM_STATUS="$NOTEBOOKLM_RESULT" ;;
+        *) warn "NotebookLM refresh returned an unrecognized status; not confirmed." ;;
+    esac
+else
+    warn "Optional NotebookLM refresh failed/unconfirmed; release completion and merge-back continue."
+    warn "Inspect the notebook and saved refresh state, then retry only: $HELPER refresh-notebooklm ${NEW_VERSION}"
+fi
+case "$NOTEBOOKLM_STATUS" in
+    updated\ \(*|skipped\ \(*) info "NotebookLM: ${NOTEBOOKLM_STATUS}" ;;
+    *) warn "NotebookLM: ${NOTEBOOKLM_STATUS}" ;;
+esac
+
 # --- Phase 8: Post-release merge back --------------------------------------
 
 section "Phase 8: Post-Release Merge Back"
@@ -730,6 +751,7 @@ echo "  Tag: ${TAG_NAME}"
 echo "  PyPI: https://pypi.org/project/ai-guardian/${NEW_VERSION}/"
 echo "  GitHub: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/${TAG_NAME}"
 echo "  Announcement: ${ANNOUNCEMENT_STATUS}"
+echo "  NotebookLM: ${NOTEBOOKLM_STATUS}"
 echo "  Container: ${NORMAL_CONTAINER_IMAGE}"
 echo "  OpenShell: ${OPENSHELL_CONTAINER_IMAGE}"
 echo "  Docs: https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"

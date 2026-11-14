@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Optional NotebookLM release refresh (#2736):** Use an installed, authenticated
+  `nlm` to replace only the combined release documentation after production
+  publication. Verify the uploaded export before deleting the old source; preserve
+  unrelated sources and pending receipts, skip unavailable tooling/auth, and expose
+  offline preview plus a refresh-only retry without blocking release completion.
+  After verified replacement, rename the notebook to `AI Guardian vX.Y.Z` and
+  confirm its title; partial rename failures resume without re-uploading.
 - **Real-agent CLI coverage ledger (#2673):** Track all twelve host CLIs,
   including Goose, against runner and Release Readiness lanes with drift tests
   and versioned capability/terms audits. Add `scripts/agent-cli-test --coverage`,
