@@ -16,7 +16,8 @@ scripts/release.sh --execute --resume patch # resume this attempt's required CI
 
 The script automates prerequisite validation, Release Readiness and standard CI,
 interactive Cursor verification, release preparation, TestPyPI, production
-tagging, publication checks, a production release announcement, and merge-back.
+tagging, publication checks, a production release announcement, optional NotebookLM
+documentation replacement, and merge-back.
 Run it as an authorized maintainer in your terminal, outside an active DAF agent
 session. Land release-script preparation changes through the normal feature-branch
 review workflow first; do not launch it from a DAF issue branch such as `2563`.
@@ -348,6 +349,94 @@ Other release deliverables still require independent checklist verification.
 
 This maintainer workflow is separate from support reporting. Support category
 restrictions and native user-only upload/publication consent are unchanged.
+
+### Optional NotebookLM release documentation refresh
+
+Phase 7c refreshes the export in the [AI Guardian notebook](https://notebook.google.com/notebook/9b78ebca-d327-4df7-8f2e-64e518f2ddcb)
+after production publication and before merge-back/the next development version.
+It requires the optional **`notebooklm-mcp-cli` 0.16.2** (`nlm`, MIT license) on
+`PATH` and an already authenticated current profile. Other versions/implementations
+are skipped until their interface is validated. This is an external maintainer
+tool, not an AI Guardian application dependency.
+
+The helper checks CLI branding/version and runs only `nlm login --check`, with
+stdin closed and browser-based auth recovery disabled for its child commands.
+It never installs tools, opens login/browser flows, requests credentials, switches
+the default profile, or changes other notebook settings. Missing/incompatible tooling
+and missing/expired/unverifiable authentication are explicit non-fatal skips.
+Every source command pins the profile that passed the check, without using
+environment-cookie overrides or switching accounts.
+
+The exact stable GitHub Release and production PyPI wheel/sdist must be published,
+as for [announcements](#production-release-announcements). A TestPyPI-only candidate
+does not qualify. The upload is a temporary copy of
+`vX.Y.Z:docs/notebooklm-export.md` from Git, **not** the current working-tree file.
+This step never regenerates the export or includes the next development snapshot.
+
+Uploaded local files have no in-place update. Replacement proceeds as follows:
+
+1. Discover sources in notebook `9b78ebca-d327-4df7-8f2e-64e518f2ddcb`; match only
+   the exact `notebooklm-export.md` title of a local-file/text source. Similar
+   titles, list order, other sources, and notebook settings are not targets.
+   Multiple exact matches or incomplete discovery stop without changes.
+2. Persist upload intent in Git metadata, upload once with `--wait --json`, and
+   record the full returned source UUID. A separate source-list check must confirm
+   that this exact new source finished processing successfully.
+3. Only then delete the previously identified export UUID and verify that exactly
+   one processed export remains. An absent export is created once. Successful
+   repeat runs reuse the verified source instead of uploading duplicates.
+4. Rename that exact notebook to **`AI Guardian vX.Y.Z`**, then read back its
+   identity/title to verify the change. A notebook already bearing the exact title
+   needs no rename. Other settings are preserved; the title never advances on a
+   failed/unconfirmed source replacement.
+
+Upload/processing/authentication/network errors, timeouts, malformed replies, and
+quota/source limits never trigger deletion of the existing export. Upload-first
+replacement needs **one spare source slot**; the helper will not delete the old
+export to make room. If deletion or final verification fails, the new source and
+its saved receipt remain available for reconciliation without another upload.
+A rename failure also retains the verified export/receipt: retry checks the
+current title before attempting another rename and never re-uploads the export.
+
+Preview the intended replacement completely offline:
+
+```bash
+python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z --dry-run
+```
+
+Retry **only this optional step** for an explicitly specified published release:
+
+```bash
+python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z
+```
+
+Neither command bumps versions, creates branches/tags, republishes packages, or
+rewrites release configuration. Preview does not invoke `nlm`, check authentication,
+contact GitHub/PyPI/NotebookLM, or write state. The release script's preview still
+runs its existing GitHub CI gates, but never contacts or mutates NotebookLM.
+
+The journal is `ai-guardian-notebooklm-refresh.json` under `git rev-parse --git-common-dir`,
+shared by this checkout's worktrees, with an OS lock released on process exit.
+It contains only version/hash/profile/source identities and progress, never cookies,
+document contents, or raw provider/account diagnostics. Run refreshes serially,
+including from separate clones. A pending different version/profile cannot overwrite
+an unfinished attempt.
+Completed state also prevents an older-version retry from downgrading the notebook
+or silently using a changed export for the same immutable release version.
+
+**An upload without a trustworthy UUID receipt is deliberately not retried.** A
+command failure may have created a source. Preserve the journal and inspect the
+exact notebook in the user interface before acting. Reconcile any partial upload
+manually; archive the pending journal only after verifying that no unaccounted-for
+upload or duplicate remains. Do not discard state merely to force another upload.
+Known uploaded UUIDs resume processing/deletion verification through the retry command.
+
+Output distinguishes **updated**, **skipped**, and **failed/unconfirmed** without
+printing CLI output, account details, or documentation. The refresh-only command
+returns nonzero for failures/unconfirmed outcomes, but this optional step **never
+prevents release completion or merge-back**. Its status remains in the release
+summary. Do not rerun the full release script to recover it. Release Readiness runs
+only CLI help and mocked contracts; no Google credentials/notebooks are used.
 
 ### One-time Read the Docs setup
 
@@ -1054,6 +1143,7 @@ Use this checklist for each release:
 - [ ] Python/middleware versions agree; non-Python archives are not PyPI distributions
 - [ ] Both separate Quay repositories have versioned manifests/digests and runtime-version evidence
 - [ ] Exact versioned Read the Docs site works; stable points to it and latest remains main
+- [ ] Optional NotebookLM refresh status reviewed (updated/skipped/failed); recover only that step, never publication
 
 ### Post-Release
 - [ ] Merge release branch back to `main`

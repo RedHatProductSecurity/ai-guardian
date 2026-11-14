@@ -2,9 +2,14 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-13
+> Last updated: 2026-11-14
 
 ## User Preferences
+
+- **2026-11-14 — Versioned NotebookLM title (#2736):** After verified release
+  documentation replacement, rename the same notebook to `AI Guardian vX.Y.Z`.
+  Do not advance the title on a failed source replacement; rename-only recovery
+  must reuse the verified export rather than uploading another copy.
 
 - **2026-11-14 — One smoke job per CLI (#2673):** The user prefers independent,
   directly named Release Readiness jobs, not a combined job with client checks
@@ -324,6 +329,16 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-14 — Audited NotebookLM CLI (#2736):** `notebooklm-mcp-cli` 0.16.2
+  is MIT-licensed. Uploaded file replacement has no in-place update. Its
+  `source add --file --wait --json` receipt contains a UUID/title but omits
+  processing status; verify that UUID in `source list --json` with numeric status
+  2 before deleting the exact old UUID. `notebook rename` has **no** `--json`;
+  verify its effect using `notebook get --json` (`notebook_id`, `title`). Never
+  replay an upload without a trustworthy receipt. Pin the checked current profile
+  for child commands and prevent browser-based authentication recovery. Read the
+  immutable tagged export for post-release retries, not the next-dev working tree.
 
 - **2026-11-14 — Cross-CLI prerequisites hide results (#2673):** The old
   `smoke_prerequisites` step was specifically the OpenCode V2 version check yet

@@ -143,6 +143,22 @@ def test_release_readiness_covers_announcement_cli_without_publication():
     assert "gh api" not in step["run"]
 
 
+def test_release_readiness_covers_notebook_refresh_without_credentials():
+    """Only help and mocked contracts run; never install nlm or authenticate."""
+    workflow = yaml.safe_load(RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8"))
+    step = next(
+        step
+        for step in workflow["jobs"]["daemon-lifecycle"]["steps"]
+        if step["name"]
+        == "Verify optional NotebookLM refresh CLI and mocked replacement contracts"
+    )
+    assert "refresh-notebooklm --help" in step["run"]
+    assert "tests/unit/test_notebooklm_release.py" in step["run"]
+    assert "nlm login" not in step["run"]
+    assert "nlm source" not in step["run"]
+    assert "pip install notebooklm" not in step["run"]
+
+
 def test_release_ci_workflows_have_safe_manual_dispatch_contracts():
     """Release validation dispatches CI without scanner issue automation."""
 
@@ -437,6 +453,21 @@ elif program == "python3":
                     sys.exit(1)
                 if outcome != "empty":
                     print("invalid receipt" if outcome == "invalid" else "https://github.com/RedHatProductSecurity/ai-guardian/discussions/123")
+        elif command == "refresh-notebooklm":
+            assert args[4] == "1.2.3"
+            if "--dry-run" in args:
+                assert not (Path.cwd() / "docs/notebooklm-export.md").exists()
+                print("skipped (dry-run; would refresh notebooklm-export.md from v1.2.3)")
+            else:
+                assert (Path.cwd() / "docs/notebooklm-export.md").is_file()
+                outcome = os.environ.get("NOTEBOOKLM_TEST_OUTCOME", "updated")
+                if outcome == "failed":
+                    print("NotebookLM failed/unconfirmed: export upload/processing timed out", file=sys.stderr)
+                    sys.exit(1)
+                elif outcome == "unexpected":
+                    print("PRIVATE_PROVIDER_OUTPUT")
+                else:
+                    print(outcome + " (optional refresh)")
         elif command not in ("validate", "update-version", "update-changelog"):
             raise AssertionError(args)
     elif Path(args[0]).name not in ("sync_release_versions.py", "sync_rust_middleware_version.py", "verify_container_images.py"):
@@ -447,10 +478,12 @@ elif program == "pip":
     sys.exit(int(os.environ.get("PIP_TEST_EXIT", "0")))
 elif program == "git-cliff":
     print("### Added\n- Generated changelog entry")
+elif program == "nlm":
+    raise AssertionError("Tests must not contact a live NotebookLM service")
 elif program not in ("curl", "git-cliff", "sleep"):
     raise AssertionError(program)
 """
-    for name in ("git", "gh", "python3", "pip", "curl", "git-cliff", "sleep"):
+    for name in ("git", "gh", "python3", "pip", "curl", "git-cliff", "sleep", "nlm"):
         path = binaries / name
         path.write_text(fake, encoding="utf-8")
         path.chmod(0o755)
@@ -475,12 +508,14 @@ elif program not in ("curl", "git-cliff", "sleep"):
         remote_branch_sha="same-commit",
         merge_conflicts=(),
         calculated_version="1.2.3",
+        notebooklm_outcome="updated",
+        answers="y\ny\n",
     ):
         if empty_changelog:
             (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n")
         result = subprocess.run(
             ["bash", str(script), "--skip-cursor", *flags, release_type],
-            input="y\ny\n",
+            input=answers,
             capture_output=True,
             text=True,
             timeout=30,
@@ -490,6 +525,7 @@ elif program not in ("curl", "git-cliff", "sleep"):
                 "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
                 "RELEASE_TEST_LOG": str(log),
                 "ANNOUNCEMENT_TEST_OUTCOME": outcome,
+                "NOTEBOOKLM_TEST_OUTCOME": notebooklm_outcome,
                 "PIP_TEST_EXIT": str(pip_exit),
                 "RELEASE_CURRENT_BRANCH": current_branch,
                 "RELEASE_REPO_ROOT": str(tmp_path),
@@ -1293,3 +1329,66 @@ def test_release_script_dry_run_previews_announcement_without_mutations(
     )
     assert not any(command[0] in ("pip", "curl") for command in commands)
     assert not _release_mutations(commands)
+
+
+def test_notebook_refresh_uses_release_version_after_production_before_merge(
+    release_sandbox,
+):
+    result, commands = release_sandbox("--execute")
+    assert result.returncode == 0, result.stdout + result.stderr
+    refresh = next(
+        i for i, command in enumerate(commands) if "refresh-notebooklm" in command
+    )
+    production_push = next(
+        i
+        for i, command in enumerate(commands)
+        if command == ["git", "push", "origin", "v1.2.3"]
+    )
+    verification = next(
+        i for i, command in enumerate(commands) if "announce-release" in command
+    )
+    mergeback = next(
+        i
+        for i, command in enumerate(commands)
+        if command == ["git", "checkout", "main"]
+    )
+    assert production_push < verification < refresh < mergeback
+    assert commands[refresh][-2:] == ["refresh-notebooklm", "1.2.3"]
+    assert "NotebookLM: updated" in result.stdout.split("Release Summary")[1]
+    assert not any(command[0] == "nlm" for command in commands)
+
+
+@pytest.mark.parametrize("outcome", ["skipped", "failed", "unexpected"])
+def test_optional_notebook_refresh_never_prevents_release_completion(
+    outcome, release_sandbox
+):
+    result, commands = release_sandbox("--execute", notebooklm_outcome=outcome)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ["git", "push", "origin", "main"] in commands
+    assert "Main branch updated" in result.stdout
+    assert sum("refresh-notebooklm" in command for command in commands) == 1
+    expected = "skipped" if outcome == "skipped" else "failed/unconfirmed"
+    assert f"NotebookLM: {expected}" in result.stdout.split("Release Summary")[1]
+    assert "PRIVATE_PROVIDER_OUTPUT" not in result.stdout + result.stderr
+    if outcome == "failed":
+        assert "refresh-notebooklm 1.2.3" in result.stdout
+
+
+def test_notebook_refresh_preview_is_offline(release_sandbox):
+    result, commands = release_sandbox("--dry-run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    refreshes = [command for command in commands if "refresh-notebooklm" in command]
+    assert len(refreshes) == 1
+    assert refreshes[0][-3:] == ["refresh-notebooklm", "1.2.3", "--dry-run"]
+    assert "would refresh notebooklm-export.md from v1.2.3" in result.stdout
+    assert "NotebookLM: skipped (dry-run" in result.stdout.split("Release Summary")[1]
+    assert not any(command[0] == "nlm" for command in commands)
+    assert not _release_mutations(commands)
+
+
+def test_testpypi_only_release_does_not_reach_notebook_refresh(release_sandbox):
+    result, commands = release_sandbox("--execute", answers="n\n")
+    assert result.returncode == 1
+    assert "Aborted after TestPyPI verification" in result.stderr
+    assert not any("refresh-notebooklm" in command for command in commands)
+    assert ["git", "push", "origin", "v1.2.3"] not in commands

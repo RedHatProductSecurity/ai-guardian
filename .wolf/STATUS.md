@@ -7,6 +7,40 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-14 (UTC)
 
+## Issue #2736 optional NotebookLM release refresh — 2026-11-14
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2736`, existing
+  branch `2736`; initialized the qualified issue once. User additionally requested
+  renaming the notebook to `AI Guardian vX.Y.Z` after the documentation refresh.
+- Added the stdlib-only `.claude/skills/release/notebooklm_release.py` and
+  `release_helper.py refresh-notebooklm X.Y.Z [--dry-run]`. It checks the optional
+  MIT-licensed `notebooklm-mcp-cli` 0.16.2 identity/current authentication without
+  installation/login/browser recovery/profile switching, independently verifies
+  production Release/PyPI publication and reads the exact tagged export.
+- Phase 7c runs after production and before merge-back/dev changes. It targets
+  only the exact local-file/text export title, uploads/waits/verifies the new UUID
+  before deleting the old UUID, then renames/verifies the exact notebook title.
+  Unrelated sources/settings are preserved. One spare source slot is necessary;
+  failures never trigger delete-first replacement or block merge-back/completion.
+- A Git-common-metadata journal and OS lock preserve intent/receipts across
+  serial retries. Known upload/delete/rename failures resume without re-upload;
+  missing trustworthy upload receipts stop for manual reconciliation. Completed
+  state guards against older-version replay/changed exports under the same tag.
+  Preview is entirely offline; TestPyPI-only paths cannot mutate the notebook.
+- Updated release guide, skill/checklist, changelog and credential-free readiness
+  coverage. The release-generated `docs/notebooklm-export.md` is unchanged.
+- **Validation:** 263 directly related unit/helper/shell contracts pass, with
+  **95%** new-helper coverage (`/tmp/opencode/2736-notebooklm.coverage`). Bash
+  syntax, Black py310, Ruff, error-only Pylint and Mypy (344 source/helper files)
+  pass. Windows locking is mocked and Bash-only tests retain their platform guard.
+  Manual simplification/privacy review completed; no `/simplify` skill is available.
+- **Limits / next:** changes remain uncommitted for user review/external DAF
+  completion. No release, live auth check, notebook inspection/upload/deletion or
+  rename was executed; actual service qualification remains for an authorized
+  maintainer with the optional tool/profile. No commit/push/PR or CI dispatch.
+- Saved a DAF progress note and the completed implementation checklist in
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2736#issuecomment-6877862162.
+
 ## Issue #2673 all-CLI coverage — independent CLI jobs, native CI pending
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2673`, existing
