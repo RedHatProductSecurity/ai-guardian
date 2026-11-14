@@ -126,8 +126,12 @@ events, scope/relocation, disabled/shadowed plugins, idempotence, and preservati
 Release Readiness includes installed-command E2E and a **smoke-only** Goose
 1.59.0 image using `scripts/agent-cli-test --cli-name goose --agent default
 --image IMAGE`: native shell offers, a denied synthetic credential command
-without an execution witness, and a clean executed tool/result round-trip must
-all be confirmed. No external network, host mounts, credentials, or published
+plus inert SSRF/config-exfil probes without execution witnesses, a clean executed
+tool/result round-trip, and a clean prompt must all be confirmed. Issued native
+tool/result correlation is required; two provider calls alone are not evidence.
+The [all-CLI coverage ledger](REAL_AGENT_CLI_COVERAGE.md) records this five-case
+**pre-tool-only** profile, not full enforcement qualification.
+No external network, host mounts, credentials, or published
 ports are present. Prompt denial and output redaction are tested exclusions.
 Real CLI/container scenarios run in CI/manual checks, not routine local tests.
 Live macOS execution, desktop, and native Windows remain unverified.

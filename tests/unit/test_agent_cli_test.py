@@ -99,7 +99,13 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
 
 def test_goose_smoke_uses_only_enforceable_cases_and_a_network_none_test_image():
     runner = _load(RUNNER_PATH, "agent_cli_goose_contract")
-    assert runner.GOOSE_SMOKE_CASE_NAMES == {"command_credential", "clean_tool"}
+    assert runner.PRE_TOOL_SMOKE_CASE_NAMES == {
+        "ssrf",
+        "config_exfil",
+        "command_credential",
+        "clean_tool",
+        "allowed",
+    }
     command = runner.build_goose_smoke_command(
         "docker", "goose-smoke:local", "owned-test"
     )
@@ -224,7 +230,7 @@ def test_goose_smoke_failure_cleans_only_owned_container(tmp_path, monkeypatch):
     assert calls[1][-1] == calls[0][calls[0].index("--name") + 1]
 
 
-def test_goose_smoke_runs_only_the_two_qualified_cases_and_always_cleans_up(
+def test_goose_smoke_runs_only_the_pre_tool_subset_and_always_cleans_up(
     monkeypatch,
 ):
     runner = _load(RUNNER_PATH, "agent_cli_goose_flow")
@@ -256,7 +262,13 @@ def test_goose_smoke_runs_only_the_two_qualified_cases_and_always_cleans_up(
         container_engine="docker", image="test-only", timeout=2
     )
     assert runner._run_goose_smoke(args) == 0
-    assert cases == ["command_credential", "clean_tool"]
+    assert cases == [
+        "ssrf",
+        "config_exfil",
+        "command_credential",
+        "clean_tool",
+        "allowed",
+    ]
     assert commands[-1][:3] == ["docker", "rm", "--force"]
     assert commands[-1][-1] == commands[0][commands[0].index("--name") + 1]
 
@@ -273,13 +285,21 @@ def test_goose_smoke_runs_only_the_two_qualified_cases_and_always_cleans_up(
         ("command_credential", "exit"),
         ("command_credential", "prehook"),
         ("command_credential", "posthook"),
+        ("command_credential", "correlation"),
+        ("ssrf", "none"),
+        ("config_exfil", "none"),
+        ("ssrf", "executed"),
+        ("config_exfil", "posthook"),
         ("clean_tool", "executed"),
+        ("clean_tool", "raw"),
+        ("ssrf", "raw"),
         ("clean_tool", "result"),
         ("clean_tool", "posthook"),
     ],
 )
-def test_goose_smoke_requires_hook_native_tool_execution_and_result_evidence(
-    monkeypatch, capsys, case_name, missing
+@pytest.mark.parametrize("cli", ("goose", "grok"))
+def test_partial_smoke_requires_hook_native_tool_execution_and_result_evidence(
+    monkeypatch, capsys, case_name, missing, cli
 ):
     runner = _load(RUNNER_PATH, "agent_cli_goose_evidence")
     case = next(case for case in runner.CASES if case.name == case_name)
@@ -293,7 +313,13 @@ def test_goose_smoke_requires_hook_native_tool_execution_and_result_evidence(
         hooks["posttooluse"] = 1
     tools = {
         "tool_offers": 1,
-        "native_tool_name_shell": 0 if missing == "native" else 1,
+        "raw_tool_output_requests": int(missing == "raw"),
+        (
+            "native_tool_name_shell"
+            if cli == "goose"
+            else "native_tool_name_run_terminal_command"
+        ): (0 if missing == "native" else 1),
+        "correlated_tool_results": 0 if missing == "correlation" else 1,
         "executed": int((case_name == "clean_tool") != (missing == "executed")),
         "clean_tool_results": int(case_name == "clean_tool" and missing != "result"),
     }
@@ -314,7 +340,7 @@ def test_goose_smoke_requires_hook_native_tool_execution_and_result_evidence(
             [], int(missing == "exit"), "private output", "private failure"
         ),
     )
-    assert runner._run_case("docker", "owned", "goose", "default", case, 2) == (
+    assert runner._run_case("docker", "owned", cli, "default", case, 2) == (
         missing == "none"
     )
     output = capsys.readouterr().out
@@ -1793,7 +1819,8 @@ def test_local_mock_returns_native_tool_calls_for_only_fixed_probe_cases():
     command = json.loads(call["function"]["arguments"])["command"]
 
     assert call["function"]["name"] == "bash"
-    assert command.startswith("printf ")
+    assert command == mock.TOOL_COMMANDS["ssrf"]
+    assert "ssrf.executed" in command
     assert "169.254.169.254" in command
     assert (
         mock.chat_response({"tools": tools}, "allowed", 1)["choices"][0][
@@ -1905,6 +1932,7 @@ def test_local_mock_stats_report_tool_availability_without_payloads():
         "command_tool_names": {"ssrf": {"bash": 1}},
         "file_write_tool_names": {},
         "clean_tool_results": {},
+        "correlated_tool_results": {},
         "raw_tool_output_requests": {},
         "function_call_outputs": {},
         "known_function_call_outputs": {},
@@ -1949,6 +1977,7 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
     expected = {
         "executed": 1,
         "tool_offers": 1,
+        "correlated_tool_results": 0,
         "clean_tool_results": 0,
         "raw_tool_output_requests": 0,
         "function_call_outputs": 0,
@@ -1984,6 +2013,7 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
         "native_tool_name_exec_command": 0,
         "native_tool_name_shell_command": 0,
         "native_tool_name_run_shell_command": 0,
+        "native_tool_name_run_terminal_command": 0,
         "native_file_write_tool_name_write": 0,
     }
     calls = {}
@@ -2086,7 +2116,7 @@ def test_gemini_mock_builds_native_function_call_response():
 
     assert response["candidates"][0]["finishReason"] == "STOP"
     assert part["functionCall"]["name"] == "run_shell_command"
-    assert part["functionCall"]["args"]["command"].startswith("printf ")
+    assert part["functionCall"]["args"]["command"] == mock.TOOL_COMMANDS["ssrf"]
     assert "169.254.169.254" in part["functionCall"]["args"]["command"]
 
 
@@ -2181,7 +2211,7 @@ def test_claude_mock_returns_messages_api_tool_calls_and_sse_events():
     assert response["stop_reason"] == "tool_use"
     assert block["type"] == "tool_use"
     assert block["name"] == "Bash"
-    assert block["input"]["command"].startswith("printf ")
+    assert block["input"]["command"] == mock.TOOL_COMMANDS["ssrf"]
     assert any(
         event.get("delta", {}).get("type") == "input_json_delta" for event in events
     )
@@ -2268,6 +2298,11 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
         "Gemini CLI Smoke (local mock provider)": (
             "gemini_smoke",
             "--cli-name gemini --agent default",
+            "--image ai-guardian-readiness",
+        ),
+        "Grok CLI pre-tool subset (local mock; no prompt/output qualification)": (
+            "grok_smoke",
+            "--cli-name grok --agent default",
             "--image ai-guardian-readiness",
         ),
         "Goose host CLI Smoke (local mock; not runtime qualification)": (

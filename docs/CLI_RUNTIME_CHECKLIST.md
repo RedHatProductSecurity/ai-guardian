@@ -247,6 +247,13 @@ than leaving them implicit.
 
 ## 7. Tests and evidence
 
+- [ ] Update the [real-agent CLI coverage ledger](REAL_AGENT_CLI_COVERAGE.md)
+  and `scripts/agent_cli_coverage.json` for every canonical host CLI. Each entry
+  needs a matching runner/Release Readiness lane or a versioned capability/terms
+  audit with an actionable blocker and priority. Run
+  `tests/unit/test_agent_cli_coverage.py`; inventory is not runtime qualification.
+  A pre-tool-only lane cannot qualify prompt denial or output containment.
+
 - [ ] Add focused unit tests for parser defaults, invalid combinations,
   command construction, environment propagation, provider selection, policy
   composition, and credential redaction.

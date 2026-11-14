@@ -40,15 +40,27 @@ MOCK_GEMINI_MODEL = "gemini-2.5-flash"
 MOCK_URL = f"http://127.0.0.1:{MOCK_PORT}/v1"
 MOCK_ANTHROPIC_BASE_URL = f"http://127.0.0.1:{MOCK_PORT}"
 MOCK_KEY = "ai-guardian-local-smoke-only"
+GROK_VERSION = "1.0.41"
 GOOSE_VERSION = "1.59.0"
+RUNNABLE_CLI_NAMES = ("claude", "codex", "gemini", "opencode", "pi", "grok", "goose")
+BLOCKED_SMOKE_CLIS = {
+    "copilot": "consent_and_hook_qualification",
+    "antigravity": "consent_and_versioned_installation",
+    "kiro": "no_documented_local_provider",
+    "openclaw": "native_plugin_qualification",
+    "crush": "license_review_required",
+}
+PARTIAL_SMOKE_CLIS = frozenset({"grok", "goose"})
 # Goose is host-only in the product registry. Its smoke uses a supplied,
 # disposable test image, not the supported sandbox create/entrypoint path.
-GOOSE_SMOKE_CASE_NAMES = frozenset({"command_credential", "clean_tool"})
+PRE_TOOL_SMOKE_CASE_NAMES = frozenset(
+    {"ssrf", "config_exfil", "command_credential", "clean_tool", "allowed"}
+)
 OPENCODE_SERVER_PORT = 4096
 OPENCODE_SERVER_URL = f"http://127.0.0.1:{OPENCODE_SERVER_PORT}"
 AGENT_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,48}$")
 SMOKE_SANDBOX_PATTERN = re.compile(
-    r"^ag-cli-smoke-(?:claude|codex|gemini|opencode|pi)-[a-f0-9]{8}$"
+    r"^ag-cli-smoke-(?:claude|codex|gemini|opencode|pi|grok)-[a-f0-9]{8}$"
 )
 
 
@@ -275,6 +287,26 @@ elif cli == 'goose':
         'GOOSE_PROVIDER':'openai', 'GOOSE_MODEL':model, 'GOOSE_MODE':'auto',
         'extensions':{'developer':{'enabled':True, 'type':'platform', 'name':'developer'}}
     }), encoding='utf-8')
+elif cli == 'grok':
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib
+    path=Path.home()/'.grok'/'config.toml'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text=path.read_text(encoding='utf-8') if path.is_file() else ''
+    config=tomllib.loads(text)
+    expected={'model':model, 'name':'AI Guardian local mock', 'base_url':url,
+              'env_key':'XAI_API_KEY', 'api_backend':'chat_completions',
+              'context_window':128000, 'max_completion_tokens':1024}
+    current=config.get('model', {}).get(model)
+    if current is not None and current != expected:
+        raise SystemExit('Conflicting smoke model configuration')
+    if current is None:
+        # Preserve generated MCP/hook configuration. No project trust is granted.
+        section='\n[model.'+model+']\n'
+        section+=''.join(k+' = '+json.dumps(v)+'\n' for k,v in expected.items())
+        path.write_text(text+section, encoding='utf-8')
 else: raise SystemExit('unsupported client')
 """
 
@@ -391,7 +423,7 @@ opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with opener.open(sys.argv[1],timeout=2) as r: stats=json.loads(r.read())
 fields=('tool_offers','clean_tool_results','raw_tool_output_requests')
 out={key:stats[key].get(case,0) for key in fields}
-for key in ('function_call_outputs','known_function_call_outputs',
+for key in ('correlated_tool_results','function_call_outputs','known_function_call_outputs',
             'unknown_function_call_outputs'):
     values=stats.get(key,{})
     out[key]=values.get(case,0) if isinstance(values,dict) else 0
@@ -412,7 +444,7 @@ for category in ('expected_probe_output','unresolved_tool','unsupported_tool',
     out['function_call_output_category_'+category]=value if type(value) is int and value >= 0 else 0
 tool_names=stats.get('command_tool_names',{}).get(case,{})
 if not isinstance(tool_names,dict): tool_names={}
-for name in ('bash','shell','exec_command','shell_command','run_shell_command'):
+for name in ('bash','shell','exec_command','shell_command','run_shell_command','run_terminal_command'):
     value=tool_names.get(name,0)
     out['native_tool_name_'+name]=value if type(value) is int and value >= 0 else 0
 file_tool_names=stats.get('file_write_tool_names',{}).get(case,{})
@@ -516,6 +548,8 @@ def _validate_agent(cli_name: str, agent: str) -> None:
         raise ValueError("the local mock currently supports Gemini's default agent")
     if cli_name == "goose" and agent != "default":
         raise ValueError("the local mock currently supports Goose's default agent")
+    if cli_name == "grok" and agent != "default":
+        raise ValueError("the local mock currently supports Grok's default agent")
 
 
 def build_create_command(
@@ -713,6 +747,21 @@ def build_agent_command(
             "--text",
             prompt,
         ]
+    if cli_name == "grok":
+        return [
+            "grok",
+            "--no-auto-update",
+            "-p",
+            prompt,
+            "--model",
+            MOCK_MODEL,
+            "--output-format",
+            "json",
+            # Only the harmless clean probe needs native execution permission.
+            # Native hook/project trust is neither bypassed nor persisted.
+            "--allow",
+            "Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case clean_tool)",
+        ]
     raise ValueError(f"unsupported CLI: {cli_name}")
 
 
@@ -731,13 +780,17 @@ def sanitized_host_environment(home: Path) -> Dict[str, str]:
         if candidate.is_file():
             podman_storage_config = str(candidate)
     prefixes = (
+        "AGY_",
         "AI_GUARDIAN_",
+        "ANTIGRAVITY_",
         "ANTHROPIC_",
         "AWS_",
         "AZURE_",
         "CLAUDE_",
         "CODEX_",
         "COHERE_",
+        "COPILOT_",
+        "CRUSH_",
         "CLOUDSDK_",
         "DEEPSEEK_",
         "FIREWORKS_",
@@ -748,8 +801,11 @@ def sanitized_host_environment(home: Path) -> Dict[str, str]:
         "GITLAB_",
         "GOOGLE_",
         "GOOSE_",
+        "GROK_",
+        "KIRO_",
         "MISTRAL_",
         "OPENAI_",
+        "OPENCLAW_",
         "OPENCODE_",
         "PI_",
         "TOGETHER_",
@@ -1408,6 +1464,7 @@ def _tool_evidence(
     fields = {
         "executed",
         "tool_offers",
+        "correlated_tool_results",
         "clean_tool_results",
         "raw_tool_output_requests",
         "function_call_outputs",
@@ -1443,6 +1500,7 @@ def _tool_evidence(
         "native_tool_name_exec_command",
         "native_tool_name_shell_command",
         "native_tool_name_run_shell_command",
+        "native_tool_name_run_terminal_command",
         "native_file_write_tool_name_write",
     }
     try:
@@ -2003,17 +2061,24 @@ def _run_case(
         )
     if case.name == "command_credential" and tool_deltas.get("executed", 0) != 0:
         return fail("command credential probe executed despite pre-tool denial")
-    if cli == "goose":
-        if tool_deltas.get("native_tool_name_shell", 0) < 1:
+    if cli in PARTIAL_SMOKE_CLIS and is_tool_case:
+        native_name = "shell" if cli == "goose" else "run_terminal_command"
+        if tool_deltas.get(f"native_tool_name_{native_name}", 0) < 1:
             return fail(
-                "the native Goose shell tool was not confirmed by the local mock"
+                "the audited native shell tool was not confirmed by the local mock"
             )
         if invocation.returncode != 0:
-            return fail("Goose did not finish the local mock turn cleanly")
+            return fail("the partial CLI did not finish the local mock turn cleanly")
         if request_delta < 2:
+            return fail("the partial CLI did not continue after its native tool call")
+        if tool_deltas.get("correlated_tool_results", 0) < 1:
             return fail(
-                "Goose did not deliver the tool result/denial to the local mock"
+                "the issued native tool result/denial did not reach the local mock"
             )
+        if case.name in {"ssrf", "config_exfil"} and (
+            tool_deltas.get("executed", 0) != 0
+        ):
+            return fail("the pre-tool probe executed despite native denial")
     if case.name in HTTP_REQUEST_CREDENTIAL_DENY_CASES:
         if tool_deltas.get("file_written", 0) != 0:
             return fail(
@@ -2326,7 +2391,80 @@ def build_agent_environment(cli: str) -> List[str]:
                 "GOOSE_MODE=auto",
             ]
         )
+    if cli == "grok":
+        env.extend(["GROK_HOME=/sandbox/.grok", f"XAI_API_KEY={MOCK_KEY}"])
     return env
+
+
+def smoke_cases(cli: str) -> Sequence[SmokeCase]:
+    """Explicit partial profiles never inherit unsupported enforcement cases."""
+    if cli not in RUNNABLE_CLI_NAMES:
+        raise ValueError("no credential-free smoke path")
+    return tuple(
+        case
+        for case in CASES
+        if (not case.cli_names or cli in case.cli_names)
+        and (cli not in PARTIAL_SMOKE_CLIS or case.name in PRE_TOOL_SMOKE_CASE_NAMES)
+    )
+
+
+def _partial_scope(cli: str) -> None:
+    _progress(
+        f"LIMIT {cli}: pre-tool subset only; prompt denial and sensitive-output "
+        "containment are NOT QUALIFIED. Clean post-tool events are observation evidence."
+    )
+
+
+def _coverage_report() -> int:
+    """Print only curated categories, never run a client or infer qualification."""
+    try:
+        ledger = json.loads(
+            Path(__file__)
+            .with_name("agent_cli_coverage.json")
+            .read_text(encoding="utf-8")
+        )
+        clients = ledger["clients"]
+        if ledger["schema_version"] != 1 or set(clients) != (
+            set(RUNNABLE_CLI_NAMES) | set(BLOCKED_SMOKE_CLIS)
+        ):
+            raise ValueError("coverage drift")
+        for cli, entry in clients.items():
+            expected = (
+                ("pre-tool-only" if cli in PARTIAL_SMOKE_CLIS else "full")
+                if cli in RUNNABLE_CLI_NAMES
+                else "blocked"
+            )
+            if entry["runner"] != expected:
+                raise ValueError("coverage drift")
+    except (OSError, ValueError, KeyError, TypeError):
+        print("ERROR: CLI coverage ledger is invalid; no client was run.")
+        return 1
+    print(
+        "CLI coverage inventory only; no client was run. This is NOT security qualification."
+    )
+    for cli in clients:
+        status = clients[cli]["runner"]
+        blocker = (
+            f"; blocker={BLOCKED_SMOKE_CLIS[cli]}" if cli in BLOCKED_SMOKE_CLIS else ""
+        )
+        print(f"{cli}: runner={status}{blocker}")
+    print("Audit, blockers and next actions: docs/REAL_AGENT_CLI_COVERAGE.md")
+    return 0
+
+
+def _verify_grok_version(engine: str, name: str, timeout: int) -> bool:
+    """Fail closed on drift without releasing the version command's output."""
+    result = _exec(engine, name, ["grok", "--version"], timeout)
+    versions = re.findall(
+        r"\b\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?\b",
+        result.stdout,
+    )
+    if result.returncode != 0 or versions != [GROK_VERSION]:
+        print(
+            f"FAIL Grok: the image must contain audited Grok {GROK_VERSION}; no image was rebuilt."
+        )
+        return False
+    return True
 
 
 def build_goose_smoke_command(engine: str, image: str, name: str) -> List[str]:
@@ -2363,6 +2501,7 @@ def _run_goose_smoke(args: argparse.Namespace) -> int:
     name = f"ag-cli-goose-smoke-{uuid.uuid4().hex[:8]}"
     created = False
     try:
+        _partial_scope("goose")
         result = _run(
             build_goose_smoke_command(args.container_engine, args.image, name),
             args.timeout,
@@ -2414,16 +2553,16 @@ def _run_goose_smoke(args: argparse.Namespace) -> int:
         if not _start_mock(args.container_engine, name, args.timeout):
             return 1
         passed = True
-        for case in CASES:
-            if case.name not in GOOSE_SMOKE_CASE_NAMES:
-                continue
+        for case in smoke_cases("goose"):
             passed = (
                 _run_case(
                     args.container_engine, name, "goose", "default", case, args.timeout
                 )
                 and passed
             )
-        _progress("Goose host CLI hook smoke " + ("passed." if passed else "failed."))
+        _progress(
+            "Goose host CLI pre-tool subset " + ("passed." if passed else "failed.")
+        )
         return 0 if passed else 1
     except (OSError, subprocess.TimeoutExpired):
         print("FAIL Goose: smoke execution failed or timed out")
@@ -2467,14 +2606,19 @@ def _delete_sandbox(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Run Claude, Codex, Gemini, OpenCode, Pi, or Goose against a local mock provider in a fresh "
+            "Run audited CLIs against a local mock provider in a fresh "
             "strict-derived sandbox with output sanitization. "
             "No provider credentials or live model calls are used."
         )
     )
     parser.add_argument(
         "--cli-name",
-        choices=("claude", "codex", "gemini", "opencode", "pi", "goose"),
+        choices=(*RUNNABLE_CLI_NAMES, *BLOCKED_SMOKE_CLIS),
+    )
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Show the all-CLI coverage ledger and blockers without running agents; not qualification",
     )
     parser.add_argument(
         "--cli-version",
@@ -2487,7 +2631,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--agent",
         help=(
-            "Claude/Gemini/Goose label ('default'), Codex profile, OpenCode agent, "
+            "Claude/Gemini/Grok/Goose label ('default'), Codex profile, OpenCode agent, "
             "or Pi provider"
         ),
     )
@@ -2528,6 +2672,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
+    if args.coverage:
+        if any(
+            (
+                args.cli_name,
+                args.cli_version,
+                args.agent,
+                args.image,
+                args.wheel,
+                args.keep,
+                args.accept_proprietary_tos,
+                args.diagnose_sandbox,
+            )
+        ):
+            parser.error("--coverage cannot be combined with smoke-run options")
+        return _coverage_report()
+    if args.cli_name in BLOCKED_SMOKE_CLIS:
+        parser.error(
+            f"No credential-free smoke path for {args.cli_name} "
+            f"({BLOCKED_SMOKE_CLIS[args.cli_name]}). See "
+            f"docs/REAL_AGENT_CLI_COVERAGE.md#{args.cli_name}; no client was run."
+        )
     if args.diagnose_sandbox:
         if not SMOKE_SANDBOX_PATTERN.fullmatch(args.diagnose_sandbox):
             parser.error(
@@ -2556,7 +2721,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
     if not args.cli_name or not args.agent:
         parser.error(
-            "--cli-name and --agent are required unless --diagnose-sandbox is used"
+            "--cli-name and --agent are required unless --coverage or --diagnose-sandbox is used"
         )
     if args.image and args.wheel:
         parser.error("--image and --wheel cannot be combined")
@@ -2625,6 +2790,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     keep_files = False
     try:
         _progress(f"Starting {args.cli_name}/{args.agent} smoke check")
+        if args.cli_name in PARTIAL_SMOKE_CLIS:
+            _partial_scope(args.cli_name)
         _progress(
             "Smoke policy: strict-derived input blocking and output sanitization; "
             "not unmodified @strict"
@@ -2707,6 +2874,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
         if not _check_sandbox_rest(args.container_engine, name, args.timeout):
             return 1
+        if args.cli_name == "grok" and not _verify_grok_version(
+            args.container_engine, name, args.timeout
+        ):
+            return 1
         if args.cli_name == "claude":
             _progress("Verifying Claude Code is installed")
             installed = _exec(
@@ -2761,6 +2932,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 return 1
         passed = True
         for case in CASES:
+            if (
+                args.cli_name in PARTIAL_SMOKE_CLIS
+                and case.name not in PRE_TOOL_SMOKE_CASE_NAMES
+            ):
+                continue
             if case.cli_names and args.cli_name not in case.cli_names:
                 _progress(
                     f"SKIP {case.name}: native Write tool smoke is not configured for {args.cli_name}"
@@ -2780,7 +2956,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 and passed
             )
         _progress(
-            "Agent CLI hook smoke test " + ("passed" if passed else "failed") + "."
+            (
+                "Agent CLI pre-tool subset "
+                if args.cli_name in PARTIAL_SMOKE_CLIS
+                else "Agent CLI hook smoke test "
+            )
+            + ("passed" if passed else "failed")
+            + "."
         )
         return 0 if passed else 1
     except subprocess.TimeoutExpired as error:

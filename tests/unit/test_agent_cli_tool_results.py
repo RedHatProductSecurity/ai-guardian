@@ -124,6 +124,7 @@ def test_http_credential_cases_use_native_file_write_and_value_free_clean_source
     (
         ("chat", "bash", "command", "string"),
         ("chat", "shell", "command", "string"),
+        ("chat", "run_terminal_command", "command", "string"),
         ("anthropic", "Bash", "command", "string"),
         ("responses", "shell", "command", "array"),
         ("responses", "exec_command", "cmd", "string"),
@@ -304,6 +305,47 @@ def test_clean_tool_requires_a_correlated_result_not_a_tool_offer(provider, prot
     provider._observe_request(payload)
     assert provider._stats()["clean_tool_results"]["clean_tool"] == 1
     assert provider.request_case(payload) == "clean_tool"
+
+
+@pytest.mark.parametrize("case", ("ssrf", "config_exfil", "command_credential"))
+def test_partial_denials_correlate_only_results_with_the_issued_native_call(
+    provider, case
+):
+    schema = {"type": "object", "properties": {"command": {"type": "string"}}}
+    payload = command_catalog("chat", [("run_terminal_command", schema)])
+    response = provider.chat_response(
+        payload, case, *provider._record_request(case, payload)
+    )
+    call = response["choices"][0]["message"]["tool_calls"][0]
+    assert call["function"]["name"] == "run_terminal_command"
+    assert provider._stats()["correlated_tool_results"] == {}
+
+    # Request count, a prompt echo, a fabricated result ID and an assistant's
+    # echoed issued ID cannot prove that the actual tool/denial returned.
+    for message in (
+        {"role": "tool", "tool_call_id": "never-issued", "content": "private denial"},
+        {"role": "user", "tool_call_id": call["id"], "content": "private echo"},
+        {"role": "assistant", "tool_call_id": call["id"], "content": "private echo"},
+    ):
+        provider._observe_request({"messages": [message]})
+    assert provider._stats()["correlated_tool_results"] == {}
+
+    provider._observe_request(
+        {
+            "messages": [
+                {
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": "private native denial",
+                }
+            ]
+        }
+    )
+    stats = provider._stats()
+    assert stats["correlated_tool_results"] == {case: 1}
+    assert stats["clean_tool_results"] == {}
+    assert "private" not in json.dumps(stats)
+    assert call["id"] not in json.dumps(stats)
 
 
 def test_responses_function_output_diagnostics_retain_only_shape_counts(provider):
@@ -759,6 +801,45 @@ def test_pi_native_shell_runs_the_real_smoke_command_scanners(
     )
 
 
+@pytest.mark.parametrize("cli", ("grok", "goose"))
+@pytest.mark.parametrize("case_name", ("ssrf", "config_exfil", "command_credential"))
+def test_partial_native_shell_payloads_reach_the_prepared_smoke_scanners(
+    provider, smoke_config, monkeypatch, tmp_path, cli, case_name
+):
+    from ai_guardian import process_hook_data
+
+    monkeypatch.setenv("AI_GUARDIAN_IDE_TYPE", cli)
+    log = Mock(return_value="partial-native-finding")
+    monkeypatch.setattr(
+        "ai_guardian.violations.logger.ViolationLogger.log_violation", log
+    )
+    command = provider.TOOL_COMMANDS[case_name]
+    if cli == "grok":
+        payload = {
+            "hookName": "PreToolUse",
+            "toolName": "run_terminal_command",
+            "toolInput": {"command": command},
+            "workspaceRoot": str(tmp_path),
+        }
+    else:
+        payload = {
+            "event": "PreToolUse",
+            "tool_name": "shell",
+            "tool_input": {"command": command},
+            "working_dir": str(tmp_path),
+            "session_id": "goose-command-scanner",
+        }
+    result = process_hook_data(payload)
+    assert result["_blocked"] is True
+    case = next(
+        case for case in load_script("agent_cli_test").CASES if case.name == case_name
+    )
+    assert any(
+        call.kwargs.get("violation_type") == case.expected_violation
+        for call in log.call_args_list
+    )
+
+
 @pytest.mark.parametrize(
     "case", ("clean_tool", "tool_output_secret", "tool_output_pii")
 )
@@ -985,6 +1066,7 @@ def test_tool_evidence_reader_accepts_only_aggregate_counts(monkeypatch):
     expected = {
         "executed": 1,
         "tool_offers": 1,
+        "correlated_tool_results": 1,
         "clean_tool_results": 1,
         "raw_tool_output_requests": 0,
         "function_call_outputs": 0,
@@ -1020,6 +1102,7 @@ def test_tool_evidence_reader_accepts_only_aggregate_counts(monkeypatch):
         "native_tool_name_exec_command": 0,
         "native_tool_name_shell_command": 0,
         "native_tool_name_run_shell_command": 0,
+        "native_tool_name_run_terminal_command": 0,
         "native_file_write_tool_name_write": 0,
     }
     monkeypatch.setattr(

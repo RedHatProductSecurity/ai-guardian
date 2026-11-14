@@ -319,6 +319,11 @@ jobs:
       - name: Verify supported IDE registry parity
         run: python -m pytest tests/unit/test_ide_registry.py -q
 
+      - name: Verify real CLI coverage ledger (inventory, not qualification)
+        run: |
+          python -m pytest tests/unit/test_agent_cli_coverage.py -q
+          python scripts/agent_cli_test.py --coverage >> "$GITHUB_STEP_SUMMARY"
+
       - name: Test IDE adapter setup
         run: |
           IDES="claude cursor copilot grok codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode pi augment crush junie goose"
@@ -900,6 +905,14 @@ jobs:
           RUN goose --version
           EOF
           docker build -t ai-guardian-goose-smoke "$RUNNER_TEMP/goose-smoke"
+
+      - name: Grok CLI pre-tool subset (local mock; no prompt/output qualification)
+        id: grok_smoke
+        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
+        run: |
+          scripts/agent-cli-test --cli-name grok --agent default \
+            --image ai-guardian-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
 
       - name: Goose host CLI Smoke (local mock; not runtime qualification)
         id: goose_smoke

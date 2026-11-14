@@ -60,7 +60,13 @@ Manual qualification on Linux/macOS Podman:
     must be denied before the target file is written, while environment-backed
     values must be allowed and reach PostToolUse. The witness records only file
     existence; counters contain fixed tool-name labels and never retain source
-    or synthetic values.
+     or synthetic values.
+19. --coverage lists all twelve supported host CLI keys without running anything.
+    Excluded clients exit nonzero with an audit/blocker link before installation.
+    Grok/Goose announce pre-tool-only coverage; prompt denial and sensitive-output
+    containment remain NOT QUALIFIED. Require native issued-result correlation,
+    denied-command non-execution, and clean execution/continuation, not offers or
+    passive hook observations alone. Grok's version must match the reviewed pin.
 """
 
 import importlib.util
@@ -753,3 +759,117 @@ def test_clients_ignoring_post_tool_protection_fail_without_dumping_output(
     assert "PASS" not in output
     assert "private" not in output
     assert case.prompt not in output
+
+
+def test_all_cli_inventory_never_looks_like_a_security_pass(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: an inventory is not native execution or qualification."""
+    monkeypatch.setattr(
+        runner, "_run", lambda *a, **kw: pytest.fail("inventory launched a process")
+    )
+    assert runner.main(["--coverage"]) == 0
+    output = capsys.readouterr().out
+    assert "no client was run. This is NOT security qualification." in output
+    assert "grok: runner=pre-tool-only" in output
+    assert "goose: runner=pre-tool-only" in output
+    assert "openclaw: runner=blocked" in output
+    assert "PASS" not in output
+
+
+@pytest.mark.parametrize("cli", ("copilot", "antigravity", "kiro", "openclaw", "crush"))
+def test_excluded_client_has_an_actionable_failure_before_side_effects(
+    cli, runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: unsupported smoke capability is a failure, not a green skip.
+
+    Manual verification: select the excluded CLI. No installer, container, native
+    approval or live-provider credential path starts; review its audit instead.
+    """
+    monkeypatch.setattr(
+        runner, "_temp_parent", lambda: pytest.fail("exclusion created a sandbox")
+    )
+    monkeypatch.setattr(
+        runner, "_run", lambda *a, **kw: pytest.fail("exclusion ran a process")
+    )
+    with pytest.raises(SystemExit) as error:
+        runner.main(["--cli-name", cli, "--agent", "default"])
+    assert error.value.code == 2
+    output = capsys.readouterr().err
+    assert f"No credential-free smoke path for {cli}" in output
+    assert f"docs/REAL_AGENT_CLI_COVERAGE.md#{cli}; no client was run." in output
+    assert "PASS" not in output
+
+
+@pytest.mark.parametrize("cli", ("grok", "goose"))
+def test_partial_coverage_does_not_claim_prompt_or_output_enforcement(
+    cli, runner, capsys
+):
+    """USER EXPERIENCE: clean post-tool observation is not output containment."""
+    runner._partial_scope(cli)
+    assert capsys.readouterr().out.strip() == (
+        f"[agent-cli-test] LIMIT {cli}: pre-tool subset only; prompt denial and "
+        "sensitive-output containment are NOT QUALIFIED. Clean post-tool events "
+        "are observation evidence."
+    )
+    assert {case.name for case in runner.smoke_cases(cli)} == {
+        "ssrf",
+        "config_exfil",
+        "command_credential",
+        "clean_tool",
+        "allowed",
+    }
+
+
+@pytest.mark.parametrize("cli", ("grok", "goose"))
+@pytest.mark.parametrize("correlated", (0, 1))
+def test_partial_pre_tool_denial_needs_an_issued_native_result(
+    cli, correlated, runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: two provider calls and a finding cannot impersonate denial."""
+    case = stub_tool_case(runner, monkeypatch, "ssrf", post_hook=0, executed=0)
+    native = "run_terminal_command" if cli == "grok" else "shell"
+    readings = iter(
+        (
+            {},
+            {
+                "executed": 0,
+                "tool_offers": 1,
+                "raw_tool_output_requests": 0,
+                "correlated_tool_results": correlated,
+                f"native_tool_name_{native}": 1,
+            },
+        )
+    )
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *a, **kw: next(readings))
+    assert runner._run_case("docker", "smoke", cli, "default", case, 30) is bool(
+        correlated
+    )
+    output = capsys.readouterr().out
+    if correlated:
+        assert "PASS ssrf" in output
+    else:
+        assert (
+            "the issued native tool result/denial did not reach the local mock"
+            in output
+        )
+        assert "PASS" not in output
+    assert "private" not in output
+    assert case.prompt not in output
+
+
+def test_unreviewed_grok_version_never_qualifies_by_running_a_different_version(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: a supplied image is not rebuilt or silently accepted."""
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *a: subprocess.CompletedProcess(
+            a, 0, "grok 1.0.42\n", "private native diagnostic"
+        ),
+    )
+    assert not runner._verify_grok_version("docker", "owned", 30)
+    assert capsys.readouterr().out.strip() == (
+        "FAIL Grok: the image must contain audited Grok 1.0.41; no image was rebuilt."
+    )

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Real-agent CLI coverage ledger (#2673):** Track all twelve host CLIs,
+  including Goose, against runner and Release Readiness lanes with drift tests
+  and versioned capability/terms audits. Add `scripts/agent-cli-test --coverage`,
+  a pinned Grok pre-tool smoke lane, and broader Goose pre-tool probes with
+  issued-tool/result correlation and execution witnesses. Other CLI blockers
+  fail preflight explicitly; partial lanes do not qualify prompt/output
+  enforcement or additional product runtimes.
 - **Goose host CLI support (#2723):** Add v1.59.0 Linux/macOS command-hook plugin
   setup, scoped health/reconciliation, advisory MCP and optional user hints,
   native-tool normalization, sanitized pre-tool decisions, and fail-closed hook

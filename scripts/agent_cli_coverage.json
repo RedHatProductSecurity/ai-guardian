@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-11-13",
+  "tracking_issue": "RedHatProductSecurity/ai-guardian#2673",
+  "clients": {
+    "claude": {
+      "runner": "full",
+      "ci_steps": ["claude_smoke"],
+      "reviewed_versions": [],
+      "blocker": null,
+      "audit": "existing-lanes"
+    },
+    "copilot": {
+      "runner": "blocked",
+      "ci_steps": [],
+      "reviewed_versions": ["1.0.112"],
+      "blocker": "consent_and_hook_qualification",
+      "audit": "copilot"
+    },
+    "grok": {
+      "runner": "pre-tool-only",
+      "ci_steps": ["grok_smoke"],
+      "reviewed_versions": ["1.0.41"],
+      "blocker": null,
+      "audit": "grok"
+    },
+    "codex": {
+      "runner": "full",
+      "ci_steps": ["codex_smoke"],
+      "reviewed_versions": [],
+      "blocker": null,
+      "audit": "existing-lanes"
+    },
+    "gemini": {
+      "runner": "full",
+      "ci_steps": ["gemini_smoke"],
+      "reviewed_versions": ["0.67.0"],
+      "blocker": null,
+      "audit": "existing-lanes"
+    },
+    "antigravity": {
+      "runner": "blocked",
+      "ci_steps": [],
+      "reviewed_versions": ["1.5.8"],
+      "blocker": "consent_and_versioned_installation",
+      "audit": "antigravity"
+    },
+    "kiro": {
+      "runner": "blocked",
+      "ci_steps": [],
+      "reviewed_versions": ["3.3.0"],
+      "blocker": "no_documented_local_provider",
+      "audit": "kiro"
+    },
+    "openclaw": {
+      "runner": "blocked",
+      "ci_steps": [],
+      "reviewed_versions": ["2026.11.3"],
+      "blocker": "native_plugin_qualification",
+      "audit": "openclaw"
+    },
+    "opencode": {
+      "runner": "full",
+      "ci_steps": ["opencode_v1_smoke", "opencode_v2_smoke"],
+      "reviewed_versions": ["1.19.0", "2.0.24"],
+      "blocker": null,
+      "audit": "existing-lanes"
+    },
+    "pi": {
+      "runner": "full",
+      "ci_steps": ["pi_smoke"],
+      "reviewed_versions": ["0.86.0"],
+      "blocker": null,
+      "audit": "existing-lanes"
+    },
+    "crush": {
+      "runner": "blocked",
+      "ci_steps": [],
+      "reviewed_versions": ["0.101.0"],
+      "blocker": "license_review_required",
+      "audit": "crush"
+    },
+    "goose": {
+      "runner": "pre-tool-only",
+      "ci_steps": ["goose_smoke"],
+      "reviewed_versions": ["1.59.0"],
+      "blocker": null,
+      "audit": "goose"
+    }
+  }
+}

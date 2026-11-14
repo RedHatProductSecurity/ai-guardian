@@ -5,7 +5,49 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-13 (UTC)
+> Last updated: 2026-11-14 (UTC)
+
+## Issue #2673 all-CLI smoke coverage — partial implementation, native CI pending
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2673`, existing
+  branch `2673`. User requested implementation and explicitly added Goose to
+  the audit. Changes are local/uncommitted; no push, PR or completion action.
+  DAF progress note saved; partial progress/blockers posted to issue comment
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2673#issuecomment-6870627229.
+- Added `scripts/agent_cli_coverage.json`, `--coverage`, and
+  `docs/REAL_AGENT_CLI_COVERAGE.md`: all twelve canonical host CLIs, actual
+  runner/Release Readiness lane parity, seven versioned capability/terms audits,
+  explicit exclusions/priorities, and a CI inventory summary, never qualification.
+- Grok 1.0.41 now has a local Chat Completions pre-tool lane through the existing
+  normal smoke lifecycle. Only a private model table is appended, generated
+  hook/MCP settings are preserved, the exact installed version is checked and
+  drift fails without replacing/rebuilding supplied images. No native hook trust
+  is granted. Goose 1.59.0 keeps its separate network-none test-only image and
+  expands from two to five cases: SSRF/config-exfil/command-credential denial,
+  clean tool and clean prompt. Both announce pre-tool-only scope; prompt denial
+  and sensitive-output containment remain NOT QUALIFIED.
+- Added native `run_terminal_command` recognition, all-issued-tool result/denial
+  correlation counters, inert SSRF/config witnesses, stronger partial evidence
+  and host-variable stripping. Existing full-client case/assertion, process-wide
+  raw-delivery, credential/ToS, firewall/REST/discovery, runtime and cleanup
+  contracts are retained. No product-runtime selector or shared hook code changed.
+- Remaining explicit exclusions: Copilot 1.0.112 (consent/native qualification),
+  Antigravity CLI 1.5.8 (consent/pinned install), Kiro 3.3.0 (no documented local
+  provider), OpenClaw 2026.11.3 (shared setup emits no required native manifest),
+  Crush 0.101.0 (FSL-1.1-MIT legal review). OpenClaw's required
+  `openclaw.plugin.json` is missing from generated setup; a structural exclusion
+  regression prevents inventing a substitute smoke-only plugin. Its local
+  providers exist; post-tool/channel-message callbacks are observational.
+- **Validation:** 508 directly related unit/complete smoke UX tests pass. Runner
+  and mock focused coverage both 81% (combined 81%); data is
+  `/tmp/opencode/2673-cli-smoke.coverage`. Coverage 7.17.3 (Apache-2.0) was supplied
+  ephemerally with `uv --with`, not added as a project dependency. Ruff, Black
+  py310, error-only Pylint, package/script Mypy (344 files), and diff checks pass.
+  Manual simplification/privacy review completed; no `/simplify` skill exists.
+- No real CLI/container, provider credentials, external model or firewall changes
+  ran locally. **Next:** user review/publication, native CI runs for Grok/expanded
+  Goose, then address or split the five prerequisites. This is not all-client
+  runtime qualification and the whole issue must not be marked complete.
 
 ## Issue #2737 container release-reference gate — 2026-11-13
 

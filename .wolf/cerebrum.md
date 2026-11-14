@@ -6,6 +6,11 @@
 
 ## User Preferences
 
+- **2026-11-13 — All-CLI smoke scope (#2673):** User explicitly added Goose to
+  the six-client audit. Inventory every canonical host CLI even when it already
+  has a smoke-only lane; a prior two-case lane is not full prompt/output or
+  product-container/OpenShell qualification.
+
 - **2026-11-13 — Goose control reservation (#2723, CodeQL #359):** User explicitly
   chose to reserve all four hook-control file paths as immutable before plugin
   installation, accepting that this covers the entire Goose `config.yaml` and
@@ -314,6 +319,23 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-14 — Versioned smoke exclusions (#2673):** OpenClaw 2026.11.3
+  requires `openclaw.plugin.json` even for local filesystem plugins; current
+  shared setup emits only index/package/bridge and cannot be qualified by
+  fabricating a smoke-only replacement. Local OpenAI-compatible providers exist,
+  so this is an integration prerequisite, not an upstream provider absence.
+  Crush 0.101.0 is FSL-1.1-MIT now, with MIT only two years after each release;
+  do not infer its current license from older versions. Kiro 3.3.0 headless
+  docs require service authentication and do not establish a local provider.
+- **2026-11-14 — Partial CLI evidence (#2673):** Grok's audited native shell is
+  `run_terminal_command`; Goose 1.59.0's platform developer extension has
+  `unprefixed_tools=true` and advertises `shell`. Goose command-hook envelopes
+  use `event`, `working_dir`, and `session_id`, not Claude's `hook_event_name`/
+  `cwd`. A fail-closed parse error is not a scanner-denial success: require the
+  expected finding plus issued tool/result correlation and non-execution.
+  Both clients' prompt/post-tool callbacks are observational; announce exclusions
+  instead of running output containment cases as false passes.
 
 - **2026-11-13 — Release-reference source layout (#2737):** The root README is
   now a link-only landing page, not a required pinned-image source. Keep both
