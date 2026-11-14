@@ -605,14 +605,21 @@ def test_shell_segments_scan_supported_commands_without_expansion():
 
 
 @pytest.mark.parametrize("tool_name", ("Bash", "Shell"))
-def test_pretool_hook_blocks_synthetic_inline_command_credential_value(tool_name):
+@pytest.mark.parametrize("argument_name", ("command", "cmd", "input"))
+@pytest.mark.parametrize("argument_is_argv", (False, True))
+def test_pretool_hook_blocks_synthetic_inline_command_credential_value(
+    tool_name, argument_name, argument_is_argv
+):
     from ai_guardian.hook_processing import process_hook_data
     from tests.fixtures.mock_mcp_server import create_hook_data
 
     value = "SYNTHETIC_PRIVATE_COMMAND_VALUE_2699"
+    command = f"curl --user demo:{value} https://example.invalid/"
     hook_data = create_hook_data(
         tool_name=tool_name,
-        tool_input={"command": f"curl --user demo:{value} https://example.invalid/"},
+        tool_input={
+            argument_name: ["bash", "-lc", command] if argument_is_argv else command
+        },
     )
     with (
         patch(
@@ -633,11 +640,47 @@ def test_pretool_hook_blocks_synthetic_inline_command_credential_value(tool_name
     output = response["output"]
     parsed = json.loads(output)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert parsed["systemMessage"] == (
-        "Inline credential argument detected; command execution was blocked. "
-        "Values are withheld. This cannot retract command text already seen by the model."
-    )
+    if argument_is_argv:
+        assert "command could not be qualified" in parsed["systemMessage"]
+    else:
+        assert parsed["systemMessage"] == (
+            "Inline credential argument detected; command execution was blocked. "
+            "Values are withheld. This cannot retract command text already seen by the model."
+        )
     assert value not in output
+
+
+def test_pretool_hook_scans_every_present_native_command_alias():
+    from ai_guardian.hook_processing import process_hook_data
+    from tests.fixtures.mock_mcp_server import create_hook_data
+
+    value = "SYNTHETIC_PRIVATE_SECONDARY_COMMAND_2699"
+    hook_data = create_hook_data(
+        tool_name="Bash",
+        tool_input={
+            "command": "printf safe",
+            "cmd": f"curl --user demo:{value} https://example.invalid/",
+        },
+    )
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=({}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_command_credential_scanning_config",
+            return_value=({"enabled": True, "action": "block"}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_password_likelihood_config",
+            return_value=({"enabled": False, "action": "ask"}, None),
+        ),
+    ):
+        response = process_hook_data(hook_data)
+
+    parsed = json.loads(response["output"])
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert value not in response["output"]
 
 
 def test_oversized_supported_command_is_incomplete_and_unrelated_is_ignored():

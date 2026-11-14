@@ -159,12 +159,18 @@ def test_goose_smoke_preflight_rejects_unqualified_modes_before_execution(
     assert error.value.code == 2
 
 
-def test_goose_mock_protocol_issues_native_blocked_and_clean_shell_calls():
+@pytest.mark.parametrize("argument_name", ("command", "cmd", "input"))
+@pytest.mark.parametrize("argument_is_array", (False, True))
+def test_goose_mock_protocol_issues_native_blocked_and_clean_shell_calls(
+    argument_name, argument_is_array
+):
     mock = _load(MOCK_PATH, "agent_cli_goose_provider")
     schema = {
         "type": "object",
-        "properties": {"command": {"type": "string"}},
-        "required": ["command"],
+        "properties": {
+            argument_name: {"type": "array" if argument_is_array else "string"}
+        },
+        "required": [argument_name],
     }
     tools = [{"type": "function", "function": {"name": "shell", "parameters": schema}}]
     for case in ("command_credential", "clean_tool"):
@@ -176,7 +182,12 @@ def test_goose_mock_protocol_issues_native_blocked_and_clean_shell_calls():
         response = mock.chat_response(data, case, 1)
         call = response["choices"][0]["message"]["tool_calls"][0]["function"]
         assert call["name"] == "shell"
-        assert json.loads(call["arguments"])["command"] == mock.TOOL_COMMANDS[case]
+        expected = (
+            ["bash", "-lc", mock.TOOL_COMMANDS[case]]
+            if argument_is_array
+            else mock.TOOL_COMMANDS[case]
+        )
+        assert json.loads(call["arguments"]) == {argument_name: expected}
     assert mock._command_tool({"name": "advisory__shell", "parameters": schema}) == (
         None,
         {},
@@ -231,8 +242,9 @@ def test_goose_smoke_failure_cleans_only_owned_container(tmp_path, monkeypatch):
     assert calls[1][-1] == calls[0][calls[0].index("--name") + 1]
 
 
+@pytest.mark.parametrize("version_output", ("1.59.0", "goose 1.59.0"))
 def test_goose_smoke_runs_only_the_pre_tool_subset_and_always_cleans_up(
-    monkeypatch,
+    monkeypatch, version_output
 ):
     runner = _load(RUNNER_PATH, "agent_cli_goose_flow")
     commands = []
@@ -246,9 +258,7 @@ def test_goose_smoke_runs_only_the_pre_tool_subset_and_always_cleans_up(
     monkeypatch.setattr(
         runner,
         "_exec",
-        lambda *args, **kwargs: subprocess.CompletedProcess(
-            [], 0, f"goose {runner.GOOSE_VERSION}", ""
-        ),
+        lambda *args, **kwargs: subprocess.CompletedProcess([], 0, version_output, ""),
     )
     monkeypatch.setattr(runner, "_write_file", lambda *args: True)
     monkeypatch.setattr(runner, "_configure_agent", lambda *args: True)
@@ -3007,6 +3017,42 @@ def test_sandbox_readiness_waits_for_loaded_daemon(monkeypatch, capsys):
     assert len(calls) == 2
     assert calls[0][0][2] == ["ai-guardian", "daemon", "status"]
     assert "Sandbox setup and daemon are ready" in capsys.readouterr().out
+
+
+def test_sandbox_readiness_timeout_reports_value_free_status_diagnostics(
+    monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_sandbox_readiness_diagnostics")
+    clock = [0.0]
+    private_stdout = "PRIVATE_STATUS_OUTPUT"
+    private_stderr = "PRIVATE_STATUS_ERROR"
+
+    monkeypatch.setattr(runner.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        runner.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds)
+    )
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args,
+            7,
+            stdout=private_stdout,
+            stderr=private_stderr,
+        ),
+    )
+
+    assert not runner._wait_for_sandbox_ready("docker", "owned", timeout=1)
+
+    output = capsys.readouterr().out
+    assert "status_attempts=1" in output
+    assert "last_exit_code=7" in output
+    assert "daemon_running_marker=no" in output
+    assert "config_loaded_marker=no" in output
+    assert "stdout=present" in output
+    assert "stderr=present" in output
+    assert private_stdout not in output
+    assert private_stderr not in output
 
 
 @pytest.mark.parametrize(

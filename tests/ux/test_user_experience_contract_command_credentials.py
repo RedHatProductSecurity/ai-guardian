@@ -3,6 +3,8 @@
 import json
 from unittest.mock import patch
 
+import pytest
+
 from ai_guardian.hook_processing import process_hook_data
 from tests.fixtures.mock_mcp_server import create_hook_data
 
@@ -54,6 +56,93 @@ def test_inline_command_credential_is_denied_with_value_free_message():
     )
     assert value not in result["output"]
     assert "curl --user" not in result["output"]
+
+
+@pytest.mark.parametrize(
+    ("argument_name", "argument_is_argv"),
+    (("cmd", False), ("input", False), ("cmd", True), ("input", True)),
+)
+def test_native_shell_argument_aliases_are_denied_without_echoing_values(
+    argument_name, argument_is_argv
+):
+    """USER EXPERIENCE: alternate native shell fields receive the same block."""
+    value = "SYNTHETIC_PRIVATE_COMMAND_ALIAS_2699"
+    command = f"curl --user demo:{value} https://example.invalid/"
+    hook_data = create_hook_data(
+        tool_name="Bash",
+        tool_input={
+            argument_name: ["bash", "-lc", command] if argument_is_argv else command
+        },
+    )
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=({}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_command_credential_scanning_config",
+            return_value=({"enabled": True, "action": "block"}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_password_likelihood_config",
+            return_value=({"enabled": False, "action": "ask"}, None),
+        ),
+    ):
+        result = process_hook_data(hook_data)
+
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert value not in result["output"]
+    assert command not in result["output"]
+
+
+@pytest.mark.parametrize(
+    ("agent", "argument_name", "expected_decision"),
+    (("goose", "cmd", "block"), ("grok", "input", "deny")),
+)
+def test_goose_and_grok_native_shell_aliases_are_denied_before_execution(
+    agent, argument_name, expected_decision
+):
+    """USER EXPERIENCE: native Goose/Grok envelopes scan non-command fields."""
+    value = "SYNTHETIC_PRIVATE_NATIVE_COMMAND_2699"
+    command = f"curl --user demo:{value} https://example.invalid/"
+    if agent == "goose":
+        hook_data = {
+            "event": "PreToolUse",
+            "tool_name": "shell",
+            "tool_input": {argument_name: command},
+            "session_id": "synthetic-session",
+        }
+        decision_key = "decision"
+    else:
+        hook_data = {
+            "hookEventName": "PreToolUse",
+            "toolName": "run_terminal_command",
+            "toolInput": {argument_name: command},
+            "sessionId": "synthetic-session",
+        }
+        decision_key = "decision"
+
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=({}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_command_credential_scanning_config",
+            return_value=({"enabled": True, "action": "block"}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_password_likelihood_config",
+            return_value=({"enabled": False, "action": "ask"}, None),
+        ),
+    ):
+        result = process_hook_data(hook_data)
+
+    response = json.loads(result["output"])
+    assert response[decision_key] == expected_decision
+    assert value not in result["output"]
+    assert command not in result["output"]
 
 
 def test_violation_resolution_guidance_is_private_and_has_no_persistent_exception():

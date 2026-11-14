@@ -1552,6 +1552,8 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
     _progress("Waiting for sandbox setup and daemon readiness")
     deadline = time.monotonic() + min(timeout, 90)
     last_heartbeat = time.monotonic()
+    attempts = 0
+    last_status = None
     while time.monotonic() < deadline:
         remaining = max(1, int(deadline - time.monotonic()))
         result = _exec(
@@ -1560,6 +1562,8 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
             ["ai-guardian", "daemon", "status"],
             min(5, remaining),
         )
+        attempts += 1
+        last_status = result
         if (
             result.returncode == 0
             and "ai-guardian daemon: running" in result.stdout
@@ -1572,6 +1576,27 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
             _progress(f"Sandbox setup is still running ({elapsed}s elapsed)")
             last_heartbeat = time.monotonic()
         time.sleep(min(1, max(0, deadline - time.monotonic())))
+    last_stdout = (
+        last_status.stdout
+        if last_status is not None and isinstance(last_status.stdout, str)
+        else ""
+    )
+    last_stderr = (
+        last_status.stderr
+        if last_status is not None and isinstance(last_status.stderr, str)
+        else ""
+    )
+    _progress(
+        "Sandbox readiness diagnostics (value-free): "
+        f"status_attempts={attempts}, "
+        f"last_exit_code={last_status.returncode if last_status else 'none'}, "
+        "daemon_running_marker="
+        f"{'yes' if 'ai-guardian daemon: running' in last_stdout else 'no'}, "
+        "config_loaded_marker="
+        f"{'yes' if 'Config: loaded' in last_stdout else 'no'}, "
+        f"stdout={'present' if last_stdout else 'empty'}, "
+        f"stderr={'present' if last_stderr else 'empty'}"
+    )
     return False
 
 
@@ -2513,10 +2538,10 @@ def _run_goose_smoke(args: argparse.Namespace) -> int:
         version = _exec(
             args.container_engine, name, ["goose", "--version"], args.timeout
         )
-        if (
-            version.returncode != 0
-            or version.stdout.strip() != f"goose {GOOSE_VERSION}"
-        ):
+        if version.returncode != 0 or version.stdout.strip() not in {
+            GOOSE_VERSION,
+            f"goose {GOOSE_VERSION}",
+        }:
             print(
                 f"FAIL Goose: the supplied smoke image must contain Goose {GOOSE_VERSION}"
             )

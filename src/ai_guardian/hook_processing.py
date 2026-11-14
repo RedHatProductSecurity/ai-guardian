@@ -50,6 +50,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -2060,6 +2061,15 @@ def inject_security_only(hook_data, daemon_state=None):
         return None
 
 
+def _shell_command_value(value: object) -> Optional[str]:
+    """Normalize a native shell command string or argv array without execution."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list) and all(isinstance(part, str) for part in value):
+        return shlex.join(value)
+    return None
+
+
 def _process_hook_data(hook_data, daemon_state=None):
     """
     Process parsed hook data and return response.
@@ -2325,6 +2335,16 @@ def _process_hook_data(hook_data, daemon_state=None):
         ):
             tool_name = normalized.tool_name
             tool_input = normalized.tool_input
+            if tool_name in {"Bash", "Shell"} and isinstance(tool_input, dict):
+                # Normalize native shell argument aliases before shared policy
+                # checks, which expect the canonical string-valued command key.
+                for argument_name in ("command", "cmd", "input"):
+                    shell_command = _shell_command_value(tool_input.get(argument_name))
+                    if not shell_command:
+                        continue
+                    if tool_input.get("command") != shell_command:
+                        tool_input = {**tool_input, "command": shell_command}
+                    break
             _latency_tool = tool_name or ""
 
             # Normalize mcp: prefix to mcp__ format (agent-agnostic)
@@ -2654,13 +2674,23 @@ def _process_hook_data(hook_data, daemon_state=None):
                     run_command_credential_scan,
                 )
 
-                shell_command = (
-                    tool_input.get("command", "")
-                    if isinstance(tool_input, dict)
-                    else ""
-                )
-                command_credential_result = run_command_credential_scan(shell_command)
-                if command_credential_result is not None:
+                shell_commands = []
+                if isinstance(tool_input, dict):
+                    for argument_name in ("command", "cmd", "input"):
+                        shell_command = _shell_command_value(
+                            tool_input.get(argument_name)
+                        )
+                        if not shell_command:
+                            continue
+                        if shell_command not in shell_commands:
+                            shell_commands.append(shell_command)
+
+                for shell_command in shell_commands:
+                    command_credential_result = run_command_credential_scan(
+                        shell_command
+                    )
+                    if command_credential_result is None:
+                        continue
                     command_credential_decision = apply_post_scan_pipeline(
                         _registry.get(ScannerName.COMMAND_CREDENTIAL_SCANNING),
                         command_credential_result,
