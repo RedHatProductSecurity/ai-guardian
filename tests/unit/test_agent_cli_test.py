@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNNER_PATH = ROOT / "scripts" / "agent_cli_test.py"
 MOCK_PATH = ROOT / "scripts" / "agent_cli_mock_provider.py"
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "release-readiness.yml"
+PREPARE_ACTION_PATH = ROOT / ".github/actions/prepare-cli-smoke/action.yml"
 
 
 def _load(path: Path, name: str):
@@ -350,7 +351,7 @@ def test_partial_smoke_requires_hook_native_tool_execution_and_result_evidence(
 
 def test_goose_readiness_image_remains_separate_pinned_and_license_preserving():
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text())
-    steps = workflow["jobs"]["container-images"]["steps"]
+    steps = workflow["jobs"]["goose-cli-smoke"]["steps"]
     build = next(step for step in steps if step.get("id") == "goose_smoke_image")
     assert "FROM ai-guardian-readiness" in build["run"]
     assert "v1.59.0/goose-x86_64-unknown-linux-musl.tar.gz" in build["run"]
@@ -363,6 +364,9 @@ def test_goose_readiness_image_remains_separate_pinned_and_license_preserving():
     assert "USER sandbox" in build["run"]
     assert "goose-x86_64" not in (ROOT / "container/Dockerfile").read_text()
     smoke = next(step for step in steps if step.get("id") == "goose_smoke")
+    assert steps.index(build) < steps.index(smoke)
+    assert "if" not in build
+    assert "if" not in smoke
     assert "--image ai-guardian-goose-smoke" in smoke["run"]
     assert "sandbox create" not in smoke["run"]
 
@@ -2260,7 +2264,15 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
         "smoke-tests": "Detection, Hook, False-Positive, Initialization & Lifecycle Smokes",
         "scenario-tests": "Container Agent Scenarios (minimal, standard, strict)",
         "container-build-validation": "Container Smoke, Scenarios & Multi-Arch Builds",
-        "container-images": "Real CLI Smoke Matrix & OpenShell Image Validation",
+        "codex-cli-smoke": "Codex CLI Smoke (failure temporarily tolerated)",
+        "gemini-cli-smoke": "Gemini CLI Smoke",
+        "grok-cli-smoke": "Grok CLI Smoke (pre-tool only)",
+        "goose-cli-smoke": "Goose CLI Smoke (pre-tool only)",
+        "opencode-v1-cli-smoke": "OpenCode V1 CLI Smoke",
+        "opencode-v2-cli-smoke": "OpenCode V2 CLI Smoke",
+        "pi-cli-smoke": "Pi CLI Smoke",
+        "claude-cli-smoke": "Claude Code CLI Smoke (maintainer opt-in required)",
+        "openshell-image-validation": "OpenShell Image Validation",
         "config-validation": "Configuration, Migration & Security Feature Qualification",
         "install-script": "POSIX Install Tests (Linux/macOS, Python ${{ matrix.python-version }})",
         "mcp-server": "MCP Initialize & get_config JSON-RPC Calls",
@@ -2273,69 +2285,63 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
 
 def test_release_readiness_runs_clients_against_the_current_wheel_image():
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
-    steps = workflow["jobs"]["container-images"]["steps"]
-    install_index = next(
-        i
-        for i, step in enumerate(steps)
-        if step.get("name") == "Install current wheel for sandbox lifecycle"
-    )
-    image_index = next(
-        i
-        for i, step in enumerate(steps)
-        if step.get("name") == "Build normal support image"
-    )
-    prerequisites_index = next(
-        i for i, step in enumerate(steps) if step.get("id") == "smoke_prerequisites"
-    )
-    assert install_index < image_index < prerequisites_index
-
-    smoke_steps = {
-        "Codex CLI Smoke (local mock provider)": (
+    smoke_jobs = {
+        "codex-cli-smoke": (
             "codex_smoke",
             "--cli-name codex --agent smoke",
             "--image ai-guardian-readiness",
         ),
-        "Gemini CLI Smoke (local mock provider)": (
+        "gemini-cli-smoke": (
             "gemini_smoke",
             "--cli-name gemini --agent default",
             "--image ai-guardian-readiness",
         ),
-        "Grok CLI pre-tool subset (local mock; no prompt/output qualification)": (
+        "grok-cli-smoke": (
             "grok_smoke",
             "--cli-name grok --agent default",
             "--image ai-guardian-readiness",
         ),
-        "Goose host CLI Smoke (local mock; not runtime qualification)": (
+        "goose-cli-smoke": (
             "goose_smoke",
             "--cli-name goose --agent default",
             "--image ai-guardian-goose-smoke",
         ),
-        "OpenCode V1 CLI Smoke (local mock provider)": (
+        "opencode-v1-cli-smoke": (
             "opencode_v1_smoke",
             "--cli-name opencode --agent build",
             "--image ai-guardian-readiness",
         ),
-        "Pi CLI Smoke (local mock provider)": (
+        "pi-cli-smoke": (
             "pi_smoke",
             "--cli-name pi --agent openai",
             "--image ai-guardian-readiness",
         ),
-        "OpenCode V2 CLI Smoke (local mock provider)": (
+        "opencode-v2-cli-smoke": (
             "opencode_v2_smoke",
             "--cli-name opencode --agent build",
             "--image ai-guardian-opencode-v2-readiness",
         ),
     }
-    smoke_indices = []
-    expected_if = (
-        "${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}"
-    )
-    for name, (step_id, arguments, image) in smoke_steps.items():
-        step_index = next(i for i, step in enumerate(steps) if step.get("name") == name)
+    for job_id, (step_id, arguments, image) in smoke_jobs.items():
+        job = workflow["jobs"][job_id]
+        assert job["runs-on"] == "ubuntu-26.04"
+        assert "needs" not in job
+        assert "if" not in job
+        assert "continue-on-error" not in job
+        steps = job["steps"]
+        prepare_index = next(
+            i
+            for i, step in enumerate(steps)
+            if step.get("uses") == "./.github/actions/prepare-cli-smoke"
+        )
+        step_index = next(
+            i for i, step in enumerate(steps) if step.get("id") == step_id
+        )
+        assert prepare_index < step_index
         step = steps[step_index]
-        smoke_indices.append(step_index)
-        assert step["id"] == step_id
-        assert step["if"] == expected_if
+        # Normal success gating is job-local: a failed build/version check must
+        # stop this smoke, but cannot skip any other CLI's independent job.
+        assert "if" not in step
         assert arguments in step["run"]
         assert image in step["run"]
         assert "--container-engine docker" in step["run"]
@@ -2343,9 +2349,21 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
         assert "GEMINI_API_KEY=" not in step["run"]
         assert "OPENAI_API_KEY=" not in step["run"]
         assert "ANTHROPIC_API_KEY=" not in step["run"]
-    assert smoke_indices == sorted(smoke_indices)
-    assert smoke_indices[0] > prerequisites_index
+        assert all(
+            not item.get("continue-on-error", False)
+            for item in steps
+            if item.get("id") != "codex_smoke"
+        )
+        prepare = steps[prepare_index]
+        assert "if" not in prepare
+        expected_image = (
+            "ai-guardian-opencode-v2-readiness"
+            if job_id == "opencode-v2-cli-smoke"
+            else "ai-guardian-readiness"
+        )
+        assert prepare["with"]["image"] == expected_image
 
+    steps = workflow["jobs"]["codex-cli-smoke"]["steps"]
     codex_step = next(step for step in steps if step.get("id") == "codex_smoke")
     assert codex_step["continue-on-error"] is True
     assert all(
@@ -2353,7 +2371,6 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
         for step in steps
         if step is not codex_step
     )
-    assert "continue-on-error" not in workflow["jobs"]["container-images"]
     codex_failure_report = next(
         step
         for step in steps
@@ -2365,50 +2382,44 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
     assert "GITHUB_STEP_SUMMARY" in codex_failure_report["run"]
     assert "does not qualify Codex" in codex_failure_report["run"]
 
-    claude_steps = [
-        step
-        for step in steps
-        if step.get("name") == "Claude Code CLI Smoke (local mock provider)"
-    ]
-    assert len(claude_steps) == 1
-    claude_step = claude_steps[0]
-    assert claude_step["if"] == (
-        "${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' "
-        "&& vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true' }}"
+    claude_job = workflow["jobs"]["claude-cli-smoke"]
+    assert claude_job["if"] == (
+        "${{ vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true' }}"
     )
+    assert "needs" not in claude_job
+    assert "continue-on-error" not in claude_job
+    claude_step = next(
+        step for step in claude_job["steps"] if step.get("id") == "claude_smoke"
+    )
+    assert "if" not in claude_step
+    assert not claude_step.get("continue-on-error", False)
     assert "--cli-name claude --agent default" in claude_step["run"]
     assert "--accept-proprietary-tos" in claude_step["run"]
     assert "--image ai-guardian-readiness" not in claude_step["run"]
 
-    skip_claude = next(
+    v2_steps = workflow["jobs"]["opencode-v2-cli-smoke"]["steps"]
+    v2_prepare = next(
         step
-        for step in steps
-        if step.get("name") == "Explain skipped Claude Code smoke check"
+        for step in v2_steps
+        if step.get("uses") == "./.github/actions/prepare-cli-smoke"
     )
-    assert "!cancelled()" in skip_claude["if"]
-    assert "steps.smoke_prerequisites.outcome == 'success'" in skip_claude["if"]
-
-    v2_build = next(
-        step
-        for step in steps
-        if step.get("name") == "Build pinned OpenCode V2 smoke image"
-    )
-    assert "--build-arg OPENCODE_VERSION=2.0.24" in v2_build["run"]
-    assert "ai-guardian-opencode-v2-readiness" in v2_build["run"]
+    assert v2_prepare["with"]["opencode-version"] == "2.0.24"
     v2_version_check = next(
         step
-        for step in steps
+        for step in v2_steps
         if step.get("name") == "Verify pinned OpenCode V2 smoke image version"
     )
-    assert v2_version_check.get("id") == "smoke_prerequisites"
     assert 'opencode_v2_version="${opencode_v2_version#opencode v}"' in (
         v2_version_check["run"]
     )
+    openshell_job = workflow["jobs"]["openshell-image-validation"]
+    assert "needs" not in openshell_job
+    assert "if" not in openshell_job
+    steps = openshell_job["steps"]
     openshell_build = next(
         step for step in steps if step.get("id") == "build_openshell_image"
     )
-    assert "!cancelled()" in openshell_build["if"]
-    assert "steps.smoke_prerequisites.outcome == 'success'" in openshell_build["if"]
+    assert "if" not in openshell_build
     openshell_checks = [
         step
         for step in steps
@@ -2424,6 +2435,41 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
         for step in openshell_checks
     )
 
+    action = yaml.safe_load(PREPARE_ACTION_PATH.read_text(encoding="utf-8"))
+    assert action["runs"]["using"] == "composite"
+    assert action["inputs"]["image"]["default"] == ""
+    assert action["inputs"]["opencode-version"]["default"] == ""
+    preparation = action["runs"]["steps"]
+    assert all(step.get("shell") == "bash" for step in preparation if "run" in step)
+    for job_id in ("claude-cli-smoke", "openshell-image-validation"):
+        prepare = next(
+            step
+            for step in workflow["jobs"][job_id]["steps"]
+            if step.get("uses") == "./.github/actions/prepare-cli-smoke"
+        )
+        assert not prepare.get("with", {}).get("image")
+    wheel = next(
+        i
+        for i, step in enumerate(preparation)
+        if "python -m build --wheel" in step.get("run", "")
+    )
+    install = next(
+        i
+        for i, step in enumerate(preparation)
+        if "pip install dist/*.whl" in step.get("run", "")
+    )
+    image = next(
+        i for i, step in enumerate(preparation) if "docker build" in step.get("run", "")
+    )
+    assert wheel < install < image
+    assert "container/vendor/" in preparation[wheel]["run"]
+    assert '"WHEEL=${WHEEL}"' in preparation[wheel]["run"]
+    assert '--build-arg AI_GUARDIAN_VERSION="$WHEEL"' in preparation[image]["run"]
+    assert (
+        '--build-arg "OPENCODE_VERSION=$OPENCODE_VERSION"' in preparation[image]["run"]
+    )
+    assert preparation[image]["if"] == "${{ inputs.image != '' }}"
+
     dockerfile = (ROOT / "container/Dockerfile").read_text(encoding="utf-8")
     assert 'npm install -g --prefix /opt/npm "@opencode/cli@${OPENCODE_VERSION}"' in (
         dockerfile
@@ -2432,6 +2478,55 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
         "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}"
         in dockerfile
     )
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Composite action runs in Bash on Linux"
+)
+@pytest.mark.parametrize("version", ("", "2.0.24"))
+def test_cli_smoke_image_build_preserves_default_and_pinned_arguments(
+    tmp_path, version
+):
+    """Exercise only the build command's argument assembly, never a container engine."""
+    action = yaml.safe_load(PREPARE_ACTION_PATH.read_text(encoding="utf-8"))
+    build = next(
+        step
+        for step in action["runs"]["steps"]
+        if "docker build" in step.get("run", "")
+    )
+    capture = tmp_path / "docker-arguments"
+    result = subprocess.run(
+        [
+            "bash",
+            "-euo",
+            "pipefail",
+            "-c",
+            'docker() { printf "%s\\0" "$@" > "$COMMAND_CAPTURE"; }\n' + build["run"],
+        ],
+        env={
+            "PATH": os.defpath,
+            "COMMAND_CAPTURE": str(capture),
+            "SMOKE_IMAGE": "local-test-image",
+            "WHEEL": "ai_guardian-1.0.0-py3-none-any.whl",
+            "OPENCODE_VERSION": version,
+        },
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout == result.stderr == ""
+    arguments = capture.read_bytes().decode().rstrip("\0").split("\0")
+    assert arguments == [
+        "build",
+        "--secret",
+        "id=github_token,env=GITHUB_TOKEN",
+        "--build-arg",
+        "AI_GUARDIAN_VERSION=ai_guardian-1.0.0-py3-none-any.whl",
+        *(["--build-arg", f"OPENCODE_VERSION={version}"] if version else []),
+        "-t",
+        "local-test-image",
+        "container/",
+    ]
 
 
 def test_cli_and_scanner_checklists_keep_real_agent_smoke_coverage_in_sync():
@@ -2457,7 +2552,7 @@ def test_release_readiness_checks_cli_version_without_changing_image_builds():
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     step = next(
         step
-        for step in workflow["jobs"]["container-images"]["steps"]
+        for step in workflow["jobs"]["opencode-v2-cli-smoke"]["steps"]
         if step.get("name") == "Verify smoke CLI version selection arguments"
     )
     script = step["run"].removeprefix("python - <<'PY'\n").removesuffix("PY\n")

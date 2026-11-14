@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Safe release CI resume (#2701):** Persist and validate exact release CI
   attempts so interrupted runs can be resumed without duplicate workflow dispatches.
 ### Changed
+- **Independent real-agent CI jobs (#2673):** Give each runnable CLI its own
+  Release Readiness job, including separate OpenCode V1/V2 jobs, and isolate
+  OpenShell image validation. Share wheel/image preparation without cross-CLI
+  prerequisites, so an OpenCode V2 failure cannot skip Goose or other clients.
+  Preserve Claude consent, Codex's reported exception, and all smoke evidence checks.
 - **README integration limitations (#2735):** Surface a compact per-integration
   prompt, pre-tool, and result-handling table near Quick Start, including cloud,
   mode, and plugin-generation boundaries. Keep the detailed behavior matrix as the

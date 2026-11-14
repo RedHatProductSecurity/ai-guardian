@@ -76,6 +76,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 @pytest.fixture
@@ -86,6 +87,53 @@ def runner():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def test_readiness_has_independent_visible_jobs_for_every_runnable_cli(runner):
+    """USER EXPERIENCE: Each CLI has a directly visible, independent Actions result.
+
+    A failed OpenCode V2 build cannot hide Goose or any other CLI. OpenShell
+    validation is separate; Claude alone skips without authorized maintainer
+    consent. Splitting jobs is not new enforcement qualification.
+    """
+    workflow_path = runner.ROOT / ".github/workflows/release-readiness.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    jobs = workflow["jobs"]
+    assert "container-images" not in jobs
+    for cli in runner.RUNNABLE_CLI_NAMES:
+        cli_jobs = [
+            job
+            for job in jobs.values()
+            if any(
+                f"scripts/agent-cli-test --cli-name {cli} " in step.get("run", "")
+                for step in job.get("steps", [])
+            )
+        ]
+        assert len(cli_jobs) == (2 if cli == "opencode" else 1)
+        for job in cli_jobs:
+            assert cli in job["name"].casefold()
+            assert not job.get("needs")
+            assert "strategy" not in job
+            if cli == "claude":
+                assert "maintainer opt-in required" in job["name"]
+                assert (
+                    job["if"]
+                    == "${{ vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true' }}"
+                )
+            else:
+                assert "if" not in job
+            assert (
+                sum(
+                    "scripts/agent-cli-test --cli-name " in step.get("run", "")
+                    for step in job["steps"]
+                )
+                == 1
+            )
+    openshell = jobs["openshell-image-validation"]
+    assert openshell["name"] == "OpenShell Image Validation"
+    assert not openshell.get("needs")
+    assert "if" not in openshell
+    assert "smoke_prerequisites" not in workflow_path.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(

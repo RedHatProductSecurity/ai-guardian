@@ -57,14 +57,21 @@ def test_ledger_matches_actual_release_readiness_invocations_and_versions(runner
     clients = json.loads(LEDGER.read_text(encoding="utf-8"))["clients"]
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     lanes = {}
-    for step in workflow["jobs"]["container-images"]["steps"]:
-        for cli in re.findall(
-            r"scripts/agent-cli-test --cli-name ([a-z]+)", step.get("run", "")
-        ):
-            assert cli in clients
-            lanes.setdefault(cli, []).append(step["id"])
-            if cli != "codex":
-                assert not step.get("continue-on-error", False)
+    for job in workflow["jobs"].values():
+        job_lanes = []
+        for step in job.get("steps", []):
+            for cli in re.findall(
+                r"scripts/agent-cli-test --cli-name ([a-z]+)", step.get("run", "")
+            ):
+                assert cli in clients
+                job_lanes.append(cli)
+                lanes.setdefault(cli, []).append(step["id"])
+                if cli != "codex":
+                    assert not step.get("continue-on-error", False)
+        if job_lanes:
+            assert len(job_lanes) == 1, "Each CLI/version needs its own job"
+            assert not job.get("needs"), "A different CLI must not gate this job"
+            assert not job.get("continue-on-error", False)
     assert lanes == {
         cli: entry["ci_steps"] for cli, entry in clients.items() if entry["ci_steps"]
     }

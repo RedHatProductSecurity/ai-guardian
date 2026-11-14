@@ -6,6 +6,11 @@
 
 ## User Preferences
 
+- **2026-11-14 — One smoke job per CLI (#2673):** The user prefers independent,
+  directly named Release Readiness jobs, not a combined job with client checks
+  scattered among steps. Give OpenCode V1/V2 separate jobs too; share only
+  wheel/image preparation in a local action and isolate OpenShell validation.
+
 - **2026-11-13 — All-CLI smoke scope (#2673):** User explicitly added Goose to
   the six-client audit. Inventory every canonical host CLI even when it already
   has a smoke-only lane; a prior two-case lane is not full prompt/output or
@@ -319,6 +324,15 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-14 — Cross-CLI prerequisites hide results (#2673):** The old
+  `smoke_prerequisites` step was specifically the OpenCode V2 version check yet
+  gated every CLI, including Goose. Separate steps with `!cancelled()` did not
+  remove that coupling. Independent jobs need job-local success gating and no
+  cross-CLI `needs`; Claude alone is job-gated on maintainer consent. Preserve
+  Codex's step-only exception, failed outcome and warning/summary, not job-level
+  tolerance. Composite Bash argument tests must skip Windows explicitly and mock
+  the container engine, never build/run a real container during local validation.
 
 - **2026-11-14 — Versioned smoke exclusions (#2673):** OpenClaw 2026.11.3
   requires `openclaw.plugin.json` even for local filesystem plugins; current

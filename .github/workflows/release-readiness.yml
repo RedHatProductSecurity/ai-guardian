@@ -750,33 +750,170 @@ jobs:
     needs: fresh-install
     uses: ./.github/workflows/container-build-validation.yml
 
-  container-images:
-    name: Real CLI Smoke Matrix & OpenShell Image Validation
+  # Each CLI/version owns its setup, prerequisites and result on an independent
+  # runner. A failed image build or smoke must not skip another CLI or OpenShell.
+  # The local action shares only wheel/image preparation, not job dependencies.
+  # Full profiles retain their strict-derived prompt/pre-tool/Write/output checks;
+  # Grok/Goose remain pre-tool-only, not prompt/output or runtime qualification.
+  codex-cli-smoke:
+    name: Codex CLI Smoke (failure temporarily tolerated)
     runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Prepare current wheel and support image
+        uses: ./.github/actions/prepare-cli-smoke
         with:
-          python-version: "3.12"
+          image: ai-guardian-readiness
 
-      - name: Build AI Guardian wheel
+      - name: Codex CLI Smoke (local mock provider)
+        id: codex_smoke
+        # Temporary release exception until Codex passes the native execution and
+        # output-evidence checks; do not interpret the allowed failure as a pass.
+        # Invocation-only hook trust still requires the runner's exact isolated
+        # AI Guardian hook-set verification; no persistent trust state is written.
+        continue-on-error: true
         run: |
-          python -m pip install --upgrade pip build
-          python -m build --wheel
-          mkdir -p container/vendor
-          cp dist/*.whl container/vendor/
-          WHEEL=$(basename container/vendor/ai_guardian-*.whl)
-          echo "WHEEL=${WHEEL}" >> "$GITHUB_ENV"
+          scripts/agent-cli-test --cli-name codex --agent smoke \
+            --image ai-guardian-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
 
-      - name: Install current wheel for sandbox lifecycle
-        run: python -m pip install dist/*.whl
+      - name: Report tolerated Codex smoke failure
+        if: ${{ !cancelled() && steps.codex_smoke.outcome == 'failure' }}
+        run: |
+          echo "::warning::Codex CLI smoke failed and is temporarily allowed for Release Readiness; this does not qualify Codex."
+          {
+            echo "### Codex CLI smoke failure temporarily allowed"
+            echo
+            echo "The Codex smoke step failed. This exception allows Release Readiness to continue, but it is not a passing smoke result or Codex qualification."
+            echo "Remove this exception only after native execution and all existing evidence checks pass."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      # Check the local version-selection interface without changing the existing
-      # prebuilt-image/cache strategy or passing a build pin with --image below.
+  gemini-cli-smoke:
+    name: Gemini CLI Smoke
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel and support image
+        uses: ./.github/actions/prepare-cli-smoke
+        with:
+          image: ai-guardian-readiness
+
+      - name: Verify Gemini CLI
+        run: docker run --rm --entrypoint gemini ai-guardian-readiness --version
+
+      - name: Gemini CLI Smoke (local mock provider)
+        id: gemini_smoke
+        run: |
+          scripts/agent-cli-test --cli-name gemini --agent default \
+            --image ai-guardian-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
+
+  grok-cli-smoke:
+    name: Grok CLI Smoke (pre-tool only)
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel and support image
+        uses: ./.github/actions/prepare-cli-smoke
+        with:
+          image: ai-guardian-readiness
+
+      - name: Grok CLI pre-tool subset (local mock; no prompt/output qualification)
+        id: grok_smoke
+        run: |
+          scripts/agent-cli-test --cli-name grok --agent default \
+            --image ai-guardian-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
+
+  goose-cli-smoke:
+    name: Goose CLI Smoke (pre-tool only)
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel and support image
+        uses: ./.github/actions/prepare-cli-smoke
+        with:
+          image: ai-guardian-readiness
+
+      - name: Build Goose host-CLI smoke-only image (Apache-2.0)
+        id: goose_smoke_image
+        run: |
+          # Test-only overlay, not part of either published runtime image.
+          mkdir -p "$RUNNER_TEMP/goose-smoke"
+          cat > "$RUNNER_TEMP/goose-smoke/Dockerfile" <<'EOF'
+          FROM ai-guardian-readiness
+          USER root
+          RUN curl -fL https://github.com/aaif-goose/goose/releases/download/v1.59.0/goose-x86_64-unknown-linux-musl.tar.gz -o /tmp/goose.tar.gz \
+              && echo '6da57ce8775f712ab146bcf244b69e2b15f85368836bff2ba3306fdefdac8f31  /tmp/goose.tar.gz' | sha256sum -c - \
+              && tar -xzf /tmp/goose.tar.gz -C /usr/local/bin \
+              && mkdir -p /usr/share/licenses/goose \
+              && curl -fL https://raw.githubusercontent.com/aaif-goose/goose/v1.59.0/LICENSE -o /usr/share/licenses/goose/LICENSE \
+              && rm /tmp/goose.tar.gz
+          USER sandbox
+          RUN goose --version
+          EOF
+          docker build -t ai-guardian-goose-smoke "$RUNNER_TEMP/goose-smoke"
+
+      - name: Goose host CLI Smoke (local mock; not runtime qualification)
+        id: goose_smoke
+        run: |
+          scripts/agent-cli-test --cli-name goose --agent default \
+            --image ai-guardian-goose-smoke --container-engine docker \
+            --ai-guardian-command ai-guardian
+
+  opencode-v1-cli-smoke:
+    name: OpenCode V1 CLI Smoke
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel and support image
+        uses: ./.github/actions/prepare-cli-smoke
+        with:
+          image: ai-guardian-readiness
+
+      - name: Verify OpenCode V1 smoke image version
+        run: |
+          opencode_v1_version="$(docker run --rm --entrypoint opencode ai-guardian-readiness --version)"
+          echo "OpenCode V1: $opencode_v1_version"
+          test "$opencode_v1_version" = "1.19.0"
+
+      - name: OpenCode V1 CLI Smoke (local mock provider)
+        id: opencode_v1_smoke
+        run: |
+          scripts/agent-cli-test --cli-name opencode --agent build \
+            --image ai-guardian-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
+
+  opencode-v2-cli-smoke:
+    name: OpenCode V2 CLI Smoke
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel and pinned OpenCode V2 support image
+        uses: ./.github/actions/prepare-cli-smoke
+        with:
+          image: ai-guardian-opencode-v2-readiness
+          opencode-version: "2.0.24"
+
+      # Check version selection without passing a build pin with --image below.
       - name: Verify smoke CLI version selection arguments
         run: |
           python - <<'PY'
@@ -799,33 +936,35 @@ jobs:
           print("PASS smoke CLI version help and supplied-image guard")
           PY
 
-      - name: Build normal support image
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: Verify pinned OpenCode V2 smoke image version
         run: |
-          docker build \
-            --secret id=github_token,env=GITHUB_TOKEN \
-            --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
-            -t ai-guardian-readiness \
-            container/
+          opencode_v2_version="$(docker run --rm --entrypoint opencode ai-guardian-opencode-v2-readiness --version)"
+          opencode_v2_version="${opencode_v2_version#opencode v}"
+          echo "OpenCode V2: $opencode_v2_version"
+          test "$opencode_v2_version" = "2.0.24"
 
-      - name: Build pinned OpenCode V2 smoke image
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: OpenCode V2 CLI Smoke (local mock provider)
+        id: opencode_v2_smoke
         run: |
-          docker build \
-            --secret id=github_token,env=GITHUB_TOKEN \
-            --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
-            --build-arg OPENCODE_VERSION=2.0.24 \
-            -t ai-guardian-opencode-v2-readiness \
-            container/
+          scripts/agent-cli-test --cli-name opencode --agent build \
+            --image ai-guardian-opencode-v2-readiness --container-engine docker \
+            --ai-guardian-command ai-guardian
 
-      - name: Verify standard image CLIs and Pi extension (OpenCode V1, Gemini, Pi)
+  pi-cli-smoke:
+    name: Pi CLI Smoke
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel and support image
+        uses: ./.github/actions/prepare-cli-smoke
+        with:
+          image: ai-guardian-readiness
+
+      - name: Verify Pi CLI and extension
         run: |
-          opencode_v1_version="$(docker run --rm --entrypoint opencode ai-guardian-readiness --version)"
-          echo "OpenCode V1: $opencode_v1_version"
-          test "$opencode_v1_version" = "1.19.0"
-          docker run --rm --entrypoint gemini ai-guardian-readiness --version
           docker run --rm --entrypoint pi ai-guardian-readiness --version
           docker run --rm \
             -e AI_GUARDIAN_AGENT=pi \
@@ -834,134 +973,47 @@ jobs:
             ai-guardian-readiness \
             /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts'
 
-      - name: Verify pinned OpenCode V2 smoke image version
-        id: smoke_prerequisites
-        run: |
-          opencode_v2_version="$(docker run --rm --entrypoint opencode ai-guardian-opencode-v2-readiness --version)"
-          opencode_v2_version="${opencode_v2_version#opencode v}"
-          echo "OpenCode V2: $opencode_v2_version"
-          test "$opencode_v2_version" = "2.0.24"
-
-      # Each invocation prepares a strict-derived config before creation: prompt /
-      # pre-tool deny (including command credential arguments and Claude/OpenCode native
-      # Write HTTP-source credential flows in Python, JavaScript, and TypeScript),
-      # environment-backed clean Write cases, clean-tool and sensitive-output
-      # sanitization cases. The Write cases run only
-      # for clients exposing a recognized native Write tool. This is
-      # not unmodified @strict post-tool qualification. Keep each client in its own
-      # named step and continue after an individual failure so all results are
-      # visible. Codex's unresolved smoke failure is temporarily non-blocking for
-      # release readiness, but stays a failed step and is reported in the summary;
-      # it does not qualify Codex. Other client failures remain job-blocking.
-      # Codex's invocation-only hook-trust override is used only after the runner
-      # verifies its exact isolated AI Guardian hook set; no persistent Codex trust
-      # state is written.
-      - name: Codex CLI Smoke (local mock provider)
-        id: codex_smoke
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
-        # Temporary release exception until Codex passes the native execution and
-        # output-evidence checks; do not interpret the allowed failure as a pass.
-        continue-on-error: true
-        run: |
-          scripts/agent-cli-test --cli-name codex --agent smoke \
-            --image ai-guardian-readiness --container-engine docker \
-            --ai-guardian-command ai-guardian
-
-      - name: Report tolerated Codex smoke failure
-        if: ${{ !cancelled() && steps.codex_smoke.outcome == 'failure' }}
-        run: |
-          echo "::warning::Codex CLI smoke failed and is temporarily allowed for Release Readiness; this does not qualify Codex."
-          {
-            echo "### Codex CLI smoke failure temporarily allowed"
-            echo
-            echo "The Codex smoke step failed. This exception allows Release Readiness to continue, but it is not a passing smoke result or Codex qualification."
-            echo "Remove this exception only after native execution and all existing evidence checks pass."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Gemini CLI Smoke (local mock provider)
-        id: gemini_smoke
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
-        run: |
-          scripts/agent-cli-test --cli-name gemini --agent default \
-            --image ai-guardian-readiness --container-engine docker \
-            --ai-guardian-command ai-guardian
-
-      - name: Build Goose host-CLI smoke-only image (Apache-2.0)
-        id: goose_smoke_image
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
-        run: |
-          # Test-only overlay, not part of either published runtime image.
-          mkdir -p "$RUNNER_TEMP/goose-smoke"
-          cat > "$RUNNER_TEMP/goose-smoke/Dockerfile" <<'EOF'
-          FROM ai-guardian-readiness
-          USER root
-          RUN curl -fL https://github.com/aaif-goose/goose/releases/download/v1.59.0/goose-x86_64-unknown-linux-musl.tar.gz -o /tmp/goose.tar.gz \
-              && echo '6da57ce8775f712ab146bcf244b69e2b15f85368836bff2ba3306fdefdac8f31  /tmp/goose.tar.gz' | sha256sum -c - \
-              && tar -xzf /tmp/goose.tar.gz -C /usr/local/bin \
-              && mkdir -p /usr/share/licenses/goose \
-              && curl -fL https://raw.githubusercontent.com/aaif-goose/goose/v1.59.0/LICENSE -o /usr/share/licenses/goose/LICENSE \
-              && rm /tmp/goose.tar.gz
-          USER sandbox
-          RUN goose --version
-          EOF
-          docker build -t ai-guardian-goose-smoke "$RUNNER_TEMP/goose-smoke"
-
-      - name: Grok CLI pre-tool subset (local mock; no prompt/output qualification)
-        id: grok_smoke
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
-        run: |
-          scripts/agent-cli-test --cli-name grok --agent default \
-            --image ai-guardian-readiness --container-engine docker \
-            --ai-guardian-command ai-guardian
-
-      - name: Goose host CLI Smoke (local mock; not runtime qualification)
-        id: goose_smoke
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
-        run: |
-          scripts/agent-cli-test --cli-name goose --agent default \
-            --image ai-guardian-goose-smoke --container-engine docker \
-            --ai-guardian-command ai-guardian
-
-      - name: OpenCode V1 CLI Smoke (local mock provider)
-        id: opencode_v1_smoke
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
-        run: |
-          scripts/agent-cli-test --cli-name opencode --agent build \
-            --image ai-guardian-readiness --container-engine docker \
-            --ai-guardian-command ai-guardian
-
       - name: Pi CLI Smoke (local mock provider)
         id: pi_smoke
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
         run: |
           scripts/agent-cli-test --cli-name pi --agent openai \
             --image ai-guardian-readiness --container-engine docker \
             --ai-guardian-command ai-guardian
 
-      - name: OpenCode V2 CLI Smoke (local mock provider)
-        id: opencode_v2_smoke
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
-        run: |
-          scripts/agent-cli-test --cli-name opencode --agent build \
-            --image ai-guardian-opencode-v2-readiness --container-engine docker \
-            --ai-guardian-command ai-guardian
+  claude-cli-smoke:
+    name: Claude Code CLI Smoke (maintainer opt-in required)
+    # No checkout, wheel build or proprietary installation without consent.
+    # A skipped job is visible, not a passing Claude qualification.
+    if: ${{ vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true' }}
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel
+        uses: ./.github/actions/prepare-cli-smoke
 
       - name: Claude Code CLI Smoke (local mock provider)
         id: claude_smoke
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' && vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED == 'true' }}
         run: |
           scripts/agent-cli-test --cli-name claude --agent default \
             --accept-proprietary-tos --container-engine docker \
             --ai-guardian-command ai-guardian
 
-      - name: Explain skipped Claude Code smoke check
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' && vars.AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED != 'true' }}
-        run: |
-          echo "::notice::Claude Code smoke check was not run. Set the repository variable AI_GUARDIAN_CLAUDE_CODE_TOS_ACCEPTED=true only after an authorized maintainer accepts Anthropic's terms for CI installation."
+  openshell-image-validation:
+    name: OpenShell Image Validation
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel
+        uses: ./.github/actions/prepare-cli-smoke
 
       - name: Build OpenShell support image
         id: build_openshell_image
-        if: ${{ !cancelled() && steps.smoke_prerequisites.outcome == 'success' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |

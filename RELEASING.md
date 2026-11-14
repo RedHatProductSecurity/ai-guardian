@@ -87,7 +87,15 @@ request, and the runner removes host provider credentials before sandbox creatio
 These checks do not contact a model provider or incur inference
 charges. Full-profile invocations run the ten common cases below; Claude/OpenCode
 also run their four applicable native Write HTTP-credential cases. Partial profiles
-must not be reported as full prompt/output protection:
+must not be reported as full prompt/output protection.
+
+Each CLI has a dedicated Release Readiness job, with separate **OpenCode V1**
+and **OpenCode V2** jobs. Setup, version checks, native execution and runner-owned
+cleanup stay with that client; a failed CLI or image build cannot skip another
+client. The local `prepare-cli-smoke` action shares the current-wheel/image build
+recipe, not runners or cross-CLI prerequisites. **OpenShell Image Validation** is
+a separate job. Claude's entire job is visibly skipped without maintainer consent;
+Codex alone retains its explicitly reported, temporary smoke-failure exception.
 
 | Cases | Required evidence |
 | --- | --- |

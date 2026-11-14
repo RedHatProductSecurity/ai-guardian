@@ -253,6 +253,11 @@ than leaving them implicit.
   audit with an actionable blocker and priority. Run
   `tests/unit/test_agent_cli_coverage.py`; inventory is not runtime qualification.
   A pre-tool-only lane cannot qualify prompt denial or output containment.
+- [ ] Give each runnable CLI/version a dedicated Release Readiness job containing
+  only that client's prerequisites and smoke. Share wheel/image preparation through
+  `.github/actions/prepare-cli-smoke`, not cross-CLI job dependencies or gates.
+  Keep OpenShell image validation separate, Claude's maintainer consent explicit,
+  and any tolerated smoke failure visible and unqualified.
 
 - [ ] Add focused unit tests for parser defaults, invalid combinations,
   command construction, environment propagation, provider selection, policy

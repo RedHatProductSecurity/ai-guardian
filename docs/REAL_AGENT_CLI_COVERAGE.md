@@ -30,6 +30,15 @@ scripts/agent-cli-test --coverage
 | `openclaw` | Blocked: native plugin qualification | Local provider exists; prove embedded CLI callback activation and fix unsupported claims separately |
 | `crush` | Blocked: license review | FSL-1.1-MIT is not a current MIT grant; no new smoke dependency is installed |
 
+Release Readiness gives every runnable CLI its own named job, with separate
+OpenCode V1/V2 jobs and an independent **OpenShell Image Validation** job. The
+shared local `.github/actions/prepare-cli-smoke` action prepares the current wheel
+and optional support image on each runner; no job depends on another CLI's build,
+version check or smoke result. A V2 failure therefore cannot skip Goose.
+Claude's job is explicitly consent-gated, and Codex's failed smoke outcome remains
+visible despite the temporary release exception. These job boundaries do not add
+native execution evidence or change the qualification limits below.
+
 **Full** describes the runner's applicable case profile, not a successful execution,
 all hooks available upstream, every platform, or runtime certification. The base
 profile has ten cases, including command-credential denial; Claude/OpenCode also
