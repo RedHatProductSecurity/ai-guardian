@@ -10,11 +10,13 @@ This module provides automation utilities for release management:
 - Calculates next version based on release type
 - Reports the versioned normal and OpenShell container image references
 - Announces verified production releases through the authenticated gh CLI
+- Optionally refreshes NotebookLM release documentation through an existing nlm profile
 
 Supports optional .release-config.json for custom configurations.
 """
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -25,6 +27,10 @@ from typing import Tuple, Optional, List, Dict, Any
 from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
+
+from notebooklm_release import NotebookLMRefresher, RefreshError
+
+logger = logging.getLogger(__name__)
 
 NORMAL_CONTAINER_REPOSITORY = "quay.io/redhatproductsecurity/ai-guardian"
 OPENSHELL_CONTAINER_REPOSITORY = "quay.io/redhatproductsecurity/ai-guardian-openshell"
@@ -1219,6 +1225,17 @@ def main():
         help="Preview offline without posting or writing files",
     )
 
+    notebook_parser = subparsers.add_parser(
+        "refresh-notebooklm",
+        help="Optionally replace the finalized export for an already published production release",
+    )
+    notebook_parser.add_argument("version", help="Exact stable release version X.Y.Z")
+    notebook_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview offline without CLI, authentication or notebook access",
+    )
+
     # Validate
     validate_parser = subparsers.add_parser("validate", help="Validate prerequisites")
     validate_parser.add_argument(
@@ -1247,6 +1264,29 @@ def main():
     if not args.command:
         parser.print_help()
         sys.exit(1)
+
+    # Optional documentation retry/preview must never initialize version/config management.
+    if args.command == "refresh-notebooklm":
+        try:
+            publication = ReleaseAnnouncer(args.version, args.repo)
+            status = NotebookLMRefresher(
+                args.version, args.repo, publication._verify_publication
+            ).refresh(dry_run=args.dry_run)
+        except (RefreshError, AnnouncementError, ValueError) as error:
+            print(f"NotebookLM failed/unconfirmed: {error}", file=sys.stderr)
+            sys.exit(1)
+        except Exception:
+            # Optional tooling must not leak raw CLI/document/credential diagnostics.
+            logger.warning(
+                "Optional NotebookLM refresh encountered an unexpected error."
+            )
+            print(
+                "NotebookLM failed/unconfirmed; inspect saved refresh state, not publication.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(status)
+        sys.exit(0)
 
     # Announcement retry/preview must never auto-detect/write config or touch versions.
     if args.command == "announce-release":

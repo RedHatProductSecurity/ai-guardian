@@ -77,7 +77,8 @@ patch releases use the matching existing stable `release-X.Y` branch.
 14. Create tag and push
 15. Verify PyPI publication and both versioned container images
 16. Confirm the production Announcements Discussion with the helper (see below)
-17. Provide post-release checklist
+17. Run the optional CLI-backed NotebookLM export refresh (see below)
+18. Provide post-release checklist
 
 ### Hotfix Release (`/release hotfix <tag>`)
 
@@ -574,6 +575,54 @@ See [RELEASING.md](../../../RELEASING.md#production-release-announcements) for d
 Keep this maintainer flow separate from support reporting: do not broaden support
 categories or change its native user-only consent stages.
 
+## Optional NotebookLM Documentation Refresh
+
+The canonical script's Phase 7c calls the same helper after production publication
+and before merge-back/development-version changes. Use this CLI path, **not a
+second manual/MCP upload**, for notebook `9b78ebca-d327-4df7-8f2e-64e518f2ddcb`.
+
+```bash
+python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z --dry-run
+python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z
+```
+
+The first command previews entirely offline. The second is an isolated retry for
+an already published explicit stable version; it never regenerates documentation,
+bumps versions, creates tags, or republishes artifacts. It reads the finalized
+export from the release tag, never the current development working tree, and
+independently verifies production Release/PyPI publication. TestPyPI-only flows
+and preview must not mutate the production notebook.
+
+The optional external tool is MIT-licensed `notebooklm-mcp-cli` **0.16.2**. Check
+its branding/version and existing authentication non-interactively; missing or
+incompatible tooling and missing/expired auth are explicit skips. Never install,
+log in, open a browser, request credentials, switch profiles, or change other notebook
+settings automatically. Source commands pin the current checked profile; browser
+auth recovery is disabled in these child commands.
+
+There is no in-place update for uploaded files. Match only the exact local-file/text
+source title `notebooklm-export.md`, upload once and confirm the new full UUID is
+processed/ready **before deleting only the identified old UUID**. Preserve every
+other source. Ambiguous discovery means no changes. Source limits must preserve
+the old export, not cause delete-first replacement.
+
+After verifying that one processed export remains, rename the same notebook to
+**`AI Guardian vX.Y.Z`** and verify the exact title through JSON readback. An
+already-correct title needs no rename. A rename failure keeps the verified export
+and resumes title verification on refresh-only retry without another upload.
+Never advance the title on a failed or unconfirmed source replacement.
+
+The Git-metadata journal and OS lock retain upload intent/receipts for serial
+retry. Known uploads resume verification/deletion without a second upload. An
+uncertain upload without a trustworthy UUID stops for manual notebook/state
+reconciliation; do not blindly retry or discard its journal. Only verified
+completion may be called updated; show skipped and failed/unconfirmed distinctly.
+Failures are best-effort and do not stop release completion/merge-back. Review the
+summary and retry only the helper, not publication. Never print credentials,
+document contents or raw CLI diagnostics. See
+[RELEASING.md](../../../RELEASING.md#optional-notebooklm-release-documentation-refresh)
+for prerequisites, journal location, source-slot requirements and recovery.
+
 ## Git Operations
 
 **Branch Naming**:
@@ -614,7 +663,7 @@ categories or change its native user-only consent stages.
 11. [ ] Push main branch
 12. [ ] (Hotfix only) Cherry-pick fix to main
 13. [ ] Verify the tagged combined docs export was generated before tagging, after source documentation and stable references were finalized; do not defer its generation until after publication
-14. [ ] Update NotebookLM sources — if the `notebooklm-mcp` MCP server is available, upload the generated `docs/notebooklm-export.md` and update other sources in the AI Guardian notebook using `source_add`
+14. [ ] Review the optional `nlm` NotebookLM refresh status (Phase 7c); use `refresh-notebooklm X.Y.Z` only for recovery, not a second MCP/manual upload or another release
 15. [ ] Generate demo guide — create `X.Y-demo-guide.md` in the external docs directory (see AGENTS.md) documenting new features with step-by-step demonstrations for stakeholder walkthroughs
 
 The automated `scripts/release.sh` merge-back resolves only known metadata
@@ -699,6 +748,7 @@ unexpected or broader conflict stops for maintainer review.
 15. **Create production tag**: After TestPyPI verification passes
 16. **Validate**: Run `python scripts/sync_release_versions.py --check` and ensure package versions match
 17. **Announce**: After verified production publication, use `announce-release X.Y.Z` and record its confirmed Discussion URL; never re-run publication to retry an announcement
+18. **Refresh NotebookLM**: Review Phase 7c or run `refresh-notebooklm X.Y.Z`; preserve the old export until the replacement is verified ready and never retry an uncertain upload blindly
 
 **Error Recovery**:
 - If any step fails, provide clear error message and recovery steps
