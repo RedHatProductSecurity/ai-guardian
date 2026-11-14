@@ -162,6 +162,11 @@ _PROJECT_ARTIFACTS: Dict[str, Tuple[Tuple[str, bool], ...]] = {
     "cursor": ((".cursor", True),),
     "copilot": ((".github/hooks", True), (".github/skills", True)),
     "grok": ((".grok", True),),
+    "goose": (
+        (".agents/plugins", True),
+        (".config/goose", True),
+        (".goosehints", False),
+    ),
     "codex": ((".codex", True),),
     "windsurf": ((".windsurf", True), (".codeium/windsurf", True)),
     "gemini": ((".gemini", True),),
@@ -187,6 +192,7 @@ _GLOBAL_ARTIFACT_ROOTS: Dict[str, Tuple[str, ...]] = {
     "cursor": ("~/.cursor",),
     "copilot": ("~/.github/hooks", "~/.copilot"),
     "grok": ("~/.grok",),
+    "goose": ("~/.config/goose", "~/.agents/plugins"),
     "codex": ("~/.codex",),
     "windsurf": ("~/.windsurf", "~/.codeium/windsurf"),
     "gemini": ("~/.gemini",),
@@ -531,6 +537,18 @@ def build_agent_config_inventory(
     for integration in SUPPORTED_IDE_REGISTRY:
         key = integration.key
         global_roots = _GLOBAL_ARTIFACT_ROOTS.get(key, ())
+        if key == "goose":
+            from ai_guardian.goose_support import (
+                goose_config_dir,
+                goose_plugins_dir,
+                goose_user_settings_path,
+            )
+
+            global_roots = (
+                str(goose_config_dir()),
+                str(goose_plugins_dir()),
+                str(goose_user_settings_path().parent),
+            )
         relocated_home = get_ide_home(key)
         if relocated_home is not None:
             global_roots = (str(relocated_home),)
@@ -647,12 +665,64 @@ def get_protected_agent_paths(project_dir: Optional[str] = None) -> Tuple[str, .
     return build_agent_config_inventory(project_dir).protected_paths
 
 
+def build_managed_goose_inventory(
+    project_dir: Optional[str] = None,
+) -> AgentConfigInventory:
+    """Protect the owned Goose plugin even when general agent config guards are off.
+
+    Goose's plugin settings can deactivate command hooks, so their controlling
+    file paths are reserved even before installation. Inventory construction must
+    not probe a request-selected plugin directory to decide this boundary.
+    Unrelated plugins, other provider files, and project hints are governed only
+    by the configurable, general inventory above.
+    """
+    from ai_guardian.goose_support import (
+        goose_config_dir,
+        goose_hook_path,
+        goose_user_settings_path,
+    )
+
+    active_project = project_dir or get_project_dir()
+    paths: List[ProtectedAgentPath] = []
+    seen: set = set()
+    for scope in ("user", "project"):
+        root = goose_hook_path(scope, active_project).parent.parent
+        _add_path(
+            paths,
+            seen,
+            str(root),
+            "goose",
+            scope,
+            active_project,
+            recursive=True,
+            kind="managed security plugin",
+        )
+    controls = (
+        (goose_config_dir() / "config.yaml", "user"),
+        (goose_user_settings_path(), "user"),
+        (Path(active_project) / ".config/goose/settings.json", "project"),
+        (Path(active_project) / ".config/goose/settings.local.json", "project"),
+    )
+    for path, scope in controls:
+        _add_path(
+            paths,
+            seen,
+            str(path),
+            "goose",
+            scope,
+            active_project,
+            kind="security plugin control",
+        )
+    return AgentConfigInventory(paths, active_project)
+
+
 __all__ = [
     "AGENT_CONFIG_PROTECTION_SECTION",
     "AgentConfigInventory",
     "ProtectedAgentPath",
     "SHELL_TOOL_NAMES",
     "build_agent_config_inventory",
+    "build_managed_goose_inventory",
     "get_protected_agent_paths",
     "is_agent_config_mutation_tool",
     "is_agent_config_protection_enabled",

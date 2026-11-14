@@ -12,6 +12,10 @@ _RULES_IDE_CONFIGS = {
         "rules_dir": ".",
         "rules_file": "SOUL.md",
     },
+    "goose": {
+        "rules_dir": ".",
+        "rules_file": ".goosehints",
+    },
 }
 
 _RULES_FILE_CONTENT = """\
@@ -68,6 +72,12 @@ def _handle_rules_setup(
         return
 
     rules_dir = Path(rules_config["rules_dir"])
+    if ide_type == "goose":
+        # --rules is explicit, but ordinary user setup must still not mutate
+        # the current project. Project hints are intentionally user-managed.
+        from ai_guardian.goose_support import goose_config_dir
+
+        rules_dir = goose_config_dir()
     rules_path = rules_dir / rules_config["rules_file"]
 
     if dry_run:

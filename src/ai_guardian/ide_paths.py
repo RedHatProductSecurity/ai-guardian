@@ -309,6 +309,10 @@ def resolve_ide_session_dir(
 
 def resolve_ide_skill_dir(ide_type: str, default_path: str) -> Path:
     """Resolve a user's skill directory while keeping project paths separate."""
+    if ide_type == "goose":
+        from ai_guardian.goose_support import goose_plugins_dir
+
+        return goose_plugins_dir().parent / "skills"
     home = get_ide_home(ide_type)
     if home is not None:
         return home / "skills"

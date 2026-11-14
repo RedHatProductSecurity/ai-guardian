@@ -114,6 +114,7 @@ Run separately for other deliberately selected historical homes.
 | Codex legacy | Selected home's `codex.json`, plus historical home-level `codex.json`, only when an owned registration exists |
 | OpenCode V1/V2 | Selected JSON/JSONC, legacy `mcp.ai-guardian`, V2 `mcp.servers.ai-guardian`, owned absolute/file-URI V1 plugin registrations; current plugin/shared bridge and old discovery-directory bridge |
 | Pi | Current managed `ai-guardian/index.ts` and matching `package.json`, and owned legacy flat `ai-guardian.ts`, in user or explicitly selected project scope |
+| Goose | Owned hook actions and MCP entry under the selected `.agents/plugins/ai-guardian-goose/`, plus its matching generated `plugin.json`; honors absolute `GOOSE_PATH_ROOT`; unrelated plugin content/settings/hints retained |
 | AiderDesk/OpenClaw | Generated `index.ts`, matching package manifest and shared bridge in the selected extension/plugin home |
 | Cline/ZooCode/Kiro project scripts | Only known event filenames and Windows script variants with the exact generated single-command shape; never their shared hook directories |
 | Other selected project files | Known Claude/Cursor/Codex/Copilot/Grok/Gemini/Antigravity/Crush files, project OpenCode JSON/JSONC and `.opencode` artifacts; user-home overrides do not redirect these paths |
@@ -181,6 +182,7 @@ retry/continuation unverified. `—`: no managed surface for that stage.
 | Cursor (`cursor`) | — | H/U | H/U | — | M/U | Setup sets `failClosed: true` on decision hooks; observation hooks have no decision channel |
 | Copilot (`copilot`) | — | H/U | H/U | — | M/U if explicitly configured | Top-level managed event arrays |
 | Grok Build (`grok`) | H/U | H/U | H/U | — | M/U | Only `PreToolUse` has a blocking decision channel |
+| Goose (`goose`) | H/U | H/U | — | — | M/U | Managed pre-tool action uses `on_failure: block`, so a missing executable blocks tools; desktop/native Windows and live package-first lifecycle unqualified |
 | Codex CLI / desktop Codex mode (`codex`) | H/U | H/U | H/U | — | M/U | Managed lifecycle includes compaction/end; regular ChatGPT mode is not covered |
 | Windsurf (`windsurf`) | — | H/U | H/U | — | M/U if configured | Nested hook events; no universal fail-open assumption |
 | Gemini CLI (`gemini`) | H/U | H/U | H/U | — | M/U if configured | BeforeAgent/BeforeTool/AfterTool and startup registration |

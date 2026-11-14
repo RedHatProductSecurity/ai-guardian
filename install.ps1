@@ -14,6 +14,7 @@
     and their hooks are set up automatically.
     Choices: claude, cursor, copilot, grok, codex, windsurf, gemini, cline,
               antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, pi, augment, crush, junie
+    Goose command hooks are POSIX-only; native Windows setup is not qualified.
 
 .PARAMETER Profile
     Security profile: @minimal, @standard (default), @strict

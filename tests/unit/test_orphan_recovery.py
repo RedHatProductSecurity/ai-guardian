@@ -27,7 +27,7 @@ HOME_VARIABLES = (
     "CLAUDE_CONFIG_DIR CURSOR_CONFIG_DIR COPILOT_HOME GROK_HOME CODEX_HOME "
     "GEMINI_CLI_HOME CLINE_DATA_DIR KIRO_HOME JUNIE_HOME AIDER_DESK_DIR "
     "AIDER_DESK_HOME_DIR OPENCLAW_STATE_DIR OPENCLAW_HOME OPENCLAW_CONFIG_PATH "
-    "OPENCODE_CONFIG_DIR OPENCODE_CONFIG CRUSH_GLOBAL_CONFIG PI_CODING_AGENT_DIR"
+    "OPENCODE_CONFIG_DIR OPENCODE_CONFIG CRUSH_GLOBAL_CONFIG PI_CODING_AGENT_DIR GOOSE_PATH_ROOT"
 ).split()
 GENERATED = "// ai-guardian-generated-version: 1.20.0\n"
 
@@ -313,6 +313,71 @@ def test_preview_is_read_only_and_repeat_cleanup_is_noop(engine, isolated_home):
     cleaned = snapshot(isolated_home)
     assert engine["main"](["--scope", "user", "--yes"]) == 0
     assert snapshot(isolated_home) == cleaned
+
+
+@pytest.mark.parametrize("scope", ["user", "project"])
+def test_goose_recovery_preserves_other_plugin_actions_and_preferences(
+    engine, isolated_home, tmp_path, monkeypatch, scope
+):
+    project = tmp_path / "project"
+    project.mkdir()
+    root = isolated_home / "relocated"
+    monkeypatch.setenv("GOOSE_PATH_ROOT", str(root))
+    base = (root if scope == "user" else project) / ".agents/plugins/ai-guardian-goose"
+    hook_path = write_json(
+        base / "hooks/hooks.json",
+        {
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "hooks": [
+                            hook("/gone/ai-guardian --ide goose"),
+                            hook("audit-tool"),
+                        ]
+                    }
+                ]
+            }
+        },
+    )
+    mcp_path = write_json(
+        base / ".mcp.json",
+        {
+            "mcpServers": {
+                "ai-guardian": {"command": "/gone/ai-guardian", "args": ["mcp-server"]},
+                "other": {"command": "other-tool"},
+            }
+        },
+    )
+    manifest = write_json(
+        base / "plugin.json",
+        {
+            "name": "ai-guardian-goose",
+            "_ai_guardian_managed": "ai-guardian-goose-command-hooks",
+        },
+    )
+    settings = write_json(
+        root / ".config/goose/settings.json", {"enabledPlugins": ["ai-guardian-goose"]}
+    )
+    args = [
+        "--scope",
+        scope,
+        *(["--project", str(project)] if scope == "project" else []),
+    ]
+    before = snapshot(tmp_path)
+    assert engine["main"]([*args, "--dry-run"]) == 0
+    assert snapshot(tmp_path) == before
+    assert engine["main"]([*args, "--yes"]) == 0
+    assert not manifest.exists()
+    assert json.loads(hook_path.read_text())["hooks"]["PreToolUse"][0]["hooks"] == [
+        hook("audit-tool")
+    ]
+    assert json.loads(mcp_path.read_text())["mcpServers"] == {
+        "other": {"command": "other-tool"}
+    }
+    assert settings.read_bytes() == before[settings.relative_to(tmp_path)]
+    cleaned = snapshot(tmp_path)
+    assert engine["main"]([*args, "--yes"]) == 0
+    assert snapshot(tmp_path) == cleaned
 
 
 def test_jsonc_preserves_comments_settings_and_nested_mcp(engine, isolated_home):

@@ -17,7 +17,7 @@ from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES, SUPPORTED_IDE_TYPE
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Keep launcher coverage aligned with the complete supported IDE registry.
-CONTAINER_EXCLUDED_IDE_TYPES = frozenset()
+CONTAINER_EXCLUDED_IDE_TYPES = frozenset({"goose"})  # Host-only; not shipped in images.
 CONTAINER_SUPPORTED_IDE_TYPES = tuple(
     ide_type
     for ide_type in SUPPORTED_IDE_TYPES

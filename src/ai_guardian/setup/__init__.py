@@ -19,7 +19,7 @@ from ai_guardian.config.utils import get_cache_dir, get_config_dir
 
 logger = logging.getLogger(__name__)
 
-_PROJECT_SCOPED_IDES = frozenset({"cursor", "grok", "pi"})
+_PROJECT_SCOPED_IDES = frozenset({"cursor", "grok", "pi", "goose"})
 
 
 def _supports_project_scope(ide_type: Optional[str]) -> bool:
@@ -42,7 +42,7 @@ def _normalize_project_setup_target(
             return (
                 scope,
                 project_dir,
-                "Project-scoped setup is supported only for Cursor, Grok, and Pi.",
+                "Project-scoped setup is supported only for Cursor, Grok, Pi, and Goose.",
             )
         return "user", None, None
 
@@ -290,7 +290,7 @@ def _setup_single_ide(
     mcp_repair = False
     # The tray's explicit setup action must be able to repair OpenCode MCP
     # without forcing replacement of a verified, already healthy plugin.
-    can_repair_mcp = ide_type in ("codex", "cursor", "pi") or (
+    can_repair_mcp = ide_type in ("codex", "cursor", "pi", "goose") or (
         ide_type == "opencode" and not no_mcp
     )
     if not success and can_repair_mcp:
@@ -376,7 +376,7 @@ def setup_hooks(
         save_profile: Optional name to save current config as a custom profile
         list_profiles: If True, list available security profiles
         no_mcp: If True, skip MCP server installation (MCP is installed by default)
-        scope: Cursor/Pi setup scope. Defaults to ``user``; use ``project``
+        scope: Project-capable integration setup scope. Defaults to ``user``; use ``project``
             only for an explicitly selected workspace.
         project_dir: Existing workspace directory for project-scoped setup.
 

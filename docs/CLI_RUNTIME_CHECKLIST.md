@@ -50,6 +50,18 @@ build time, and forwards `XAI_API_KEY` when supplied. Grok is intentionally not
 part of the OpenShell selector or image until its image, provider/network
 policy, and runtime authentication path are validated.
 
+### Current Goose boundary
+
+`goose` is a host CLI integration pinned to v1.59.0 on Linux/macOS, not a normal
+Docker/Podman or OpenShell runtime. `SUPPORTED_CONTAINER_CLI_IDE_TYPES` excludes it
+from product selectors/image parity; the general CLI registry identifies its
+executable for host self-protection. Desktop/native Windows are unqualified. The
+Release Readiness smoke-only image is separate: no host mounts, external network,
+credentials, or product sandbox creation; it must prove native pre-tool denial
+and a clean tool/result round-trip using a loopback mock. Prompt denial, Stop
+withholding, redaction, and transcripts/sessions are tested exclusions. See
+[Goose support](GOOSE.md).
+
 ## 1. Scope, support, and legal classification
 
 - [ ] Choose a stable CLI key and display name. Keep the key consistent across

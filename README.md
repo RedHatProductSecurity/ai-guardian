@@ -86,6 +86,7 @@ cloud jobs.
 | Pi extension | Gate | Gate | Replace or mark as error | Requires a loaded extension; commands handled before the input event are outside its prompt gate. |
 | Augment / Auggie local hooks | Not installed | Gate for selected tools | Feedback only; no replacement | Installed matchers do not cover every tool. |
 | Crush | Not installed | Gate | Not installed | AI Guardian installs only the pre-tool stage. |
+| Goose host CLI | Observe only | Gate | Observe only | v1.59.0 Linux/macOS only; requires an enabled plugin with the fail-closed pre-tool action. Desktop/native Windows and product container/OpenShell runtimes are unqualified. |
 | Junie | Not installed | Not installed | Not installed | MCP-only advisory checks depend on the agent choosing to call and follow them; no enforced hooks. |
 
 **Post-tool processing cannot undo completed tool side effects.** See the
@@ -142,6 +143,7 @@ upstream references. That guide is the source of truth for this summary.
 | Agent CLI maturity advisories | [Agent Support][agent-support] |
 | OpenCode support | [OpenCode][opencode] |
 | Pi and Crush support | [Agent Support][agent-support] |
+| Goose host CLI pre-tool enforcement | [Goose Support][goose] |
 | Dummy agent for hook testing | [Agent Support][agent-support] |
 | Container image | [Container Guide][container] |
 | Docker, Podman, and OpenShell sandboxes | [Sandbox Guide][sandbox] |
@@ -177,6 +179,7 @@ For production use, install a stable release from PyPI. The `main` branch contai
 [getting-started]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/overview/01-what-is-ai-guardian-install-and-verify.md
 [configuration]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md
 [agent-support]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md
+[goose]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GOOSE.md
 [scanners]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md
 [console]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md
 [troubleshooting]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TROUBLESHOOTING.md

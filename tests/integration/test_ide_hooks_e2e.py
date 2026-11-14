@@ -174,6 +174,7 @@ def isolated_ide_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("CODEX_HOME", str(home / "codex"))
     monkeypatch.delenv("AI_GUARDIAN_IDE_TYPE", raising=False)
     monkeypatch.delenv("AI_GUARDIAN_DAEMON_URL", raising=False)
+    monkeypatch.delenv("GOOSE_PATH_ROOT", raising=False)
     monkeypatch.chdir(project)
 
     _write_guardian_config(config_dir, blocked_dir)
@@ -355,6 +356,40 @@ def _payload(
 ) -> Dict[str, Any]:
     project = environment["project"]
     blocked_file = environment["blocked_file"]
+    if ide_type == "goose":
+        payload = {
+            "event": event_name,
+            "session_id": "isolated-ide-e2e",
+            "working_dir": str(project),
+        }
+        if event_name == "PreToolUse":
+            payload.update(
+                {
+                    # This scanner-only fixture disables ordinary permissions.
+                    # Exercise directory_rules through a native file-read tool,
+                    # as for the other IDEs, not an ungoverned shell command.
+                    "tool_name": "read_image" if case_name == "block" else "shell",
+                    "tool_call_id": "e2e-call",
+                    "tool_input": (
+                        {"source": str(blocked_file)}
+                        if case_name == "block"
+                        else {"command": "pwd"}
+                    ),
+                }
+            )
+        elif event_name == "PostToolUse":
+            payload.update(
+                {
+                    "tool_name": "shell",
+                    "tool_input": {"command": "pwd"},
+                    "tool_output": {
+                        "content": [{"type": "text", "text": "clean synthetic output"}]
+                    },
+                }
+            )
+        elif event_name == "UserPromptSubmit":
+            payload["message"] = "Describe this project."
+        return payload
     payload: Dict[str, Any] = {
         "cwd": str(project),
         "session_id": "isolated-ide-e2e",
@@ -718,6 +753,10 @@ def test_install_verify_and_exercise_ide_integration(
     ide_type, isolated_ide_environment
 ):
     """Install, verify, and exercise the generated integration for one IDE."""
+    if ide_type == "goose" and platform.system() == "Windows":
+        pytest.skip(
+            "Goose command hooks require POSIX sh; native Windows is not qualified"
+        )
     if ide_type == "opencode":
         pytest.skip(
             "OpenCode is covered by generation-specific plugin and MCP contracts"

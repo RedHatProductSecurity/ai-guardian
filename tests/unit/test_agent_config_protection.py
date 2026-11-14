@@ -1,6 +1,7 @@
 """Tests for the canonical supported-agent configuration inventory."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -8,7 +9,13 @@ from ai_guardian.agent_config_protection import (
     AgentConfigInventory,
     ProtectedAgentPath,
     build_agent_config_inventory,
+    build_managed_goose_inventory,
     is_agent_config_protection_enabled,
+)
+from ai_guardian.goose_support import (
+    goose_config_dir,
+    goose_hook_path,
+    goose_user_settings_path,
 )
 from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
 
@@ -195,3 +202,80 @@ def test_inventory_has_a_project_artifact_root_for_every_supported_integration()
             for item in inventory.paths
         )
     assert inventory.match_path(r"C:\\workspace\\.cursor\\hooks.json") is not None
+
+
+@pytest.fixture
+def isolated_goose_paths(tmp_path, monkeypatch):
+    home = tmp_path / "goose home"
+    project = tmp_path / "workspace"
+    home.mkdir()
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("GOOSE_PATH_ROOT", str(home))
+    return home, project
+
+
+@pytest.mark.parametrize(
+    "installed_scopes",
+    [(), ("user",), ("project",), ("user", "project")],
+    ids=["absent", "user", "project", "both"],
+)
+def test_managed_goose_inventory_reserves_controls_independent_of_installation(
+    isolated_goose_paths, installed_scopes
+):
+    _, project = isolated_goose_paths
+    for scope in installed_scopes:
+        goose_hook_path(scope, str(project)).parent.parent.mkdir(parents=True)
+
+    inventory = build_managed_goose_inventory(str(project))
+    controls = (
+        (goose_config_dir() / "config.yaml", "user"),
+        (goose_user_settings_path(), "user"),
+        (project / ".config/goose/settings.json", "project"),
+        (project / ".config/goose/settings.local.json", "project"),
+    )
+    for path, scope in controls:
+        item = inventory.match_path(str(path))
+        assert item is not None, path
+        assert item.integration == "goose"
+        assert item.scope == scope
+        assert item.kind == "security plugin control"
+        assert item.recursive is False
+    assert len(inventory.paths) == 6  # Two owned plugin roots and four controls.
+
+
+def test_managed_goose_inventory_does_not_probe_plugin_directory_existence(
+    isolated_goose_paths,
+):
+    _, project = isolated_goose_paths
+    with patch.object(
+        Path, "is_dir", side_effect=AssertionError("untrusted installation probe")
+    ) as probe:
+        inventory = build_managed_goose_inventory(str(project))
+
+    probe.assert_not_called()
+    assert inventory.match_path(str(project / ".config/goose/settings.json"))
+
+
+def test_managed_goose_inventory_preserves_unrelated_mutation_and_read_scope(
+    isolated_goose_paths,
+):
+    home, project = isolated_goose_paths
+    inventory = build_managed_goose_inventory(str(project))
+    for path in (
+        project / ".goosehints",
+        project / ".agents/plugins/other/hooks/hooks.json",
+        project / ".config/goose/preferences.json",
+        home / ".agents/plugins/other/plugin.json",
+        goose_config_dir() / "provider-preferences.yaml",
+    ):
+        assert inventory.match_path(str(path)) is None, path
+    assert (
+        inventory.match_mutation("Read", {"file_path": str(goose_user_settings_path())})
+        is None
+    )
+    assert (
+        inventory.match_mutation("Bash", {"command": "cat .config/goose/settings.json"})
+        is None
+    )

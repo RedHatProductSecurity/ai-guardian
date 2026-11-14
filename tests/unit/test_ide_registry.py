@@ -344,6 +344,27 @@ def test_support_capability_matrix_covers_registry_and_variants():
             assert any(variant in row for row in integration_rows)
 
 
+def test_goose_readme_summary_keeps_enforcement_and_runtime_limits():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    rows = [
+        line for line in readme.splitlines() if line.startswith("| Goose host CLI |")
+    ]
+    assert len(rows) == 1
+    cells = [cell.strip() for cell in rows[0].strip("|").split("|")]
+    assert len(cells) == 5
+    assert cells[1:4] == ["Observe only", "Gate", "Observe only"]
+    for limit in (
+        "v1.59.0",
+        "Linux/macOS",
+        "enabled plugin",
+        "fail-closed",
+        "unqualified",
+    ):
+        assert limit in cells[4]
+    for excluded in ("Desktop", "native Windows", "container/OpenShell"):
+        assert excluded in cells[4]
+
+
 def test_explicit_cursor_project_scope_uses_selected_workspace(tmp_path):
     """A parent .cursor directory cannot redirect an explicit project target."""
     parent_cursor = tmp_path / ".cursor"
@@ -374,6 +395,12 @@ def test_registered_adapters_handle_malformed_payloads(ide_type):
         "cwd": 7,
     }
 
+    if ide_type == "goose":
+        # Goose's fail-closed PreToolUse action treats bad/unknown event data as
+        # process failure, rather than silently normalizing it to an empty scan.
+        with pytest.raises(ValueError, match="Goose hook event"):
+            adapter.normalize_input(payload)
+        return
     normalized = adapter.normalize_input(payload)
 
     assert isinstance(normalized, NormalizedHookInput), ide_type

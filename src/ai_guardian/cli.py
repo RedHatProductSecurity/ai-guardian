@@ -516,6 +516,7 @@ def main():
             help=(
                 "For Cursor Cloud: install hooks in DIR/.cursor; configure "
                 "MCP through Cursor's dashboard/team settings or API. "
+                "Also supports explicit Grok, Pi, and Goose project setup. "
                 "Default setup targets the local user configuration."
             ),
         )

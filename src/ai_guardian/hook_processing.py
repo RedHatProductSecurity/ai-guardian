@@ -79,10 +79,7 @@ from ai_guardian.constants import (
     HookEvent,
     ViolationType,
 )
-from ai_guardian.agent_config_protection import (
-    is_agent_config_mutation_tool,
-    is_agent_config_protection_enabled,
-)
+from ai_guardian.agent_config_protection import is_agent_config_mutation_tool
 from ai_guardian.developer_session import is_trusted_developer_session
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.utils.path_matching import match_leading_doublestar_pattern
@@ -1089,6 +1086,21 @@ def extract_tool_result(hook_data):
         tuple: (output: str or None, tool_name: str)
     """
     try:
+        goose_adapter = detect_adapter(hook_data)
+        if goose_adapter.agent_type == "goose":
+            normalized = goose_adapter.normalize_input(hook_data)
+            goose_tool_name = normalized.tool_name or "unknown"
+            if goose_tool_name in STATE_MODIFY_TOOLS:
+                return None, goose_tool_name
+            value = normalized.tool_response
+            return (
+                (
+                    json.dumps(value, ensure_ascii=False)
+                    if isinstance(value, (dict, list))
+                    else value if isinstance(value, str) else None
+                ),
+                goose_tool_name,
+            )
         # Get tool name from multiple possible locations
         tool_name = hook_data.get("tool_name") or hook_data.get("toolName")
         logger.info(
@@ -2015,6 +2027,11 @@ def inject_security_only(hook_data, daemon_state=None):
     """
     try:
         adapter = detect_adapter(hook_data)
+        if adapter.agent_type == "goose":
+            # A paused pre-tool hook must still acknowledge the host's
+            # decision protocol; generic {} stdout is a Goose hook failure.
+            event = adapter.normalize_input(hook_data).event
+            return adapter.format_response(False, hook_event=event)
         if adapter.ide_type not in (
             IDEType.CLAUDE_CODE,
             IDEType.ANTIGRAVITY,
@@ -2339,9 +2356,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                 if config_error:
                     warning_messages.append(config_error)
 
-                agent_config_section, agent_config_error = (
-                    _load_agent_config_protection_config()
-                )
+                _, agent_config_error = _load_agent_config_protection_config()
                 if agent_config_error:
                     warning_messages.append(agent_config_error)
 
@@ -2351,13 +2366,11 @@ def _process_hook_data(hook_data, daemon_state=None):
                     now,
                     default=True,
                 )
-                agent_config_protection_enabled = is_agent_config_protection_enabled(
-                    {"agent_config_protection": agent_config_section}
-                )
+                # Mutations still need the immutable reserved-control inventory
+                # when the broader agent-configuration preference is off. The
+                # policy checker selects the applicable inventory itself.
                 agent_config_check_required = bool(
-                    agent_config_protection_enabled
-                    and tool_name
-                    and is_agent_config_mutation_tool(tool_name)
+                    tool_name and is_agent_config_mutation_tool(tool_name)
                 )
                 # Identity verification remains mandatory even when the user
                 # disables ordinary permission rules.
@@ -2405,6 +2418,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                         (
                             immutable_shell_check_required
                             or immutable_file_check_required
+                            or agent_config_check_required
                         )
                         and not permissions_enabled
                         and not identity_required
@@ -2767,9 +2781,9 @@ def _process_hook_data(hook_data, daemon_state=None):
             ):
                 # Extract file content for tools that read files
                 file_hook_data = hook_data
-                if agent_type == "opencode" and tool_name == "Read":
+                if agent_type in ("opencode", "goose") and tool_name == "Read":
                     # The native payload remains available for audit, but file
-                    # checks must consume the same resolved target as policy,
+                    # checks must consume the same normalized target as policy,
                     # never re-extract a relative/conflicting native alias.
                     file_hook_data = {"tool_input": tool_input}
                 with _latency_timer.check("directory_rules"):

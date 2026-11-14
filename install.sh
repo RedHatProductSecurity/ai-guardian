@@ -34,7 +34,7 @@ Options:
                         installed IDEs and set up their hooks automatically
                         Choices: claude, cursor, copilot, grok, codex, windsurf,
                                  gemini, antigravity, cline, zoocode, kiro, aiderdesk,
-                                  openclaw, opencode, pi, augment, crush, junie
+                                  openclaw, opencode, pi, augment, crush, junie, goose
     --no-setup          Install only, don't auto-detect or update IDE hooks
     --profile PROFILE   Security profile: @minimal, @standard (default), @strict
     --version VERSION   Install a specific version or a local .whl file
@@ -106,6 +106,20 @@ detect_installed_agents() {
     local grok_dir="${GROK_HOME:-$HOME/.grok}"
     if [ -d "$grok_dir" ] || command -v grok >/dev/null 2>&1; then
         agents+=("grok")
+    fi
+
+    local goose_config="$HOME/.config/goose/config.yaml"
+    case "${XDG_CONFIG_HOME:-}" in
+        /*) goose_config="$XDG_CONFIG_HOME/goose/config.yaml" ;;
+    esac
+    if [ "$(uname -s)" = "Darwin" ]; then
+        goose_config="$HOME/Library/Application Support/Block/goose/config.yaml"
+    fi
+    case "${GOOSE_PATH_ROOT:-}" in
+        /*) goose_config="$GOOSE_PATH_ROOT/config/config.yaml" ;;
+    esac
+    if [ -f "$goose_config" ] || command -v goose >/dev/null 2>&1; then
+        agents+=("goose")
     fi
 
     local codex_dir="${CODEX_HOME:-$HOME/.codex}"

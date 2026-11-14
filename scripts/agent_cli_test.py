@@ -40,6 +40,10 @@ MOCK_GEMINI_MODEL = "gemini-2.5-flash"
 MOCK_URL = f"http://127.0.0.1:{MOCK_PORT}/v1"
 MOCK_ANTHROPIC_BASE_URL = f"http://127.0.0.1:{MOCK_PORT}"
 MOCK_KEY = "ai-guardian-local-smoke-only"
+GOOSE_VERSION = "1.59.0"
+# Goose is host-only in the product registry. Its smoke uses a supplied,
+# disposable test image, not the supported sandbox create/entrypoint path.
+GOOSE_SMOKE_CASE_NAMES = frozenset({"command_credential", "clean_tool"})
 OPENCODE_SERVER_PORT = 4096
 OPENCODE_SERVER_URL = f"http://127.0.0.1:{OPENCODE_SERVER_PORT}"
 AGENT_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,48}$")
@@ -262,6 +266,15 @@ elif cli == 'claude':
         probe=f'Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case {case})'
         if probe not in allowed: allowed.append(probe)
     path.write_text(json.dumps(cfg), encoding='utf-8')
+elif cli == 'goose':
+    # This entire HOME is new and private to a network-none test container.
+    Path(workspace).mkdir(parents=True, exist_ok=True)
+    path=Path(os.environ['GOOSE_PATH_ROOT'])/'config/config.yaml'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        'GOOSE_PROVIDER':'openai', 'GOOSE_MODEL':model, 'GOOSE_MODE':'auto',
+        'extensions':{'developer':{'enabled':True, 'type':'platform', 'name':'developer'}}
+    }), encoding='utf-8')
 else: raise SystemExit('unsupported client')
 """
 
@@ -501,6 +514,8 @@ def _validate_agent(cli_name: str, agent: str) -> None:
         raise ValueError("the local mock currently supports Claude's default agent")
     if cli_name == "gemini" and agent != "default":
         raise ValueError("the local mock currently supports Gemini's default agent")
+    if cli_name == "goose" and agent != "default":
+        raise ValueError("the local mock currently supports Goose's default agent")
 
 
 def build_create_command(
@@ -684,6 +699,20 @@ def build_agent_command(
             "--approval-mode",
             "yolo",
         ]
+    if cli_name == "goose":
+        return [
+            "goose",
+            "run",
+            "--no-session",
+            "--provider",
+            "openai",
+            "--model",
+            MOCK_MODEL,
+            "--output-format",
+            "json",
+            "--text",
+            prompt,
+        ]
     raise ValueError(f"unsupported CLI: {cli_name}")
 
 
@@ -718,6 +747,7 @@ def sanitized_host_environment(home: Path) -> Dict[str, str]:
         "GITHUB_",
         "GITLAB_",
         "GOOGLE_",
+        "GOOSE_",
         "MISTRAL_",
         "OPENAI_",
         "OPENCODE_",
@@ -1871,8 +1901,7 @@ def _run_case(
     old_hooks = _hook_counts(engine, name, timeout, diagnostics)
     is_tool_case = (
         case.name in OUTPUT_CASES
-        or case.name
-        in ("ssrf", "config_exfil", "command_credential")
+        or case.name in ("ssrf", "config_exfil", "command_credential")
         or case.name in HTTP_REQUEST_CREDENTIAL_CASES
     )
     old_tools = (
@@ -1974,6 +2003,17 @@ def _run_case(
         )
     if case.name == "command_credential" and tool_deltas.get("executed", 0) != 0:
         return fail("command credential probe executed despite pre-tool denial")
+    if cli == "goose":
+        if tool_deltas.get("native_tool_name_shell", 0) < 1:
+            return fail(
+                "the native Goose shell tool was not confirmed by the local mock"
+            )
+        if invocation.returncode != 0:
+            return fail("Goose did not finish the local mock turn cleanly")
+        if request_delta < 2:
+            return fail(
+                "Goose did not deliver the tool result/denial to the local mock"
+            )
     if case.name in HTTP_REQUEST_CREDENTIAL_DENY_CASES:
         if tool_deltas.get("file_written", 0) != 0:
             return fail(
@@ -2277,7 +2317,130 @@ def build_agent_environment(cli: str) -> List[str]:
                 f"GEMINI_API_KEY={MOCK_KEY}",
             ]
         )
+    if cli == "goose":
+        env.extend(
+            [
+                f"OPENAI_BASE_URL={MOCK_URL}",
+                f"OPENAI_API_KEY={MOCK_KEY}",
+                "GOOSE_PATH_ROOT=/sandbox/goose-smoke",
+                "GOOSE_MODE=auto",
+            ]
+        )
     return env
+
+
+def build_goose_smoke_command(engine: str, image: str, name: str) -> List[str]:
+    """No host mounts, inherited credentials, published ports, or external network."""
+    command = [
+        engine,
+        "run",
+        "--detach",
+        "--pull=never",
+        "--name",
+        name,
+        "--network=none",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--user",
+        "1000:1000",
+        "--entrypoint",
+        "sleep",
+    ]
+    for value in (
+        "HOME=/sandbox",
+        "XDG_CONFIG_HOME=/sandbox/.config",
+        "GOOSE_PATH_ROOT=/sandbox/goose-smoke",
+        f"AI_GUARDIAN_STATE_DIR={STATE_DIR}",
+        "AI_GUARDIAN_CONFIG_DIR=/sandbox/.config/ai-guardian",
+        "AI_GUARDIAN_HEADLESS=true",
+    ):
+        command.extend(["--env", value])
+    return [*command, image, "infinity"]
+
+
+def _run_goose_smoke(args: argparse.Namespace) -> int:
+    """Qualify host CLI hooks in a smoke-only image, never product runtime support."""
+    name = f"ag-cli-goose-smoke-{uuid.uuid4().hex[:8]}"
+    created = False
+    try:
+        result = _run(
+            build_goose_smoke_command(args.container_engine, args.image, name),
+            args.timeout,
+        )
+        if result.returncode != 0:
+            print("FAIL Goose: could not create the isolated smoke container")
+            return 1
+        created = True
+        version = _exec(
+            args.container_engine, name, ["goose", "--version"], args.timeout
+        )
+        if (
+            version.returncode != 0
+            or version.stdout.strip() != f"goose {GOOSE_VERSION}"
+        ):
+            print(
+                f"FAIL Goose: the supplied smoke image must contain Goose {GOOSE_VERSION}"
+            )
+            return 1
+        with tempfile.TemporaryDirectory(
+            prefix="ai-guardian-goose-smoke-", dir=_temp_parent()
+        ) as directory:
+            config_dir = Path(directory)
+            write_smoke_config(config_dir)
+            if not _write_file(
+                args.container_engine,
+                name,
+                "/sandbox/.config/ai-guardian/ai-guardian.json",
+                (config_dir / "ai-guardian.json").read_bytes(),
+                args.timeout,
+            ):
+                print("FAIL Goose: unable to stage the isolated smoke configuration")
+                return 1
+        if not _configure_agent(
+            args.container_engine, name, "goose", "default", args.timeout
+        ):
+            return 1
+        setup = _exec(
+            args.container_engine,
+            name,
+            ["ai-guardian", "setup", "--ide", "goose", "--yes", "--no-mcp"],
+            args.timeout,
+        )
+        if setup.returncode != 0:
+            print("FAIL Goose: managed hook setup failed")
+            return 1
+        # Hooks use the current wheel without connecting to any host daemon.
+        # The real CLI and mock share loopback inside network=none.
+        if not _start_mock(args.container_engine, name, args.timeout):
+            return 1
+        passed = True
+        for case in CASES:
+            if case.name not in GOOSE_SMOKE_CASE_NAMES:
+                continue
+            passed = (
+                _run_case(
+                    args.container_engine, name, "goose", "default", case, args.timeout
+                )
+                and passed
+            )
+        _progress("Goose host CLI hook smoke " + ("passed." if passed else "failed."))
+        return 0 if passed else 1
+    except (OSError, subprocess.TimeoutExpired):
+        print("FAIL Goose: smoke execution failed or timed out")
+        return 1
+    finally:
+        if created:
+            try:
+                removed = _run(
+                    [args.container_engine, "rm", "--force", name], args.timeout
+                )
+                cleanup_failed = removed.returncode != 0
+            except (OSError, subprocess.TimeoutExpired):
+                cleanup_failed = True
+            if cleanup_failed:
+                print(
+                    f"WARNING: unable to remove this run's Goose smoke container: {name}"
+                )
 
 
 def _delete_sandbox(
@@ -2304,14 +2467,14 @@ def _delete_sandbox(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Run Claude, Codex, Gemini, OpenCode, or Pi against a local mock provider in a fresh "
+            "Run Claude, Codex, Gemini, OpenCode, Pi, or Goose against a local mock provider in a fresh "
             "strict-derived sandbox with output sanitization. "
             "No provider credentials or live model calls are used."
         )
     )
     parser.add_argument(
         "--cli-name",
-        choices=("claude", "codex", "gemini", "opencode", "pi"),
+        choices=("claude", "codex", "gemini", "opencode", "pi", "goose"),
     )
     parser.add_argument(
         "--cli-version",
@@ -2324,11 +2487,14 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--agent",
         help=(
-            "Claude/Gemini label ('default'), Codex profile, OpenCode agent, "
+            "Claude/Gemini/Goose label ('default'), Codex profile, OpenCode agent, "
             "or Pi provider"
         ),
     )
-    parser.add_argument("--image", help="Existing image built from the current wheel")
+    parser.add_argument(
+        "--image",
+        help="Existing image built from the current wheel (required for Goose's smoke-only image)",
+    )
     parser.add_argument(
         "--wheel", type=Path, help="Wheel for a temporary current-source image"
     )
@@ -2407,6 +2573,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
     if args.accept_proprietary_tos and args.cli_name != "claude":
         parser.error("--accept-proprietary-tos applies only to --cli-name claude")
+    if args.cli_name == "goose" and (not args.image or args.keep or args.wheel):
+        parser.error(
+            "Goose requires --image with the current wheel and Goose 1.59.0; --keep and --wheel are not supported"
+        )
     try:
         _validate_agent(args.cli_name, args.agent)
         guardian = _split_command(args.ai_guardian_command)
@@ -2418,6 +2588,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args.container_engine
     ):
         parser.error(f"Container engine is not available: {args.container_engine}")
+
+    if args.cli_name == "goose":
+        return _run_goose_smoke(args)
 
     root = Path(tempfile.mkdtemp(prefix="ai-guardian-agent-cli-", dir=_temp_parent()))
     home = root / "empty-home"

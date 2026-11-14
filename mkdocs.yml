@@ -112,6 +112,7 @@ nav:
   - IDE Integrations:
       - IDE/Agent Integration Checklist: IDE_INTEGRATION_CHECKLIST.md
       - OpenCode Support: OPENCODE.md
+      - Goose Support: GOOSE.md
       - GitHub Copilot: GITHUB_COPILOT.md
       - Aider: AIDER.md
       - AiderDesk: AIDERDESK.md

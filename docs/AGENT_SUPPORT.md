@@ -62,6 +62,7 @@ upstream distinction.
 | Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
+| Goose | `--ide goose` | 5 managed events; only `PreToolUse` enforces | Plugin-local advisor | **Host CLI v1.59.0 Linux/macOS; desktop/native Windows and product sandboxes unqualified** ([guide](GOOSE.md)) |
 
 ## IDE-specific home and configuration paths
 
@@ -82,6 +83,7 @@ home. With no variables set, the existing defaults below are unchanged.
 | Cursor | `CURSOR_CONFIG_DIR` | User hooks: `<dir>/hooks.json`; user MCP: `<dir>/mcp.json` | Project hooks/MCP remain under the selected project `.cursor/` directory |
 | GitHub Copilot CLI | `COPILOT_HOME` | Hooks: `<dir>/hooks/hooks.json`; optional MCP: `<dir>/mcp-config.json`; CLI transcript: `<dir>/session-state/events.jsonl` | Project files are not redirected; without the variable the hook default remains `~/.github/hooks/hooks.json` |
 | Grok Build | `GROK_HOME` | Hooks: `<dir>/hooks/ai-guardian.json`; MCP: `<dir>/config.toml` | Project hooks/MCP remain under the selected project `.grok/` directory; no local transcript adapter |
+| Goose | Absolute `GOOSE_PATH_ROOT` (process root) | Hooks/MCP: `<root>/.agents/plugins/ai-guardian-goose/`; configuration: `<root>/config`; plugin settings: `<root>/.config/goose/settings.json` | Explicit project plugin shadows user copy when enabled; [defaults/limits](GOOSE.md#paths) |
 | Gemini CLI | `GEMINI_CLI_HOME` | The effective `.gemini` home is `<dir>/.gemini`; hooks/settings: `<dir>/.gemini/settings.json`; sessions: `<dir>/.gemini/tmp` | Project `.gemini/` paths are not redirected |
 | Cline / ZooCode | `CLINE_DATA_DIR` for user MCP; `CLINE_STORAGE_DIR` remains a transcript/storage alias | MCP: `<dir>/mcp_settings.json` | Hook setup remains project-local at `.clinerules/hooks` |
 | Kiro | `KIRO_HOME` | MCP: `<dir>/settings/mcp.json`; CLI sessions: `<dir>/sessions/cli` | Hook setup remains project-local at `.kiro/hooks`; the historical no-env MCP default is retained |
@@ -161,6 +163,7 @@ blocking, observation, context injection, and output transformation.
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
 | Grok Build | Yes | Yes | Yes | Yes (observation) | N/A | Yes | Yes |
+| Goose | Yes | Yes (observation) | Yes | Yes (observation) | Not installed | N/A | Yes |
 | OpenAI Codex (CLI + Desktop) | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
@@ -246,6 +249,7 @@ a guarantee that every installed version behaves identically.
 | `augment` | Augment/Auggie local command hooks | **Not installed as a gate**: upstream `PromptSubmit` is asynchronous and cannot block or change the prompt. | **Gate** on explicit deny for the installed matcher set. | **Feedback only**; post hooks cannot deny or replace results. | Synchronous command hooks use JSON stdin/stdout; AI Guardian sets a 5s timeout. Only exit 2 or a deny blocks; crashes/timeouts fail open. Installed matchers cover selected process, edit, save, view, and remove-files tools, not every possible tool. [Hooks reference](https://docs.augmentcode.com/cli/hooks). |
 | `crush` | Current AI Guardian project hook installs only `PreToolUse` | **Not installed**. | **Gate** using the Claude-compatible deny response or exit 2. | **Not installed** by AI Guardian. | Command receives JSON on stdin; AI Guardian configures a 30s timeout. Only an explicit deny is relied on; other process-failure behavior is not qualified here. This describes AI Guardian's installed surface, not every hook available in newer Crush releases. [Crush hooks](https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md). |
 | `junie` | Junie MCP-only integration | **Not available**. | **Not available**. | **Not available**. | AI Guardian installs no lifecycle hook protocol. MCP checks are advisory and depend on the agent choosing to call and follow them; no hook timing or hook failure default applies. [Junie environment and configuration](https://junie.jetbrains.com/docs/environment-variables.html). |
+| `goose` | Goose v1.59.0 Linux/macOS host CLI; not desktop/native Windows or product container/OpenShell runtimes | **Observe only**; no rewrite/context injection. | **Gate** via `decision: block`; sanitized reason. | **Observe only**; no withholding/replacement. | Open Plugins JSON command hooks; 360s pre-tool timeout and `on_failure: block`, 60s passive timeouts. Missing executable, malformed payload/response, scan failure, and timeout fail closed. Requires the effective enabled plugin; config health is not live activation proof. Stop is excluded: blocking continues generation rather than withholding output. MCP is advisory. [Goose contract](GOOSE.md). |
 
 ## Hook Latency Support Matrix
 
@@ -276,6 +280,7 @@ integration guides.
 | Pi | Extension | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd | Supported |
 | Crush | Command hooks | PreToolUse | Supported (partial hook surface) |
 | Junie | MCP | None | MCP-only; no hook latency |
+| Goose | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd | Supported; prompt/post events observation-only |
 | Aider CLI | Git pre-commit hook | None | Commit-time scan; no per-interaction hook latency |
 
 Codex setup installs five managed events. The adapter also records timing for
@@ -313,6 +318,14 @@ sensitive tool results rather than returning a sanitized copy; Grok's prompt
 and post-tool callbacks are observation-only in AI Guardian; Copilot command
 prompt output is ignored by the host. Copilot CLI and Codex support transcript
 scanning via adapter-resolved default paths (Issue #935).
+
+**Goose:** pre-tool checks cover secrets/PII, command and HTTP-source credentials,
+directory/tool policy, prompt injection/jailbreaks, SSRF, configuration exfiltration,
+offensive language, canaries, and exfiltration where the normalized input exposes
+them. Prompt/post findings are **observation-only**; no `secret_redaction`, output
+withholding, or prompt denial is claimed. `secret_in_transcript`/`pii_in_transcript`
+are unsupported. Images retain the same caution/coverage limits as other agents;
+remote image URLs receive pre-tool URL checks. See [Goose support](GOOSE.md).
 
 | Violation Type | Requires | Claude Code | Cursor | Copilot CLI | Antigravity | Junie (MCP) |
 |---|---|---|---|---|---|---|
@@ -724,6 +737,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Grok Build | Low | Hook contract and isolated tests are covered; real host and passive-event behavior remain limited |
+| Goose | Low | Pinned v1.59.0 protocol, isolated tests, and CI mock smoke provided; live macOS/desktop/native Windows unqualified |
 | Gemini CLI | Medium | Current grouped settings format and hook enforcement covered by the local-mock real-agent smoke matrix; live provider qualification remains manual |
 | Antigravity CLI | Low | Hook adapter implemented based on documentation; limited real-world testing |
 | Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
@@ -786,6 +800,7 @@ JSON object so error payloads are not echoed.
 | Cursor desktop / CLI | JSON `permission` field for decision hooks; JSON transform field for MCP post-hooks | `{"permission": "deny", "user_message": "...", "agent_message": "..."}`; MCP output uses `updated_mcp_tool_output` |
 | GitHub Copilot | JSON (PreToolUse) or exit code 2 | `{"permissionDecision": "deny"}` |
 | Grok Build | JSON decision on PreToolUse | `{"decision": "deny", "reason": "..."}` |
+| Goose | JSON PreToolUse decision; installed failure policy blocks failed hooks | `{"decision": "block", "reason": "..."}`; passive events emit no decisions |
 | Gemini CLI | JSON `decision` field | `{"decision": "deny", "reason": "..."}` |
 | Cline | JSON `cancel` field | `{"cancel": true, "reason": "..."}` |
 | Kiro | Exit code 2 (PreToolUse) or 1 (other) + stderr | stderr = error message |
