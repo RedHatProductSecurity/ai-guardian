@@ -119,6 +119,8 @@ _WRAPPERS = frozenset(
         "sh",
         "bash",
         "zsh",
+        "dash",
+        "ksh",
         "sudo",
         "time",
         "timeout",
@@ -126,6 +128,11 @@ _WRAPPERS = frozenset(
         "cmd.exe",
     }
 )
+_POSIX_SHELL_WRAPPERS = frozenset({"sh", "bash", "zsh", "dash", "ksh"})
+_POWERSHELL_WRAPPERS = frozenset({"powershell", "pwsh"})
+_CMD_WRAPPERS = frozenset({"cmd", "cmd.exe"})
+_SHELL_WRAPPERS = _POSIX_SHELL_WRAPPERS | _POWERSHELL_WRAPPERS | _CMD_WRAPPERS
+_MAX_WRAPPER_DEPTH = 4
 _VALID_ACTIONS = frozenset({"ask", "block", "warn", "log-only"})
 
 
@@ -372,8 +379,33 @@ def _command_name(token: _Token) -> str:
     return name
 
 
+def _shell_command_payload(
+    tokens: list[_Token],
+) -> Optional[tuple[_Token, bool]]:
+    """Return a bounded shell ``-c`` payload and its PowerShell mode, if any."""
+    if not tokens:
+        return None
+    wrapper = _command_name(tokens[0])
+    for index in range(1, len(tokens) - 1):
+        option = tokens[index].value.casefold()
+        if wrapper in _POSIX_SHELL_WRAPPERS and (
+            option in {"-c", "-lc", "-cl"}
+            or (
+                option.startswith("-")
+                and not option.startswith("--")
+                and "c" in option[1:]
+            )
+        ):
+            return tokens[index + 1], False
+        if wrapper in _POWERSHELL_WRAPPERS and option in {"-c", "-command"}:
+            return tokens[index + 1], True
+        if wrapper in _CMD_WRAPPERS and option in {"/c", "/k"}:
+            return tokens[index + 1], False
+    return None
+
+
 def _family_for_segment(
-    tokens: list[_Token], *, powershell: bool = False
+    tokens: list[_Token], *, powershell: bool = False, wrapper_depth: int = 0
 ) -> tuple[Optional[str], bool]:
     """Return a direct family, or whether a supported command is wrapped."""
     if not tokens:
@@ -401,6 +433,27 @@ def _family_for_segment(
                 return _DIRECT_COMMANDS[_command_name(tokens[2])], True
         return None, False
 
+    payload = _shell_command_payload(tokens)
+    if payload is not None:
+        payload_token, payload_powershell = payload
+        if wrapper_depth >= _MAX_WRAPPER_DEPTH:
+            # Do not let deeply nested command interpreters hide a supported
+            # network client from the bounded analyzer.
+            return "unknown", True
+        nested_segments, nested_incomplete = _tokenize(
+            payload_token.value, powershell=payload_powershell or powershell
+        )
+        for nested_tokens in nested_segments:
+            family, _nested_wrapped = _family_for_segment(
+                nested_tokens,
+                powershell=payload_powershell or powershell,
+                wrapper_depth=wrapper_depth + 1,
+            )
+            if family:
+                return family, True
+        if nested_incomplete:
+            return "unknown", True
+
     for token in tokens[1:]:
         candidate = _DIRECT_COMMANDS.get(_command_name(token))
         if candidate:
@@ -410,6 +463,18 @@ def _family_for_segment(
         for name, family in _DIRECT_COMMANDS.items():
             if value == name or value.startswith(name + " "):
                 return family, True
+    for index, token in enumerate(tokens[1:], start=1):
+        if _command_name(token) not in _SHELL_WRAPPERS:
+            continue
+        if wrapper_depth >= _MAX_WRAPPER_DEPTH:
+            return "unknown", True
+        family, _nested_wrapped = _family_for_segment(
+            tokens[index:],
+            powershell=powershell,
+            wrapper_depth=wrapper_depth + 1,
+        )
+        if family:
+            return family, True
     return None, False
 
 
@@ -977,6 +1042,13 @@ def _scan_powershell_web(
 def analyze_command_credentials(
     command: str, *, shell: Optional[str] = None
 ) -> CommandCredentialAnalysis:
+    """Analyze bounded command syntax, including supported shell ``-c`` forms."""
+    return _analyze_command_credentials(command, shell=shell, wrapper_depth=0)
+
+
+def _analyze_command_credentials(
+    command: str, *, shell: Optional[str], wrapper_depth: int
+) -> CommandCredentialAnalysis:
     """Analyze a command using bounded tokenization and an explicit CLI registry.
 
     ``shell`` is primarily exposed for deterministic cross-platform tests. Auto
@@ -998,7 +1070,11 @@ def analyze_command_credentials(
         )
         prefix_segments, _ = _tokenize(prefix, powershell=prefix_powershell)
         for command_index, tokens in enumerate(prefix_segments):
-            family, _wrapped = _family_for_segment(tokens, powershell=prefix_powershell)
+            family, _wrapped = _family_for_segment(
+                tokens,
+                powershell=prefix_powershell,
+                wrapper_depth=wrapper_depth,
+            )
             if family:
                 return CommandCredentialAnalysis(
                     (
@@ -1027,11 +1103,39 @@ def analyze_command_credentials(
     recognized_command = False
 
     for command_index, tokens in enumerate(segments):
-        family, wrapped = _family_for_segment(tokens, powershell=powershell)
+        family, wrapped = _family_for_segment(
+            tokens, powershell=powershell, wrapper_depth=wrapper_depth
+        )
         if family is None:
             continue
         recognized_command = True
         if wrapped:
+            payload = _shell_command_payload(tokens)
+            if payload is not None and family != "unknown":
+                payload_token, payload_powershell = payload
+                nested_shell = shell
+                if payload_powershell and nested_shell is None:
+                    nested_shell = "powershell"
+                nested = _analyze_command_credentials(
+                    payload_token.value,
+                    shell=nested_shell,
+                    wrapper_depth=wrapper_depth + 1,
+                )
+                if nested.findings:
+                    findings.extend(
+                        CommandCredentialFinding(
+                            command_index + item.command_index,
+                            item.argument_index,
+                            item.command_family,
+                            item.option,
+                            item.finding_class,
+                        )
+                        for item in nested.findings
+                    )
+                    incomplete = incomplete or nested.incomplete
+                    continue
+                if not nested.incomplete:
+                    continue
             findings.append(
                 CommandCredentialFinding(
                     command_index,

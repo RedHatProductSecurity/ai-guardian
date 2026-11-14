@@ -3041,6 +3041,13 @@ def test_sandbox_readiness_timeout_reports_value_free_status_diagnostics(
             stderr=private_stderr,
         ),
     )
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, stdout="running|0|false", stderr=""
+        ),
+    )
 
     assert not runner._wait_for_sandbox_ready("docker", "owned", timeout=1)
 
@@ -3051,6 +3058,9 @@ def test_sandbox_readiness_timeout_reports_value_free_status_diagnostics(
     assert "config_loaded_marker=no" in output
     assert "stdout=present" in output
     assert "stderr=present" in output
+    assert "container_state=running" in output
+    assert "container_exit_code=0" in output
+    assert "container_oom_killed=false" in output
     assert private_stdout not in output
     assert private_stderr not in output
 

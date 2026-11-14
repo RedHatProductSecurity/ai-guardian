@@ -1586,6 +1586,42 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
         if last_status is not None and isinstance(last_status.stderr, str)
         else ""
     )
+    container_state = "unavailable"
+    container_exit_code = "unknown"
+    container_oom_killed = "unknown"
+    try:
+        inspect_result = _run(
+            [
+                engine,
+                "inspect",
+                "--format",
+                "{{.State.Status}}|{{.State.ExitCode}}|{{.State.OOMKilled}}",
+                name,
+            ],
+            5,
+        )
+        if inspect_result.returncode == 0 and isinstance(inspect_result.stdout, str):
+            state_fields = inspect_result.stdout.strip().split("|")
+            valid_states = {
+                "created",
+                "running",
+                "paused",
+                "restarting",
+                "removing",
+                "exited",
+                "dead",
+            }
+            if (
+                len(state_fields) == 3
+                and state_fields[0] in valid_states
+                and state_fields[1].isdigit()
+                and state_fields[2].lower() in {"true", "false"}
+            ):
+                container_state = state_fields[0]
+                container_exit_code = state_fields[1]
+                container_oom_killed = state_fields[2].lower()
+    except (OSError, subprocess.TimeoutExpired):
+        container_state = "inspect_error"
     _progress(
         "Sandbox readiness diagnostics (value-free): "
         f"status_attempts={attempts}, "
@@ -1595,7 +1631,10 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
         "config_loaded_marker="
         f"{'yes' if 'Config: loaded' in last_stdout else 'no'}, "
         f"stdout={'present' if last_stdout else 'empty'}, "
-        f"stderr={'present' if last_stderr else 'empty'}"
+        f"stderr={'present' if last_stderr else 'empty'}, "
+        f"container_state={container_state}, "
+        f"container_exit_code={container_exit_code}, "
+        f"container_oom_killed={container_oom_killed}"
     )
     return False
 

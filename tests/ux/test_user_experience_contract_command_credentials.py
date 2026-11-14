@@ -96,6 +96,42 @@ def test_native_shell_argument_aliases_are_denied_without_echoing_values(
     assert command not in result["output"]
 
 
+def test_argv_shell_script_blocks_credential_after_harmless_setup():
+    """USER EXPERIENCE: later credentials in shell -c scripts are denied."""
+    from scripts.agent_cli_mock_provider import TOOL_COMMANDS
+
+    value = "synthetic_command_credential_2699"
+    command = TOOL_COMMANDS["command_credential"]
+    hook_data = create_hook_data(
+        tool_name="Bash",
+        tool_input={"command": ["bash", "-lc", command]},
+    )
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=({}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_command_credential_scanning_config",
+            return_value=({"enabled": True, "action": "block"}, None),
+        ),
+        patch(
+            "ai_guardian.config.loaders._load_password_likelihood_config",
+            return_value=({"enabled": False, "action": "ask"}, None),
+        ),
+    ):
+        result = process_hook_data(hook_data)
+
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert response["systemMessage"] == (
+        "Inline credential argument detected; command execution was blocked. "
+        "Values are withheld. This cannot retract command text already seen by the model."
+    )
+    assert value not in result["output"]
+    assert "curl --user" not in result["output"]
+
+
 @pytest.mark.parametrize(
     ("agent", "argument_name", "expected_decision"),
     (("goose", "cmd", "block"), ("grok", "input", "deny")),

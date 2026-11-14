@@ -3,6 +3,7 @@
 import json
 import logging
 from pathlib import Path
+import shlex
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -604,6 +605,17 @@ def test_shell_segments_scan_supported_commands_without_expansion():
     assert result.findings[0].finding_class == INLINE_LITERAL
 
 
+def test_shell_c_argv_scans_later_command_after_execution_witness_setup():
+    from scripts.agent_cli_mock_provider import TOOL_COMMANDS
+
+    command = shlex.join(["bash", "-lc", TOOL_COMMANDS["command_credential"]])
+    result = analyze_command_credentials(command)
+
+    assert result.findings
+    assert any(item.finding_class == INLINE_LITERAL for item in result.findings)
+    assert not result.incomplete
+
+
 @pytest.mark.parametrize("tool_name", ("Bash", "Shell"))
 @pytest.mark.parametrize("argument_name", ("command", "cmd", "input"))
 @pytest.mark.parametrize("argument_is_argv", (False, True))
@@ -640,13 +652,10 @@ def test_pretool_hook_blocks_synthetic_inline_command_credential_value(
     output = response["output"]
     parsed = json.loads(output)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
-    if argument_is_argv:
-        assert "command could not be qualified" in parsed["systemMessage"]
-    else:
-        assert parsed["systemMessage"] == (
-            "Inline credential argument detected; command execution was blocked. "
-            "Values are withheld. This cannot retract command text already seen by the model."
-        )
+    assert parsed["systemMessage"] == (
+        "Inline credential argument detected; command execution was blocked. "
+        "Values are withheld. This cannot retract command text already seen by the model."
+    )
     assert value not in output
 
 
