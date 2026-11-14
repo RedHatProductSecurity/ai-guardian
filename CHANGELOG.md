@@ -59,9 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Release Readiness CLI smoke reliability:** Accept Goose's exact bare or
   prefixed pinned-version output, scan native shell `command`/`cmd`/`input`
-  arguments (including argv arrays and nested shell `-c` scripts), and emit
-  value-free sandbox readiness and container-state facts when startup times out.
-  Preserve every violation and execution-evidence gate.
+  arguments (including argv arrays and nested shell `-c` scripts), normalize
+  OpenCode argv before immutable policy checks, and emit value-free sandbox
+  readiness/container-state and hook/scanner invocation facts. Preserve every
+  violation and execution-evidence gate.
 - **Independent real-agent CI jobs (#2673):** Give each runnable CLI its own
   Release Readiness job, including separate OpenCode V1/V2 jobs, and isolate
   OpenShell image validation. Share wheel/image preparation without cross-CLI

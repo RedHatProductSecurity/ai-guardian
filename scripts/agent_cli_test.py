@@ -405,6 +405,30 @@ if p.is_file():
 print(json.dumps(dict(c),sort_keys=True))
 """
 
+_READ_HOOK_COUNTS = r"""
+import collections,json,sys
+from pathlib import Path
+events=collections.Counter(); shell_tools=collections.Counter(); command_scans=0
+p=Path(sys.argv[1])
+if p.is_file():
+  for line in p.read_text(encoding='utf-8').splitlines():
+    try: item=json.loads(line)
+    except json.JSONDecodeError: continue
+    event=item.get('hook_event')
+    if isinstance(event,str) and event in ('prompt','pretooluse','posttooluse'):
+      events[event]+=1
+    tool=item.get('tool')
+    if tool in ('Bash','Shell'):
+      shell_tools[tool]+=1
+    checks=item.get('checks')
+    if isinstance(checks,dict) and 'command_credential_scanning' in checks:
+      command_scans+=1
+events['normalized_tool_bash']=shell_tools.get('Bash',0)
+events['normalized_tool_shell']=shell_tools.get('Shell',0)
+events['command_credential_scan_calls']=command_scans
+print(json.dumps(dict(events),sort_keys=True))
+"""
+
 _READ_STATS = r"""
 import json,sys,urllib.request
 with urllib.request.urlopen(sys.argv[1],timeout=2) as r: p=json.loads(r.read())
@@ -1430,7 +1454,7 @@ def _hook_counts(
     result = _exec(
         engine,
         name,
-        ["python3", "-c", _READ_LOG_COUNTS, f"{STATE_DIR}/latency.jsonl", "hook_event"],
+        ["python3", "-c", _READ_HOOK_COUNTS, f"{STATE_DIR}/latency.jsonl"],
         timeout,
     )
     try:
@@ -1444,7 +1468,15 @@ def _hook_counts(
     return {
         key: value
         for key, value in values.items()
-        if key in ("prompt", "pretooluse", "posttooluse")
+        if key
+        in (
+            "prompt",
+            "pretooluse",
+            "posttooluse",
+            "normalized_tool_bash",
+            "normalized_tool_shell",
+            "command_credential_scan_calls",
+        )
         and type(value) is int
         and value >= 0
     }
@@ -2384,7 +2416,7 @@ def _report_case_failure_details(
             f"expected_{case.expected_violation}_delta=+{violation_deltas.get(case.expected_violation, 0)}"
         )
     for label, counts in (
-        ("hook_event_deltas", hook_deltas),
+        ("hook_and_scan_deltas", hook_deltas),
         ("tool_evidence_deltas", tool_deltas),
     ):
         if counts is not None:

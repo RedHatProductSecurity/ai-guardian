@@ -5,6 +5,7 @@ payloads remain in memory; a file alias is never inferred for unrelated tools.
 """
 
 import os
+import shlex
 from typing import Any, Dict, Optional, Tuple
 
 from ai_guardian.constants import (
@@ -74,6 +75,15 @@ def opencode_native_name(hook_data: Dict) -> Optional[str]:
     tool_use = hook_data.get("tool_use")
     name = tool_use.get("name") if isinstance(tool_use, dict) else None
     return name if isinstance(name, str) and name else hook_data.get("tool_name")
+
+
+def normalize_shell_command(value: Any) -> Optional[str]:
+    """Normalize a native shell command string or string argv without execution."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list) and all(isinstance(part, str) for part in value):
+        return shlex.join(value)
+    return None
 
 
 def _windows_shell_path(value: str) -> str:
@@ -161,6 +171,12 @@ def normalize_opencode_input(
 ) -> Dict:
     normalized = dict(tool_input) if isinstance(tool_input, dict) else {}
     if tool_name not in OPENCODE_FILE_TOOLS:
+        if tool_name in {"Bash", "Shell"}:
+            for key in ("command", "cmd", "input"):
+                command = normalize_shell_command(normalized.get(key))
+                if command:
+                    normalized["command"] = command
+                    break
         return normalized
     failure, target = _file_target(tool_input, FILE_PATH_KEYS, cwd)
     # Preserve native aliases in this private in-memory copy. A conflicting or

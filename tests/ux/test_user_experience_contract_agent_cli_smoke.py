@@ -532,7 +532,7 @@ def test_advisory_findings_without_native_pre_tool_events_remain_failures(
         f"FAIL {case_name}: expected pretooluse hook event was not recorded" in output
     )
     assert f"expected_{case.expected_violation}_delta=+1" in output
-    assert "hook_event_deltas=prompt=+1" in output
+    assert "hook_and_scan_deltas=prompt=+1" in output
     assert "PASS" not in output
     assert "private" not in output
 

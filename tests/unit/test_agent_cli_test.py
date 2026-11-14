@@ -3065,6 +3065,46 @@ def test_sandbox_readiness_timeout_reports_value_free_status_diagnostics(
     assert private_stderr not in output
 
 
+def test_hook_counts_expose_normalized_shell_and_command_scan_counts(
+    monkeypatch, tmp_path
+):
+    runner = _load(RUNNER_PATH, "agent_cli_hook_count_diagnostics")
+    monkeypatch.setattr(runner, "STATE_DIR", str(tmp_path))
+    latency_log = tmp_path / "latency.jsonl"
+    latency_log.write_text(
+        "\n".join(
+            (
+                json.dumps(
+                    {
+                        "hook_event": "pretooluse",
+                        "tool": "Bash",
+                        "checks": {"command_credential_scanning": 0.12},
+                    }
+                ),
+                json.dumps({"hook_event": "prompt", "tool": ""}),
+            )
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda _engine, _name, command, timeout: subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout, check=False
+        ),
+    )
+
+    counts = runner._hook_counts("docker", "owned", timeout=5)
+
+    assert counts == {
+        "pretooluse": 1,
+        "prompt": 1,
+        "normalized_tool_bash": 1,
+        "normalized_tool_shell": 0,
+        "command_credential_scan_calls": 1,
+    }
+
+
 @pytest.mark.parametrize(
     ("container_healthy", "published_health", "stats_health", "expected", "message"),
     (

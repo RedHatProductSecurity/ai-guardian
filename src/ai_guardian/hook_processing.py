@@ -50,7 +50,6 @@ import json
 import logging
 import os
 import re
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -248,6 +247,7 @@ from ai_guardian.response_format import (
 )
 from ai_guardian.hook_adapters import CodexAdapter, detect_adapter
 from ai_guardian.reporting.latency import _CheckTimer
+from ai_guardian.tools.input import normalize_shell_command
 
 
 from ai_guardian.hook_events.utils import _format_response  # noqa: F401, E402
@@ -2063,11 +2063,7 @@ def inject_security_only(hook_data, daemon_state=None):
 
 def _shell_command_value(value: object) -> Optional[str]:
     """Normalize a native shell command string or argv array without execution."""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, list) and all(isinstance(part, str) for part in value):
-        return shlex.join(value)
-    return None
+    return normalize_shell_command(value)
 
 
 def _process_hook_data(hook_data, daemon_state=None):
@@ -2686,9 +2682,10 @@ def _process_hook_data(hook_data, daemon_state=None):
                             shell_commands.append(shell_command)
 
                 for shell_command in shell_commands:
-                    command_credential_result = run_command_credential_scan(
-                        shell_command
-                    )
+                    with _latency_timer.check("command_credential_scanning"):
+                        command_credential_result = run_command_credential_scan(
+                            shell_command
+                        )
                     if command_credential_result is None:
                         continue
                     command_credential_decision = apply_post_scan_pipeline(
