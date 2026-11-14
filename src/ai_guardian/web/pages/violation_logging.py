@@ -49,6 +49,10 @@ ALL_LOG_TYPES = [
         "http_request_credential_detected",
         "HTTP Request Credential — hard-coded credentials in supported HTTP requests",
     ),
+    (
+        "command_credential_detected",
+        "Command Credential — inline credentials in supported shell commands",
+    ),
 ]
 _NOTIFICATION_CONFIG_LOCK = threading.Lock()
 

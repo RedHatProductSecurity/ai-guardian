@@ -245,6 +245,7 @@ Violation logging is enabled by default:
       "tool_permission",
       "directory_blocking",
       "secret_detected",
+      "command_credential_detected",
       "secret_redaction",
       "prompt_injection",
       "ssrf_protection",
