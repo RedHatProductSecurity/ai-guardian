@@ -1,6 +1,7 @@
 """User-visible contract for pre-execution command credential protection."""
 
 import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -162,7 +163,9 @@ def test_opencode_shell_argv_is_normalized_before_policy_and_credential_scans():
         },
         "tool_use_id": "synthetic-opencode-command",
         "session_id": "synthetic-opencode-command",
-        "cwd": "/tmp",
+        # Supply native absolute workspace metadata; `/tmp` is not an absolute
+        # Windows path under Python 3.13+ and triggers the earlier generic deny.
+        "cwd": os.getcwd(),
     }
     with (
         patch(
