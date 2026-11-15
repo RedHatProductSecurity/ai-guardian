@@ -93,16 +93,27 @@ class NotebookLMRefresher:
     """Replace one exact-title source, retaining the old one until verification."""
 
     def __init__(
-        self, version: str, repo_path: str, verify_publication: Callable[[], None]
+        self,
+        version: str,
+        repo_path: str,
+        verify_publication: Callable[[], None],
+        generated_text_source_id: str | None = None,
     ):
         if not re.fullmatch(STABLE_VERSION, version):
             raise ValueError(
                 "Specify a stable release version X.Y.Z (no v prefix or suffix)"
             )
+        if generated_text_source_id is not None and not _source_id(
+            generated_text_source_id
+        ):
+            raise ValueError(
+                "Generated-text source override must be a full source UUID"
+            )
         self.version = version
         self.title = f"AI Guardian v{version}"
         self.repo_path = repo_path
         self.verify_publication = verify_publication
+        self.generated_text_source_id = generated_text_source_id
         self.nlm = ""
         self.profile = ""
 
@@ -225,18 +236,28 @@ class NotebookLMRefresher:
         return sources
 
     @staticmethod
-    def _exports(sources: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    def _exports(
+        sources: list[dict[str, Any]],
+        approved_generated_text_ids: set[str] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        approved_generated_text_ids = approved_generated_text_ids or set()
         matches = {
             entry["id"]: entry for entry in sources if entry["title"] == EXPORT_NAME
         }
-        if any(
-            entry["type"] not in ("uploaded_file", "pasted_text")
-            or entry.get("url") not in (None, "")
-            for entry in matches.values()
-        ):
-            raise RefreshError(
-                "Export identity is ambiguous: matching title is not a local-file export"
-            )
+        for source_id, entry in matches.items():
+            if entry["type"] == "generated_text":
+                if source_id not in approved_generated_text_ids:
+                    raise RefreshError(
+                        "Export identity is ambiguous: generated-text source is not bound to an explicit source ID or upload receipt"
+                    )
+            elif entry["type"] not in ("uploaded_file", "pasted_text"):
+                raise RefreshError(
+                    "Export identity is ambiguous: matching title is not a local-file/text export"
+                )
+            if entry.get("url") not in (None, ""):
+                raise RefreshError(
+                    "Export identity is ambiguous: matching source has a URL"
+                )
         return matches
 
     @staticmethod
@@ -278,6 +299,20 @@ class NotebookLMRefresher:
                 and data["old_id"] not in data["baseline"]
             )
             or (data.get("new_id") is not None and not _source_id(data["new_id"]))
+            or (
+                data.get("generated_text_source_id") is not None
+                and (
+                    not _source_id(data["generated_text_source_id"])
+                    or data.get("old_id") != data["generated_text_source_id"]
+                )
+            )
+            or (
+                data.get("approved_generated_text_source_id") is not None
+                and (
+                    not _source_id(data["approved_generated_text_source_id"])
+                    or data.get("old_id") != data["approved_generated_text_source_id"]
+                )
+            )
             or data.get("phase")
             not in (
                 "upload_intent",
@@ -316,7 +351,14 @@ class NotebookLMRefresher:
                 temporary.unlink(missing_ok=True)
 
     def _finish(self, state_file: Path, state: dict[str, Any]) -> str:
-        matches = self._exports(self._sources())
+        approved_generated_text_ids = {state["new_id"]}
+        approved_old_id = state.get("approved_generated_text_source_id")
+        if approved_old_id is None:
+            # Recover journals written before the explicit authorization field.
+            approved_old_id = state.get("generated_text_source_id")
+        if approved_old_id is not None:
+            approved_generated_text_ids.add(approved_old_id)
+        matches = self._exports(self._sources(), approved_generated_text_ids)
         old_id, new_id = state["old_id"], state["new_id"]
         new = matches.get(new_id)
         if not new or new.get("status") != 2:
@@ -351,7 +393,7 @@ class NotebookLMRefresher:
                 raise RefreshError(
                     "Deletion receipt is unconfirmed; retry refresh only to reconcile the saved IDs"
                 )
-            matches = self._exports(self._sources())
+            matches = self._exports(self._sources(), approved_generated_text_ids)
         if set(matches) != {new_id} or matches[new_id].get("status") != 2:
             raise RefreshError(
                 "Replacement could not be verified; retry refresh only, not publication"
@@ -397,9 +439,14 @@ class NotebookLMRefresher:
 
     def refresh(self, dry_run: bool = False) -> str:
         if dry_run:
+            source_override = (
+                f"; explicitly replace generated-text source {self.generated_text_source_id}"
+                if self.generated_text_source_id
+                else ""
+            )
             return (
                 f"skipped (dry-run; would refresh {EXPORT_NAME} from v{self.version} in notebook {NOTEBOOK_ID}; "
-                f"upload, verify processing, delete only the superseded export, then rename to {self.title})"
+                f"upload, verify processing, delete only the superseded export, then rename to {self.title}{source_override})"
             )
         skipped = self._prerequisites()
         if skipped:
@@ -421,9 +468,10 @@ class NotebookLMRefresher:
                 "version": self.version,
                 "digest": digest,
                 "profile": self.profile,
+                "generated_text_source_id": self.generated_text_source_id,
             }
             if state and state["phase"] != "complete":
-                if any(state[key] != value for key, value in identity.items()):
+                if any(state.get(key) != value for key, value in identity.items()):
                     raise RefreshError(
                         "A different pending refresh must be reconciled first; no new upload"
                     )
@@ -445,26 +493,62 @@ class NotebookLMRefresher:
                     raise RefreshError(
                         "Tagged release export changed since the saved refresh; preserve state for review"
                     )
+                if (
+                    state["phase"] == "complete"
+                    and state["version"] == self.version
+                    and state["digest"] == digest
+                    and (
+                        state["profile"] != self.profile
+                        or state.get("generated_text_source_id")
+                        != self.generated_text_source_id
+                    )
+                ):
+                    raise RefreshError(
+                        "Completed refresh is bound to a different profile or explicit source ID"
+                    )
 
             sources = self._sources()
-            matches = self._exports(sources)
+            approved_generated_text_ids = set()
+            if self.generated_text_source_id is not None:
+                approved_generated_text_ids.add(self.generated_text_source_id)
+            if (
+                state
+                and state["phase"] == "complete"
+                and state["profile"] == self.profile
+            ):
+                approved_generated_text_ids.add(state["new_id"])
+            matches = self._exports(sources, approved_generated_text_ids)
+            if (
+                self.generated_text_source_id is not None
+                and self.generated_text_source_id not in matches
+            ):
+                raise RefreshError(
+                    "Explicit generated-text source ID does not match the exact export title; no changes"
+                )
             if len(matches) > 1:
                 raise RefreshError(
                     "Export identity is ambiguous: multiple exact-title sources; no changes"
                 )
             if (
                 state
-                and all(state[key] == value for key, value in identity.items())
+                and all(state.get(key) == value for key, value in identity.items())
                 and state["new_id"] in matches
             ):
                 return self._finish(state_file, state)
 
+            old_id = next(iter(matches), None)
+            approved_old_id = (
+                old_id
+                if old_id is not None and matches[old_id]["type"] == "generated_text"
+                else None
+            )
             state = {
                 "schema": 1,
                 "notebook": NOTEBOOK_ID,
                 **identity,
                 "baseline": [entry["id"] for entry in sources],
-                "old_id": next(iter(matches), None),
+                "old_id": old_id,
+                "approved_generated_text_source_id": approved_old_id,
                 "new_id": None,
                 "phase": "upload_intent",
             }

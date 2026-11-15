@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **NotebookLM refresh recovery:** Allow an explicitly identified exact-title
+  `generated_text` source to be replaced using its full source UUID, and accept a
+  new file source reported as `generated_text` only when bound to its saved upload
+  receipt. Upload/processing verification still precedes deletion.
+
 ## [1.22.0] - 2026-11-14
 
 ### Added

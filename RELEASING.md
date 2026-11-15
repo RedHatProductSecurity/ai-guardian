@@ -376,12 +376,18 @@ This step never regenerates the export or includes the next development snapshot
 Uploaded local files have no in-place update. Replacement proceeds as follows:
 
 1. Discover sources in notebook `9b78ebca-d327-4df7-8f2e-64e518f2ddcb`; match only
-   the exact `notebooklm-export.md` title of a local-file/text source. Similar
-   titles, list order, other sources, and notebook settings are not targets.
-   Multiple exact matches or incomplete discovery stop without changes.
+   the exact `notebooklm-export.md` title of a local-file/text source. If NotebookLM
+   reports the previously confirmed export as `generated_text`, an operator may
+   supply its exact full UUID with `--replace-generated-text-source-id UUID`.
+   This explicit override applies only to that exact title and UUID, is recorded in
+   the journal, and must be repeated on retries. Similar titles, other source IDs,
+   URLs, and notebook settings are never targets. Multiple exact matches or
+   incomplete discovery stop without changes.
 2. Persist upload intent in Git metadata, upload once with `--wait --json`, and
    record the full returned source UUID. A separate source-list check must confirm
-   that this exact new source finished processing successfully.
+   that this exact new source finished processing successfully. NotebookLM may
+   label that receipt-bound file as `generated_text`; only the UUID from the saved
+   upload receipt is accepted for the replacement.
 3. Only then delete the previously identified export UUID and verify that exactly
    one processed export remains. An absent export is created once. Successful
    repeat runs reuse the verified source instead of uploading duplicates.
@@ -409,6 +415,21 @@ Retry **only this optional step** for an explicitly specified published release:
 ```bash
 python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z
 ```
+
+For a reviewed `generated_text` source that is the exact prior export, preview and
+retry with its full source UUID:
+
+```bash
+python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z \
+  --replace-generated-text-source-id <SOURCE_UUID> --dry-run
+python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z \
+  --replace-generated-text-source-id <SOURCE_UUID>
+```
+
+This does not change the safe order: the new tagged file must be uploaded and
+verified ready before that one explicitly identified source can be deleted. Use
+the override only after confirming the exact source identity; never use it to
+remove an unrelated generated-text item.
 
 Neither command bumps versions, creates branches/tags, republishes packages, or
 rewrites release configuration. Preview does not invoke `nlm`, check authentication,
