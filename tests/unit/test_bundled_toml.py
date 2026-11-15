@@ -4,6 +4,11 @@ Validates that all bundled TOML files parse correctly and contain
 the expected number of compiled rules.
 """
 
+import json
+from base64 import b32encode
+from hashlib import sha256
+from pathlib import Path
+
 import pytest
 
 from ai_guardian.patterns import DATA_DIR
@@ -12,7 +17,7 @@ from ai_guardian.patterns.toml_parser import load_and_compile, load_toml_file
 PATTERNS_DIR = DATA_DIR
 
 EXPECTED_COUNTS = {
-    "secrets.toml": 138,
+    "secrets.toml": 139,
     "pii.toml": 13,
     "prompt-injection.toml": 73,
     "unicode.toml": 107,
@@ -467,6 +472,19 @@ ISSUE_2322_FALSE_POSITIVE_CASES = [
     ("postgres-connection", "# Use postgresql:// to connect to the database"),
 ]
 
+ISSUE_2749_SUFFIX = sha256(b"synthetic-serval-client-secret").hexdigest()[:49]
+ISSUE_2749_DETECTION_CASES = [
+    ("serval-api-client-secret", f"svl_secret_{key_type}_{ISSUE_2749_SUFFIX}")
+    for key_type in ("pk", "wk", "mk")
+]
+ISSUE_2749_FALSE_POSITIVE_CASES = [
+    ("serval-api-client-secret", "svl_secret_xx_" + ISSUE_2749_SUFFIX),
+    ("serval-api-client-secret", "svl_secret_pk_" + ISSUE_2749_SUFFIX[:-1]),
+    ("serval-api-client-secret", "svl_secret_pk_" + ISSUE_2749_SUFFIX + "A"),
+    ("serval-api-client-secret", "svl_secret_pk_<redacted>"),
+    ("serval-api-client-secret", "# svl_secret_pk_ is the documented prefix"),
+]
+
 ALL_DETECTION_CASES = (
     NEW_SECRET_DETECTION_CASES
     + ISSUE_1617_DETECTION_CASES
@@ -477,6 +495,7 @@ ALL_DETECTION_CASES = (
     + ISSUE_2323_DETECTION_CASES
     + ISSUE_2477_DETECTION_CASES
     + ISSUE_2322_DETECTION_CASES
+    + ISSUE_2749_DETECTION_CASES
 )
 ALL_FALSE_POSITIVE_CASES = (
     NEW_SECRET_FALSE_POSITIVE_CASES
@@ -488,6 +507,7 @@ ALL_FALSE_POSITIVE_CASES = (
     + ISSUE_2323_FALSE_POSITIVE_CASES
     + ISSUE_2477_FALSE_POSITIVE_CASES
     + ISSUE_2322_FALSE_POSITIVE_CASES
+    + ISSUE_2749_FALSE_POSITIVE_CASES
     + ISSUE_2464_FALSE_POSITIVE_CASES
 )
 
@@ -502,3 +522,30 @@ class TestSecretPatterns:
     @pytest.mark.parametrize("rule_id,text", ALL_FALSE_POSITIVE_CASES)
     def test_no_false_positive(self, secret_rules, rule_id, text):
         assert not secret_rules[rule_id].compiled.search(text)
+
+    def test_serval_false_positive_rate_on_benign_corpus(self, secret_rules):
+        """Keep candidate false positives below 1% on the bounded benign corpus."""
+        corpus_path = Path(__file__).parents[1] / "fixtures" / "nuget_sonar_benign.json"
+        corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+        for index in range(100):
+            digest = sha256(f"benign-artifact:{index}".encode()).digest()
+            corpus.extend(
+                (
+                    {
+                        "name": f"artifact-checksum-{index}",
+                        "content": f"sha256: {digest.hex()}",
+                    },
+                    {
+                        "name": f"base32-identifier-{index}",
+                        "content": f"build id: {b32encode(digest[:28]).decode().rstrip('=')}",
+                    },
+                )
+            )
+
+        rule = secret_rules["serval-api-client-secret"].compiled
+        false_positives = [
+            item["name"] for item in corpus if rule.search(item["content"])
+        ]
+        assert len(corpus) == 220
+        assert len(false_positives) / len(corpus) < 0.01, false_positives
+        assert false_positives == []

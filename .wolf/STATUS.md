@@ -5,7 +5,19 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-14 (UTC)
+> Last updated: 2026-11-15 (UTC)
+
+## Issue #2749 Serval API client secret detection — 2026-11-15
+
+- On managed DAF `open` session `RedHatProductSecurity-ai-guardian-2749`, existing
+  branch `2749`, added a bundled Serval rule for `pk`/`wk`/`mk` types with the
+  documented 49-character suffix. Added synthetic match, malformed/placeholder,
+  scanner integration, and 220-document benign-corpus coverage (0 false positives).
+- Updated the bundled count and Unreleased changelog. All 405 bundled/scanner tests
+  pass; Black, Ruff, Pylint, Mypy, and `git diff --check` pass.
+- Posted the completed checklist to GitHub #2749, added the `done` label, and saved
+  a DAF note. **Next:** user review and external `daf complete`; no commit, push, or
+  PR was created.
 
 ## Issue #2736 optional NotebookLM release refresh — 2026-11-14
 
