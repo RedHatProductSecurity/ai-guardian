@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **NotebookLM completed replacement retry:** Reuse the completed journal when
+  retrying with the same explicit source UUID after the prior source was deleted.
+
 ### Changed
 - **NotebookLM refresh recovery:** Allow an explicitly identified exact-title
   `generated_text` source to be replaced using its full source UUID, and accept a

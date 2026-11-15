@@ -518,13 +518,6 @@ class NotebookLMRefresher:
             ):
                 approved_generated_text_ids.add(state["new_id"])
             matches = self._exports(sources, approved_generated_text_ids)
-            if (
-                self.generated_text_source_id is not None
-                and self.generated_text_source_id not in matches
-            ):
-                raise RefreshError(
-                    "Explicit generated-text source ID does not match the exact export title; no changes"
-                )
             if len(matches) > 1:
                 raise RefreshError(
                     "Export identity is ambiguous: multiple exact-title sources; no changes"
@@ -535,6 +528,13 @@ class NotebookLMRefresher:
                 and state["new_id"] in matches
             ):
                 return self._finish(state_file, state)
+            if (
+                self.generated_text_source_id is not None
+                and self.generated_text_source_id not in matches
+            ):
+                raise RefreshError(
+                    "Explicit generated-text source ID does not match the exact export title; no changes"
+                )
 
             old_id = next(iter(matches), None)
             approved_old_id = (

@@ -386,7 +386,7 @@ def test_generated_text_source_requires_explicit_id_and_preserves_all_sources(
     assert [entry["id"] for entry in io.sources] == [GENERATED_TEXT_ID, OTHER_ID]
 
 
-def test_explicit_generated_text_source_uploads_and_verifies_before_exact_delete(
+def test_explicit_generated_text_replacement_retry_reuses_completed_journal(
     notebook_io,
 ):
     io = notebook_io
@@ -399,7 +399,8 @@ def test_explicit_generated_text_source_uploads_and_verifies_before_exact_delete
         generated_text_source_id=GENERATED_TEXT_ID,
     )
 
-    assert io.refresher.refresh().startswith("updated")
+    result = io.refresher.refresh()
+    assert result.startswith("updated")
     assert [entry["id"] for entry in io.sources] == [OTHER_ID, NEW_ID]
     mutations_seen = mutations(io)
     assert [call[1:3] for call in mutations_seen] == [
@@ -411,6 +412,8 @@ def test_explicit_generated_text_source_uploads_and_verifies_before_exact_delete
         call[1:3] == ["source", "list"] for call in io.calls[upload + 1 : delete]
     )
     assert io.calls[delete][3] == GENERATED_TEXT_ID
+    assert io.refresher.refresh() == result
+    assert len(mutations(io)) == 2
     state = json.loads(
         (io.common / refresh_module.STATE_NAME).read_text(encoding="utf-8")
     )
