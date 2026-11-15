@@ -247,6 +247,7 @@ from ai_guardian.response_format import (
 )
 from ai_guardian.hook_adapters import CodexAdapter, detect_adapter
 from ai_guardian.reporting.latency import _CheckTimer
+from ai_guardian.tools.input import normalize_shell_command
 
 
 from ai_guardian.hook_events.utils import _format_response  # noqa: F401, E402
@@ -511,6 +512,9 @@ def _finalize_latency(
             "processing_ms": round(timer.processing_ms(), 2),
             "checks": {k: round(v, 2) for k, v in timer.to_dict().items()},
         }
+        counts = timer.counts()
+        if counts:
+            entry["counts"] = counts
         if timer.ask_wait_total_ms > 0:
             entry["ask_dialog_ms"] = round(timer.ask_wait_total_ms, 2)
         if correlation_id:
@@ -2060,6 +2064,11 @@ def inject_security_only(hook_data, daemon_state=None):
         return None
 
 
+def _shell_command_value(value: object) -> Optional[str]:
+    """Normalize a native shell command string or argv array without execution."""
+    return normalize_shell_command(value)
+
+
 def _process_hook_data(hook_data, daemon_state=None):
     """
     Process parsed hook data and return response.
@@ -2325,6 +2334,16 @@ def _process_hook_data(hook_data, daemon_state=None):
         ):
             tool_name = normalized.tool_name
             tool_input = normalized.tool_input
+            if tool_name in {"Bash", "Shell"} and isinstance(tool_input, dict):
+                # Normalize native shell argument aliases before shared policy
+                # checks, which expect the canonical string-valued command key.
+                for argument_name in ("command", "cmd", "input"):
+                    shell_command = _shell_command_value(tool_input.get(argument_name))
+                    if not shell_command:
+                        continue
+                    if tool_input.get("command") != shell_command:
+                        tool_input = {**tool_input, "command": shell_command}
+                    break
             _latency_tool = tool_name or ""
 
             # Normalize mcp: prefix to mcp__ format (agent-agnostic)
@@ -2654,18 +2673,39 @@ def _process_hook_data(hook_data, daemon_state=None):
                     run_command_credential_scan,
                 )
 
-                shell_command = (
-                    tool_input.get("command", "")
-                    if isinstance(tool_input, dict)
-                    else ""
-                )
-                command_credential_result = run_command_credential_scan(shell_command)
-                if command_credential_result is not None:
+                shell_commands = []
+                if isinstance(tool_input, dict):
+                    for argument_name in ("command", "cmd", "input"):
+                        shell_command = _shell_command_value(
+                            tool_input.get(argument_name)
+                        )
+                        if not shell_command:
+                            continue
+                        if shell_command not in shell_commands:
+                            shell_commands.append(shell_command)
+
+                for shell_command in shell_commands:
+                    _latency_timer.add_count("command_credential_scan_attempts")
+                    with _latency_timer.check("command_credential_scanning"):
+                        command_credential_result = run_command_credential_scan(
+                            shell_command
+                        )
+                    if command_credential_result is None:
+                        _latency_timer.add_count(
+                            "command_credential_scan_empty_results"
+                        )
+                        continue
+                    _latency_timer.add_count("command_credential_scan_results")
                     command_credential_decision = apply_post_scan_pipeline(
                         _registry.get(ScannerName.COMMAND_CREDENTIAL_SCANNING),
                         command_credential_result,
                         _post_scan_ctx,
                         severity_override=command_credential_result.severity,
+                    )
+                    _latency_timer.add_count(
+                        "command_credential_scan_blocks"
+                        if command_credential_decision.should_block
+                        else "command_credential_scan_nonblocks"
                     )
                     warning_messages.extend(command_credential_decision.warnings)
                     if command_credential_decision.warnings:

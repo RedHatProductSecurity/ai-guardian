@@ -57,6 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Safe release CI resume (#2701):** Persist and validate exact release CI
   attempts so interrupted runs can be resumed without duplicate workflow dispatches.
 ### Changed
+- **Release Readiness CLI smoke reliability:** Accept Goose's exact bare or
+  prefixed pinned-version output, scan native shell `command`/`cmd`/`input`
+  arguments (including argv arrays and nested shell `-c` scripts), normalize
+  OpenCode argv before immutable policy checks, make Grok's config parent
+  writable in the support image, and emit value-free sandbox readiness/container-
+  state and hook/scanner outcome facts. Preserve every violation and
+  execution-evidence gate.
 - **Independent real-agent CI jobs (#2673):** Give each runnable CLI its own
   Release Readiness job, including separate OpenCode V1/V2 jobs, and isolate
   OpenShell image validation. Share wheel/image preparation without cross-CLI
@@ -77,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distinguish `latest` development docs, and report inactive or misrouted release
   versions with actionable recovery guidance.
 ### Fixed
+- **Command credential violation history (#2745):** Persist blocked command-
+  credential findings with the default logging policy, including existing configs;
+  expose the type in the Console, generated configs, and built-in profiles.
 - **Goose CI regressions (#2723):** Decode local image file URLs with platform
   drive-path semantics, construct hook paths without premature filesystem probes,
   and preserve symlink-parent traversal for shared security checks. Align the

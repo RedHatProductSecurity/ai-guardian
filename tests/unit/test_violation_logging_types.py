@@ -26,6 +26,7 @@ ALL_LOG_TYPES = [
     "image_pii_detected",
     "context_poisoning",
     "http_request_credential_detected",
+    "command_credential_detected",
 ]
 
 
@@ -65,6 +66,14 @@ class TestViolationLoggerDefaults:
             with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": tmp}):
                 defaults = ViolationLogger()._get_default_config()
                 assert "http_request_credential_detected" in defaults["log_types"]
+
+    def test_default_config_includes_command_credential_findings(self):
+        from ai_guardian.violations.logger import ViolationLogger
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": tmp}):
+                defaults = ViolationLogger()._get_default_config()
+                assert "command_credential_detected" in defaults["log_types"]
 
     def test_default_config_has_all_log_types(self):
         from ai_guardian.violations.logger import ViolationLogger
@@ -139,6 +148,7 @@ class TestShouldLogType:
                 assert vl._should_log_type("ssrf_blocked") is True
                 assert vl._should_log_type("config_file_exfil") is True
                 assert vl._should_log_type("image_secret_detected") is True
+                assert vl._should_log_type("command_credential_detected") is True
                 assert vl._should_log_type("tool_permission") is True
                 # Non-default custom type still filtered
                 assert vl._should_log_type("custom_nonexistent") is False
@@ -155,6 +165,7 @@ class TestSetupDefaults:
         assert "ssrf_blocked" in log_types
         assert "config_file_exfil" in log_types
         assert "middleware_paused" in log_types
+        assert "command_credential_detected" in log_types
 
     def test_permissive_config_template_includes_new_types(self):
         from ai_guardian.setup import _get_default_config_template
@@ -164,6 +175,22 @@ class TestSetupDefaults:
         assert "ssrf_blocked" in log_types
         assert "config_file_exfil" in log_types
         assert "middleware_paused" in log_types
+        assert "command_credential_detected" in log_types
+
+    def test_builtin_profiles_include_command_credential_logging(self):
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        profiles_dir = os.path.join(
+            repo_root, "src", "ai_guardian", "templates", "profiles"
+        )
+        for profile_name in ("minimal", "moderator", "standard", "strict"):
+            with open(
+                os.path.join(profiles_dir, f"{profile_name}.json"), encoding="utf-8"
+            ) as profile_file:
+                profile = json.load(profile_file)
+            assert (
+                "command_credential_detected"
+                in profile["violation_logging"]["log_types"]
+            )
 
 
 class TestConsoleLoggingTypes:
@@ -174,6 +201,16 @@ class TestConsoleLoggingTypes:
         )
 
         assert "http_request_credential_detected" in {
+            log_type for log_type, _ in console_types
+        }
+
+    def test_console_exposes_command_credential_log_type(self):
+        pytest.importorskip("nicegui", reason="NiceGUI is required by web pages")
+        from ai_guardian.web.pages.violation_logging import (
+            ALL_LOG_TYPES as console_types,
+        )
+
+        assert "command_credential_detected" in {
             log_type for log_type, _ in console_types
         }
 

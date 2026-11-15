@@ -532,7 +532,7 @@ def test_advisory_findings_without_native_pre_tool_events_remain_failures(
         f"FAIL {case_name}: expected pretooluse hook event was not recorded" in output
     )
     assert f"expected_{case.expected_violation}_delta=+1" in output
-    assert "hook_event_deltas=prompt=+1" in output
+    assert "hook_and_scan_deltas=prompt=+1" in output
     assert "PASS" not in output
     assert "private" not in output
 
@@ -921,3 +921,48 @@ def test_unreviewed_grok_version_never_qualifies_by_running_a_different_version(
     assert capsys.readouterr().out.strip() == (
         "FAIL Grok: the image must contain audited Grok 1.0.41; no image was rebuilt."
     )
+
+
+def test_grok_sandbox_readiness_failure_reports_only_aggregate_diagnostics(
+    runner, monkeypatch, capsys
+):
+    """USER EXPERIENCE: readiness failures aid diagnosis without raw status data."""
+    clock = [0.0]
+    private_stdout = "PRIVATE_GROK_STATUS_OUTPUT"
+    private_stderr = "PRIVATE_GROK_STATUS_ERROR"
+    monkeypatch.setattr(runner.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        runner.time,
+        "sleep",
+        lambda seconds: clock.__setitem__(0, clock[0] + seconds),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 7, stdout=private_stdout, stderr=private_stderr
+        ),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, stdout="running|0|false", stderr=""
+        ),
+    )
+
+    assert not runner._wait_for_sandbox_ready("docker", "owned", timeout=1)
+
+    output = capsys.readouterr().out
+    assert "Sandbox readiness diagnostics (value-free)" in output
+    assert "status_attempts=1" in output
+    assert "last_exit_code=7" in output
+    assert "daemon_running_marker=no" in output
+    assert "config_loaded_marker=no" in output
+    assert "stdout=present" in output
+    assert "stderr=present" in output
+    assert "container_state=running" in output
+    assert "container_exit_code=0" in output
+    assert "container_oom_killed=false" in output
+    assert private_stdout not in output
+    assert private_stderr not in output

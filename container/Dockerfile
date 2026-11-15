@@ -284,7 +284,7 @@ RUN mkdir -p /sandbox/.claude /sandbox/.config /sandbox/.gemini /sandbox/.codex 
         /sandbox/.kiro /sandbox/.openclaw /sandbox/.pi/agent \
         /sandbox/.config/ai-guardian/profiles \
     && chown -R sandbox:sandbox /sandbox/.claude /sandbox/.config \
-        /sandbox/.gemini /sandbox/.codex /sandbox/.kiro /sandbox/.openclaw \
+        /sandbox/.gemini /sandbox/.codex /sandbox/.grok /sandbox/.kiro /sandbox/.openclaw \
         /sandbox/.pi
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh

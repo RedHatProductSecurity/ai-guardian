@@ -460,6 +460,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
                 "directory_blocking",
                 "secret_detected",
                 "http_request_credential_detected",
+                "command_credential_detected",
                 "secret_redaction",
                 "prompt_injection",
                 "jailbreak_detected",

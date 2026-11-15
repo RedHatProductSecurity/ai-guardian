@@ -147,11 +147,14 @@ def test_container_images_match_project_rapidocr_pin():
         assert "rapidocr==3.9.2" not in contents
 
 
-def test_normal_image_precreates_writable_profile_mount_parent():
+def test_normal_image_precreates_writable_client_config_parents():
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+    normalized = re.sub(r"\\\s*\n\s*", " ", dockerfile)
+    chown_clause = normalized.split("chown -R sandbox:sandbox", 1)[1].split("\n", 1)[0]
 
     assert "/sandbox/.config/ai-guardian/profiles" in dockerfile
-    assert "chown -R sandbox:sandbox /sandbox/.claude /sandbox/.config" in dockerfile
+    assert "chown -R sandbox:sandbox /sandbox/.claude /sandbox/.config" in normalized
+    assert "/sandbox/.grok" in chown_clause
 
 
 def test_docs_requirements_pin_mkdocstrings_compatible_pymdown_extensions():

@@ -25,11 +25,18 @@ class _CheckTimer:
     When enabled=False, check() is a no-op pass-through with zero overhead.
     """
 
-    __slots__ = ("_timings", "_start_total", "_enabled", "_ask_wait_ms")
+    __slots__ = (
+        "_timings",
+        "_counts",
+        "_start_total",
+        "_enabled",
+        "_ask_wait_ms",
+    )
 
     def __init__(self, enabled: bool = True):
         self._enabled = enabled
         self._timings: Dict[str, float] = {}
+        self._counts: Dict[str, int] = {}
         self._start_total = time.perf_counter() if enabled else 0.0
         self._ask_wait_ms = 0.0
 
@@ -49,6 +56,11 @@ class _CheckTimer:
         if self._enabled and ms > 0:
             self._ask_wait_ms += ms
 
+    def add_count(self, name: str, amount: int = 1) -> None:
+        """Record an optional value-free event count with the hook timing."""
+        if self._enabled and type(amount) is int and amount > 0:
+            self._counts[name] = self._counts.get(name, 0) + amount
+
     def total_ms(self) -> float:
         if not self._enabled:
             return 0.0
@@ -63,6 +75,9 @@ class _CheckTimer:
 
     def to_dict(self) -> Dict[str, float]:
         return dict(self._timings)
+
+    def counts(self) -> Dict[str, int]:
+        return dict(self._counts)
 
 
 class LatencyLogger:

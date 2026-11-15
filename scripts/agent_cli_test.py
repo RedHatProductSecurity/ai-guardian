@@ -405,6 +405,42 @@ if p.is_file():
 print(json.dumps(dict(c),sort_keys=True))
 """
 
+_READ_HOOK_COUNTS = r"""
+import collections,json,sys
+from pathlib import Path
+events=collections.Counter(); shell_tools=collections.Counter(); command_scans=0
+scan_counts=collections.Counter()
+scan_count_fields=('command_credential_scan_attempts','command_credential_scan_empty_results',
+                   'command_credential_scan_results','command_credential_scan_blocks',
+                   'command_credential_scan_nonblocks')
+p=Path(sys.argv[1])
+if p.is_file():
+  for line in p.read_text(encoding='utf-8').splitlines():
+    try: item=json.loads(line)
+    except json.JSONDecodeError: continue
+    event=item.get('hook_event')
+    if isinstance(event,str) and event in ('prompt','pretooluse','posttooluse'):
+      events[event]+=1
+    tool=item.get('tool')
+    if tool in ('Bash','Shell'):
+      shell_tools[tool]+=1
+    checks=item.get('checks')
+    if isinstance(checks,dict) and 'command_credential_scanning' in checks:
+      command_scans+=1
+    counts=item.get('counts')
+    if isinstance(counts,dict):
+      for key in scan_count_fields:
+        value=counts.get(key)
+        if type(value) is int and value >= 0:
+          scan_counts[key]+=value
+events['normalized_tool_bash']=shell_tools.get('Bash',0)
+events['normalized_tool_shell']=shell_tools.get('Shell',0)
+events['command_credential_scan_calls']=command_scans
+for key in scan_count_fields:
+  events[key]=scan_counts[key]
+print(json.dumps(dict(events),sort_keys=True))
+"""
+
 _READ_STATS = r"""
 import json,sys,urllib.request
 with urllib.request.urlopen(sys.argv[1],timeout=2) as r: p=json.loads(r.read())
@@ -1430,7 +1466,7 @@ def _hook_counts(
     result = _exec(
         engine,
         name,
-        ["python3", "-c", _READ_LOG_COUNTS, f"{STATE_DIR}/latency.jsonl", "hook_event"],
+        ["python3", "-c", _READ_HOOK_COUNTS, f"{STATE_DIR}/latency.jsonl"],
         timeout,
     )
     try:
@@ -1444,7 +1480,20 @@ def _hook_counts(
     return {
         key: value
         for key, value in values.items()
-        if key in ("prompt", "pretooluse", "posttooluse")
+        if key
+        in (
+            "prompt",
+            "pretooluse",
+            "posttooluse",
+            "normalized_tool_bash",
+            "normalized_tool_shell",
+            "command_credential_scan_calls",
+            "command_credential_scan_attempts",
+            "command_credential_scan_empty_results",
+            "command_credential_scan_results",
+            "command_credential_scan_blocks",
+            "command_credential_scan_nonblocks",
+        )
         and type(value) is int
         and value >= 0
     }
@@ -1552,6 +1601,8 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
     _progress("Waiting for sandbox setup and daemon readiness")
     deadline = time.monotonic() + min(timeout, 90)
     last_heartbeat = time.monotonic()
+    attempts = 0
+    last_status = None
     while time.monotonic() < deadline:
         remaining = max(1, int(deadline - time.monotonic()))
         result = _exec(
@@ -1560,6 +1611,8 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
             ["ai-guardian", "daemon", "status"],
             min(5, remaining),
         )
+        attempts += 1
+        last_status = result
         if (
             result.returncode == 0
             and "ai-guardian daemon: running" in result.stdout
@@ -1572,6 +1625,66 @@ def _wait_for_sandbox_ready(engine: str, name: str, timeout: int) -> bool:
             _progress(f"Sandbox setup is still running ({elapsed}s elapsed)")
             last_heartbeat = time.monotonic()
         time.sleep(min(1, max(0, deadline - time.monotonic())))
+    last_stdout = (
+        last_status.stdout
+        if last_status is not None and isinstance(last_status.stdout, str)
+        else ""
+    )
+    last_stderr = (
+        last_status.stderr
+        if last_status is not None and isinstance(last_status.stderr, str)
+        else ""
+    )
+    container_state = "unavailable"
+    container_exit_code = "unknown"
+    container_oom_killed = "unknown"
+    try:
+        inspect_result = _run(
+            [
+                engine,
+                "inspect",
+                "--format",
+                "{{.State.Status}}|{{.State.ExitCode}}|{{.State.OOMKilled}}",
+                name,
+            ],
+            5,
+        )
+        if inspect_result.returncode == 0 and isinstance(inspect_result.stdout, str):
+            state_fields = inspect_result.stdout.strip().split("|")
+            valid_states = {
+                "created",
+                "running",
+                "paused",
+                "restarting",
+                "removing",
+                "exited",
+                "dead",
+            }
+            if (
+                len(state_fields) == 3
+                and state_fields[0] in valid_states
+                and state_fields[1].isdigit()
+                and state_fields[2].lower() in {"true", "false"}
+            ):
+                container_state = state_fields[0]
+                container_exit_code = state_fields[1]
+                container_oom_killed = state_fields[2].lower()
+    except (OSError, subprocess.TimeoutExpired):
+        container_state = "inspect_error"
+    _progress(
+        "Sandbox readiness diagnostics (value-free): "
+        f"status_attempts={attempts}, "
+        f"last_exit_code={last_status.returncode if last_status else 'none'}, "
+        "daemon_running_marker="
+        f"{'yes' if 'ai-guardian daemon: running' in last_stdout else 'no'}, "
+        "config_loaded_marker="
+        f"{'yes' if 'Config: loaded' in last_stdout else 'no'}, "
+        f"stdout={'present' if last_stdout else 'empty'}, "
+        f"stderr={'present' if last_stderr else 'empty'}, "
+        f"container_state={container_state}, "
+        f"container_exit_code={container_exit_code}, "
+        f"container_oom_killed={container_oom_killed}"
+    )
     return False
 
 
@@ -2320,7 +2433,7 @@ def _report_case_failure_details(
             f"expected_{case.expected_violation}_delta=+{violation_deltas.get(case.expected_violation, 0)}"
         )
     for label, counts in (
-        ("hook_event_deltas", hook_deltas),
+        ("hook_and_scan_deltas", hook_deltas),
         ("tool_evidence_deltas", tool_deltas),
     ):
         if counts is not None:
@@ -2513,10 +2626,10 @@ def _run_goose_smoke(args: argparse.Namespace) -> int:
         version = _exec(
             args.container_engine, name, ["goose", "--version"], args.timeout
         )
-        if (
-            version.returncode != 0
-            or version.stdout.strip() != f"goose {GOOSE_VERSION}"
-        ):
+        if version.returncode != 0 or version.stdout.strip() not in {
+            GOOSE_VERSION,
+            f"goose {GOOSE_VERSION}",
+        }:
             print(
                 f"FAIL Goose: the supplied smoke image must contain Goose {GOOSE_VERSION}"
             )
