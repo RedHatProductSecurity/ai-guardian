@@ -1231,6 +1231,14 @@ def main():
     )
     notebook_parser.add_argument("version", help="Exact stable release version X.Y.Z")
     notebook_parser.add_argument(
+        "--replace-generated-text-source-id",
+        metavar="UUID",
+        help=(
+            "explicitly allow this exact generated_text source UUID as the prior "
+            "export; replacement is still uploaded and verified before deletion"
+        ),
+    )
+    notebook_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Preview offline without CLI, authentication or notebook access",
@@ -1270,7 +1278,10 @@ def main():
         try:
             publication = ReleaseAnnouncer(args.version, args.repo)
             status = NotebookLMRefresher(
-                args.version, args.repo, publication._verify_publication
+                args.version,
+                args.repo,
+                publication._verify_publication,
+                generated_text_source_id=args.replace_generated_text_source_id,
             ).refresh(dry_run=args.dry_run)
         except (RefreshError, AnnouncementError, ValueError) as error:
             print(f"NotebookLM failed/unconfirmed: {error}", file=sys.stderr)

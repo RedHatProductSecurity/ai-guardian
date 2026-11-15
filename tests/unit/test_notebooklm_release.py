@@ -20,6 +20,7 @@ import release_helper
 OLD_ID = "11111111-1111-4111-8111-111111111111"
 NEW_ID = "22222222-2222-4222-8222-222222222222"
 OTHER_ID = "33333333-3333-4333-8333-333333333333"
+GENERATED_TEXT_ID = "44444444-4444-4444-8444-444444444444"
 EXPORT = b"# Finalized release documentation\nVersion 1.2.3\n"
 
 
@@ -44,6 +45,7 @@ def notebook_io(tmp_path, monkeypatch):
     io = SimpleNamespace(
         repo=repo,
         common=common,
+        delete_id=OLD_ID,
         calls=[],
         sources=[source(OLD_ID), source(OTHER_ID, "unrelated-export.md")],
         version="nlm version 0.16.2\nYou are on the latest version.\n",
@@ -89,12 +91,12 @@ def notebook_io(tmp_path, monkeypatch):
             assert uploaded_file.name == "notebooklm-export.md"
             assert uploaded_file.read_bytes() == io.export
             assert "--wait" in args and "--wait-timeout" in args and "--json" in args
-            io.sources.append(source(NEW_ID, status=io.status))
+            io.sources.append(source(NEW_ID, status=io.status, type="generated_text"))
         elif stage == "source delete":
             io.deleted = True
-            assert args[2] == OLD_ID
+            assert args[2] == io.delete_id
             assert "--confirm" in args and "--json" in args
-            io.sources = [entry for entry in io.sources if entry["id"] != OLD_ID]
+            io.sources = [entry for entry in io.sources if entry["id"] != io.delete_id]
         elif stage == "notebook rename":
             assert args[2:4] == [refresh_module.NOTEBOOK_ID, "AI Guardian v1.2.3"]
             assert args[-2:] == ["--profile", "default"]
@@ -102,7 +104,9 @@ def notebook_io(tmp_path, monkeypatch):
                 "--json" not in args
             ), "The audited notebook rename has no --json option"
             assert OLD_ID not in [entry["id"] for entry in io.sources]
-            assert source(NEW_ID) in io.sources
+            assert any(
+                entry["id"] == NEW_ID and entry["status"] == 2 for entry in io.sources
+            )
             if io.apply_rename:
                 io.title = args[3]
         elif stage == "notebook get":
@@ -140,7 +144,7 @@ def notebook_io(tmp_path, monkeypatch):
                 "source delete": json.dumps(
                     {
                         "status": "success",
-                        "deleted_source_ids": [OLD_ID],
+                        "deleted_source_ids": [io.delete_id],
                         "deleted_count": 1,
                     }
                 ),
@@ -220,6 +224,17 @@ def test_rejects_nonproduction_versions_before_io(version, notebook_io):
     with pytest.raises(ValueError, match="stable release"):
         refresh_module.NotebookLMRefresher(
             version, str(notebook_io.repo), notebook_io.verify
+        )
+    assert not notebook_io.calls
+
+
+def test_generated_text_override_requires_full_source_uuid(notebook_io):
+    with pytest.raises(ValueError, match="full source UUID"):
+        refresh_module.NotebookLMRefresher(
+            "1.2.3",
+            str(notebook_io.repo),
+            notebook_io.verify,
+            generated_text_source_id="generated-source",
         )
     assert not notebook_io.calls
 
@@ -358,6 +373,161 @@ def test_web_source_with_matching_title_is_not_an_uploaded_export(notebook_io):
     with pytest.raises(refresh_module.RefreshError):
         io.refresher.refresh()
     assert not mutations(io)
+
+
+def test_generated_text_source_requires_explicit_id_and_preserves_all_sources(
+    notebook_io,
+):
+    io = notebook_io
+    io.sources[0].update(id=GENERATED_TEXT_ID, type="generated_text")
+    with pytest.raises(refresh_module.RefreshError, match="explicit source ID"):
+        io.refresher.refresh()
+    assert not mutations(io)
+    assert [entry["id"] for entry in io.sources] == [GENERATED_TEXT_ID, OTHER_ID]
+
+
+def test_explicit_generated_text_replacement_retry_reuses_completed_journal(
+    notebook_io,
+):
+    io = notebook_io
+    io.sources[0].update(id=GENERATED_TEXT_ID, type="generated_text")
+    io.delete_id = GENERATED_TEXT_ID
+    io.refresher = refresh_module.NotebookLMRefresher(
+        "1.2.3",
+        str(io.repo),
+        io.verify,
+        generated_text_source_id=GENERATED_TEXT_ID,
+    )
+
+    result = io.refresher.refresh()
+    assert result.startswith("updated")
+    assert [entry["id"] for entry in io.sources] == [OTHER_ID, NEW_ID]
+    mutations_seen = mutations(io)
+    assert [call[1:3] for call in mutations_seen] == [
+        ["source", "add"],
+        ["source", "delete"],
+    ]
+    upload, delete = map(io.calls.index, mutations_seen)
+    assert any(
+        call[1:3] == ["source", "list"] for call in io.calls[upload + 1 : delete]
+    )
+    assert io.calls[delete][3] == GENERATED_TEXT_ID
+    assert io.refresher.refresh() == result
+    assert len(mutations(io)) == 2
+    state = json.loads(
+        (io.common / refresh_module.STATE_NAME).read_text(encoding="utf-8")
+    )
+    assert state["generated_text_source_id"] == GENERATED_TEXT_ID
+
+
+def test_generated_text_override_must_match_source_title_before_upload(notebook_io):
+    io = notebook_io
+    io.sources[0].update(id=GENERATED_TEXT_ID, type="generated_text")
+    io.refresher = refresh_module.NotebookLMRefresher(
+        "1.2.3", str(io.repo), io.verify, generated_text_source_id=OTHER_ID
+    )
+    with pytest.raises(refresh_module.RefreshError, match="explicit source ID"):
+        io.refresher.refresh()
+    assert not mutations(io)
+
+
+def test_explicit_generated_text_source_must_exist_before_upload(notebook_io):
+    io = notebook_io
+    io.sources = [source(OTHER_ID, "unrelated-export.md")]
+    io.refresher = refresh_module.NotebookLMRefresher(
+        "1.2.3",
+        str(io.repo),
+        io.verify,
+        generated_text_source_id=GENERATED_TEXT_ID,
+    )
+    with pytest.raises(refresh_module.RefreshError, match="does not match"):
+        io.refresher.refresh()
+    assert not mutations(io)
+
+
+def test_unapproved_generated_text_match_after_upload_is_never_deleted(notebook_io):
+    io = notebook_io
+    unexpected_id = "55555555-5555-4555-8555-555555555555"
+
+    def inject_unapproved_match():
+        if io.uploaded and unexpected_id not in [entry["id"] for entry in io.sources]:
+            io.sources.append(source(unexpected_id, type="generated_text"))
+        return None
+
+    io.failures["source list"] = inject_unapproved_match
+    with pytest.raises(refresh_module.RefreshError, match="not bound"):
+        io.refresher.refresh()
+    assert io.uploaded
+    assert not io.deleted
+    assert OLD_ID in [entry["id"] for entry in io.sources]
+
+
+def test_pending_generated_text_replacement_requires_same_explicit_id(notebook_io):
+    io = notebook_io
+    io.sources[0].update(id=GENERATED_TEXT_ID, type="generated_text")
+    io.delete_id = GENERATED_TEXT_ID
+    io.status = 1
+    io.refresher = refresh_module.NotebookLMRefresher(
+        "1.2.3",
+        str(io.repo),
+        io.verify,
+        generated_text_source_id=GENERATED_TEXT_ID,
+    )
+    with pytest.raises(refresh_module.RefreshError):
+        io.refresher.refresh()
+    assert not io.deleted
+    prior_mutations = len(mutations(io))
+
+    io.refresher = refresh_module.NotebookLMRefresher("1.2.3", str(io.repo), io.verify)
+    with pytest.raises(refresh_module.RefreshError, match="pending"):
+        io.refresher.refresh()
+    assert len(mutations(io)) == prior_mutations
+
+    io.refresher = refresh_module.NotebookLMRefresher(
+        "1.2.3",
+        str(io.repo),
+        io.verify,
+        generated_text_source_id=GENERATED_TEXT_ID,
+    )
+    io.sources[-1]["status"] = 2
+    assert io.refresher.refresh().startswith("updated")
+    assert io.deleted
+    assert len(mutations(io)) == 2
+
+
+def test_legacy_pending_generated_text_journal_resumes_receipt_without_reupload(
+    notebook_io,
+):
+    io = notebook_io
+    io.sources = [
+        source(GENERATED_TEXT_ID, type="generated_text"),
+        source(OTHER_ID, "unrelated-export.md"),
+        source(NEW_ID, status=2, type="generated_text"),
+    ]
+    io.delete_id = GENERATED_TEXT_ID
+    io.refresher = refresh_module.NotebookLMRefresher(
+        "1.2.3",
+        str(io.repo),
+        io.verify,
+        generated_text_source_id=GENERATED_TEXT_ID,
+    )
+    state = {
+        "schema": 1,
+        "notebook": refresh_module.NOTEBOOK_ID,
+        "version": "1.2.3",
+        "digest": refresh_module.hashlib.sha256(EXPORT).hexdigest(),
+        "profile": "default",
+        "generated_text_source_id": GENERATED_TEXT_ID,
+        "baseline": [GENERATED_TEXT_ID, OTHER_ID],
+        "old_id": GENERATED_TEXT_ID,
+        "new_id": NEW_ID,
+        "phase": "uploaded",
+    }
+    (io.common / refresh_module.STATE_NAME).write_text(json.dumps(state))
+
+    assert io.refresher.refresh().startswith("updated")
+    assert [entry["id"] for entry in io.sources] == [OTHER_ID, NEW_ID]
+    assert [call[1:3] for call in mutations(io)] == [["source", "delete"]]
 
 
 @pytest.mark.parametrize(
@@ -523,6 +693,45 @@ def test_refresh_cli_bypasses_version_management_and_prints_safe_status(
     assert "Finalized release documentation" not in output.out + output.err
 
 
+def test_refresh_cli_forwards_explicit_generated_text_source_id(
+    notebook_io, monkeypatch, capsys
+):
+    io = notebook_io
+    refresher = Mock()
+    refresher.refresh.return_value = "updated"
+    constructor = Mock(return_value=refresher)
+    monkeypatch.setattr(release_helper, "NotebookLMRefresher", constructor)
+    monkeypatch.setattr(
+        release_helper.ReleaseAnnouncer, "_verify_publication", io.verify
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "helper",
+            "--repo",
+            str(io.repo),
+            "refresh-notebooklm",
+            "1.2.3",
+            "--replace-generated-text-source-id",
+            GENERATED_TEXT_ID,
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exit_info:
+        release_helper.main()
+
+    assert exit_info.value.code == 0
+    constructor.assert_called_once_with(
+        "1.2.3",
+        str(io.repo),
+        io.verify,
+        generated_text_source_id=GENERATED_TEXT_ID,
+    )
+    refresher.refresh.assert_called_once_with(dry_run=False)
+    assert capsys.readouterr().out.strip() == "updated"
+
+
 def test_cli_failure_hides_raw_provider_errors_and_never_claims_success(
     notebook_io, monkeypatch, capsys
 ):
@@ -576,6 +785,21 @@ def test_preview_describes_notebook_rename_without_contacting_service(notebook_i
     assert "AI Guardian v1.2.3" in io.refresher.refresh(dry_run=True)
     assert io.title == "AI Guardian"
     assert not io.calls
+
+
+def test_preview_identifies_explicit_generated_text_source_without_io(notebook_io):
+    io = notebook_io
+    io.refresher = refresh_module.NotebookLMRefresher(
+        "1.2.3",
+        str(io.repo),
+        io.verify,
+        generated_text_source_id=GENERATED_TEXT_ID,
+    )
+    result = io.refresher.refresh(dry_run=True)
+    assert GENERATED_TEXT_ID in result
+    assert "explicitly replace generated-text source" in result
+    assert not io.calls
+    io.verify.assert_not_called()
 
 
 def test_failed_upload_does_not_rename_notebook(notebook_io):

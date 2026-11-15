@@ -602,9 +602,15 @@ auth recovery is disabled in these child commands.
 
 There is no in-place update for uploaded files. Match only the exact local-file/text
 source title `notebooklm-export.md`, upload once and confirm the new full UUID is
-processed/ready **before deleting only the identified old UUID**. Preserve every
-other source. Ambiguous discovery means no changes. Source limits must preserve
-the old export, not cause delete-first replacement.
+processed/ready **before deleting only the identified old UUID**. If an operator
+has explicitly confirmed that an exact-title `generated_text` source is the old
+export, the refresh helper accepts its full ID with
+`--replace-generated-text-source-id UUID`. This exception is scoped to that exact
+ID/title, recorded in the journal, and must be repeated on retry. Preserve every
+other source. NotebookLM can also label the new file upload `generated_text`; accept
+that type only for the exact UUID saved from the upload receipt. Ambiguous discovery
+means no changes. Source limits must preserve the old export, not cause delete-first
+replacement.
 
 After verifying that one processed export remains, rename the same notebook to
 **`AI Guardian vX.Y.Z`** and verify the exact title through JSON readback. An
