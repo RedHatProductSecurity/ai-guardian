@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Serval API client secret detection (#2749):** Detect public API and worker
+  secrets using the documented `svl_secret_` type tags and exact suffix length.
+
 ### Fixed
 - **NotebookLM completed replacement retry:** Reuse the completed journal when
   retrying with the same explicit source UUID after the prior source was deleted.

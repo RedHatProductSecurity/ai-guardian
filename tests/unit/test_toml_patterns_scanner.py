@@ -45,6 +45,30 @@ class TestTomlPatternsScanner:
         ]
         assert len(secret_findings) == 0
 
+    def test_scan_finds_serval_client_secret_types(self):
+        scanner = TomlPatternsScanner()
+        suffix = "a1B2c3D4" * 6 + "a"
+        for key_type in ("pk", "wk", "mk"):
+            findings = scanner.scan(f"svl_secret_{key_type}_{suffix}")
+            assert any(
+                finding.rule_id == "serval-api-client-secret" for finding in findings
+            )
+
+    def test_scan_rejects_malformed_serval_client_secrets(self):
+        scanner = TomlPatternsScanner()
+        suffix = "a1B2c3D4" * 6 + "a"
+        malformed_values = (
+            f"svl_secret_xx_{suffix}",
+            f"svl_secret_pk_{suffix[:-1]}",
+            f"svl_secret_pk_{suffix}A",
+            "svl_secret_pk_<redacted>",
+        )
+        for value in malformed_values:
+            assert not any(
+                finding.rule_id == "serval-api-client-secret"
+                for finding in scanner.scan(value)
+            )
+
     def test_scan_empty_content(self):
         scanner = TomlPatternsScanner()
         assert scanner.scan("") == []
