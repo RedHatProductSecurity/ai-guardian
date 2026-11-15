@@ -88,11 +88,20 @@ def test_ledger_matches_actual_release_readiness_invocations_and_versions(runner
     )
 
 
-def test_seven_client_audit_has_versions_sources_priorities_and_no_runtime_claim():
+def test_audited_client_records_have_versions_sources_priorities_and_no_runtime_claim():
     clients = json.loads(LEDGER.read_text(encoding="utf-8"))["clients"]
     text = AUDIT.read_text(encoding="utf-8")
     sources = dict(re.findall(r"^\[([^\]]+)\]: (https://\S+)$", text, re.MULTILINE))
-    for cli in ("copilot", "grok", "antigravity", "kiro", "openclaw", "crush", "goose"):
+    for cli in (
+        "copilot",
+        "cursor",
+        "grok",
+        "antigravity",
+        "kiro",
+        "openclaw",
+        "crush",
+        "goose",
+    ):
         assert clients[cli]["reviewed_versions"]
         section = text.split(f"## {cli}\n", 1)[1].split("\n## ", 1)[0]
         for version in clients[cli]["reviewed_versions"]:
@@ -254,7 +263,9 @@ def test_openclaw_exclusion_tracks_the_missing_required_native_manifest(
     assert not (plugin / "openclaw.plugin.json").exists()
 
 
-@pytest.mark.parametrize("cli", ("copilot", "antigravity", "kiro", "openclaw", "crush"))
+@pytest.mark.parametrize(
+    "cli", ("copilot", "cursor", "antigravity", "kiro", "openclaw", "crush")
+)
 def test_blocked_clients_exit_nonzero_before_any_runtime_or_installation(
     cli, runner, monkeypatch, capsys
 ):

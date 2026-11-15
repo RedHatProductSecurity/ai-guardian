@@ -19,6 +19,7 @@ from ai_guardian.hook_adapters.base import NormalizedHookInput
 from ai_guardian.ide_registry import (
     ALL_IDE_TYPES,
     SUPPORTED_CLI_IDE_TYPES,
+    SUPPORTED_CONTAINER_CLI_IDE_TYPES,
     SUPPORTED_IDE_REGISTRY,
     SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
     SUPPORTED_IDE_TYPES,
@@ -67,6 +68,9 @@ def test_canonical_registry_is_unique_and_complete():
 def test_openshell_cli_registry_matches_the_published_image_scope():
     assert SUPPORTED_OPENSHELL_CLI_IDE_TYPES == ("codex", "claude", "opencode")
     assert set(SUPPORTED_OPENSHELL_CLI_IDE_TYPES).issubset(set(SUPPORTED_CLI_IDE_TYPES))
+    assert "cursor" in SUPPORTED_CLI_IDE_TYPES
+    assert "cursor" not in SUPPORTED_CONTAINER_CLI_IDE_TYPES
+    assert "cursor" not in SUPPORTED_OPENSHELL_CLI_IDE_TYPES
 
 
 def test_cli_capable_integrations_have_executable_and_identity_metadata():
@@ -81,6 +85,7 @@ def test_cli_capable_integrations_have_executable_and_identity_metadata():
     assert get_cli_executables_for_agent_type("claude_code") == ("claude",)
     assert get_cli_executables_for_agent_type("github_copilot") == ("copilot",)
     assert get_cli_executables_for_agent_type("gemini_cli") == ("gemini",)
+    assert get_cli_executables_for_agent_type("cursor") == ("agent",)
 
 
 def test_setup_registry_matches_canonical_registry():

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "reviewed_on": "2026-11-13",
+  "reviewed_on": "2026-11-15",
   "tracking_issue": "RedHatProductSecurity/ai-guardian#2673",
   "clients": {
     "claude": {
@@ -9,6 +9,13 @@
       "reviewed_versions": [],
       "blocker": null,
       "audit": "existing-lanes"
+    },
+    "cursor": {
+      "runner": "blocked",
+      "ci_steps": [],
+      "reviewed_versions": ["2026.10.22"],
+      "blocker": "cursor_service_auth_and_terms_consent",
+      "audit": "cursor"
     },
     "copilot": {
       "runner": "blocked",

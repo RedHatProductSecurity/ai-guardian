@@ -115,8 +115,9 @@ relocation variable deliberately keep their existing defaults.
 ## Coverage-to-test matrix
 
 For actual CLI invocation coverage, see the separate [real-agent CLI coverage
-ledger](REAL_AGENT_CLI_COVERAGE.md). It includes all twelve canonical host CLIs
-(including Goose), partial pre-tool lanes, explicit blockers and CI drift tests.
+ledger](REAL_AGENT_CLI_COVERAGE.md). It includes all thirteen canonical host CLIs
+(including Goose and the blocked Cursor CLI record), partial pre-tool lanes,
+explicit blockers and CI drift tests.
 This matrix's adapter/generated-bridge evidence does not establish native CLI
 execution, output containment or product-runtime qualification.
 

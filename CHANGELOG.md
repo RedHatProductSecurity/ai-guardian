@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Cursor CLI coverage inventory:** Add Cursor's `agent` CLI to the canonical
+  host CLI ledger as blocked pending explicit service-auth/terms consent and native
+  runtime qualification. Keep it out of product image selectors and retain the
+  separate live desktop hook compatibility gate.
+
 ## [1.22.0] - 2026-11-14
 
 ### Added

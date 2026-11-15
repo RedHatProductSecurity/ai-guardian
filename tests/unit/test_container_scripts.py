@@ -18,6 +18,7 @@ from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES, SUPPORTED_IDE_TYPE
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Keep launcher coverage aligned with the complete supported IDE registry.
 CONTAINER_EXCLUDED_IDE_TYPES = frozenset({"goose"})  # Host-only; not shipped in images.
+CONTAINER_EXCLUDED_CLI_IDE_TYPES = frozenset({"cursor", "goose"})
 CONTAINER_SUPPORTED_IDE_TYPES = tuple(
     ide_type
     for ide_type in SUPPORTED_IDE_TYPES
@@ -26,7 +27,7 @@ CONTAINER_SUPPORTED_IDE_TYPES = tuple(
 CONTAINER_SUPPORTED_CLI_IDE_TYPES = tuple(
     ide_type
     for ide_type in SUPPORTED_CLI_IDE_TYPES
-    if ide_type not in CONTAINER_EXCLUDED_IDE_TYPES
+    if ide_type not in CONTAINER_EXCLUDED_CLI_IDE_TYPES
 )
 RUN_SCRIPT = REPO_ROOT / "container" / "run.sh"
 ENTRYPOINT_SCRIPT = REPO_ROOT / "container" / "entrypoint.sh"

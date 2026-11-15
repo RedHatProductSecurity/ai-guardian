@@ -45,6 +45,7 @@ GOOSE_VERSION = "1.59.0"
 RUNNABLE_CLI_NAMES = ("claude", "codex", "gemini", "opencode", "pi", "grok", "goose")
 BLOCKED_SMOKE_CLIS = {
     "copilot": "consent_and_hook_qualification",
+    "cursor": "cursor_service_auth_and_terms_consent",
     "antigravity": "consent_and_versioned_installation",
     "kiro": "no_documented_local_provider",
     "openclaw": "native_plugin_qualification",

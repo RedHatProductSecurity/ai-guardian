@@ -1,7 +1,9 @@
 # Real-agent CLI coverage ledger
 
-Reviewed **2026-11-13** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
-This inventory includes **Goose**, even though it already had a smoke-only lane.
+Updated **2026-11-15** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673); existing client runtime reviews are unchanged.
+This inventory includes **Goose**, even though it already had a smoke-only lane,
+and records Cursor's headless `agent` CLI as blocked pending consent and
+native qualification.
 The machine-readable ledger is [`scripts/agent_cli_coverage.json`](../scripts/agent_cli_coverage.json).
 `tests/unit/test_agent_cli_coverage.py` compares every `SUPPORTED_CLI_IDE_TYPES`
 entry with the runner, actual Release Readiness invocations, and this audit.
@@ -18,6 +20,7 @@ scripts/agent-cli-test --coverage
 | CLI key | Runner / CI lane | Scope or actionable exclusion |
 | --- | --- | --- |
 | `claude` | Full applicable case profile; consent-gated | Explicit maintainer ToS consent before installation; strict-derived sanitization, not unmodified strict output blocking |
+| `cursor` | Blocked: credentialed Cursor service and terms consent | Headless `agent -p` exists, but no local mock-provider path or approved CI service credentials/runtime qualification |
 | `codex` | Full applicable case profile; failure currently tolerated in CI | Native execution remains unqualified when the lane fails; the release exception is not a pass |
 | `gemini` | Full applicable case profile | Native refusal of sensitive results, **not** sanitized delivery |
 | `opencode` | Separate V1/V2 lanes | V2 smoke image is not a published product-runtime qualification |
@@ -57,7 +60,7 @@ active; a leak cannot become the next case's baseline. The inert SSRF/config
 commands print strings and write only a fixed execution witness, without reading
 credentials or contacting those destinations.
 
-All seven records below distinguish **reviewed upstream versions** from **tested
+All eight records below distinguish **reviewed upstream versions** from **tested
 native versions**. No new native executions were run locally in this change:
 project policy reserves real containers/integration scenarios for CI. Add the CI
 run/commit, image digest, exact CLI version and platform to the issue before
@@ -83,6 +86,32 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
   consent, pin an artifact, add a pre-tool-only BYOK adapter and CI lane, verify
   native hook evidence and tool/result IDs. Do not reuse Claude's consent variable.
 - **Native execution in this change:** not run; no new tested native version.
+
+## cursor
+
+- **Reviewed version / installation:** Cursor CLI uses the `agent` executable;
+  the [official changelog][cursor-changelog] was reviewed through **2026.10.22**.
+  The vendor install script selects the current build, so no immutable artifact or
+  exact installed CLI version is pinned in this project.
+- **Unattended / local protocol:** Cursor documents [headless `agent -p` and
+  `CURSOR_API_KEY`][cursor-headless], plus structured
+  [JSON/stream output][cursor-output]. Scripts use Cursor's service. The reviewed
+  [CLI configuration][cursor-config] documents model selection but no arbitrary
+  local-provider/base-URL setting, so the current credential-free loopback mock
+  harness cannot run this CLI as-is.
+- **Installed hook boundary / trust:** Cursor's [CLI changelog][cursor-changelog]
+  records CLI hook support and Claude Code settings-hook merging. The general
+  [hook reference][cursor-hooks] defines the app's hook contracts, but the exact
+  event subset fired by headless CLI runs still needs native qualification. This
+  does not replace the separate live desktop compatibility check.
+- **Blocker:** `cursor_service_auth_and_terms_consent` — no approved CI use of a
+  Cursor service credential, usage/cost budget, or proprietary service terms; no
+  pinned installer/version preflight has been qualified.
+- **Next action / priority:** **P1** — obtain explicit maintainer consent for the
+  external service and terms, agree on credential handling and a spend limit, then
+  pin and qualify `agent -p` against the exact hook events it supports. Until then,
+  keep this inventory-only blocked record and retain the manual desktop gate.
+- **Native execution in this change:** not run; no exact installed native version.
 
 ## grok
 
@@ -248,6 +277,11 @@ engine configuration, shared sandbox lifecycle, image/cache strategy or native
 trust to accommodate a client. All runtime diagnostics remain aggregate counters,
 booleans and fixed categories, never prompts, credentials or CLI/model/tool bodies.
 
+[cursor-headless]: https://cursor.com/docs/cli/headless
+[cursor-config]: https://cursor.com/docs/cli/reference/configuration
+[cursor-output]: https://cursor.com/docs/cli/reference/output-format
+[cursor-changelog]: https://cursor.com/docs/cli/changelog
+[cursor-hooks]: https://cursor.com/docs/hooks
 [copilot-license]: https://github.com/github/copilot-cli/blob/main/LICENSE.md
 [copilot-byok]: https://docs.github.com/copilot/how-tos/copilot-cli/customize-copilot/add-llm-models
 [grok-package]: https://registry.npmjs.org/@xai-official/grok/1.0.41

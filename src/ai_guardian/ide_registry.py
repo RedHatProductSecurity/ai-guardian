@@ -121,6 +121,8 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         ),
         project_scope=True,
         platform_contract="user and explicit project/cloud setup; runtime E2E on Linux",
+        cli_capable=True,
+        cli_executables=("agent",),
     ),
     IDEIntegration(
         "copilot",
@@ -443,10 +445,11 @@ SUPPORTED_IDE_TYPES: Tuple[str, ...] = tuple(
 SUPPORTED_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in SUPPORTED_IDE_REGISTRY if integration.cli_capable
 )
-# Host CLI support is independent of image contents. Goose is not distributed
-# in either published image and must not leak into sandbox/tray selectors.
+# Host CLI support is independent of image contents. Cursor's authenticated
+# vendor CLI and Goose are not distributed in either published image and must
+# not leak into sandbox/tray selectors.
 SUPPORTED_CONTAINER_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
-    key for key in SUPPORTED_CLI_IDE_TYPES if key != "goose"
+    key for key in SUPPORTED_CLI_IDE_TYPES if key not in {"cursor", "goose"}
 )
 # The OpenShell image bundles OpenCode and Codex; Claude Code is installed at
 # runtime only after explicit ToS consent. Keep this separate from the broader

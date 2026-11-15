@@ -821,11 +821,14 @@ def test_all_cli_inventory_never_looks_like_a_security_pass(
     assert "no client was run. This is NOT security qualification." in output
     assert "grok: runner=pre-tool-only" in output
     assert "goose: runner=pre-tool-only" in output
+    assert "cursor: runner=blocked" in output
     assert "openclaw: runner=blocked" in output
     assert "PASS" not in output
 
 
-@pytest.mark.parametrize("cli", ("copilot", "antigravity", "kiro", "openclaw", "crush"))
+@pytest.mark.parametrize(
+    "cli", ("copilot", "cursor", "antigravity", "kiro", "openclaw", "crush")
+)
 def test_excluded_client_has_an_actionable_failure_before_side_effects(
     cli, runner, monkeypatch, capsys
 ):

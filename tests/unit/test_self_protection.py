@@ -1664,16 +1664,21 @@ def test_host_cli_guard_fails_closed_for_missing_or_invalid_values(value):
     assert error_msg is not None
 
 
-def test_non_cli_integration_is_not_misclassified_as_host_cli():
+def test_cursor_host_cli_is_blocked_from_launching_another_cli():
     checker = ToolPolicyChecker(
         config={"permissions": {"enabled": False, "rules": []}},
         developer_session=False,
     )
 
+    cursor_allowed, cursor_error, _ = checker.check_tool_allowed(
+        _host_cli_hook("cursor", "agent -p 'inspect this project'")
+    )
     is_allowed, error_msg, _ = checker.check_tool_allowed(
         _host_cli_hook("cursor", "opencode --help")
     )
 
+    assert not cursor_allowed
+    assert cursor_error is not None
     assert is_allowed
     assert error_msg is None
 
