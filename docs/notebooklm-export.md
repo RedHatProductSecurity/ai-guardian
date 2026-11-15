@@ -8,666 +8,219 @@ Auto-generated combined export of all project documentation.
 # AI Guardian
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.22.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
 </p>
 
-> AI IDE security hook: controls MCP/skill permissions, blocks directories, detects prompt injection, scans secrets
+> Security controls for AI coding agents: hooks scan prompts and tool activity, enforce permissions, and detect sensitive data.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/ai-guardian.svg)](https://pypi.org/project/ai-guardian/)
 
-AI Guardian provides comprehensive protection for AI IDE interactions through multiple security layers.
+## Documentation and Q&A
+
+- [Full documentation site (latest stable release)](https://ai-guardian.readthedocs.io/en/stable/) — searchable,
+  versioned guides.
+- [Latest documentation (tracks `main`)](https://ai-guardian.readthedocs.io/en/latest/) — guides for upcoming
+  development changes.
+- [Source documentation index][docs-index] — browse the documentation in this repository.
+- [Ask questions about the documentation in NotebookLM](https://notebook.google.com/notebook/9b78ebca-d327-4df7-8f2e-64e518f2ddcb) — a Google account is required.
+- [Use the combined documentation export with a private LLM tool][docs-export] — upload this generated single-file compilation to your organization's approved private NotebookLM instance or other LLM search tool. It is generated during releases; do not edit it directly.
 
 ## Security Disclaimer
 
-**AI Guardian is not a silver bullet** and cannot guarantee detection of all security threats.
-
-- **Prompt injection detection** may miss novel or obfuscated attacks
-- **Secret scanning** depends on scanner patterns and may miss custom secret formats
-- **Attackers evolve continuously** — new bypass techniques emerge constantly
-- **Fail-open by design** — prioritizes availability over security (errors allow operations)
-
-**Use AI Guardian as ONE layer in a defense-in-depth security strategy, not as your only protection.**
-
-Combine with:
-- Code review processes
-- CI/CD security scanning
-- Network security (firewalls, egress rules)
-- Secret management (Vault, AWS Secrets Manager)
-
-See [Security Design](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) for limitations and architecture.
+**AI Guardian is one layer of defense in depth, not a guarantee against every
+threat.** Detection may miss novel or obfuscated attacks, and secret coverage
+depends on available scanner patterns. By design, scanner errors fail open so
+development remains available. Combine AI Guardian with code review, CI/CD
+scanning, network controls, and secret management. See [Security Design][design]
+for architecture and limitations.
 
 ## Quick Start
 
-### 1. Install
-
 ```bash
-uv tool install ai-guardian        # recommended
-# or: pip install ai-guardian
+uv tool install ai-guardian
+ai-guardian setup --create-config --install-scanner
+ai-guardian daemon start -b
 ```
 
-### 2. Configure
+Setup detects supported IDEs and guides hook setup. Open your IDE to start using
+AI Guardian. For optional desktop controls, run `ai-guardian tray start -b`; open
+the browser console with `ai-guardian console`.
 
-```bash
-ai-guardian setup --ide claude --create-config --install-scanner
-```
+> **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read,
+> Write, Edit) are allowed and scanned by hooks. See [Tool Policy][policy]
+> for the security posture and configuration.
 
-### 3. Start
+## Per-integration behavior and limitations
 
-```bash
-ai-guardian daemon start -b        # background daemon (faster hook processing)
-ai-guardian tray start -b          # system tray (optional — manage daemons visually)
-```
+**Supported does not mean identical enforcement.** Protection requires the
+hooks/plugins to be installed, enabled, trusted where applicable, and loaded in
+the actual execution scope. A local installation does not automatically protect
+cloud jobs.
 
-### 4. Open the Console
+**Legend:**
 
-```bash
-ai-guardian console                      # browser console (Python 3.10+)
-ai-guardian tui                           # compatibility alias for console
-```
+- **Gate** can stop the action before it starts. **Replace/withhold** changes the
+  model-visible prompt or result; it is not a native prompt denial or a rollback.
+- **Advice/observe** adds context or scans activity without enforcing a gate or
+  replacing a result.
+- **Conditional** depends on the host path/configuration. **Unverified** must not
+  be relied on for enforcement.
+- **Not installed/unavailable** means no AI Guardian hook coverage at that stage.
 
-Manage settings, view violations, and scan projects. See [docs/CONSOLE.md](docs/CONSOLE.md).
+| Integration / surface | Prompt handling | Pre-tool enforcement | Post-tool result handling | Key limitation |
+|---|---|---|---|---|
+| Claude Code | Gate | Gate | Feedback or replace supported results | Bash replacement is currently ignored; a post-tool block alone leaves the original result visible. |
+| Cursor desktop / local CLI | Gate | Gate | Replace supported MCP results only | No general built-in result replacement; backend-hosted HTTP MCP results cannot be replaced locally. |
+| Cursor Cloud Agent | Unavailable | Conditional gate | Supported MCP replacement only; not backend-hosted HTTP MCP | Requires loaded project/cloud-workspace hooks; local user hooks do not protect cloud runs. |
+| GitHub Copilot CLI / local command hooks | Observe only | Gate | Not installed | Prompt-hook output is ignored; it cannot block or rewrite the prompt. |
+| GitHub Copilot cloud coding-agent job | Not installed | Not installed | Not installed | Local setup does not provision remote job hooks. |
+| Grok Build | Observe only | Gate | Observe only | Passive-event output is ignored; project hooks require trust. |
+| Codex CLI / desktop Codex mode | Gate | Gate | Replace with feedback, not a sanitized copy | Codex hooks require review/trust and do not cover regular ChatGPT mode. |
+| ChatGPT desktop — regular mode | Unavailable | Unavailable | Unavailable | Outside the Codex hook surface; shared MCP configuration does not add hook enforcement. |
+| Windsurf Cascade | Gate | Gate | Observe only | Post-hooks cannot block or replace completed results. |
+| Gemini CLI | Gate | Gate | Withhold with a fixed refusal | Does not deliver AI Guardian's sanitized copy of a sensitive result. |
+| Antigravity CLI (`agy`) | Advice only | Gate | Observe only; no result content | Prompt advice does not terminate the model request; post-hooks cannot inspect tool output. |
+| Cline | Observe only | Gate | Observe only; no verified replacement | Script-hook prompt cancellation and result replacement are not documented host contracts. |
+| ZooCode | Unverified | Intended gate; unverified | Unverified replacement | Shared Cline scripts are not independently qualified for the exact ZooCode runtime. |
+| Kiro IDE | Gate | Gate | Advice/context only | Post-hook context is not result replacement. |
+| Kiro CLI | Observe/advice only | Gate | Advice/context only | Prompt Submit cannot block; hook availability varies by CLI generation. |
+| AiderDesk extension | Gate | Conditional gate | Replace where the callback runs | Requires v0.55.0+ and an enabled extension; execution paths differ in callback coverage. |
+| OpenClaw Gateway plugin | Observe only | Gate | Observe only | Prompt-event return values are ignored; the loaded plugin does not replace post-tool results. |
+| OpenCode V1 (1.x) | Replace with a fixed refusal | Gate | Conditional transformation | An explicit replacement can be applied; a post-hook block is not a verified safe-redaction guarantee. |
+| OpenCode V2 (2.x) | Replace with a fixed refusal | Gate | Replace/withhold | Requires V2 plugin discovery and artifacts; V1 plugin code does not run in V2. |
+| Pi extension | Gate | Gate | Replace or mark as error | Requires a loaded extension; commands handled before the input event are outside its prompt gate. |
+| Augment / Auggie local hooks | Not installed | Gate for selected tools | Feedback only; no replacement | Installed matchers do not cover every tool. |
+| Crush | Not installed | Gate | Not installed | AI Guardian installs only the pre-tool stage. |
+| Goose host CLI | Observe only | Gate | Observe only | v1.59.0 Linux/macOS only; requires an enabled plugin with the fail-closed pre-tool action. Desktop/native Windows and product container/OpenShell runtimes are unqualified. |
+| Junie | Not installed | Not installed | Not installed | MCP-only advisory checks depend on the agent choosing to call and follow them; no enforced hooks. |
 
-Done. Open your IDE and start coding — ai-guardian protects automatically.
+**Post-tool processing cannot undo completed tool side effects.** See the
+[detailed per-integration behavior matrix](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#per-integration-behavior-matrix)
+for version-specific prerequisites, protocols, timeouts, failure behavior, and
+upstream references. That guide is the source of truth for this summary.
 
-> **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read, Write, Edit) are allowed and scanned by hooks, but MCP servers and Skills require explicit allow rules. See [Tool Policy](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#default-security-posture) for why and how to allow them.
+## Guides
 
-## Developer Install
-
-For contributors cloning the repo:
-
-```bash
-git clone https://github.com/RedHatProductSecurity/ai-guardian.git
-cd ai-guardian
-uv venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-uv pip install -e .[dev]
-
-# Run tests
-uv run --extra dev python -m pytest tests/test_<module>.py -v
-
-# Run linters
-black --target-version py310 src/ai_guardian/ tests/
-ruff check src/ai_guardian/ tests/ --fix
-```
-
-See [CONTRIBUTING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md) and [AGENTS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/AGENTS.md) for full development guidelines.
-
-> **Warning:** The `main` branch contains unreleased development code. Always install stable releases from PyPI (`uv tool install ai-guardian` or `pip install ai-guardian`). Do not `git clone` + `pip install -e .` for production use.
-
-## Installation Options
-
-### One-Line Install
-
-Creates config, installs a scanner, and automatically detects supported IDE
-configuration directories so their hooks can be installed. Use `--ide` to
-target one IDE explicitly, or `--no-setup` to skip hook setup:
-
-From the tray, open **IDE/CLI Setup...**. Use **Check hooks/MCP installation...** to
-immediately verify locally installed integrations; if hooks or a required MCP
-registration are missing or unhealthy, the tray offers setup choices and reports the final verification
-status. The **Manual setup (specific IDE)** entries are for unusual,
-incompletely detected, or targeted repair cases, while **Create Config...** is
-for first-time or manual configuration. These explicit actions remain
-available even when no daemon is running or only remote daemons are connected;
-per-IDE setup also installs the MCP security advisor by default when that IDE
-supports it.
-The tray also checks automatically when it starts and then every 10 seconds
-while running. The initial check also sends an **AI Guardian** health-result
-notification; later healthy polling checks remain silent. Automatic checks
-only offer setup on local-daemon trays.
-When multiple integrations need setup, the tray shows an individual **Install
-now** or **Never install** choice for each one. These choices are kept per
-integration, so a newly detected IDE can still be offered later.
-When no global `ai-guardian.json` exists, the automatic setup prompt also shows
-a **Security profile** selector. `@standard` is selected and recommended by
-default; `@minimal`, `@strict`, and `@moderator` include concise guidance, and
-**Skip configuration for now** installs only the selected IDE hooks. If a
-profile is selected, the tray creates the global config only after confirmation
-and before installing hooks. Existing global or project-local configuration is
-never overwritten by this flow. Configuration creation failures leave hook
-setup untouched and the prompt is temporarily deferred.
-The web console's **Configuration → Proactive Prompt State** page provides a
-read-only view of these local prompt decisions. They are stored separately in
-the XDG state file `proactive_prompts.json`, rather than in `ai-guardian.json`.
-Entries named `ide_setup_<combination>` are prompt history; the synchronized
-`ide_setup_status` entry is the current installed-IDE and current/last-verified
-hook-health snapshot.
-Within prompt history, `dismissed` means the automatic prompt was declined for
-that exact combination, while `snoozed` means it is postponed until its stored
-time. Neither value says whether the hooks are currently healthy: the tray
-refreshes the snapshot from live hook verification before applying either
-decision. Dismissed and snoozed integrations continue to be rechecked, and a
-changed unhealthy result can make their prompt eligible again. **Never
-install** is the only automatic choice that stops rechecking; the tray keeps
-its last verified status visible and suppresses automatic setup until the
-choice is reset, while manual setup remains available.
-Use the per-IDE **Reset** button on that page, or
-`ai-guardian ide-setup reset --ide <ide>`, to clear one IDE's saved prompt
-decisions and Never install choice.
-
-```bash
-# Auto-detect installed IDEs (Linux / macOS)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash
-
-# Linux / macOS (auto-detects uv → venv → pip)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --ide claude
-
-# Force a specific install method
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --venv --ide claude  # venv + pip
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --pip --ide claude   # bare pip
-
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.ps1 | iex
-
-# Install without changing IDE hooks
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/install.sh | bash -s -- --no-setup
-```
-
-### Container
-
-A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with ai-guardian and the supported agent integrations. Redistributable headless CLIs are bundled; proprietary or GUI-only agents are configured at startup without being embedded:
-
-For provider-backed sessions, OpenShell is preferred when available, but remains
-**experimental (upstream pre-1.0)**; [validate compatibility first](docs/Sandbox.md#openshell-maturity-and-compatibility).
-Provider credentials remain in the gateway, with deny-by-default network/filesystem
-policy and per-sandbox isolation. Docker/Podman is the simpler fallback;
-credentials passed to it are available inside and may be readable by the agent.
-
-```bash
-# Recommended — run.sh handles auth, port mapping, config sharing, and ToS consent
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.21.0/container/run.sh -o run.sh
-chmod +x run.sh
-OPENAI_API_KEY=... \
-    ./run.sh --agent codex --repo $(pwd)
-
-# Preferred OpenShell sandbox (experimental, upstream pre-1.0; published or local image)
-# OpenShell currently supports Codex only; Claude support is deferred until 0.1.3.
-# Complete the gateway/provider setup in docs/Sandbox.md first.
-podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
-ai-guardian sandbox create --runtime openshell \
-    --image quay.io/redhatproductsecurity/ai-guardian-openshell:latest \
-    --cli codex --repo $(pwd)
-
-# Or build and select a local OpenShell image
-podman build -f container/Dockerfile.openshell \
-    -t localhost/ai-guardian-openshell:latest container/
-ai-guardian sandbox create --runtime openshell \
-    --base localhost/ai-guardian-openshell:latest \
-    --cli codex --repo $(pwd)
-# A source-wheel build is documented in container/README.md; it includes the
-# current development setup behavior instead of the stable PyPI fallback.
-
-# Launch Codex directly instead of opening the shell
-ai-guardian sandbox create --runtime openshell --cli codex --repo $(pwd) -- codex
-
-# Or manually with podman/docker
-podman pull quay.io/redhatproductsecurity/ai-guardian:latest
-podman run -it -p 63152:63152 \
-    -v $(pwd):/workspace:z \
-    -e AI_GUARDIAN_AGENT=codex \
-    -e OPENAI_API_KEY=<your-openai-key> \
-    quay.io/redhatproductsecurity/ai-guardian:latest
-```
-
-For Codex authentication in a Docker/Podman sandbox, the host
-`~/.codex/auth.json` is not mounted automatically. Authenticate inside the
-sandbox or follow the [container Codex authentication
-guide](docs/Sandbox.md#codex-authentication-in-container-sandboxes) for
-headless OAuth, API-key, and explicit credential-copy options.
-
-For a named sandbox that can be managed across sessions, use the CLI
-subcommand. It supports both Docker/Podman containers and OpenShell:
-
-```bash
-ai-guardian sandbox create --runtime container --name guardian-codex --repo .
-ai-guardian sandbox list
-ai-guardian sandbox stop guardian-codex
-ai-guardian sandbox start guardian-codex
-ai-guardian sandbox connect guardian-codex
-ai-guardian sandbox exec guardian-codex -- ai-guardian daemon status
-ai-guardian sandbox logs guardian-codex --follow
-ai-guardian sandbox config save guardian-codex
-ai-guardian sandbox delete guardian-codex
-```
-
-New sandbox creation defaults to OpenShell (**experimental; upstream pre-1.0**);
-[check compatibility first](docs/Sandbox.md#openshell-maturity-and-compatibility), or use `--runtime container`
-explicitly when a plain Docker/Podman sandbox is required. Named lifecycle commands
-automatically detect the runtime from AI Guardian labels and OpenShell
-metadata when `--runtime` is omitted. An unqualified `list` includes both
-runtimes. OpenShell operations use the installed `openshell` CLI and its active
-gateway; set `OPENSHELL_CLI` when a different executable is required. The
-sandbox command is also the supported entry point for interactive,
-fully provisioned OpenShell sessions, including policy composition and
-gateway-provider setup.
-
-OpenShell `create` opens an independent interactive sandbox shell after setup,
-matching the native OpenShell experience while leaving the sandbox available
-after the shell exits; container `create` remains detached.
-
-The OpenShell `status`, `stop`, `exec`, and `logs` forms are thin aliases of
-the corresponding native commands. `connect` uses an independent
-`openshell sandbox exec --name ... --tty` shell so exiting it does not
-terminate the sandbox's main process. `start` and `restart` additionally
-ensure that the AI Guardian daemon and gateway service are available; `delete`
-removes that service before the native sandbox. `create` and `list` add AI
-Guardian defaults and managed-resource filtering. See the
-[Sandbox CLI guide](docs/Sandbox.md) for the full command reference, including
-timestamped configuration snapshots and recreating a sandbox with
-`--restore-config latest`.
-
-The OpenShell subcommand exposes the daemon's internal port through the
-gateway-managed `ai-guardian` service. The gateway gives each sandbox a
-separate URL, so multiple sandboxes can use the same internal port:
-
-```bash
-openshell service expose NAME 63152 ai-guardian
-openshell service get NAME ai-guardian
-# Example: http://NAME--ai-guardian.openshell.localhost:PORT/
-```
-
-Tray and NiceGUI discovery query the gateway for these service URLs. `--port`
-is a container-only option; OpenShell selects the service port through the
-gateway and does not use a host-side forward process.
-
-OpenShell must be installed and initialized on the host first, with a
-reachable gateway and configured compute driver; follow the
-[official OpenShell installation guide](https://docs.nvidia.com/openshell/latest/about/installation).
-On Fedora/Linux, verify the systemd user service with
-`systemctl --user status openshell-gateway`. On macOS, verify the Homebrew
-service with `brew services list`. In both cases, run `openshell status` before
-using the OpenShell subcommand. When the gateway uses rootless Podman on Linux,
-start its API socket first with `systemctl --user enable --now podman.socket`;
-see the container guide for socket-path troubleshooting.
-
-The OpenShell subcommand opens a shell by default. Its `--repo` option uploads an
-isolated snapshot rather than binding the host checkout; the shell starts in
-`/sandbox/repo`, and a read/write GitHub provider can push the sandbox copy
-without writing files back to the host. Pass `-- codex` to launch Codex
-directly instead of opening the shell.
-
-OpenShell integration is experimental and currently supports Codex only. Claude
-Code with Vertex AI remains deferred pending credential-bound qualification on
-OpenShell `0.1.3`; the upstream GCP metadata fix is necessary but not sufficient.
-Pi, Copilot, and OpenCode remain outside the current OpenShell contract.
-
-OpenCode is supported through the host integration and the normal Docker/Podman
-image, whose V1 executable is pinned at `1.18.34`. OpenCode is outside the
-OpenShell runtime scope; see the [OpenCode support record](docs/OPENCODE.md) for
-the V1/V2 plugin contracts and exact limitations.
-
-The `providers_v2_enabled` setting was specific to OpenShell `0.1.2` and is not
-used by the qualified `0.1.3` baseline. OpenShell `0.1.2` and earlier are below
-AI Guardian's supported range.
-
-A Codex OAuth login does not require a separate API key. Choose **OAuth** or
-**API key** in the tray's Create sandbox form, or
-pass `--openshell-auth oauth`/`--openshell-auth api-key` to select the matching
-`codex`/`openai` profile and `ai-guardian-codex`/`ai-guardian-openai` provider.
-The subcommand converts the gateway-provided OAuth placeholders into Codex's
-native sandbox-local `auth.json`; real host tokens are not uploaded. When host
-files must be uploaded, the subcommand uses a compatible staging flow and starts
-the selected CLI with `sandbox exec` after setup.
-For API-key authentication, the entrypoint runs `codex login --with-api-key`
-with the provider-injected placeholder so Codex can read its native
-`auth.json`; the real host key is never written into the sandbox.
-Inside OpenShell, the subcommand sets Codex's sandbox-local
-`sandbox_mode = "danger-full-access"` so Codex does not create a nested
-bubblewrap sandbox. OpenShell remains the outer filesystem and network
-boundary; regular Docker/Podman launches retain Codex's normal inner sandbox.
-See the official [OpenShell Codex example](https://github.com/NVIDIA/OpenShell/blob/main/examples/agent-driven-policy-management/sandbox-agent.sh).
-
-For a Codex-only sandbox, no GitHub policy is required. The subcommand applies
-the shared base policy and selected Codex policy automatically. Add the
-read-only or read/write GitHub policy only when the sandbox needs GitHub
-access.
-
-```bash
-# Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.21.1
-podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.21.1
-
-# Or build from source
-podman build -t ai-guardian container/
-podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex ai-guardian
-```
-
-See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for agent selection, host config/profile behavior, OpenShell, Vertex AI auth, and multi-arch details.
-The container guide also includes [read-only](container/openshell-github-readonly-policy.yaml) and [read/write](container/openshell-github-readwrite-policy.yaml) OpenShell policy overlays, selected-CLI policy fragments, and provider setup.
-
-### What Setup Does
-
-The `setup` command:
-- Installs a scanner engine (gitleaks)
-- Creates `ai-guardian.json` config with secure defaults
-- Installs IDE hooks (PreToolUse, PostToolUse, UserPromptSubmit)
-- Sets up the MCP security advisor for AI-aware protection
-
-### Daemon & Tray
-
-The daemon provides faster hook processing. The tray discovers and manages daemons across local, Podman/Docker containers, and Kubernetes pods:
-
-```bash
-ai-guardian daemon start -b       # Start headless daemon (background: -b)
-ai-guardian tray start -b         # Start system tray in background
-ai-guardian pause [MINUTES]      # Pause global scanning (0/omitted: indefinite)
-ai-guardian resume                # Resume global scanning
-ai-guardian tray stop             # Stop the tray
-ai-guardian tray --install --autostart  # Add desktop shortcut + launch on login
-```
-
-The tray auto-discovers running daemons and shows per-daemon submenus with Statistics, Console, Pause/Resume, and Start/Stop controls. On first launch, the tray will offer to create a desktop shortcut automatically. See [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) for full documentation.
-
-> **Linux + Podman**: Container discovery requires the Podman socket to be active and `DOCKER_HOST` set:
-> ```bash
-> systemctl --user enable --now podman.socket
-> export DOCKER_HOST=unix://$(podman info --format '{{.Host.RemoteSocket.Path}}')
-> ai-guardian tray start -b
-> ```
-> macOS with Podman Desktop sets `DOCKER_HOST` automatically. See [Multi-Daemon Tray](docs/MULTI_DAEMON_TRAY.md#linux-podman) for details.
-
-> **Breaking change in v1.8.0**: `daemon start` no longer launches the tray automatically. Run `ai-guardian tray start -b` separately, or use `ai-guardian tray --install --autostart` for a permanent desktop shortcut with login startup.
-
-### Security Profiles
-
-Choose a profile that matches your environment:
-
-```bash
-ai-guardian setup --ide claude --create-config --profile @minimal --install-scanner
-ai-guardian setup --ide claude --create-config --profile @strict --install-scanner
-```
-
-| Profile | Secrets | PII | Prompt Injection | SSRF |
-|---------|---------|-----|------------------|------|
-| @minimal | block | warn | low | warn |
-| @standard (default) | block | block | medium | block |
-| @strict | block | block | high | block |
-| @moderator | ask | ask | medium | ask |
+| Topic | Documentation |
+|-------|---------------|
+| Install and verify | [Getting started][getting-started] |
+| Configuration and security profiles | [Configuration Guide][configuration] |
+| IDE and agent integrations | [Agent Support][agent-support] |
+| Scanners | [Scanner Installation][scanners] |
+| Console and operations | [Console Guide][console] · [Troubleshooting][troubleshooting] |
+| Containers and sandboxes | [Sandbox Guide][sandbox] · [Container Guide][container] |
+| Development | [Developer Guide][developer] · [Contributing][contributing] |
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| [Secret Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Credential patterns and [experimental opt-in password heuristics](docs/security/PASSWORD_LIKELIHOOD.md) |
-| [PII Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Detect personally identifiable information |
-| [Prompt Injection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Language-aware detection with tree-sitter AST parsing and configurable sensitivity |
-| [Image Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md) | OCR-based secret and PII detection in screenshots and images |
-| [Unicode Attack Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/UNICODE_ATTACKS.md) | Zero-width chars, bidi override, homoglyphs |
-| [SSRF Protection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SSRF_PROTECTION.md) | Block private IPs, cloud metadata, dangerous schemes |
-| [Config File Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) | Detect exfiltration of sensitive config files |
-| [Directory Blocking](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md) | `.ai-read-deny` markers + config-based rules |
-| [Tool Permissions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md) | Allow/deny lists for Skills, MCP, Bash, Write |
-| [Violation Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) | Privacy-aware audit history, read-only remote mirroring, and desktop/email alerts |
-| [Compliance Audit Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AUDIT_LOGGING.md) | Sanitized all-decision audit trail for SOC 2, GDPR, and HIPAA |
-| [Sanitize Command](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) | Clean sensitive data from files |
-| [Support bundles](docs/SUPPORT.md) | Tray/standalone CLI with local ZIP-only export or public Bug Reports/Q&A and user-only consent |
-| [Uninstall and orphan recovery](docs/UNINSTALL.md) | Standalone scoped POSIX/Windows integration cleanup without the installed package |
-| [Interactive Console](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | NiceGUI browser console for managing configuration visually |
-| [Scanner Management](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Install and manage 8 scanner engines (including built-in toml-patterns) |
-| [Pre-commit Hook](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md) | Scan staged files for secrets before commit |
-| [Inline Annotations](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/ANNOTATIONS.md) | Suppress false positives with `ai-guardian:allow` and block annotations |
-| [Self-Protection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) | Prevents AI from disabling its own security controls |
-| [MCP Security Advisor](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) | Read-only security tools for AI agents (proactive checks) |
-| [MCP Security Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md#mcp-security-scanning) | Audit MCP server configs and source code for supply chain risks |
-| [Project Config Overlay](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180) | Per-repo config with immutable fields and global-only section protection |
-| [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Discover/control local and remote daemons, with SSH-managed HTTPS and [opt-in SSH alias discovery](docs/MULTI_DAEMON_TRAY.md#discover-ssh-aliases) |
-| [Desktop Shortcut & Autostart](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) | Install tray as desktop app with optional login startup |
-| [Tray Plugins](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) | Custom menu items with native tkinter or NiceGUI forms, platform-aware commands |
-| [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |
-| [Multi-Agent Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapters for 17 AI coding agents with normalized input/output |
-| [Container Image](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) | UBI-based image with supported agent integrations and scanners, published to quay.io |
-| [OpenShell Supervisor Middleware](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENSHELL_MIDDLEWARE.md) | Experimental Rust external semantic scanning/redaction service plus tray readiness and complete-policy workflows for OpenShell-compatible releases (v0.1.3 baseline) |
-| [Supply Chain Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) | Detect malicious patterns in agent hooks, MCP configs, and plugin files |
-| [Context Poisoning Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) | Detect persistent instruction injection in conversation context (OWASP LLM03) |
-| [Security SDK & REST API](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md) | Programmatic security checking for Python agents and multi-language support |
-| [Secret Liveness Validation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#secret-liveness-validation) | Verify detected secrets are still active via provider APIs |
-| [Hook Latency Metrics](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md#hook-latency-tracking) | Per-hook timing with console dashboard for performance analysis |
-| [OTEL Observability](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OBSERVABILITY.md) | OpenTelemetry trace export for SDK agent runs and interactive sessions |
-| [Canary Token Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Detect user-registered tripwire values in AI output to catch data exfiltration |
-| [Offensive Language Scanner](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Detect profanity, slurs, and non-inclusive terminology in code and comments |
-| [Exfiltration Behavior Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) | Detect bash commands that steal credentials via curl, base64, SSH key exfil |
-| [Code Security Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Bandit/Semgrep-based detection of insecure code patterns (eval, weak crypto, injection) |
-| [Dummy Agent](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | LLM-free hook testing via interactive REPL with YAML scenario files |
-| [Kubernetes Deployment](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md) | Kustomize manifests for Kind, OpenShift, and production deployments |
-| [Security Instructions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Configurable agent context injection rules via the web console |
-| [Transcript Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability) | Scan IDE conversation transcripts for secrets/PII across 7+ IDEs |
-| [Agent CLI Maturity Advisories](docs/AGENT_SUPPORT.md#upstream-cli-maturity) | Non-blocking setup/doctor warnings for detected pre-1.0 CLI versions |
-| [LeakTK Listen Mode](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Event-driven scanning with 40x latency reduction vs polling |
-| [Zero-Config Onboarding](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | `init --scan` scans the project and generates a tuned config |
-| [Language-Aware FP Suppression](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Tree-sitter AST parsing reduces false positives in code |
-| [ML Prompt Injection Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | One-command `ai-guardian ml setup` installs model + dependencies |
-| [Crush IDE Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapter for Charmbracelet Crush with MCP advisory |
-| [Pi IDE Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Managed extension hooks, pinned MCP bridge, and JSONL transcript scanning |
-| [OpenCode Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENCODE.md) | Version-aware V1/V2 plugin contracts, transcript discovery, and runtime support boundaries |
-| [Event-Driven Tray Updates](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Tray refreshes on daemon state changes instead of polling |
-| [Scan & Configure UI](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | Web console workflow to scan a project and generate config |
+| Feature | Guide |
+|---------|-------|
+| Secret scanning and custom detection rules | [Secret Scanning][secrets] |
+| PII detection | [Secret Scanning][secrets] |
+| Prompt injection detection | [Prompt Injection][prompt] |
+| Context poisoning detection | [Context Poisoning][context] |
+| Image scanning | [Image Scanning][images] |
+| Unicode attack detection | [Unicode Attacks][unicode] |
+| SSRF protection | [SSRF Protection][ssrf] |
+| Config-file and credential exfiltration detection | [Credential Exfiltration][exfiltration] |
+| Command credential argument scanning | [Command Credential Scanning][command-credentials] |
+| HTTP request credential source scanning | [HTTP Request Credential Scanning][http-credentials] |
+| Directory blocking | [Directory Rules][directories] |
+| Tool, MCP, and Skill permissions | [Tool Policy][policy] |
+| MCP security advisor and scanning | [MCP Server][mcp] |
+| Supply-chain scanning | [Configuration Guide][configuration] |
+| Sanitize command and secret redaction | [Secret Redaction][redaction] |
+| Violation logging | [Violation Logging][violations] |
+| Compliance audit logging | [Audit Logging][audit] |
+| Support bundles | [Support][support] |
+| Uninstall and orphan recovery | [Uninstall Guide][uninstall] |
+| Interactive console | [Console Guide][console] |
+| Scanner management | [Scanner Installation][scanners] |
+| Built-in TOML pattern engine | [TOML Patterns][toml] |
+| Secret liveness validation | [Configuration Guide][configuration] |
+| Code security scanning | [Scanner Installation][scanners] |
+| Pre-commit scanning | [Pre-commit Hook][pre-commit] |
+| Inline annotations | [Annotations][annotations] |
+| Self-protection | [Security Design][design] |
+| Project configuration overlay | [Configuration Guide][configuration] |
+| Security instructions | [Configuration Guide][configuration] |
+| Multi-agent support and transcript scanning | [Agent Support][agent-support] |
+| Agent CLI maturity advisories | [Agent Support][agent-support] |
+| OpenCode support | [OpenCode][opencode] |
+| Pi and Crush support | [Agent Support][agent-support] |
+| Goose host CLI pre-tool enforcement | [Goose Support][goose] |
+| Dummy agent for hook testing | [Agent Support][agent-support] |
+| Container image | [Container Guide][container] |
+| Docker, Podman, and OpenShell sandboxes | [Sandbox Guide][sandbox] |
+| OpenShell supervisor middleware | [OpenShell Middleware][openshell] |
+| Kubernetes deployment | [Kubernetes Guide][kubernetes] |
+| Multi-daemon tray | [Multi-Daemon Tray][tray] |
+| Desktop shortcut and autostart | [Multi-Daemon Tray][tray] |
+| Tray plugins and event-driven updates | [Multi-Daemon Tray][tray] |
+| Hook latency metrics | [Hooks][hooks] |
+| OpenTelemetry observability | [Observability][observability] |
+| Canary token detection | [Configuration Guide][configuration] |
+| Offensive language scanning | [Configuration Guide][configuration] |
+| Exfiltration behavior detection | [Credential Exfiltration][exfiltration] |
+| Zero-config onboarding | [Configuration Guide][configuration] |
+| Language-aware false-positive suppression | [Prompt Injection][prompt] |
+| ML prompt injection detection | [Prompt Injection][prompt] |
+| LeakTK listen mode | [Scanner Installation][scanners] |
+| Scan-and-configure workflow | [Console Guide][console] |
+| Security SDK and REST API | [SDK Guide][sdk] |
 
-## Default Behavior (No Configuration File)
+## License and Contributions
 
-ai-guardian provides protection **immediately** with zero configuration:
+Licensed under [Apache-2.0][license]. Contributions are welcome; see the
+[Developer Guide][developer] and [Contributing Guide][contributing].
 
-| Feature | Default | Notes |
-|---------|---------|-------|
-| Secret scanning | Enabled | Built-in `toml-patterns` scanner works without external tools |
-| Prompt injection detection | Enabled | Heuristic detector |
-| Config file scanning | Enabled | Detects exfiltration patterns |
-| SSRF protection | Enabled | Blocks private IPs, metadata endpoints |
-| Immutable file protection | Enabled | Cannot be disabled |
-| `.ai-read-deny` markers | Enabled | Always respected |
-| Violation logging | Enabled | Logs to `~/.local/state/ai-guardian/violations.jsonl` |
-| Built-in tool permissions | Allowed | Bash, Read, Write, Edit — protected by hooks |
-| MCP server permissions | **Blocked** | Require explicit allow rules (third-party code) |
-| Skill permissions | **Blocked** | Require explicit allow rules (can override AI behavior) |
-| Directory rules | Allow all | Configure `directory_rules` to restrict |
+For production use, install a stable release from PyPI. The `main` branch contains unreleased development code.
 
-## Configuration
-
-Config file: `~/.config/ai-guardian/ai-guardian.json` (or `$XDG_CONFIG_HOME/ai-guardian/`)
-
-```bash
-ai-guardian setup --create-config                          # Secure defaults (Skills/MCP blocked)
-ai-guardian setup --create-config --permissive              # Permissive (all tools allowed)
-ai-guardian setup --create-config --profile @minimal        # Personal projects, low friction
-ai-guardian setup --create-config --profile @strict         # Enterprise SOC2/compliance
-ai-guardian setup --create-config --profile @moderator      # Human-in-the-loop, ask on every finding
-ai-guardian setup --list-profiles                           # List available profiles
-```
-
-- **Example config**: [ai-guardian-example.json](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/ai-guardian-example.json)
-- **JSON Schema**: [ai-guardian-config.schema.json](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/ai-guardian-config.schema.json) (IDE autocomplete + runtime validation)
-- **Ignore file schema**: [aiguardignore.schema.json](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json) (VS Code Taplo validation for `.aiguardignore.toml`)
-- **Full reference**: [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md)
-
-### Configuration Locations (Precedence Order)
-
-1. **User config**: `~/.config/ai-guardian/ai-guardian.json` (base)
-2. **Project config**: `.ai-guardian/ai-guardian.json` (merged on top of user config, see [docs](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180))
-3. **Remote configs** (highest, permissions only): Fetched from URLs in `remote_configs`
-4. **Defaults**: Built-in defaults when no config exists
-
-## Setup Command
-
-```bash
-ai-guardian setup                    # Auto-detect IDE
-ai-guardian setup --yes              # Configure all detected unconfigured IDEs/CLIs
-ai-guardian setup --ide claude       # Claude Code
-ai-guardian setup --ide cursor       # Cursor IDE
-ai-guardian setup --ide copilot      # GitHub Copilot
-ai-guardian setup --dry-run          # Preview changes
-ai-guardian setup --ide claude       # MCP security advisor installed by default
-ai-guardian setup --remote-config-url https://example.com/policy.json
-ai-guardian ide-setup sync           # Refresh local IDE/hook status in XDG state
-ai-guardian ide-setup sync --json     # Print the synchronized status as JSON
-ai-guardian ide-setup reset --ide claude  # Reset Claude setup prompt decisions
-```
-
-Run `ai-guardian setup` after upgrading to get the latest hooks. Without
-`--ide`, it checks installed integrations, skips healthy ones, and prompts when
-one or more still need setup; `--yes` configures all pending integrations.
-If `--create-config` is supplied (optionally with `--profile`), the security
-configuration is created first and then reused for every selected integration.
-The MCP security advisor server is installed by default — the AI can check
-security proactively before acting. Use `--no-mcp` to skip. See
-[docs/AGENT_SUPPORT.md#setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#setup)
-for automatic detection details and
-[docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md)
-for MCP options.
-
-### OpenAI Codex coverage
-
-`OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** selected in
-the ChatGPT desktop app. Regular ChatGPT mode in that app is not currently
-protected by AI Guardian's Codex lifecycle hooks. The ChatGPT desktop app,
-Codex CLI, and Codex IDE extension can share MCP configuration, but shared MCP
-availability does not imply hook enforcement.
-
-## Action Modes
-
-Each security policy supports three enforcement levels:
-
-| Mode | Execution | User Warning | Use Case |
-|------|-----------|--------------|----------|
-| `block` | Blocked | Error shown | **Enforce** policy (default) |
-| `warn` | Allowed | Warning shown | **Educate** during rollout |
-| `log-only` | Allowed | Silent | **Monitor** silently |
-
-See [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) for per-feature action mode configuration.
-
-## Integration
-
-See [Agent Support](docs/AGENT_SUPPORT.md) for the current capability
-matrix, [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md)
-for host integrations, and [CLI/Runtime Integration Checklist](docs/CLI_RUNTIME_CHECKLIST.md)
-for container and OpenShell support.
-
-- [GitHub Copilot Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GITHUB_COPILOT.md)
-- [Aider Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AIDER.md)
-- [Multi-Engine Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_ENGINE_SUPPORT.md)
-- [Hook Ordering](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md)
-
-## How It Works
-
-```
-User prompt / Tool use
-       |
-  [MCP Advisor] -----> AI checks proactively (optional)
-       |
-  [AI Guardian Hook] -- Enforcement (mandatory)
-       |
-  MCP/Skill check --> Not allowed? --> BLOCK
-       |
-  Directory check --> .ai-read-deny? --> BLOCK
-       |
-  Prompt injection --> Detected? -----> BLOCK
-       |
-  Secret scan ------> Found? --------> BLOCK
-       |
-  ALLOW --> Send to AI / Execute tool
-```
-
-The MCP advisor lets the AI check *before* acting (advisory). Hooks enforce *during* execution (mandatory). PostToolUse hooks scan tool outputs using the same pipeline. See [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) for the MCP server and [docs/SECURITY_DESIGN.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) for full architecture.
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AI_GUARDIAN_CONFIG_DIR` | Custom config directory | `~/.config/ai-guardian` |
-| `AI_GUARDIAN_HOME` | Compatibility alias for the config directory | `~/.config/ai-guardian` |
-| `AI_GUARDIAN_STATE_DIR` | State directory (logs, violations) | `~/.local/state/ai-guardian` |
-| `AI_GUARDIAN_CACHE_DIR` | Cache directory (patterns) | `~/.cache/ai-guardian` |
-| `AI_GUARDIAN_IDE_TYPE` | Override IDE auto-detection | Auto-detect |
-| `AI_GUARDIAN_PATTERN_TOKEN` | Default pattern server auth token (all sections) | None |
-
-`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CURSOR_CONFIG_DIR`, `COPILOT_HOME`, and
-`GEMINI_CLI_HOME` are honored by setup, MCP registration, verification, and
-supported session discovery. `AI_GUARDIAN_CONFIG_DIR` takes precedence over
-`AI_GUARDIAN_HOME`, which takes precedence over XDG. See the
-[IDE-specific path reference](docs/AGENT_SUPPORT.md#ide-specific-home-and-configuration-paths)
-for the complete variable list, precedence rules, and project-local behavior.
-
-Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`, `config_file_scanning`) can use its own pattern server with independent auth via `token_env` or `token_file`. See [docs/PATTERN_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PATTERN_SERVER.md#per-section-auth-for-multiple-servers).
-
-## Requirements
-
-- **Python 3.10+**
-- **Windows**: Python 3.10, 3.13, and 3.14 are tested; other versions may work but are not CI-verified
-- **WSL2**: Experimental support when installed and run inside a Linux
-  distribution; see [platform and scanner notes](docs/SCANNER_INSTALLATION.md#wsl2-experimental)
-  and [Console guidance](docs/CONSOLE.md#wsl2-experimental).
-- **Scanner engine**: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, or gitguardian
-- **GNOME Linux**: AppIndicator extension for system tray icon ([system tray notes](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#system-tray))
-
-See [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) for installation instructions.
-
-## Optional Dependencies
-
-ai-guardian works out of the box with built-in Python-native scanners, the NiceGUI browser console, and heuristic prompt injection detection. These optional packages enable extra functionality:
-
-| Package | What it enables | Install |
-|---------|-----------------|---------|
-| **tkinter** | Native popup dialogs for ask mode (strongly recommended) | `install.sh --tkinter`, or see below |
-| **PyGObject (gi)** | System tray on Linux | `install.sh --gobject`, or: `dnf install python3-gobject` / `apt install python3-gi` |
-| **gitleaks** | Additional secret scanner engine | `ai-guardian scanner install gitleaks` |
-| **betterleaks** | Additional secret scanner engine | `ai-guardian scanner install betterleaks` |
-| **trufflehog** | Additional secret scanner engine (AGPL, subprocess) | `ai-guardian scanner install trufflehog` |
-| **ML model** | ML-based prompt injection detection | `ai-guardian ml setup` (or `ml download` for model only) |
-
-### tkinter Install by Platform
-
-| Platform | Command |
-|----------|---------|
-| Fedora/RHEL | `sudo dnf install python3-tkinter` |
-| Debian/Ubuntu | `sudo apt install python3-tk` |
-| macOS (system Python) | Included |
-| macOS (pyenv/Homebrew) | `brew install tcl-tk`, then rebuild Python |
-| uv | Not available — NiceGUI browser form used automatically |
-
-## Contributing
-
-We welcome contributions! See [Developer Install](#developer-install) for setup and [CONTRIBUTING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md) for complete guidelines.
-
-- **Bug reports & feature requests** -- use [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guardian/discussions)
-- **Code contributions** -- fork + PR (not affected by interaction limits)
-
-## Documentation
-
-Full documentation is also available at [ai-guardian.readthedocs.io](https://ai-guardian.readthedocs.io/) with search and versioned navigation.
-
-Source docs are in the [docs/](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/) folder.
-
-- [Configuration Guide](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md)
-- [Security Documentation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/)
-- [Console Guide](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md)
-- [Tool Policy](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md)
-- [Scanner Installation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md)
-- [Security Design](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md)
-- [All Documentation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/README.md)
-
-## FAQ
-
-**Q: Why no prompt injection examples in the docs?**
-Publishing attack patterns makes them easier to misuse and would cause ai-guardian to block its own documentation. Use `test:` prefixed strings for testing. See OWASP LLM Top 10 for research.
-
-**Q: What's `permissions` vs `permissions_directories` vs `directory_rules`?**
-`permissions` = which **tools** can run. `permissions_directories` = auto-discover tool permissions from repos. `directory_rules` = which **paths** can be accessed. See [docs/TOOL_POLICY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md) and [docs/security/DIRECTORY_RULES.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md).
-
-**Q: How are multiple rules evaluated?**
-Both `permissions.rules` and `directory_rules` use **last-match-wins**: rules are checked in array order and the last matching rule determines the outcome. Place broad deny rules first, then specific allow rules after. Common mistake: putting an allow rule before a deny-all — the deny-all wins because it comes last. See [docs/TOOL_POLICY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#rule-evaluation-order-last-match-wins).
-
-## License
-
-Apache 2.0 - see [LICENSE](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/LICENSE) file for details.
-
-## Acknowledgments
-
-- [Gitleaks](https://github.com/gitleaks/gitleaks) - Secret detection engine
-- [Claude Code](https://claude.ai/code) - AI-powered IDE
-- [Cursor](https://cursor.sh) - AI code editor
-- [LeakTK](https://github.com/leaktk/patterns) - Community secret detection patterns
-- [Hermes Security Patterns](https://github.com/fullsend-ai/experiments/tree/main/hermes-security-patterns) - Security research
+<!-- Absolute links also work when docs/index.md includes this README. -->
+[docs-index]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/README.md
+[docs-export]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/notebooklm-export.md
+[design]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md
+[policy]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md
+[getting-started]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/overview/01-what-is-ai-guardian-install-and-verify.md
+[configuration]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md
+[agent-support]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md
+[goose]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GOOSE.md
+[scanners]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md
+[console]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md
+[troubleshooting]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TROUBLESHOOTING.md
+[sandbox]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/Sandbox.md
+[container]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md
+[developer]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/DEVELOPER_GUIDE.md
+[contributing]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md
+[secrets]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md
+[prompt]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md
+[context]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md
+[images]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md
+[unicode]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/UNICODE_ATTACKS.md
+[ssrf]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SSRF_PROTECTION.md
+[exfiltration]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md
+[command-credentials]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/COMMAND_CREDENTIAL_SCANNING.md
+[http-credentials]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/HTTP_REQUEST_CREDENTIAL_SCANNING.md
+[directories]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md
+[mcp]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md
+[redaction]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md
+[violations]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md
+[audit]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AUDIT_LOGGING.md
+[support]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SUPPORT.md
+[uninstall]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/UNINSTALL.md
+[toml]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md
+[pre-commit]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md
+[annotations]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/ANNOTATIONS.md
+[opencode]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENCODE.md
+[openshell]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENSHELL_MIDDLEWARE.md
+[kubernetes]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md
+[tray]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md
+[hooks]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md
+[observability]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OBSERVABILITY.md
+[sdk]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md
+[license]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/LICENSE
 
 # === container/README.md ===
 
@@ -778,12 +331,12 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/redhatproductsecurity/ai-guardian:1.21.1
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.22.0
 ```
 
 Tag conventions:
 - `:latest` — tracks main branch (updated on every merge)
-- `:<version>` — pinned stable release (e.g. `1.21.1`)
+- `:<version>` — pinned stable release (e.g. `1.22.0`)
 
 ## Build Locally
 
@@ -792,10 +345,10 @@ Tag conventions:
 podman build -t ai-guardian container/
 
 # Specific version
-podman build --build-arg AI_GUARDIAN_VERSION=1.21.1 -t ai-guardian container/
+podman build --build-arg AI_GUARDIAN_VERSION=1.22.0 -t ai-guardian container/
 
 # Local wheel (copy the wheel into container/vendor/ first)
-WHEEL_PATH=dist/ai_guardian-1.21.1-py3-none-any.whl
+WHEEL_PATH=dist/ai_guardian-1.22.0-py3-none-any.whl
 WHEEL_NAME="$(basename "$WHEEL_PATH")"
 cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
 podman build --build-arg "AI_GUARDIAN_VERSION=$WHEEL_NAME" \
@@ -1967,7 +1520,7 @@ Access from the host: `http://localhost:63152`
 
 | Arg | Default | Description |
 |-----|---------|-------------|
-| `AI_GUARDIAN_VERSION` | `1.21.1` | PyPI version or `.whl` filename |
+| `AI_GUARDIAN_VERSION` | `1.22.0` | PyPI version or `.whl` filename |
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
 | `OPENCODE_VERSION` | `1.19.0` | OpenCode V1 version for both support images |
@@ -2092,6 +1645,7 @@ upstream distinction.
 | Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
+| Goose | `--ide goose` | 5 managed events; only `PreToolUse` enforces | Plugin-local advisor | **Host CLI v1.59.0 Linux/macOS; desktop/native Windows and product sandboxes unqualified** ([guide](GOOSE.md)) |
 
 ## IDE-specific home and configuration paths
 
@@ -2112,6 +1666,7 @@ home. With no variables set, the existing defaults below are unchanged.
 | Cursor | `CURSOR_CONFIG_DIR` | User hooks: `<dir>/hooks.json`; user MCP: `<dir>/mcp.json` | Project hooks/MCP remain under the selected project `.cursor/` directory |
 | GitHub Copilot CLI | `COPILOT_HOME` | Hooks: `<dir>/hooks/hooks.json`; optional MCP: `<dir>/mcp-config.json`; CLI transcript: `<dir>/session-state/events.jsonl` | Project files are not redirected; without the variable the hook default remains `~/.github/hooks/hooks.json` |
 | Grok Build | `GROK_HOME` | Hooks: `<dir>/hooks/ai-guardian.json`; MCP: `<dir>/config.toml` | Project hooks/MCP remain under the selected project `.grok/` directory; no local transcript adapter |
+| Goose | Absolute `GOOSE_PATH_ROOT` (process root) | Hooks/MCP: `<root>/.agents/plugins/ai-guardian-goose/`; configuration: `<root>/config`; plugin settings: `<root>/.config/goose/settings.json` | Explicit project plugin shadows user copy when enabled; [defaults/limits](GOOSE.md#paths) |
 | Gemini CLI | `GEMINI_CLI_HOME` | The effective `.gemini` home is `<dir>/.gemini`; hooks/settings: `<dir>/.gemini/settings.json`; sessions: `<dir>/.gemini/tmp` | Project `.gemini/` paths are not redirected |
 | Cline / ZooCode | `CLINE_DATA_DIR` for user MCP; `CLINE_STORAGE_DIR` remains a transcript/storage alias | MCP: `<dir>/mcp_settings.json` | Hook setup remains project-local at `.clinerules/hooks` |
 | Kiro | `KIRO_HOME` | MCP: `<dir>/settings/mcp.json`; CLI sessions: `<dir>/sessions/cli` | Hook setup remains project-local at `.kiro/hooks`; the historical no-env MCP default is retained |
@@ -2141,6 +1696,12 @@ custom directory/configuration variables. Integrations without a documented
 relocation variable deliberately keep their existing defaults.
 
 ## Coverage-to-test matrix
+
+For actual CLI invocation coverage, see the separate [real-agent CLI coverage
+ledger](REAL_AGENT_CLI_COVERAGE.md). It includes all twelve canonical host CLIs
+(including Goose), partial pre-tool lanes, explicit blockers and CI drift tests.
+This matrix's adapter/generated-bridge evidence does not establish native CLI
+execution, output containment or product-runtime qualification.
 
 This matrix is keyed by the canonical registry rather than by display-name
 groupings. Shared implementations still have one row per public key, so a
@@ -2181,12 +1742,17 @@ future integrations. For this repository, the main evidence paths are
 
 ## Hook Capability Matrix
 
+This inventory records configured or recognized lifecycle events, not whether a
+host enforces each response. The behavior matrix below is authoritative for
+blocking, observation, context injection, and output transformation.
+
 | Agent | SessionStart | UserPromptSubmit | PreToolUse | PostToolUse | BeforeReadFile | PostCompact | SessionEnd |
 |-------|-------------|-----------------|------------|-------------|----------------|-------------|------------|
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
 | Grok Build | Yes | Yes | Yes | Yes (observation) | N/A | Yes | Yes |
+| Goose | Yes | Yes (observation) | Yes | Yes (observation) | Not installed | N/A | Yes |
 | OpenAI Codex (CLI + Desktop) | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
@@ -2207,6 +1773,72 @@ remain available to callers without stable session identities.
 
 The Codex row applies to Codex CLI and desktop Codex mode only. Regular
 ChatGPT mode does not run these Codex lifecycle hooks.
+
+### Capability overview
+
+These profiles summarize the **configured integration**, not relative security
+or assurance. A gate applies only when the hook is installed, enabled, trusted
+where required, and present in the execution scope. Post-tool processing cannot
+undo side effects that already occurred. The detailed table below is the source
+of truth for host/version limitations and failure behavior.
+
+| Profile | Integrations |
+|---|---|
+| **Prompt control and pre-tool gate** | Claude Code; Cursor desktop/local CLI; Codex CLI and desktop Codex mode; Windsurf; Gemini CLI; Kiro IDE; AiderDesk; OpenCode V1/V2; Pi. OpenCode replaces the submitted draft with a fixed refusal rather than returning a native prompt denial. |
+| **Pre-tool gate; prompt gate absent, advisory, conditional, or unverified** | Copilot command hooks; Grok Build; Antigravity CLI; Cline; Cursor Cloud Agent; Kiro CLI; OpenClaw; ZooCode; Augment; Crush. Copilot's command prompt-hook output is ignored; Antigravity injects advice but does not terminate the model request. |
+| **MCP-only advisory checks** | Junie. MCP availability does not itself enforce a check; the agent must call and follow it. |
+
+Post-tool result handling is a separate capability. Claude Code supports
+model-visible output replacement, but a post-tool `block` alone leaves the
+original result visible. Cursor replacement is documented for supported MCP
+results only. Codex can replace a completed result with feedback, not a
+sanitized copy of that result. Gemini can withhold a sensitive result using a
+fixed refusal. AiderDesk, OpenCode, and Pi have host-side result transformation
+paths; OpenCode V1 block behavior is not counted as a verified redaction
+guarantee. Other paths are observation/context-only, not installed, or
+unverified as detailed below.
+
+### Per-integration behavior matrix
+
+For a compact onboarding view, see the
+[README behavior and limitations summary](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/README.md#per-integration-behavior-and-limitations).
+Keep that summary synchronized with the detailed reference below when integration
+behavior or scope changes.
+
+`UserPromptSubmit` includes the closest host-native equivalent. **Gate** means
+the host can stop an action before it starts; **replace** changes what the next
+model request receives; **withhold** substitutes a refusal/error; **advice**
+adds context without stopping the action; **observe** has no enforced decision
+effect; **not installed** means AI Guardian does not register that stage;
+**unverified** must not be relied on for enforcement. Output changes happen
+after the tool has run. Failure defaults below describe the host contract, not
+a guarantee that every installed version behaves identically.
+
+| Registry key | Surface or variant | UserPromptSubmit equivalent | PreToolUse equivalent | PostToolUse equivalent | Protocol, timing, prerequisite, failure behavior, references, and limits |
+|---|---|---|---|---|---|
+| `claude` | Claude Code in the scope where hooks are configured, including CLI, desktop, or hosted execution | **Gate**; AI Guardian does not rewrite prompts. | **Gate** via permission decision; a clean response leaves Claude's normal permission flow in place. | **Feedback or replace**: `decision: block` alone leaves the original result visible; `updatedToolOutput` can replace supported model-visible results when the returned shape matches the tool. Claude Code currently ignores this replacement for Bash output ([upstream issue #64326](https://github.com/anthropics/claude-code/issues/64326)). | Command hooks exchange JSON on stdin/stdout. Prompt timeout defaults to 30s; most other hooks default to 600s. The generated config does not set `onFailure: block`, so command failures/timeouts generally fail open. Install/configure hooks in the actual execution scope. A post-hook cannot undo tool side effects. [Hooks reference](https://code.claude.com/docs/en/hooks). |
+| `cursor` | Desktop and local CLI | **Gate** through `beforeSubmitPrompt`; no in-place prompt rewrite. | **Gate** through permission decisions and before-read hooks. | **Replace only supported MCP results** through `updated_mcp_tool_output`; generic `modifiedToolOutput` is not a documented replacement contract. | Command JSON on stdin/stdout. AI Guardian sets `failClosed: true` on generated prompt/pre-decision hooks; post hooks remain fail-open. No timeout is pinned in AI Guardian config. Install in the local/user or selected project scope. HTTP MCP results running on Cursor's backend can arrive already redacted and cannot be replaced by the local hook. [Hooks reference](https://cursor.com/docs/hooks). |
+| `cursor` | Cloud Agent / cloud workspace | **Unavailable**: `beforeSubmitPrompt` runs before the cloud VM exists. | **Conditional gate** only when the applicable project/cloud-workspace hook is present and loaded; local user hooks do not protect a remote run. | Cursor documents replacement for supported MCP results, but backend-hosted HTTP MCP results cannot be replaced; no general built-in result replacement is claimed. | Cloud protection requires explicit workspace/project configuration. Generated decision hooks request fail-closed handling, but the cloud run must actually load that configuration. Timeout is not pinned by AI Guardian. [Hooks reference](https://cursor.com/docs/hooks). |
+| `copilot` | Copilot CLI / command-hook configuration | **Observe only**: `userPromptSubmitted` command output, including `modifiedPrompt`, is dropped; exit 2 is a warning and does not block the prompt. | **Gate** via `permissionDecision: deny`. | **Not installed** by AI Guardian. | Command JSON on stdin/stdout. The command prompt event is not an enforcement point; `modifiedPrompt` is honored by SDK programmatic hooks only. For `preToolUse`, non-timeout hook errors fail closed; timeout is fail-open. AI Guardian installs the local Copilot hook configuration, not remote cloud-job hooks. [Hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference). |
+| `copilot` | Copilot cloud coding-agent job | **Not installed** by AI Guardian. | **Not installed** by AI Guardian. | **Not installed** by AI Guardian. | The local `COPILOT_HOME`/user command-hook setup does not provision a repository's remote `.github/hooks/` policy. Do not infer cloud enforcement from a local CLI/IDE installation. [Hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference). |
+| `grok` | Grok Build command hooks | **Observe only** in AI Guardian; the adapter emits no prompt decision or context. | **Gate** on an explicit deny. | **Observe only**; passive-event output is ignored, so no result replacement. | Command hooks receive event JSON on stdin and return JSON/exit status. AI Guardian does not set a timeout; Grok's documented default is 5s. Only an explicit deny blocks; crashes, malformed output, non-deny exit codes, and timeouts fail open. Project hooks require the project to be trusted. [Hooks reference](https://docs.x.ai/build/features/hooks). |
+| `codex` | Codex CLI and desktop **Codex mode** only; not regular ChatGPT mode | **Gate** with a block decision or exit 2; no prompt rewrite. | **Gate**; the deny response includes Codex's required sanitized `permissionDecisionReason`. | **Replace with feedback** when blocked; Codex can substitute the completed result with feedback, but AI Guardian does not claim a sanitized replacement of the original result. | Command hooks use JSON stdin/stdout. Generated timeout is 300s for prompt/pre-tool and 60s for post-tool. Hooks must be reviewed/trusted by Codex; ordinary hook failures continue rather than deny. Post-tool runs after side effects. [Codex hooks](https://learn.chatgpt.com/docs/hooks); [scope note](#codex-and-chatgpt-desktop-scope). |
+| `windsurf` | Cascade hooks in the configured user/project scope | **Gate** through `pre_user_prompt` (exit 2). | **Gate** through installed pre-command, pre-read, pre-write, and pre-MCP events (exit 2). | **Observe only**; post-hooks cannot block or replace completed tool results. | Command receives event JSON on stdin; exit 2 blocks pre-hooks, other errors continue. AI Guardian does not set a timeout or `show_output`. Hook files must be present in the actual Cascade scope. [Cascade hooks](https://docs.windsurf.com/windsurf/cascade/hooks). |
+| `gemini` | Gemini CLI | **Gate** through `BeforeAgent`; no prompt rewrite. | **Gate** through `BeforeTool`. | **Withhold by refusal** on a sensitive result; Gemini replaces the model-visible result with a fixed refusal, not AI Guardian's sanitized copy. | Command hooks use JSON stdin/stdout. Host default timeout is 60s; exit 2 blocks, while other nonzero exits warn and continue. Requires the generated Gemini settings hook config to be loaded. [Hooks reference](https://geminicli.com/docs/hooks/reference/). |
+| `antigravity` | Antigravity CLI (`agy`) | **Advice only** through `PreInvocation`, the closest equivalent; AI Guardian does not set the host's `terminationBehavior: terminate`. | **Gate** on explicit deny; a clean check returns `ask` to preserve the host permission flow. | **Observe only** for tool output: Antigravity's `PostToolUse` payload has no result content. | CamelCase JSON on stdin/stdout. AI Guardian configures 300s for `PreToolUse` and 60s for `PostToolUse`/`PreInvocation`. Requires `~/.gemini/config/hooks.json` (or the configured hook file) and `agy`. Host handling of hook process failure is not relied on; verify the target version. [Hooks reference](https://antigravity.google/docs/hooks/). |
+| `cline` | Cline file/script hooks | **Observe only**: the prompt event is delivered, but the documented file-hook response has no prompt-denial or rewrite field; AI Guardian's `cancel` response is not a prompt gate. | **Gate** using the documented `cancel: true` response. | **No verified result replacement**: AI Guardian emits `modifiedResult`, which is not in the documented file-hook output contract; treat the stage as observation-only. | File hooks receive JSON on stdin and return JSON on stdout. The cited file-hook contract does not specify a script timeout or failure default; AI Guardian pins neither. Enable hooks in the intended Cline scope; Cline documents that hooks are disabled in `--yolo` mode. CLI and IDE use different hook paths. Do not infer file-hook behavior from the separate SDK plugin-hook contract. [File hook reference and examples](https://github.com/cline/cline/blob/main/sdk/examples/hooks/README.md). |
+| `zoocode` | ZooCode using the shared Cline adapter and `.clinerules/hooks` scripts | **Unverified**: AI Guardian emits the Cline `cancel` response, but this host/version mapping is not independently qualified. | **Intended gate** using the shared Cline `cancel: true` response; verify the exact ZooCode runtime. | **Unverified**: no safe `modifiedResult` replacement is established. | The setup writes Cline-format event scripts; ZooCode's acceptance, timing, and failure semantics are not independently qualified by this integration. Do not rely on prompt denial or result replacement without host-specific verification. [ZooCode hooks](https://zcode.z.ai/en/docs/hooks). |
+| `kiro` | Kiro IDE | **Gate**: nonzero command result blocks IDE Prompt Submit; AI Guardian exits 1 on a finding. | **Gate**: AI Guardian exits 2 on a finding. | **Advice/context only**; stdout may be added to agent context, not a result replacement. | Shell command action receives JSON on stdin; successful stdout is context. Default timeout is 60s. For IDE Prompt Submit and Pre Tool Use, a nonzero result blocks; other hook errors are surfaced. Install the project `.kiro/hooks` scripts. [Hook actions](https://kiro.dev/docs/hooks/actions/); [hook triggers](https://kiro.dev/docs/hooks/types/). |
+| `kiro` | Kiro CLI (including documented CLI hook surfaces) | **Observe/advice only**: CLI Prompt Submit hooks cannot block, even though the trigger exists. | **Gate** on explicit exit 2. | **Advice/context only**; no safe output replacement. | Command JSON on stdin; default timeout is 60s. CLI Prompt Submit nonzero exits are warnings; Pre Tool Use exit 2 blocks. Standalone hook files and exact event availability vary by CLI generation; verify the installed version. [Hook actions](https://kiro.dev/docs/hooks/actions/); [hook triggers](https://kiro.dev/docs/hooks/types/). |
+| `aiderdesk` | AiderDesk extension v0.55.0+ with the AI Guardian extension enabled | **Gate** via `onPromptStarted` returning `{ blocked: true }`. | **Conditional gate** through `onToolApproval`/`onToolCalled`; host execution paths can differ in which callbacks fire. | **Replace output** through `onToolFinished` where that callback runs; tool side effects have already occurred. | Extension callback invokes the shared process bridge synchronously; bridge timeout is 30s. Explicit exit 1/2 findings block; spawn errors/timeouts fail open. Requires the extension and `ai-guardian` executable in the extension environment. [Extension events](https://aiderdesk.dev/docs/extensions/events); [AI Guardian setup](AIDERDESK.md). |
+| `openclaw` | OpenClaw Gateway plugin | **Observe only**: AI Guardian scans `message_received`, but that event ignores returned handler values, so `cancel` is not a prompt gate. | **Gate** through `before_tool_call`. | **Observe only**: `after_tool_call` is an observe hook and the plugin discards the scan result. | Plugin calls the shared process bridge synchronously with JSON; 30s timeout. Explicit exit 1/2 findings block pre-tool calls; other bridge failures fail open. Requires the plugin to be loaded by the Gateway. [Hook reference](https://docs.openclaw.ai/plugins/hooks/reference); [AI Guardian setup](#ide-specific-home-and-configuration-paths). |
+| `opencode` | OpenCode V1 (`opencode-ai` 1.x) | **Replace** submitted prompt parts with a fixed refusal before model submission; not a native prompt-cancel result. | **Gate** by throwing from `tool.execute.before`. | **Conditional transformation**: the V1 callback applies an explicit returned replacement; a blocked post-hook throws, which is not counted as a verified safe-redaction guarantee. | Plugin invokes shared JSON process bridge; 30s timeout. OpenCode bridge failures and missing workspace identity fail closed. Requires V1 plugin registration and its adjacent bridge. Tool side effects precede post-tool handling. [OpenCode guide](OPENCODE.md); [plugin hooks](https://opencode.ai/docs/plugins/). |
+| `opencode` | OpenCode V2 (`@opencode/cli` 2.x) | **Replace** prompt draft with a fixed refusal and clear attachments/mentions; not a native prompt denial. | **Gate** by throwing from `execute.before`. | **Replace/withhold** the completed model-visible result; V2 updates the owned result before reporting a block. | Plugin invokes shared JSON process bridge; 30s timeout. Missing workspace identity and bridge failures fail closed. Requires V2 plugin discovery and V2 artifacts; V1 plugin code does not run in V2. [OpenCode guide](OPENCODE.md); [migration guide](https://opencode.ai/docs/build/plugins/migrate-v1/). |
+| `pi` | Pi extension in user or project scope | **Gate** through `input` returning `action: handled`; extension commands handled earlier are outside this event. | **Gate** through `tool_call` and the native `user_bash` callback. | **Replace or mark as error** through `tool_result`; assistant output is also checked at `message_end`. | Extension invokes `ai-guardian` synchronously with JSON and a 30s timeout. Explicit exit 1/2 findings block; other child-process failures/timeouts fail open. Requires the extension to be loaded and the executable available. [Extensions reference](https://pi.dev/docs/latest/extensions). |
+| `augment` | Augment/Auggie local command hooks | **Not installed as a gate**: upstream `PromptSubmit` is asynchronous and cannot block or change the prompt. | **Gate** on explicit deny for the installed matcher set. | **Feedback only**; post hooks cannot deny or replace results. | Synchronous command hooks use JSON stdin/stdout; AI Guardian sets a 5s timeout. Only exit 2 or a deny blocks; crashes/timeouts fail open. Installed matchers cover selected process, edit, save, view, and remove-files tools, not every possible tool. [Hooks reference](https://docs.augmentcode.com/cli/hooks). |
+| `crush` | Current AI Guardian project hook installs only `PreToolUse` | **Not installed**. | **Gate** using the Claude-compatible deny response or exit 2. | **Not installed** by AI Guardian. | Command receives JSON on stdin; AI Guardian configures a 30s timeout. Only an explicit deny is relied on; other process-failure behavior is not qualified here. This describes AI Guardian's installed surface, not every hook available in newer Crush releases. [Crush hooks](https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md). |
+| `junie` | Junie MCP-only integration | **Not available**. | **Not available**. | **Not available**. | AI Guardian installs no lifecycle hook protocol. MCP checks are advisory and depend on the agent choosing to call and follow them; no hook timing or hook failure default applies. [Junie environment and configuration](https://junie.jetbrains.com/docs/environment-variables.html). |
+| `goose` | Goose v1.59.0 Linux/macOS host CLI; not desktop/native Windows or product container/OpenShell runtimes | **Observe only**; no rewrite/context injection. | **Gate** via `decision: block`; sanitized reason. | **Observe only**; no withholding/replacement. | Open Plugins JSON command hooks; 360s pre-tool timeout and `on_failure: block`, 60s passive timeouts. Missing executable, malformed payload/response, scan failure, and timeout fail closed. Requires the effective enabled plugin; config health is not live activation proof. Stop is excluded: blocking continues generation rather than withholding output. MCP is advisory. [Goose contract](GOOSE.md). |
 
 ## Hook Latency Support Matrix
 
@@ -2237,6 +1869,7 @@ integration guides.
 | Pi | Extension | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd | Supported |
 | Crush | Command hooks | PreToolUse | Supported (partial hook surface) |
 | Junie | MCP | None | MCP-only; no hook latency |
+| Goose | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd | Supported; prompt/post events observation-only |
 | Aider CLI | Git pre-commit hook | None | Commit-time scan; no per-interaction hook latency |
 
 Codex setup installs five managed events. The adapter also records timing for
@@ -2249,14 +1882,13 @@ Junie's MCP calls and Aider CLI's commit-time `ai-guardian scan` do not enter
 the hook pipeline, so they do not create latency entries. A paused daemon also
 does not create entries because it intentionally skips hook processing.
 
-## Protection Level by Hook Availability
+## Interpreting violation coverage
 
-| Hooks Available | AI Guardian Capabilities |
-|----------------|------------------------|
-| **Full hooks** (Prompt + Pre + Post) | Secret scanning, PII detection, prompt injection, SSRF, directory blocking, config scanning, redaction, tool permissions |
-| **Pre + Post only** (no Prompt) | All above except prompt scanning and transcript scanning |
-| **MCP only** (no hooks) | Advisory checks only — check_path, check_command, check_mcp_trust, sanitize_text. No enforcement (agent must cooperate) |
-| **None** | No protection available |
+Scanner coverage depends on the event and on the host actually enforcing the
+response. An event listed in the inventory is not automatically a block or a
+safe result replacement. Use the [capability overview](#capability-overview)
+and [per-integration behavior matrix](#per-integration-behavior-matrix) for
+stage behavior; the following table describes violation/scanner coverage.
 
 ## Violation Type Coverage Matrix
 
@@ -2264,13 +1896,32 @@ Coverage per agent depends on which hooks are available. This table shows repres
 
 Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
 
-Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus the equivalent prompt event where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Gemini uses its `BeforeAgent` event for prompt checks; sensitive tool output is refused rather than replaced (see below). Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
+The Copilot column refers to the installed local CLI/IDE command hooks, not
+Copilot's cloud coding-agent jobs. Prompt/transcript findings can be reported,
+but command prompt-hook output is not enforced and AI Guardian does not install
+a Copilot `PostToolUse` hook.
 
-| Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
+The detailed behavior matrix intentionally avoids assuming that agents with a
+shared adapter or event name have the same enforcement behavior. Gemini refuses
+sensitive tool results rather than returning a sanitized copy; Grok's prompt
+and post-tool callbacks are observation-only in AI Guardian; Copilot command
+prompt output is ignored by the host. Copilot CLI and Codex support transcript
+scanning via adapter-resolved default paths (Issue #935).
+
+**Goose:** pre-tool checks cover secrets/PII, command and HTTP-source credentials,
+directory/tool policy, prompt injection/jailbreaks, SSRF, configuration exfiltration,
+offensive language, canaries, and exfiltration where the normalized input exposes
+them. Prompt/post findings are **observation-only**; no `secret_redaction`, output
+withholding, or prompt denial is claimed. `secret_in_transcript`/`pii_in_transcript`
+are unsupported. Images retain the same caution/coverage limits as other agents;
+remote image URLs receive pre-tool URL checks. See [Goose support](GOOSE.md).
+
+| Violation Type | Requires | Claude Code | Cursor | Copilot CLI | Antigravity | Junie (MCP) |
 |---|---|---|---|---|---|---|
-| secret_detected | Pre+Post | Enforce | Enforce | Enforce | Enforce | Advisory |
+| secret_detected | Pre+Post | Enforce | Partial | Partial | Partial | Advisory |
 | suspected_password (opt-in experimental) | Prompt/Pre/Post where exposed | Unqualified* | Unqualified* | Unqualified* | No post output; unqualified* | Advisory only |
-| secret_redaction | Post | Enforce | Enforce | Enforce | No (no tool output) | No |
+| command_credential_detected (supported CLI subset) | Pre (Bash/Shell) or MCP `check_command` | Enforce | Enforce | Enforce | Enforce | Advisory |
+| secret_redaction | Post | Partial | Partial | No (PostToolUse not installed) | No (no tool output) | No |
 | pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
 | directory_blocking | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
 | tool_permission | Pre | Enforce | Enforce | Enforce | Enforce | No |
@@ -2278,8 +1929,8 @@ Agents with full hook support not shown individually (Windsurf, Gemini CLI, Clin
 | jailbreak_detected | Pre+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
 | ssrf_blocked | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
 | config_file_exfil | Pre | Enforce | Enforce | Enforce | Enforce | No |
-| secret_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
-| pii_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
+| secret_in_transcript | Prompt | Enforce | Enforce | Observe only | No | No |
+| pii_in_transcript | Prompt | Enforce | Enforce | Observe only | No | No |
 | image_secret | Pre | Caution | Caution | Caution | Caution | No |
 | image_pii | Pre | Caution | Caution | Caution | Caution | No |
 | offensive_language | Pre+Post | Enforce | Enforce | Partial | Partial | Advisory |
@@ -2288,9 +1939,10 @@ Agents with full hook support not shown individually (Windsurf, Gemini CLI, Clin
 
 **Legend:**
 
-- **Enforce** — fully tested and working
+- **Enforce** — AI Guardian emits a supported denial/replacement response for the applicable stage; host/version limits still apply
 - **Advisory** — MCP only, agent must cooperate (no enforcement)
-- **Partial** — no UserPromptSubmit, only file content scanned
+- **Partial** — enforcement is available at some applicable stages, but one or more required stages are unavailable, observation-only, or limited
+- **Observe only** — scanning may run, but the host does not enforce the prompt-hook response
 - **Caution** — known limitations (see [Image scanning](#image-scanning-all-agents) below)
 - **No** — not supported
 
@@ -2674,6 +2326,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Grok Build | Low | Hook contract and isolated tests are covered; real host and passive-event behavior remain limited |
+| Goose | Low | Pinned v1.59.0 protocol, isolated tests, and CI mock smoke provided; live macOS/desktop/native Windows unqualified |
 | Gemini CLI | Medium | Current grouped settings format and hook enforcement covered by the local-mock real-agent smoke matrix; live provider qualification remains manual |
 | Antigravity CLI | Low | Hook adapter implemented based on documentation; limited real-world testing |
 | Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
@@ -2736,6 +2389,7 @@ JSON object so error payloads are not echoed.
 | Cursor desktop / CLI | JSON `permission` field for decision hooks; JSON transform field for MCP post-hooks | `{"permission": "deny", "user_message": "...", "agent_message": "..."}`; MCP output uses `updated_mcp_tool_output` |
 | GitHub Copilot | JSON (PreToolUse) or exit code 2 | `{"permissionDecision": "deny"}` |
 | Grok Build | JSON decision on PreToolUse | `{"decision": "deny", "reason": "..."}` |
+| Goose | JSON PreToolUse decision; installed failure policy blocks failed hooks | `{"decision": "block", "reason": "..."}`; passive events emit no decisions |
 | Gemini CLI | JSON `decision` field | `{"decision": "deny", "reason": "..."}` |
 | Cline | JSON `cancel` field | `{"cancel": true, "reason": "..."}` |
 | Kiro | Exit code 2 (PreToolUse) or 1 (other) + stderr | stderr = error message |
@@ -3970,6 +3624,18 @@ build time, and forwards `XAI_API_KEY` when supplied. Grok is intentionally not
 part of the OpenShell selector or image until its image, provider/network
 policy, and runtime authentication path are validated.
 
+### Current Goose boundary
+
+`goose` is a host CLI integration pinned to v1.59.0 on Linux/macOS, not a normal
+Docker/Podman or OpenShell runtime. `SUPPORTED_CONTAINER_CLI_IDE_TYPES` excludes it
+from product selectors/image parity; the general CLI registry identifies its
+executable for host self-protection. Desktop/native Windows are unqualified. The
+Release Readiness smoke-only image is separate: no host mounts, external network,
+credentials, or product sandbox creation; it must prove native pre-tool denial
+and a clean tool/result round-trip using a loopback mock. Prompt denial, Stop
+withholding, redaction, and transcripts/sessions are tested exclusions. See
+[Goose support](GOOSE.md).
+
 ## 1. Scope, support, and legal classification
 
 - [ ] Choose a stable CLI key and display name. Keep the key consistent across
@@ -4155,6 +3821,18 @@ than leaving them implicit.
 
 ## 7. Tests and evidence
 
+- [ ] Update the [real-agent CLI coverage ledger](REAL_AGENT_CLI_COVERAGE.md)
+  and `scripts/agent_cli_coverage.json` for every canonical host CLI. Each entry
+  needs a matching runner/Release Readiness lane or a versioned capability/terms
+  audit with an actionable blocker and priority. Run
+  `tests/unit/test_agent_cli_coverage.py`; inventory is not runtime qualification.
+  A pre-tool-only lane cannot qualify prompt denial or output containment.
+- [ ] Give each runnable CLI/version a dedicated Release Readiness job containing
+  only that client's prerequisites and smoke. Share wheel/image preparation through
+  `.github/actions/prepare-cli-smoke`, not cross-CLI job dependencies or gates.
+  Keep OpenShell image validation separate, Claude's maintainer consent explicit,
+  and any tolerated smoke failure visible and unqualified.
+
 - [ ] Add focused unit tests for parser defaults, invalid combinations,
   command construction, environment propagation, provider selection, policy
   composition, and credential redaction.
@@ -4188,6 +3866,10 @@ than leaving them implicit.
   a correlated clean tool result too. Cover the smoke UX contract in
   `tests/ux/test_user_experience_contract_agent_cli_smoke.py`; client limitations
   and unapproved hooks must fail rather than silently qualify.
+- [ ] The Python, JavaScript, and TypeScript HTTP request credential scanner has
+  real-agent native Write violation and environment-reference clean cases for
+  Claude Code and OpenCode; other CLI lanes are not claimed by this Write-specific
+  smoke probe.
 - [ ] Keep release-readiness runtime coverage explicit about image/version lanes:
   Gemini CLI runs in the normal support image; OpenCode runs against the bundled
   V1 image and a separate V2 smoke-only image. The V2 image must not be described
@@ -4322,6 +4004,12 @@ remain advisory; SDK checks deny unresolved Ask without opening a UI.
 Real-host pre-model prevention remains unqualified. Project overlays,
 tool payloads and project exclusions cannot activate or weaken this policy.
 
+[Command credential scanning](security/COMMAND_CREDENTIAL_SCANNING.md) is a
+separate global-only, default-on policy. Project-local overlays cannot disable
+or weaken it; the default action blocks supported inline literal credentials and
+applies the configured action to incomplete command analysis. Credential
+references remain advisory.
+
 AI Guardian loads configuration from multiple sources in a specific priority order:
 
 ### 1. User Configuration (Default)
@@ -4398,7 +4086,7 @@ aliases at tray startup/refresh and in the loopback Web Console picker. The opti
 without renaming. Save these settings in the **workstation Console home `/` → SSH
 daemon connections** card (from a dashboard, click the **AI Guardian** header),
 not a remote daemon/project settings page. The development tray also offers
-**Discover SSH aliases...**; see the VM guide's release gate before assuming
+**SSH → Discover SSH aliases...**; see the VM guide's release gate before assuming
 availability in a published build. Discovery never probes hosts or grants
 trust; review and explicit identity confirmation remain mandatory. See
 [SSH config locations, bounded Includes, Match behavior and persistent dismissal](MULTI_DAEMON_TRAY.md#discover-ssh-aliases).
@@ -8023,14 +7711,17 @@ This guide explains how to integrate AI Guardian with [GitHub Copilot](https://g
 
 ## Overview
 
-AI Guardian integrates with GitHub Copilot through **native hooks** that intercept prompts and tool usage before they're sent to the AI. This provides **real-time protection** by scanning for secrets and enforcing security policies during AI interactions.
+AI Guardian integrates with GitHub Copilot through command hooks. The
+`userPromptSubmitted` hook receives prompts, but Copilot drops command-hook
+output for that event; it cannot block or rewrite the submitted prompt. The
+`preToolUse` hook can deny tool calls before execution.
 
 ### Protection Levels
 
-✅ **Real-time scanning**:
-- Scans user prompts before submission (`userPromptSubmitted` hook)
+✅ **Hook coverage**:
+- Observes submitted prompts (`userPromptSubmitted`); command-hook output is ignored, so this is not a prompt gate
 - Scans tool inputs before execution (`preToolUse` hook)
-- Blocks operations containing secrets or accessing denied directories
+- Denies tool calls containing secrets or accessing denied directories
 - Enforces MCP/Skill permissions
 
 ## Prerequisites
@@ -8167,7 +7858,7 @@ GitHub Copilot supports these hooks:
 
 | Hook | Purpose | AI Guardian Support |
 |------|---------|-------------------|
-| `userPromptSubmitted` | Before sending prompt to AI | ✅ Supported |
+| `userPromptSubmitted` | Before sending prompt to AI | ⚠️ Observed only; command-hook output is ignored |
 | `preToolUse` | Before tool execution | ✅ Supported |
 | `postToolUse` | After tool execution | ⏭️ Future |
 
@@ -8204,40 +7895,18 @@ Once installed, AI Guardian runs automatically:
 
 When you use GitHub Copilot:
 
-1. **Type a prompt**: AI Guardian scans for secrets
+1. **Type a prompt**: AI Guardian's command hook receives it, but the prompt is still submitted
 2. **Copilot suggests code**: AI Guardian checks tool usage
 3. **Clean content**: Request proceeds normally
-4. **Secrets detected**: Request blocked with error message
+4. **A secret is detected in the prompt**: the hook may surface a warning, but this command-hook integration cannot stop the prompt; do not include credentials in prompts
 
-### Example: Blocked Request
+### Prompt Hook Limitation
 
-```
-User prompt: "Deploy using API key: sk_live_abc123..."
-
-🛡️ Secret Detected
-
-Protection: Secret Scanning
-Secret Type: stripe-api-key
-Location: prompt:line 1
-Scanner: Gitleaks
-Pattern source: Default Gitleaks rules
-
-Why blocked: Hard-coded secrets in prompts create security risks.
-Secrets should never be included in AI prompts or source code.
-
-This operation has been blocked for security.
-DO NOT attempt to bypass this protection - it prevents credential leaks.
-
-Recommendation:
-- Store secrets in environment variables or secret managers
-- Use placeholder values in examples (e.g., "sk_test_example_key")
-- Never paste real API keys, tokens, or passwords
-
-⚠️ Secret value NOT shown in this message for security
-
-Config: ~/.config/ai-guardian/ai-guardian.json
-Section: secret_scanning.enabled
-```
+Copilot's current command-hook contract drops `userPromptSubmitted` output,
+including `modifiedPrompt`. An exit code of 2 is a warning for this event, not a
+block. Prompt rewriting is honored only by SDK programmatic hooks, which AI
+Guardian does not install. Use `preToolUse` for tool-call enforcement and keep
+credentials out of prompts. See the [Copilot hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference).
 
 ### Example: Allowed Request
 
@@ -8265,8 +7934,8 @@ GitHub Copilot expects specific JSON responses:
 ```
 
 **AI Guardian Response** (exit code only):
-- Exit code 0: Allow prompt
-- Exit code 2: Block prompt (with error message on stderr)
+- Exit code 0: Hook completed; Copilot continues submitting the prompt
+- Exit code 2: Copilot surfaces a warning, but the prompt still proceeds
 
 ### preToolUse Hook
 
@@ -8400,7 +8069,7 @@ Then check stderr output for details.
 ### Defense in Depth
 
 **Recommended layers**:
-1. **AI Guardian hooks** - Real-time prompt/tool scanning
+1. **AI Guardian hooks** - Prompt observation and pre-tool enforcement
 2. **Git pre-commit hooks** - Commit-time verification
 3. **CI/CD scanning** - Build-time secret detection
 4. **Secret rotation** - Regular credential updates
@@ -8535,6 +8204,163 @@ Track ai-guardian usage for compliance:
 
 **Security concerns**:
 - Open an issue with `[SECURITY]` prefix
+
+# === docs/GOOSE.md ===
+
+# Goose CLI support
+
+AI Guardian supports **Goose v1.59.0 host CLI command hooks on Linux and macOS**.
+The integration key and executable are `goose`; a model/provider is not an agent
+alias. Desktop, native Windows, hosted/remote Goose, normal Docker/Podman
+sandboxes, and OpenShell are **not qualified**. Product runtime selectors exclude
+Goose. This is agent-level enforcement, not an outer sandbox.
+
+## Setup and scope
+
+```bash
+ai-guardian setup --ide goose --yes
+ai-guardian doctor
+```
+
+Restart Goose after setup. Default setup creates only the user's owned
+`~/.agents/plugins/ai-guardian-goose/` plugin, never project files. To select a
+project explicitly:
+
+```bash
+ai-guardian setup --ide goose --project /path/to/repository --yes
+```
+
+The plugin contains `plugin.json`, `hooks/hooks.json`, and (unless `--no-mcp`)
+`.mcp.json`. Setup merges recognized AI Guardian hook actions and the
+`ai-guardian` MCP entry, preserves unrelated actions/settings, backs up changes,
+and refuses unrecognized manifests, malformed configuration, and linked managed
+paths. Current setup is idempotent. Reconciliation repairs owned stale/missing
+actions without rewriting unrelated plugins or Goose enablement preferences.
+Doctor/tray health distinguishes effective hooks from supplemental MCP setup;
+configuration health does not prove that a running Goose has reloaded them.
+Malformed sibling hook actions are unhealthy because Goose can reject the whole
+hook file. Custom manifest MCP layouts are preserved but reported unverified;
+the supported advisor registration uses only the managed default `.mcp.json`.
+
+Enabled project plugins precede user plugins and deduplicate by directory name.
+An enabled project `ai-guardian-goose` shadows the user's hooks **and** MCP;
+a config-disabled project copy does not. Project-local plugin settings override
+project settings, then user settings. Malformed or unverifiable settings are
+reported unhealthy, not silently repaired.
+
+## Paths
+
+| Surface | Default |
+|---|---|
+| User plugin | `~/.agents/plugins/ai-guardian-goose/` |
+| Project plugin | `<project>/.agents/plugins/ai-guardian-goose/` |
+| Linux configuration | `${XDG_CONFIG_HOME:-~/.config}/goose/config.yaml` |
+| macOS configuration | `~/Library/Application Support/Block/goose/config.yaml` |
+| User plugin settings | `~/.config/goose/settings.json` (not XDG-relocated) |
+| Project/local settings | `<project>/.config/goose/settings.json`, `settings.local.json` |
+
+An **absolute** `GOOSE_PATH_ROOT` relocates the process root: configuration becomes
+`<root>/config/`, plugins `<root>/.agents/plugins/`, and user plugin settings
+`<root>/.config/goose/settings.json`. Relative values are ignored, as upstream
+does. Project selection is not relocated. Use the same environment for setup,
+Goose, and the daemon/tray that verifies it.
+
+## Enforcement contract
+
+| Installed event | Behavior |
+|---|---|
+| `PreToolUse` | Gate native/MCP tools; `{"decision":"allow"}` or `{"decision":"block","reason":"…"}` on stdout, exit 0 |
+| `UserPromptSubmit` | Observe `message`; no prompt denial, rewrite, or context injection |
+| `PostToolUse` | Observe structured `tool_output`; no output withholding/redaction |
+| `SessionStart`, `SessionEnd` | Lifecycle bookkeeping only |
+
+JSON stdin contains `event`, `session_id`, `working_dir`, `tool_name`, `tool_input`,
+`tool_call_id`, and event-specific content. Native `shell`, `write`, `edit`,
+`tree`, and `read_image` map to shared command/file checks. Edit's `before`/`after`
+become old/new content. Relative file paths use `working_dir`; remote images
+receive URL checks. Namespaced extension tools retain MCP identity rather than
+being mistaken for native shell/file tools.
+Native file paths keep `~` literal, matching Goose rather than shell expansion.
+Adapter normalization and managed hook-path construction do not probe input paths.
+Native paths retain linked `..` components until the shared security guards
+canonicalize and check the actual target; file URLs use the platform's decoder.
+
+The managed pre-tool action pins **360 seconds** and `on_failure: "block"`.
+Nonzero startup/scan failures, malformed requests/responses, missing executable,
+and timeouts remain failures so Goose applies this fail-closed policy. This
+differs from Goose's default fail-open behavior and does not inherit AI Guardian's
+generic fail-open fallback. Passive actions pin 60 seconds and return no decisions.
+This policy applies only while Goose has loaded the enabled action; a missing or
+unloadable plugin itself is not a security gate and is reported unhealthy.
+Goose forwards denial reasons to the model; they contain only a generic violation
+category, never findings, credentials, paths, scanner exceptions, or security
+configuration advice.
+
+**`Stop` is not installed.** Blocking it asks Goose to continue generating, not
+withhold the already generated response. `BeforeReadFile`, `BeforeShellExecution`,
+and other passive callbacks are not additional gates. No prompt/output containment
+or transcript protection is claimed. Arbitrary shell scripts/MCP servers retain
+the shared scanner's limits; this is not a subprocess filesystem sandbox.
+
+## MCP, hints, protection, and removal
+
+The plugin's `.mcp.json` uses `mcpServers.ai-guardian` to launch
+`ai-guardian mcp-server`. The adapter maps Goose's prefixed managed extension
+name back to its stable MCP identity. MCP is **advisory**, not a hook alternative.
+
+Explicit `--rules` installs advisory guidelines in the **user configuration's**
+`.goosehints`, never project hints (even with project hook setup). Existing hints
+are preserved unless replacement was requested. There is no AI Guardian
+transcript/session adapter: Goose's session storage is not compatible JSONL.
+
+The general configuration inventory covers Goose configuration, plugin controls,
+project hints, and user/project plugin trees. The owned security plugin and all
+four hook-control file paths listed above remain immutable for agent-originated
+mutations independently of the broader agent-configuration preference, **even
+before plugin installation**. This includes the entire `config.yaml`, not just
+its plugin settings. The inventory does not probe the request-selected plugin
+directory to determine installation. Unrelated plugins, other provider files,
+and project hints are outside this narrow immutable scope. This reserves paths;
+it does not make an absent or unloaded plugin enforce hooks.
+Attempts to invoke the active `goose` CLI from agent tools receive shared host-CLI
+protection. Operator-only
+[recovery](UNINSTALL.md) removes recognized owned hook/MCP actions and manifests,
+not unrelated plugins, preferences, hints, or session data. A missing executable
+**blocks pre-tool calls** until the operator repairs/removes the registration.
+
+## Validation and legal review
+
+Isolated adapter/setup/UX tests cover allow/deny, failure boundaries, passive
+events, scope/relocation, disabled/shadowed plugins, idempotence, and preservation.
+Release Readiness includes installed-command E2E and a **smoke-only** Goose
+1.59.0 image using `scripts/agent-cli-test --cli-name goose --agent default
+--image IMAGE`: native shell offers, a denied synthetic credential command
+plus inert SSRF/config-exfil probes without execution witnesses, a clean executed
+tool/result round-trip, and a clean prompt must all be confirmed. Issued native
+tool/result correlation is required; two provider calls alone are not evidence.
+The [all-CLI coverage ledger](REAL_AGENT_CLI_COVERAGE.md) records this five-case
+**pre-tool-only** profile, not full enforcement qualification.
+No external network, host mounts, credentials, or published
+ports are present. Prompt denial and output redaction are tested exclusions.
+Real CLI/container scenarios run in CI/manual checks, not routine local tests.
+Live macOS execution, desktop, and native Windows remain unverified.
+
+[Goose v1.59.0](https://github.com/aaif-goose/goose/releases/tag/v1.59.0) is
+[Apache-2.0](https://github.com/aaif-goose/goose/blob/v1.59.0/LICENSE), compatible
+with AI Guardian's Apache-2.0 license. No Goose library is embedded or added as a
+Python dependency. Normal releases do not redistribute Goose; the temporary CI
+overlay retains its license. No proprietary CLI installation consent is required
+for Goose itself. Model/provider, extension, and service terms, credentials, and
+telemetry choices remain the operator's separate responsibility; setup does not
+change those preferences. The smoke uses only a loopback mock and synthetic
+credentials, preserving other agents' consent gates.
+
+Pinned references: [hooks](https://github.com/aaif-goose/goose/blob/v1.59.0/crates/goose/src/hooks/mod.rs),
+[discovery/settings](https://github.com/aaif-goose/goose/blob/v1.59.0/crates/goose/src/plugins/discovery.rs),
+[Open Plugins](https://github.com/aaif-goose/goose/blob/v1.59.0/crates/goose/src/plugins/formats/open_plugins.rs),
+[MCP](https://github.com/aaif-goose/goose/blob/v1.59.0/crates/goose/src/plugins/mcp_servers.rs),
+[paths](https://github.com/aaif-goose/goose/blob/v1.59.0/crates/goose/src/config/paths.rs),
+[native tools](https://github.com/aaif-goose/goose/blob/v1.59.0/crates/goose/src/agents/platform_extensions/developer/mod.rs).
 
 # === docs/HOOKS.md ===
 
@@ -9120,11 +8946,16 @@ The canonical production registry is
 [`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). Its current
 keys are `claude`, `cursor`, `copilot`, `grok`, `codex`, `windsurf`, `gemini`,
 `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`,
-`pi`, `augment`, `crush`, and `junie`. Add a new IDE there first. The parity contract in
+`pi`, `augment`, `crush`, `junie`, and `goose`. Add a new IDE there first. The parity contract in
 [`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py) then
 requires setup, adapter aliases, MCP/rules capability, transcript/session
 registries, installer text, support documentation, and the release-readiness
-matrices to stay synchronized.
+matrices to stay synchronized. The separate [per-integration behavior
+matrix](AGENT_SUPPORT.md#per-integration-behavior-matrix) records whether each
+prompt/pre-tool/post-tool stage blocks, observes, transforms, is conditional,
+or is unverified; the registry parity test requires one row for every key.
+Keep the [README summary](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/README.md#per-integration-behavior-and-limitations)
+aligned with that detailed matrix, including materially different host surfaces.
 
 ## Support model
 
@@ -9266,6 +9097,18 @@ even when the integration also has GUI, plugin, or MCP surfaces.
   channels, exit-code behavior, and whether the agent accepts modified output.
 - [ ] Record the response contract for allow, block, warning, and redaction
   paths, including which messages reach the user and the agent.
+- [ ] For `UserPromptSubmit`, `PreToolUse`, and `PostToolUse`, distinguish host
+  enforcement from event presence: record gate, observation, advice, rewrite,
+  replacement/withholding, unsupported, and unverified behavior separately.
+- [ ] Record each relevant host variant (for example local vs cloud, CLI vs
+  IDE, or plugin generation), the hook protocol/timing, timeout and process
+  failure defaults, required trust/configuration, upstream references, and any
+  limits on output replacement or post-action side effects.
+- [ ] Add a row for the canonical registry key to the per-integration behavior
+  matrix in `docs/AGENT_SUPPORT.md`; add/extend its registry-to-matrix contract
+  in `tests/unit/test_ide_registry.py`. Add the corresponding user-facing README
+  summary row(s), separating materially different local/cloud, CLI/IDE, and
+  plugin-generation surfaces or explicitly qualifying them.
 - [ ] Identify configuration files, environment-variable overrides, project
   files, and whether the integration must preserve unrelated user settings.
 - [ ] Identify transcript format and path behavior, including whether the
@@ -9366,9 +9209,15 @@ behavior is truly identical, but the test output and evidence must identify the
 new IDE. “The adapter is similar to another IDE” is not an exclusion. Keep
 fixtures synthetic and isolated from the user's configuration.
 
+For a canonical host CLI, also synchronize the [real-agent CLI coverage
+ledger](REAL_AGENT_CLI_COVERAGE.md), its runner and Release Readiness steps. Retain
+an exact-version audit and actionable exclusion when native execution is blocked;
+generated bridge/unit evidence is not a real-agent pass. Pre-tool-only and
+observation-only scopes must remain explicit.
+
 | Test group | Tests that must be implemented | Minimum scenarios and evidence |
 |------------|--------------------------------|--------------------------------|
-| Canonical registration and parity | Add the IDE to `SUPPORTED_IDE_REGISTRY`; extend `tests/unit/test_ide_registry.py` only when a new capability shape needs a contract | Stable key/display name, all aliases, adapter class, setup mode, managed event manifest, transcript/session declaration, and release-readiness/docs/installer parity must pass |
+| Canonical registration and parity | Add the IDE to `SUPPORTED_IDE_REGISTRY`; extend `tests/unit/test_ide_registry.py` for registry-to-capability-matrix coverage | Stable key/display name, all aliases, adapter class, setup mode, managed event manifest, transcript/session declaration, capability behavior row, and release-readiness/docs/installer parity must pass |
 | Adapter detection and normalization | Focused adapter unit tests plus shared registry/precedence tests | Explicit `--ide` and environment-alias detection, auto-detection precedence, every supported lifecycle event, tool-name mapping, missing fields, wrong types, malformed JSON, and unknown events normalize safely or return the documented error |
 | Response contract | Adapter and hook-pipeline tests | Benign allow, security block, warning/log-only, post-tool redaction/output transform, user-facing and agent-facing fields, exit codes, stdout/stderr shape, invalid response handling, timeout, missing executable, non-zero process failure, and fail-open/fail-closed behavior |
 | Hook lifecycle and UX | `tests/unit/test_hook_processing.py` and an applicable `tests/ux/` contract | Invoke every event AI Guardian installs. Test clean input, a blockable threat, warning, output transformation, malformed input, and the exact permission/message flow. If the upstream exposes an event that AI Guardian does not install, record the exclusion and test that it is not reported as missing |
@@ -9478,7 +9327,8 @@ because executing generated `.bat` hooks requires a Windows command host.
 ## 4. Documentation and release bookkeeping
 
 - [ ] Update every applicable reference table in `docs/AGENT_SUPPORT.md`:
-  Supported Agents, Hook Capability Matrix, Violation Type Coverage Matrix,
+  Supported Agents, Hook Capability Matrix, per-integration behavior matrix,
+  Violation Type Coverage Matrix,
   Agent Confidence Levels, Hook Event Name Mapping, Response Format
   Differences, and Config File Locations.
 - [ ] Update the architecture, setup, transcript, and known-limitations
@@ -9487,8 +9337,15 @@ because executing generated `.bat` hooks requires a Windows command host.
   cannot be explained clearly in the shared support reference.
 - [ ] Update `docs/README.md` and `mkdocs.yml` when creating a new document or
   adding a new integration guide.
-- [ ] Keep `README.md` concise: link to the shared support reference and this
-  checklist instead of duplicating capability tables.
+- [ ] Keep `README.md` at approximately 300 lines or fewer. Synchronize its
+  **Per-integration behavior and limitations** summary whenever prompt handling,
+  pre-tool enforcement, result handling, prerequisites, or execution scope changes.
+  Preserve its legend and limitations; keep protocol, timing, version, and failure
+  details in the linked `docs/AGENT_SUPPORT.md` reference rather than copying the
+  full matrix. Keep `docs/AGENT_SUPPORT.md#per-integration-behavior-matrix` stable.
+- [ ] Verify summary/reference links and anchors on GitHub and on the documentation
+  homepage, which includes `README.md` through `docs/index.md`; included relative
+  links are resolved from the homepage, not automatically from the source README.
 - [ ] Update `AGENTS.md`, `docs/DEVELOPER_GUIDE.md`, or contributor guidance
   when the integration workflow changes.
 - [ ] Add a `[Unreleased]` entry to `CHANGELOG.md` for notable integration or
@@ -9536,7 +9393,8 @@ expand it when a shared component is touched:
 - [ ] Run the focused tests for the changed surface and all tests that cover
   shared adapter or hook-processing code.
 - [ ] Re-check every row in the support matrix affected by the change, rather
-  than updating only the Supported Agents table.
+  than updating only the Supported Agents table. Update the matching README
+  summary rows and limitations in the same change.
 - [ ] Re-check independent health renderers and launchers (doctor and tray
   menu actions) when setup paths, config scopes, or MCP registration change.
   Verify that setup remains user/desktop-scoped by default even when a
@@ -11395,8 +11253,8 @@ controls.
   later displayed-step failure remain terminal. Verify the direct route on each
   supported desktop as well as manual Add; see the full SSH UX contract for opt-in,
   cancellation, dismissal/restart and identity-change checks.
-- **SSH discovery settings:** **Discover SSH aliases...** is always available in
-  the workstation tray, including discovery-off/zero-candidate/no-pairing states.
+- **SSH discovery settings:** **Discover SSH aliases...** under the tray's **SSH**
+  submenu is always available, including discovery-off/zero-candidate/no-pairing states.
   Reuse `run_form_flow` for the complete two-step interaction: current enable
   checkbox and **Continue**, then current optional literal prefix and **Save**.
   All providers retain both controls, explanations, validation feedback and
@@ -11598,7 +11456,8 @@ monitor, result and sanitized screenshots/timing for each matrix row.
    origin through source delays and provider startup errors. No placement test may
    auto-check consent, upload a Gist, publish a Discussion or duplicate a send.
 8. SSH discovery settings: with discovery off, zero matches and no enrolled
-   daemons, find **Discover SSH aliases...** next to **Add daemon via SSH**.
+   daemons, find **Discover SSH aliases...** beside **Add daemon via SSH** under
+   the tray's **SSH** submenu.
    Check both current values, cancel/close either step, and confirm no persistence.
    Save a custom `guardian-` prefix, then an empty prefix; reject wildcard/invalid
    input with feedback without switching toolkit. Confirm candidates refresh
@@ -11969,7 +11828,7 @@ VM-hosted Console bootstrap and workstation-side pairing. Production PyPI
 1.21.0 includes HTTPS and SSH-managed enrollment; fresh-install, desktop and
 lifecycle qualification for the complete walkthrough remains open in that guide.
 
-For an SSH-only VM (including a known AWS instance), choose **Add daemon via SSH**
+For an SSH-only VM (including a known AWS instance), choose **SSH → Add daemon via SSH**
 in the tray. The shared modal dispatcher tries **Native → Tkinter → NiceGUI**,
 respecting explicit preferences and advancing only after proven pre-display
 startup failure. It never switches toolkit after host input or cancellation.
@@ -12120,9 +11979,9 @@ user-identified hosts only: it does not enumerate AWS instances or use AWS APIs.
 #### Discover SSH aliases
 
 Discovery is **off by default**, independent of saved SSH connections. Choose
-**Discover SSH aliases...** directly in the workstation tray, next to **Add daemon
-via SSH**. This settings entry is always available—even with discovery disabled,
-zero matching aliases, or no enrolled daemons. **Add daemon via SSH** remains the
+**SSH → Discover SSH aliases...** in the workstation tray. This settings entry is
+always available—even with discovery disabled, zero matching aliases, or no enrolled
+daemons. **Add daemon via SSH** is beside it in the same submenu and remains the
 separate pairing action, not the discovery settings form.
 
 1. Check or uncheck **Enable SSH alias discovery**, reflecting the current saved
@@ -12168,11 +12027,11 @@ searched. Actual connections still delegate users, ports, keys, jump hosts and
 connection predicates to the system OpenSSH client.
 
 At tray startup and each background refresh, **SSH aliases available to pair (N)**
-appears as a pending-enrollment menu only when aliases are available, separate
+appears under the tray's **SSH** submenu only when aliases are available, separate
 from saved/connected targets. With zero aliases it disappears, not a greyed `(0)`
-entry; discovery warnings remain accessible as **SSH alias discovery notice**.
-The **Discover SSH aliases...** settings entry remains available in either case. Each
-alias offers **Review discovered daemon** and **Dismiss alias**. The loopback Web
+entry; discovery warnings remain accessible as **SSH alias discovery notice** there.
+The **SSH → Discover SSH aliases...** settings entry remains available in either case.
+Each alias offers **Review discovered daemon** and **Dismiss alias**. The loopback Web
 Console picker refreshes the equivalent list automatically. Changing either the
 SSH config or these discovery settings takes effect on the next refresh, without
 restarting the daemon or tray. Saving from the tray requests that refresh; scanning
@@ -17976,6 +17835,8 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Unicode Attacks](security/UNICODE_ATTACKS.md) | Zero-width chars, bidi override, homoglyphs |
 | [Directory Rules](security/DIRECTORY_RULES.md) | `.ai-read-deny` markers and config-based rules |
 | [Credential Exfiltration](security/CREDENTIAL_EXFILTRATION.md) | Config file scanning for exfiltration patterns |
+| [Command Credential Scanning](security/COMMAND_CREDENTIAL_SCANNING.md) | Default-on pre-execution checks for literal credentials in supported command arguments |
+| [HTTP Request Credential Scanning](security/HTTP_REQUEST_CREDENTIAL_SCANNING.md) | Default-on static Python, JavaScript, and TypeScript checks for literal credentials flowing into supported HTTP request sinks |
 | [Secret Redaction](security/SECRET_REDACTION.md) | Masking secrets in tool outputs |
 | [Image Scanning (OCR)](security/IMAGE_SCANNING.md) | OCR-based secret/PII detection in images, IDE limitations |
 | [Inline Annotations](ANNOTATIONS.md) | Suppress false positives with per-line or block annotations |
@@ -18010,6 +17871,8 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 |----------|-------------|
 | [IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) | Implementation, testing, documentation, and release checklist for integrations |
 | [Agent Support](AGENT_SUPPORT.md) | Multi-agent hook adapters — capability matrix, setup, and architecture, including Grok Build |
+| [Real-agent CLI Coverage](REAL_AGENT_CLI_COVERAGE.md) | All-CLI smoke ledger, versioned capability/terms audits, partial lanes, and actionable blockers |
+| [Goose Support](GOOSE.md) | Host CLI plugin setup, enforcement/failure policy, and explicit runtime exclusions |
 | [OpenCode Support](OPENCODE.md) | Version-aware V1/V2 plugin, transcript, container, and validation reference |
 | [Pre-commit Hook](PRE_COMMIT.md) | Scan staged files for secrets before commit |
 | [GitHub Copilot Setup](GITHUB_COPILOT.md) | Setup guide for GitHub Copilot |
@@ -18043,6 +17906,281 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Agent Instructions](../AGENTS.md) | Development guidelines, testing, CI/CD |
 | [Releasing](../RELEASING.md) | Release process and version management |
 | [Changelog](../CHANGELOG.md) | Version history |
+
+# === docs/REAL_AGENT_CLI_COVERAGE.md ===
+
+# Real-agent CLI coverage ledger
+
+Reviewed **2026-11-13** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
+This inventory includes **Goose**, even though it already had a smoke-only lane.
+The machine-readable ledger is [`scripts/agent_cli_coverage.json`](../scripts/agent_cli_coverage.json).
+`tests/unit/test_agent_cli_coverage.py` compares every `SUPPORTED_CLI_IDE_TYPES`
+entry with the runner, actual Release Readiness invocations, and this audit.
+A new CLI, missing lane, removed exclusion, or stale version pin must not silently
+escape that contract. Release Readiness publishes the inventory, **not a passing
+security result**, in its job summary:
+
+```bash
+scripts/agent-cli-test --coverage
+```
+
+## Reading the ledger
+
+| CLI key | Runner / CI lane | Scope or actionable exclusion |
+| --- | --- | --- |
+| `claude` | Full applicable case profile; consent-gated | Explicit maintainer ToS consent before installation; strict-derived sanitization, not unmodified strict output blocking |
+| `codex` | Full applicable case profile; failure currently tolerated in CI | Native execution remains unqualified when the lane fails; the release exception is not a pass |
+| `gemini` | Full applicable case profile | Native refusal of sensitive results, **not** sanitized delivery |
+| `opencode` | Separate V1/V2 lanes | V2 smoke image is not a published product-runtime qualification |
+| `pi` | Full applicable case profile | Native extension, issued tool/result and execution evidence required |
+| `grok` | **Pre-tool-only**, five-case lane | Prompt and sensitive-output enforcement not qualified |
+| `goose` | **Pre-tool-only**, five-case host-CLI lane | Test-only image; not a product container/OpenShell integration |
+| `copilot` | Blocked: consent and native-hook qualification | Local BYOK exists; obtain terms approval and qualify the installed pre-tool surface |
+| `antigravity` | Blocked: consent and versioned installation | Local Gemini override exists; qualify the exact artifact, trust and installed adapter behavior |
+| `kiro` | Blocked: no documented local-provider path | Headless authentication requires the Kiro service; do not substitute a live-provider test |
+| `openclaw` | Blocked: native plugin qualification | Local provider exists; prove embedded CLI callback activation and fix unsupported claims separately |
+| `crush` | Blocked: license review | FSL-1.1-MIT is not a current MIT grant; no new smoke dependency is installed |
+
+Release Readiness gives every runnable CLI its own named job, with separate
+OpenCode V1/V2 jobs and an independent **OpenShell Image Validation** job. The
+shared local `.github/actions/prepare-cli-smoke` action prepares the current wheel
+and optional support image on each runner; no job depends on another CLI's build,
+version check or smoke result. A V2 failure therefore cannot skip Goose.
+Claude's job is explicitly consent-gated, and Codex's failed smoke outcome remains
+visible despite the temporary release exception. These job boundaries do not add
+native execution evidence or change the qualification limits below.
+
+**Full** describes the runner's applicable case profile, not a successful execution,
+all hooks available upstream, every platform, or runtime certification. The base
+profile has ten cases, including command-credential denial; Claude/OpenCode also
+have four native Write HTTP-credential cases. A blocked selection exits nonzero
+before building, installing, copying credentials, or invoking an agent. It is not
+a green skip. Existing full clients keep all their assertions and applicable cases.
+
+The five-case pre-tool profile is `ssrf`, `config_exfil`, `command_credential`,
+`clean_tool`, and `allowed`. It requires real native pre-tool hooks and findings,
+no post-tool callback or execution witness for denied commands, issued-call/result
+correlation, successful CLI exits, and an exactly-once clean execution plus clean
+result. Clean post-tool callbacks are **observation evidence**, not evidence of
+sensitive-result replacement. Unsupported prompt and output cases are announced as
+**NOT QUALIFIED**, not passed. Process-wide raw-sensitive-delivery checks remain
+active; a leak cannot become the next case's baseline. The inert SSRF/config
+commands print strings and write only a fixed execution witness, without reading
+credentials or contacting those destinations.
+
+All seven records below distinguish **reviewed upstream versions** from **tested
+native versions**. No new native executions were run locally in this change:
+project policy reserves real containers/integration scenarios for CI. Add the CI
+run/commit, image digest, exact CLI version and platform to the issue before
+claiming a runtime result. Unit tests and generated setup files are not that proof.
+
+## copilot
+
+- **Reviewed version / installation:** `@github/copilot` **1.0.112**, npm metadata;
+  npm or official release binary. Proprietary [CLI license][copilot-license] and
+  applicable service terms, not a permissive embedded dependency.
+- **Unattended / local protocol:** `copilot -p ... --model provider/model`;
+  [documented BYOK][copilot-byok] `providers.json` supports OpenAI chat completions
+  or Responses and Anthropic endpoints. `COPILOT_PROVIDERS_CONFIG` selects the
+  private file; `COPILOT_OFFLINE=true` prevents GitHub contact. BYOK does not
+  require GitHub authentication. A future mock must use synthetic auth and loopback.
+- **Installed hook boundary / trust:** AI Guardian installs `userPromptSubmitted`
+  and `preToolUse`. Prompt-hook output is ignored; do not advertise prompt denial.
+  No post-tool sanitizer is installed. Native tool permissions and hook discovery
+  must be checked without granting hook trust or importing host settings.
+- **Blocker:** `consent_and_hook_qualification` is a project consent/implementation
+  prerequisite, **not** a claim that upstream lacks local models.
+- **Next action / priority:** **P1** — obtain explicit authorized terms/installation
+  consent, pin an artifact, add a pre-tool-only BYOK adapter and CI lane, verify
+  native hook evidence and tool/result IDs. Do not reuse Claude's consent variable.
+- **Native execution in this change:** not run; no new tested native version.
+
+## grok
+
+- **Reviewed version / installation:** `@xai-official/grok` **1.0.41**, already
+  pinned in the normal image by `GROK_VERSION`; npm declares **Apache-2.0**.
+  Registry archive integrity was verified during static review; no binary ran.
+  [Package metadata][grok-package] and [CLI documentation][grok-settings].
+- **Unattended / local protocol:** `grok --no-auto-update -p ... --model ag-smoke
+  --output-format json`. A private `[model.ag-smoke]` in user `config.toml` sets
+  `api_backend = "chat_completions"`, loopback `base_url`, and synthetic
+  `XAI_API_KEY`. The runner appends only its model table and preserves generated
+  MCP/hook settings. Only the harmless clean Python probe gets a scoped native
+  tool permission; it does not grant hook trust or enable always-approve mode.
+- **Installed hook boundary / trust:** only `PreToolUse` denies. Prompt, post-tool
+  and lifecycle hooks observe; their stdout cannot replace results. Native
+  `run_terminal_command` is required, not an advisory MCP checker. Global managed
+  hooks are used; project hooks require separate upstream trust, which the runner
+  does not grant. [Hook contract][grok-hooks], [headless flags][grok-headless].
+- **Next action / priority:** **P1** — run the new five-case CI subset against the
+  audited version. Version drift fails without rebuilding a supplied image.
+  Record aggregate native evidence; leave prompt/output containment unqualified.
+  No OpenShell or additional host-platform support is added.
+- **Native execution in this change:** not run; no new tested native version.
+
+## antigravity
+
+- **Reviewed version / installation:** Antigravity CLI **1.5.8**, from the official
+  [changelog][agy-changelog]. `agy` is a proprietary standalone CLI installed by
+  the vendor; an installed desktop launcher is not proof of CLI availability.
+  [Terms][agy-terms] require explicit review before a CI install.
+- **Unattended / local protocol:** `agy -p ... --output-format json --model ...`;
+  official [authentication docs][agy-auth] support `modelProvider: "gemini"` in
+  private CLI settings plus `GEMINI_API_KEY` and `GOOGLE_GEMINI_BASE_URL`.
+  A Gemini-compatible loopback mock is feasible, not yet implemented/qualified.
+- **Installed hook boundary / trust:** AI Guardian installs `PreInvocation`,
+  `PreToolUse` and observational `PostToolUse`. The current adapter injects
+  prompt advice, not a termination decision. Upstream added PreInvocation
+  termination in 1.4.11; **do not mislabel the adapter gap as an upstream absence**.
+  PostToolUse does not offer the installed output transformation contract.
+  Workspace trust/native tool permissions need exact-version qualification, not
+  a blanket unattended-approval option. [Headless reference][agy-headless].
+- **Blocker:** `consent_and_versioned_installation` — no approved reproducible
+  pinned smoke installation/trust preflight is implemented.
+- **Next action / priority:** **P2** — approve terms, identify a versioned verified
+  artifact, qualify user-scoped hooks and Gemini mock routing, then add a partial
+  lane. Treat any prompt-termination adapter change as separately tested behavior.
+- **Native execution in this change:** not run; no new tested native version.
+
+## kiro
+
+- **Reviewed version / installation:** Kiro CLI **3.3.0**, official
+  [CLI changelog][kiro-changelog]; `kiro-cli` standalone vendor installer.
+  Kiro IDE/CLI are AWS Content under the [Kiro license][kiro-license], not MIT.
+- **Unattended / local protocol:** `kiro-cli chat --v3 --no-interactive ...`;
+  the [headless reference][kiro-headless] requires service-backed `KIRO_API_KEY`.
+  Pin `--v3`/`--v2` explicitly; headless and interactive defaults differ.
+  Reviewed model/auth docs do not establish an arbitrary local mock override.
+- **Installed hook boundary / trust:** existing script setup describes prompt,
+  pre-tool and post-tool events; this is not proof of native V3 activation or
+  output replacement. Current unified V3 hooks/agent configuration require a fresh
+  compatibility audit. Do not add `--trust-all-tools` or approve hooks to get a pass.
+- **Blocker:** `no_documented_local_provider` — a documented credential-free
+  provider contract for the exact CLI/harness is needed, not a real service key.
+- **Next action / priority:** **P3** — seek a supported local-provider/test transport
+  upstream and audit V3 hook installation; preserve the exclusion until both exist.
+  No service call, login or vendor installer is run by this ledger check.
+- **Native execution in this change:** not run; no new tested native version.
+
+## openclaw
+
+- **Reviewed version / installation:** `openclaw` **2026.11.3**, npm / tagged
+  source, [MIT license][openclaw-license]. Already present in the normal image;
+  this does not qualify its runtime or extend OpenShell.
+- **Unattended / local protocol:** tagged [agent CLI docs][openclaw-agent] document
+  `openclaw agent exec ... --json` and explicit `agent --local` embedded turns.
+  `models.providers` supports [custom providers][openclaw-providers]; a loopback
+  OpenAI-compatible responder is feasible without a gateway or host auth.
+- **Installed hook boundary / trust:** the generated plugin registers
+  `before_tool_call` and can deny. `after_tool_call` is a void/observational
+  callback; the plugin currently discards its bridge result. `message_received`
+  is also observational, so returning `cancel` does not prove prompt denial and
+  embedded operator input need not traverse that channel event. Upstream's
+  [tagged native callback types][openclaw-hooks] distinguish these from result
+  persistence/replacement hooks. Plugin trust/enablement, cwd, tool identity, and
+  embedded execution callbacks need native verification.
+- **Blocker:** `native_plugin_qualification` — a project integration gap, **not**
+  absence of local providers. Current setup writes only `index.ts`, `package.json`
+  and the bridge, but the tagged [native manifest contract][openclaw-manifest]
+  requires `openclaw.plugin.json` even for local filesystem loads. The generated
+  package's legacy `openclaw.hooks` field does not supply that manifest. An
+  isolated setup exclusion regression locks this concrete prerequisite; do not
+  create a substitute smoke-only plugin or use the command-hook registry as proof.
+- **Next action / priority:** **P1** — add a pinned embedded pre-tool lane and
+  callback/ID tests **after** repairing native manifest/registration in the shared
+  integration, without modifying native trust. Separately qualify any plugin
+  change for prompt cancellation or result replacement before claiming it.
+- **Native execution in this change:** not run; no new tested native version.
+
+## crush
+
+- **Reviewed version / installation:** Crush **0.101.0**, tagged source / release
+  binaries. Its [FSL-1.1-MIT license][crush-license] has a restricted-purpose grant
+  now and an MIT grant effective **two years after each release**. It is not an
+  immediately permissive MIT dependency; no new package/image is added here.
+- **Unattended / local protocol:** the tagged [README][crush-readme] documents
+  custom OpenAI-compatible `completions` and Anthropic `messages` providers,
+  with configurable base URLs. Native headless invocation for this version must
+  still be pinned and checked after legal review, rather than inferred from TUI
+  availability. Do not launch or install it as part of that static review.
+- **Installed hook boundary / trust:** AI Guardian installs only `PreToolUse`.
+  Upstream 0.101.0 [hooks][crush-hooks] also include post-tool replacement and
+  observational `TurnStart`; that does **not** mean AI Guardian installs them.
+  Neither prompt denial nor output containment is currently claimed. Config is
+  executable/trusted code; native workspace/config trust cannot be auto-approved.
+- **Blocker:** `license_review_required`; later adapter/headless qualification
+  also remains necessary. This is not an assertion that every FSL use is illegal.
+- **Next action / priority:** **P2** — obtain a documented legal decision on
+  test-only external use/redistribution before adding a pinned executable; then
+  qualify the installed pre-tool-only surface and local protocol independently.
+- **Native execution in this change:** not run; no new tested native version.
+
+## goose
+
+- **Reviewed version / installation:** Goose **1.59.0**, Apache-2.0 external CLI;
+  existing checksum-pinned Linux smoke-only release overlay retains the license.
+  [Tagged source/license][goose-source] and [AI Guardian contract](GOOSE.md).
+- **Unattended / local protocol:** `goose run --no-session --provider openai
+  --model ag-smoke --output-format json --text ...`; loopback `OPENAI_BASE_URL`
+  and synthetic API key, fresh `GOOSE_PATH_ROOT`. No host mounts or credentials.
+- **Installed hook boundary / trust:** owned Open Plugins command hooks enforce
+  only PreToolUse. Prompt/post/lifecycle events observe; Stop blocking continues
+  generation and is not output withholding. Require the native `shell` tool and
+  a correlated issued result, not just two model requests. Normal user/project
+  enablement/trust remains unchanged outside the disposable test image.
+- **Next action / priority:** **P1** — validate the expanded five-case CI subset
+  (adds SSRF/config-exfil denial and a clean prompt to the original two cases).
+  Preserve network-none, non-root, dropped capabilities and owned cleanup. This
+  host-only lane intentionally has no daemon publication/discovery claim; normal
+  product-runtime REST/discovery/firewall behavior is untouched. Desktop/native
+  Windows, prompt/output containment and both product runtimes remain unqualified.
+- **Native execution in this change:** not run; no new tested native version.
+
+## existing-lanes
+
+Claude, Codex, Gemini, OpenCode V1/V2 and Pi retain their existing consent,
+native hook-scope, execution, clean-result and process-wide raw-delivery checks.
+See [release smoke instructions](../RELEASING.md#real-agent-hook-smoke-test).
+Historical Linux strict-derived local-mock evidence for Gemini **0.67.0** and
+Pi **0.86.0** is recorded in #2662/#2670; it is not a new run of this change.
+Gemini containment is native refusal. The tolerated Codex CI failure stays failed
+and unqualified. Claude requires its separate explicit installation consent.
+
+## Runtime and diagnostics boundaries
+
+The [canonical registry](../src/ai_guardian/ide_registry.py) remains authoritative:
+host CLI support, the broader normal-container selector and the narrower
+OpenShell selector are distinct. This change adds **no** product runtime to those
+selectors and makes no live-provider or additional OS qualification claim.
+Grok uses the existing normal sandbox/REST/discovery lifecycle and IPv4/IPv6
+egress isolation; supplied images never cause hidden rebuilds. Goose retains its
+separate network-none test lifecycle. Do not change the host firewall, global
+engine configuration, shared sandbox lifecycle, image/cache strategy or native
+trust to accommodate a client. All runtime diagnostics remain aggregate counters,
+booleans and fixed categories, never prompts, credentials or CLI/model/tool bodies.
+
+[copilot-license]: https://github.com/github/copilot-cli/blob/main/LICENSE.md
+[copilot-byok]: https://docs.github.com/copilot/how-tos/copilot-cli/customize-copilot/add-llm-models
+[grok-package]: https://registry.npmjs.org/@xai-official/grok/1.0.41
+[grok-settings]: https://docs.x.ai/build/settings
+[grok-hooks]: https://docs.x.ai/build/features/hooks
+[grok-headless]: https://docs.x.ai/build/cli/headless-scripting
+[agy-changelog]: https://antigravity.google/docs/changelog
+[agy-terms]: https://antigravity.google/terms
+[agy-auth]: https://antigravity.google/docs/install
+[agy-headless]: https://antigravity.google/docs/cli/headless
+[kiro-changelog]: https://kiro.dev/changelog/cli/
+[kiro-license]: https://kiro.dev/license/
+[kiro-headless]: https://kiro.dev/docs/cli/headless/
+[openclaw-license]: https://github.com/openclaw/openclaw/blob/v2026.11.3/LICENSE
+[openclaw-agent]: https://github.com/openclaw/openclaw/blob/v2026.11.3/docs/cli/agent.md
+[openclaw-providers]: https://github.com/openclaw/openclaw/blob/v2026.11.3/docs/concepts/model-providers.md
+[openclaw-hooks]: https://github.com/openclaw/openclaw/blob/v2026.11.3/src/plugins/hook-types.ts
+[openclaw-manifest]: https://github.com/openclaw/openclaw/blob/v2026.11.3/docs/plugins/manifest.md
+[crush-license]: https://github.com/charmbracelet/crush/blob/v0.101.0/LICENSE.md
+[crush-readme]: https://github.com/charmbracelet/crush/blob/v0.101.0/README.md
+[crush-hooks]: https://github.com/charmbracelet/crush/blob/v0.101.0/docs/hooks/README.md
+[goose-source]: https://github.com/aaif-goose/goose/tree/v1.59.0
 
 # === docs/Sandbox.md ===
 
@@ -19185,6 +19323,13 @@ A scanner is a new detection engine that integrates into the hook pipeline and
 #828) as reference implementations. Every item below is required — missing any
 one causes a broken or incomplete feature.
 
+For a **command-semantic scanner** that analyzes pre-execution tool arguments
+rather than file contents, adapt the batch-scan and file-finding items below:
+integrate with the command pipeline/SDK and native pre-tool hook, but do not add
+`FileScanner`, SARIF, or `.aiguardignore` support unless the detector also scans
+stored file content. Document this scope and retain synthetic supported-CLI
+pre-execution coverage.
+
 ### 1. Dependency
 - [ ] `pyproject.toml` — add fixed or optional dependency
 
@@ -19252,6 +19397,9 @@ one causes a broken or incomplete feature.
   must verify pre/post hook events and containment at the mock boundary, not just
   finding counts. If no supported CLI hook exercises this
   scanner, record the reason and retain focused scanner/UX coverage.
+  Consult the [all-CLI coverage ledger](REAL_AGENT_CLI_COVERAGE.md): a pre-tool-only
+  lane cannot validate a prompt/output protection, and a blocked CLI selection
+  must not become a passing skip. Keep its versioned audit and CI record in sync.
 
 ### 11. Help tooltips
 - [ ] `src/ai_guardian/setup/config.py` — add `_comment_*` keys inside the scanner dict in `_get_default_config_template()` for each configurable field so they surface automatically as Web Console tooltips
@@ -21505,6 +21653,94 @@ Full control over the agentic loop enables full security coverage. With the Clau
 - **Same detection engine**: Both direct and REST modes use the same detection functions as the hook system.
 - **Config-gated**: Each detector respects its `enabled` flag in the configuration.
 
+# === docs/security/COMMAND_CREDENTIAL_SCANNING.md ===
+
+# Command Credential Scanning
+
+AI Guardian includes a separate, default-on command scanner for credential values
+placed directly in supported HTTP-client arguments. Its default action is
+**block**, before a supported native Bash/Shell command executes. It does not extend or change
+the optional password-likelihood heuristic.
+
+## What it detects
+
+The built-in parser recognizes direct invocations of:
+
+- `curl`: user/password and proxy-user options, bearer-token options,
+  authorization-related headers, and URL userinfo.
+- `wget`: user/password options, authorization-related headers, and URL userinfo.
+- PowerShell `Invoke-WebRequest`/`iwr` and `Invoke-RestMethod`/`irm`:
+  literal authorization headers, token options, URL userinfo, and supported
+  plaintext `ConvertTo-SecureString -AsPlainText` credential expressions.
+
+Findings distinguish inline literals from variable/credential-store references,
+interactive authentication without a value, and unsupported or incomplete
+analysis. Credential references and no-value/interactive authentication are
+advisory: the scanner does not inspect the environment, credential files, or
+credential stores. Unsupported wrappers and incomplete parsing are not reported
+as confirmed credentials; the configured action is applied conservatively.
+
+## Actions and configuration
+
+```json
+"command_credential_scanning": {
+  "enabled": true,
+  "action": "block"
+}
+```
+
+`enabled` defaults to `true`. `action` defaults to `block` and accepts:
+
+- `block` — deny inline literals and incomplete analysis before execution.
+- `ask` — require a private, operation-scoped **Allow Once** or **Block** decision;
+  if approval is unavailable, the command is denied.
+- `warn` — show a value-free warning and allow the command.
+- `log-only` — retain a value-free finding without a user-facing warning.
+
+References and interactive/no-value authentication remain advisory under each
+action because no literal credential value was identified.
+
+The setting is available in the generated config, profiles, JSON schema, Doctor,
+global Web Console settings, and the Secret Scanning settings page. This is a
+global-only policy: project-local config cannot disable or weaken it. It can be
+disabled explicitly in global config with `"enabled": false`.
+
+The MCP `check_command` tool can report a value-free recommendation, but MCP is
+advisory: it cannot stop execution. Native pre-tool hooks apply the configured
+block/Ask decision before execution.
+
+## Privacy and limitations
+
+The scanner does not expand variables, execute commands, or read credential files.
+Finding records contain only fixed command/option labels, a classification, and
+bounded argument positions; they never retain the argument value or full command.
+Blocking is a pre-tool execution control, **not** a way to retract command text
+that the AI model has already seen.
+
+This is a bounded command-argument parser, not a general shell interpreter. It
+does not cover every CLI, alias, wrapper, authentication scheme, or shell feature.
+An unrelated command is ignored. No file-content scan, SARIF finding factory, or
+`.aiguardignore.toml` scanner type applies: the implementation is reachable from
+pre-execution command hooks, SDK command checks, and the MCP `check_command`
+advisor, not file scanning.
+It has no third-party dependency. Existing supported CLI hook smokes exercise one
+synthetic blocked command and a clean allow control using only the local mock
+provider; no real credential or external endpoint is used.
+
+## Manual verification
+
+1. In an isolated test project with a supported native command hook, request a
+   command such as `curl --user demo:synthetic_smoke_value https://example.invalid/`.
+2. Confirm the native pre-tool hook denies execution and reports that an inline
+   credential was found while withholding the value.
+3. Confirm a harmless command is allowed, and a variable reference is advisory.
+4. Inspect the value-free violation entry; verify neither the synthetic value nor
+   the full command appears in the record.
+5. Repeat with `action: "warn"` only in a disposable test configuration and
+   confirm the command may proceed with the fixed warning.
+
+No command in this guide should be run with a real credential.
+
 # === docs/security/CONTEXT_POISONING.md ===
 
 # Context Poisoning Detection (LLM03)
@@ -23333,6 +23569,122 @@ touch ~/sensitive/.ai-read-deny
 - **v1.3.0** - Last-match-wins rule ordering
 - **v1.5.0** - Enhanced violation logging integration
 
+# === docs/security/HTTP_REQUEST_CREDENTIAL_SCANNING.md ===
+
+# HTTP Request Credential Scanning
+
+AI Guardian can inspect Python, JavaScript, and TypeScript source before
+supported file-write tools apply it and block hard-coded credentials passed to
+common HTTP request APIs. This is bounded, source-only static analysis: it uses
+language-aware parsers but never imports, executes, or sends analyzed source to
+another service.
+
+## Coverage
+
+### Python
+
+The scanner recognizes request calls and client/request construction from
+`requests`, `httpx`, `aiohttp`, and `urllib.request` (including `urlopen`). It
+checks:
+
+- Inline authentication values, including basic-auth username/password pairs.
+- Literal values in recognized `Authorization`, `Proxy-Authorization`, `Cookie`,
+  API-key, and authentication headers.
+- Literal credentials in direct session `auth`/`headers` assignments,
+  `headers.update(...)`, and recognized header-key subscript assignments.
+- Credentials embedded as user information in HTTP(S) request URLs.
+- Credential-named query parameters in literal HTTP(S) request URLs.
+- Literal values under explicitly credential-named fields (such as `password`,
+  `access_token`, `api_key`, and `client_secret`) in request `data`, `json`, and
+  `params` mappings.
+- Simple string literals and bounded same-scope assignments/aliases. Common
+  module aliases and `from ... import ...` request functions are supported.
+
+### JavaScript and TypeScript
+
+JavaScript-family files use the JavaScript grammar for `.js`, `.jsx`, `.mjs`, and
+`.cjs`; TypeScript uses its TypeScript grammar for `.ts`, `.mts`, and `.cts`, and
+the TSX grammar for `.tsx`. A file is parsed as its declared language rather
+than treating TypeScript as JavaScript. The supported request APIs are:
+
+| Client | Supported call shapes and credential sinks |
+|---|---|
+| Browser/Node `fetch` | Global `fetch`, `window.fetch`/`globalThis.fetch`, imported `fetch` from `node-fetch` or `undici`, and `new Request(url, init)`. Checks init `headers`, `auth`, `body`, `json`, `params`, and `data` fields. |
+| `XMLHttpRequest` | Instances created with `new XMLHttpRequest()`; checks `open` URL and optional username/password, `setRequestHeader`, and credential-named fields passed to `send`. |
+| `axios` | Imported or `require`-bound default client, `.request`, and `.get`/`.post`/`.put`/`.patch`/`.delete`/`.head`/`.options` calls. Checks config `auth`, headers, and explicitly credential-named `data`/`params` fields. |
+| Node `http`/`https` | Imported or `require`-bound `request`/`get` calls, options `auth` and headers, and `ClientRequest.setHeader`, `write`, and `end`. |
+
+The analyzer follows simple literal assignments and aliases within one source
+scope, including common module import aliases, object fields, literal string
+concatenation, and template strings whose substitutions resolve to literals.
+It detects URL user information and credential-named query parameters when the
+request URL is statically known. Request body fields are considered credentials
+only when their names explicitly identify a credential, such as `password`,
+`token`, `apiKey`, or `clientSecret`; ordinary fields are not reported.
+
+The analysis is intentionally bounded. It does not follow helper/interprocedural
+flows, arbitrary expressions, runtime values, deeply dynamic options, unsupported
+HTTP clients, or aliases across scope boundaries. `Headers.set` mutation flows,
+Axios-created client defaults, and dynamically constructed request configurations
+are not covered. Values obtained from environment variables, configuration,
+interactive prompts, or secret managers are references, not inline literals.
+Placeholder examples such as `YOUR_TOKEN`, `$TOKEN`, `${TOKEN}`, `{{TOKEN}}`,
+and `<password>` are not reported. Relevant source that cannot be parsed within
+the source/AST limits is reported as incomplete analysis and follows the
+configured action; it is not described as a confirmed credential.
+
+This scanner is separate from code-security analysis and generic secret-pattern
+scanning.
+
+## Enforcement and privacy
+
+The scanner runs on supported Python, JavaScript, and TypeScript source supplied
+to supported `Write` and `Edit` PreToolUse hooks. It can deny the proposed write, request operation-scoped
+Allow Once/Block approval, or warn/log according to policy. It does not prevent
+the model from seeing source before the pre-tool hook, and it does not cover
+manual edits or write surfaces that do not provide source to the hook.
+
+Finding metadata contains only a fixed client/sink classification and source
+line number. Credential values and source snippets are excluded from violation
+records, Ask prompts, warning messages, and scanner logs. The saved file path can
+be shown as ordinary location metadata. Incomplete parsing is reported only when
+the bounded source contains indicators of a supported HTTP client and credential
+sink; default block policy treats that analysis as unqualified, not as a confirmed
+credential.
+
+## Configuration
+
+This setting is global-only and enabled by default:
+
+```json
+"http_request_credential_scanning": {
+  "enabled": true,
+  "action": "block"
+}
+```
+
+Actions are `block`, `ask`, `warn`, and `log-only`. `ask` uses the existing
+private, operation-scoped approval flow and denies when approval is unavailable.
+`warn` and `log-only` do not prevent the write. Disable the scanner only through
+global policy; project configuration cannot weaken it. The Console setting is on
+the **Secrets** page and in **Global Settings**.
+
+## Limitations
+
+- Static parsing cannot prove that a literal is active, valid, or secret; test
+  fixtures and examples can be reported unless they use obvious placeholders.
+- Only recognized request APIs and credential sinks are covered. Renamed APIs,
+  wrappers, dynamic headers, aliasing across scope boundaries, and indirect flows
+  may be missed.
+- `Edit` hooks generally provide a replacement fragment; AI Guardian combines it
+  with bounded prospective-file context where available. Imports and dataflow
+  outside that context are unavailable.
+- A pre-tool block is not a guarantee against disclosure: source may already have
+  been included in the model context before the proposed write is checked.
+
+Use a secret manager or runtime configuration rather than embedding credentials
+in application source.
+
 # === docs/security/IMAGE_SCANNING.md ===
 
 # Image Scanning (OCR)
@@ -24361,6 +24713,8 @@ This directory contains detailed documentation for AI Guardian's security detect
 | **Unicode Attacks** | Detect invisible characters, homoglyphs, and bidirectional text attacks | [UNICODE_ATTACKS.md](UNICODE_ATTACKS.md) |
 | **Context Poisoning** | Detect persistent malicious instructions injected into conversation context (LLM03) | [CONTEXT_POISONING.md](CONTEXT_POISONING.md) |
 | **Credential Exfiltration** | Scan config files for credential theft commands | [CREDENTIAL_EXFILTRATION.md](CREDENTIAL_EXFILTRATION.md) |
+| **Command Credential Scanning** | Block literal credentials in supported command arguments before execution | [COMMAND_CREDENTIAL_SCANNING.md](COMMAND_CREDENTIAL_SCANNING.md) |
+| **HTTP Request Credential Scanning** | Block hard-coded credentials in supported Python, JavaScript, and TypeScript HTTP request source before file writes | [HTTP_REQUEST_CREDENTIAL_SCANNING.md](HTTP_REQUEST_CREDENTIAL_SCANNING.md) |
 | **Directory Rules** | Control which files and directories AI can access | [DIRECTORY_RULES.md](DIRECTORY_RULES.md) |
 
 ### Image & Media Scanning
@@ -25244,6 +25598,7 @@ This guide explains how AI Guardian's secret scanning works, including configura
 - [Overview](#overview)
 - [Scanner Engines](#scanner-engines)
 - [Configuration](#configuration)
+- [Custom Detection Rules](#custom-detection-rules)
 - [Pattern Server Integration](#pattern-server-integration)
 - [Secret Redaction Security](#secret-redaction-security)
 - [False Positives](#false-positives)
@@ -25329,6 +25684,46 @@ of built-in TOML patterns):**
 - Falls back to Gitleaks if BetterLeaks not found
 - Works on any system (automatic detection)
 
+### Custom Detection Rules
+
+Set `secret_scanning.additional_patterns` to add organization-specific regex rules
+without editing AI Guardian's bundled files or waiting for a package release. These
+rules **augment** the bundled patterns; they do not replace or disable them. They
+are evaluated only by the built-in `toml-patterns` engine. If an explicit
+`secret_scanning.engines` list omits `toml-patterns` (for example, an
+external-only list), these rules are not used.
+
+```json
+{
+  "secret_scanning": {
+    "additional_patterns": [
+      {
+        "id": "example-org-internal-token",
+        "match_type": "regex",
+        "regex": "ORG_INTERNAL_TOKEN_[A-Z0-9]{16}",
+        "description": "Example organization token (synthetic format)",
+        "keywords": ["ORG_INTERNAL_TOKEN_"],
+        "flags": "i"
+      }
+    ]
+  }
+}
+```
+
+`id`, `match_type`, and `regex` are required. Rule IDs must be unique and use
+letters, digits, `.`, `_`, or `-`; `match_type` currently supports only `regex`.
+Regexes must use syntax compatible with Go RE2. Optional `description` labels
+findings, `keywords` provide a literal prefilter, and `flags` accepts `i`, `m`,
+and/or `s`. The Console validates the JSON and rule structure before saving and
+shows entry-specific errors. A malformed rule in a directly edited config is
+skipped with a value-free warning pointing to the setting; valid rules and bundled
+detection remain active.
+
+This detection setting is distinct from
+`secret_redaction.additional_patterns`, which configures **output redaction only**
+and does not add blocking/detection rules. After changing the config file directly,
+use the normal daemon configuration reload flow.
+
 **Three external scanners (also explicitly opts out of built-in TOML patterns):**
 ```json
 {
@@ -25361,6 +25756,21 @@ The formats are based on [vendor documentation](https://docs.baseten.co/organiza
 and [MIT-licensed Betterleaks rules](https://github.com/betterleaks/betterleaks/pull/429).
 These bundled rules perform format matching, not live credential validation; the
 Tailscale SCIM format remains excluded because its key-ID layout is undocumented.
+
+OpenShift AI Models-as-a-Service (MaaS) keys use the `sk-oai-` prefix. The MaaS
+API documentation and upstream generator define the value as
+`sk-oai-{key_id}_{secret}`: Base62 (alphanumeric) key-ID and secret components
+separated by one underscore. The upstream format validator requires non-empty
+Base62 components; the current generator derives the key ID from 12 random bytes
+and the secret from 32 random bytes. For high-confidence static matching, the
+bundled rule bounds the components to a 12–17-character key ID and a 32–43-character
+secret, focusing on generated credentials rather than every structurally parseable
+string. It does not match the bare prefix, incomplete values, or unrelated `sk-*`
+formats. This is format detection, not live key validation. See the [Red Hat
+OpenShift AI guide](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/use-models-as-a-service_maas-deploy),
+[MaaS API key guide](https://opendatahub-io.github.io/models-as-a-service/latest/user-guide/api-key-management/),
+and the upstream [key generator](https://github.com/opendatahub-io/models-as-a-service/blob/main/maas-api/internal/api_keys/keygen.go)
+and [format tests](https://github.com/opendatahub-io/models-as-a-service/blob/main/maas-api/internal/api_keys/keygen_test.go).
 
 **Credentials in git remote URLs** — AI Guardian detects credentials embedded in git remote URLs (e.g., `https://user:token@github.com/org/repo`). This pattern catches a common source of credential leaks where tokens are hardcoded into remote URLs instead of using credential helpers. The detection runs automatically as part of the secret scanning pipeline.
 
@@ -30936,7 +31346,7 @@ an existing process. Start the workstation tray in its own desktop terminal:
 
 ### Choose a pairing entry point
 
-- **Direct tray:** choose **Add daemon via SSH** and enter `guardian-vm`.
+- **Direct tray:** choose **SSH → Add daemon via SSH** and enter `guardian-vm`.
   It uses the shared **native-first pairing flow** (Native → Tkinter → NiceGUI
   where eligible), not necessarily the Web Console. No discovery opt-in is needed.
 - **Browser alternative:** in a separate **workstation terminal, not through SSH**,
@@ -30977,10 +31387,10 @@ repeat testing, add `guardian-vm-test` as a second name in the same declaration
 verify `ssh -o BatchMode=yes guardian-vm-test true`. Manual **Add daemon via SSH**
 remains available for deliberate pairing of a dismissed alias.
 
-**Released UI:** AI Guardian 1.21.0 includes **Discover SSH aliases...** directly
-in the tray, next to manual pairing; its enable/Continue and prefix/Save steps edit
-the same settings as the workstation Console. Restart an already-running tray
-after upgrading before checking for this entry.
+**Released UI:** AI Guardian 1.21.0 includes **Discover SSH aliases...** under the
+tray's **SSH** submenu, alongside manual pairing; its enable/Continue and prefix/Save
+steps edit the same settings as the workstation Console. Restart an already-running
+tray after upgrading before checking for this entry.
 
 ### Review, explicitly trust, and connect
 
@@ -31267,6 +31677,7 @@ Run separately for other deliberately selected historical homes.
 | Codex legacy | Selected home's `codex.json`, plus historical home-level `codex.json`, only when an owned registration exists |
 | OpenCode V1/V2 | Selected JSON/JSONC, legacy `mcp.ai-guardian`, V2 `mcp.servers.ai-guardian`, owned absolute/file-URI V1 plugin registrations; current plugin/shared bridge and old discovery-directory bridge |
 | Pi | Current managed `ai-guardian/index.ts` and matching `package.json`, and owned legacy flat `ai-guardian.ts`, in user or explicitly selected project scope |
+| Goose | Owned hook actions and MCP entry under the selected `.agents/plugins/ai-guardian-goose/`, plus its matching generated `plugin.json`; honors absolute `GOOSE_PATH_ROOT`; unrelated plugin content/settings/hints retained |
 | AiderDesk/OpenClaw | Generated `index.ts`, matching package manifest and shared bridge in the selected extension/plugin home |
 | Cline/ZooCode/Kiro project scripts | Only known event filenames and Windows script variants with the exact generated single-command shape; never their shared hook directories |
 | Other selected project files | Known Claude/Cursor/Codex/Copilot/Grok/Gemini/Antigravity/Crush files, project OpenCode JSON/JSONC and `.opencode` artifacts; user-home overrides do not redirect these paths |
@@ -31334,6 +31745,7 @@ retry/continuation unverified. `—`: no managed surface for that stage.
 | Cursor (`cursor`) | — | H/U | H/U | — | M/U | Setup sets `failClosed: true` on decision hooks; observation hooks have no decision channel |
 | Copilot (`copilot`) | — | H/U | H/U | — | M/U if explicitly configured | Top-level managed event arrays |
 | Grok Build (`grok`) | H/U | H/U | H/U | — | M/U | Only `PreToolUse` has a blocking decision channel |
+| Goose (`goose`) | H/U | H/U | — | — | M/U | Managed pre-tool action uses `on_failure: block`, so a missing executable blocks tools; desktop/native Windows and live package-first lifecycle unqualified |
 | Codex CLI / desktop Codex mode (`codex`) | H/U | H/U | H/U | — | M/U | Managed lifecycle includes compaction/end; regular ChatGPT mode is not covered |
 | Windsurf (`windsurf`) | — | H/U | H/U | — | M/U if configured | Nested hook events; no universal fail-open assumption |
 | Gemini CLI (`gemini`) | H/U | H/U | H/U | — | M/U if configured | BeforeAgent/BeforeTool/AfterTool and startup registration |
@@ -31403,6 +31815,7 @@ Every time AI Guardian blocks something, it creates a log entry:
 | **Tool Permission** | Blocked command execution | Command, tool name, policy rule |
 | **Directory Blocking** | Restricted path access | File path, requested operation |
 | **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, and timestamp only; no per-finding details |
+| **Command Credential** | Literal credential in a supported command argument, or incomplete command analysis | Fixed option/classification labels and argument positions only; no argument values or full command |
 | **Secret Redaction** | Secret masked in output | Secret type, masking strategy |
 | **Prompt Injection** | Malicious prompt detected | Pattern matched, confidence score |
 | **SSRF Protection** | Dangerous network request | URL, reason (private IP, metadata, etc.) |
@@ -31620,6 +32033,7 @@ Violation logging is enabled by default:
       "tool_permission",
       "directory_blocking",
       "secret_detected",
+      "command_credential_detected",
       "secret_redaction",
       "prompt_injection",
       "ssrf_protection",
@@ -31749,7 +32163,8 @@ Notification options are separate from that history configuration:
 The supported `<type>` keys are `tool_permission`, `directory_blocking`,
 `secret_detected`, `image_secret_detected`, `pii_detected`, `image_pii_detected`,
 `secret_in_transcript`, `pii_in_transcript`, `suspected_password`,
-`secret_redaction`, `prompt_injection`, `jailbreak_detected`, `ssrf_blocked`,
+`command_credential_detected`, `secret_redaction`, `prompt_injection`,
+`jailbreak_detected`, `ssrf_blocked`,
 `config_file_exfil`, `prompt_injection_in_transcript`, `annotation_suppressed`,
 `middleware_paused`, `bash_exfil`, `scan_finding`, `canary_detection`,
 `context_poisoning`, `supply_chain`, `code_security`, `offensive_language`,
@@ -32219,6 +32634,20 @@ Violation logging is **extremely efficient**:
     "_comment_action": "ask (default) requests private Allow Once / Block approval for contextual candidates or incomplete analysis; unavailable approval blocks. warn is advisory; block requests denial. Ambiguous candidates remain advisory. Host model-boundary qualification is required.",
     "action": "ask"
   },
+  "_comment_command_credential_scanning": "Default-on command-aware detection for literal credentials in supported curl, wget, and PowerShell web-request arguments. Values are never retained. References are advisory. Blocking execution cannot retract command text already seen by the model.",
+  "command_credential_scanning": {
+    "_comment_enabled": "Enabled by default. Set false only in global policy to disable this independent command scanner.",
+    "enabled": true,
+    "_comment_action": "Default block stops supported commands containing inline literal credentials before execution. ask provides one-operation approval and blocks if approval is unavailable. warn may proceed with a warning; log-only records a value-free finding silently. Credential references and interactive/no-value authentication are advisory; incomplete parsing follows this action and is not reported as a confirmed credential.",
+    "action": "block"
+  },
+  "_comment_http_request_credential_scanning": "Default-on static analysis of Python, JavaScript, and TypeScript source written through supported Write/Edit hooks. It detects literal credentials in supported HTTP request authentication, header, and credential-named request fields. Language-aware parsers inspect source only; it is never imported or executed, and values/snippets are never retained. See docs/security/HTTP_REQUEST_CREDENTIAL_SCANNING.md for supported clients and limitations.",
+  "http_request_credential_scanning": {
+    "_comment_enabled": "Enabled by default. Set false only in global policy to disable this independent source scanner.",
+    "enabled": true,
+    "_comment_action": "Default block denies supported writes containing inline literals or relevant source that cannot be fully analyzed. ask permits only operation-scoped Allow Once / Block and denies if approval is unavailable. warn may proceed with a value-free warning; log-only records a value-free finding silently. Environment/config/secret-manager references and interactive retrieval are not treated as inline literals.",
+    "action": "block"
+  },
   "secret_scanning": {
     "_comment": "Secret scanning defaults to built-in TOML patterns followed by Gitleaks",
     "_comment2": "Controls whether secret scanning is performed",
@@ -32243,6 +32672,16 @@ Violation logging is **extremely efficient**:
       "pk_test_[A-Za-z0-9]{24,}",
       "EXAMPLE_API_KEY_[A-Z0-9]+",
       {"pattern": "sk_test_temp_[A-Za-z0-9]+", "valid_until": "2026-06-01T00:00:00Z"}
+    ],
+    "_additional_patterns_comment": "Custom regex detection rules augment bundled patterns and apply only when the built-in toml-patterns engine is selected. External-only engine lists do not use them. This is separate from secret_redaction.additional_patterns, which only configures output redaction.",
+    "additional_patterns": [
+      {
+        "id": "example-org-internal-token",
+        "match_type": "regex",
+        "regex": "ORG_INTERNAL_TOKEN_[A-Z0-9]{16}",
+        "description": "Example organization token (synthetic format)",
+        "keywords": ["ORG_INTERNAL_TOKEN_"]
+      }
     ],
     "_engines_comment": "Default engines are built-in toml-patterns followed by gitleaks. An explicit list replaces this default; omit toml-patterns to opt out, including through the Console Engine Configuration checkbox.",
     "_engines_comment2": "Configure multiple scanner engines with different strategies for combining results",
@@ -32593,7 +33032,7 @@ Violation logging is **extremely efficient**:
     "log_redactions": true,
     "_log_redactions_note": "Log each redaction event to violations.jsonl for audit",
     "additional_patterns": [],
-    "_additional_patterns_note": "Extra regex patterns for custom secret types beyond built-in detection"
+    "_additional_patterns_note": "Custom patterns used only to redact secrets from tool outputs; this does not add secret_scanning detection rules. See secret_scanning.additional_patterns for built-in TOML detection rules."
   },
 
   "scan_pii": {
@@ -33255,6 +33694,8 @@ Violation logging is **extremely efficient**:
       "tool_permission",
       "directory_blocking",
       "secret_detected",
+      "http_request_credential_detected",
+      "command_credential_detected",
       "secret_redaction",
       "prompt_injection",
       "jailbreak_detected",
@@ -33615,6 +34056,46 @@ Violation logging is **extremely efficient**:
       },
       "additionalProperties": false
     },
+    "command_credential_scanning": {
+      "type": "object",
+      "description": "Independent default-on, command-aware scanner for credential-bearing arguments in supported curl, wget, and PowerShell web-request commands. It never executes commands or retains values. Blocking happens before tool execution, not before the model sees the command.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable command-aware credential argument detection. Enabled by default."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["block", "ask", "warn", "log-only"],
+          "default": "block",
+          "description": "Action for inline literal credentials and incomplete analysis. block denies before execution; ask permits only operation-scoped Allow Once / Block and denies if approval is unavailable; warn is advisory; log-only is silent. Credential references and interactive/no-value authentication remain advisory and do not prove a literal secret was disclosed."
+        },
+        "_comment_enabled": {"type": "string"},
+        "_comment_action": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "http_request_credential_scanning": {
+      "type": "object",
+      "description": "Independent default-on static analysis of Python, JavaScript, and TypeScript source supplied to supported Write/Edit pre-tool hooks. Language-aware parsers inspect source without importing or executing it and detect literal credentials flowing into supported HTTP request authentication, authorization/API-key headers, and explicitly credential-named request fields. Only bounded simple assignments within one source scope are followed; helper/inter-procedural flows, unsupported clients, and unsupported write integrations are outside the boundary. Values and source snippets are never retained.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Python, JavaScript, and TypeScript HTTP request credential source analysis. Enabled by default. Global-only policy."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["block", "ask", "warn", "log-only"],
+          "default": "block",
+          "description": "Action for inline literal findings and relevant incomplete analysis. block denies before a supported Write/Edit is applied; ask permits only operation-scoped Allow Once / Block and denies if approval is unavailable; warn is advisory; log-only is silent."
+        },
+        "_comment_enabled": {"type": "string"},
+        "_comment_action": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
     "secret_scanning": {
       "type": "object",
       "description": "Secret scanning with multi-engine support (v1.4.0+). Object with 'enabled' property that supports boolean (permanent) or time-based (temporary) formats. Multi-engine support added in v1.5.0 - configure multiple engines with automatic fallback.",
@@ -33955,6 +34436,56 @@ Violation logging is **extremely efficient**:
           "description": "Regex patterns for known-safe secret values to ignore (for false positives). Unlike ignore_files which skips entire files, this lets you keep scanning but exclude specific known-safe values such as test API key prefixes or example tokens. Complements inline '# gitleaks:allow' for cases where you cannot modify the source file. Supports time-based patterns for temporary allowlisting.",
           "items": {
             "$ref": "#/definitions/string_or_timed_pattern"
+          },
+          "default": []
+        },
+        "additional_patterns": {
+          "type": "array",
+          "description": "User-managed regex rules that augment bundled secret detection patterns. Applied only by the built-in toml-patterns engine; external-only engine lists do not use them. This is distinct from secret_redaction.additional_patterns, which configures output redaction only.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                "description": "Unique rule identifier, using letters, digits, '.', '_' or '-'."
+              },
+              "match_type": {
+                "type": "string",
+                "const": "regex",
+                "description": "Custom secret detection rules currently support regex matching."
+              },
+              "regex": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Python regular expression to match a custom secret format. Must use syntax compatible with Go RE2."
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable name for findings from this rule."
+              },
+              "keywords": {
+                "type": "array",
+                "description": "Optional literal prefilter terms; the regex is evaluated only when at least one term occurs in the scanned content.",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "flags": {
+                "type": "string",
+                "pattern": "^[ims]*$",
+                "description": "Optional regex flags: i (ignore case), m (multiline), and s (dot matches newline)."
+              }
+            },
+            "required": [
+              "id",
+              "match_type",
+              "regex"
+            ],
+            "additionalProperties": false
           },
           "default": []
         },
@@ -35467,6 +35998,8 @@ Violation logging is **extremely efficient**:
               "directory_blocking",
               "secret_detected",
               "suspected_password",
+              "command_credential_detected",
+              "http_request_credential_detected",
               "secret_redaction",
               "prompt_injection",
               "jailbreak_detected",
@@ -35493,6 +36026,8 @@ Violation logging is **extremely efficient**:
             "directory_blocking",
             "secret_detected",
             "suspected_password",
+            "command_credential_detected",
+            "http_request_credential_detected",
             "secret_redaction",
             "prompt_injection",
             "jailbreak_detected",
@@ -35527,6 +36062,8 @@ Violation logging is **extremely efficient**:
               "tool_permission",
               "directory_blocking",
               "secret_detected",
+              "command_credential_detected",
+              "http_request_credential_detected",
               "image_secret_detected",
               "pii_detected",
               "image_pii_detected",
@@ -37403,13 +37940,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.21.1] - 2026-11-10
+## [1.22.0] - 2026-11-14
 
+### Added
+- **Optional NotebookLM release refresh (#2736):** Use an installed, authenticated
+  `nlm` to replace only the combined release documentation after production
+  publication. Verify the uploaded export before deleting the old source; preserve
+  unrelated sources and pending receipts, skip unavailable tooling/auth, and expose
+  offline preview plus a refresh-only retry without blocking release completion.
+  After verified replacement, rename the notebook to `AI Guardian vX.Y.Z` and
+  confirm its title; partial rename failures resume without re-uploading.
+- **Real-agent CLI coverage ledger (#2673):** Track all twelve host CLIs,
+  including Goose, against runner and Release Readiness lanes with drift tests
+  and versioned capability/terms audits. Add `scripts/agent-cli-test --coverage`,
+  a pinned Grok pre-tool smoke lane, and broader Goose pre-tool probes with
+  issued-tool/result correlation and execution witnesses. Other CLI blockers
+  fail preflight explicitly; partial lanes do not qualify prompt/output
+  enforcement or additional product runtimes.
+- **Goose host CLI support (#2723):** Add v1.59.0 Linux/macOS command-hook plugin
+  setup, scoped health/reconciliation, advisory MCP and optional user hints,
+  native-tool normalization, sanitized pre-tool decisions, and fail-closed hook
+  failures. Prompt/post-tool events remain observational; Stop, transcripts,
+  desktop/native Windows, and product container/OpenShell support are excluded.
+  Add isolated contracts and a credential-free, smoke-only CI CLI path.
+- **OpenShift AI MaaS API key detection (#2720):** Detect generated `sk-oai-`
+  credentials using their Base62 key-ID/secret structure without broadening generic
+  `sk-*` matching; document the vendor format and its source.
+- **HTTP request credential flow scanning (#2717, #2722):** Extend the default-on,
+  non-executing analysis to Python, JavaScript, and TypeScript HTTP request flows.
+  Detect literal credentials in supported authentication, headers, and
+  credential-named request fields before supported Write/Edit operations; findings
+  and logs withhold source values/snippets.
+- **Custom secret detection rules (#2721):** Expose validated organization-local
+  regex rules in `secret_scanning.additional_patterns`, the Secret Scanning Console,
+  generated/example configuration, and documentation. Rules augment bundled
+  detection and require the built-in `toml-patterns` engine.
+- **Integration hook capability matrix (#2724):** Document per-surface prompt,
+  pre-tool, and post-tool enforcement, observation, and transformation behavior;
+  add registry-to-matrix parity coverage and clarify Copilot prompt-hook limits.
+- **Runtime-organized tray sandbox actions (#2713):** Group OpenShell middleware,
+  sandbox creation, and stopped-sandbox actions separately from Docker/Podman actions;
+  runtime shortcuts preselect the matching option in the complete create form. Group
+  SSH pairing, alias discovery and discovered-alias actions under an SSH submenu.
+- **Command credential argument scanning (#2699):** Add a separate, default-on
+  scanner that blocks literal credentials in supported curl, wget, and PowerShell
+  web-request arguments before shell execution. Credential references stay advisory;
+  command values are withheld from findings and logs.
+- **GitHub App stateless token redaction coverage (#2698):** Exercise an exact
+  520-character synthetic `ghs_` JWT-shaped token and verify its full span is
+  detected and redacted while retaining legacy-token coverage.
+- **Safe release CI resume (#2701):** Persist and validate exact release CI
+  attempts so interrupted runs can be resumed without duplicate workflow dispatches.
+### Changed
+- **Release Readiness CLI smoke reliability:** Accept Goose's exact bare or
+  prefixed pinned-version output, scan native shell `command`/`cmd`/`input`
+  arguments (including argv arrays and nested shell `-c` scripts), normalize
+  OpenCode argv before immutable policy checks, make Grok's config parent
+  writable in the support image, and emit value-free sandbox readiness/container-
+  state and hook/scanner outcome facts. Preserve every violation and
+  execution-evidence gate.
+- **Independent real-agent CI jobs (#2673):** Give each runnable CLI its own
+  Release Readiness job, including separate OpenCode V1/V2 jobs, and isolate
+  OpenShell image validation. Share wheel/image preparation without cross-CLI
+  prerequisites, so an OpenCode V2 failure cannot skip Goose or other clients.
+  Preserve Claude consent, Codex's reported exception, and all smoke evidence checks.
+- **README integration limitations (#2735):** Surface a compact per-integration
+  prompt, pre-tool, and result-handling table near Quick Start, including cloud,
+  mode, and plugin-generation boundaries. Keep the detailed behavior matrix as the
+  reference and require contributors to synchronize the README summary. Make README
+  links portable between GitHub and the documentation homepage.
+- **Private documentation search (#2716):** Link to the generated combined export
+  from the README and explain uploading it to an organization's approved private
+  NotebookLM or other LLM search tool; clarify that the export is release-generated
+  and should not be edited directly.
+- **README documentation resources:** Shorten the root README into a landing page
+  and surface the full documentation site, source index, and NotebookLM Q&A.
+- **Read the Docs release verification:** Link to stable documentation by default,
+  distinguish `latest` development docs, and report inactive or misrouted release
+  versions with actionable recovery guidance.
 ### Fixed
+- **Command credential violation history (#2745):** Persist blocked command-
+  credential findings with the default logging policy, including existing configs;
+  expose the type in the Console, generated configs, and built-in profiles.
+- **Goose CI regressions (#2723):** Decode local image file URLs with platform
+  drive-path semantics, construct hook paths without premature filesystem probes,
+  and preserve symlink-parent traversal for shared security checks. Align the
+  scanner-only E2E denial fixture with Goose's native file-read surface. Reserve
+  hook-control paths before installation without request-driven plugin-directory
+  existence checks (CodeQL #359).
+- **Container release-reference gate (#2737):** Accept the link-only root README
+  while retaining strict validation and synchronization of active container
+  references. Check the real repository layout in lightweight CI, including
+  documentation-only changes, without rewriting generated history or dev wheels.
+- **HTTP request credential scanner hardening (#2717):** Bound aggregate value,
+  string, URL and branch-state analysis; preserve possible credential flows across
+  branches and client context managers; inspect complete prospective Edit content;
+  and include blocked findings in default violation logs.
+- **Custom secret-rule configuration defaults (#2729):** Include the new
+  `secret_scanning.additional_patterns` setting and guidance in all built-in profiles.
+  Keep the IDE hook E2E fixture schema-valid so config warnings do not obscure JSON responses.
+- **Tray MCP proactive label during daemon pauses (#2719):** Keep the label aligned
+  with the configured level and selected radio option, while separately identifying
+  a temporary daemon pause.
+- **OpenCode PostToolUse filenames:** Reuse normalized native tool arguments so
+  `filePath` and other supported path aliases are retained by post-tool scanners
+  and violation records, including legacy handler calls.
 - **Release test matrix reliability (#2700):** Measure redaction performance with
   repeated samples and initialize isolated recovery state before exposing test-home
   overrides, while checking for unexpected state files. Pin no-runtime OpenCode
   recovery coverage to a deterministic configuration generation.
+- **Post-release merge conflicts:** Resolve only validated version, changelog, and
+  OpenWolf status conflicts; preserve main's unreleased notes and next development
+  version, and stop for manual review of unexpected conflicts.
 - **SSH pairing consent control:** Keep identity consent unchecked initially and
   disable **Trust and add daemon** until the checkbox is selected. Linux uses an
   isolated form provider because zenity/KDialog cannot gate the submit button.
@@ -37446,590 +38088,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remote-synchronized stable branch; reject main, mismatched release branches, and
   divergent local histories before CI or release changes.
 
-## [1.21.0] - 2026-11-08
-
-### Added
-- **Pre-1.0 agent CLI advisories:** Setup and Doctor now report a non-blocking
-  warning when a supported CLI's detected version is below 1.0.0. Doctor includes
-  the advisory in human-readable and structured output without changing hook
-  health; unavailable or unparsable versions are not classified as pre-1.0.
-
-### CI/CD
-- **Release script CI gates:** Run and await Release Readiness, Tests, Lint, and
-  Integration Tests on the current source ref in preview and execute modes.
-  Release Readiness continues to provide Smoke Tests, Scenario Tests, and
-  Container Build Validation once; failed or unmatched runs stop release changes.
-- **OpenCode hook E2E variants:** Run OpenCode V1 and V2 plugin/MCP integration
-  contracts as separately named Release Readiness matrix jobs, with generation-
-  specific test selection and shared OpenCode unit checks run only once.
+## [1.21.1] - 2026-11-10
 
 ### Fixed
-- **Tray modal focus handoff:** Standardize one-shot foreground restoration after
-  tray-menu dismissal for Tk messages/results, plugin and SSH forms, proactive and
-  snooze prompts, Pause, sandbox forms/progress/logs/confirmations, and support
-  review. Temporary topmost hints are cleared; dialogs do not remain always-on-top
-  or repeatedly reclaim focus. Native dialogs and browser windows are unchanged.
-- **CLI scan output privacy:** Default terminal results show finding counts and
-  relative file paths without printing scanner messages, source positions, or code
-  snippets. Absolute paths under the home directory use a `$HOME` prefix. Explicit
-  JSON/SARIF reports retain detailed findings and should be handled as sensitive
-  files.
-- **GitGuardian cloud scanner packaging and failures:** Omit the optional
-  GitGuardian CLI from default Docker/Podman and OpenShell images; derived images
-  can opt in with `INCLUDE_GITGUARDIAN=true`. Parse findings from ggshield's
-  `--exit-zero` JSON output, retain per-engine failures across first-match,
-  any-match, and consensus results, and preserve consensus thresholds. Report cloud
-  quota, credentials, consent, and service failures as incomplete scan coverage
-  under `on_scan_error` without exposing credential values. Scanner diagnostics
-  are not echoed to stderr; the hook warning uses fixed engine labels and safe
-  summaries.
-- **Codex PreToolUse denials:** Include Codex's required non-empty
-  `permissionDecisionReason` using the existing sanitized violation label, so the
-  CLI accepts denials instead of treating them as invalid hook output.
-- **Codex readiness smoke hook execution:** Use Codex's invocation-only hook-trust
-  override in the disposable smoke container only after verifying its isolated
-  `CODEX_HOME` contains exactly the generated AI Guardian hooks and no other active
-  hook sources. Do not persist trust state or change Codex's workspace-write
-  sandbox/approval policy. Keep all native hook, execution, raw-output and
-  clean-exit assertions mandatory. Failure diagnostics summarize only allowlisted
-  Codex event/item types, fixed error/output categories, native tool-name counts,
-  correlated function-output counts/shapes, and numeric statuses/exit codes. The
-  local mock emits function calls as in-progress until argument deltas complete,
-  then reports the completed item. A detected Bubblewrap permission denial now
-  prints a fixed explanation linking to `docs/CODEX_SANDBOX_RUNTIME.md`; the case
-  remains failed and no sandbox requirement is relaxed.
-- **Release Readiness CLI reporting:** Give each configured CLI smoke its own
-  named step and continue to remaining clients after an individual smoke failure,
-  while keeping prerequisites, cancellation, and Claude consent gates intact.
-  Temporarily allow only the unresolved Codex smoke step to fail without blocking
-  release readiness; report it as unqualified, and keep other failures blocking.
-  Rename jobs to describe their test coverage.
-- **CLI smoke execution witness:** Prepare only the disposable witness directory
-  as writable by the container user on POSIX hosts, so Docker UID mismatches do not
-  prevent native tool execution. Keep the rest of the workspace non-writable to
-  other users and retain all execution-evidence checks.
-- **Gemini native output containment:** Scan `AfterTool`'s model-visible
-  `llmContent`, preserving text-part boundaries. Refuse results requiring
-  sanitization through Gemini's native deny decision instead of returning an
-  unsupported replacement field that leaves raw output visible.
-- **Gemini hook capability metadata:** Mark `AfterTool` as refusal-only, not a
-  safe output-transform surface, matching the native adapter and user contract.
-- **Pi first-session transcript:** Handle the expected not-yet-persisted first
-  transcript without blocking clean prompts. Start at byte zero so the first
-  persisted content is scanned; other initial I/O failures retain scan-error policy.
-- **Pi native shell checks:** Normalize the exact native `bash` tool to canonical
-  `Bash` so shell permissions, SSRF and configuration-exfiltration checks run before
-  execution. Custom and MCP tool names remain unchanged.
-- **OpenCode smoke continuation budget:** Give only the disposable mock model a
-  128K context window instead of 8K, leaving room for native/MCP tools and their
-  result continuation without disabling compaction. Add fixed-category CLI error
-  diagnostics without exposing private output; clean native-result and zero-exit
-  requirements remain unchanged.
-- **OpenCode V2 result containment:** Replace the complete native result during
-  output redaction, removing duplicate raw content/structured output/metadata.
-  Convert shared Bash replacements to valid V2 text content and clear completed
-  blocked results before the refusal path. Clean results stay unchanged. The smoke
-  mock also recognizes JSON-encoded correlated clean results without weakening
-  execution, hook, successful-exit or raw-delivery requirements.
-- **Smoke native tool routing:** Select an advertised native shell rather than the
-  first tool with a command-shaped input, which could be an advisory MCP checker
-  in OpenCode. Checker findings never substitute for native hook/execution evidence.
-  Shared hooks, policy, egress isolation and raw-delivery assertions are unchanged.
-- **Smoke output policy:** Prepare a disposable strict-derived configuration before
-  sandbox creation and stage it through the existing config snapshot-copy path,
-  leaving the active config writable. Exercise secret/PII output sanitization
-  while retaining prompt/pre-tool blocking and raw-delivery failure assertions.
-  Announce that this is not unmodified `@strict` post-tool qualification; bundled
-  profiles, runtime adapters, normal images and the smoke firewall are unchanged.
-- **Smoke REST diagnostics:** Run the private diagnostic reader with the classic
-  image's installed AI Guardian Python environment, not system Python, preventing
-  an import failure after daemon readiness. On Docker, probe authenticated host
-  REST through the sandbox's private address on its exact internal-only network
-  when Docker omits published bindings for internal networks. No external network
-  is attached; the Podman published-port/firewall path is unchanged.
-- **Agent CLI smoke network isolation:** Podman smoke uses its default rootless
-  network with a smoke-only IPv4/IPv6 egress firewall, preserving the published
-  daemon REST return path. A short-lived namespace helper installs the policy before
-  setup; agents remain non-root and the startup gate rejects
-  `SYS_ADMIN`/`NET_ADMIN`, so
-  they cannot remove it. Normal containers, shared lifecycle code and the host
-  firewall are unchanged; Docker retains its internal network. The temporary
-  Podman smoke image adds the GPL-2.0-only nftables external tool; supplied images
-  without the bootstrap fail closed without hidden rebuilds.
-- **OpenCode smoke startup:** Disable automatic update checks and remote model
-  catalog fetching for isolated smoke invocations, avoiding repeated network
-  timeouts on the internal egress-blocked network. Normal OpenCode auto-updates
-  remain enabled.
-- **OpenCode V1 smoke runtime:** Reuse one headless server and perform a clean,
-  local-provider warm-up before the smoke cases so MCP integrations do not incur a
-  fresh cold start for each invocation.
-- **Claude smoke setup:** Install Claude Code in the temporary smoke image only
-  after explicit ToS opt-in, preventing an egress-isolated sandbox from trying to
-  download the CLI from `claude.ai` at runtime.
-- **Podman macOS smoke setup:** Preserve Podman's connection metadata in the
-  runner's isolated environment so sandbox creation uses the configured machine
-  connection rather than a missing temporary socket.
-- **Remote tray menu responsiveness:** Render remote daemon menu details from the
-  last background stats snapshot instead of issuing REST requests from native menu
-  callbacks, keeping an unreachable container from freezing the macOS tray.
-- **Real-agent smoke diagnostics:** Report aggregate provider-request and violation
-  deltas when a CLI case fails, without emitting agent prompts or raw output.
-  Check internal and published REST health/authentication before running cases;
-  retained smoke sandboxes support read-only `--diagnose-sandbox` checks without
-  exposing credentials or response bodies.
-- **Codex smoke profile compatibility:** Write the local mock provider into Codex's
-  native named-profile file instead of a rejected legacy profile table, preserving
-  the base MCP and hook configuration.
-- **Smoke image build visibility:** Stream normal Docker/Podman build output live
-  instead of hiding build steps behind generic elapsed-time messages. Agent
-  invocation output remains captured; build commands and caching are unchanged.
-- **Tray pause target liveness (#2663):** Show sessions and project directories
-  for active daemons using hook activity in the last 30 minutes, remove sessions
-  immediately on `SessionEnd`, and keep explicitly paused directories available for
-  Resume. Documented the inactivity fallback for integrations without reliable
-  end events.
-- **Manual daemon tray actions (#2654):** Rebuild menu descriptors when a
-  same-name target's endpoint or TLS trust settings change, so actions use the
-  newly discovered target without displaying or logging credentials.
-- **Manual daemon target discovery (#2655):** Skip entries with null, non-string,
-  or blank names and warn without logging the supplied value. Invalid target names
-  can no longer interrupt sorting or leave the tray with stale discovery results.
-- **Sensitive violation filters (#2652):** Keep `secret_detected`,
-  `image_secret_detected`, and `pii_detected` queries compatible with consolidated
-  `sensitive_finding` history, and document the privacy-safe category in MCP and
-  SDK references.
-- **Direct-hook violation notifications (#2651):** Persist the privacy-safe alert
-  envelope to the outbox before a short-lived direct hook exits, then hand delivery
-  to a detached worker. Daemon-mode notification dispatch remains asynchronous.
-- **IPv6 daemon REST reachability (#2649):** Resolve daemon endpoints for both
-  address families and check each TCP candidate, allowing reachable IPv6 listeners
-  to proceed through the existing verified REST transport.
-- **PowerShell CLI self-protection (#2653):** Fail closed on opaque encoded-command
-  payloads, including common PowerShell aliases and `.exe` entrypoints, while
-  preserving ordinary commands and documentation mentions.
-- **OpenCode V2 shell enforcement:** Normalize OpenCode's native `shell` tool to
-  canonical `Bash`, so shared command scanners, permissions, and immutable CLI
-  self-protection run before V2 shell execution.
-
-### Changed
-- **Release command safety:** `scripts/release.sh` now previews by default. An
-  explicit `--execute` is required for release mutations and publication.
-- **Podman agent smoke profile:** Match the managed container's rootless
-  default network, `keep-id` user namespace, and normal capability defaults so
-  Codex's `workspace-write` Bubblewrap sandbox gets the same runtime setup. The
-  startup gate still requires a non-root user without `SYS_ADMIN` or `NET_ADMIN`;
-  the egress firewall, hook/execution/raw-output/clean-exit evidence, and Codex
-  sandbox/approval settings remain unchanged. A retained-container probe still
-  fails at Bubblewrap's `devpts` mount (`Permission denied`); the enforcement
-  source remains undetermined, so execution is not qualified.
-
-### Added
-- **Per-violation notification preferences (#2672):** Configure desktop and email
-  alerts independently for each supported violation type. Desktop defaults on and
-  email off; email controls require a valid alert recipient and usable TLS SMTP.
-  Migrate legacy global/channel settings without re-enabling a previously disabled
-  configuration, and apply the same preferences to local, direct-hook, and remote
-  fallback delivery.
-- **Sandbox deletion confirmation copy control (#2668):** Display the full expected
-  sandbox name with a Copy action and explicit clipboard success/failure feedback.
-  Keep deletion behind the existing exact-name confirmation; use complete isolated
-  Tkinter/NiceGUI interactions because native text-entry dialogs cannot provide the
-  copy control.
-- **Violations page daemon filtering:** Apply case-insensitive partial source
-  searches while retaining exact, identity-based source selection. Show refreshed
-  Running, Paused, Offline, or Unknown availability labels; refresh and clearing
-  preserve unrelated violation filters.
-- **Smoke CLI version selection:** Use `--cli-name opencode --cli-version 1.19.0`
-  or `--cli-version 2.0.24` to pin OpenCode in a temporary smoke image and verify
-  the installed version before testing. Omission keeps the image default;
-  supplied images and other clients reject the option. Normal OpenCode installs,
-  image defaults, build/cache behavior and smoke isolation remain unchanged.
-- **Real-agent hook-stage evidence:** Add clean tool execution and synthetic secret/
-  PII output cases. Require normalized pre/post-tool events and an execution witness;
-  verify clean results reach the local mock and sensitive values do not, including
-  token-count requests. A logged finding or offered tool alone cannot pass. Keep
-  prompt/pre-tool blocking, egress isolation, native trust and ToS gates unchanged;
-  report only aggregate evidence, not model/tool output.
-- **Real-agent CLI hook smoke check:** Release Readiness runs Codex, Gemini CLI,
-  OpenCode, and Pi in strict-derived smoke sandboxes built from the current wheel;
-  Claude Code remains behind its explicit CI ToS-consent variable. Native local
-  mock protocols exercise blocked prompt/tool paths and a clean allow path without
-  host credentials or billable provider calls. OpenCode is checked with bundled
-  V1 `1.19.0` and a separate V2 `2.0.24` smoke-only image. The V2 CLI is installed
-  from its pinned npm package and uses an isolated standalone run per case. Gemini's
-  mock supports the native GenerateContent/countTokens protocol, and its native
-  `run_shell_command` hook name now maps to canonical Bash scanning/policy. The
-  runner retains rootless Podman storage identity, waits for sandbox readiness,
-  and reports bounded build/configuration diagnostics. Claude's permission is
-  written to sandbox-owned settings, and its Anthropic token-count preflight is
-  handled locally.
-- **Experimental WSL2 platform guidance (#2593):** Document Linux-distribution
-  installation and scanner boundaries, browser-console use from Windows, and
-  manual localhost troubleshooting. Clarify that WSL1 and comprehensive WSL2
-  testing are not covered, and that the reported initial stall is undiagnosed.
-- **Violation notifications (#2634):** Send privacy-safe desktop alerts by default
-  and optionally deliver email through configured TLS SMTP. Remote daemons deliver
-  through their selected channels first; the tray falls back locally only for
-  channels known to be unconfigured or to have failed. A private outbox prevents
-  duplicate delivery across retries and excludes detected values and scanned content.
-- **Opt-in remote violation history mirroring (#2633):** Allow a receiving
-  daemon's tray to import curated summaries from reachable remote daemons into
-  separate per-daemon JSONL files included in the local history view. Mirrored
-  entries retain source identity, deduplicate across
-  polls/restarts, remain read-only, and never copy raw blocked content, context,
-  or suggestions. Disabled by default.
-- **Bundled credential patterns (#2632):** Detect standalone Baseten, Labelbox,
-  Recursion, Supabase secret, and typed Tailscale API/auth/OAuth-client/webhook
-  credential formats with the built-in TOML engine. Add synthetic scanner and
-  blocking/redaction UX coverage plus CI detection canaries; no live validation
-  or corpus-wide false-positive claim.
-- **Status-aware tray pause modal (#2620):** Replace nested pause submenus with
-  one **Pause...** action. The modal mirrors the daemon → project directory →
-  hook session hierarchy, with status glyphs and a duration/Resume dropdown
-  at every level. A larger, width-fitting layout wraps long labels so row controls
-  remain visible without horizontal scrolling, explicitly applies initial geometry
-  without monitor context, and keeps detailed help collapsed below the controls.
-  Keep existing durations and pause lifetimes, show inherited
-  pauses explicitly, and refresh the same isolated Tk/NiceGUI window after each
-  action. Closing without an action is non-mutating; failed or stale requests
-  never fall back to a broader scope.
-- **Bundled TOML secret-scanning defaults (#2617):** Align the canonical example
-  and schema with the runtime default of built-in `toml-patterns` followed by
-  Gitleaks. Keep all built-in profile comments in sync and clarify explicit
-  opt-out behavior in generated-config comments, the Console, and documentation.
-- **Console engine selection:** Engine Configuration now offers checkboxes for
-  built-in TOML patterns and external scanners installed on the selected daemon.
-  Selection changes save immediately and update the advanced JSON editor; the
-  About API exposes installed scanner names without binary paths.
-- **Doctor secret-engine diagnostics:** List every supported secret-scanning
-  engine with configured/installed status, and warn when enabled scanning omits
-  the built-in `toml-patterns` engine. Preserve multiline detail formatting in
-  the Web Console so each engine remains on its own line. Doctor and scanner
-  catalog pattern-server lists now show one server per line with its
-  `patterns_endpoint`. The Engine Tester lists only explicitly configured engines
-  and explains that installed/built-in engines are not added automatically.
-- **Experimental password-likelihood heuristics (#2612):** Independent offline,
-  default-off/global-only suspected-password analysis with explicit trusted opt-in,
-  contextual versus ambiguous classes, bounded work and generic privacy-safe
-  locations. Adds shared SDK/daemon/hook/static-scan integration, a trusted Secrets
-  control, full-span explicit sanitization, isolated unit/UX coverage and frozen
-  synthetic quality/performance budgets. Once enabled, defaults to Ask through
-  existing local/remote tray approval, with value-withheld Allow Once / Block,
-  fail-closed unavailable approval and unchanged stronger credential decisions.
-  Automatic display-less remote daemons can forward to a registered tray without
-  overriding explicit headless mode; queued prompt timeouts are terminal.
-  Console enable/outcome controls auto-save human changes globally without a
-  separate Save button; viewing the page or changing outcome does not opt in.
-  Details provide private-review guidance without persistent-exception snippets;
-  report metadata is restricted to numeric locations and fixed labels. Delimited
-  phrase validation avoids repeated-regex backtracking.
-  No dependency, vault/source enrollment or
-  universal passphrase recognition. Warnings are not prevention; real-corpus and
-  actual pre-model host evidence remain explicit release gates, not inferred from
-  hook responses or existing credential-scanner support ratings.
-- **Headless Ubuntu VM quickstart (#2585):** Add an ordered PyPI/venv guide for
-  verified SSH, explicit global setup/private storage, lab TLS, VM-hosted Console
-  bootstrap, restart/verified health and workstation enrollment/discovery. Cover
-  reboot recovery, owned foreground/background tunnels, current development-menu
-  changes and troubleshooting; link from navigation/configuration/HTTPS/SSH
-  references and include enrolled SSH targets in the discovery table. Clearly mark
-  the upcoming-release gate: PyPI 1.20.0 lacks the features, the first supporting
-  published version is unconfirmed, and fresh VM/workstation PyPI qualification
-  remains pending rather than being inferred from source-build validation.
-- **Production release announcements (#2595):** The release helper and shell script
-  announce the exact verified public GitHub Release and downloadable production
-  PyPI wheel/sdist in Announcements using existing `gh` authentication. Includes
-  paginated duplicate-safe lookup, offline dry-run, announcement-only retry,
-  uncertain-create reconciliation and explicit summary/error status. No support
-  reporting category or consent changes; includes mocked helper/shell contracts.
-- **Tray physical-monitor context (#2581):** Capture action-time display identity
-  and usable bounds on macOS, Windows and geometry-capable Linux tray hosts;
-  retain them through delayed dialogs, child pickers, target selection and support
-  review/preview/results. Revalidate topology/DPI before placement and fall back
-  visibly when a monitor disappears. Native providers without positioning defer
-  to isolated Tk; browser/Wayland/remote-panel limitations have explicit manual
-  move-window guidance, not a false placement guarantee. Preserve cancellation,
-  exclusive preferences, single-monitor defaults and native user-only consent.
-  Includes isolated unit/UX contracts and physical-desktop verification guidance.
-- **Per-daemon Contact Support (#2597):** Add source-bound diagnostics actions for
-  local/container/Kubernetes/manual HTTPS/SSH/OpenShell daemons in flat and nested
-  tray menus. Keep the independently available local tray-host action. Collect
-  sanitized source-runtime diagnostics through authenticated, bounded background
-  jobs; validate complete files and protected desktop staging, retain sanitized
-  provenance/explicit omissions, and never substitute desktop diagnostics on
-  failure. Capture SSH's current verified tunnel on click, avoiding false offline
-  failures after initial connection/reconnect without migrating in-flight work.
-  Desktop destination settings, per-file review, ZIP-only export and
-  separate native Gist/Discussion consent remain authoritative. Includes isolated
-  unit/UX contracts, API release-readiness coverage and source/modal documentation.
-- **SSH tray menu parity (#2592):** Reuse standard daemon menus for SSH VMs,
-  including flat/nested layouts, Console/Violations/Metrics navigation, cached
-  Statistics/Status, Terminal, Maintenance and target-scoped MCP state/controls.
-  Add verified-destination SSH lifecycle, diagnostics, scanner and pip execution
-  using the remote installation's actual virtualenv/configuration/state context;
-  retain connection management, host-key/TLS verification and managed reconnect.
-  Bind actions/plugins to the displayed VM and clicked connection generation,
-  distinguish local browser UI from VM commands, and explain unsupported actions
-  without workstation fallback. Document the parity audit and older-daemon,
-  installer, offline and runtime-specific limitations. Hide the empty SSH alias
-  `(0)` indicator while retaining discovery notices and the settings entry.
-  Keep local daemons first and sort all remaining daemon names alphabetically,
-  ignoring case, without retargeting already displayed actions.
-  Keep SSH Terminal failures open until dismissal so their diagnostics are readable.
-  Default SSH working directories to the remote user's home, never the
-  workstation home; apply only explicitly saved VM paths and display them literally.
-  Support current-main remote daemons through the existing global MCP config API
-  and read-only Linux process-verified installation discovery, without requiring
-  unreleased remote metadata or guessing a workstation/PATH installation.
-- **Tray SSH alias discovery settings (#2591):** Add an always-available
-  **Discover SSH aliases...** entry next to pairing, with native-first enable and
-  optional-prefix steps, validation, Save/Cancel and automatic candidate refresh.
-  Reuse the Web Console's workstation-global settings writer; untouched browser
-  fields follow saved changes without discarding edits. Default opt-in/prefix,
-  explicit identity review, saved pairings and existing tunnels remain unchanged.
-- **Single-PC HTTPS quickstart (#2582):** Document four steps to test native
-  daemon REST HTTPS on Linux with OpenSSL 3.x, explicit local certificate trust,
-  private key storage, restart and verification checks. Link directly from the
-  configuration reference and distinguish REST HTTPS from the Console webpage;
-  preserve the advanced private-VM/CA/SSH guidance.
-- **Opt-in local SSH alias discovery (#2587):** Offer concrete user OpenSSH aliases
-  automatically at tray startup/refresh and in the loopback Web Console, with an
-  optional literal prefix, bounded unconditional Includes, pending-enrollment
-  indicator and direct full identity review. Enumeration never probes hosts or
-  executes config predicates; SSH/TLS verification and unchecked explicit trust
-  confirmation remain mandatory. Persistent dismissal/removal prevents re-offering
-  aliases; saved trust, owned tunnels, dynamic ports and reconnect remain unchanged.
-  Includes synchronized settings/schema/setup/profiles, isolated parser/manager/
-  tray/Web/UX contracts, source documentation and release-readiness coverage.
-- **Capability-aware modal policy (#2580):** Share Native → Tkinter → NiceGUI
-  ordering across eligible dialog implementations, with exclusive explicit
-  preferences and fallback only on proven pre-display startup failure. Preserve
-  cancellation and the no-toolkit-switch-after-display contract; retain complete
-  setup choices, upload/policy reviews, destructive confirmations and uncropped
-  log review. Isolate proactive tray toolkits and retain native user-only support
-  consent. Includes the platform/capability matrix, unit/UX contracts and manual
-  desktop verification checklist; visual/platform qualification remains pending.
-  Tray **Add daemon via SSH** now uses a reusable form-flow adapter over that
-  dispatcher instead of launching the Web Console: complete native input/trust
-  controls first, then isolated Tk and NiceGUI on startup failure only. Retains
-  unchecked identity consent and one provider across all steps. Contributor
-  instructions and a modal implementation recipe require this shared policy for
-  future modals; native desktop qualification remains pending.
-- **SSH-managed remote daemons (#2552):** Add a known SSH host/alias from the tray
-  or local Web Console, explicitly confirm its daemon TLS identity, and reconnect
-  automatically through owned loopback-only OpenSSH forwarding. Uses existing SSH
-  configuration/agent and strict host-key checks; detects the actual runtime port,
-  verifies HTTPS identity before sending daemon credentials, and never silently
-  replaces trust or downgrades to HTTP. Pairings use private POSIX storage or
-  current-user Windows DPAPI, separate from exported configuration. Includes
-  asynchronous controls, offline/backoff states, cleanup, polling-only remote
-  permission prompts, unit/UX contracts and release-readiness checks. No new
-  dependencies, SSH key provisioning, AWS inventory or public REST ports.
-- **Native daemon REST HTTPS and explicit trust (#2551):** Opt-in TLS 1.2+ listener,
-  CA/SAN/validity verification, separate TCP address and expected TLS identity,
-  and optional independently provisioned SHA-256 leaf pins checked before HTTP
-  credentials are sent. Keeps HTTP defaults, bind addresses, tokens, REST fields
-  and SDK APIs; rejects invalid TLS without plaintext fallback or downgrade.
-  Shared local/remote REST clients refuse redirects and environment proxies.
-  Includes global Web Console controls, private-VM provisioning/pairing and
-  restart/renewal guidance, unit/UX contracts and release-readiness coverage.
-  Adds **cryptography >=43.0.0** for certificate lifecycle validation (dual
-  Apache-2.0/BSD-3-Clause license verified upstream).
-- **Standalone orphaned-integration recovery (#2568):** Shared package-independent
-  Python 3.11+ cleanup for Bash and native PowerShell, with explicit user/project
-  scopes, preview, unique backups with documented access controls, ownership checks,
-  safe partial-failure reporting and idempotency. Covers managed/legacy Pi,
-  Codex/Grok TOML, relocated homes, OpenCode JSONC/V2 MCP and legacy artifacts,
-  and current Copilot/Antigravity hook schemas. Preserves third-party settings
-  and violation history; operator-only recovery remains blocked to agents.
-  Documents per-host missing-runtime qualification gaps and Windows limitations;
-  adds isolated unit/UX and cross-platform CI lifecycle gates.
-- **Potential ServiceNow BYOG integration documentation (#2573):** Describe the
-  unimplemented, untested, unsupported, and unvalidated proposal, required adapter
-  and security work, and ServiceNow test-environment prerequisite. Link contributor
-  interest and future validation to #2572 without committing to development.
-- **About author attribution:** Show **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**
-  in tray and Web Console About views, without displaying the full profile URL.
-  The tray author line is clickable/keyboard-accessible when Tk is available;
-  native fallback dialogs retain the same compact attribution. Opening About never opens a browser.
-- **Reviewed public support Discussions (#2567):** Fresh configurations select
-  GitHub Discussions in the fixed AI Guardian repository, with Bug Reports
-  preselected and Q&A as the only alternative. CLI and MCP share native final
-  user consent bound to the authenticated account, resolved category, exact
-  sanitized title/body and remaining diagnostics; agents and `--yes` cannot
-  grant upload or public approval. Selected sanitized files go into one user-owned
-  unlisted Gist, followed by a separate exact Discussion preview containing its
-  actual link, not inline diagnostics or a replaced user message. Unlisted is not
-  private; users can manage/delete their Gist, but cannot retract copies/forks.
-  The public choice is disabled without GitHub credentials; ZIP stays available,
-  with no automatic login or scope upgrades. Includes both URL outputs, bounded Gist text delivery,
-  explicit manual-delivery errors, durable duplicate/uncertain-result protection,
-  Web Console settings, and [migration guidance](docs/SUPPORT.md).
-  Standalone `ai-guardian support send --prepare` needs no agent, MCP, or running
-  daemon and never auto-starts the daemon while troubleshooting it.
-  A global **Contact supports** tray action, directly above About, respects the
-  configured destination and opens a restyled native modal instead of a shell. It includes
-  an aligned diagnostic table, View/inclusion controls, Select all / Deselect all,
-  a user message field, restricted category selection, and Cancel/Send actions.
-  Diagnostic files are alphabetical with doctor.json first and checked by default
-  on new lists; saved explicit selections, including deselections, remain available.
-  The generated title is removed. GitHub review requires a title and message;
-  ZIP/legacy review requires a message. Create ZIP / Send also requires at least
-  one file, and empty/whitespace fields cannot advance. Support dialogs are restored,
-  raised and focused on opening rather than left minimized or behind other windows.
-  File View adds a Wrap lines checkbox and an unwrapped horizontal scrollbar,
-  preserving its setting across pages. The final public-consent control stays
-  visible with an explanation of why Publish publicly starts disabled.
-  GitHub retains its separate exact-content public-consent step; results stay
-  visible until closed. Legacy exports include only selected files, and manual
-  email hand-off is not reported as a completed send.
-  Empty/missing destinations use GitHub; explicit CLI/MCP exports and previously
-  prepared bundles retain their destinations. No saved settings are rewritten.
-  The first screen uses a read-only Destination dropdown and **Next** button,
-  defaulting to local ZIP, instead of per-destination action buttons. Selecting
-  an unavailable public route disables Next; switching to ZIP re-enables it.
-  The choice list can grow without adding more destination buttons.
-  With GitHub selected, **Create ZIP only** offers a retained local archive of the
-  selected files and sanitized message, without GitHub authentication, upload,
-  email or Gist. Results distinguish ZIP creation from support delivery and warn
-  that the archive is not encrypted. Public Discussion publication still requires
-  separate final consent; ZIP creation leaves the configured route unchanged.
-  Cancellation/failure after upload reports the existing Gist URL without claiming
-  nothing was uploaded. Verified Gists are reused across retries/process restarts;
-  ambiguous uploads block duplicates, with no silent inline fallback or deletion.
-  The ZIP result includes **Open destination folder** in the native file browser,
-  without opening/extracting the archive or uploading it.
-  Bundles now include individually removable, sanitized CLI settings/hooks/MCP
-  copies (not credential stores or conversations), with explicit temporary-file
-  review/deletion instructions and unchanged originals. Local exports clearly
-  state that no support submission occurred and retain their cross-process
-  reference, fixing a later `support send` incorrectly finding no pending bundle.
-  Only the log is truncated, retaining the newest text from the last 12 hours;
-  violations also include only the last 12 hours, with every included sanitized
-  record complete and no arbitrary newest-100 limit. Collected sanitized
-  configuration and structured files remain complete. View's next/previous pages
-  reach every field of large files, using the same prepared copy as Send/ZIP
-  without a separate size crop. Large
-  complete files fail public size checks clearly rather than being cut to fit;
-  originals remain unchanged. Documents public posting permissions and the need
-  for a separately arranged private channel for confidential diagnostics.
-
-### Changed
-- **Violation JSONL performance (#2637):** Avoid parsing and rewriting the local
-  history after routine appends; retention and entry-limit cleanup runs when
-  needed or on a bounded schedule. Small local history queries read backward in
-  chunks while preserving newest-first timestamp order, with a full-scan fallback
-  for out-of-order legacy records. Resolve/unresolve still rewrite the file because
-  resolution state is stored in each record.
-- **Betterleaks scanner pin:** Update Betterleaks from 1.3.1 to 1.9.0. The
-  upstream release includes the Linux x64 and arm64 assets required by container
-  builds and scanner-version validation.
-
-### Fixed
-- **GitHub support Gist receipts (#2650):** Accept GitHub's documented ID-only
-  Gist URL while retaining independent authenticated-owner, unlisted-visibility,
-  description, and exact-file verification. Persist and safely reuse the verified
-  receipt on retry so Discussion publication can continue without another upload.
-- **KDE Pause dialog foreground (#2645):** Map the Tk window with a temporary
-  raising hint, clear it after the tray-menu handoff, and restore focus once more.
-  Monitor placement and provider eligibility are unchanged.
-- **Privacy-safe violation diagnostics:** Avoid echoing caller-provided violation
-  categories in logger debug messages; log only fixed diagnostic text.
-- **Violation-log sensitive-data minimization:** Store only an ID, timestamp,
-  severity, generic category, and resolution state for secret, image-secret, and
-  PII findings. Ask-mode history omits matched input/error text, and CLI scan
-  history omits finding messages/snippets; callers and CLI output retain their
-  original data. Generic records persist recognized type/severity labels only,
-  including the middleware-paused and CLI fallback/canary categories.
-- **SSRF destination classification (#2632):** Normalize a terminal DNS root dot,
-  block the RFC 2544 benchmarking range and IPv6 unspecified address, and apply
-  existing destination policy to IPv4 endpoints embedded in the well-known NAT64
-  prefix without blanket-blocking public NAT64 destinations.
-- **Scanner version CI checks:** When GitHub rejects the repository-scoped token
-  for a public upstream release, retry the metadata request without credentials
-  instead of reporting an existing scanner release as missing.
-- **OpenCode V2 file targets and diagnostics (#2627):** Normalize native `path`
-  alongside compatible file aliases in both adapter and direct policy calls;
-  reject malformed/conflicting targets without weakening immutable protection.
-  Bind current-session workspace metadata and checker child CWD to project-policy
-  selection, including parallel sessions and moved sessions. Add value-free input
-  subreasons/shape, version and operation correlation to Console/copy and MCP,
-  including the stored `blocked.tool_name` fallback and legacy-record handling.
-  Input failures no longer receive misleading admin-permission advice. Keep fixed
-  stage-specific refusals, fail closed on unavailable workspaces/checker failures,
-  and cover privacy plus complete affected UX contracts with isolated tests.
-  Pass the canonical target to file-content/directory checks too. Repair missing
-  OpenCode MCP registration from the tray without forcing replacement of verified
-  healthy hooks, avoiding a recurring setup prompt after non-interactive repair.
-  Preserve other adapters' native immutable-configuration guard precedence before
-  canonical input validation; Grok native file mutations retain the correct
-  configuration-protection denial for dict/JSON arguments and file-path aliases.
-- **OpenCode V2 MCP setup (#2622):** Register the local AI Guardian server under
-  `mcp.servers` with V2's `disabled` semantics while preserving the V1 MCP shape.
-  Doctor verifies the active generation, and setup removal cleans only AI
-  Guardian's legacy/V2 entries while retaining unrelated config. Add isolated
-  JSON/JSONC coverage for both config overrides and a Doctor UX contract.
-- **OpenCode V2 MCP verification (#2628):** Recognize supported legacy flat MCP
-  registrations in V2, with a native entry taking precedence in mixed configs.
-  Evaluate known system/managed and explicitly supplied project layers separately
-  from the user setup target, exposing safe source/scope metadata. Doctor and tray
-  distinguish an MCP-only issue from configured plugin artifacts; plugin activation
-  remains explicitly unverified.
-- **OpenCode blocked first prompt (#2615):** For the reporter-confirmed V2
-  generation, replace the blocked prompt draft with a fixed refusal notice, clear
-  attachments and agent/skill selections, and complete safe prompt admission
-  instead of throwing. This keeps the safe turn in the requested session without
-  admitting the original content; V2 may run the model on the fixed notice. Also
-  replace blocked V1 prompt parts instead of leaving an empty turn. Add executable
-  first-block, safe-follow-up, and later-block coverage plus V1/V2 UX contracts.
-  The reporter's exact OpenCode patch version and OS remain unknown.
-- **Tray daemon menu support actions (#2614):** Keep bundled Maintenance available
-  in a local daemon submenu alongside other targets. Show Contact supports once per
-  daemon without a duplicate root-level host action; retain the standalone host
-  action when no daemon targets exist. Add unit and UX coverage for zero, single,
-  and multiple targets, including local-plus-remote menus.
-- **Support project-config path validation (#2597 / PR #2600):** Route local and
-  daemon project diagnostic reads through the shared regular-file reader, reject
-  file/directory symlinks and hard links, and validate normalized absolute path
-  containment before opening, without resolving untrusted paths before validation.
-  Preserve complete local configurations, including explicit filenames and files
-  larger than remote transfer limits. Addresses CodeQL alerts #323–#325 without
-  suppressing or dismissing findings.
-- **Secure setup/startup storage (#2584):** Create missing POSIX application
-  directories/parents as `0700` and configuration/token files as `0600`, including
-  JSON setup and early logging initialization. Preserve fail-closed credential
-  checks and existing shared-directory modes; report unsafe storage paths rather
-  than silently repairing them. Distinguish IPC liveness from REST readiness in
-  status/PID metadata and missing configuration, unsafe metadata, or unavailable
-  REST during SSH pairing. Adds isolated umask, publication/cleanup and UX coverage.
-- **Windows CI prerequisite checks:** Isolate every UI path in proactive prompt
-  precedence tests and cover Windows' first eligible provider explicitly. Native
-  PowerShell recovery now resolves only an executable before checking Python,
-  avoiding module discovery/imports when the interpreter is missing; keeps exit
-  code 2 and the non-mutating prerequisite error.
-- **Daemon TLS configuration consistency (#2551):** Include matching opt-in HTTPS
-  defaults in every built-in profile and accept documentation comments in the
-  TLS schema without accepting unknown settings. Isolate TLS UX log capture from
-  earlier CLI tests' logging suppression.
-- **Windows standalone recovery (#2568):** Compare path and handle timestamps
-  within their respective APIs so Windows metadata differences do not falsely
-  retain unchanged integrations. Preserve file-change checks, isolate PowerShell
-  caches from CI preservation snapshots, and avoid the Windows connection-close
-  race in the REST authorization regression without changing authorization.
-  Shared test/lifecycle launches also prevent native Windows startup-optimization
-  cache writes that ignore environment cache paths, without excluding home files.
-  Recognize setup-generated `pythonw.exe` module launches and legacy OpenCode
-  command arrays after runtime removal; retain unrelated or ambiguous commands.
-- **Linux tray dialog lifecycle (#2569):** Keep shared informational dialogs open
-  until dismissal instead of replacing them after a 30-second timeout. Treat
-  normal window closure as completion, retain missing-provider/startup fallbacks,
-  and never switch toolkits after an isolated Tk message window has displayed.
-  Provider/lifecycle diagnostics no longer include raw dialog output.
-- **About window foreground focus:** Finish layout before showing the native
-  About dialog, then restore normal visibility/focus after its temporary raising
-  hint is released so it does not flash and drop behind other windows on KDE.
-  Keep it normally stackable after startup and tolerate early closure or rejected
-  window-manager hints.
+- **Release test matrix reliability (#2700):** Measure redaction performance with
+  repeated samples and initialize isolated recovery state before exposing test-home
+  overrides, while checking for unexpected state files. Pin no-runtime OpenCode
+  recovery coverage to a deterministic configuration generation.
 
 
 *(Earlier versions omitted — see CHANGELOG.md for full history)*
