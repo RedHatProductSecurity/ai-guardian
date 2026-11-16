@@ -439,11 +439,13 @@ class TestContainerLaunchers:
             "- name: Build and push OpenShell sandbox image", 1
         )[0]
 
-        assert "username: ${{ secrets.QUAY_RPS_USERNAME }}" in normal_login
+        assert "username: ${{ vars.QUAY_RPS_USERNAME }}" in normal_login
         assert "password: ${{ secrets.QUAY_RPS_PASSWORD }}" in normal_login
         assert "- name: Log in to quay.io for OpenShell" in openshell_login
-        assert "username: ${{ secrets.QUAY_RPS_OPENSHELL_USERNAME }}" in openshell_login
+        assert "username: ${{ vars.QUAY_RPS_OPENSHELL_USERNAME }}" in openshell_login
         assert "password: ${{ secrets.QUAY_RPS_OPENSHELL_PASSWORD }}" in openshell_login
+        assert "# Required GitHub Actions variables (usernames):" in workflow
+        assert "# Required GitHub Actions secrets (passwords):" in workflow
         assert "legacy-mirror:" not in workflow
         assert "Export image tag" not in workflow
         assert "steps.export" not in workflow
