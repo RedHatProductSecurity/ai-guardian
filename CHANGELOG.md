@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **IDE setup scanner availability (#2760):** Report when the built-in
+  `toml-patterns` engine keeps secret scanning available without Gitleaks, and
+  warn that scanning will not run only when no configured engine is available.
 - **NotebookLM completed replacement retry:** Reuse the completed journal when
   retrying with the same explicit source UUID after the prior source was deleted.
 

@@ -818,8 +818,8 @@ class TestIDESetup:
             assert success is False
             assert "❌ Gitleaks command failed" in message
 
-    def test_setup_ide_hooks_shows_gitleaks_warning(self, tmp_path):
-        """Test that setup shows warning when Gitleaks is not installed."""
+    def test_setup_ide_hooks_reports_builtin_scanner_without_gitleaks(self, tmp_path):
+        """Missing Gitleaks must not imply that the default scanner is unavailable."""
         setup = IDESetup()
 
         config_file = tmp_path / "settings.json"
@@ -835,18 +835,163 @@ class TestIDESetup:
                 }
             },
         ):
-            # Mock Gitleaks as not installed
-            with mock.patch.object(setup, "verify_gitleaks_installed") as mock_verify:
-                mock_verify.return_value = (False, "❌ Gitleaks not found")
-
+            with (
+                mock.patch.object(
+                    setup,
+                    "verify_gitleaks_installed",
+                    return_value=(False, "❌ Gitleaks not found"),
+                ),
+                mock.patch("ai_guardian.setup.hooks.get_config", return_value={}),
+            ):
                 success, message = setup.setup_ide_hooks(
                     "claude", dry_run=False, force=False
                 )
 
+        assert success is True
+        assert "❌ Gitleaks not found" in message
+        assert "built-in `toml-patterns` engine" in message
+        assert "Gitleaks is optional" in message
+        assert "Secret scanning will be disabled" not in message
+
+    def test_setup_ide_hooks_warns_when_no_configured_scanner_is_available(
+        self, tmp_path
+    ):
+        """A Gitleaks-only configuration must warn when Gitleaks is absent."""
+        setup = IDESetup()
+        config_file = tmp_path / "settings.json"
+
+        with (
+            mock.patch.object(
+                setup,
+                "IDE_CONFIGS",
+                {
+                    "claude": {
+                        "name": "Claude Code",
+                        "config_path": str(config_file),
+                        "hooks": {"UserPromptSubmit": [{"test": "hook"}]},
+                    }
+                },
+            ),
+            mock.patch.object(
+                setup,
+                "verify_gitleaks_installed",
+                return_value=(False, "❌ Gitleaks not found"),
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks.get_config",
+                return_value={"secret_scanning": {"engines": ["gitleaks"]}},
+            ),
+        ):
+            success, message = setup.setup_ide_hooks(
+                "claude", dry_run=False, force=False
+            )
+
+        assert success is True
+        assert "No configured secret-scanning engine is available" in message
+        assert "Secret scanning will not run" in message
+        assert "Install a configured scanner" in message
+        assert "Gitleaks is optional" not in message
+
+    def test_setup_gitleaks_notice_recognizes_an_available_alternate_engine(self):
+        """Configured external engines remain available when Gitleaks is absent."""
+        setup = IDESetup()
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.hooks.get_config",
+                return_value={
+                    "secret_scanning": {"engines": ["gitleaks", "betterleaks"]}
+                },
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks.shutil.which",
+                return_value="/usr/bin/betterleaks",
+            ),
+        ):
+            notice, no_scanner_available = setup._secret_scanning_setup_notice(False)
+
+        assert no_scanner_available is False
+        assert "betterleaks" in notice
+        assert "Gitleaks is optional" in notice
+
+    def test_setup_gitleaks_notice_respects_disabled_secret_scanning(self):
+        """An explicit secret-scanning opt-out is not reported as a missing engine."""
+        setup = IDESetup()
+
+        with mock.patch(
+            "ai_guardian.setup.hooks.get_config",
+            return_value={"secret_scanning": {"enabled": False}},
+        ):
+            notice, no_scanner_available = setup._secret_scanning_setup_notice(False)
+
+        assert no_scanner_available is False
+        assert "Secret scanning is disabled in the effective configuration" in notice
+        assert "No configured secret-scanning engine is available" not in notice
+
+    def test_all_setup_paths_use_shared_secret_scanning_notice(self, tmp_path):
+        """Every setup path that checks Gitleaks reports the same availability notice."""
+        setup = IDESetup()
+        marker = "\n  ⚠️  TEST: configured scanner availability\n"
+        config_path = tmp_path / "claude-settings.json"
+
+        def setup_standard_hooks():
+            with mock.patch.object(
+                setup,
+                "IDE_CONFIGS",
+                {
+                    "claude": {
+                        "name": "Claude Code",
+                        "config_path": str(config_path),
+                        "hooks": {"UserPromptSubmit": [{"test": "hook"}]},
+                    }
+                },
+            ):
+                return setup.setup_ide_hooks("claude", force=True)
+
+        setup_paths = [
+            lambda: setup._setup_script_based_hooks(
+                "cline", IDESetup.IDE_CONFIGS["cline"], tmp_path / "cline-hooks"
+            ),
+            lambda: setup._setup_plugin_file(
+                "opencode", IDESetup.IDE_CONFIGS["opencode"], tmp_path / "plugins"
+            ),
+            lambda: setup._setup_extension_based_hooks(
+                "aiderdesk",
+                IDESetup.IDE_CONFIGS["aiderdesk"],
+                tmp_path / "aiderdesk",
+            ),
+            lambda: setup._setup_pi_extension(tmp_path / "pi", enable_mcp=False),
+            lambda: setup._setup_single_file_extension(
+                "cline",
+                {"name": "Cline", "extension_file": "ai-guardian.ts"},
+                tmp_path / "single-file",
+            ),
+            setup_standard_hooks,
+        ]
+
+        with (
+            mock.patch.object(
+                setup,
+                "verify_gitleaks_installed",
+                return_value=(False, "❌ Gitleaks not found"),
+            ),
+            mock.patch.object(
+                setup,
+                "_secret_scanning_setup_notice",
+                return_value=(marker, True),
+            ),
+            mock.patch("ai_guardian.setup.hooks.detect_opencode_runtime") as runtime,
+            mock.patch(
+                "ai_guardian.setup.hooks._opencode_setup_diagnostic",
+                return_value=None,
+            ),
+            mock.patch.object(setup, "_register_opencode_plugin", return_value=None),
+        ):
+            runtime.return_value = {"generation": "v2", "version": "2.0.22"}
+            for setup_path in setup_paths:
+                success, message = setup_path()
                 assert success is True
-                assert "❌ Gitleaks not found" in message
-                assert "WARNING: Secret scanning will be disabled" in message
-                assert "install gitleaks" in message.lower()
+                assert marker in message
 
     @pytest.mark.parametrize(
         ("version", "expected_warning"),

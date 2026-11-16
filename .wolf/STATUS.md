@@ -7,6 +7,25 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-16 (UTC)
 
+## Issue #2760 setup scanner availability — 2026-11-16
+
+- On the existing managed DAF branch `2760`, updated every setup path that
+  previously warned that Gitleaks was mandatory. Setup now reads the effective
+  scanner configuration, reports built-in `toml-patterns` or other available
+  configured engines, and warns that scanning will not run only when no
+  configured engine is available. Custom Python scanner code is not loaded just
+  to render setup status.
+- Added unit and IDE setup UX coverage for default engines, Gitleaks-only
+  configuration, an installed alternate engine, disabled scanning, and all six
+  setup output paths. Updated the Unreleased changelog.
+- **Validation:** 708 related unit/UX tests pass. Ruff, Black (Python 3.10
+  target), error-level Pylint, and `git diff --check` pass. The changed setup
+  module passes Mypy; package Mypy still reports the 14 existing errors in
+  untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+- Posted the completed acceptance checklist on GitHub #2760, added the `done`
+  label, and saved a DAF note. Changes remain uncommitted for user review and
+  external `daf complete`; no commit, push, or PR was created.
+
 ## Issue #2755 trusted-session non-blocking findings — 2026-11-16
 
 - Continued implementation on the existing `2755` branch. The separate global,
