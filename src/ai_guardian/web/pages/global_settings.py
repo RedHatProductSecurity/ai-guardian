@@ -18,6 +18,20 @@ from ai_guardian.web.config_helpers import (
 from ai_guardian.agent_config_protection import is_agent_config_protection_enabled
 from ai_guardian.self_protection import is_host_agent_cli_protection_enabled
 
+DEVELOPER_SESSION_NON_BLOCKING_HELP = (
+    "In a trusted developer session, allow eligible successful findings "
+    "configured with action=block as advisory diagnostics. This only takes "
+    "effect when Developer Session CLI Access is also enabled; it does not "
+    "enable that setting. Scanning and violation logging continue. Sensitive "
+    "content is relaxed only when the host safely replaces it with verified "
+    "sanitized content; otherwise it remains blocked. Scanner errors follow "
+    "on_scan_error, including fail-closed behavior when set to block. These "
+    "settings do not disable other protections, so other hooks may still block "
+    "an operation. For legitimate development work, review the violation and "
+    "follow your organization's approved exception process. Restart the "
+    "daemon/session after changing this setting."
+)
+
 FEATURE_GROUPS = [
     (
         "Scanning",
@@ -718,18 +732,9 @@ def create_global_settings_page(service, daemon_name: str):
                         if scope_label != "Global":
                             findings_switch.disable()
                             ui.badge("Global only", color="blue").props("dense")
-                    ui.label(
-                        "In a trusted developer session, allow successful findings "
-                        "configured with action=block as advisory diagnostics. This "
-                        "only takes effect when Developer Session CLI Access is also "
-                        "enabled; it does not enable that setting. Scanning and "
-                        "violation logging continue, sensitive output is redacted "
-                        "before it is allowed only where the host safely supports "
-                        "replacement, and on_scan_error=block remains fail-closed. "
-                        "Sensitive findings in hooks without safe replacement remain "
-                        "blocking. Restart the daemon/session after "
-                        "changing it."
-                    ).classes("text-xs text-grey-6 ml-8")
+                    ui.label(DEVELOPER_SESSION_NON_BLOCKING_HELP).classes(
+                        "text-xs text-grey-6 ml-8"
+                    )
 
                     async def save_non_blocking_findings(event):
                         current_global = await run.io_bound(load_web_config_global)
