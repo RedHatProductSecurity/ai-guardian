@@ -324,6 +324,22 @@ def _set_developer_session_enabled(config, value):
     return config
 
 
+def _get_developer_session_non_blocking_findings_enabled(config):
+    """Read the global-only non-blocking-findings option for display."""
+    section = config.get("developer_session", {})
+    return isinstance(section, dict) and section.get("non_blocking_findings") is True
+
+
+def _set_developer_session_non_blocking_findings_enabled(config, value):
+    """Update the independent non-blocking-findings opt-in."""
+    section = config.get("developer_session", {})
+    if not isinstance(section, dict):
+        section = {}
+    section["non_blocking_findings"] = bool(value)
+    config["developer_session"] = section
+    return config
+
+
 def _get_agent_config_protection_enabled(config):
     """Read the global-only supported-agent protection setting."""
     return is_agent_config_protection_enabled(config)
@@ -691,6 +707,52 @@ def create_global_settings_page(service, daemon_name: str):
                         )
 
                     developer_switch.on_value_change(save_developer_session)
+
+                    with ui.row().classes("items-center gap-2 w-full"):
+                        findings_switch = ui.switch(
+                            "Non-blocking Detection Findings",
+                            value=_get_developer_session_non_blocking_findings_enabled(
+                                global_config
+                            ),
+                        ).classes("flex-grow")
+                        if scope_label != "Global":
+                            findings_switch.disable()
+                            ui.badge("Global only", color="blue").props("dense")
+                    ui.label(
+                        "In a trusted developer session, allow successful findings "
+                        "configured with action=block as advisory diagnostics. This "
+                        "only takes effect when Developer Session CLI Access is also "
+                        "enabled; it does not enable that setting. Scanning and "
+                        "violation logging continue, sensitive output is redacted "
+                        "before it is allowed only where the host safely supports "
+                        "replacement, and on_scan_error=block remains fail-closed. "
+                        "Sensitive findings in hooks without safe replacement remain "
+                        "blocking. Restart the daemon/session after "
+                        "changing it."
+                    ).classes("text-xs text-grey-6 ml-8")
+
+                    async def save_non_blocking_findings(event):
+                        current_global = await run.io_bound(load_web_config_global)
+                        updated_global = (
+                            _set_developer_session_non_blocking_findings_enabled(
+                                current_global, event.value
+                            )
+                        )
+                        saved = await run.io_bound(
+                            save_web_config, updated_global, scope="global"
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
+                        ui.notify(
+                            "Non-blocking Detection Findings saved; restart the daemon/session to apply",
+                            type="warning",
+                        )
+
+                    findings_switch.on_value_change(save_non_blocking_findings)
 
                 # --- On Scan Error ---
                 with ui.card().classes("w-full"):

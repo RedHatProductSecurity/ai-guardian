@@ -44,6 +44,39 @@ export const AiGuardian: Plugin = async (ctx) => {
         cwd,
       };
       const result = guardian.run(hookData);
+      if (result.updatedPrompt !== undefined) {
+        if (typeof result.updatedPrompt === 'string' && result.updatedPrompt) {
+          const firstPart = output.parts.find(
+            (part) => part.type === 'text' && !part.synthetic,
+          );
+          if (firstPart) {
+            output.parts.splice(0, output.parts.length, {
+              id: firstPart.id,
+              sessionID: input.sessionID,
+              messageID: firstPart.messageID,
+              type: 'text',
+              text: result.updatedPrompt,
+              synthetic: true,
+            });
+            try {
+              await ctx.client.tui.showToast({
+                query: { directory: cwd },
+                body: {
+                  title: 'AI Guardian',
+                  message: `${result.error || 'AI Guardian detected sensitive prompt content.'}\n\nSensitive content was redacted before model submission.`,
+                  variant: 'warning',
+                  duration: 8000,
+                },
+              });
+              return;
+            } catch {
+              return;
+            }
+          }
+        }
+        result.blocked = true;
+        result.error = 'AI Guardian could not safely replace the prompt';
+      }
       if (result.blocked) {
         const firstPart = output.parts[0];
         // V1 has no supported prompt-cancel result. Keep a safe, nonempty user

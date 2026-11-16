@@ -11,6 +11,10 @@ import logging
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, List, Optional
 
+from ai_guardian.developer_session import (
+    non_blocking_finding_advisory_message,
+    should_downgrade_blocking_finding,
+)
 from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
 from ai_guardian.violations.decision import PolicyDecision
 from ai_guardian.violations.log_violation import ScanContext, log_violation
@@ -62,6 +66,7 @@ class PostScanContext:
     violation_logger: Any = None
     latency_timer: Any = None
     invocation_allowed_findings: Any = None
+    non_blocking_findings_enabled: bool = False
     # Raw source is kept only for the duration of this invocation.  The
     # shared logger converts it to hashed/sanitized metadata before writing.
     allowlist_content: Optional[str] = None
@@ -259,6 +264,7 @@ def apply_post_scan_pipeline(
     severity_override: Optional[str] = None,
     skip_violation_log: bool = False,
     finding_fingerprints: Optional[List[Any]] = None,
+    sensitive_replacement_verified: bool = False,
 ) -> PostScanDecision:
     """Apply standard post-scan filters: violation logging + ask mode.
 
@@ -377,7 +383,29 @@ def apply_post_scan_pipeline(
                 policy_decision=canonical_decision.to_dict(),
             )
 
-    if not should_block and error_msg:
+    # These findings scan incoming prompts/tool inputs, where current hook
+    # protocols cannot replace the submitted content. Do not let a secret reach
+    # the model merely because the trusted-session override is enabled.
+    sensitive_input_finding = result.violation_type in {
+        "secret_detected",
+        "pii_detected",
+    }
+    block_downgraded = (
+        not private_candidate
+        and (not sensitive_input_finding or sensitive_replacement_verified)
+        and should_downgrade_blocking_finding(
+            enabled=ctx.non_blocking_findings_enabled,
+            action=(result.extra.get("action", "block") if result.extra else "block"),
+            detected=result.detected,
+            scan_error=result.extra.get("scan_error") if result.extra else None,
+        )
+        and should_block
+    )
+    if block_downgraded:
+        should_block = False
+        diagnostic = error_msg or f"{entry.violation_type} detected"
+        warnings.append(non_blocking_finding_advisory_message(diagnostic))
+    elif not should_block and error_msg:
         detailed = build_detailed_warn_message(entry, result, file_path)
         warnings.append(detailed)
 
@@ -385,7 +413,9 @@ def apply_post_scan_pipeline(
         effective_result,
         _decision_context(ctx, context_overrides),
         source=source,
-        decision_override="block" if should_block else None,
+        decision_override=(
+            "allow" if block_downgraded else "block" if should_block else None
+        ),
     )
     if not skip_violation_log:
         log_scan_violation(

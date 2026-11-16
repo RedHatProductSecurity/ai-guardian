@@ -80,7 +80,11 @@ from ai_guardian.constants import (
     ViolationType,
 )
 from ai_guardian.agent_config_protection import is_agent_config_mutation_tool
-from ai_guardian.developer_session import is_trusted_developer_session
+from ai_guardian.developer_session import (
+    is_non_blocking_findings_enabled,
+    is_trusted_developer_session,
+)
+from ai_guardian.ide_registry import get_ide_integration_for_agent_type
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.utils.path_matching import match_leading_doublestar_pattern
 
@@ -1952,6 +1956,9 @@ class HookContext:
     _latency_timer: Any
     now: Any
     _invocation_allowed: Set = field(default_factory=set)
+    non_blocking_findings_enabled: bool = False
+    safe_prompt_replacement: bool = False
+    modified_prompt: Optional[str] = None
     security_message: Optional[str] = None
     daemon_state: Any = None
     normalized: Any = None
@@ -2111,10 +2118,26 @@ def _process_hook_data(hook_data, daemon_state=None):
         now = datetime.now(timezone.utc)
         violation_logger = ViolationLogger() if HAS_VIOLATION_LOGGER else None
 
+        if daemon_state is None:
+            non_blocking_findings_enabled = is_non_blocking_findings_enabled()
+        elif getattr(daemon_state, "developer_session_enabled", None) is True:
+            non_blocking_snapshot = getattr(
+                daemon_state,
+                "developer_session_non_blocking_findings_enabled",
+                False,
+            )
+            non_blocking_findings_enabled = non_blocking_snapshot is True
+        else:
+            non_blocking_findings_enabled = False
+
         # Detect adapter and normalize input in a single pass
         adapter = detect_adapter(hook_data)
         ide_type = adapter.ide_type
         agent_type = _get_agent_type(adapter)
+        integration = get_ide_integration_for_agent_type(agent_type)
+        safe_prompt_replacement = bool(
+            integration and integration.safe_prompt_replacement
+        )
         normalized = adapter.normalize_input(hook_data)
         hook_event = normalized.event
         # Start timing after adapter normalization so every normalized event,
@@ -2305,6 +2328,8 @@ def _process_hook_data(hook_data, daemon_state=None):
             _latency_timer=_latency_timer,
             now=now,
             _invocation_allowed=_invocation_allowed,
+            non_blocking_findings_enabled=non_blocking_findings_enabled,
+            safe_prompt_replacement=safe_prompt_replacement,
             security_message=security_message,
             daemon_state=daemon_state,
             normalized=normalized,
@@ -2631,6 +2656,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             violation_logger=violation_logger,
             latency_timer=_latency_timer,
             invocation_allowed_findings=_invocation_allowed,
+            non_blocking_findings_enabled=non_blocking_findings_enabled,
         )
 
         if hook_event in (
@@ -3407,6 +3433,11 @@ def _process_hook_data(hook_data, daemon_state=None):
             has_secrets=False,
             hook_event=hook_event,
             warning_message=combined_warning,
+            **(
+                {"modified_prompt": ctx.modified_prompt}
+                if ctx.modified_prompt is not None
+                else {}
+            ),
             security_message=security_message,
             violation_type=_vtype,
         )

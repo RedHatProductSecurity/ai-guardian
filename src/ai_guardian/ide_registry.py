@@ -26,6 +26,13 @@ class IDEIntegration:
     ``event_cases`` is the deterministic isolated-E2E plan.  Every managed
     event must appear exactly once and each value contains one or more of the
     E2E cases: ``allow``, ``block``, or ``post``.
+
+    ``safe_post_output_replacement`` is stricter than the presence of a
+    PostToolUse event or response field: it is true only when the host applies
+    a sanitized replacement to the model-visible result.
+
+    ``safe_prompt_replacement`` is true only when the host lets the integration
+    replace the submitted prompt before it reaches the model.
     """
 
     key: str
@@ -40,6 +47,8 @@ class IDEIntegration:
     rules_supported: bool = False
     project_scope: bool = False
     post_output_transform: bool = True
+    safe_post_output_replacement: bool = False
+    safe_prompt_replacement: bool = False
     platform_contract: str = "all supported platforms"
     external: bool = True
     cli_capable: bool = False
@@ -97,6 +106,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         cli_capable=True,
         cli_executables=("claude",),
         agent_type_aliases=("claude_code",),
+        safe_post_output_replacement=True,
     ),
     IDEIntegration(
         "cursor",
@@ -120,6 +130,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("postToolUse", ("post",)),
         ),
         project_scope=True,
+        safe_post_output_replacement=True,
         platform_contract="user and explicit project/cloud setup; runtime E2E on Linux",
     ),
     IDEIntegration(
@@ -304,6 +315,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "local",
         ("AiderDesk Markdown",),
         "none",
+        safe_post_output_replacement=True,
     ),
     IDEIntegration(
         "openclaw",
@@ -327,8 +339,10 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "local",
         ("OpenCode SQLite",),
         "browser",
+        safe_post_output_replacement=True,
         cli_capable=True,
         cli_executables=("opencode",),
+        safe_prompt_replacement=True,
     ),
     IDEIntegration(
         "pi",
@@ -351,6 +365,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         platform_contract="global and project-local managed Pi extensions; native MCP config is unavailable",
         cli_capable=True,
         cli_executables=("pi",),
+        safe_post_output_replacement=True,
     ),
     IDEIntegration(
         "augment",

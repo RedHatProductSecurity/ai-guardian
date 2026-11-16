@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Trusted developer-session non-blocking findings (#2755):** Add a separate,
+  default-off global opt-in to surface successful block-action findings as
+  advisory diagnostics while preserving scanning, violation logging, and
+  fail-closed `on_scan_error: block` behavior. Supported PostToolUse secret and
+  PII output is redacted and keeps the scanner diagnostic; sensitive findings
+  remain blocking where host/tool protocols cannot safely replace content.
 - **Cypress Cloud record key detection (#2750):** Detect GUID values assigned to
   `CYPRESS_RECORD_KEY` without matching generic UUIDs or project IDs.
 - **Serval API client secret detection (#2749):** Detect public API and worker
