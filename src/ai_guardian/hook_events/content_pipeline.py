@@ -6,11 +6,15 @@ in a result loop.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import ai_guardian.config.loaders as _loaders
 from ai_guardian.config.utils import is_feature_enabled
 from ai_guardian.constants import HookEvent, ViolationType, ActionMode
+from ai_guardian.developer_session import (
+    NON_BLOCKING_FINDINGS_NOTICE,
+    should_downgrade_blocking_finding,
+)
 from ai_guardian.hook_events.utils import (
     _format_response,  # noqa: F401
     _extract_pii_matched_text,
@@ -34,6 +38,125 @@ def _agent_type_value(adapter, ide_type):
     if isinstance(ide_value, str) and ide_value:
         return ide_value
     return str(ide_type or "unknown")
+
+
+def _sensitive_finding_values(result, content: str) -> Optional[List[str]]:
+    """Extract exact sensitive matches needed to verify a prompt replacement."""
+    violation_type = getattr(result.violation_type, "value", result.violation_type)
+    values = []
+
+    if violation_type == "secret_detected":
+        candidates = [result.matched_text]
+        for finding in result.findings or []:
+            if isinstance(finding, dict):
+                candidates.append(finding.get("matched_text"))
+        for candidate in candidates:
+            if not isinstance(candidate, str) or len(candidate) < 4:
+                continue
+            if candidate not in content:
+                return None
+            if candidate not in values:
+                values.append(candidate)
+    elif violation_type == "pii_detected":
+        redactions = result.redactions
+        if not isinstance(redactions, list) or not redactions:
+            return None
+        for redaction in redactions:
+            if not isinstance(redaction, dict):
+                return None
+            position = redaction.get("position")
+            length = redaction.get("original_length")
+            if (
+                not isinstance(position, int)
+                or isinstance(position, bool)
+                or not isinstance(length, int)
+                or isinstance(length, bool)
+                or position < 0
+                or length <= 0
+                or position + length > len(content)
+            ):
+                return None
+            value = content[position : position + length]
+            if value not in values:
+                values.append(value)
+
+    return values or None
+
+
+def _value_spans(content: str, value: str) -> List[Tuple[int, int]]:
+    """Return every exact occurrence so repeated sensitive values are removed."""
+    spans = []
+    offset = 0
+    while value:
+        position = content.find(value, offset)
+        if position < 0:
+            break
+        spans.append((position, position + len(value)))
+        offset = position + len(value)
+    return spans
+
+
+def _verified_sensitive_prompt_replacement(
+    prompt: str,
+    scan_results,
+    diagnostic_values_by_result: Dict[int, List[str]],
+) -> Optional[str]:
+    """Redact exact block-action findings and verify none remain in the prompt."""
+    spans = []
+    values_to_remove = []
+    found_block_finding = False
+
+    for result in scan_results:
+        violation_type = getattr(result.violation_type, "value", result.violation_type)
+        if violation_type not in {"secret_detected", "pii_detected"}:
+            continue
+        if not result.detected:
+            continue
+        extra = result.extra if isinstance(result.extra, dict) else {}
+        if extra.get("action", "block") != "block" or extra.get("scan_error"):
+            continue
+        found_block_finding = True
+        values = diagnostic_values_by_result.get(id(result))
+        if not values:
+            return None
+        for value in values:
+            value_spans = _value_spans(prompt, value)
+            if not value_spans:
+                return None
+            spans.extend(value_spans)
+            values_to_remove.append(value)
+
+    if not found_block_finding or not spans:
+        return None
+
+    merged_spans: List[Tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if merged_spans and start <= merged_spans[-1][1]:
+            merged_spans[-1] = (merged_spans[-1][0], max(merged_spans[-1][1], end))
+        else:
+            merged_spans.append((start, end))
+
+    pieces: List[str] = []
+    offset = 0
+    for start, end in merged_spans:
+        pieces.extend((prompt[offset:start], "[REDACTED]"))
+        offset = end
+    pieces.append(prompt[offset:])
+    replacement = "".join(pieces)
+
+    if replacement == prompt or any(value in replacement for value in values_to_remove):
+        return None
+    return replacement
+
+
+def _sanitize_finding_diagnostic(message, sensitive_values):
+    """Remove exact matched values from scanner diagnostics before display."""
+    if not isinstance(message, str):
+        return message
+    for value in sorted(set(sensitive_values or []), key=len, reverse=True):
+        if value:
+            message = message.replace(value, "[REDACTED]")
+    return message
 
 
 def _matches_ignore_files(file_path, ignore_files):
@@ -141,6 +264,9 @@ def run_content_pipeline(
         _latency_timer = ctx._latency_timer
         security_message = ctx.security_message
         _invocation_allowed = ctx._invocation_allowed
+        safe_prompt_replacement = ctx.safe_prompt_replacement is True
+    else:
+        safe_prompt_replacement = False
 
     agent_type = _agent_type_value(adapter, ide_type)
 
@@ -215,6 +341,36 @@ def run_content_pipeline(
         registry=_registry,
     )
 
+    diagnostic_values_by_result = {}
+    for scan_result in scan_results:
+        violation_type = getattr(
+            scan_result.violation_type, "value", scan_result.violation_type
+        )
+        if violation_type in {"secret_detected", "pii_detected"}:
+            values = _sensitive_finding_values(scan_result, content_to_scan)
+            if values:
+                diagnostic_values_by_result[id(scan_result)] = values
+
+    prompt_replacement_verified = False
+    if (
+        ctx is not None
+        and hook_event == HookEvent.PROMPT
+        and safe_prompt_replacement
+        and _post_scan_ctx.non_blocking_findings_enabled
+    ):
+        submitted_prompt = hook_data.get("prompt")
+        # OCR, system-tag removal, or other prompt transformations mean the
+        # scanner's spans cannot be safely mapped back to the host-owned draft.
+        if isinstance(submitted_prompt, str) and submitted_prompt == content_to_scan:
+            replacement = _verified_sensitive_prompt_replacement(
+                submitted_prompt,
+                scan_results,
+                diagnostic_values_by_result,
+            )
+            if replacement is not None:
+                ctx.modified_prompt = replacement
+                prompt_replacement_verified = True
+
     # Build pipeline names for context saving (derived from registry)
     _content_pipeline = _registry.get_pipeline(
         hook_event,
@@ -245,6 +401,7 @@ def run_content_pipeline(
         error_override=None,
         non_block_warning=False,
         fp_override=None,
+        diagnostic_values=None,
         **pipeline_kwargs,
     ):
         decision = apply_post_scan_pipeline(
@@ -255,6 +412,11 @@ def run_content_pipeline(
             filename=filename,
             **pipeline_kwargs,
         )
+        if diagnostic_values:
+            decision.warnings = [
+                _sanitize_finding_diagnostic(warning, diagnostic_values)
+                for warning in decision.warnings
+            ]
         warning_messages.extend(decision.warnings)
         if warn_violation_types is not None and decision.warnings:
             warn_violation_types.append(vtype)
@@ -264,8 +426,16 @@ def run_content_pipeline(
             error = (
                 error_override if error_override is not None else decision.error_message
             )
+            if diagnostic_values:
+                error = _sanitize_finding_diagnostic(error, diagnostic_values)
             _blocking_violations.append((error, vtype))
-        elif non_block_warning and result.error_message:
+        elif (
+            non_block_warning
+            and result.error_message
+            and not any(
+                NON_BLOCKING_FINDINGS_NOTICE in warning for warning in decision.warnings
+            )
+        ):
             warning_messages.append(result.error_message)
             if warn_violation_types is not None:
                 warn_violation_types.append(vtype)
@@ -370,6 +540,8 @@ def run_content_pipeline(
                 vtype,
                 skip_violation_log=True,
                 error_override=result.error_message,
+                diagnostic_values=diagnostic_values_by_result.get(id(result)),
+                sensitive_replacement_verified=prompt_replacement_verified,
             )
 
         elif scanner_name == ScannerName.PII:
@@ -383,6 +555,8 @@ def run_content_pipeline(
                 warn_violation_types=warn_violation_types,
                 log_only_count=log_only_count,
                 pii_content=(content_overrides.get(ScannerName.PII, content_to_scan)),
+                sensitive_replacement_verified=prompt_replacement_verified,
+                diagnostic_values=diagnostic_values_by_result.get(id(result)),
             )
             if pii_block_msg is not None:
                 _blocking_violations.append((pii_block_msg, ViolationType.PII_DETECTED))
@@ -618,6 +792,8 @@ def _handle_pii_result(
     warn_violation_types,
     log_only_count,
     pii_content,
+    sensitive_replacement_verified=False,
+    diagnostic_values=None,
 ):
     """Handle PII scan result post-processing.
 
@@ -640,6 +816,7 @@ def _handle_pii_result(
 
     pii_config_for_log, _ = _loaders._load_pii_config()
     pii_action = (pii_config_for_log or {}).get("action", pii_action)
+    configured_pii_action = pii_action
     pii_types = list(set(r.get("type", "unknown") for r in pii_redactions))
     logger.warning(f"PII detected: {pii_types}")
 
@@ -672,18 +849,37 @@ def _handle_pii_result(
         filename=filename,
         blocked_overrides=pii_blocked_ov,
         finding_fingerprints=pii_fps,
+        sensitive_replacement_verified=sensitive_replacement_verified,
     )
+    if diagnostic_values:
+        pii_decision.warnings = [
+            _sanitize_finding_diagnostic(warning, diagnostic_values)
+            for warning in pii_decision.warnings
+        ]
     warning_messages.extend(pii_decision.warnings)
     if warn_violation_types is not None and pii_decision.warnings:
         warn_violation_types.append(ViolationType.PII_DETECTED)
 
+    session_override_applied = (
+        should_downgrade_blocking_finding(
+            enabled=_post_scan_ctx.non_blocking_findings_enabled,
+            action=configured_pii_action,
+            detected=pii_result.detected,
+            scan_error=pii_result.extra.get("scan_error"),
+        )
+        and not pii_decision.should_block
+    )
     if not pii_decision.should_block:
         pii_action = "warn"
 
     if pii_action in ("block", "redact"):
-        return (pii_warning, log_only_count)
+        return (
+            _sanitize_finding_diagnostic(pii_warning, diagnostic_values),
+            log_only_count,
+        )
     elif pii_action == "warn":
-        warning_messages.append(pii_warning)
+        if pii_warning and not session_override_applied:
+            warning_messages.append(pii_warning)
         if warn_violation_types is not None:
             warn_violation_types.append(ViolationType.PII_DETECTED)
     elif pii_action == "log-only":

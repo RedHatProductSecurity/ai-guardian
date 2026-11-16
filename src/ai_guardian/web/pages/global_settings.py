@@ -18,6 +18,20 @@ from ai_guardian.web.config_helpers import (
 from ai_guardian.agent_config_protection import is_agent_config_protection_enabled
 from ai_guardian.self_protection import is_host_agent_cli_protection_enabled
 
+DEVELOPER_SESSION_NON_BLOCKING_HELP = (
+    "In a trusted developer session, allow eligible successful findings "
+    "configured with action=block as advisory diagnostics. This only takes "
+    "effect when Developer Session CLI Access is also enabled; it does not "
+    "enable that setting. Scanning and violation logging continue. Sensitive "
+    "content is relaxed only when the host safely replaces it with verified "
+    "sanitized content; otherwise it remains blocked. Scanner errors follow "
+    "on_scan_error, including fail-closed behavior when set to block. These "
+    "settings do not disable other protections, so other hooks may still block "
+    "an operation. For legitimate development work, review the violation and "
+    "follow your organization's approved exception process. Restart the "
+    "daemon/session after changing this setting."
+)
+
 FEATURE_GROUPS = [
     (
         "Scanning",
@@ -320,6 +334,22 @@ def _set_developer_session_enabled(config, value):
     if not isinstance(section, dict):
         section = {}
     section["enabled"] = bool(value)
+    config["developer_session"] = section
+    return config
+
+
+def _get_developer_session_non_blocking_findings_enabled(config):
+    """Read the global-only non-blocking-findings option for display."""
+    section = config.get("developer_session", {})
+    return isinstance(section, dict) and section.get("non_blocking_findings") is True
+
+
+def _set_developer_session_non_blocking_findings_enabled(config, value):
+    """Update the independent non-blocking-findings opt-in."""
+    section = config.get("developer_session", {})
+    if not isinstance(section, dict):
+        section = {}
+    section["non_blocking_findings"] = bool(value)
     config["developer_session"] = section
     return config
 
@@ -691,6 +721,43 @@ def create_global_settings_page(service, daemon_name: str):
                         )
 
                     developer_switch.on_value_change(save_developer_session)
+
+                    with ui.row().classes("items-center gap-2 w-full"):
+                        findings_switch = ui.switch(
+                            "Non-blocking Detection Findings",
+                            value=_get_developer_session_non_blocking_findings_enabled(
+                                global_config
+                            ),
+                        ).classes("flex-grow")
+                        if scope_label != "Global":
+                            findings_switch.disable()
+                            ui.badge("Global only", color="blue").props("dense")
+                    ui.label(DEVELOPER_SESSION_NON_BLOCKING_HELP).classes(
+                        "text-xs text-grey-6 ml-8"
+                    )
+
+                    async def save_non_blocking_findings(event):
+                        current_global = await run.io_bound(load_web_config_global)
+                        updated_global = (
+                            _set_developer_session_non_blocking_findings_enabled(
+                                current_global, event.value
+                            )
+                        )
+                        saved = await run.io_bound(
+                            save_web_config, updated_global, scope="global"
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
+                        ui.notify(
+                            "Non-blocking Detection Findings saved; restart the daemon/session to apply",
+                            type="warning",
+                        )
+
+                    findings_switch.on_value_change(save_non_blocking_findings)
 
                 # --- On Scan Error ---
                 with ui.card().classes("w-full"):

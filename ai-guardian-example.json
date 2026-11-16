@@ -35,9 +35,10 @@
   "self_protection": {
     "block_host_agent_cli": true
   },
-  "_comment31": "Agent-originated AI Guardian CLI execution is denied by default. Enable developer_session.enabled only in this protected global config before starting a trusted development session; project configs, SDK overlays, hook payloads, and command arguments cannot enable it.",
+  "_comment31": "Trusted developer-session options are global-only. developer_session.enabled only allows agent-originated AI Guardian CLI execution. non_blocking_findings is a separate, default-off opt-in that allows successful action=block findings as advisory diagnostics only when enabled is also true; sensitive content is relaxed only when a verified host replacement delivers sanitized content (including OpenCode prompts). Scan and hook errors still follow on_scan_error, including block.",
   "developer_session": {
-    "enabled": false
+    "enabled": false,
+    "non_blocking_findings": false
   },
   "_comment32": "Protect supported CLI/IDE configuration, hooks, MCP registrations, plugins, extensions, and project/workspace artifacts from agent-originated mutations. Missing or invalid values remain enabled; disable only as an explicit global user choice.",
   "agent_config_protection": {

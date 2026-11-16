@@ -67,7 +67,8 @@ interface from agent shell execution. This boundary:
 - Runs independently of the configurable permissions rules, including when ordinary tool permissions are disabled.
 - Defaults to deny. A developer may explicitly set `developer_session.enabled` to `true` in the protected global configuration before starting the trusted development runtime. Missing, malformed, project-level, overlay, or later agent-supplied values remain denied.
 - The setting is captured when the daemon starts; if a daemon is already running, start the development session with a newly started daemon so a normal-session setting cannot be upgraded in place.
-- The opt-in affects only agent-originated AI Guardian CLI execution. Protected files, hooks, caches, MCP identity checks, and other immutable protections remain enforced.
+- `developer_session.enabled` still affects only agent-originated AI Guardian CLI execution. A separate default-off `developer_session.non_blocking_findings` option can relax successful scanner findings with `action=block` into visible advisories, but only when the trusted developer-session flag is also enabled. Detection and violation logging remain active. Sensitive findings are relaxed only when a verified host replacement receives sanitized content: supported PostToolUse output contracts and OpenCode V1/V2 prompt replacement. Prompt/tool-input findings without replacement support and unsupported PostToolUse results remain blocking.
+- `warn`, `log-only`, and `ask` actions are unchanged, and scanner/hook failures remain governed by `on_scan_error`; `on_scan_error: block` still blocks. Protected files, hooks, caches, MCP identity checks, tool-policy rules, and other immutable protections remain enforced.
 
 The boundary only applies to agent-originated tool calls. Installed IDE hook
 processes, the verified read-only `mcp__ai-guardian__*` advisor namespace, and a
@@ -75,9 +76,9 @@ human running the CLI directly in a terminal remain functional. The denial is
 reported with a safe self-protection reason and does not expose matching rules
 or permission configuration guidance.
 
-The developer-session marker is a global-only configuration setting, not a
-project permission, hook payload field, SDK overlay, or AI Guardian command-line
-option. The normal generated configuration leaves the secure default unchanged.
+Both developer-session settings are global-only configuration, not project
+permissions, hook payload fields, SDK overlays, or AI Guardian command-line
+options. The normal generated configuration leaves both opt-ins disabled.
 
 ### Agent-Originated Host CLI Boundary
 

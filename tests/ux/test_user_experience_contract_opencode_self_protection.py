@@ -209,7 +209,7 @@ def test_opencode_v1_blocked_first_prompt_keeps_a_safe_nonempty_session_turn():
     assert "messageID: firstPart.messageID" in prompt_hook
     assert "synthetic: true" in prompt_hook
     assert "output.parts.length = 0" not in prompt_hook
-    assert "result.error" not in prompt_hook
+    assert "message: `${result.error ||" in prompt_hook
     assert "fixed refusal notice was substituted" in prompt_hook
 
 
@@ -267,9 +267,58 @@ def test_opencode_v2_blocked_prompt_is_replaced_before_admission():
     assert "files: []" in prompt_hook
     assert "agents: []" in prompt_hook
     assert "skills: []" in prompt_hook
-    assert "await recordRefusalNotice(" not in prompt_hook
-    assert "result.error" not in prompt_hook
+    assert "await recordSecurityNotice(" in prompt_hook
+    assert "result.error || 'AI Guardian detected sensitive prompt content.'" in (
+        prompt_hook
+    )
     assert "throw new Error('Blocked by ai-guardian')" not in prompt_hook
+
+
+def test_opencode_sanitized_prompt_replacement_shows_a_safe_diagnostic():
+    """USER EXPERIENCE: trusted sensitive finding -> redacted prompt + visible notice.
+
+    Scenario:
+    1. Both trusted-session settings are enabled and OpenCode detects a successful
+       block-action secret/PII finding in the submitted prompt.
+    2. The hook verifies the matched value is absent from a replacement prompt.
+    3. OpenCode admits only the replacement, while the developer sees the scanner
+       diagnostic and redaction notice.
+
+    Expected User Experience:
+    - V1 replaces the submitted text and attachments before model submission, then
+      shows a warning toast with the diagnostic.
+    - V2 replaces the prompt and clears files/agent/skill selections, then records
+      the diagnostic as a safe synthetic notice.
+    - If the replacement is missing or cannot be verified, the existing block path
+      remains in force. Other hosts without verified prompt replacement stay blocked.
+
+    Manual verification:
+    1. Enable Developer Session CLI Access and Non-blocking Detection Findings.
+    2. Run `ai-guardian setup --ide opencode`, then reload OpenCode so it loads the
+       generated plugin.
+    3. Submit a synthetic prompt that triggers a configured secret finding.
+    4. Confirm only redacted text reaches the model and the scanner diagnostic is
+       visible in the V1 toast or V2 transcript notice.
+    5. Disable the trusted-session option and confirm the prompt follows the block
+       path instead.
+    """
+    v1_prompt_hook = _OPENCODE_PLUGIN_TS.split("async 'chat.message'", maxsplit=1)[
+        1
+    ].split("async 'tool.execute.after'", maxsplit=1)[0]
+    v2_prompt_hook = _OPENCODE_PLUGIN_V2_TS.split(
+        "await ctx.session.hook('prompt'", maxsplit=1
+    )[1].split("await ctx.tool.hook('execute.before'", maxsplit=1)[0]
+
+    assert "result.updatedPrompt" in v1_prompt_hook
+    assert "variant: 'warning'" in v1_prompt_hook
+    assert "Sensitive content was redacted before model submission." in v1_prompt_hook
+    assert "result.updatedPrompt" in v2_prompt_hook
+    assert "text: result.updatedPrompt" in v2_prompt_hook
+    assert "files: []" in v2_prompt_hook
+    assert "agents: []" in v2_prompt_hook
+    assert "skills: []" in v2_prompt_hook
+    assert "await recordSecurityNotice(" in v2_prompt_hook
+    assert "Sensitive content was redacted before model submission." in v2_prompt_hook
 
 
 def test_opencode_v2_pre_and_post_tool_blocks_reach_transcript_and_model():
@@ -309,8 +358,8 @@ def test_opencode_v2_pre_and_post_tool_blocks_reach_transcript_and_model():
 
     assert "The tool did not run." in _OPENCODE_PLUGIN_V2_TS
     assert "its result was withheld from the model." in _OPENCODE_PLUGIN_V2_TS
-    assert "await recordRefusalNotice(" in before_hook
-    assert "await recordRefusalNotice(" in after_hook
+    assert "await recordSecurityNotice(" in before_hook
+    assert "await recordSecurityNotice(" in after_hook
     assert "AI Guardian blocked this tool call before execution" in before_hook
     assert (
         "AI Guardian blocked this tool result after execution; result withheld"
@@ -327,7 +376,7 @@ def test_opencode_v2_pre_and_post_tool_blocks_reach_transcript_and_model():
     assert "...record" not in replacement
     assert "output: replacement" not in replacement
     notice_helper = _OPENCODE_PLUGIN_V2_TS.split(
-        "const recordRefusalNotice = async", maxsplit=1
+        "const recordSecurityNotice = async", maxsplit=1
     )[1].split("await ctx.session.hook('prompt'", maxsplit=1)[0]
     assert "event.input" not in notice_helper
     assert "event.result" not in notice_helper

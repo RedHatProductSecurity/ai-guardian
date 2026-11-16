@@ -131,7 +131,7 @@ export default {
       }, opencodeVersion);
     };
 
-    const recordRefusalNotice = async (
+    const recordSecurityNotice = async (
       sessionID: string,
       sourceID: unknown,
       text: string,
@@ -150,7 +150,7 @@ export default {
         });
       } catch {
         console.error(
-          '[ai-guardian] Could not add a refusal notice to the OpenCode transcript',
+          '[ai-guardian] Could not add a security notice to the OpenCode transcript',
         );
       }
     };
@@ -162,6 +162,25 @@ export default {
         prompt,
         message_id: event.messageID,
       }));
+      if (result.updatedPrompt !== undefined) {
+        if (typeof result.updatedPrompt === 'string' && result.updatedPrompt) {
+          event.prompt = {
+            text: result.updatedPrompt,
+            files: [],
+            agents: [],
+            skills: [],
+          };
+          await recordSecurityNotice(
+            event.sessionID,
+            event.messageID,
+            `${result.error || 'AI Guardian detected sensitive prompt content.'}\n\nSensitive content was redacted before model submission.`,
+            'prompt-sanitized',
+          );
+          return;
+        }
+        result.blocked = true;
+        result.error = 'AI Guardian could not safely replace the prompt';
+      }
       if (result.blocked) {
         // V2 prompt hooks transform admission and expose no typed denial result.
         // Replace the owned draft so the blocked payload is not admitted, while
@@ -185,7 +204,7 @@ export default {
         message_id: event.messageID,
       }));
       if (result.blocked) {
-        await recordRefusalNotice(
+        await recordSecurityNotice(
           event.sessionID,
           event.id,
           PRE_TOOL_REFUSAL_NOTICE,
@@ -218,7 +237,7 @@ export default {
           // Clear the owned result before any notification or exception path.
           event.result = resultWithReplacement(POST_TOOL_REFUSAL_NOTICE) as typeof event.result;
         }
-        await recordRefusalNotice(
+        await recordSecurityNotice(
           event.sessionID,
           event.id,
           POST_TOOL_REFUSAL_NOTICE,

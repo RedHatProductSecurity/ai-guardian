@@ -6,6 +6,11 @@ from typing import Any, Dict, Optional
 import ai_guardian.config.loaders as _loaders
 from ai_guardian.config.utils import get_project_dir, is_feature_enabled
 from ai_guardian.constants import ActionMode, ViolationType, HookEvent
+from ai_guardian.developer_session import (
+    non_blocking_finding_advisory_message,
+    should_downgrade_blocking_finding,
+)
+from ai_guardian.ide_registry import get_ide_integration_for_agent_type
 from ai_guardian.hook_events.utils import (
     _format_response,  # noqa: F401
     _extract_pii_matched_text,
@@ -15,6 +20,7 @@ from ai_guardian.hook_events.utils import (
 from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
 from ai_guardian.violations.log_violation import ScanContext, log_violation
 from ai_guardian.scanners.transcript import _advance_transcript_position
+from ai_guardian.violations.decision import PolicyDecision
 
 from ai_guardian.ask_mode import (
     _handle_ask_mode_auto,
@@ -56,6 +62,126 @@ def _agent_type_value(adapter, ide_type):
 
 _MAX_REDACTED_CONTEXT_BYTES = 102400
 _MAX_SOURCE_COMMAND_LEN = 500
+
+
+def _non_blocking_policy_decision(result, action, enabled, scan_context, source):
+    """Record the effective allow decision without hiding the scanner finding."""
+    if not result.should_block or not should_downgrade_blocking_finding(
+        enabled=enabled,
+        action=action,
+        detected=result.detected,
+        scan_error=result.extra.get("scan_error"),
+    ):
+        return None
+    return PolicyDecision.from_scan_result(
+        result,
+        scan_context.to_dict(),
+        source=source,
+        decision_override="allow",
+    )
+
+
+def _sanitize_non_blocking_secret_output(
+    content: str,
+    scan_result: ScanResult,
+    redaction_config: Optional[Dict],
+    latency_timer,
+):
+    """Return sanitized output and detected values, or None if safe redaction fails.
+
+    A trusted-session override must not send detected credentials to the model.
+    Run the normal redactor even when its user-facing feature is disabled, then
+    use exact scanner matches as a fallback for formats the redactor does not know.
+    """
+    if not isinstance(content, str) or not content:
+        return None
+
+    sanitizer_config = (
+        dict(redaction_config) if isinstance(redaction_config, dict) else {}
+    )
+    sanitizer_config["enabled"] = True
+    pii_config, _ = _loaders._load_pii_config()
+    pii_config = (
+        pii_config
+        if isinstance(pii_config, dict) and pii_config.get("enabled", True)
+        else None
+    )
+
+    from ai_guardian.scanners.secret_redactor import SecretRedactor
+
+    redactor = SecretRedactor(sanitizer_config, pii_config=pii_config)
+    with latency_timer.check("secret_redaction"):
+        redaction_result = redactor.redact(content)
+
+    redacted_text = redaction_result.get("redacted_text")
+    if not isinstance(redacted_text, str):
+        return None
+
+    detected_values = []
+    candidates = [scan_result.matched_text]
+    for finding in scan_result.findings or []:
+        if isinstance(finding, dict):
+            candidate = finding.get("matched_text")
+            if isinstance(candidate, str):
+                candidates.append(candidate)
+    for candidate in candidates:
+        if len(candidate) >= 4 and candidate not in detected_values:
+            detected_values.append(candidate)
+
+    # SecretRedactor handles normal formats and preserves established masking
+    # strategies. Exact findings from another engine still need full masking.
+    for detected_value in detected_values:
+        if detected_value in redacted_text:
+            redacted_text = redacted_text.replace(detected_value, "[REDACTED]")
+
+    if redacted_text == content or not detected_values:
+        return None
+    if any(value in redacted_text for value in detected_values):
+        return None
+
+    return redacted_text, detected_values
+
+
+def _pii_redaction_verified(content: str, redacted_text: Any, redactions: list) -> bool:
+    """Confirm every PII value identified by spans is absent from replacement."""
+    if not isinstance(redacted_text, str) or redacted_text == content:
+        return False
+
+    detected_values = []
+    for redaction in redactions:
+        if not isinstance(redaction, dict):
+            continue
+        position = redaction.get("position", -1)
+        length = redaction.get("original_length", 0)
+        if (
+            isinstance(position, int)
+            and isinstance(length, int)
+            and position >= 0
+            and length > 0
+            and position + length <= len(content)
+        ):
+            detected_values.append(content[position : position + length])
+
+    return bool(detected_values) and all(
+        value not in redacted_text for value in detected_values
+    )
+
+
+def _supports_safe_post_output_replacement(agent_type: str, tool_name: str) -> bool:
+    """Return whether this host/tool pair can replace model-visible output safely."""
+    integration = get_ide_integration_for_agent_type(agent_type)
+    if integration is None or not integration.safe_post_output_replacement:
+        return False
+
+    normalized_tool = (tool_name or "").casefold()
+    if integration.key == "claude" and normalized_tool == "bash":
+        # Claude Code currently ignores updatedToolOutput for Bash results.
+        return False
+    if integration.key == "cursor" and not normalized_tool.startswith("mcp__"):
+        # Cursor documents replacement only for local MCP tool results.
+        return False
+
+    return True
 
 
 # Deferred-import wrappers for functions defined in hook_processing.py.
@@ -132,6 +258,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
         violation_logger = ctx.violation_logger
         _latency_timer = ctx._latency_timer
         _invocation_allowed = ctx._invocation_allowed
+        non_blocking_findings_enabled = (
+            getattr(ctx, "non_blocking_findings_enabled", False) is True
+        )
         now = ctx.now
     else:
         hook_data = kwargs["hook_data"]
@@ -144,6 +273,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
         violation_logger = kwargs["violation_logger"]
         _latency_timer = kwargs["_latency_timer"]
         _invocation_allowed = kwargs["_invocation_allowed"]
+        non_blocking_findings_enabled = (
+            kwargs.get("non_blocking_findings_enabled", False) is True
+        )
         now = kwargs["now"]
 
     agent_type = _agent_type_value(adapter, ide_type)
@@ -222,6 +354,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 violation_logger=violation_logger,
                 latency_timer=_latency_timer,
                 invocation_allowed_findings=_invocation_allowed,
+                non_blocking_findings_enabled=non_blocking_findings_enabled,
             ),
         )
         if password_decision.should_block:
@@ -572,6 +705,64 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 return result
         else:
             # Redaction disabled - block to prevent secrets from reaching AI model
+            if should_downgrade_blocking_finding(
+                enabled=non_blocking_findings_enabled,
+                action="block",
+                detected=has_secrets,
+                scan_error=(
+                    post_secret_result.extra.get("scan_error")
+                    if post_secret_result
+                    else None
+                ),
+            ) and _supports_safe_post_output_replacement(agent_type, tool_name):
+                try:
+                    sanitized = _sanitize_non_blocking_secret_output(
+                        tool_output,
+                        post_secret_result,
+                        redaction_config,
+                        _latency_timer,
+                    )
+                except Exception:
+                    sanitized = None
+                    logger.warning(
+                        "Failed to sanitize a trusted-session secret finding; "
+                        "retaining the block"
+                    )
+
+                if sanitized is not None:
+                    redacted_text, detected_values = sanitized
+                    if len(redacted_text) > _MAX_REDACTED_CONTEXT_BYTES:
+                        original_length = len(redacted_text)
+                        redacted_text = (
+                            redacted_text[:_MAX_REDACTED_CONTEXT_BYTES]
+                            + f"\n\n[Truncated: original output was {original_length} bytes]"
+                        )
+
+                    # Keep the established scanner diagnostic visible; scrub
+                    # exact matches defensively if a scanner ever includes one.
+                    warning_message = error_message or "Secrets detected in tool output"
+                    for detected_value in detected_values:
+                        warning_message = warning_message.replace(
+                            detected_value, "[REDACTED]"
+                        )
+                    result = _format_response(
+                        adapter,
+                        has_secrets=False,
+                        hook_event=hook_event,
+                        warning_message=warning_message,
+                        modified_output=redacted_text,
+                        violation_type=ViolationType.SECRET_DETECTED,
+                        tool_name=tool_name,
+                    )
+                    result["_warning"] = True
+                    result["_violation_type"] = ViolationType.SECRET_DETECTED
+                    _advance_transcript_position(hook_data)
+                    return result
+
+                logger.error(
+                    "Secret finding could not be sanitized; blocking PostToolUse output"
+                )
+
             logger.warning("Secrets detected and redaction disabled - blocking output")
             result = _format_response(
                 adapter,
@@ -635,6 +826,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     "action": post_pii_result.extra.get("action", "block")
                 }
                 pii_action = _pii_cfg.get("action", "block")
+                configured_pii_action = pii_action
                 pii_types = list(set(r["type"] for r in pii_redactions))
                 _pii_first = pii_redactions[0] if pii_redactions else {}
                 _pii_sc = _pii_first.get("column")
@@ -762,6 +954,23 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             ide_type=agent_type,
                         )
 
+                if (
+                    should_downgrade_blocking_finding(
+                        enabled=non_blocking_findings_enabled,
+                        action=configured_pii_action,
+                        detected=has_pii,
+                        scan_error=post_pii_result.extra.get("scan_error"),
+                    )
+                    and _pii_redaction_verified(
+                        tool_output, redacted_text, pii_redactions
+                    )
+                    and _supports_safe_post_output_replacement(agent_type, tool_name)
+                ):
+                    pii_action = "warn"
+                    pii_session_downgraded = True
+                else:
+                    pii_session_downgraded = False
+
                 if pii_action == "block":
                     result = _format_response(
                         adapter,
@@ -802,7 +1011,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         has_secrets=False,
                         hook_event=hook_event,
                         warning_message=pii_warning,
+                        modified_output=(
+                            redacted_text if pii_session_downgraded else None
+                        ),
                         violation_type=ViolationType.PII_DETECTED,
+                        tool_name=tool_name,
                     )
                     result["_warning"] = True
                     result["_violation_type"] = ViolationType.PII_DETECTED
@@ -873,16 +1086,32 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     post_pi_detected = post_pi_result.detected
                     post_pi_block = post_pi_result.should_block
                     post_pi_error_msg = post_pi_result.error_message
+                    post_pi_action = post_pi_result.extra.get("action", "block")
+                    post_pi_downgraded = (
+                        post_pi_block
+                        and should_downgrade_blocking_finding(
+                            enabled=non_blocking_findings_enabled,
+                            action=post_pi_action,
+                            detected=post_pi_detected,
+                            scan_error=post_pi_result.extra.get("scan_error"),
+                        )
+                    )
+                    post_pi_source = (
+                        "prompt" if post_pi_cp_filename == "user_prompt" else "file"
+                    )
 
                     if post_pi_detected:
                         log_violation(
                             post_pi_result,
                             _scan_ctx,
                             violation_logger=violation_logger,
-                            source=(
-                                "prompt"
-                                if post_pi_cp_filename == "user_prompt"
-                                else "file"
+                            source=post_pi_source,
+                            policy_decision=_non_blocking_policy_decision(
+                                post_pi_result,
+                                post_pi_action,
+                                non_blocking_findings_enabled,
+                                _scan_ctx,
+                                post_pi_source,
                             ),
                             suggestion={
                                 "action": "add_allowlist_pattern",
@@ -891,7 +1120,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         )
 
                     if post_pi_block:
-                        post_pi_action = post_pi_result.extra.get("action", "block")
                         post_pi_ask = _handle_ask_mode_auto(
                             post_pi_action,
                             ViolationType.PROMPT_INJECTION,
@@ -935,6 +1163,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                                     ide_type=agent_type,
                                 )
 
+                        if post_pi_block and post_pi_downgraded:
+                            post_pi_block = False
+                            post_warning_messages.append(
+                                non_blocking_finding_advisory_message(post_pi_error_msg)
+                            )
+                            post_warn_types.append(ViolationType.PROMPT_INJECTION)
+
                         if post_pi_block:
                             logger.info("PostToolUse: blocking due to prompt injection")
                             result = _format_response(
@@ -946,7 +1181,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             )
                             _advance_transcript_position(hook_data)
                             return result
-                    elif post_pi_detected and post_pi_error_msg:
+                    elif (
+                        post_pi_detected
+                        and post_pi_error_msg
+                        and not post_pi_downgraded
+                    ):
                         post_warning_messages.append(post_pi_error_msg)
                         post_warn_types.append(ViolationType.PROMPT_INJECTION)
 
@@ -999,6 +1238,16 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     post_cp_detected = post_cp_result.detected
                     post_cp_block = post_cp_result.should_block
                     post_cp_error_msg = post_cp_result.error_message
+                    cp_action = post_cp_result.extra.get("action", "warn")
+                    post_cp_downgraded = (
+                        post_cp_block
+                        and should_downgrade_blocking_finding(
+                            enabled=non_blocking_findings_enabled,
+                            action=cp_action,
+                            detected=post_cp_detected,
+                            scan_error=post_cp_result.extra.get("scan_error"),
+                        )
+                    )
 
                     if post_cp_detected:
                         log_violation(
@@ -1006,6 +1255,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             _scan_ctx,
                             violation_logger=violation_logger,
                             source="prompt",
+                            policy_decision=_non_blocking_policy_decision(
+                                post_cp_result,
+                                cp_action,
+                                non_blocking_findings_enabled,
+                                _scan_ctx,
+                                "prompt",
+                            ),
                             suggestion={
                                 "action": "add_allowlist_pattern",
                                 "note": "If this is a legitimate persistent instruction, add to context_poisoning.allowlist_patterns in ai-guardian.json",
@@ -1013,7 +1269,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         )
 
                     if post_cp_block:
-                        cp_action = post_cp_result.extra.get("action", "warn")
                         post_cp_ask = _handle_ask_mode_auto(
                             cp_action,
                             ViolationType.CONTEXT_POISONING,
@@ -1056,6 +1311,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                                     ide_type=agent_type,
                                 )
 
+                        if post_cp_block and post_cp_downgraded:
+                            post_cp_block = False
+                            post_warning_messages.append(
+                                non_blocking_finding_advisory_message(post_cp_error_msg)
+                            )
+                            post_warn_types.append(ViolationType.CONTEXT_POISONING)
+
                         if post_cp_block:
                             logger.info(
                                 "PostToolUse: blocking due to context poisoning"
@@ -1069,7 +1331,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             )
                             _advance_transcript_position(hook_data)
                             return result
-                    elif post_cp_detected and post_cp_error_msg:
+                    elif (
+                        post_cp_detected
+                        and post_cp_error_msg
+                        and not post_cp_downgraded
+                    ):
                         post_warning_messages.append(post_cp_error_msg)
                         post_warn_types.append(ViolationType.CONTEXT_POISONING)
         except Exception as e:
@@ -1084,13 +1350,31 @@ def handle_post_tool_use(ctx=None, **kwargs):
             latency_timer=_latency_timer,
         )
         if post_ol_result is not None and post_ol_result.detected:
+            post_ol_action = post_ol_result.extra.get("action", "log")
+            post_ol_should_block = post_ol_result.should_block
+            post_ol_downgraded = (
+                post_ol_should_block
+                and should_downgrade_blocking_finding(
+                    enabled=non_blocking_findings_enabled,
+                    action=post_ol_action,
+                    detected=post_ol_result.detected,
+                    scan_error=post_ol_result.extra.get("scan_error"),
+                )
+            )
             log_violation(
                 post_ol_result,
                 _scan_ctx,
                 violation_logger=violation_logger,
                 context_overrides={
-                    "action": post_ol_result.extra.get("action", "log"),
+                    "action": post_ol_action,
                 },
+                policy_decision=_non_blocking_policy_decision(
+                    post_ol_result,
+                    post_ol_action,
+                    non_blocking_findings_enabled,
+                    _scan_ctx,
+                    "post_tool_use",
+                ),
                 suggestion={
                     "action": "review_offensive_language",
                     "note": (
@@ -1100,8 +1384,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     ),
                 },
             )
-            post_ol_action = post_ol_result.extra.get("action", "log")
-            post_ol_should_block = post_ol_result.should_block
             post_ol_error_msg = post_ol_result.error_message
             post_ol_ask = _handle_ask_mode_auto(
                 post_ol_action,
@@ -1144,6 +1426,12 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         dialog_wait_ms=post_ol_ask.dialog_wait_ms,
                         ide_type=agent_type,
                     )
+            if post_ol_should_block and post_ol_downgraded:
+                post_ol_should_block = False
+                post_warning_messages.append(
+                    non_blocking_finding_advisory_message(post_ol_error_msg)
+                )
+                post_warn_types.append(ViolationType.OFFENSIVE_LANGUAGE)
             if post_ol_should_block:
                 logger.info("PostToolUse: blocking due to offensive language detection")
                 result = _format_response(
@@ -1155,7 +1443,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 )
                 _advance_transcript_position(hook_data)
                 return result
-            elif post_ol_error_msg:
+            elif post_ol_error_msg and not post_ol_downgraded:
                 post_warning_messages.append(post_ol_error_msg)
                 post_warn_types.append(ViolationType.OFFENSIVE_LANGUAGE)
     except Exception as e:

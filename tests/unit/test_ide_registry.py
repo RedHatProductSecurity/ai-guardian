@@ -69,6 +69,26 @@ def test_openshell_cli_registry_matches_the_published_image_scope():
     assert set(SUPPORTED_OPENSHELL_CLI_IDE_TYPES).issubset(set(SUPPORTED_CLI_IDE_TYPES))
 
 
+def test_safe_post_output_replacement_is_limited_to_verified_integrations():
+    safe_integrations = {
+        integration.key
+        for integration in SUPPORTED_IDE_REGISTRY
+        if integration.safe_post_output_replacement
+    }
+
+    assert safe_integrations == {"claude", "cursor", "aiderdesk", "opencode", "pi"}
+
+
+def test_safe_prompt_replacement_is_limited_to_verified_integrations():
+    safe_integrations = {
+        integration.key
+        for integration in SUPPORTED_IDE_REGISTRY
+        if integration.safe_prompt_replacement
+    }
+
+    assert safe_integrations == {"opencode"}
+
+
 def test_cli_capable_integrations_have_executable_and_identity_metadata():
     for integration in SUPPORTED_IDE_REGISTRY:
         if not integration.cli_capable:

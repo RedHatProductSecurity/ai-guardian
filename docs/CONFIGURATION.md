@@ -182,16 +182,43 @@ read-only commands. For AI Guardian development only, set
 daemon captures this value at startup; a missing or malformed value denies
 access.
 
+This CLI-access setting does not change scanner enforcement. The separate,
+default-off `developer_session.non_blocking_findings` option allows successful
+findings whose configured action is `block` to appear as advisory diagnostics
+instead. Scanning and violation logging continue, and the user sees the finding
+diagnostic. Non-sensitive findings also include an explicit note that the
+trusted developer-session option allowed the operation. The option is effective
+only when `developer_session.enabled` is also `true`.
+
+Sensitive findings are only relaxed when the host contract can replace the
+model-visible content with a sanitized version. For supported PostToolUse
+secret and PII results, AI Guardian redacts the output and preserves the
+scanner's existing diagnostic message. OpenCode V1/V2 can also replace the
+submitted prompt with verified redacted text and show the scanner diagnostic.
+If redaction or host replacement cannot be verified, the finding remains
+blocking. Replacement is tool-specific: Claude Code Bash output and Cursor
+non-MCP results are not treated as replaceable. Prompt/tool-input findings on
+hosts without verified prompt replacement remain blocking even when this option
+is enabled. See the [agent support matrix](AGENT_SUPPORT.md) for host-specific
+limits.
+
+Configured `warn`, `log-only`, and `ask` actions are unchanged. Scanner and hook
+failures are not findings and are never relaxed by this option;
+`on_scan_error: block` remains fail-closed. Enabling non-blocking findings can
+allow content that a finding would otherwise have withheld, so use it only in a
+trusted development session.
+
 This is a global-only session setting, not a project permission. It is not read
 from project configuration, SDK overlays, hook payloads, or AI Guardian
-command-line arguments.
-The opt-in is limited to the CLI boundary and does not disable protected-file,
-hook, cache, MCP identity, or other immutable protections.
+command-line arguments. The non-blocking-findings option has the same protected
+global-only scope. CLI access remains limited to its existing boundary; the
+findings option does not disable protected-file, hook, cache, MCP identity, or
+other immutable protections.
 
 The Web Console exposes this setting under **Configuration & CLI
-Protection** in Global Settings. It is displayed but not editable while the
-project configuration scope is selected. Restart the daemon/session after
-changing it.
+Protection** in Global Settings. Both developer-session options are displayed
+but not editable while the project configuration scope is selected. Restart the
+daemon/session after changing either option.
 
 ### Host CLI Self-Protection
 

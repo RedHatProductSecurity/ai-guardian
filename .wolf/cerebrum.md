@@ -6,6 +6,11 @@
 
 ## User Preferences
 
+- **2026-11-16 — Trusted-session finding diagnostics (#2755):** When a trusted
+  developer-session option allows sanitized finding output, keep the scanner's
+  existing diagnostic visible to the developer so they can tell detection is
+  still active. Do not replace that diagnostic with only a generic advisory.
+
 - **2026-11-14 — Versioned NotebookLM title (#2736):** After verified release
   documentation replacement, rename the same notebook to `AI Guardian vX.Y.Z`.
   Do not advance the title on a failed source replacement; rename-only recovery

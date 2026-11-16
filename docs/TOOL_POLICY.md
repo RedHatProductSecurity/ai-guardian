@@ -717,7 +717,9 @@ ordinary permission rules:
 
 - The AI Guardian CLI guard denies launches of `ai-guardian` by default. Its
   trusted developer-session opt-in is global-only and does not disable other
-  immutable protections.
+  immutable protections. A separate, default-off developer-session option may
+  relax successful block-action scanner findings; it does not change tool-policy
+  denials or scanner-error handling.
 - The host CLI guard denies launches of the active supported agent CLI when
   `self_protection.block_host_agent_cli` is enabled. It resolves the executable
   from the active adapter/session identity and the canonical integration

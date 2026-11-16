@@ -5,7 +5,8 @@ hook data as JSON to ai-guardian via stdin, using the same protocol
 as Claude Code. Detection relies on opencode_version field or env var.
 """
 
-from typing import ClassVar, Dict, List
+import json
+from typing import ClassVar, Dict, List, Optional
 
 from ai_guardian.constants import HookEvent, OPENCODE_TOOL_MAP
 from ai_guardian.hook_adapters.base import NormalizedHookInput
@@ -43,6 +44,61 @@ class OpenCodeAdapter(BaseAgentAdapter):
     def get_tool_name_map(self) -> Dict[str, str]:
         """Map OpenCode's native built-in tool names to canonical names."""
         return OPENCODE_TOOL_MAP
+
+    def format_response(
+        self,
+        has_secrets: bool,
+        error_message: Optional[str] = None,
+        hook_event: HookEvent = HookEvent.PROMPT,
+        warning_message: Optional[str] = None,
+        modified_output: Optional[str] = None,
+        violation_type: Optional[str] = None,
+        security_message: Optional[str] = None,
+        redacted_output: Optional[str] = None,
+        tool_name: Optional[str] = None,
+        modified_prompt: Optional[str] = None,
+    ) -> Dict:
+        """Return a host-owned sanitized prompt replacement when verified."""
+        response = super().format_response(
+            has_secrets=has_secrets,
+            error_message=error_message,
+            hook_event=hook_event,
+            warning_message=warning_message,
+            modified_output=modified_output,
+            violation_type=violation_type,
+            security_message=security_message,
+            redacted_output=redacted_output,
+            tool_name=tool_name,
+        )
+        if modified_prompt is None:
+            return response
+
+        if has_secrets or hook_event != HookEvent.PROMPT or not modified_prompt:
+            return super().format_response(
+                has_secrets=True,
+                error_message=(
+                    "AI Guardian could not safely replace the prompt; submission blocked."
+                ),
+                hook_event=HookEvent.PROMPT,
+                violation_type=violation_type,
+            )
+
+        try:
+            payload = json.loads(response.get("output", ""))
+            if not isinstance(payload, dict):
+                raise ValueError("Unexpected OpenCode response shape")
+            payload["updatedPrompt"] = modified_prompt
+            response["output"] = json.dumps(payload)
+        except (TypeError, ValueError):
+            return super().format_response(
+                has_secrets=True,
+                error_message=(
+                    "AI Guardian could not safely replace the prompt; submission blocked."
+                ),
+                hook_event=HookEvent.PROMPT,
+                violation_type=violation_type,
+            )
+        return response
 
     def normalize_input(self, hook_data: Dict) -> NormalizedHookInput:
         result = super().normalize_input(hook_data)

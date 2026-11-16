@@ -8,12 +8,17 @@
   "properties": {
     "developer_session": {
       "type": "object",
-      "description": "Global-only developer-session access. Agent-originated AI Guardian CLI execution is denied by default. Enable this only in the protected global configuration before starting a trusted development session; project configs, SDK overlays, hook payloads, and command arguments cannot enable it.",
+      "description": "Global-only trusted developer-session options. Agent-originated AI Guardian CLI execution is denied by default. non_blocking_findings is a separate opt-in and is effective only when enabled is true. Project configs, SDK overlays, hook payloads, and command arguments cannot enable either option.",
       "properties": {
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Allow agent-originated AI Guardian CLI execution for this trusted developer session. Default: false."
+          "description": "Allow agent-originated AI Guardian CLI execution for this trusted developer session. This does not change detection enforcement. Default: false."
+        },
+        "non_blocking_findings": {
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled is also true, allow successful findings configured with action=block as advisory diagnostics when a verified host/tool contract can safely replace sensitive content. Supported PostToolUse secret and PII output is redacted and the scanner diagnostic remains visible. Sensitive prompt findings may be relaxed only where the host safely replaces the submitted prompt with verified redacted text (currently OpenCode V1/V2); prompt/tool-input findings without replacement support remain blocking. If sanitization or replacement cannot be verified, it blocks. Scanning and violation logging continue; warn, log-only, and ask actions are unchanged. Scanner and hook errors continue to follow on_scan_error, including fail-closed blocking. Protected global configuration only. Default: false."
         }
       },
       "additionalProperties": false
