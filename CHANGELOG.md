@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Cypress Cloud record key detection (#2750):** Detect GUID values assigned to
+  `CYPRESS_RECORD_KEY` without matching generic UUIDs or project IDs.
 - **Serval API client secret detection (#2749):** Detect public API and worker
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 

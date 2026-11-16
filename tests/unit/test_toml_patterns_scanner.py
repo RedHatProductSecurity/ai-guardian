@@ -69,6 +69,47 @@ class TestTomlPatternsScanner:
                 for finding in scanner.scan(value)
             )
 
+    def test_scan_finds_cypress_cloud_record_key_assignments(self):
+        scanner = TomlPatternsScanner()
+        record_key = "01234567-89ab-4cde-8fab-0123456789ab"
+        content_examples = (
+            f"CYPRESS_RECORD_KEY={record_key}",
+            f'{{"CYPRESS_RECORD_KEY": "{record_key.upper()}"}}',
+            f"export cypress_record_key='{record_key}'",
+        )
+        for content in content_examples:
+            assert any(
+                finding.rule_id == "cypress-cloud-record-key"
+                for finding in scanner.scan(content)
+            )
+
+    def test_scan_does_not_treat_generic_uuids_as_cypress_record_keys(self):
+        scanner = TomlPatternsScanner()
+        record_key = "01234567-89ab-4cde-8fab-0123456789ab"
+        safe_examples = (
+            f"request_id={record_key}",
+            "CYPRESS_PROJECT_ID=abc123",
+            f"CYPRESS_RECORD_KEY_BACKUP={record_key}",
+        )
+        for content in safe_examples:
+            assert not any(
+                finding.rule_id == "cypress-cloud-record-key"
+                for finding in scanner.scan(content)
+            )
+
+    def test_scan_rejects_malformed_cypress_record_key(self):
+        scanner = TomlPatternsScanner()
+        malformed_values = (
+            "CYPRESS_RECORD_KEY=<redacted>",
+            "CYPRESS_RECORD_KEY=01234567-89ab-4cde-8fab-0123456789a",
+            "CYPRESS_RECORD_KEY=01234567-89ab-4cde-8fab-0123456789abA",
+        )
+        for content in malformed_values:
+            assert not any(
+                finding.rule_id == "cypress-cloud-record-key"
+                for finding in scanner.scan(content)
+            )
+
     def test_scan_empty_content(self):
         scanner = TomlPatternsScanner()
         assert scanner.scan("") == []

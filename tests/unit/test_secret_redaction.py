@@ -57,6 +57,16 @@ class TestSecretRedactor:
         assert len(result["redactions"]) == 1
         assert result["redactions"][0]["type"] == "GitHub Personal Token"
 
+    def test_cypress_record_key_redaction_preserves_assignment_context(self):
+        redactor = SecretRedactor()
+        text = "CYPRESS_RECORD_KEY=01234567-89ab-4cde-8fab-0123456789ab"
+
+        result = redactor.redact(text)
+
+        assert "01234567-89ab-4cde-8fab-0123456789ab" not in result["redacted_text"]
+        assert "CYPRESS_RECORD_KEY=" in result["redacted_text"]
+        assert result["redactions"]
+
     def test_aws_access_key_full_redaction(self):
         """Test that AWS access keys are fully redacted."""
         redactor = SecretRedactor()
