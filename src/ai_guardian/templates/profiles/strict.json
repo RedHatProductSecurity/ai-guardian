@@ -171,7 +171,7 @@
   "self_protection": {
     "block_host_agent_cli": true
   },
-  "_comment_developer_session": "Trusted developer-session options are global-only. developer_session.enabled only allows agent-originated AI Guardian CLI execution. Set non_blocking_findings to true as a separate, default-off opt-in to allow successful findings configured with action=block as advisory; it has no effect unless enabled is true. Scanner/hook errors remain subject to on_scan_error (block remains fail-closed). Project configs, SDK overlays, hook payloads, and command-line arguments cannot enable these options.",
+  "_comment_developer_session": "Trusted developer-session options are global-only. developer_session.enabled only allows agent-originated AI Guardian CLI execution. Set non_blocking_findings to true as a separate, default-off opt-in to allow successful findings configured with action=block as advisory; sensitive content is relaxed only where a verified host replacement can deliver sanitized text (including OpenCode prompts). It has no effect unless enabled is true. Scanner/hook errors remain subject to on_scan_error (block remains fail-closed). Project configs, SDK overlays, hook payloads, and command-line arguments cannot enable these options.",
   "developer_session": {
     "enabled": false,
     "non_blocking_findings": false
