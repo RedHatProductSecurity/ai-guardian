@@ -7,6 +7,27 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-16 (UTC)
 
+## Issue #2756 tray menu entries survive daemon restart — 2026-11-16
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2756`, existing
+  branch `2756`. The failure was in multi-daemon menus: discovery replaced a
+  non-SSH target object without changing its menu identity, while the plugin slot
+  remained bound to the old object. Cache cleanup then hid Maintenance without a
+  menu rebuild.
+- Extracted the existing menu identity as a shared per-target key and use it for
+  cached plugin definitions. Existing slots remain bound to the rendered target;
+  SSH keeps its object-generation identity. Added unit and complete support UX
+  regressions for rediscovery and tray reconstruction; both Maintenance and
+  Contact supports remain visible.
+- **Validation:** 814 related unit tests and 134 complete support/SSH UX tests
+  pass. Ruff, Black, error-only Pylint, changed-module Mypy, JSON validation, and
+  `git diff --check` pass. Full package Mypy retains 14 existing errors in
+  untouched `skill_discovery.py` and `secret_validator.py`.
+- Checked all three acceptance criteria in GitHub #2756, posted validation at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2756#issuecomment-6928777611,
+  and saved a DAF note. **Next:** user review and external `daf complete`. No
+  commit, push, PR, or live desktop tray restart was performed.
+
 ## Issue #2750 Cypress Cloud record-key detection — 2026-11-16
 
 - On managed DAF `open` session `RedHatProductSecurity-ai-guardian-2750`, existing

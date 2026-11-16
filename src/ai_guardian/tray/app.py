@@ -1041,41 +1041,48 @@ class DaemonTray:
                         self._pystray_exception_origin(fallback_exc),
                     )
 
-    def _target_menu_identity(self):
-        """Rebuild when targets reorder or their menu-bound identity changes."""
-        return tuple(
+    @staticmethod
+    def _target_menu_identity_for(target):
+        """Return one target's menu identity, stable across discovery refreshes."""
+        return (
+            target.runtime,
+            target.name,
+            target.container_id,
+            target.pod_name,
+            target.namespace,
+            target.ssh_id,
+            id(target) if target.runtime == "ssh" else None,
             (
-                t.runtime,
-                t.name,
-                t.container_id,
-                t.pod_name,
-                t.namespace,
-                t.ssh_id,
-                id(t) if t.runtime == "ssh" else None,
                 (
                     (
-                        (
-                            t.url,
-                            t.host,
-                            t.port,
-                            tuple(
-                                (key, t.tls.get(key, ""))
-                                for key in (
-                                    "ca_file",
-                                    "server_name",
-                                    "certificate_sha256",
-                                )
-                            ),
-                        )
-                        if isinstance(t.tls, dict)
-                        else (t.url, t.host, t.port, type(t.tls).__qualname__)
+                        target.url,
+                        target.host,
+                        target.port,
+                        tuple(
+                            (key, target.tls.get(key, ""))
+                            for key in (
+                                "ca_file",
+                                "server_name",
+                                "certificate_sha256",
+                            )
+                        ),
                     )
-                    if t.runtime == "manual"
-                    else None
-                ),
-            )
-            for t in self._targets
+                    if isinstance(target.tls, dict)
+                    else (
+                        target.url,
+                        target.host,
+                        target.port,
+                        type(target.tls).__qualname__,
+                    )
+                )
+                if target.runtime == "manual"
+                else None
+            ),
         )
+
+    def _target_menu_identity(self):
+        """Rebuild when targets reorder or their menu-bound identity changes."""
+        return tuple(self._target_menu_identity_for(target) for target in self._targets)
 
     @staticmethod
     def _pystray_exception_origin(exc):

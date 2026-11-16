@@ -330,6 +330,14 @@
 
 ## Key Learnings
 
+- **2026-11-16 — Tray plugin cache across rediscovery (#2756):** Discovery may
+  replace non-SSH `DaemonTarget` objects while keeping the same logical menu
+  identity. Multi-daemon plugin slots remain bound to the rendered daemon, so
+  key their cached definitions by the shared menu identity rather than object ID;
+  preserve SSH's object-ID generation boundary so reconnects cannot retarget an
+  existing action. Cover Maintenance and Contact supports through rediscovery and
+  tray reconstruction.
+
 - **2026-11-16 — Cypress record-key redaction precedence (#2750):** The generic
   environment-assignment rule can claim a `CYPRESS_RECORD_KEY` assignment before
   the bundled context-specific TOML rule. Test that the value is removed and the
