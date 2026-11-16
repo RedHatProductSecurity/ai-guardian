@@ -37,6 +37,42 @@ budget_tokens: 1000
 - Published as `3318d3ff` to PR #2765. The refreshed CodeQL check passed
   (`133672389250`), as did the current Analyze matrix and Read the Docs build.
 
+## Issue #2763 Quay usernames from Actions variables — 2026-11-16
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2763`. DAF metadata
+  identified branch `2763`, but the clean checkout initially showed `2755`; switched
+  to the existing local `2763` branch before editing.
+- Updated `.github/workflows/build-container.yml` so both Quay usernames come from
+  Actions `vars`, passwords remain in `secrets`, and the header documents the
+  distinction. Updated the credential regression in
+  `tests/unit/test_container_scripts.py`.
+- **Validation:** all 73 tests in `tests/unit/test_container_scripts.py` pass;
+  Ruff, Black (Python 3.10 target), and `git diff --check` pass.
+- Posted the acceptance checklist and validation on GitHub #2763, added the `done`
+  label, and saved a DAF note. **Next:** user review and external `daf complete`;
+  changes remain uncommitted, with no PR created.
+
+## Issue #2756 tray menu entries survive daemon restart — 2026-11-16
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2756`, existing
+  branch `2756`. The failure was in multi-daemon menus: discovery replaced a
+  non-SSH target object without changing its menu identity, while the plugin slot
+  remained bound to the old object. Cache cleanup then hid Maintenance without a
+  menu rebuild.
+- Extracted the existing menu identity as a shared per-target key and use it for
+  cached plugin definitions. Existing slots remain bound to the rendered target;
+  SSH keeps its object-generation identity. Added unit and complete support UX
+  regressions for rediscovery and tray reconstruction; both Maintenance and
+  Contact supports remain visible.
+- **Validation:** 814 related unit tests and 134 complete support/SSH UX tests
+  pass. Ruff, Black, error-only Pylint, changed-module Mypy, JSON validation, and
+  `git diff --check` pass. Full package Mypy retains 14 existing errors in
+  untouched `skill_discovery.py` and `secret_validator.py`.
+- Checked all three acceptance criteria in GitHub #2756, posted validation at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2756#issuecomment-6928777611,
+  and saved a DAF note. **Next:** user review and external `daf complete`. No
+  commit, push, PR, or live desktop tray restart was performed.
+
 ## Issue #2755 trusted-session non-blocking findings — 2026-11-16
 
 - Continued implementation on the existing `2755` branch. The separate global,

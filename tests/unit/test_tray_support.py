@@ -203,6 +203,46 @@ def test_local_daemon_keeps_bundled_maintenance_menu_in_multi_daemon_mode(
     assert find(maintenance.submenu, "Restart Daemon")
 
 
+def test_local_daemon_menu_survives_same_identity_rediscovery(monkeypatch):
+    from ai_guardian.tray.plugins import _load_bundled_plugins, plugins_to_dict
+    from tests.fixtures.ssh_tray import build, find, make_tray, visible
+
+    local = DaemonTarget("local", "local", status="running")
+    remote = DaemonTarget("remote", "manual", status="running")
+    tray = make_tray([local, remote])
+    tray._multi_client._local_plugins.return_value = plugins_to_dict(
+        _load_bundled_plugins()
+    )
+    tray._multi_client.get_plugins.return_value = {"plugins": []}
+    monkeypatch.setattr(tray._plugins, "_get_daemon_menu_tags", lambda _target: [])
+    tray._plugins._poll_plugins()
+
+    root = build(tray)
+    daemon_menus = [
+        item.submenu
+        for item in visible(root)
+        if item.submenu
+        and any(child.label == "Contact supports" for child in visible(item.submenu))
+    ]
+    local_menu = next(
+        item
+        for item in daemon_menus
+        if any(child.label == "Maintenance" for child in visible(item))
+    )
+    assert find(local_menu, "Contact supports")
+
+    # Discovery creates fresh target objects after the daemon restarts. The
+    # existing native menu remains bound to the same logical daemon identity.
+    tray._targets = [
+        DaemonTarget("local", "local", status="running"),
+        DaemonTarget("remote", "manual", status="running"),
+    ]
+    tray._plugins._poll_plugins()
+
+    assert find(local_menu, "Contact supports")
+    assert find(local_menu, "Maintenance")
+
+
 def test_remote_launcher_captures_tunnel_before_async_completion(monkeypatch):
     from ai_guardian.tray import support
 

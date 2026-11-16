@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IDE setup scanner availability (#2760):** Report when the built-in
   `toml-patterns` engine keeps secret scanning available without Gitleaks, and
   warn that scanning will not run only when no configured engine is available.
+- **Tray menu survives daemon rediscovery (#2756):** Keep daemon-bound plugin
+  entries available when discovery replaces a target object without changing its
+  identity, so Maintenance remains visible after a daemon restart.
 - **NotebookLM completed replacement retry:** Reuse the completed journal when
   retrying with the same explicit source UUID after the prior source was deleted.
 
