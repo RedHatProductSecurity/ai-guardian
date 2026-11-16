@@ -34,8 +34,8 @@ budget_tokens: 1000
   Ruff, Black (Python 3.10 target), error-level Pylint, diff checks, and targeted
   Mypy for both changed source modules pass. Package-wide Mypy still reports the
   same 14 errors in untouched `skill_discovery.py` and `scanners/secret_validator.py`.
-- The follow-up is local and uncommitted on branch `2760`; a fresh CodeQL analysis
-  still requires publishing the update to PR #2765.
+- Published as `3318d3ff` to PR #2765. The refreshed CodeQL check passed
+  (`133672389250`), as did the current Analyze matrix and Read the Docs build.
 
 ## Issue #2755 trusted-session non-blocking findings — 2026-11-16
 
