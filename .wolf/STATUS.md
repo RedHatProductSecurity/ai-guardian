@@ -7,6 +7,21 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-16 (UTC)
 
+## Issue #2763 Quay usernames from Actions variables — 2026-11-16
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2763`. DAF metadata
+  identified branch `2763`, but the clean checkout initially showed `2755`; switched
+  to the existing local `2763` branch before editing.
+- Updated `.github/workflows/build-container.yml` so both Quay usernames come from
+  Actions `vars`, passwords remain in `secrets`, and the header documents the
+  distinction. Updated the credential regression in
+  `tests/unit/test_container_scripts.py`.
+- **Validation:** all 73 tests in `tests/unit/test_container_scripts.py` pass;
+  Ruff, Black (Python 3.10 target), and `git diff --check` pass.
+- Posted the acceptance checklist and validation on GitHub #2763, added the `done`
+  label, and saved a DAF note. **Next:** user review and external `daf complete`;
+  changes remain uncommitted, with no PR created.
+
 ## Issue #2756 tray menu entries survive daemon restart — 2026-11-16
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2756`, existing

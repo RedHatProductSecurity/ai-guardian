@@ -6,11 +6,12 @@
 #   - :latest         on every successful merge to main
 #   - :VERSION        on clean release tags (v1.2.3)
 #
-# Required secrets:
-#   QUAY_RPS_USERNAME, QUAY_RPS_PASSWORD (normal image repository)
-#   QUAY_RPS_OPENSHELL_USERNAME, QUAY_RPS_OPENSHELL_PASSWORD (OpenShell repository)
-# The RPS prefix in both OpenShell secret names must match the configured
-# GitHub Actions secrets.
+# Required GitHub Actions variables (usernames):
+#   QUAY_RPS_USERNAME (normal image repository)
+#   QUAY_RPS_OPENSHELL_USERNAME (OpenShell repository)
+# Required GitHub Actions secrets (passwords):
+#   QUAY_RPS_PASSWORD (normal image repository)
+#   QUAY_RPS_OPENSHELL_PASSWORD (OpenShell repository)
 # Required: both primary Quay repositories created and set to public:
 #           quay.io/redhatproductsecurity/ai-guardian
 #           quay.io/redhatproductsecurity/ai-guardian-openshell
@@ -139,7 +140,7 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_RPS_USERNAME }}
+          username: ${{ vars.QUAY_RPS_USERNAME }}
           password: ${{ secrets.QUAY_RPS_PASSWORD }}
 
       # --- Skip rebuild if commit-tagged image already exists ---
@@ -191,7 +192,7 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_RPS_OPENSHELL_USERNAME }}
+          username: ${{ vars.QUAY_RPS_OPENSHELL_USERNAME }}
           password: ${{ secrets.QUAY_RPS_OPENSHELL_PASSWORD }}
 
       - name: Build and push OpenShell sandbox image
