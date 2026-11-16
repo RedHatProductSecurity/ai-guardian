@@ -27,6 +27,24 @@ budget_tokens: 1000
   https://github.com/RedHatProductSecurity/ai-guardian/issues/2756#issuecomment-6928777611,
   and saved a DAF note. **Next:** user review and external `daf complete`. No
   commit, push, PR, or live desktop tray restart was performed.
+## Issue #2755 trusted-session non-blocking findings — 2026-11-16
+
+- Continued implementation on the existing `2755` branch. The separate global,
+  default-off finding option is gated by trusted Developer Session CLI Access.
+  Sensitive PostToolUse output is allowed only after verified replacement for
+  the host/tool pair and sanitized content: Claude except Bash, Cursor MCP only,
+  AiderDesk, OpenCode, and Pi. Unsupported output and all unreplaceable
+  prompt/tool-input findings remain blocking. The scanner diagnostic remains
+  visible to the developer. The host capability was confirmed against the
+  project's integration contract matrix; no live host runtime was qualified.
+- **Validation:** complete developer-session and PII UX contracts pass (25);
+  registry, PostToolUse, and scan-filter unit tests pass (108, 1 skipped).
+  Earlier directly related suites passed (53 UX and 347 unit tests). Black,
+  Ruff, error-only Pylint, JSON validation, and diff checks pass. Package Mypy
+  retains 14 known errors in untouched `skill_discovery.py` and
+  `secret_validator.py`.
+- Existing issue comment and DAF progress note are in place. Changes remain
+  uncommitted; no push or PR. **Next:** user review and external DAF completion.
 
 ## Issue #2750 Cypress Cloud record-key detection — 2026-11-16
 

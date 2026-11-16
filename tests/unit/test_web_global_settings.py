@@ -7,8 +7,10 @@ pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 from ai_guardian.web.pages.global_settings import (
     _get_agent_config_protection_enabled,
     _get_developer_session_enabled,
+    _get_developer_session_non_blocking_findings_enabled,
     _set_agent_config_protection_enabled,
     _set_developer_session_enabled,
+    _set_developer_session_non_blocking_findings_enabled,
     _get_host_agent_cli_protection_enabled,
     _set_host_agent_cli_protection_enabled,
 )
@@ -44,6 +46,38 @@ def test_developer_session_save_coerces_switch_value():
     _set_developer_session_enabled(config, 0)
 
     assert config["developer_session"]["enabled"] is False
+
+
+def test_non_blocking_findings_defaults_off_and_requires_boolean_true():
+    assert _get_developer_session_non_blocking_findings_enabled({}) is False
+    assert (
+        _get_developer_session_non_blocking_findings_enabled(
+            {"developer_session": {"non_blocking_findings": True}}
+        )
+        is True
+    )
+    assert (
+        _get_developer_session_non_blocking_findings_enabled(
+            {"developer_session": {"non_blocking_findings": "true"}}
+        )
+        is False
+    )
+
+
+def test_non_blocking_findings_save_preserves_cli_access_and_other_config():
+    config = {
+        "permissions": {"enabled": True},
+        "developer_session": {"enabled": True},
+    }
+
+    updated = _set_developer_session_non_blocking_findings_enabled(config, True)
+
+    assert updated is config
+    assert updated["permissions"] == {"enabled": True}
+    assert updated["developer_session"] == {
+        "enabled": True,
+        "non_blocking_findings": True,
+    }
 
 
 def test_agent_config_protection_defaults_enabled_and_requires_boolean_false():

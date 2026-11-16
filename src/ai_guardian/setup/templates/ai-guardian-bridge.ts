@@ -7,6 +7,7 @@ export interface GuardianResult {
   error?: string;
   output?: string;
   updatedOutput?: unknown;
+  updatedPrompt?: string;
 }
 
 interface GuardianBridgeOptions {
@@ -76,6 +77,11 @@ export function parseGuardianOutput(raw: unknown): GuardianResult | undefined {
     outer.updatedMCPToolOutput,
     outer.updated_mcp_tool_output,
   );
+  const updatedPrompt = firstDefined(
+    hookOutput.updatedPrompt,
+    inner.updatedPrompt,
+    outer.updatedPrompt,
+  );
   const blocked = outer._blocked === true
     || inner._blocked === true
     || outer.decision === 'block'
@@ -97,6 +103,7 @@ export function parseGuardianOutput(raw: unknown): GuardianResult | undefined {
     error: error || undefined,
     output,
     updatedOutput,
+    updatedPrompt: typeof updatedPrompt === 'string' ? updatedPrompt : undefined,
   };
 }
 

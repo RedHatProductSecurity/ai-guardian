@@ -368,7 +368,7 @@ def test_v1_blocked_prompt_is_replaced_with_a_safe_nonempty_message():
     assert "messageID: firstPart.messageID" in prompt_hook
     assert "synthetic: true" in prompt_hook
     assert "output.parts.length = 0" not in prompt_hook
-    assert "result.error" not in prompt_hook
+    assert "message: `${result.error ||" in prompt_hook
 
 
 def test_v2_prompt_blocks_replace_all_input_with_a_fixed_safe_notice():
@@ -386,9 +386,11 @@ def test_v2_prompt_blocks_replace_all_input_with_a_fixed_safe_notice():
     assert "files: []" in prompt_hook
     assert "agents: []" in prompt_hook
     assert "skills: []" in prompt_hook
-    assert "await recordRefusalNotice(" not in prompt_hook
+    assert "await recordSecurityNotice(" in prompt_hook
     assert "throw new Error('Blocked by ai-guardian')" not in prompt_hook
-    assert "result.error" not in prompt_hook
+    assert "result.error || 'AI Guardian detected sensitive prompt content.'" in (
+        prompt_hook
+    )
 
 
 def test_v2_tool_blocks_add_safe_pre_and_post_refusal_notices():
@@ -404,11 +406,11 @@ def test_v2_tool_blocks_add_safe_pre_and_post_refusal_notices():
     assert "The tool did not run." in _OPENCODE_PLUGIN_V2_TS
     assert "const POST_TOOL_REFUSAL_NOTICE =" in _OPENCODE_PLUGIN_V2_TS
     assert "its result was withheld from the model." in _OPENCODE_PLUGIN_V2_TS
-    assert "await recordRefusalNotice(" in before_hook
+    assert "await recordSecurityNotice(" in before_hook
     assert "PRE_TOOL_REFUSAL_NOTICE" in before_hook
     assert "event.id" in before_hook
     assert "AI Guardian blocked this tool call before execution" in before_hook
-    assert "await recordRefusalNotice(" in after_hook
+    assert "await recordSecurityNotice(" in after_hook
     assert "POST_TOOL_REFUSAL_NOTICE" in after_hook
     assert "event.id" in after_hook
     assert (

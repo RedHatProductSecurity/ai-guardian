@@ -289,6 +289,8 @@ if (mode === 'allow') {
   process.stdout.write(JSON.stringify({output: JSON.stringify({hookSpecificOutput: {updatedToolOutput: '[REDACTED]'}})}));
 } else if (mode === 'redaction-bash') {
   process.stdout.write(JSON.stringify({output: JSON.stringify({hookSpecificOutput: {updatedToolOutput: {stdout: '[REDACTED]', stderr: '', interrupted: false}}})}));
+} else if (mode === 'prompt-redaction') {
+  process.stdout.write(JSON.stringify({output: JSON.stringify({systemMessage: 'Synthetic scanner diagnostic', updatedPrompt: 'Inspect [REDACTED]'})}));
 } else if (mode === 'blocked-process') {
   process.stderr.write('blocked process');
   process.exit(2);
@@ -338,6 +340,14 @@ console.log(JSON.stringify(bridge.run({ source: 'unit-test', ...(process.env.BRI
                     "stderr": "",
                     "interrupted": False,
                 },
+            },
+        ),
+        (
+            "prompt-redaction",
+            {
+                "blocked": False,
+                "error": "Synthetic scanner diagnostic",
+                "updatedPrompt": "Inspect [REDACTED]",
             },
         ),
         ("blocked-process", {"blocked": True, "error": "blocked process"}),
@@ -573,6 +583,63 @@ console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, toasts: toa
     not _node_supports_type_stripping(),
     reason="Node.js with TypeScript type stripping is required",
 )
+def test_opencode_v1_replaces_sensitive_prompt_and_shows_diagnostic(tmp_path):
+    """Execute V1 sanitized prompt substitution and its developer-visible toast."""
+    _write_opencode_v1_plugin_runtime(tmp_path)
+    runner = tmp_path / "run-v1-sanitized-prompt.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import { AiGuardian } from './ai-guardian-plugin/index.ts';
+globalThis.guardianCalls = [];
+globalThis.guardianResponses = [{
+  blocked: false,
+  error: 'Synthetic scanner diagnostic and non-blocking notice',
+  updatedPrompt: 'Inspect [REDACTED]',
+}];
+const toasts = [];
+const plugin = await AiGuardian({
+  directory: process.cwd(),
+  client: { tui: { showToast: async ({ body }) => toasts.push(body) } },
+});
+const original = 'Inspect synthetic-secret-marker-2755';
+const message = {
+  parts: [
+    { id: 'prompt', sessionID: 'session', messageID: 'message', type: 'text', text: original },
+    { id: 'attachment', sessionID: 'session', messageID: 'message', type: 'file', filename: 'unscanned.png' },
+  ],
+};
+await plugin['chat.message']({ sessionID: 'session', messageID: 'message' }, message);
+assert.deepEqual(message.parts, [{
+  id: 'prompt', sessionID: 'session', messageID: 'message', type: 'text',
+  text: 'Inspect [REDACTED]', synthetic: true,
+}]);
+assert.equal(JSON.stringify(message.parts).includes(original), false);
+assert.equal(JSON.stringify(message.parts).includes('unscanned.png'), false);
+assert.equal(toasts.length, 1);
+assert.equal(toasts[0].variant, 'warning');
+assert.ok(toasts[0].message.includes('Synthetic scanner diagnostic'));
+assert.ok(toasts[0].message.includes('redacted before model submission'));
+assert.deepEqual(globalThis.guardianCalls.map(call => call.prompt), [original]);
+console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, toasts: toasts.length }));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"calls": 1, "toasts": 1}
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
 def test_opencode_v2_first_and_later_blocks_admit_only_safe_notice(tmp_path):
     """Execute V2 prompt refusal and safe follow-up through the generated plugin."""
     _write_opencode_plugin_runtime(tmp_path)
@@ -658,6 +725,78 @@ console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, syntheticMe
     )
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout) == {"calls": 3, "syntheticMessages": 0}
+
+
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_opencode_v2_replaces_sensitive_prompt_and_records_diagnostic(tmp_path):
+    """Execute V2 prompt substitution and its visible synthetic diagnostic."""
+    _write_opencode_plugin_runtime(tmp_path)
+    runner = tmp_path / "run-v2-sanitized-prompt.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import plugin from './ai-guardian-plugin/index.ts';
+globalThis.guardianCalls = [];
+globalThis.guardianResponses = [{
+  blocked: false,
+  error: 'Synthetic scanner diagnostic and non-blocking notice',
+  updatedPrompt: 'Inspect [REDACTED]',
+}];
+const hooks = {};
+const syntheticMessages = [];
+const sessionID = 'session';
+const cleanup = await plugin.setup({
+  location: { directory: process.cwd() },
+  app: { version: '2.0.22' },
+  session: {
+    hook: async (name, handler) => { hooks[name] = handler; },
+    get: async () => ({ title: 'Session', location: { directory: process.cwd() } }),
+    synthetic: async message => syntheticMessages.push(message),
+  },
+  tool: { hook: async (name, handler) => { hooks[name] = handler; } },
+  event: { async *subscribe() {} },
+});
+const original = 'Inspect synthetic-secret-marker-2755';
+const event = {
+  sessionID,
+  messageID: 'message',
+  prompt: {
+    text: original,
+    files: [{ uri: 'file:///unscanned.png' }],
+    agents: [{ name: 'unscanned-agent' }],
+    skills: [{ id: 'unscanned-skill' }],
+  },
+};
+await hooks.prompt(event);
+assert.deepEqual(event.prompt, {
+  text: 'Inspect [REDACTED]', files: [], agents: [], skills: [],
+});
+assert.equal(JSON.stringify(event.prompt).includes(original), false);
+assert.equal(JSON.stringify(event.prompt).includes('unscanned.png'), false);
+assert.equal(JSON.stringify(event.prompt).includes('unscanned-agent'), false);
+assert.equal(JSON.stringify(event.prompt).includes('unscanned-skill'), false);
+assert.equal(syntheticMessages.length, 1);
+assert.ok(syntheticMessages[0].text.includes('Synthetic scanner diagnostic'));
+assert.ok(syntheticMessages[0].text.includes('redacted before model submission'));
+assert.equal(JSON.stringify(syntheticMessages).includes(original), false);
+assert.deepEqual(globalThis.guardianCalls.map(call => call.prompt), [original]);
+cleanup();
+console.log(JSON.stringify({ calls: globalThis.guardianCalls.length, syntheticMessages: syntheticMessages.length }));
+""",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [NODE, "--experimental-strip-types", str(runner)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"calls": 1, "syntheticMessages": 1}
 
 
 @pytest.mark.skipif(

@@ -6,6 +6,15 @@ from unittest import mock
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def disable_trusted_session_finding_override(monkeypatch):
+    """Keep UX contracts independent of the user's protected global config."""
+    monkeypatch.setattr(
+        "ai_guardian.hook_processing.is_non_blocking_findings_enabled",
+        lambda: False,
+    )
+
+
 @pytest.fixture
 def cli_connect(monkeypatch):
     """Track only the test thread; background callers get no daemon connection."""

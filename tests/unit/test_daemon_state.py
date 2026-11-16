@@ -20,13 +20,21 @@ class TestDeveloperSessionState:
             "ai_guardian.developer_session.get_config_dir", lambda: tmp_path
         )
         (tmp_path / "ai-guardian.json").write_text(
-            json.dumps({"developer_session": {"enabled": True}}),
+            json.dumps(
+                {
+                    "developer_session": {
+                        "enabled": True,
+                        "non_blocking_findings": True,
+                    }
+                }
+            ),
             encoding="utf-8",
         )
 
         state = DaemonState(config_path=tmp_path / "nonexistent.json")
 
         assert state.developer_session_enabled is True
+        assert state.developer_session_non_blocking_findings_enabled is True
 
     def test_daemon_defaults_to_deny(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
@@ -36,6 +44,7 @@ class TestDeveloperSessionState:
         state = DaemonState(config_path=tmp_path / "nonexistent.json")
 
         assert state.developer_session_enabled is False
+        assert state.developer_session_non_blocking_findings_enabled is False
 
 
 class TestCrossHookCorrelation:

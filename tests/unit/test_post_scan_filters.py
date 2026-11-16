@@ -211,12 +211,122 @@ class TestApplyPostScanPipeline:
         ask_result = MagicMock()
         ask_result.decision = AskDecision.BLOCK
         ask_result.dialog_wait_ms = 100.0
-        ctx = _make_ctx(handle_ask_mode_auto=MagicMock(return_value=ask_result))
+        ctx = _make_ctx(
+            handle_ask_mode_auto=MagicMock(return_value=ask_result),
+            non_blocking_findings_enabled=True,
+        )
         entry = _make_entry()
-        result = _detected_result()
+        result = _detected_result(extra={"action": "ask"})
         with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
             decision = apply_post_scan_pipeline(entry, result, ctx)
         assert decision.should_block
+
+    def test_block_finding_becomes_advisory_but_remains_logged_as_allowed(self):
+        ctx = _make_ctx(non_blocking_findings_enabled=True)
+        entry = _make_entry()
+        result = _detected_result(error_message="Canary token detected")
+
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            decision = apply_post_scan_pipeline(entry, result, ctx)
+
+        assert not decision.should_block
+        assert "Canary token detected" in decision.warnings[0]
+        assert "trusted developer session's non-blocking findings option" in (
+            decision.warnings[0]
+        )
+        assert ctx.violation_logger.log_violation.call_count == 1
+        logged_decision = ctx.violation_logger.log_violation.call_args[1][
+            "policy_decision"
+        ]
+        assert logged_decision.decision == "allow"
+
+    def test_warn_action_is_unchanged_when_non_blocking_is_enabled(self):
+        ctx = _make_ctx(non_blocking_findings_enabled=True)
+        entry = _make_entry()
+        result = _detected_result(
+            should_block=False,
+            error_message="Canary token detected",
+            extra={"action": "warn"},
+        )
+
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            decision = apply_post_scan_pipeline(entry, result, ctx)
+
+        assert not decision.should_block
+        assert len(decision.warnings) == 1
+        assert "warn mode" in decision.warnings[0]
+        assert "non-blocking findings option" not in decision.warnings[0]
+
+    def test_incomplete_scan_is_not_downgraded_as_a_finding(self):
+        ctx = _make_ctx(non_blocking_findings_enabled=True)
+        entry = _make_entry(violation_type="suspected_password")
+        result = _detected_result(
+            detected=False,
+            violation_type="suspected_password",
+            should_block=True,
+            extra={"action": "block", "incomplete": True},
+        )
+
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            decision = apply_post_scan_pipeline(entry, result, ctx)
+
+        assert decision.should_block
+        assert decision.warnings == []
+
+    def test_explicit_scan_error_is_not_downgraded(self):
+        ctx = _make_ctx(non_blocking_findings_enabled=True)
+        entry = _make_entry()
+        result = _detected_result(
+            should_block=True,
+            error_message="Scanner failed",
+            extra={"action": "block", "scan_error": "Scanner failed"},
+        )
+
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            decision = apply_post_scan_pipeline(entry, result, ctx)
+
+        assert decision.should_block
+        assert decision.warnings == []
+
+    @pytest.mark.parametrize("violation_type", ["secret_detected", "pii_detected"])
+    def test_sensitive_finding_in_unreplaceable_input_is_not_downgraded(
+        self, violation_type
+    ):
+        ctx = _make_ctx(non_blocking_findings_enabled=True)
+        entry = _make_entry(violation_type=violation_type)
+        result = _detected_result(
+            violation_type=violation_type,
+            error_message="Secret detected",
+        )
+
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            decision = apply_post_scan_pipeline(entry, result, ctx)
+
+        assert decision.should_block
+        assert decision.warnings == []
+
+    @pytest.mark.parametrize("violation_type", ["secret_detected", "pii_detected"])
+    def test_sensitive_finding_with_verified_replacement_is_downgraded(
+        self, violation_type
+    ):
+        ctx = _make_ctx(non_blocking_findings_enabled=True)
+        entry = _make_entry(violation_type=violation_type)
+        result = _detected_result(
+            violation_type=violation_type,
+            error_message="Synthetic scanner diagnostic",
+        )
+
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            decision = apply_post_scan_pipeline(
+                entry,
+                result,
+                ctx,
+                sensitive_replacement_verified=True,
+            )
+
+        assert not decision.should_block
+        assert "Synthetic scanner diagnostic" in decision.warnings[0]
+        assert "non-blocking findings option" in decision.warnings[0]
 
     def test_ask_mode_allow_sets_no_block(self):
         from ai_guardian.ui.ask_dialog import AskDecision

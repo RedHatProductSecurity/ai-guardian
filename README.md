@@ -126,6 +126,7 @@ upstream references. That guide is the source of truth for this summary.
 | Supply-chain scanning | [Configuration Guide][configuration] |
 | Sanitize command and secret redaction | [Secret Redaction][redaction] |
 | Violation logging | [Violation Logging][violations] |
+| Trusted developer-session non-blocking findings | [Configuration Guide][configuration] |
 | Compliance audit logging | [Audit Logging][audit] |
 | Support bundles | [Support][support] |
 | Uninstall and orphan recovery | [Uninstall Guide][uninstall] |
