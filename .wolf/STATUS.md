@@ -5,7 +5,21 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-15 (UTC)
+> Last updated: 2026-11-16 (UTC)
+
+## Issue #2750 Cypress Cloud record-key detection — 2026-11-16
+
+- On managed DAF `open` session `RedHatProductSecurity-ai-guardian-2750`, existing
+  branch `2750`, added a bundled rule matching GUIDs only in `CYPRESS_RECORD_KEY`
+  assignments. Added synthetic positive/negative scanner and redaction coverage;
+  0/120 benign corpus samples matched. Updated the bundled rule count and changelog.
+- **Validation:** all 492 tests across the complete bundled TOML, TOML scanner, and
+  secret-redaction unit files pass. Black, Ruff, error-only Pylint, and diff checks
+  pass. Package Mypy still reports 14 known errors in untouched `skill_discovery.py`
+  and `secret_validator.py`.
+- Posted the checked acceptance checklist on GitHub #2750, added the `done` label,
+  and saved a DAF note. **Next:** user review and external `daf complete`; no commit,
+  push, or PR was created.
 
 ## Issue #2749 Serval API client secret detection — 2026-11-15
 

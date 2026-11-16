@@ -330,6 +330,11 @@
 
 ## Key Learnings
 
+- **2026-11-16 — Cypress record-key redaction precedence (#2750):** The generic
+  environment-assignment rule can claim a `CYPRESS_RECORD_KEY` assignment before
+  the bundled context-specific TOML rule. Test that the value is removed and the
+  variable name preserved; do not require a particular overlapping strategy.
+
 - **2026-11-14 — Audited NotebookLM CLI (#2736):** `notebooklm-mcp-cli` 0.16.2
   is MIT-licensed. Uploaded file replacement has no in-place update. Its
   `source add --file --wait --json` receipt contains a UUID/title but omits

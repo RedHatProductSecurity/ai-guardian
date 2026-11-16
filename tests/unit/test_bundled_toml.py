@@ -8,6 +8,7 @@ import json
 from base64 import b32encode
 from hashlib import sha256
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -17,7 +18,7 @@ from ai_guardian.patterns.toml_parser import load_and_compile, load_toml_file
 PATTERNS_DIR = DATA_DIR
 
 EXPECTED_COUNTS = {
-    "secrets.toml": 139,
+    "secrets.toml": 140,
     "pii.toml": 13,
     "prompt-injection.toml": 73,
     "unicode.toml": 107,
@@ -484,6 +485,33 @@ ISSUE_2749_FALSE_POSITIVE_CASES = [
     ("serval-api-client-secret", "svl_secret_pk_<redacted>"),
     ("serval-api-client-secret", "# svl_secret_pk_ is the documented prefix"),
 ]
+ISSUE_2750_RECORD_KEY = "01234567-89ab-4cde-8fab-0123456789ab"
+ISSUE_2750_DETECTION_CASES = [
+    (
+        "cypress-cloud-record-key",
+        "CYPRESS_RECORD_KEY=00000000-0000-4000-8000-000000000001",
+    ),
+    (
+        "cypress-cloud-record-key",
+        f'{{"CYPRESS_RECORD_KEY": "{ISSUE_2750_RECORD_KEY.upper()}"}}',
+    ),
+    (
+        "cypress-cloud-record-key",
+        f"export cypress_record_key='{ISSUE_2750_RECORD_KEY}'",
+    ),
+]
+ISSUE_2750_FALSE_POSITIVE_CASES = [
+    ("cypress-cloud-record-key", f"request_id={ISSUE_2750_RECORD_KEY}"),
+    ("cypress-cloud-record-key", "CYPRESS_PROJECT_ID=abc123"),
+    ("cypress-cloud-record-key", "# CYPRESS_RECORD_KEY is a GUID"),
+    ("cypress-cloud-record-key", "CYPRESS_RECORD_KEY=<redacted>"),
+    (
+        "cypress-cloud-record-key",
+        "CYPRESS_RECORD_KEY=01234567-89ab-4cde-8fab-0123456789a",
+    ),
+    ("cypress-cloud-record-key", f"CYPRESS_RECORD_KEY={ISSUE_2750_RECORD_KEY}A"),
+    ("cypress-cloud-record-key", f"CYPRESS_RECORD_KEY_BACKUP={ISSUE_2750_RECORD_KEY}"),
+]
 
 ALL_DETECTION_CASES = (
     NEW_SECRET_DETECTION_CASES
@@ -496,6 +524,7 @@ ALL_DETECTION_CASES = (
     + ISSUE_2477_DETECTION_CASES
     + ISSUE_2322_DETECTION_CASES
     + ISSUE_2749_DETECTION_CASES
+    + ISSUE_2750_DETECTION_CASES
 )
 ALL_FALSE_POSITIVE_CASES = (
     NEW_SECRET_FALSE_POSITIVE_CASES
@@ -508,6 +537,7 @@ ALL_FALSE_POSITIVE_CASES = (
     + ISSUE_2477_FALSE_POSITIVE_CASES
     + ISSUE_2322_FALSE_POSITIVE_CASES
     + ISSUE_2749_FALSE_POSITIVE_CASES
+    + ISSUE_2750_FALSE_POSITIVE_CASES
     + ISSUE_2464_FALSE_POSITIVE_CASES
 )
 
@@ -547,5 +577,32 @@ class TestSecretPatterns:
             item["name"] for item in corpus if rule.search(item["content"])
         ]
         assert len(corpus) == 220
+        assert len(false_positives) / len(corpus) < 0.01, false_positives
+        assert false_positives == []
+
+    def test_cypress_record_key_false_positive_rate_on_benign_corpus(
+        self, secret_rules
+    ):
+        """Generic UUIDs in benign files must not match the Cypress-only rule."""
+        corpus_path = Path(__file__).parents[1] / "fixtures" / "nuget_sonar_benign.json"
+        corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+        unrelated_fields = ("request_id", "trace_id", "build_id", "record_id")
+        for index in range(100):
+            record_id = UUID(
+                hex=sha256(f"benign-record-id:{index}".encode()).hexdigest()[:32],
+                version=4,
+            )
+            corpus.append(
+                {
+                    "name": f"unrelated-uuid-{index}",
+                    "content": f"{unrelated_fields[index % len(unrelated_fields)]}={record_id}",
+                }
+            )
+
+        rule = secret_rules["cypress-cloud-record-key"].compiled
+        false_positives = [
+            item["name"] for item in corpus if rule.search(item["content"])
+        ]
+        assert len(corpus) == 120
         assert len(false_positives) / len(corpus) < 0.01, false_positives
         assert false_positives == []
