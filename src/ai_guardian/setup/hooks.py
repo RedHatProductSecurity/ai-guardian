@@ -2205,10 +2205,9 @@ class IDESetup:
             )
 
         if available_engines:
-            engines_text = ", ".join(available_engines)
             return (
-                "\n  ℹ️  Secret scanning remains available through configured "
-                f"engine(s): {engines_text}. Gitleaks is optional.\n",
+                "\n  ℹ️  Secret scanning remains available through at least one "
+                "configured engine; Gitleaks is optional.\n",
                 False,
             )
 

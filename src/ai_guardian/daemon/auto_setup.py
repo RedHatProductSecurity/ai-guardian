@@ -128,10 +128,9 @@ def auto_upgrade_typescript_integrations():
             if result.get("success"):
                 logger.info("Updated TypeScript integration for %s", ide_type)
             else:
+                # Setup messages may include local paths or configuration data.
                 logger.warning(
-                    "Unable to update TypeScript integration for %s: %s",
-                    ide_type,
-                    result.get("message", "unknown error"),
+                    "Unable to update TypeScript integration for %s", ide_type
                 )
         return results
     except Exception as exc:

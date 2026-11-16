@@ -101,6 +101,32 @@ def test_setup_warns_when_gitleaks_is_the_only_unavailable_engine(tmp_path):
     assert "Gitleaks is optional" not in message
 
 
+def test_setup_does_not_echo_configured_external_engine_names(tmp_path):
+    """
+    USER EXPERIENCE: An available external scanner is reported without echoing its configured name.
+
+    Scenario:
+    1. Gitleaks is not installed, but Betterleaks is selected and available.
+    2. The user configures Claude Code hooks.
+
+    Expected User Experience:
+    - Setup reports that secret scanning remains available through a configured engine.
+    - Setup does not echo the configuration-derived engine identifier.
+    - Setup says Gitleaks is optional.
+    """
+    with patch(
+        "ai_guardian.setup.hooks.shutil.which", return_value="/usr/bin/betterleaks"
+    ):
+        success, message = _setup_claude_hooks_with_missing_gitleaks(
+            tmp_path, {"secret_scanning": {"engines": ["gitleaks", "betterleaks"]}}
+        )
+
+    assert success is True
+    assert "at least one configured engine" in message
+    assert "betterleaks" not in message
+    assert "Gitleaks is optional" in message
+
+
 def test_doctor_lists_complete_hook_inventory_without_false_failures():
     """
     USER EXPERIENCE: Doctor shows every supported integration independently.

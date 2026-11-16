@@ -23,8 +23,19 @@ budget_tokens: 1000
   module passes Mypy; package Mypy still reports the 14 existing errors in
   untouched `skill_discovery.py` and `scanners/secret_validator.py`.
 - Posted the completed acceptance checklist on GitHub #2760, added the `done`
-  label, and saved a DAF note. Changes remain uncommitted for user review and
-  external `daf complete`; no commit, push, or PR was created.
+  label, and saved a DAF note. The implementation is published in PR #2765;
+  only the CodeQL follow-up below remains uncommitted.
+- **PR #2765 CodeQL follow-up:** Configured external engine identifiers were
+  interpolated into setup output, which was printed by CLI setup and logged by
+  daemon auto-upgrade. Setup now reports availability without echoing configured
+  identifiers, and daemon warnings omit raw setup details. Added unit and UX
+  regressions for both sinks.
+- **Follow-up validation:** 517 related unit/UX tests pass (1 skipped). Full
+  Ruff, Black (Python 3.10 target), error-level Pylint, diff checks, and targeted
+  Mypy for both changed source modules pass. Package-wide Mypy still reports the
+  same 14 errors in untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+- The follow-up is local and uncommitted on branch `2760`; a fresh CodeQL analysis
+  still requires publishing the update to PR #2765.
 
 ## Issue #2755 trusted-session non-blocking findings — 2026-11-16
 

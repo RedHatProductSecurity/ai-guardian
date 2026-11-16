@@ -231,6 +231,24 @@ class TestAutoUpgradeTypescriptIntegrations:
 
         setup.upgrade_typescript_integrations.assert_called_once_with()
 
+    def test_failed_upgrade_does_not_log_setup_message(self, caplog):
+        setup = mock.MagicMock()
+        sensitive_message = "private setup details"
+        results = [
+            {
+                "ide": "opencode",
+                "success": False,
+                "message": sensitive_message,
+            }
+        ]
+        setup.upgrade_typescript_integrations.return_value = results
+
+        with mock.patch("ai_guardian.setup.hooks.IDESetup", return_value=setup):
+            assert auto_upgrade_typescript_integrations() == results
+
+        assert "Unable to update TypeScript integration" in caplog.text
+        assert sensitive_message not in caplog.text
+
 
 class TestAutoSetupTray:
     def test_skips_in_ci(self, monkeypatch):

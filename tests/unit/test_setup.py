@@ -911,7 +911,8 @@ class TestIDESetup:
             notice, no_scanner_available = setup._secret_scanning_setup_notice(False)
 
         assert no_scanner_available is False
-        assert "betterleaks" in notice
+        assert "at least one configured engine" in notice
+        assert "betterleaks" not in notice
         assert "Gitleaks is optional" in notice
 
     def test_setup_gitleaks_notice_respects_disabled_secret_scanning(self):
