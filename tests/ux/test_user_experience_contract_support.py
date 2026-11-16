@@ -64,9 +64,9 @@ Headless, authentication/category failures, changed files, and uncertain results
 must never silently publish or switch destinations.
 
 8. With multiple daemons, choose Contact supports in each daemon's submenu.
-   Check Source during preparation, destination selection, file review, upload,
-   publication and result. Reorder/refresh/remove targets while preparing: never
-   switch source. View daemon-source.json for sanitized provenance and omissions.
+    Check Source during preparation, destination selection, file review, upload,
+    publication and result. Reorder/refresh/remove targets while preparing: never
+    switch source. View daemon-source.json for sanitized provenance and omissions.
    Repeat for local, container, Kubernetes, manual HTTPS, SSH and OpenShell targets.
    No remote desktop or publication login is needed. Offline/older/authentication/
    oversized/failed collections name the selected source and never substitute
@@ -74,8 +74,11 @@ must never silently publish or switch destinations.
    and public Discussion consent remains mandatory on the workstation.
    Build the menu before SSH connects, then wait for its filled status circle and
    choose Contact supports. Repeat after a disconnect/reconnect: preparation must
-   use the current verified connection, not claim offline because of an old menu.
-   Once clicked, another reconnect must not move the operation to another tunnel.
+    use the current verified connection, not claim offline because of an old menu.
+    Once clicked, another reconnect must not move the operation to another tunnel.
+ 9. With a local daemon alongside another target, restart the daemon from its
+    outdated-code warning. After discovery refreshes, its submenu still contains
+    Maintenance and Contact supports. Restart the tray and verify both are present.
 """
 
 import json
@@ -216,6 +219,69 @@ def test_tray_support_menu_has_one_action_per_daemon_target(monkeypatch, runtime
         child for child in visible(local_menus[0]) if child.label == "Maintenance"
     )
     assert any(child.label == "Stop Daemon" for child in visible(maintenance.submenu))
+
+
+def test_daemon_restart_rediscovery_keeps_maintenance_and_support_actions(
+    monkeypatch,
+):
+    from ai_guardian.daemon.discovery import DaemonTarget
+    from ai_guardian.tray.plugins import _load_bundled_plugins, plugins_to_dict
+    from tests.fixtures.ssh_tray import build, find, make_tray, visible
+
+    local = DaemonTarget("local", "local", status="running")
+    remote = DaemonTarget("remote", "manual", status="running")
+    tray = make_tray([local, remote])
+    tray._multi_client._local_plugins.return_value = plugins_to_dict(
+        _load_bundled_plugins()
+    )
+    tray._multi_client.get_plugins.return_value = {"plugins": []}
+    monkeypatch.setattr(tray._plugins, "_get_daemon_menu_tags", lambda _target: [])
+    tray._plugins._poll_plugins()
+
+    def local_daemon_menu(root):
+        daemon_menus = [
+            item.submenu
+            for item in visible(root)
+            if item.submenu
+            and any(
+                child.label == "Contact supports" for child in visible(item.submenu)
+            )
+        ]
+        return next(
+            item
+            for item in daemon_menus
+            if any(child.label == "Maintenance" for child in visible(item))
+        )
+
+    menu_before_restart = build(tray)
+    local_menu = local_daemon_menu(menu_before_restart)
+    assert find(local_menu, "Contact supports")
+    assert find(local_menu, "Maintenance")
+
+    # Daemon discovery returns new objects even though both daemon identities
+    # are unchanged; the existing native menu descriptors remain installed.
+    tray._targets = [
+        DaemonTarget("local", "local", status="running"),
+        DaemonTarget("remote", "manual", status="running"),
+    ]
+    tray._plugins._poll_plugins()
+
+    assert find(local_menu, "Contact supports")
+    assert find(local_menu, "Maintenance")
+
+    # A tray restart builds new descriptors and reloads plugins from scratch.
+    restarted_tray = make_tray(tray._targets)
+    restarted_tray._multi_client._local_plugins.return_value = plugins_to_dict(
+        _load_bundled_plugins()
+    )
+    restarted_tray._multi_client.get_plugins.return_value = {"plugins": []}
+    monkeypatch.setattr(
+        restarted_tray._plugins, "_get_daemon_menu_tags", lambda _target: []
+    )
+    restarted_tray._plugins._poll_plugins()
+    restarted_menu = local_daemon_menu(build(restarted_tray))
+    assert find(restarted_menu, "Contact supports")
+    assert find(restarted_menu, "Maintenance")
 
 
 @pytest.mark.parametrize("source", ["local", "daemon"])

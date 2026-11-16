@@ -128,7 +128,9 @@ class TrayPluginMenuBuilder:
                                 self._daemon_plugins[i],
                             )
                         else:
-                            self._bound_plugins[id(target)] = (
+                            self._bound_plugins[
+                                self._tray._target_menu_identity_for(target)
+                            ] = (
                                 target,
                                 self._daemon_plugins[i],
                             )
@@ -150,7 +152,10 @@ class TrayPluginMenuBuilder:
         self._bound_plugins = {
             key: value
             for key, value in self._bound_plugins.items()
-            if any(t is value[0] for t in self._tray._targets)
+            if any(
+                t.runtime != "ssh" and self._tray._target_menu_identity_for(t) == key
+                for t in self._tray._targets
+            )
         }
         for i in reachable_slots:
             for p in self._daemon_global_plugins.get(i, []):
@@ -652,11 +657,11 @@ class TrayPluginMenuBuilder:
                     -1,
                 )
                 self._bound_plugins.setdefault(
-                    id(daemon_slot), (daemon_slot, self._get_daemon_plugins(index))
+                    self._tray._target_menu_identity_for(daemon_slot),
+                    (daemon_slot, self._get_daemon_plugins(index)),
                 )
-                get_plugins = lambda: self._bound_plugins.get(
-                    id(daemon_slot), (None, [])
-                )[1]
+                key = self._tray._target_menu_identity_for(daemon_slot)
+                get_plugins = lambda: self._bound_plugins.get(key, (None, []))[1]
             return self._build_plugin_slots(
                 get_plugins,
                 lambda: daemon_slot,
