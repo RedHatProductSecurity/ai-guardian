@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from ai_guardian import __version__
@@ -93,7 +94,9 @@ def test_toml_config_wraps_only_ai_guardian_server(
     tmp_path, cli, monkeypatch, multiline_args
 ):
     monkeypatch.setattr(proxy, "_installed_version", lambda _command: __version__)
-    monkeypatch.setattr(proxy.sys, "executable", r"C:\Python\python.exe")
+    monkeypatch.setattr(
+        proxy, "sys", SimpleNamespace(executable=r"C:\Python\python.exe")
+    )
     path = tmp_path / "config.toml"
     proxy_path = r"C:\smoke\agent_cli_mcp_proxy.py"
     args_text = (
@@ -136,7 +139,9 @@ def test_pi_extension_wraps_managed_mcp_launch_without_touching_other_source(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(proxy, "_installed_version", lambda _command: __version__)
-    monkeypatch.setattr(proxy.sys, "executable", r"C:\Python\python.exe")
+    monkeypatch.setattr(
+        proxy, "sys", SimpleNamespace(executable=r"C:\Python\python.exe")
+    )
     extension = tmp_path / "index.ts"
     extension.write_text(
         "// generated extension\n"

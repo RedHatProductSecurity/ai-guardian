@@ -335,6 +335,12 @@
 
 ## Key Learnings
 
+- **2026-11-17 — Synthetic executable paths in tests (#2764):** `proxy.sys` is
+  normally the process-wide `sys` module. To test Windows executable strings on
+  any host, replace the proxy module's `sys` binding with a small namespace instead
+  of monkeypatching `sys.executable`; test fixtures should not mutate interpreter
+  identity globally.
+
 - **2026-11-17 — Windows config proxy substitutions (#2764):** Python
   `re.Pattern.sub` treats backslashes in string replacements as replacement
   syntax. Use a callback when inserting serialized Windows paths into TOML or

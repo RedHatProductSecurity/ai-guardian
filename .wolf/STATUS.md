@@ -37,7 +37,13 @@ budget_tokens: 1000
   project-managed Mypy passes all 343 source files. `git diff --check` passes.
   The standalone system Mypy executable reports 14 existing typing errors in
   untouched `skill_discovery.py` and `scanners/secret_validator.py`.
-  **Next:** publish the Windows regression fix and verify the refreshed PR checks.
+- Rerun `44173164123` passed the Windows Python 3.13 and 3.14 jobs. Python 3.10
+  instead encountered suite-wide setup errors in `tests/conftest.py` after the
+  Doctor tests began; its proxy tests had passed earlier in the run. Tightened
+  the synthetic path tests to replace only the proxy module's `sys` binding, not
+  process-wide `sys.executable`. The proxy and Doctor unit files pass together
+  under pytest 9.2.0 (**201 tests**). **Next:** publish this test-isolation fix
+  and verify the fresh Python 3.10 Windows job.
 ## Issue #2759 sanitized context for locationless violations — 2026-11-17
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2759` on the
