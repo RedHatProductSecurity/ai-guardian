@@ -7,6 +7,28 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-16 (UTC)
 
+## Issue #2764 MCP version tool in agent CLI smoke — 2026-11-16
+
+- On the existing `2764` branch, added the read-only MCP `get_version` tool,
+  returning the installed package's `__version__`. Registered it in the packaged
+  security skill and documented the query in MCP/CLI references.
+- Added a deterministic local-provider MCP smoke case for Claude, Codex, Gemini,
+  OpenCode, Pi, and Grok. The mock tracks tool offer/call/result correlation and
+  only records whether the result matches the installed version; it does not
+  retain the version value. Grok's security scope remains pre-tool-only. Goose's
+  smoke setup uses `--no-mcp` and explicitly reports the version capability as
+  **UNSUPPORTED**, never as a pass.
+- Release Readiness now performs an interactive stdio JSON-RPC `get_version`
+  call, checks the exact installed version, and preserves `get_config` protocol
+  coverage. Updated unit, provider-protocol, smoke, workflow, and UX contracts.
+- **Validation:** 437 directly related unit/UX tests pass; the exact extracted
+  Release Readiness MCP protocol step passes locally. Ruff, Black (Python 3.10
+  target), error-only Pylint, package Mypy (342 files), JSON validation, and
+  `git diff --check` pass. No real agent CLI/container smoke was run locally;
+  native CLI verification remains for CI.
+- Changes remain uncommitted on branch `2764`; no push, PR, or issue update was
+  made. **Next:** user review, then normal DAF/CI workflow.
+
 ## Issue #2758 PyPI social preview image — 2026-11-16
 
 - Confirmed the live `ai-guardian` PyPI page uses PyPI's generic `og:image`; the

@@ -235,6 +235,17 @@ Pi **0.86.0** is recorded in #2662/#2670; it is not a new run of this change.
 Gemini containment is native refusal. The tolerated Codex CI failure stays failed
 and unqualified. Claude requires its separate explicit installation consent.
 
+## MCP version smoke
+
+The credential-free CLI smoke separately calls AI Guardian's native
+`get_version` MCP tool for Claude, Codex, Gemini, OpenCode, Pi, and Grok. It
+requires an issued call, a correlated tool result, and the exact installed
+package version at the local mock provider; a final-answer claim alone is not
+evidence. This capability check does not expand Grok's pre-tool-only security
+qualification. Goose intentionally uses `--no-mcp`, so its runner reports the
+MCP version check as **UNSUPPORTED**, never as a pass. Other clients without a
+credential-free smoke lane remain explicitly blocked in the coverage ledger.
+
 ## Runtime and diagnostics boundaries
 
 The [canonical registry](../src/ai_guardian/ide_registry.py) remains authoritative:

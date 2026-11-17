@@ -123,6 +123,7 @@ upstream references. That guide is the source of truth for this summary.
 | Directory blocking | [Directory Rules][directories] |
 | Tool, MCP, and Skill permissions | [Tool Policy][policy] |
 | MCP security advisor and scanning | [MCP Server][mcp] |
+| MCP package version query | [MCP Server][mcp] |
 | Supply-chain scanning | [Configuration Guide][configuration] |
 | Sanitize command and secret redaction | [Secret Redaction][redaction] |
 | Violation logging | [Violation Logging][violations] |

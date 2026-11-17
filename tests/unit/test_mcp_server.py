@@ -1,7 +1,7 @@
 """
 Unit tests for MCP server module.
 
-Tests all 16 tools, 3 resources, and security filtering.
+Tests all 18 tools, 3 resources, and security filtering.
 Requires Python >= 3.10 (MCP SDK dependency).
 """
 
@@ -1300,6 +1300,18 @@ class TestToolInputViolationDiagnostics:
         assert "PRIVATE_" not in json.dumps(entry)
 
 
+class TestGetVersion:
+    """Test get_version tool."""
+
+    def test_returns_installed_package_version(self):
+        from ai_guardian import __version__
+
+        server = create_server()
+        tool = server._tool_manager._tools["get_version"]
+
+        assert tool.fn() == {"version": __version__}
+
+
 class TestGetConfig:
     """Test get_config tool."""
 
@@ -1922,7 +1934,7 @@ class TestServerCreation:
         server = create_server()
         assert server is not None
 
-    def test_server_has_17_tools(self):
+    def test_server_has_18_tools(self):
         server = create_server()
         tools = server._tool_manager._tools
         expected = {
@@ -1933,6 +1945,7 @@ class TestServerCreation:
             "sanitize_directory",
             "check_annotations",
             "get_violations",
+            "get_version",
             "get_config",
             "get_scanner_status",
             "get_scanner_supported",
@@ -1954,6 +1967,7 @@ class TestServerCreation:
 
         instructions = _load_skill_instructions()
         assert "get_violations" in instructions
+        assert "get_version" in instructions
         assert "Do NOT" in instructions
 
     def test_skill_instructions_no_bypass_content(self):

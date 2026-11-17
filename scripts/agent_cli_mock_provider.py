@@ -25,12 +25,14 @@ FILE_WRITE_CASES = {
     "http_request_credential_js",
     "http_request_credential_ts_clean",
 }
+MCP_VERSION_CASES = {"mcp_version"}
 TOOL_CASES = {
     "ssrf",
     "config_exfil",
     "command_credential",
     *OUTPUT_CASES,
     *FILE_WRITE_CASES,
+    *MCP_VERSION_CASES,
 }
 # Exact native names used by the supported CLIs. A command-shaped MCP/custom
 # tool is not execution evidence, even if it logs the expected security finding.
@@ -132,6 +134,12 @@ TOOL_OFFER_COUNTS: Counter = Counter()
 COMMAND_TOOL_NAME_COUNTS: Dict[str, Counter] = {}
 FILE_WRITE_TOOL_REQUEST_COUNTS: Counter = Counter()
 FILE_WRITE_TOOL_NAME_COUNTS: Dict[str, Counter] = {}
+MCP_VERSION_TOOL_REQUEST_COUNTS: Counter = Counter()
+MCP_VERSION_TOOL_OFFER_COUNTS: Counter = Counter()
+MCP_VERSION_TOOL_CALL_COUNTS: Counter = Counter()
+MCP_VERSION_TOOL_RESULT_COUNTS: Counter = Counter()
+MCP_VERSION_MATCH_COUNTS: Counter = Counter()
+MCP_VERSION_MISMATCH_COUNTS: Counter = Counter()
 CLEAN_TOOL_RESULT_COUNTS: Counter = Counter()
 CORRELATED_TOOL_RESULT_COUNTS: Counter = Counter()
 RAW_TOOL_OUTPUT_COUNTS: Counter = Counter()
@@ -225,6 +233,8 @@ def _issued_tool_id(case: str, prefix: str) -> str:
     if case in TOOL_CASES:
         with COUNTS_LOCK:
             TOOL_IDENTITIES[identity] = case
+            if case in MCP_VERSION_CASES:
+                MCP_VERSION_TOOL_CALL_COUNTS[case] += 1
     return identity
 
 
@@ -270,6 +280,37 @@ def _tool_result_strings(value: Any) -> Iterable[str]:
         except ValueError:
             continue
         yield from _strings(decoded)
+
+
+def _tool_result_versions(value: Any) -> Iterable[str]:
+    """Extract version fields only from structured, correlated tool results."""
+    if isinstance(value, dict):
+        version = value.get("version")
+        if isinstance(version, str):
+            yield version
+        for child in value.values():
+            yield from _tool_result_versions(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _tool_result_versions(child)
+    elif isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except (ValueError, RecursionError):
+            return
+        if isinstance(decoded, (dict, list)):
+            yield from _tool_result_versions(decoded)
+
+
+def _installed_ai_guardian_version() -> str:
+    """Read the version from the installed package used by this smoke image."""
+    from ai_guardian import __version__
+
+    return __version__
+
+
+def _tool_result_matches_installed_version(output: Any) -> bool:
+    return _installed_ai_guardian_version() in set(_tool_result_versions(output))
 
 
 def _function_call_output_category(case: str, output: Any) -> str:
@@ -329,6 +370,19 @@ def _observe_request(payload: Dict[str, Any]) -> None:
         if sensitive_value(case) in serialized
     }
     tool_results = list(_tool_results(payload))
+    version_results = [
+        (case, output) for case, output in tool_results if case in MCP_VERSION_CASES
+    ]
+    version_result_matches = [
+        (case, _tool_result_matches_installed_version(output))
+        for case, output in version_results
+    ]
+    version_matches = Counter(
+        case for case, matched in version_result_matches if matched
+    )
+    version_mismatches = Counter(
+        case for case, matched in version_result_matches if not matched
+    )
     correlated_results = Counter(case for case, _output in tool_results)
     clean_results = sum(
         1
@@ -369,6 +423,9 @@ def _observe_request(payload: Dict[str, Any]) -> None:
         output_shapes[shape] += 1
     with COUNTS_LOCK:
         CORRELATED_TOOL_RESULT_COUNTS.update(correlated_results)
+        MCP_VERSION_TOOL_RESULT_COUNTS.update(case for case, _ in version_results)
+        MCP_VERSION_MATCH_COUNTS.update(version_matches)
+        MCP_VERSION_MISMATCH_COUNTS.update(version_mismatches)
         for case in raw_cases:
             RAW_TOOL_OUTPUT_COUNTS[case] += 1
         if clean_results:
@@ -490,9 +547,74 @@ def _find_file_write_tool(
 def _find_case_tool(
     payload: Dict[str, Any], case: str
 ) -> Optional[Tuple[str, Dict[str, Any]]]:
+    if case in MCP_VERSION_CASES:
+        return _find_mcp_version_tool(payload)
     if case in FILE_WRITE_CASES:
         return _find_file_write_tool(payload)
     return _find_command_tool(payload)
+
+
+def _find_mcp_version_tool(
+    payload: Dict[str, Any],
+) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Find only AI Guardian's namespaced get_version MCP tool."""
+    tools = payload.get("tools", [])
+    entries = tools if isinstance(tools, list) else [tools]
+    server_keys = (
+        "server",
+        "server_name",
+        "serverName",
+        "server_label",
+        "serverLabel",
+        "mcp_server_name",
+    )
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        candidates = [(entry, entry)]
+        function = entry.get("function")
+        if isinstance(function, dict):
+            candidates.append((function, entry))
+        declarations = entry.get("functionDeclarations") or entry.get(
+            "function_declarations", []
+        )
+        if isinstance(declarations, list):
+            candidates.extend(
+                (item, entry) for item in declarations if isinstance(item, dict)
+            )
+
+        for candidate, parent in candidates:
+            name = candidate.get("name")
+            if not isinstance(name, str):
+                continue
+            folded_name = name.casefold()
+            name_parts = re.findall(r"[a-z0-9]+", folded_name)
+            namespaced_tool = name_parts in (
+                ["ai", "guardian", "get", "version"],
+                ["mcp", "ai", "guardian", "get", "version"],
+            )
+            server_names = [
+                source.get(key)
+                for source in (candidate, parent)
+                for key in server_keys
+                if isinstance(source.get(key), str)
+            ]
+            explicit_server_matches = folded_name == "get_version" and any(
+                value.casefold().replace("_", "-") == "ai-guardian"
+                for value in server_names
+            )
+            if not (namespaced_tool or explicit_server_matches):
+                continue
+            schema = (
+                candidate.get("input_schema")
+                or candidate.get("parametersJsonSchema")
+                or candidate.get("parameters_json_schema")
+                or candidate.get("parameters")
+                or candidate.get("inputSchema")
+                or {}
+            )
+            return name, schema if isinstance(schema, dict) else {}
+    return None
 
 
 def _file_write_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
@@ -510,6 +632,8 @@ def _file_write_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
 
 
 def _case_tool_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
+    if case in MCP_VERSION_CASES:
+        return {}
     if case in FILE_WRITE_CASES:
         return _file_write_arguments(schema, case)
     return _command_arguments(schema, TOOL_COMMANDS[case])
@@ -531,9 +655,20 @@ def _record_request(case: str, payload: Dict[str, Any]) -> Tuple[int, int]:
                 if name in NATIVE_FILE_WRITE_TOOLS:
                     FILE_WRITE_TOOL_NAME_COUNTS.setdefault(case, Counter())[name] += 1
         elif case_tool is not None:
-            COMMAND_TOOL_REQUEST_COUNTS[case] += 1
-            tool_call_number = COMMAND_TOOL_REQUEST_COUNTS[case]
-            if case in TOOL_CASES and tool_call_number == 1:
+            if case in MCP_VERSION_CASES:
+                MCP_VERSION_TOOL_REQUEST_COUNTS[case] += 1
+                tool_call_number = MCP_VERSION_TOOL_REQUEST_COUNTS[case]
+                if tool_call_number == 1:
+                    TOOL_OFFER_COUNTS[case] += 1
+                    MCP_VERSION_TOOL_OFFER_COUNTS[case] += 1
+            else:
+                COMMAND_TOOL_REQUEST_COUNTS[case] += 1
+                tool_call_number = COMMAND_TOOL_REQUEST_COUNTS[case]
+            if (
+                case in TOOL_CASES
+                and case not in MCP_VERSION_CASES
+                and tool_call_number == 1
+            ):
                 TOOL_OFFER_COUNTS[case] += 1
                 name = case_tool[0].casefold()
                 if name in NATIVE_COMMAND_TOOL_NAMES:
@@ -556,6 +691,11 @@ def _stats() -> Dict[str, Dict[str, int]]:
                 case: dict(counts)
                 for case, counts in FILE_WRITE_TOOL_NAME_COUNTS.items()
             },
+            "mcp_version_tool_offers": dict(MCP_VERSION_TOOL_OFFER_COUNTS),
+            "mcp_version_tool_calls": dict(MCP_VERSION_TOOL_CALL_COUNTS),
+            "mcp_version_tool_results": dict(MCP_VERSION_TOOL_RESULT_COUNTS),
+            "mcp_version_matches": dict(MCP_VERSION_MATCH_COUNTS),
+            "mcp_version_mismatches": dict(MCP_VERSION_MISMATCH_COUNTS),
             "clean_tool_results": dict(CLEAN_TOOL_RESULT_COUNTS),
             "correlated_tool_results": dict(CORRELATED_TOOL_RESULT_COUNTS),
             "raw_tool_output_requests": dict(RAW_TOOL_OUTPUT_COUNTS),
@@ -768,9 +908,11 @@ def gemini_response(
     part: Dict[str, Any] = {"text": "Local smoke response: OK."}
     if case in TOOL_CASES and tool_call_number == 1 and tool:
         name, schema = tool
-        if case in OUTPUT_CASES:
+        if case in OUTPUT_CASES or case in MCP_VERSION_CASES:
             with COUNTS_LOCK:
                 GEMINI_TOOL_CASES[name] = case
+                if case in MCP_VERSION_CASES:
+                    MCP_VERSION_TOOL_CALL_COUNTS[case] += 1
         part = {
             "functionCall": {
                 "name": name,

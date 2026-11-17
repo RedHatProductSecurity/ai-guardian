@@ -1275,7 +1275,7 @@ jobs:
           echo "Venv install: OK"
 
   mcp-server:
-    name: MCP Initialize & get_config JSON-RPC Calls
+    name: MCP Initialize & Read-Only Tool JSON-RPC Calls
     runs-on: ubuntu-26.04
 
     steps:
@@ -1344,54 +1344,121 @@ jobs:
       - name: Test MCP server tool call
         run: |
           python << 'PYEOF'
-          import subprocess, json, sys
+          import json
+          import os
+          import select
+          import subprocess
+          import sys
+          import time
 
-          init_req = json.dumps({
-              "jsonrpc": "2.0", "id": 1, "method": "initialize",
-              "params": {
-                  "protocolVersion": "2024-11-05",
-                  "capabilities": {},
-                  "clientInfo": {"name": "test", "version": "1.0"}
-              }
-          })
-          initialized_notif = json.dumps({
-              "jsonrpc": "2.0", "method": "notifications/initialized"
-          })
-          tool_call = json.dumps({
-              "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-              "params": {"name": "get_config", "arguments": {}}
-          })
+          from ai_guardian import __version__
 
-          stdin_data = init_req + "\n" + initialized_notif + "\n" + tool_call + "\n"
-
-          proc = subprocess.run(
+          proc = subprocess.Popen(
               ["ai-guardian", "mcp-server"],
-              input=stdin_data, capture_output=True, text=True, timeout=15
+              stdin=subprocess.PIPE,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+              bufsize=0,
           )
+          read_buffer = bytearray()
 
-          stdout = proc.stdout.strip()
-          if stdout:
-              for line in stdout.split("\n"):
-                  line = line.strip()
-                  if not line:
-                      continue
+          def send(message):
+              proc.stdin.write((json.dumps(message) + "\n").encode())
+              proc.stdin.flush()
+
+          def receive(request_id):
+              deadline = time.monotonic() + 15
+              while time.monotonic() < deadline:
+                  remaining = deadline - time.monotonic()
+                  readable, _, _ = select.select([proc.stdout], [], [], remaining)
+                  if not readable:
+                      break
+                  chunk = os.read(proc.stdout.fileno(), 4096)
+                  if not chunk:
+                      break
+                  read_buffer.extend(chunk)
+                  while b"\n" in read_buffer:
+                      line_end = read_buffer.index(b"\n")
+                      line = bytes(read_buffer[:line_end])
+                      del read_buffer[: line_end + 1]
+                      try:
+                          message = json.loads(line)
+                      except json.JSONDecodeError:
+                          continue
+                      if message.get("id") == request_id:
+                          return message
+              raise SystemExit(f"MCP request {request_id} returned no response")
+
+          try:
+              send({
+                  "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                  "params": {
+                      "protocolVersion": "2024-11-05",
+                      "capabilities": {},
+                      "clientInfo": {"name": "test", "version": "1.0"}
+                  }
+              })
+              initialized = receive(1)
+              if "error" in initialized:
+                  raise SystemExit("MCP initialize returned an error")
+              send({
+                  "jsonrpc": "2.0", "method": "notifications/initialized"
+              })
+              send({
+                  "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                  "params": {"name": "get_version", "arguments": {}}
+              })
+              version_message = receive(2)
+              if "error" in version_message:
+                  raise SystemExit("MCP get_version JSON-RPC call returned an error")
+              version_response = version_message.get("result", {})
+              if version_response.get("isError"):
+                  raise SystemExit("MCP get_version tool returned an error")
+              version_texts = [
+                  item.get("text", "")
+                  for item in version_response.get("content", [])
+                  if isinstance(item, dict) and item.get("type") == "text"
+              ]
+              returned_versions = []
+              for text in version_texts:
                   try:
-                      msg = json.loads(line)
-                      if msg.get("id") == 2:
-                          print(f"Tool call response received (id=2)")
-                          sys.exit(0)
+                      value = json.loads(text)
                   except json.JSONDecodeError:
                       continue
-              print(f"MCP server produced output ({len(stdout)} bytes)")
-          else:
-              print("MCP server started and exited cleanly")
-
-          if proc.returncode in (0, None, -15):
-              print("MCP server test: OK")
-          else:
+                  if isinstance(value, dict) and isinstance(value.get("version"), str):
+                      returned_versions.append(value["version"])
+              if returned_versions != [__version__]:
+                  raise SystemExit(
+                      "MCP get_version did not return the installed package version"
+                  )
+              send({
+                  "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                  "params": {"name": "get_config", "arguments": {}}
+              })
+              config_message = receive(3)
+              config_result = config_message.get("result", {})
+              if (
+                  "error" in config_message
+                  or not config_result
+                  or config_result.get("isError")
+              ):
+                  raise SystemExit("MCP get_config tool call did not return a result")
+              print(f"MCP get_version returned installed version {__version__}")
+              print("MCP get_config tool call returned a result")
+          finally:
+              if proc.stdin and not proc.stdin.closed:
+                  try:
+                      proc.stdin.close()
+                  except BrokenPipeError:
+                      pass
+              try:
+                  proc.wait(timeout=5)
+              except subprocess.TimeoutExpired:
+                  proc.kill()
+                  proc.wait(timeout=5)
+          if proc.returncode not in (0, None, -15):
               print(f"MCP server exited with code {proc.returncode}")
-              if proc.stderr:
-                  print(f"stderr (truncated): {proc.stderr[:500]}")
+              sys.exit(1)
           PYEOF
 
   openshell-middleware-runtime:

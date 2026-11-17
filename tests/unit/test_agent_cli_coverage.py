@@ -110,13 +110,16 @@ def test_seven_client_audit_has_versions_sources_priorities_and_no_runtime_claim
 
 @pytest.mark.parametrize("cli", ("grok", "goose"))
 def test_partial_profiles_never_run_prompt_or_sensitive_output_enforcement(cli, runner):
-    assert {case.name for case in runner.smoke_cases(cli)} == {
+    expected_cases = {
         "ssrf",
         "config_exfil",
         "command_credential",
         "clean_tool",
         "allowed",
     }
+    if cli == "grok":
+        expected_cases.add("mcp_version")
+    assert {case.name for case in runner.smoke_cases(cli)} == expected_cases
     assert not set(runner.OUTPUT_CASES - {"clean_tool"}).intersection(
         case.name for case in runner.smoke_cases(cli)
     )
@@ -418,14 +421,21 @@ def test_grok_supplied_image_lifecycle_runs_only_partial_cases_and_cleans_up(
         ]
     ) == (0 if version_ok else 1)
     assert cases == (
-        ["ssrf", "config_exfil", "command_credential", "clean_tool", "allowed"]
+        [
+            "ssrf",
+            "config_exfil",
+            "command_credential",
+            "clean_tool",
+            "mcp_version",
+            "allowed",
+        ]
         if version_ok
         else []
     )
     assert any(command[1:3] == ["sandbox", "delete"] for command in commands)
     assert not any(command[1:3] == ["image", "rm"] for command in commands)
     assert list(owned_parent.iterdir()) == []
-    assert (
-        "prompt denial and sensitive-output containment are NOT QUALIFIED"
-        in capsys.readouterr().out
-    )
+    output = capsys.readouterr().out
+    assert "prompt denial and sensitive-output containment are NOT QUALIFIED" in output
+    if version_ok:
+        assert "Agent CLI pre-tool subset and MCP version check passed." in output

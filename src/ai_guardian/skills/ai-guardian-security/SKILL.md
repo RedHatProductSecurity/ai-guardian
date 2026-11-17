@@ -4,7 +4,7 @@ description: >
   AI security advisor — proactive security checks via ai-guardian MCP tools.
   Use this skill whenever you have access to ai-guardian MCP tools (check_path,
   check_command, check_mcp_trust, sanitize_text, get_violations,
-  get_config, get_scanner_status, get_scanner_supported, get_patterns_list,
+  get_version, get_config, get_scanner_status, get_scanner_supported, get_patterns_list,
   get_metrics, doctor, prepare_support_bundle, send_support_bundle,
   scan_directory, scan_directory_report). Activate when:
   accessing files in unfamiliar directories, running commands with URLs or credentials,
@@ -98,6 +98,7 @@ Security config can change at any time (via Console, tray, CLI, or file edit). W
 |-----------|------|
 | "Why was that blocked?" | `get_violations(violation_type=..., limit=10)` — always show file path and line number when present (see below) |
 | "What's my security config?" | `get_config()` |
+| "What version of AI Guardian is installed?" | `get_version()` |
 | "Is my setup working?" | `doctor()` — see below |
 | "How many violations?" | `get_metrics(since_days=7)` |
 | "What scanners do I have?" | `get_scanner_status()` and `get_scanner_supported()` |

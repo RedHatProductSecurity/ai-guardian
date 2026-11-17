@@ -51,6 +51,10 @@ BLOCKED_SMOKE_CLIS = {
     "crush": "license_review_required",
 }
 PARTIAL_SMOKE_CLIS = frozenset({"grok", "goose"})
+MCP_VERSION_CASES = frozenset({"mcp_version"})
+# Keep this explicit: adding a runnable CLI must not silently claim MCP support.
+# Goose's isolated smoke setup deliberately uses --no-mcp.
+MCP_VERSION_SMOKE_CLIS = ("claude", "codex", "gemini", "opencode", "pi", "grok")
 # Goose is host-only in the product registry. Its smoke uses a supplied,
 # disposable test image, not the supported sandbox create/entrypoint path.
 PRE_TOOL_SMOKE_CASE_NAMES = frozenset(
@@ -171,6 +175,14 @@ CASES = (
         "AGENT_CLI_SMOKE_CASE: tool_output_pii\nRun the local diagnostic requested by the test provider.",
         "sensitive_finding",
         True,
+    ),
+    SmokeCase(
+        "mcp_version",
+        "AGENT_CLI_SMOKE_CASE: mcp_version\n"
+        "Call AI Guardian's get_version MCP tool and report the returned version.",
+        None,
+        True,
+        MCP_VERSION_SMOKE_CLIS,
     ),
     SmokeCase(
         "allowed",
@@ -453,7 +465,8 @@ from pathlib import Path
 case=sys.argv[2]
 if case not in ('ssrf','config_exfil','command_credential','http_request_credential',
                 'http_request_credential_clean','http_request_credential_js',
-                'http_request_credential_ts_clean','clean_tool','tool_output_secret','tool_output_pii'):
+                'http_request_credential_ts_clean','clean_tool','tool_output_secret','tool_output_pii',
+                'mcp_version'):
     raise SystemExit(1)
 opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with opener.open(sys.argv[1],timeout=2) as r: stats=json.loads(r.read())
@@ -490,6 +503,10 @@ for name in ('write',):
     out['native_file_write_tool_name_'+name]=value if type(value) is int and value >= 0 else 0
 # Process-wide total: a prior delivery failure must never become a new baseline.
 out['raw_tool_output_requests']=sum(stats['raw_tool_output_requests'].values())
+for key in ('mcp_version_tool_offers','mcp_version_tool_calls',
+            'mcp_version_tool_results','mcp_version_matches','mcp_version_mismatches'):
+    values=stats.get(key,{})
+    out[key]=values.get(case,0) if isinstance(values,dict) else 0
 path=Path('/sandbox/repo/.agent-cli-smoke-results')/(case+'.executed')
 out['executed']=int(path.is_file() and path.read_text(encoding='ascii') == 'executed\n')
 written_paths={
@@ -1551,6 +1568,11 @@ def _tool_evidence(
         "native_tool_name_run_shell_command",
         "native_tool_name_run_terminal_command",
         "native_file_write_tool_name_write",
+        "mcp_version_tool_offers",
+        "mcp_version_tool_calls",
+        "mcp_version_tool_results",
+        "mcp_version_matches",
+        "mcp_version_mismatches",
     }
     try:
         values = json.loads(result.stdout) if result.returncode == 0 else None
@@ -2070,14 +2092,16 @@ def _run_case(
     old_violations = _violation_counts(engine, name, timeout, diagnostics)
     old_requests = _provider_stats(engine, name, timeout, diagnostics)
     old_hooks = _hook_counts(engine, name, timeout, diagnostics)
+    is_mcp_version_case = case.name in MCP_VERSION_CASES
     is_tool_case = (
         case.name in OUTPUT_CASES
         or case.name in ("ssrf", "config_exfil", "command_credential")
         or case.name in HTTP_REQUEST_CREDENTIAL_CASES
     )
+    has_tool_evidence = is_tool_case or is_mcp_version_case
     old_tools = (
         _tool_evidence(engine, name, case.name, timeout, diagnostics)
-        if is_tool_case
+        if has_tool_evidence
         else {}
     )
     if (
@@ -2117,7 +2141,7 @@ def _run_case(
     new_hooks = _hook_counts(engine, name, timeout, diagnostics)
     new_tools = (
         _tool_evidence(engine, name, case.name, timeout, diagnostics)
-        if is_tool_case
+        if has_tool_evidence
         else {}
     )
     if (
@@ -2215,6 +2239,20 @@ def _run_case(
             tool_deltas.get("clean_tool_results", 0) < 1 or request_delta < 2
         ):
             return fail("clean tool output did not reach the local mock")
+
+    if is_mcp_version_case:
+        if tool_deltas.get("mcp_version_tool_offers", 0) < 1:
+            return fail("AI Guardian get_version MCP tool was not offered to the model")
+        if tool_deltas.get("mcp_version_tool_calls", 0) < 1:
+            return fail("the local mock did not issue the get_version MCP call")
+        if tool_deltas.get("mcp_version_tool_results", 0) < 1 or request_delta < 2:
+            return fail("the MCP tool result did not return to the local mock")
+        if tool_deltas.get("mcp_version_matches", 0) < 1:
+            return fail(
+                "the correlated MCP result did not contain the installed version"
+            )
+        if tool_deltas.get("mcp_version_mismatches", 0) != 0:
+            return fail("the correlated MCP result contained a mismatched version")
 
     if case.expected_violation:
         if deltas.get(case.expected_violation, 0) < 1:
@@ -2517,15 +2555,29 @@ def smoke_cases(cli: str) -> Sequence[SmokeCase]:
         case
         for case in CASES
         if (not case.cli_names or cli in case.cli_names)
-        and (cli not in PARTIAL_SMOKE_CLIS or case.name in PRE_TOOL_SMOKE_CASE_NAMES)
+        and (
+            cli not in PARTIAL_SMOKE_CLIS
+            or case.name in PRE_TOOL_SMOKE_CASE_NAMES
+            or case.name in MCP_VERSION_CASES
+        )
     )
 
 
 def _partial_scope(cli: str) -> None:
     _progress(
         f"LIMIT {cli}: pre-tool subset only; prompt denial and sensitive-output "
-        "containment are NOT QUALIFIED. Clean post-tool events are observation evidence."
+        "containment are NOT QUALIFIED. Clean post-tool events are observation "
+        "evidence. The MCP version check is a separate capability result."
     )
+
+
+def _report_unsupported_mcp_version(cli: str) -> None:
+    reason = (
+        "smoke intentionally disables MCP"
+        if cli == "goose"
+        else "no native MCP smoke path is configured"
+    )
+    _progress(f"UNSUPPORTED mcp_version for {cli}: {reason}; this is not a pass.")
 
 
 def _coverage_report() -> int:
@@ -2615,6 +2667,7 @@ def _run_goose_smoke(args: argparse.Namespace) -> int:
     created = False
     try:
         _partial_scope("goose")
+        _report_unsupported_mcp_version("goose")
         result = _run(
             build_goose_smoke_command(args.container_engine, args.image, name),
             args.timeout,
@@ -3048,12 +3101,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if (
                 args.cli_name in PARTIAL_SMOKE_CLIS
                 and case.name not in PRE_TOOL_SMOKE_CASE_NAMES
+                and case.name not in MCP_VERSION_CASES
             ):
                 continue
             if case.cli_names and args.cli_name not in case.cli_names:
-                _progress(
-                    f"SKIP {case.name}: native Write tool smoke is not configured for {args.cli_name}"
-                )
+                if case.name in MCP_VERSION_CASES:
+                    _report_unsupported_mcp_version(args.cli_name)
+                else:
+                    _progress(
+                        f"SKIP {case.name}: native Write tool smoke is not configured for {args.cli_name}"
+                    )
                 continue
             passed = (
                 _run_case(
@@ -3068,15 +3125,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
                 and passed
             )
-        _progress(
-            (
-                "Agent CLI pre-tool subset "
-                if args.cli_name in PARTIAL_SMOKE_CLIS
-                else "Agent CLI hook smoke test "
-            )
-            + ("passed" if passed else "failed")
-            + "."
-        )
+        if args.cli_name == "grok":
+            summary = "Agent CLI pre-tool subset and MCP version check "
+        elif args.cli_name in PARTIAL_SMOKE_CLIS:
+            summary = "Agent CLI pre-tool subset "
+        else:
+            summary = "Agent CLI hook smoke test "
+        _progress(summary + ("passed" if passed else "failed") + ".")
         return 0 if passed else 1
     except subprocess.TimeoutExpired as error:
         print("ERROR: agent CLI smoke test timed out after " f"{error.timeout} seconds")

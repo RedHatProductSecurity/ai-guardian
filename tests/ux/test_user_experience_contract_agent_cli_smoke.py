@@ -67,6 +67,11 @@ Manual qualification on Linux/macOS Podman:
     containment remain NOT QUALIFIED. Require native issued-result correlation,
     denied-command non-execution, and clean execution/continuation, not offers or
     passive hook observations alone. Grok's version must match the reviewed pin.
+20. Full smoke lanes and Grok call the namespaced AI Guardian `get_version` MCP
+     tool through the configured server. Require an issued MCP call, correlated
+     tool result, and exact installed-package version evidence at the mock provider;
+     final-answer text alone is not evidence. Goose's `--no-mcp` lane reports this
+     capability as UNSUPPORTED, never PASS.
 """
 
 import importlib.util
@@ -858,15 +863,29 @@ def test_partial_coverage_does_not_claim_prompt_or_output_enforcement(
     assert capsys.readouterr().out.strip() == (
         f"[agent-cli-test] LIMIT {cli}: pre-tool subset only; prompt denial and "
         "sensitive-output containment are NOT QUALIFIED. Clean post-tool events "
-        "are observation evidence."
+        "are observation evidence. The MCP version check is a separate capability result."
     )
-    assert {case.name for case in runner.smoke_cases(cli)} == {
+    expected_cases = {
         "ssrf",
         "config_exfil",
         "command_credential",
         "clean_tool",
         "allowed",
     }
+    if cli == "grok":
+        expected_cases.add("mcp_version")
+    assert {case.name for case in runner.smoke_cases(cli)} == expected_cases
+
+
+def test_goose_mcp_version_is_explicitly_unsupported_not_a_pass(runner, capsys):
+    runner._report_unsupported_mcp_version("goose")
+
+    output = capsys.readouterr().out.strip()
+    assert output == (
+        "[agent-cli-test] UNSUPPORTED mcp_version for goose: smoke intentionally "
+        "disables MCP; this is not a pass."
+    )
+    assert "PASS mcp_version" not in output
 
 
 @pytest.mark.parametrize("cli", ("grok", "goose"))
