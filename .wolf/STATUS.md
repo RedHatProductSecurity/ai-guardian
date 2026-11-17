@@ -21,9 +21,10 @@ budget_tokens: 1000
   container-exec probe timeouts are retried. Goose intentionally disables MCP and
   reports **UNSUPPORTED**, never PASS.
 - PR #2770 is on branch `2764`; pushed baseline commits include `5f761105`,
-  `571ddd56`, `5fb33518`, `8690a1a0`, and `24be242d`. Release Readiness run
-  `44149430049` exposed the remaining Grok config/approval and OpenCode V2
-  endpoint/session/argument issues. Local smoke qualification now passes for
+  `571ddd56`, `5fb33518`, `8690a1a0`, and `24be242d`, with final follow-up
+  `20e04b9c` now pushed. Release Readiness run `44149430049` exposed the
+  remaining Grok config/approval and OpenCode V2 endpoint/session/argument
+  issues. Local smoke qualification now passes for
   Grok's pre-tool subset plus correlated MCP version result and OpenCode V2
   **2.0.24** across its complete smoke matrix. Grok's CLI turn timed out after
   the witnessed result; V2 exited 1 after its witnessed result; both count only
@@ -31,8 +32,8 @@ budget_tokens: 1000
   new violations were confirmed.
 - **Local validation:** 531 related unit/UX tests pass; Ruff, Black (Python 3.10
   target), error-only Pylint, mypy, and `git diff --check` pass.
-  **Next:** commit and push the follow-up to PR #2770, then rerun Release
-  Readiness and record its Grok/OpenCode V2 results.
+  Release Readiness run `44160977835` is evaluating commit `20e04b9c`.
+  **Next:** record that run's result, especially the Grok and OpenCode V2 lanes.
 
 ## Issue #2758 PyPI social preview image — 2026-11-16
 
