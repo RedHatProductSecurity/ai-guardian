@@ -32,8 +32,11 @@ budget_tokens: 1000
   new violations were confirmed.
 - **Local validation:** 531 related unit/UX tests pass; Ruff, Black (Python 3.10
   target), error-only Pylint, mypy, and `git diff --check` pass.
-  Release Readiness run `44160977835` is evaluating commit `20e04b9c`.
-  **Next:** record that run's result, especially the Grok and OpenCode V2 lanes.
+  Release Readiness run `44160977835` completed successfully on commit
+  `20e04b9c`, including Grok and OpenCode V2 CLI smoke jobs. PR #2770 has since
+  advanced to `dc0e4f74` with a merge from `main`; its regular matrix/build checks
+  are still running on that newer head. **Next:** review those checks for failures;
+  no #2764 smoke issue remains locally or in Release Readiness.
 ## Issue #2759 sanitized context for locationless violations — 2026-11-17
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2759` on the
