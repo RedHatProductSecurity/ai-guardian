@@ -23,6 +23,7 @@ from ai_guardian.daemon.about import AUTHOR_HANDLE, AUTHOR_URL
 from ai_guardian.ide_registry import (
     SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
     SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
+    get_ide_integration,
 )
 from ai_guardian.openshell_policy import (
     NO_POLICY_CHOICE,
@@ -3693,6 +3694,18 @@ class TrayMenuBuilder:
             return action
 
         ide_items = [
+            pystray.MenuItem("Status legend", None),
+            pystray.MenuItem(
+                "CLI: ✓ available · ✗ not detected · — N/A · ? unknown",
+                None,
+                enabled=False,
+            ),
+            pystray.MenuItem(
+                "AI Guardian: ✓ verified healthy · ! setup incomplete · — not detected · ? unknown",
+                None,
+                enabled=False,
+            ),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Check hooks/MCP installation...",
                 self._tray._health._on_check_ide_setup,
@@ -3703,6 +3716,38 @@ class TrayMenuBuilder:
 
         def _ide_display_name(ide_key, ide_cfg):
             return "Cursor IDE/CLI" if ide_key == "cursor" else ide_cfg["name"]
+
+        def _ide_status_label(ide_key, ide_label):
+            """Render cached status only; menu construction never probes the host."""
+            integration = get_ide_integration(ide_key)
+            default_cli = (
+                "unknown"
+                if integration is None or integration.cli_capable
+                else "not_applicable"
+            )
+            snapshot = getattr(self._tray._health, "_ide_setup_snapshot", None)
+            statuses = (
+                snapshot.get("tray_status", {}) if isinstance(snapshot, dict) else {}
+            )
+            status = statuses.get(ide_key, {}) if isinstance(statuses, dict) else {}
+            cli_status = status.get("cli", default_cli)
+            setup_status = status.get("setup", "unknown")
+            cli_indicator = {
+                "installed": "✓",
+                "not_installed": "✗",
+                "not_applicable": "—",
+                "unknown": "?",
+            }.get(cli_status, "?")
+            setup_indicator = {
+                "configured": "✓",
+                "needs_setup": "!",
+                "not_detected": "—",
+                "unknown": "?",
+            }.get(setup_status, "?")
+            return (
+                f"  {ide_label} [CLI {cli_indicator}] "
+                f"[AI Guardian {setup_indicator}]"
+            )
 
         # Dummy Agent is an internal hook-testing harness, not a user-facing
         # IDE/CLI integration with a manual setup flow.
@@ -3715,7 +3760,12 @@ class TrayMenuBuilder:
         ):
             ide_label = _ide_display_name(ide_key, ide_cfg)
             ide_items.append(
-                pystray.MenuItem(f"  {ide_label}", _mk_ide_action(ide_key))
+                pystray.MenuItem(
+                    lambda _item, key=ide_key, label=ide_label: _ide_status_label(
+                        key, label
+                    ),
+                    _mk_ide_action(ide_key),
+                )
             )
             if ide_key == "cursor":
                 ide_items.append(

@@ -840,6 +840,125 @@ def test_cursor_cloud_setup_requires_explicit_project_selection():
     )
 
 
+def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status():
+    """
+    USER EXPERIENCE: Setup submenu -> see CLI availability and AI Guardian
+    health independently without delaying menu opening.
+
+    Scenario:
+    1. The tray has a cached health snapshot from its background check.
+    2. The user opens IDE/CLI Setup while some integrations are healthy,
+       incomplete, not detected, or have an unavailable check.
+    3. The user may still choose manual setup for any integration.
+
+    Expected User Experience:
+    - CLI availability and verified AI Guardian setup use separate indicators.
+    - A configured indicator means required hooks and applicable MCP are healthy.
+    - CLI-not-applicable, not-detected, and unknown states are distinct.
+    - The legend explains every indicator and setup actions remain available.
+    - Opening the submenu reads cached state only; it does not run checks.
+    """
+    health = SimpleNamespace(
+        _ide_setup_snapshot={
+            "tray_status": {
+                "claude": {"cli": "installed", "setup": "configured"},
+                "codex": {"cli": "installed", "setup": "needs_setup"},
+                "gemini": {"cli": "not_installed", "setup": "not_detected"},
+                "cursor": {"cli": "not_applicable", "setup": "unknown"},
+                "copilot": {"cli": "unknown", "setup": "unknown"},
+                "cline": {"cli": "not_applicable", "setup": "not_detected"},
+            }
+        },
+        _on_check_ide_setup=lambda *_: None,
+        _refresh_ide_setup_state=MagicMock(
+            side_effect=AssertionError("opening the menu must not run checks")
+        ),
+    )
+    builder = TrayMenuBuilder(SimpleNamespace(_health=health, _targets=[]))
+
+    with (
+        patch("ai_guardian.tray.app.pystray", create=True) as pystray,
+        patch("ai_guardian.tray.menu_builder.pystray", new=pystray),
+        patch("ai_guardian.tray.plugin_runner.pystray", new=pystray),
+    ):
+        pystray.MenuItem = MagicMock()
+        pystray.Menu = MagicMock()
+        pystray.Menu.SEPARATOR = MagicMock()
+        builder._build_ide_setup_menu_items()
+        calls = pystray.MenuItem.call_args_list
+
+    dynamic_rows = {
+        call.args[0](None): call.args[1] for call in calls if callable(call.args[0])
+    }
+    assert "  Claude Code [CLI ✓] [AI Guardian ✓]" in dynamic_rows
+    assert "  OpenAI Codex (CLI + Desktop) [CLI ✓] [AI Guardian !]" in dynamic_rows
+    assert "  Google Gemini CLI [CLI ✗] [AI Guardian —]" in dynamic_rows
+    assert "  Cursor IDE/CLI [CLI —] [AI Guardian ?]" in dynamic_rows
+    assert "  GitHub Copilot [CLI ?] [AI Guardian ?]" in dynamic_rows
+    assert "  Cline [CLI —] [AI Guardian —]" in dynamic_rows
+    assert all(callable(action) for action in dynamic_rows.values())
+
+    labels = [call.args[0] for call in calls if not callable(call.args[0])]
+    assert "Status legend" in labels
+    assert "CLI: ✓ available · ✗ not detected · — N/A · ? unknown" in labels
+    assert (
+        "AI Guardian: ✓ verified healthy · ! setup incomplete · — not detected · ? unknown"
+        in labels
+    )
+    assert "Check hooks/MCP installation..." in labels
+
+    # Replacing the cache updates the already-built item's next rendered label.
+    claude_label = next(
+        call.args[0]
+        for call in calls
+        if callable(call.args[0]) and call.args[0](None).startswith("  Claude Code ")
+    )
+    health._ide_setup_snapshot = {
+        "tray_status": {"claude": {"cli": "installed", "setup": "needs_setup"}}
+    }
+    assert claude_label(None) == "  Claude Code [CLI ✓] [AI Guardian !]"
+    health._refresh_ide_setup_state.assert_not_called()
+
+
+def test_remote_only_tray_refreshes_local_setup_status_without_auto_prompting():
+    """
+    USER EXPERIENCE: Remote-only tray -> refresh workstation setup indicators
+    without showing automatic local setup prompts.
+
+    Scenario:
+    1. The tray controls a container daemon but no local daemon.
+    2. Its background health worker refreshes IDE/CLI status for the workstation.
+    3. Automatic setup prompts remain restricted to local-daemon trays.
+
+    Expected User Experience:
+    - The global IDE/CLI Setup submenu can show current local status.
+    - Refresh runs in the existing background check, not while opening the menu.
+    - No automatic setup prompt is opened for a remote-only tray.
+    """
+    tray = SimpleNamespace(
+        _standalone=False,
+        _targets=[SimpleNamespace(runtime="container")],
+    )
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state") as refresh,
+        patch.object(
+            monitor,
+            "_get_installed_ides",
+            side_effect=AssertionError("remote-only tray must not prompt"),
+        ),
+        patch.object(
+            monitor,
+            "_get_unconfigured_ides",
+            side_effect=AssertionError("remote-only tray must not prompt"),
+        ),
+    ):
+        monitor._check_ide_setup_notification()
+
+    refresh.assert_called_once_with(include_excluded=False)
+
+
 def test_first_run_setup_offers_profile_and_configures_before_hooks():
     """
     USER EXPERIENCE: First-run setup -> choose a profile before hook setup.

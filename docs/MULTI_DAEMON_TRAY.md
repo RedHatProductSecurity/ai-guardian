@@ -85,6 +85,16 @@ The MCP Proactive submenu includes `low`, `medium`, `high`, and `paused`.
 Daemon pauses temporarily use the `paused` effective state without changing the
 saved proactive level; hooks continue enforcing security.
 
+The global **IDE/CLI Setup...** submenu labels each integration with separate
+CLI-availability and AI Guardian setup indicators. CLI availability means a
+supported executable was found on `PATH`; integrations without a CLI show
+**N/A**. The setup indicator is healthy only after required hooks and applicable
+MCP registration have been verified. Not-detected and failed checks have
+separate neutral indicators, explained by the submenu's status legend. These
+values come from background refreshes after startup, health checks, and setup;
+opening the submenu never runs discovery or verification. Manual setup actions
+remain available in every state.
+
 **About** shows **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**,
 without displaying the full profile URL, alongside the existing
 version, system, scanner and repository details. With Tk available, click the

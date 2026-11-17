@@ -443,8 +443,13 @@ class TrayHealthMonitor:
             state=state,
             skip_excluded=not include_excluded,
         )
-        if not isinstance(snapshot, dict) or snapshot.get("error"):
+        if not isinstance(snapshot, dict):
             self._ide_setup_snapshot = None
+            return None
+        if snapshot.get("error"):
+            self._ide_setup_snapshot = (
+                snapshot if isinstance(snapshot.get("tray_status"), dict) else None
+            )
             return None
 
         self._ide_setup_snapshot = snapshot
@@ -977,15 +982,13 @@ class TrayHealthMonitor:
     ):
         """Prompt users to configure installed IDE integrations.
 
-        Automatic checks are limited to local-daemon trays and honor the
-        proactive-prompt state. The tray menu's manual check bypasses those
-        restrictions and reports when every installed integration is healthy.
-        The first startup check also reports its result once; periodic checks
-        remain silent unless setup is needed.
+        Setup-health snapshots refresh for every tray because the status menu is
+        local to the workstation. Automatic prompts remain limited to
+        local-daemon trays and honor proactive-prompt state. The tray menu's
+        manual check bypasses those restrictions and reports when every
+        installed integration is healthy. The first startup check also reports
+        its result once; periodic checks remain silent unless setup is needed.
         """
-        if not manual and not self._has_local_daemon():
-            return
-
         with self._ide_setup_prompt_lock:
             if self._ide_setup_prompt_in_progress or (
                 self._ide_setup_check_in_progress
@@ -994,6 +997,9 @@ class TrayHealthMonitor:
                 return
 
         self._refresh_ide_setup_state(include_excluded=manual)
+
+        if not manual and not self._has_local_daemon():
+            return
 
         installed = self._get_installed_ides() if (manual or report_result) else None
 

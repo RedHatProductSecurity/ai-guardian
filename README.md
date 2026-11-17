@@ -151,6 +151,7 @@ upstream references. That guide is the source of truth for this summary.
 | OpenShell supervisor middleware | [OpenShell Middleware][openshell] |
 | Kubernetes deployment | [Kubernetes Guide][kubernetes] |
 | Multi-daemon tray | [Multi-Daemon Tray][tray] |
+| Tray CLI and setup health indicators | [Multi-Daemon Tray][tray] |
 | Desktop shortcut and autostart | [Multi-Daemon Tray][tray] |
 | Tray plugins and event-driven updates | [Multi-Daemon Tray][tray] |
 | Hook latency metrics | [Hooks][hooks] |

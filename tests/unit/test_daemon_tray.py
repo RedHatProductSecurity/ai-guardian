@@ -1062,6 +1062,60 @@ class TestIDESetupMenu:
             assert "Manual setup (specific IDE)" in item_names
             assert "  Cursor Cloud (project setup)..." in item_names
 
+    def test_build_ide_setup_menu_uses_cached_statuses_and_preserves_actions(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._health._ide_setup_snapshot = {
+            "tray_status": {
+                "claude": {"cli": "installed", "setup": "configured"},
+                "codex": {"cli": "installed", "setup": "needs_setup"},
+                "gemini": {"cli": "not_installed", "setup": "not_detected"},
+                "cursor": {"cli": "not_applicable", "setup": "unknown"},
+                "copilot": {"cli": "unknown", "setup": "unknown"},
+                "cline": {"cli": "not_applicable", "setup": "not_detected"},
+            }
+        }
+        with (
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            refresh = mock.Mock(side_effect=AssertionError("menu must use cache"))
+            tray._health._refresh_ide_setup_state = refresh
+
+            tray._menu._build_ide_setup_menu_items()
+            calls = mock_pystray.MenuItem.call_args_list
+
+        rendered = {}
+        for call in calls:
+            label, action = call[0][:2]
+            if callable(label):
+                rendered[label(None)] = action
+
+        assert rendered["  Claude Code [CLI ✓] [AI Guardian ✓]"]
+        assert rendered["  OpenAI Codex (CLI + Desktop) [CLI ✓] [AI Guardian !]"]
+        assert rendered["  Google Gemini CLI [CLI ✗] [AI Guardian —]"]
+        assert rendered["  Cursor IDE/CLI [CLI —] [AI Guardian ?]"]
+        assert rendered["  GitHub Copilot [CLI ?] [AI Guardian ?]"]
+        assert rendered["  Cline [CLI —] [AI Guardian —]"]
+        assert all(callable(action) for action in rendered.values())
+
+        static_labels = [call[0][0] for call in calls if not callable(call[0][0])]
+        assert "Status legend" in static_labels
+        assert "CLI: ✓ available · ✗ not detected · — N/A · ? unknown" in static_labels
+        assert (
+            "AI Guardian: ✓ verified healthy · ! setup incomplete · — not detected · ? unknown"
+            in static_labels
+        )
+        assert "Check hooks/MCP installation..." in static_labels
+        refresh.assert_not_called()
+
     def test_run_exposes_health_check_inside_ide_setup_menu(self):
         tray = DaemonTray(
             get_stats_callback=lambda: {},
@@ -1128,7 +1182,14 @@ class TestIDESetupMenu:
             mock_pystray.Menu.SEPARATOR = mock.MagicMock()
             tray._menu._build_ide_setup_menu_items()
             item_names = [
-                call[0][0] for call in mock_pystray.MenuItem.call_args_list[:-1]
+                (
+                    (call[0][0](None) if callable(call[0][0]) else call[0][0]).split(
+                        " [CLI ", 1
+                    )[0]
+                    if callable(call[0][0])
+                    else call[0][0]
+                )
+                for call in mock_pystray.MenuItem.call_args_list[:-1]
             ]
             assert "Manual setup (specific IDE)" in item_names
             assert "  Create Config..." in item_names
@@ -1162,9 +1223,16 @@ class TestIDESetupMenu:
             mock_pystray.Menu.SEPARATOR = mock.MagicMock()
             tray._menu._build_ide_setup_menu_items()
 
-            item_names = [call[0][0] for call in mock_pystray.MenuItem.call_args_list]
+            item_names = [
+                call[0][0](None) if callable(call[0][0]) else call[0][0]
+                for call in mock_pystray.MenuItem.call_args_list
+            ]
 
-        indented_names = [name for name in item_names if name.startswith("  ")]
+        indented_names = [
+            name.split(" [CLI ", 1)[0]
+            for name in item_names
+            if isinstance(name, str) and name.startswith("  ")
+        ]
         primary_names = [
             name[2:]
             for name in indented_names

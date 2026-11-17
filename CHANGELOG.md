@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Tray integration status indicators (#2771):** Show CLI availability separately
+  from verified AI Guardian hook/MCP health in the IDE/CLI Setup submenu, with
+  explicit unknown and not-applicable states and a status legend.
 - **Actionable sensitive-finding locations (#2776):** Preserve verified file paths
   and bounded line/column coordinates for secret, image-secret, and PII history
   without retaining matched values, snippets, or detector subtype. Console, CLI,
