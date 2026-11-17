@@ -179,7 +179,7 @@ CASES = (
     SmokeCase(
         "mcp_version",
         "AGENT_CLI_SMOKE_CASE: mcp_version\n"
-        "Call AI Guardian's get_version MCP tool and report the returned version.",
+        "using ai-guardian mcp tell me what is ai-guardian version",
         None,
         True,
         MCP_VERSION_SMOKE_CLIS,

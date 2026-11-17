@@ -67,11 +67,12 @@ Manual qualification on Linux/macOS Podman:
     containment remain NOT QUALIFIED. Require native issued-result correlation,
     denied-command non-execution, and clean execution/continuation, not offers or
     passive hook observations alone. Grok's version must match the reviewed pin.
-20. Full smoke lanes and Grok call the namespaced AI Guardian `get_version` MCP
-     tool through the configured server. Require an issued MCP call, correlated
-     tool result, and exact installed-package version evidence at the mock provider;
-     final-answer text alone is not evidence. Goose's `--no-mcp` lane reports this
-     capability as UNSUPPORTED, never PASS.
+20. Full smoke lanes and Grok call the configured AI Guardian `get_version` MCP
+      tool. OpenCode V2 may expose MCP through Code Mode, so its `execute` wrapper
+      calls `tools["ai-guardian"].get_version({})`. Require an issued call, correlated
+      tool result, and exact installed-package version evidence at the mock provider;
+      final-answer text alone is not evidence. Goose's `--no-mcp` lane reports this
+      capability as UNSUPPORTED, never PASS.
 """
 
 import importlib.util

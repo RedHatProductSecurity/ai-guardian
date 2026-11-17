@@ -548,7 +548,7 @@ def _find_case_tool(
     payload: Dict[str, Any], case: str
 ) -> Optional[Tuple[str, Dict[str, Any]]]:
     if case in MCP_VERSION_CASES:
-        return _find_mcp_version_tool(payload)
+        return _find_mcp_version_tool(payload) or _find_codemode_execute_tool(payload)
     if case in FILE_WRITE_CASES:
         return _find_file_write_tool(payload)
     return _find_command_tool(payload)
@@ -617,6 +617,35 @@ def _find_mcp_version_tool(
     return None
 
 
+def _find_codemode_execute_tool(
+    payload: Dict[str, Any],
+) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Find OpenCode Code Mode's wrapper for a real MCP tool invocation."""
+    tools = payload.get("tools", [])
+    entries = tools if isinstance(tools, list) else [tools]
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        function = entry.get("function")
+        candidate = function if isinstance(function, dict) else entry
+        if candidate.get("name") != "execute":
+            continue
+        schema = (
+            candidate.get("input_schema")
+            or candidate.get("parametersJsonSchema")
+            or candidate.get("parameters_json_schema")
+            or candidate.get("parameters")
+            or candidate.get("inputSchema")
+        )
+        if not isinstance(schema, dict):
+            continue
+        properties = schema.get("properties")
+        code_property = properties.get("code") if isinstance(properties, dict) else None
+        if isinstance(code_property, dict) and code_property.get("type") == "string":
+            return "execute", schema
+    return None
+
+
 def _file_write_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
     properties = schema.get("properties", {})
     arguments: Dict[str, Any] = {}
@@ -631,7 +660,12 @@ def _file_write_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
     return arguments
 
 
-def _case_tool_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
+def _case_tool_arguments(
+    schema: Dict[str, Any], case: str, tool_name: Optional[str] = None
+) -> Dict[str, Any]:
+    if case in MCP_VERSION_CASES and tool_name == "execute":
+        return {"code": 'return await tools["ai-guardian"].get_version({})'}
+
     if case in MCP_VERSION_CASES:
         return {}
     if case in FILE_WRITE_CASES:
@@ -769,7 +803,9 @@ def chat_response(
                     "type": "function",
                     "function": {
                         "name": name,
-                        "arguments": json.dumps(_case_tool_arguments(schema, case)),
+                        "arguments": json.dumps(
+                            _case_tool_arguments(schema, case, name)
+                        ),
                     },
                 }
             ],
@@ -805,7 +841,7 @@ def responses_response(
             "type": "function_call",
             "status": "completed",
             "name": name,
-            "arguments": json.dumps(_case_tool_arguments(schema, case)),
+            "arguments": json.dumps(_case_tool_arguments(schema, case, name)),
             "call_id": _issued_tool_id(case, "call_"),
         }
     else:
@@ -860,7 +896,7 @@ def anthropic_response(
                 "type": "tool_use",
                 "id": _issued_tool_id(case, "toolu_"),
                 "name": name,
-                "input": _case_tool_arguments(schema, case),
+                "input": _case_tool_arguments(schema, case, name),
             }
         ]
         stop_reason = "tool_use"
@@ -916,7 +952,7 @@ def gemini_response(
         part = {
             "functionCall": {
                 "name": name,
-                "args": _case_tool_arguments(schema, case),
+                "args": _case_tool_arguments(schema, case, name),
             }
         }
     return {

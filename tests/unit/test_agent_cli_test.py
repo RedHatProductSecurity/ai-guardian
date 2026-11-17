@@ -1926,6 +1926,74 @@ def test_local_mock_finds_ai_guardian_version_tool_in_native_schemas(tool):
     )
 
 
+def test_local_mock_calls_mcp_version_through_opencode_codemode(monkeypatch):
+    mock = _load(MOCK_PATH, "agent_cli_mcp_version_codemode")
+    expected_version = "synthetic-package-version"
+    monkeypatch.setattr(
+        mock, "_installed_ai_guardian_version", lambda: expected_version
+    )
+    tool = {
+        "type": "function",
+        "function": {
+            "name": "execute",
+            "description": "OpenCode Code Mode execution tool",
+            "parameters": {
+                "type": "object",
+                "properties": {"code": {"type": "string"}},
+                "required": ["code"],
+            },
+        },
+    }
+    payload = {"tools": [tool]}
+
+    call_number, tool_call_number = mock._record_request("mcp_version", payload)
+    response = mock.chat_response(payload, "mcp_version", call_number, tool_call_number)
+    call = response["choices"][0]["message"]["tool_calls"][0]
+    assert call["function"]["name"] == "execute"
+    assert json.loads(call["function"]["arguments"]) == {
+        "code": 'return await tools["ai-guardian"].get_version({})'
+    }
+    assert (
+        mock._find_case_tool(
+            {
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "execute",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"command": {"type": "string"}},
+                            },
+                        },
+                    }
+                ]
+            },
+            "mcp_version",
+        )
+        is None
+    )
+
+    mock._observe_request(
+        {
+            "messages": [
+                {
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": json.dumps({"version": expected_version}),
+                }
+            ]
+        }
+    )
+    stats = mock._stats()
+    assert stats["mcp_version_tool_offers"] == {"mcp_version": 1}
+    assert stats["mcp_version_tool_calls"] == {"mcp_version": 1}
+    assert stats["mcp_version_tool_results"] == {"mcp_version": 1}
+    assert stats["mcp_version_matches"] == {"mcp_version": 1}
+    assert stats["mcp_version_mismatches"] == {}
+    assert expected_version not in json.dumps(stats)
+
+
 def test_local_mock_requires_correlated_mcp_version_result(monkeypatch):
     mock = _load(MOCK_PATH, "agent_cli_mcp_version_round_trip")
     expected_version = "synthetic-package-version"
@@ -2546,6 +2614,12 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
     } == job_names
 
 
+def test_release_readiness_limits_github_token_to_read_only_contents():
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+    assert workflow["permissions"] == {"contents": "read"}
+
+
 def test_release_readiness_mcp_protocol_checks_installed_version_tool_result():
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     step = next(
@@ -3061,6 +3135,15 @@ def test_counter_read_diagnostics_truncate_stderr():
 
     assert len(diagnostics[0]) < 1300
     assert diagnostics[0].endswith("x" * 1200)
+
+
+def test_mcp_version_smoke_prompt_asks_for_the_server_result():
+    runner = _load(RUNNER_PATH, "agent_cli_mcp_version_prompt")
+    case = next(case for case in runner.CASES if case.name == "mcp_version")
+
+    assert case.prompt.endswith(
+        "using ai-guardian mcp tell me what is ai-guardian version"
+    )
 
 
 @pytest.mark.parametrize(

@@ -242,9 +242,12 @@ The credential-free CLI smoke separately calls AI Guardian's native
 requires an issued call, a correlated tool result, and the exact installed
 package version at the local mock provider; a final-answer claim alone is not
 evidence. This capability check does not expand Grok's pre-tool-only security
-qualification. Goose intentionally uses `--no-mcp`, so its runner reports the
-MCP version check as **UNSUPPORTED**, never as a pass. Other clients without a
-credential-free smoke lane remain explicitly blocked in the coverage ledger.
+qualification. OpenCode V2 exposes MCP through Code Mode by default, so its smoke
+invokes `get_version` through the `execute` wrapper rather than expecting the
+individual MCP tool in the provider's tool list. Goose intentionally uses
+`--no-mcp`, so its runner reports the MCP version check as **UNSUPPORTED**, never
+as a pass. Other clients without a credential-free smoke lane remain explicitly
+blocked in the coverage ledger.
 
 ## Runtime and diagnostics boundaries
 
