@@ -252,10 +252,11 @@ sets `codemode: false` for this server and invokes the individual MCP tool rathe
 than qualifying Code Mode's `execute` interpreter. Grok follows its native
 `search_tool` → `use_tool` flow; dispatch is allowed only after a correlated
 search result identifies the exact qualified `ai-guardian__get_version` tool
-and its schema. The provider continuation verifies the correlated result against
-the installed package version. Clients that keep MCP results local must also
-produce the smoke-only stdio witness; clients that forward correlated tool results
-use provider evidence. Goose intentionally uses
+and its schema. The mock-issued provider call is counted separately from the
+client's actual MCP RPC. Grok keeps the `use_tool` result local, so its smoke
+uses the stdio witness to correlate the call and exact installed version.
+Clients that keep MCP results local must produce that witness; clients that
+forward correlated tool results use provider evidence. Goose intentionally uses
 `--no-mcp`, so its runner reports the MCP version check as **UNSUPPORTED**, never
 as a pass. Other clients without a credential-free smoke lane remain explicitly
 blocked in the coverage ledger.

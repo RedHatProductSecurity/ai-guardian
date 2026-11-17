@@ -17,7 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `codemode: false` to qualify direct native tool result transport. A smoke-only
   stdio witness covers clients that keep the MCP result local; provider-continuation
   clients use correlated call/result counters. Grok is pinned to 1.0.63 for custom
-  Chat Completions MCP support. A timeout/nonzero exit after
+  Chat Completions MCP support; its local `use_tool` result is checked by the stdio
+  witness. OpenCode V2 uses a persistent smoke server and waits for a correlated
+  `tools/list` response containing `get_version` before starting smoke sessions. A
+  timeout/nonzero exit after
   complete MCP evidence qualifies only this capability, not the rest of that
   CLI's smoke cases.
 - **Pi setup and native MCP registration (#2762):** Detect an installed Pi CLI

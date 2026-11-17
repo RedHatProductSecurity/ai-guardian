@@ -58,8 +58,8 @@ MCP_VERSION_CASES = frozenset({"mcp_version"})
 # Goose's isolated smoke setup deliberately uses --no-mcp.
 MCP_VERSION_SMOKE_CLIS = ("claude", "codex", "gemini", "opencode", "pi", "grok")
 # These clients keep MCP results inside local stdio rather than forwarding them
-# in a provider continuation. Grok 1.0.63 uses its Chat Completions continuation.
-MCP_EVIDENCE_PROXY_SMOKE_CLIS = frozenset({"gemini", "opencode", "pi"})
+# in a provider continuation. Grok's `use_tool` result remains local as well.
+MCP_EVIDENCE_PROXY_SMOKE_CLIS = frozenset({"gemini", "grok", "opencode", "pi"})
 # Goose is host-only in the product registry. Its smoke uses a supplied,
 # disposable test image, not the supported sandbox create/entrypoint path.
 PRE_TOOL_SMOKE_CASE_NAMES = frozenset(
@@ -512,8 +512,11 @@ for key in ('mcp_version_tool_offers','mcp_version_tool_calls',
             'mcp_version_tool_results','mcp_version_matches','mcp_version_mismatches'):
     values=stats.get(key,{})
     out[key]=values.get(case,0) if isinstance(values,dict) else 0
-# Only local-result clients need the stdio witness; provider-continuation clients
-# keep their correlated MCP call/result counts from the provider boundary above.
+# Keep the mock-issued provider call separate from the client's actual MCP RPC.
+out['mcp_version_provider_calls']=out['mcp_version_tool_calls']
+out['mcp_version_rpc_calls']=0
+# Clients that keep MCP results local need the stdio witness; clients that forward
+# correlated tool results use provider evidence for the actual call/result.
 if case == 'mcp_version' and sys.argv[4] == '1':
     rpc_events=collections.Counter()
     evidence=Path(sys.argv[3])
@@ -524,6 +527,7 @@ if case == 'mcp_version' and sys.argv[4] == '1':
             event=item.get('event')
             if event in ('mcp_call','mcp_result_match','mcp_result_mismatch'):
                 rpc_events[event]+=1
+    out['mcp_version_rpc_calls']=rpc_events['mcp_call']
     out['mcp_version_tool_calls']=rpc_events['mcp_call']
     out['mcp_version_tool_results']=rpc_events['mcp_result_match']+rpc_events['mcp_result_mismatch']
     out['mcp_version_matches']=rpc_events['mcp_result_match']
@@ -768,13 +772,21 @@ def build_agent_command(
             prompt,
         ]
     if cli_name == "opencode":
-        command = ["opencode", "run"]
-        if opencode_v2:
-            # A private server prevents the V2 CLI from reusing stale state from
-            # an earlier case in the same sandbox.
+        command = ["opencode"]
+        if opencode_v2 and opencode_attach_url:
+            command.extend(["--server", opencode_attach_url, "run"])
+        else:
+            command.append("run")
+        if opencode_v2 and not opencode_attach_url:
+            # Keep direct invocations isolated when no shared smoke server exists.
             command.append("--standalone")
         elif opencode_attach_url:
-            command.extend(["--attach", opencode_attach_url, "--dir", "/sandbox/repo"])
+            if opencode_v2:
+                command.extend(["--dir", "/sandbox/repo"])
+            else:
+                command.extend(
+                    ["--attach", opencode_attach_url, "--dir", "/sandbox/repo"]
+                )
         command.extend(
             [
                 "--agent",
@@ -1648,6 +1660,8 @@ def _tool_evidence(
         "native_tool_name_run_terminal_command",
         "native_file_write_tool_name_write",
         "mcp_version_tool_offers",
+        "mcp_version_provider_calls",
+        "mcp_version_rpc_calls",
         "mcp_version_tool_calls",
         "mcp_version_tool_results",
         "mcp_version_matches",
@@ -2061,8 +2075,8 @@ def _opencode_uses_v2(
     return major >= 2
 
 
-def _start_opencode_v1_server(engine: str, name: str, timeout: int) -> bool:
-    """Start one headless V1 backend so all smoke cases reuse its MCP startup."""
+def _start_opencode_server(engine: str, name: str, timeout: int) -> bool:
+    """Start one headless backend so smoke cases reuse its MCP startup."""
     command = [engine, "exec", "--detach"]
     for entry in build_agent_environment("opencode"):
         command.extend(["--env", entry])
@@ -2081,10 +2095,10 @@ def _start_opencode_v1_server(engine: str, name: str, timeout: int) -> bool:
     )
     started = _run(command, timeout)
     if started.returncode != 0:
-        _report_failure_details("OpenCode V1 server start", started)
+        _report_failure_details("OpenCode server start", started)
         return False
 
-    _progress("Waiting for the persistent OpenCode V1 server")
+    _progress("Waiting for the persistent OpenCode server")
     health_url = f"{OPENCODE_SERVER_URL}/global/health"
     deadline = time.monotonic() + min(timeout, 60)
     last_heartbeat = time.monotonic()
@@ -2098,22 +2112,74 @@ def _start_opencode_v1_server(engine: str, name: str, timeout: int) -> bool:
             min(3, remaining),
         )
         if result.returncode == 0:
-            _progress("Persistent OpenCode V1 server is ready")
+            _progress("Persistent OpenCode server is ready")
             return True
         last_result = result
         elapsed = int(time.monotonic() - last_heartbeat)
         if elapsed >= 15:
-            _progress(f"OpenCode V1 server is still starting ({elapsed}s elapsed)")
+            _progress(f"OpenCode server is still starting ({elapsed}s elapsed)")
             last_heartbeat = time.monotonic()
         time.sleep(min(0.5, max(0, deadline - time.monotonic())))
 
     if last_result is not None:
-        _report_failure_details("OpenCode V1 server readiness", last_result, 1200)
-    print("FAIL: persistent OpenCode V1 server did not become ready")
+        _report_failure_details("OpenCode server readiness", last_result, 1200)
+    print("FAIL: persistent OpenCode server did not become ready")
     return False
 
 
-def _warm_opencode_v1_server(engine: str, name: str, agent: str, timeout: int) -> bool:
+def _wait_for_opencode_v2_mcp_tools(engine: str, name: str, timeout: int) -> bool:
+    """Wait until V2 has listed get_version before creating one-shot sessions."""
+    ready_reader = r"""
+import json, pathlib, sys
+path=pathlib.Path(sys.argv[1])
+ready=False
+try:
+    for line in path.read_text(encoding='utf-8').splitlines():
+        try: event=json.loads(line).get('event')
+        except (AttributeError, TypeError, ValueError): continue
+        if event == 'mcp_tools_list_match': ready=True
+except OSError:
+    pass
+print('1' if ready else '0')
+"""
+    _progress("Waiting for OpenCode V2 to list the AI Guardian MCP tool")
+    deadline = time.monotonic() + min(timeout, 60)
+    last_heartbeat = time.monotonic()
+    while time.monotonic() < deadline:
+        remaining = max(1, int(deadline - time.monotonic()))
+        result = _exec(
+            engine,
+            name,
+            [
+                "python3",
+                "-c",
+                ready_reader,
+                f"{STATE_DIR}/mcp_version_rpc.jsonl",
+            ],
+            min(3, remaining),
+        )
+        if result.returncode == 0 and result.stdout.strip() == "1":
+            _progress("OpenCode V2 has listed the exact AI Guardian get_version tool")
+            return True
+        elapsed = int(time.monotonic() - last_heartbeat)
+        if elapsed >= 15:
+            _progress(
+                f"OpenCode V2 MCP tool listing is still pending ({elapsed}s elapsed)"
+            )
+            last_heartbeat = time.monotonic()
+        time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+    print("FAIL: OpenCode V2 did not list AI Guardian get_version before the smoke")
+    return False
+
+
+def _warm_opencode_server(
+    engine: str,
+    name: str,
+    agent: str,
+    timeout: int,
+    *,
+    opencode_v2: bool = False,
+) -> bool:
     """Pay the first MCP/session startup cost before reporting smoke cases."""
     case = next(case for case in CASES if case.name == "allowed")
     before_violations = _violation_counts(engine, name, timeout)
@@ -2129,15 +2195,20 @@ def _warm_opencode_v1_server(engine: str, name: str, agent: str, timeout: int) -
             "opencode",
             agent,
             case.prompt,
+            opencode_v2=opencode_v2,
             opencode_attach_url=OPENCODE_SERVER_URL,
         ),
         timeout,
         env=build_agent_environment("opencode"),
         workdir="/sandbox/repo",
-        progress="Warming the OpenCode V1 backend with the local mock provider",
+        progress=(
+            "Warming the OpenCode V2 backend with the local mock provider"
+            if opencode_v2
+            else "Warming the OpenCode V1 backend with the local mock provider"
+        ),
     )
     if invocation.returncode != 0:
-        _report_failure_details("OpenCode V1 warm-up", invocation)
+        _report_failure_details("OpenCode warm-up", invocation)
         return False
 
     after_violations = _violation_counts(engine, name, timeout)
@@ -2152,7 +2223,9 @@ def _warm_opencode_v1_server(engine: str, name: str, agent: str, timeout: int) -
         print("FAIL: OpenCode warm-up did not reach the local mock provider")
         return False
 
-    _progress("OpenCode V1 backend is warmed and ready for smoke cases")
+    _progress(
+        f"OpenCode {'V2' if opencode_v2 else 'V1'} backend is warmed and ready for smoke cases"
+    )
     return True
 
 
@@ -2161,13 +2234,14 @@ def _mcp_version_evidence_is_complete(
     hook_deltas: Optional[Dict[str, int]],
     tool_deltas: Optional[Dict[str, int]],
 ) -> bool:
-    """Require a live offer, prompt event, issued call, and exact RPC result."""
+    """Require an offer, provider-issued call, MCP call, and exact result."""
     if request_delta is None or request_delta < 1 or hook_deltas is None:
         return False
     if hook_deltas.get("prompt", 0) < 1 or tool_deltas is None:
         return False
     return (
         tool_deltas.get("mcp_version_tool_offers", 0) >= 1
+        and tool_deltas.get("mcp_version_provider_calls", 0) >= 1
         and tool_deltas.get("mcp_version_tool_calls", 0) >= 1
         and tool_deltas.get("mcp_version_tool_results", 0) >= 1
         and tool_deltas.get("mcp_version_matches", 0) >= 1
@@ -2405,8 +2479,14 @@ def _run_case(
     if is_mcp_version_case:
         if tool_deltas.get("mcp_version_tool_offers", 0) < 1:
             return fail("AI Guardian get_version MCP tool was not offered to the model")
-        if tool_deltas.get("mcp_version_tool_calls", 0) < 1:
+        if tool_deltas.get("mcp_version_provider_calls", 0) < 1:
             return fail("the local mock did not issue the get_version MCP call")
+        if tool_deltas.get("mcp_version_tool_calls", 0) < 1:
+            if cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS:
+                return fail(
+                    "the CLI did not send the issued get_version call to the MCP server"
+                )
+            return fail("the issued get_version call did not reach the MCP result")
         if tool_deltas.get("mcp_version_tool_results", 0) < 1:
             return fail(
                 "the AI Guardian MCP server did not return a correlated get_version result"
@@ -3303,13 +3383,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             else False
         )
         opencode_attach_url = None
-        if args.cli_name == "opencode" and not opencode_v2:
-            _progress("Starting a persistent OpenCode V1 server for all cases")
-            if not _start_opencode_v1_server(args.container_engine, name, args.timeout):
+        if args.cli_name == "opencode":
+            generation = "V2" if opencode_v2 else "V1"
+            _progress(
+                f"Starting a persistent OpenCode {generation} server for all cases"
+            )
+            if not _start_opencode_server(args.container_engine, name, args.timeout):
                 return 1
             opencode_attach_url = OPENCODE_SERVER_URL
-            if not _warm_opencode_v1_server(
-                args.container_engine, name, args.agent, args.timeout
+            if opencode_v2 and not _wait_for_opencode_v2_mcp_tools(
+                args.container_engine, name, args.timeout
+            ):
+                return 1
+            if not _warm_opencode_server(
+                args.container_engine,
+                name,
+                args.agent,
+                args.timeout,
+                opencode_v2=opencode_v2,
             ):
                 return 1
         passed = True

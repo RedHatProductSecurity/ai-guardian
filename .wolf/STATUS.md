@@ -9,27 +9,29 @@ budget_tokens: 1000
 
 ## Issue #2764 MCP version tool in agent CLI smoke — 2026-11-17
 
-- Added the MCP version capability to the supported native CLI smoke lanes. The
-  stdio witness is used only for Gemini, OpenCode, and Pi, which keep MCP results
-  local; Claude, Codex, and Grok use correlated provider continuations. Grok
-  1.0.63 discovers the server tool through `search_tool` and calls it through
-  `use_tool`; the mock requires an issued search result containing the exact
-  qualified name and schema before it dispatches. OpenCode V2's smoke sets
-  `codemode: false` for this server and shares `OPENCODE_CONFIG` between setup and
-  runtime. Goose intentionally disables MCP and reports **UNSUPPORTED**, never
-  PASS.
-- Pushed commits `5f761105`, `571ddd56`, and `5fb33518` to `origin/2764` in
-  PR #2770. Release Readiness run `44128748557` completed with Grok and OpenCode
-  V2 failures: the mock did not model Grok's meta-tool workflow, V2's default
-  Code Mode path did not yield direct result evidence, and the evidence reader
-  replaced continuation counters with absent witness events. These are fixed in
-  the current local changes; a refreshed native run is pending.
+- Added the MCP version capability to supported native CLI smoke lanes. Grok's
+  `search_tool` → `use_tool` dispatch requires an issued search result with the
+  exact qualified name and schema; its MCP result is checked by the stdio witness.
+  OpenCode V2 uses `codemode: false`, shares `OPENCODE_CONFIG` across setup/runtime,
+  and now waits for a correlated `tools/list` result containing `get_version` on a
+  persistent server before starting smoke sessions. Goose intentionally disables
+  MCP and reports **UNSUPPORTED**, never PASS.
+- Pushed commits `5f761105`, `571ddd56`, `5fb33518`, and `8690a1a0` to
+  `origin/2764` in PR #2770. Release Readiness run `44128748557` completed with
+  Grok and OpenCode V2 failures: Grok made provider requests but no native MCP
+  tool call; V2 offered Code Mode's `execute` wrapper but produced no witnessed
+  JSON-RPC call. Run `44138913355` also failed both lanes: Grok had no correlated
+  result, and V2 had no get_version RPC. Local changes now distinguish mock-issued
+  calls from actual RPCs, add Grok to stdio evidence, and wait for V2's exact tool
+  listing before running cases. These follow-up changes have not yet been pushed
+  or exercised in Release Readiness.
 - A timeout/nonzero exit can qualify only `mcp_version`, and only with prompt,
   offer, issued call, correlated exact-version response, and zero new violations.
-  **Local validation:** 583 related unit/UX tests pass; Ruff, Black (Python 3.10
-  target), error-only Pylint, and `uv run --extra dev mypy src/ai_guardian/`
-  pass. The host `mypy` reports 14 errors in two untouched modules. **Next:**
-  commit/push these corrections, rerun Release Readiness, and check CodeQL.
+  **Local validation:** 517 related unit/UX tests pass; Ruff, Black (Python 3.10
+  target), and error-only Pylint pass. `mypy src/ai_guardian/` still reports 14
+  existing errors in untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+  **Next:** push the local follow-up, run Release Readiness again, and verify Grok
+  and OpenCode V2 produce the required correlated evidence.
 
 ## Issue #2758 PyPI social preview image — 2026-11-16
 

@@ -72,10 +72,12 @@ Manual qualification on Linux/macOS Podman:
     its direct native MCP tool rather than Code Mode's `execute` interpreter.
     Grok uses its native `search_tool` → `use_tool` continuation; dispatch requires
     the issued search result to identify the exact qualified tool name and schema.
+    Its `use_tool` result stays local and is verified by the smoke-only stdio witness.
     Require a model-facing offer, an issued call, a correlated result, and an exact
     match with the installed server executable's version. Clients whose MCP result
-    stays local must also produce the smoke-only stdio witness; provider-continuation
-    clients use their correlated tool result. Assistant text alone is never evidence.
+    stays local must also produce the smoke-only stdio witness. Preserve the
+    provider-issued-call count separately so the witness cannot erase whether the
+    mock issued a tool call. Assistant text alone is never evidence.
     If a CLI times out or exits nonzero after the matched
     MCP response, only this capability can pass, and that process outcome is
     reported. Goose's `--no-mcp` lane reports this capability as UNSUPPORTED,

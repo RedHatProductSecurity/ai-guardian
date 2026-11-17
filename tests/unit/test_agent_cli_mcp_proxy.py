@@ -217,6 +217,58 @@ def test_stdio_proxy_correlates_result_id_and_checks_installed_version(
 
 
 @pytest.mark.parametrize(
+    ("tool_name", "input_schema", "expected_event"),
+    (
+        ("get_version", {"type": "object", "properties": {}}, "mcp_tools_list_match"),
+        ("other_tool", {"type": "object", "properties": {}}, "mcp_tools_list_mismatch"),
+        ("get_version", {"type": "string"}, "mcp_tools_list_mismatch"),
+    ),
+)
+def test_stdio_proxy_confirms_the_exact_get_version_tool_list(
+    tmp_path, tool_name, input_schema, expected_event
+):
+    server = tmp_path / "server.py"
+    server.write_text(
+        "import json,sys\n"
+        "for line in sys.stdin:\n"
+        " request=json.loads(line)\n"
+        " result={'tools':[{'name':"
+        f"{tool_name!r},'inputSchema':{input_schema!r}"
+        "}]}\n"
+        " print(json.dumps({'jsonrpc':'2.0','id':request['id'],'result':result}),flush=True)\n",
+        encoding="utf-8",
+    )
+    evidence = tmp_path / "evidence.jsonl"
+    env = {**os.environ, "AI_GUARDIAN_MCP_EVIDENCE_FILE": str(evidence)}
+    request = {"jsonrpc": "2.0", "id": "list-1", "method": "tools/list"}
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "proxy",
+            "--expected-version",
+            __version__,
+            "--",
+            sys.executable,
+            str(server),
+        ],
+        input=json.dumps(request) + "\n",
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+    assert json.loads(completed.stdout)["id"] == "list-1"
+    events = [
+        json.loads(line)["event"]
+        for line in evidence.read_text(encoding="utf-8").splitlines()
+    ]
+    assert events == [expected_event]
+
+
+@pytest.mark.parametrize(
     ("tool_name", "expected_events"),
     (("get_config", []), ("get_version", ["mcp_call"])),
 )

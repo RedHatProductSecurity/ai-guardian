@@ -463,6 +463,28 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
         "ai_guardian_smoke/ag-smoke",
         "hello",
     ]
+    assert runner.build_agent_command(
+        "opencode",
+        "build",
+        "hello",
+        opencode_v2=True,
+        opencode_attach_url="http://127.0.0.1:4096",
+    ) == [
+        "opencode",
+        "--server",
+        "http://127.0.0.1:4096",
+        "run",
+        "--dir",
+        "/sandbox/repo",
+        "--agent",
+        "build",
+        "--auto",
+        "--format",
+        "json",
+        "--model",
+        "ai_guardian_smoke/ag-smoke",
+        "hello",
+    ]
     assert runner.build_agent_command("pi", "openai", "hello") == [
         "pi",
         "-p",
@@ -964,8 +986,10 @@ def test_main_sets_up_smoke_isolation_and_cleans_up(
     assert not any(command[1:3] == ["network", "connect"] for command in commands)
 
 
-def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path):
-    runner = _load(RUNNER_PATH, "agent_cli_smoke_opencode_v1_server")
+def test_main_starts_one_persistent_opencode_server_for_all_cases(
+    monkeypatch, tmp_path
+):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_opencode_server")
     runner._temp_parent = lambda: tmp_path
     runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
     monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
@@ -977,9 +1001,11 @@ def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path)
     runner._check_podman_smoke_image = lambda *_args: True
     runner._setup_podman_firewall = lambda *_args: True
     server_starts = []
-    runner._start_opencode_v1_server = lambda *args: server_starts.append(args) or True
+    runner._start_opencode_server = lambda *args: server_starts.append(args) or True
     warmups = []
-    runner._warm_opencode_v1_server = lambda *args: warmups.append(args) or True
+    runner._warm_opencode_server = (
+        lambda *args, **kwargs: warmups.append((args, kwargs)) or True
+    )
     case_calls = []
     runner._run_case = lambda *args, **kwargs: case_calls.append(kwargs) or True
 
@@ -1010,7 +1036,7 @@ def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path)
     assert len(server_starts) == 1
     assert server_starts[0][0] == "podman"
     assert len(warmups) == 1
-    assert warmups[0][0] == "podman"
+    assert warmups[0][0][0] == "podman"
     expected_cases = [
         case
         for case in runner.CASES
@@ -1202,9 +1228,26 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
 
     monkeypatch.setattr(runner, "_exec", fake_exec)
     monkeypatch.setattr(runner, "_delete_sandbox", lambda *args: None)
-    starts, warmups, cases = [], [], []
-    runner._start_opencode_v1_server = lambda *args: starts.append(args) or True
-    runner._warm_opencode_v1_server = lambda *args: warmups.append(args) or True
+    starts, warmups, waits, cases, sequence = [], [], [], [], []
+
+    def start_server(*args):
+        starts.append(args)
+        sequence.append("start")
+        return True
+
+    def warm_server(*args, **kwargs):
+        warmups.append((args, kwargs))
+        sequence.append("warm")
+        return True
+
+    def wait_for_mcp(*args):
+        waits.append(args)
+        sequence.append("wait")
+        return True
+
+    runner._start_opencode_server = start_server
+    runner._warm_opencode_server = warm_server
+    runner._wait_for_opencode_v2_mcp_tools = wait_for_mcp
     runner._run_case = lambda *args, **kwargs: cases.append(kwargs) or True
     argv = [
         "--cli-name",
@@ -1224,7 +1267,7 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
     assert builds == [{"install_claude_code": False, "opencode_version": requested}]
     output = capsys.readouterr().out
     if exit_code:
-        assert not starts and not warmups and not cases
+        assert not starts and not warmups and not waits and not cases
         assert (
             f"installed OpenCode version does not match --cli-version {requested}"
             in output
@@ -1232,7 +1275,10 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
         assert "smoke test passed" not in output
     else:
         v2 = installed.startswith("2.")
-        assert len(starts) == len(warmups) == (0 if v2 else 1)
+        assert len(starts) == len(warmups) == 1
+        assert len(waits) == int(v2)
+        assert sequence == (["start", "wait", "warm"] if v2 else ["start", "warm"])
+        assert warmups[0][1] == {"opencode_v2": v2}
         expected_cases = [
             case
             for case in runner.CASES
@@ -1241,15 +1287,14 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
         assert len(cases) == len(expected_cases)
         assert all(call["opencode_v2"] is v2 for call in cases)
         assert all(
-            call["opencode_attach_url"] == (None if v2 else runner.OPENCODE_SERVER_URL)
-            for call in cases
+            call["opencode_attach_url"] == runner.OPENCODE_SERVER_URL for call in cases
         )
         assert f"Detected OpenCode {'V2' if v2 else 'V1'}: {installed}" in output
     assert [engine, "image", "rm", "localhost/versioned-smoke:test"] in commands
 
 
-def test_opencode_v1_server_starts_detached_and_waits_for_health(monkeypatch):
-    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_server_start")
+def test_opencode_server_starts_detached_and_waits_for_health(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_server_start")
     commands = []
     probes = []
 
@@ -1264,7 +1309,7 @@ def test_opencode_v1_server_starts_detached_and_waits_for_health(monkeypatch):
     monkeypatch.setattr(runner, "_run", fake_run)
     monkeypatch.setattr(runner, "_exec", fake_exec)
 
-    assert runner._start_opencode_v1_server("podman", "smoke", 30)
+    assert runner._start_opencode_server("podman", "smoke", 30)
 
     command = commands[0]
     assert command[:3] == ["podman", "exec", "--detach"]
@@ -1282,8 +1327,60 @@ def test_opencode_v1_server_starts_detached_and_waits_for_health(monkeypatch):
     assert probes[0][2][-1] == f"{runner.OPENCODE_SERVER_URL}/global/health"
 
 
-def test_opencode_v1_warmup_uses_clean_case_and_local_provider(monkeypatch):
-    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_warmup")
+def test_opencode_v2_waits_for_correlated_exact_mcp_tool_listing(monkeypatch, capsys):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v2_mcp_readiness")
+    responses = iter(("0\n", "1\n"))
+    commands = []
+
+    def fake_exec(engine, name, command, timeout):
+        commands.append((engine, name, command, timeout))
+        return subprocess.CompletedProcess(command, 0, next(responses), "")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(runner.time, "monotonic", lambda: 0)
+
+    assert runner._wait_for_opencode_v2_mcp_tools("podman", "smoke", 30)
+
+    assert len(commands) == 2
+    assert all(command[0:2] == ("podman", "smoke") for command in commands)
+    assert all(
+        command[2][-1] == f"{runner.STATE_DIR}/mcp_version_rpc.jsonl"
+        for command in commands
+    )
+    assert all(
+        any("mcp_tools_list_match" in item for item in command[2])
+        for command in commands
+    )
+    assert "exact AI Guardian get_version tool" in capsys.readouterr().out
+
+
+def test_opencode_v2_mcp_readiness_times_out_without_exact_tool_listing(
+    monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v2_mcp_readiness_timeout")
+    now = [0.0]
+    probes = []
+
+    def fake_exec(engine, name, command, timeout):
+        probes.append((engine, name, command, timeout))
+        return subprocess.CompletedProcess(command, 0, "0\n", "")
+
+    def fake_sleep(seconds):
+        now[0] += seconds
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(runner.time, "sleep", fake_sleep)
+
+    assert not runner._wait_for_opencode_v2_mcp_tools("podman", "smoke", 1)
+
+    assert len(probes) == 2
+    assert "did not list AI Guardian get_version" in capsys.readouterr().out
+
+
+def test_opencode_warmup_uses_clean_case_and_local_provider(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_warmup")
     violations = iter(({}, {}))
     requests = iter(({"allowed": 0}, {"allowed": 1}))
     commands = []
@@ -1301,7 +1398,7 @@ def test_opencode_v1_warmup_uses_clean_case_and_local_provider(monkeypatch):
 
     monkeypatch.setattr(runner, "_exec", fake_exec)
 
-    assert runner._warm_opencode_v1_server("podman", "smoke", "build", 30)
+    assert runner._warm_opencode_server("podman", "smoke", "build", 30)
 
     assert commands[0][0:4] == [
         "opencode",
@@ -1312,8 +1409,8 @@ def test_opencode_v1_warmup_uses_clean_case_and_local_provider(monkeypatch):
     assert "AGENT_CLI_SMOKE_CASE: allowed" in commands[0][-1]
 
 
-def test_opencode_v1_warmup_fails_if_clean_case_creates_a_violation(monkeypatch):
-    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_warmup_violation")
+def test_opencode_warmup_fails_if_clean_case_creates_a_violation(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_warmup_violation")
     violations = iter(({}, {"prompt_injection": 1}))
     requests = iter(({"allowed": 0}, {"allowed": 1}))
     monkeypatch.setattr(
@@ -1330,7 +1427,7 @@ def test_opencode_v1_warmup_fails_if_clean_case_creates_a_violation(monkeypatch)
         ),
     )
 
-    assert not runner._warm_opencode_v1_server("podman", "smoke", "build", 30)
+    assert not runner._warm_opencode_server("podman", "smoke", "build", 30)
 
 
 def test_main_removes_smoke_network_when_sandbox_creation_fails(monkeypatch, tmp_path):
@@ -2542,6 +2639,8 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
         "native_tool_name_run_terminal_command": 0,
         "native_file_write_tool_name_write": 0,
         "mcp_version_tool_offers": 0,
+        "mcp_version_provider_calls": 0,
+        "mcp_version_rpc_calls": 0,
         "mcp_version_tool_calls": 0,
         "mcp_version_tool_results": 0,
         "mcp_version_matches": 0,
@@ -3350,7 +3449,11 @@ def test_mcp_version_smoke_prompt_asks_for_the_server_result():
     ("missing", "expected_reason"),
     (
         ("offer", "AI Guardian get_version MCP tool was not offered to the model"),
-        ("call", "the local mock did not issue the get_version MCP call"),
+        ("provider_call", "the local mock did not issue the get_version MCP call"),
+        (
+            "call",
+            "the CLI did not send the issued get_version call to the MCP server",
+        ),
         (
             "result",
             "the AI Guardian MCP server did not return a correlated get_version result",
@@ -3366,6 +3469,8 @@ def test_mcp_version_smoke_requires_correlated_installed_version(
     case = next(case for case in runner.CASES if case.name == "mcp_version")
     tool_evidence = {
         "mcp_version_tool_offers": int(missing != "offer"),
+        "mcp_version_provider_calls": int(missing != "provider_call"),
+        "mcp_version_rpc_calls": int(missing != "call"),
         "mcp_version_tool_calls": int(missing != "call"),
         "mcp_version_tool_results": int(missing != "result"),
         "mcp_version_matches": int(missing not in ("match", "result")),
@@ -3413,6 +3518,8 @@ def test_mcp_version_smoke_passes_with_a_matching_correlated_result(
             {},
             {
                 "mcp_version_tool_offers": 1,
+                "mcp_version_provider_calls": 1,
+                "mcp_version_rpc_calls": 1,
                 "mcp_version_tool_calls": 1,
                 "mcp_version_tool_results": 1,
                 "mcp_version_matches": 1,
@@ -3454,6 +3561,8 @@ def test_mcp_version_timeout_uses_only_aggregate_rpc_evidence(
         (
             {
                 "mcp_version_tool_offers": 0,
+                "mcp_version_provider_calls": 0,
+                "mcp_version_rpc_calls": 0,
                 "mcp_version_tool_calls": 0,
                 "mcp_version_tool_results": 0,
                 "mcp_version_matches": 0,
@@ -3461,6 +3570,8 @@ def test_mcp_version_timeout_uses_only_aggregate_rpc_evidence(
             },
             {
                 "mcp_version_tool_offers": 1,
+                "mcp_version_provider_calls": 1,
+                "mcp_version_rpc_calls": 1,
                 "mcp_version_tool_calls": 1,
                 "mcp_version_tool_results": result_count,
                 "mcp_version_matches": match_count,

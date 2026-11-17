@@ -86,6 +86,18 @@ def _identity_key(value: Any) -> Optional[str]:
     return None
 
 
+def _has_get_version_tool(result: Any) -> bool:
+    if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+        return False
+    return any(
+        isinstance(tool, dict)
+        and tool.get("name") == "get_version"
+        and isinstance(tool.get("inputSchema"), dict)
+        and tool["inputSchema"].get("type") == "object"
+        for tool in result["tools"]
+    )
+
+
 def _proxy_server(command: List[str], expected_version: str) -> int:
     if not command:
         print("MCP evidence proxy requires a server command", file=sys.stderr)
@@ -105,6 +117,7 @@ def _proxy_server(command: List[str], expected_version: str) -> int:
         return 127
 
     pending: Dict[str, int] = {}
+    pending_tool_lists: set[str] = set()
     pending_lock = threading.Lock()
 
     def forward_server_output() -> None:
@@ -119,6 +132,8 @@ def _proxy_server(command: List[str], expected_version: str) -> int:
                     key = _identity_key(response.get("id"))
                     if key is not None:
                         with pending_lock:
+                            tool_list_pending = key in pending_tool_lists
+                            pending_tool_lists.discard(key)
                             count = pending.get(key, 0)
                             if count:
                                 if count == 1:
@@ -139,6 +154,13 @@ def _proxy_server(command: List[str], expected_version: str) -> int:
                                     if version_matches
                                     else "mcp_result_mismatch"
                                 )
+                        if tool_list_pending:
+                            _append_event(
+                                "mcp_tools_list_match"
+                                if response.get("error") is None
+                                and _has_get_version_tool(response.get("result"))
+                                else "mcp_tools_list_mismatch"
+                            )
             except (OSError, TypeError, ValueError, RecursionError):
                 # The proxy is observational; a failed counter must not alter MCP.
                 print(
@@ -160,6 +182,11 @@ def _proxy_server(command: List[str], expected_version: str) -> int:
                 request = json.loads(line)
             except (ValueError, UnicodeDecodeError):
                 request = None
+            if isinstance(request, dict) and request.get("method") == "tools/list":
+                key = _identity_key(request.get("id"))
+                if key is not None:
+                    with pending_lock:
+                        pending_tool_lists.add(key)
             if (
                 isinstance(request, dict)
                 and request.get("method") == "tools/call"

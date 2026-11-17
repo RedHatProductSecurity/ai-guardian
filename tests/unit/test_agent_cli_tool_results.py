@@ -1105,6 +1105,8 @@ def test_tool_evidence_reader_accepts_only_aggregate_counts(monkeypatch):
         "native_tool_name_run_terminal_command": 0,
         "native_file_write_tool_name_write": 0,
         "mcp_version_tool_offers": 0,
+        "mcp_version_provider_calls": 0,
+        "mcp_version_rpc_calls": 0,
         "mcp_version_tool_calls": 0,
         "mcp_version_tool_results": 0,
         "mcp_version_matches": 0,
@@ -1121,10 +1123,11 @@ def test_tool_evidence_reader_accepts_only_aggregate_counts(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("use_rpc_witness", "expected_call_count"), ((False, 1), (True, 0))
+    ("use_rpc_witness", "write_rpc_events", "expected_call_count"),
+    ((False, False, 1), (True, False, 0), (True, True, 1)),
 )
-def test_mcp_evidence_uses_provider_continuation_only_without_rpc_witness(
-    provider, tmp_path, use_rpc_witness, expected_call_count
+def test_mcp_evidence_keeps_provider_and_rpc_correlation_separate(
+    provider, tmp_path, use_rpc_witness, write_rpc_events, expected_call_count
 ):
     runner = load_script("agent_cli_test")
     provider.MCP_VERSION_TOOL_OFFER_COUNTS["mcp_version"] = 1
@@ -1149,6 +1152,11 @@ def test_mcp_evidence_uses_provider_continuation_only_without_rpc_witness(
     thread.start()
     try:
         evidence_path = tmp_path / "mcp_version_rpc.jsonl"
+        if write_rpc_events:
+            evidence_path.write_text(
+                '{"event":"mcp_call"}\n{"event":"mcp_result_match"}\n',
+                encoding="utf-8",
+            )
         completed = subprocess.run(
             [
                 sys.executable,
@@ -1167,6 +1175,8 @@ def test_mcp_evidence_uses_provider_continuation_only_without_rpc_witness(
         assert completed.returncode == 0
         values = json.loads(completed.stdout)
         assert values["mcp_version_tool_offers"] == 1
+        assert values["mcp_version_provider_calls"] == 1
+        assert values["mcp_version_rpc_calls"] == int(write_rpc_events)
         assert values["mcp_version_tool_calls"] == expected_call_count
         assert values["mcp_version_tool_results"] == expected_call_count
         assert values["mcp_version_matches"] == expected_call_count
