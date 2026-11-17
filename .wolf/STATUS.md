@@ -7,6 +7,36 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-16 (UTC)
 
+## Issue #2760 setup scanner availability — 2026-11-16
+
+- On the existing managed DAF branch `2760`, updated every setup path that
+  previously warned that Gitleaks was mandatory. Setup now reads the effective
+  scanner configuration, reports built-in `toml-patterns` or other available
+  configured engines, and warns that scanning will not run only when no
+  configured engine is available. Custom Python scanner code is not loaded just
+  to render setup status.
+- Added unit and IDE setup UX coverage for default engines, Gitleaks-only
+  configuration, an installed alternate engine, disabled scanning, and all six
+  setup output paths. Updated the Unreleased changelog.
+- **Validation:** 708 related unit/UX tests pass. Ruff, Black (Python 3.10
+  target), error-level Pylint, and `git diff --check` pass. The changed setup
+  module passes Mypy; package Mypy still reports the 14 existing errors in
+  untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+- Posted the completed acceptance checklist on GitHub #2760, added the `done`
+  label, and saved a DAF note. The implementation is published in PR #2765;
+  only the CodeQL follow-up below remains uncommitted.
+- **PR #2765 CodeQL follow-up:** Configured external engine identifiers were
+  interpolated into setup output, which was printed by CLI setup and logged by
+  daemon auto-upgrade. Setup now reports availability without echoing configured
+  identifiers, and daemon warnings omit raw setup details. Added unit and UX
+  regressions for both sinks.
+- **Follow-up validation:** 517 related unit/UX tests pass (1 skipped). Full
+  Ruff, Black (Python 3.10 target), error-level Pylint, diff checks, and targeted
+  Mypy for both changed source modules pass. Package-wide Mypy still reports the
+  same 14 errors in untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+- Published as `3318d3ff` to PR #2765. The refreshed CodeQL check passed
+  (`133672389250`), as did the current Analyze matrix and Read the Docs build.
+
 ## Issue #2763 Quay usernames from Actions variables — 2026-11-16
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2763`. DAF metadata
@@ -42,6 +72,7 @@ budget_tokens: 1000
   https://github.com/RedHatProductSecurity/ai-guardian/issues/2756#issuecomment-6928777611,
   and saved a DAF note. **Next:** user review and external `daf complete`. No
   commit, push, PR, or live desktop tray restart was performed.
+
 ## Issue #2755 trusted-session non-blocking findings — 2026-11-16
 
 - Continued implementation on the existing `2755` branch. The separate global,

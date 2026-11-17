@@ -28,6 +28,105 @@ from ai_guardian.tray.proactive_prompt import (
 from ai_guardian.ui.modal import UIUnavailable
 
 
+def _setup_claude_hooks_with_missing_gitleaks(tmp_path, ai_config):
+    setup = IDESetup()
+    config_file = tmp_path / "settings.json"
+    with (
+        patch.object(
+            setup,
+            "IDE_CONFIGS",
+            {
+                "claude": {
+                    "name": "Claude Code",
+                    "config_path": str(config_file),
+                    "hooks": {"UserPromptSubmit": [{"test": "hook"}]},
+                }
+            },
+        ),
+        patch.object(
+            setup,
+            "verify_gitleaks_installed",
+            return_value=(False, "❌ Gitleaks not found"),
+        ),
+        patch("ai_guardian.setup.hooks.get_config", return_value=ai_config),
+    ):
+        return setup.setup_ide_hooks("claude", dry_run=False, force=False)
+
+
+def test_setup_without_gitleaks_reports_builtin_scanning_as_available(tmp_path):
+    """
+    USER EXPERIENCE: Default engine configuration without Gitleaks → scanning remains available.
+
+    Scenario:
+    1. Gitleaks is not installed.
+    2. The default AI Guardian secret-scanning configuration is active.
+    3. The user configures Claude Code hooks.
+
+    Expected User Experience:
+    - Setup reports that Gitleaks is missing without calling it mandatory.
+    - Setup explains that the built-in toml-patterns engine remains available.
+    - Setup does not claim that all secret scanning is disabled.
+    """
+    success, message = _setup_claude_hooks_with_missing_gitleaks(tmp_path, {})
+
+    assert success is True
+    assert "❌ Gitleaks not found" in message
+    assert "built-in `toml-patterns` engine" in message
+    assert "Gitleaks is optional" in message
+    assert "Secret scanning will be disabled" not in message
+
+
+def test_setup_warns_when_gitleaks_is_the_only_unavailable_engine(tmp_path):
+    """
+    USER EXPERIENCE: Gitleaks-only configuration without Gitleaks → scanning unavailable.
+
+    Scenario:
+    1. The effective configuration explicitly selects only Gitleaks.
+    2. Gitleaks is not installed.
+    3. The user configures Claude Code hooks.
+
+    Expected User Experience:
+    - Setup identifies that no configured secret-scanning engine is available.
+    - Setup says secret scanning will not run and gives a configuration/install action.
+    - Setup does not imply that Gitleaks is required under the default configuration.
+    """
+    success, message = _setup_claude_hooks_with_missing_gitleaks(
+        tmp_path, {"secret_scanning": {"engines": ["gitleaks"]}}
+    )
+
+    assert success is True
+    assert "No configured secret-scanning engine is available" in message
+    assert "Secret scanning will not run" in message
+    assert "Install a configured scanner" in message
+    assert "Gitleaks is optional" not in message
+
+
+def test_setup_does_not_echo_configured_external_engine_names(tmp_path):
+    """
+    USER EXPERIENCE: An available external scanner is reported without echoing its configured name.
+
+    Scenario:
+    1. Gitleaks is not installed, but Betterleaks is selected and available.
+    2. The user configures Claude Code hooks.
+
+    Expected User Experience:
+    - Setup reports that secret scanning remains available through a configured engine.
+    - Setup does not echo the configuration-derived engine identifier.
+    - Setup says Gitleaks is optional.
+    """
+    with patch(
+        "ai_guardian.setup.hooks.shutil.which", return_value="/usr/bin/betterleaks"
+    ):
+        success, message = _setup_claude_hooks_with_missing_gitleaks(
+            tmp_path, {"secret_scanning": {"engines": ["gitleaks", "betterleaks"]}}
+        )
+
+    assert success is True
+    assert "at least one configured engine" in message
+    assert "betterleaks" not in message
+    assert "Gitleaks is optional" in message
+
+
 def test_doctor_lists_complete_hook_inventory_without_false_failures():
     """
     USER EXPERIENCE: Doctor shows every supported integration independently.

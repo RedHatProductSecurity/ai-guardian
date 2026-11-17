@@ -12,7 +12,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ai_guardian.config.utils import get_config_dir
+from ai_guardian.config.utils import get_config, get_config_dir
 from ai_guardian.constants import (
     CODEX_COVERAGE_NOTE,
     CODEX_DISPLAY_NAME,
@@ -2086,6 +2086,146 @@ class IDESetup:
         except Exception as e:
             return False, f"❌ Error checking Gitleaks: {e}"
 
+    def _secret_scanning_setup_notice(
+        self, gitleaks_installed: bool
+    ) -> Tuple[str, bool]:
+        """Describe whether an installed Gitleaks binary is needed for scanning.
+
+        Returns the user-facing notice and whether no configured scanner is
+        available. Configured Python scanners are not imported here: setup must
+        not execute user-provided scanner code just to render a status message.
+        """
+        if gitleaks_installed:
+            return "", False
+
+        try:
+            config = get_config()
+        except Exception:
+            logger.warning(
+                "Unable to load effective secret-scanning configuration during setup",
+                exc_info=True,
+            )
+            return (
+                "\n  ⚠️  WARNING: Setup could not verify whether a configured "
+                "secret-scanning engine is available. Check the AI Guardian "
+                "configuration before relying on secret scanning.\n",
+                False,
+            )
+
+        secret_config = config.get("secret_scanning", {})
+        if secret_config is None:
+            secret_config = {}
+        if not isinstance(secret_config, dict):
+            return (
+                "\n  ⚠️  WARNING: Setup could not verify whether a configured "
+                "secret-scanning engine is available. Check the AI Guardian "
+                "configuration before relying on secret scanning.\n",
+                False,
+            )
+
+        if secret_config.get("enabled", True) is False:
+            return (
+                "\n  Secret scanning is disabled in the effective configuration.\n",
+                False,
+            )
+
+        from ai_guardian.scanners.engine_builder import ENGINE_PRESETS
+        from ai_guardian.scanners.secret_scanning import DEFAULT_ENGINES
+
+        engines = secret_config.get("engines", DEFAULT_ENGINES)
+        if not isinstance(engines, list):
+            return (
+                "\n  ⚠️  WARNING: Setup could not verify whether a configured "
+                "secret-scanning engine is available. Check "
+                "`secret_scanning.engines` in the AI Guardian configuration.\n",
+                False,
+            )
+
+        available_engines: List[str] = []
+        custom_python_engine_configured = False
+        for engine_spec in engines:
+            engine_type: Any
+            if isinstance(engine_spec, str):
+                engine_type = engine_spec
+                engine_options = {}
+            elif isinstance(engine_spec, dict):
+                engine_type = engine_spec.get("type")
+                engine_options = engine_spec
+            else:
+                continue
+
+            if not isinstance(engine_type, str):
+                continue
+
+            if engine_type == "toml-patterns":
+                available_engines.append("toml-patterns (built-in)")
+                continue
+
+            if engine_type == "python":
+                custom_python_engine_configured = True
+                continue
+
+            if engine_type == "custom":
+                binary = engine_options.get("binary")
+                if isinstance(binary, str) and shutil.which(binary):
+                    available_engines.append("custom scanner")
+                continue
+
+            engine_preset = ENGINE_PRESETS.get(engine_type)
+            if engine_preset is None:
+                continue
+
+            requires_consent = engine_options.get(
+                "requires_consent", engine_preset.requires_consent
+            )
+            if (
+                requires_consent
+                and not (
+                    get_config_dir() / "consent" / f"{engine_type}.consent"
+                ).is_file()
+            ):
+                continue
+
+            binary = engine_options.get("binary", engine_preset.binary)
+            is_available: bool
+            if engine_type == "gitleaks" and binary == "gitleaks":
+                is_available = gitleaks_installed
+            else:
+                is_available = (
+                    isinstance(binary, str) and shutil.which(binary) is not None
+                )
+            if is_available and engine_type not in available_engines:
+                available_engines.append(engine_type)
+
+        if "toml-patterns (built-in)" in available_engines:
+            return (
+                "\n  ℹ️  Secret scanning remains available through the built-in "
+                "`toml-patterns` engine; Gitleaks is optional.\n",
+                False,
+            )
+
+        if available_engines:
+            return (
+                "\n  ℹ️  Secret scanning remains available through at least one "
+                "configured engine; Gitleaks is optional.\n",
+                False,
+            )
+
+        if custom_python_engine_configured:
+            return (
+                "\n  ⚠️  WARNING: Setup cannot verify the configured custom Python "
+                "scanner without loading its code. Confirm that scanner is "
+                "available before relying on secret scanning.\n",
+                False,
+            )
+
+        return (
+            "\n  ⚠️  WARNING: No configured secret-scanning engine is available. "
+            "Secret scanning will not run until an engine is installed or "
+            "`secret_scanning.engines` is updated to select an available scanner.\n",
+            True,
+        )
+
     def detect_ide(self) -> Optional[str]:
         """
         Auto-detect installed IDE based on config files.
@@ -2872,23 +3012,25 @@ class IDESetup:
             created.append(fname)
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
+        scanner_notice, no_scanner_available = self._secret_scanning_setup_notice(
+            gitleaks_installed
+        )
 
         message = f"✓ Successfully configured {ide_name} hooks at {hooks_dir}\n"
         message += f"  Created scripts: {', '.join(created)}\n"
         message += f"\n  {gitleaks_message}\n"
 
-        if not gitleaks_installed:
-            message += (
-                "\n  ⚠️  WARNING: Secret scanning will be disabled without Gitleaks!\n"
-                "      AI Guardian requires Gitleaks for secret detection.\n"
-            )
+        message += scanner_notice
 
         message += "\n  Next steps:\n"
-        if not gitleaks_installed:
-            message += "  1. Install Gitleaks (see above)\n"
-            message += f"  2. Restart {ide_name} for changes to take effect\n"
-        else:
-            message += f"  1. Restart {ide_name} for changes to take effect\n"
+        step = 1
+        if no_scanner_available:
+            message += (
+                f"  {step}. Install a configured scanner or update "
+                "`secret_scanning.engines` to select an available scanner\n"
+            )
+            step += 1
+        message += f"  {step}. Restart {ide_name} for changes to take effect\n"
 
         return True, message
 
@@ -3116,6 +3258,9 @@ class IDESetup:
             return False, registration_error
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
+        scanner_notice, no_scanner_available = self._secret_scanning_setup_notice(
+            gitleaks_installed
+        )
 
         message = f"✓ Successfully configured {ide_name} plugin at {plugin_file}\n"
         message += f"  Created shared bridge: {bridge_file}\n"
@@ -3136,16 +3281,15 @@ class IDESetup:
                 )
         message += f"\n  {gitleaks_message}\n"
 
-        if not gitleaks_installed:
-            message += (
-                "\n  ⚠️  WARNING: Secret scanning will be disabled without Gitleaks!\n"
-                "      AI Guardian requires Gitleaks for secret detection.\n"
-            )
+        message += scanner_notice
 
         message += "\n  Next steps:\n"
         step = 1
-        if not gitleaks_installed:
-            message += f"  {step}. Install Gitleaks (see above)\n"
+        if no_scanner_available:
+            message += (
+                f"  {step}. Install a configured scanner or update "
+                "`secret_scanning.engines` to select an available scanner\n"
+            )
             step += 1
         message += f"  {step}. Restart {ide_name} for the plugin to load\n"
 
@@ -3198,21 +3342,23 @@ class IDESetup:
         bridge_path.write_text(self._render_guardian_bridge(abs_path), encoding="utf-8")
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
+        scanner_notice, no_scanner_available = self._secret_scanning_setup_notice(
+            gitleaks_installed
+        )
 
         message = f"✓ Successfully configured {ide_name} extension at {ext_dir}\n"
         message += "  Created: index.ts, package.json, ai-guardian-bridge.ts\n"
         message += f"\n  {gitleaks_message}\n"
 
-        if not gitleaks_installed:
-            message += (
-                "\n  ⚠️  WARNING: Secret scanning will be disabled without Gitleaks!\n"
-                "      AI Guardian requires Gitleaks for secret detection.\n"
-            )
+        message += scanner_notice
 
         message += "\n  Next steps:\n"
         step = 1
-        if not gitleaks_installed:
-            message += f"  {step}. Install Gitleaks (see above)\n"
+        if no_scanner_available:
+            message += (
+                f"  {step}. Install a configured scanner or update "
+                "`secret_scanning.engines` to select an available scanner\n"
+            )
             step += 1
         message += f"  {step}. Run: cd {ext_dir} && npm install\n"
         step += 1
@@ -3288,6 +3434,9 @@ class IDESetup:
             )
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
+        scanner_notice, no_scanner_available = self._secret_scanning_setup_notice(
+            gitleaks_installed
+        )
         message = f"✓ Successfully configured Pi managed extension at {extension_dir}\n"
         message += "  Created: index.ts and package.json\n"
         if migrated_legacy:
@@ -3307,11 +3456,7 @@ class IDESetup:
                     f"{mcp_install_message}; MCP tools remain unavailable.\n"
                 )
         message += f"\n  {gitleaks_message}\n"
-        if not gitleaks_installed:
-            message += (
-                "\n  ⚠️  WARNING: Secret scanning will be disabled without Gitleaks!\n"
-                "      AI Guardian requires Gitleaks for secret detection.\n"
-            )
+        message += scanner_notice
         message += "\n  Next steps:\n"
         step = 1
         if enable_mcp and not mcp_install_success:
@@ -3320,8 +3465,11 @@ class IDESetup:
                 "npm install --ignore-scripts --no-audit --no-fund\n"
             )
             step += 1
-        if not gitleaks_installed:
-            message += f"  {step}. Install Gitleaks (see above)\n"
+        if no_scanner_available:
+            message += (
+                f"  {step}. Install a configured scanner or update "
+                "`secret_scanning.engines` to select an available scanner\n"
+            )
             step += 1
         message += f"  {step}. Restart Pi for the extension to load\n"
         return True, message
@@ -3351,16 +3499,27 @@ class IDESetup:
         extension_path.write_text(content, encoding="utf-8")
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
+        scanner_notice, no_scanner_available = self._secret_scanning_setup_notice(
+            gitleaks_installed
+        )
         message = (
             f"✓ Successfully configured {ide_name} extension at {extension_path}\n"
         )
         message += f"\n  {gitleaks_message}\n"
-        if not gitleaks_installed:
+        message += scanner_notice
+        message += "\n  Next steps:\n"
+        if no_scanner_available:
             message += (
-                "\n  ⚠️  WARNING: Secret scanning will be disabled without Gitleaks!\n"
-                "      AI Guardian requires Gitleaks for secret detection.\n"
+                "  1. Install a configured scanner or update "
+                "`secret_scanning.engines` to select an available scanner\n"
             )
-        message += f"\n  Restart {ide_name} or reload its extensions for the change to take effect\n"
+            message += (
+                "  2. Restart or reload the extension for changes to take effect\n"
+            )
+        else:
+            message += (
+                "  1. Restart or reload the extension for changes to take effect\n"
+            )
         return True, message
 
     def _is_setup_already_configured(
@@ -3712,6 +3871,9 @@ class IDESetup:
 
             # Verify Gitleaks installation
             gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
+            scanner_notice, no_scanner_available = self._secret_scanning_setup_notice(
+                gitleaks_installed
+            )
 
             message = f"✓ Successfully configured {ide_name} hooks at {config_path}\n"
             if ide_type == "codex":
@@ -3753,20 +3915,21 @@ class IDESetup:
                     "     https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOK_ORDERING.md\n"
                 )
 
-            if not gitleaks_installed:
-                message += (
-                    "\n  ⚠️  WARNING: Secret scanning will be disabled without Gitleaks!\n"
-                    "      AI Guardian requires Gitleaks for secret detection.\n"
-                )
+            message += scanner_notice
 
             message += "\n  Next steps:\n"
-            if not gitleaks_installed:
-                message += "  1. Install Gitleaks (see above)\n"
-                message += f"  2. Restart {ide_name} for changes to take effect\n"
-                message += '  3. Test with: echo \'{"prompt": "test"}\' | ai-guardian\n'
-            else:
-                message += f"  1. Restart {ide_name} for changes to take effect\n"
-                message += '  2. Test with: echo \'{"prompt": "test"}\' | ai-guardian\n'
+            step = 1
+            if no_scanner_available:
+                message += (
+                    f"  {step}. Install a configured scanner or update "
+                    "`secret_scanning.engines` to select an available scanner\n"
+                )
+                step += 1
+            message += f"  {step}. Restart {ide_name} for changes to take effect\n"
+            step += 1
+            message += (
+                f'  {step}. Test with: echo \'{{"prompt": "test"}}\' | ai-guardian\n'
+            )
 
             return True, message
 
