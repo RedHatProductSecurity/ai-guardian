@@ -31,9 +31,15 @@ budget_tokens: 1000
   Mypy errors.
 - Posted the completed acceptance checklist and validation at
   https://github.com/RedHatProductSecurity/ai-guardian/issues/2759#issuecomment-6936782392,
-  applied the `done` label, and saved a DAF note. Changes remain uncommitted on
-  branch `2759`; no push or PR was created. **Next:** user review and external
-  `daf complete`.
+  applied the `done` label, and saved a DAF note. The implementation is published
+  in PR #2769 on branch `2759`.
+- **CI follow-up:** The initial Tests run failed across the matrix only because
+  `test_violation_jsonl_adds_canonical_record_without_changing_legacy_fields`
+  still expected raw `blocked.command`. Updated it to verify raw-command removal
+  and the sanitized `blocked.source_command` fallback. The affected policy and
+  logger tests pass (38); Ruff, Black, and `git diff --check` pass. Published as
+  `386859c4`; PR checks are rerunning. **Next:** review the new CI results, then
+  user review and external `daf complete`.
 
 ## Issue #2758 PyPI social preview image — 2026-11-16
 
