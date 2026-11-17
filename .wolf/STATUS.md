@@ -5,35 +5,31 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-16 (UTC)
+> Last updated: 2026-11-17 (UTC)
 
-## Issue #2764 MCP version tool in agent CLI smoke — 2026-11-16
+## Issue #2764 MCP version tool in agent CLI smoke — 2026-11-17
 
-- On the existing `2764` branch, added the read-only MCP `get_version` tool,
-  returning the installed package's `__version__`. Registered it in the packaged
-  security skill and documented the query in MCP/CLI references.
-- Added a deterministic local-provider MCP smoke case for Claude, Codex, Gemini,
-  OpenCode, Pi, and Grok. The mock tracks tool offer/call/result correlation and
-  only records whether the result matches the installed version; it does not
-  retain the version value. Grok's security scope remains pre-tool-only. Goose's
-  smoke setup uses `--no-mcp` and explicitly reports the version capability as
-  **UNSUPPORTED**, never as a pass.
-- Release Readiness now performs an interactive stdio JSON-RPC `get_version`
-  call, checks the exact installed version, and preserves `get_config` protocol
-  coverage. Updated unit, provider-protocol, smoke, workflow, and UX contracts.
-- **Initial validation:** 437 directly related unit/UX tests pass; the exact
-  extracted Release Readiness MCP protocol step passes locally. Ruff, Black
-  (Python 3.10 target), error-only Pylint, package Mypy (342 files), JSON
-  validation, and `git diff --check` pass. No real agent CLI/container smoke was
-  run locally; native CLI verification remains for CI.
-- Published as `5921dcea` in PR #2770. CI failed in the Tests matrix on
-  `test_tool_evidence_reader_accepts_only_aggregate_counts`: the accepted
-  aggregate fixture had not been extended with the five MCP-version counters
-  now required by the strict evidence schema. Added those zero-valued counters
-  to the fixture without loosening exact-field validation; all 157 tests in
-  `tests/unit/test_agent_cli_tool_results.py` pass locally. The follow-up is
-  uncommitted and not pushed. **Next:** publish the test-contract correction and
-  confirm the refreshed CI run.
+- Added the MCP version capability to the supported native CLI smoke lanes. The
+  stdio witness is used only for Gemini, OpenCode, and Pi, which keep MCP results
+  local; Claude, Codex, and Grok use correlated provider continuations. Grok
+  1.0.63 discovers the server tool through `search_tool` and calls it through
+  `use_tool`; the mock requires an issued search result containing the exact
+  qualified name and schema before it dispatches. OpenCode V2's smoke sets
+  `codemode: false` for this server and shares `OPENCODE_CONFIG` between setup and
+  runtime. Goose intentionally disables MCP and reports **UNSUPPORTED**, never
+  PASS.
+- Pushed commits `5f761105`, `571ddd56`, and `5fb33518` to `origin/2764` in
+  PR #2770. Release Readiness run `44128748557` completed with Grok and OpenCode
+  V2 failures: the mock did not model Grok's meta-tool workflow, V2's default
+  Code Mode path did not yield direct result evidence, and the evidence reader
+  replaced continuation counters with absent witness events. These are fixed in
+  the current local changes; a refreshed native run is pending.
+- A timeout/nonzero exit can qualify only `mcp_version`, and only with prompt,
+  offer, issued call, correlated exact-version response, and zero new violations.
+  **Local validation:** 583 related unit/UX tests pass; Ruff, Black (Python 3.10
+  target), error-only Pylint, and `uv run --extra dev mypy src/ai_guardian/`
+  pass. The host `mypy` reports 14 errors in two untouched modules. **Next:**
+  commit/push these corrections, rerun Release Readiness, and check CodeQL.
 
 ## Issue #2758 PyPI social preview image — 2026-11-16
 

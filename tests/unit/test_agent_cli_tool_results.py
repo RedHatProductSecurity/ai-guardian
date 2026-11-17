@@ -1120,6 +1120,63 @@ def test_tool_evidence_reader_accepts_only_aggregate_counts(monkeypatch):
     assert runner._tool_evidence("docker", "smoke", "clean_tool", 30) == expected
 
 
+@pytest.mark.parametrize(
+    ("use_rpc_witness", "expected_call_count"), ((False, 1), (True, 0))
+)
+def test_mcp_evidence_uses_provider_continuation_only_without_rpc_witness(
+    provider, tmp_path, use_rpc_witness, expected_call_count
+):
+    runner = load_script("agent_cli_test")
+    provider.MCP_VERSION_TOOL_OFFER_COUNTS["mcp_version"] = 1
+    call_id = provider._issued_tool_id("mcp_version", "call_")
+    from ai_guardian import __version__
+
+    provider._observe_request(
+        {
+            "messages": [
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": json.dumps({"version": __version__}),
+                }
+            ]
+        }
+    )
+    server = provider.ThreadingHTTPServer(
+        ("127.0.0.1", 0), provider.MockProviderHandler
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        evidence_path = tmp_path / "mcp_version_rpc.jsonl"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                runner._READ_TOOL_EVIDENCE,
+                f"http://127.0.0.1:{server.server_port}/__ai_guardian_smoke/stats",
+                "mcp_version",
+                str(evidence_path),
+                str(int(use_rpc_witness)),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        assert completed.returncode == 0
+        values = json.loads(completed.stdout)
+        assert values["mcp_version_tool_offers"] == 1
+        assert values["mcp_version_tool_calls"] == expected_call_count
+        assert values["mcp_version_tool_results"] == expected_call_count
+        assert values["mcp_version_matches"] == expected_call_count
+        assert values["mcp_version_mismatches"] == 0
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 @pytest.mark.parametrize("stage", ("before", "after"))
 def test_unavailable_hook_counters_cannot_pass_a_tool_case(monkeypatch, stage, capsys):
     runner, case = configure_case(monkeypatch, "clean_tool")

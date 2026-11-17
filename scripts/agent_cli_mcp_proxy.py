@@ -254,8 +254,9 @@ def _patch_json_config(path: Path, cli: str, proxy_path: str) -> bool:
         entry = servers.get("ai-guardian") if isinstance(servers, dict) else None
     elif cli == "opencode":
         mcp = config.get("mcp")
+        opencode_v2_servers = mcp.get("servers") if isinstance(mcp, dict) else None
         if isinstance(mcp, dict):
-            servers = mcp.get("servers")
+            servers = opencode_v2_servers
             entry = (
                 servers.get("ai-guardian")
                 if isinstance(servers, dict)
@@ -284,15 +285,22 @@ def _patch_json_config(path: Path, cli: str, proxy_path: str) -> bool:
     ):
         return False
     expected_version = _installed_version(version_command)
-    changed = _wrap_entry(
+    config_changed = False
+    if cli == "opencode" and isinstance(opencode_v2_servers, dict):
+        # The V2 smoke qualifies the server's direct native MCP function. Keep
+        # Code Mode's execute interpreter outside this result-transport check.
+        if entry.get("codemode") is not False:
+            entry["codemode"] = False
+            config_changed = True
+    wrapped_changed = _wrap_entry(
         entry,
         proxy_path,
         expected_version,
         command_array=(cli == "opencode"),
     )
-    if changed:
+    if wrapped_changed or config_changed:
         path.write_text(json.dumps(config), encoding="utf-8")
-    return changed
+    return wrapped_changed or config_changed
 
 
 def _load_toml(path: Path) -> Dict[str, Any]:

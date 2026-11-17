@@ -335,6 +335,14 @@
 
 ## Key Learnings
 
+- **2026-11-17 — Grok/OpenCode V2 MCP smoke evidence (#2764):** Grok exposes
+  server tools through `search_tool`/`use_tool`; require an issued search result
+  with the exact qualified name and schema before modeling dispatch. OpenCode V2
+  defaults per-server `codemode` to true; set it false only in the smoke that
+  qualifies direct native MCP transport. Clients with provider continuations
+  must retain correlated provider result counters instead of overwriting them
+  with an absent stdio witness.
+
 - **2026-11-16 — Tray plugin cache across rediscovery (#2756):** Discovery may
   replace non-SSH `DaemonTarget` objects while keeping the same logical menu
   identity. Multi-daemon plugin slots remain bound to the rendered daemon, so

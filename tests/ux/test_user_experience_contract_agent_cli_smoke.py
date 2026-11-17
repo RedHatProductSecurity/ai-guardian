@@ -68,14 +68,18 @@ Manual qualification on Linux/macOS Podman:
     denied-command non-execution, and clean execution/continuation, not offers or
     passive hook observations alone. Grok's version must match the reviewed pin.
 20. Full smoke lanes and Grok call the configured AI Guardian `get_version` MCP
-    tool. OpenCode V2 may expose MCP through Code Mode, so its `execute` wrapper
-    calls `tools["ai-guardian"].get_version({})`. Require a model-facing tool offer,
-    an issued call, a JSON-RPC result correlated by request ID, and an exact match
-    with the installed server executable's version. Aggregate evidence comes
-    from the provider and the smoke-only stdio witness; assistant text alone is
-    never evidence. If a CLI times out or exits nonzero after the matched MCP
-    response, only this capability can pass, and that process outcome is reported.
-    Goose's `--no-mcp` lane reports this capability as UNSUPPORTED, never PASS.
+    tool. The OpenCode V2 smoke sets `codemode: false` on that server to qualify
+    its direct native MCP tool rather than Code Mode's `execute` interpreter.
+    Grok uses its native `search_tool` → `use_tool` continuation; dispatch requires
+    the issued search result to identify the exact qualified tool name and schema.
+    Require a model-facing offer, an issued call, a correlated result, and an exact
+    match with the installed server executable's version. Clients whose MCP result
+    stays local must also produce the smoke-only stdio witness; provider-continuation
+    clients use their correlated tool result. Assistant text alone is never evidence.
+    If a CLI times out or exits nonzero after the matched
+    MCP response, only this capability can pass, and that process outcome is
+    reported. Goose's `--no-mcp` lane reports this capability as UNSUPPORTED,
+    never PASS.
 """
 
 import importlib.util

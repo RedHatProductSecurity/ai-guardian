@@ -512,7 +512,9 @@ for key in ('mcp_version_tool_offers','mcp_version_tool_calls',
             'mcp_version_tool_results','mcp_version_matches','mcp_version_mismatches'):
     values=stats.get(key,{})
     out[key]=values.get(case,0) if isinstance(values,dict) else 0
-if case == 'mcp_version':
+# Only local-result clients need the stdio witness; provider-continuation clients
+# keep their correlated MCP call/result counts from the provider boundary above.
+if case == 'mcp_version' and sys.argv[4] == '1':
     rpc_events=collections.Counter()
     evidence=Path(sys.argv[3])
     if evidence.is_file():
@@ -1586,13 +1588,22 @@ def _tool_evidence(
     case: str,
     timeout: int,
     diagnostics: Optional[List[str]] = None,
+    cli: Optional[str] = None,
 ) -> Optional[Dict[str, int]]:
     url = f"http://127.0.0.1:{MOCK_PORT}/__ai_guardian_smoke/stats"
     evidence_path = f"{STATE_DIR}/mcp_version_rpc.jsonl"
     result = _exec(
         engine,
         name,
-        ["python3", "-c", _READ_TOOL_EVIDENCE, url, case, evidence_path],
+        [
+            "python3",
+            "-c",
+            _READ_TOOL_EVIDENCE,
+            url,
+            case,
+            evidence_path,
+            str(int(cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS)),
+        ],
         timeout,
     )
     fields = {
@@ -2187,7 +2198,7 @@ def _run_case(
     )
     has_tool_evidence = is_tool_case or is_mcp_version_case
     old_tools = (
-        _tool_evidence(engine, name, case.name, timeout, diagnostics)
+        _tool_evidence(engine, name, case.name, timeout, diagnostics, cli=cli)
         if has_tool_evidence
         else {}
     )
@@ -2228,7 +2239,7 @@ def _run_case(
         timed_out_requests = _provider_stats(engine, name, timeout, diagnostics)
         timed_out_hooks = _hook_counts(engine, name, timeout, diagnostics)
         timed_out_tools = (
-            _tool_evidence(engine, name, case.name, timeout, diagnostics)
+            _tool_evidence(engine, name, case.name, timeout, diagnostics, cli=cli)
             if has_tool_evidence
             else {}
         )
@@ -2291,7 +2302,7 @@ def _run_case(
     new_requests = _provider_stats(engine, name, timeout, diagnostics)
     new_hooks = _hook_counts(engine, name, timeout, diagnostics)
     new_tools = (
-        _tool_evidence(engine, name, case.name, timeout, diagnostics)
+        _tool_evidence(engine, name, case.name, timeout, diagnostics, cli=cli)
         if has_tool_evidence
         else {}
     )

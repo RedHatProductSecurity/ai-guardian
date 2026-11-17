@@ -2015,6 +2015,181 @@ def test_local_mock_calls_mcp_version_through_opencode_codemode(monkeypatch):
     assert expected_version not in json.dumps(stats)
 
 
+def test_local_mock_qualifies_grok_search_and_use_tool_round_trip(monkeypatch):
+    mock = _load(MOCK_PATH, "agent_cli_grok_mcp_meta_tools")
+    expected_version = "synthetic-package-version"
+    monkeypatch.setattr(
+        mock, "_installed_ai_guardian_version", lambda: expected_version
+    )
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "use_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tool_name": {"type": "string"},
+                        "tool_input": {"type": "object"},
+                    },
+                    "required": ["tool_name", "tool_input"],
+                },
+            },
+        },
+    ]
+    initial = {
+        "messages": [{"role": "user", "content": "AGENT_CLI_SMOKE_CASE: mcp_version"}],
+        "tools": tools,
+    }
+
+    call_number, tool_call_number = mock._record_request("mcp_version", initial)
+    search_response = mock.chat_response(
+        initial, "mcp_version", call_number, tool_call_number
+    )
+    search_call = search_response["choices"][0]["message"]["tool_calls"][0]
+    assert search_call["function"]["name"] == "search_tool"
+    assert json.loads(search_call["function"]["arguments"]) == {
+        "query": "ai-guardian get_version",
+        "limit": 5,
+    }
+    assert mock._stats()["mcp_version_tool_offers"] == {}
+    assert mock._stats()["mcp_version_tool_calls"] == {}
+
+    discovered = {
+        "results": [
+            {
+                "server": "ai-guardian",
+                "tools": [
+                    {
+                        "tool_name": "ai-guardian__get_version",
+                        "input_schema": {"type": "object", "properties": {}},
+                    }
+                ],
+            }
+        ],
+        "total_hidden_tools": 1,
+        "status": "ready",
+    }
+    after_search = {
+        "messages": [
+            *initial["messages"],
+            {
+                "role": "tool",
+                "tool_call_id": search_call["id"],
+                "content": json.dumps(discovered),
+            },
+        ],
+        "tools": tools,
+    }
+    mock._observe_request(after_search)
+    call_number, tool_call_number = mock._record_request("mcp_version", after_search)
+    use_response = mock.chat_response(
+        after_search, "mcp_version", call_number, tool_call_number
+    )
+    use_call = use_response["choices"][0]["message"]["tool_calls"][0]
+    assert use_call["function"]["name"] == "use_tool"
+    assert json.loads(use_call["function"]["arguments"]) == {
+        "tool_name": "ai-guardian__get_version",
+        "tool_input": {},
+    }
+    assert mock._stats()["mcp_version_tool_offers"] == {"mcp_version": 1}
+    assert mock._stats()["mcp_version_tool_calls"] == {"mcp_version": 1}
+
+    mock._observe_request(
+        {
+            "messages": [
+                *after_search["messages"],
+                {
+                    "role": "tool",
+                    "tool_call_id": use_call["id"],
+                    "content": json.dumps({"version": expected_version}),
+                },
+            ]
+        }
+    )
+    stats = mock._stats()
+    assert stats["mcp_version_tool_results"] == {"mcp_version": 1}
+    assert stats["mcp_version_matches"] == {"mcp_version": 1}
+    assert stats["mcp_version_mismatches"] == {}
+    assert expected_version not in json.dumps(stats)
+
+
+def test_grok_mcp_dispatch_requires_issued_search_result_and_exact_schema():
+    mock = _load(MOCK_PATH, "agent_cli_grok_mcp_search_evidence")
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "use_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tool_name": {"type": "string"},
+                        "tool_input": {"type": "object"},
+                    },
+                },
+            },
+        },
+    ]
+    payload = {
+        "messages": [
+            {
+                "role": "tool",
+                "tool_call_id": "not-issued-by-the-mock",
+                "content": json.dumps(
+                    {
+                        "tool_name": "ai-guardian__get_version",
+                        "input_schema": {"type": "object"},
+                    }
+                ),
+            }
+        ],
+        "tools": tools,
+    }
+
+    assert mock._find_case_tool(payload, "mcp_version")[0] == "search_tool"
+    search_id = mock._issued_tool_id("mcp_version", "call_", track_case=False)
+    with mock.COUNTS_LOCK:
+        mock.GROK_MCP_SEARCH_TOOL_IDS.add(search_id)
+    payload["messages"][0].update(
+        {
+            "tool_call_id": search_id,
+            "content": json.dumps(
+                {
+                    "tool_name": "other-server__get_version",
+                    "input_schema": {"type": "object"},
+                }
+            ),
+        }
+    )
+
+    assert mock._find_case_tool(payload, "mcp_version")[0] == "search_tool"
+
+
 def test_local_mock_requires_correlated_mcp_version_result(monkeypatch):
     mock = _load(MOCK_PATH, "agent_cli_mcp_version_round_trip")
     expected_version = "synthetic-package-version"
@@ -2392,6 +2567,7 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
     assert "out['file_written']" in calls["reader"]
     assert calls["evidence_path"] == f"{runner.STATE_DIR}/mcp_version_rpc.jsonl"
     assert "Path(sys.argv[3])" in calls["reader"]
+    assert "sys.argv[4] == '1'" in calls["reader"]
     assert "private-tool-name" not in calls["reader"]
 
 

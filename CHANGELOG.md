@@ -10,13 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **MCP version query and CLI smoke coverage (#2764):** Expose the installed
   AI Guardian package version through `get_version` and verify a native agent
-  CLI calls the configured MCP tool and receives a correlated JSON-RPC result
-  containing the exact installed version in the isolated local-mock smoke. OpenCode
-  V2's Code Mode `execute` wrapper is exercised without relying on assistant text.
-  A smoke-only stdio witness covers clients that keep the MCP result local; Grok
-  uses its provider continuation and is pinned to 1.0.63 for custom Chat Completions
-  MCP support. A timeout/nonzero exit after complete MCP evidence qualifies only
-  this capability, not the rest of that CLI's smoke cases.
+  CLI calls the configured MCP tool and receives a correlated MCP result
+  containing the exact installed version in the isolated local-mock smoke. Grok's
+  native `search_tool`/`use_tool` continuation is tested with correlated discovery
+  evidence. OpenCode V2 normally routes MCP through Code Mode, but this smoke sets
+  `codemode: false` to qualify direct native tool result transport. A smoke-only
+  stdio witness covers clients that keep the MCP result local; provider-continuation
+  clients use correlated call/result counters. Grok is pinned to 1.0.63 for custom
+  Chat Completions MCP support. A timeout/nonzero exit after
+  complete MCP evidence qualifies only this capability, not the rest of that
+  CLI's smoke cases.
 - **Pi setup and native MCP registration (#2762):** Detect an installed Pi CLI
   before its AI Guardian extension exists and register AI Guardian through Pi's
   native extension API so it appears in `/mcp` (Pi 0.99.0+).

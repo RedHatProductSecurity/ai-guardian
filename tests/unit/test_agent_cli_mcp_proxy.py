@@ -80,6 +80,10 @@ def test_json_config_wraps_only_the_ai_guardian_stdio_command(
             "mcp-server",
         ]
     assert wrapped["preserved"] == "value"
+    if cli == "opencode" and servers == ("mcp", "servers", "ai-guardian"):
+        assert wrapped["codemode"] is False
+    else:
+        assert "codemode" not in wrapped
     assert updated["unrelated"] == {"preserve": True}
 
 

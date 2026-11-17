@@ -13,7 +13,7 @@ import uuid
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 MODEL = "ag-smoke"
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
@@ -140,6 +140,8 @@ MCP_VERSION_TOOL_CALL_COUNTS: Counter = Counter()
 MCP_VERSION_TOOL_RESULT_COUNTS: Counter = Counter()
 MCP_VERSION_MATCH_COUNTS: Counter = Counter()
 MCP_VERSION_MISMATCH_COUNTS: Counter = Counter()
+GROK_MCP_SEARCH_REQUEST_COUNTS: Counter = Counter()
+GROK_MCP_SEARCH_TOOL_IDS: Set[str] = set()
 CLEAN_TOOL_RESULT_COUNTS: Counter = Counter()
 CORRELATED_TOOL_RESULT_COUNTS: Counter = Counter()
 RAW_TOOL_OUTPUT_COUNTS: Counter = Counter()
@@ -228,9 +230,9 @@ def _known_tool_case(identity: Any) -> Optional[str]:
         return TOOL_IDENTITIES.get(identity)
 
 
-def _issued_tool_id(case: str, prefix: str) -> str:
+def _issued_tool_id(case: str, prefix: str, *, track_case: bool = True) -> str:
     identity = f"{prefix}{uuid.uuid4().hex}"
-    if case in TOOL_CASES:
+    if case in TOOL_CASES and track_case:
         with COUNTS_LOCK:
             TOOL_IDENTITIES[identity] = case
             if case in MCP_VERSION_CASES:
@@ -548,7 +550,12 @@ def _find_case_tool(
     payload: Dict[str, Any], case: str
 ) -> Optional[Tuple[str, Dict[str, Any]]]:
     if case in MCP_VERSION_CASES:
-        return _find_mcp_version_tool(payload) or _find_codemode_execute_tool(payload)
+        direct = _find_mcp_version_tool(payload) or _find_codemode_execute_tool(payload)
+        if direct is not None:
+            return direct
+        if _grok_search_result_confirms_version_tool(payload):
+            return _find_grok_meta_tool(payload, "use_tool")
+        return _find_grok_meta_tool(payload, "search_tool")
     if case in FILE_WRITE_CASES:
         return _find_file_write_tool(payload)
     return _find_command_tool(payload)
@@ -646,6 +653,76 @@ def _find_codemode_execute_tool(
     return None
 
 
+def _find_grok_meta_tool(
+    payload: Dict[str, Any], name: str
+) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Find Grok's MCP discovery/dispatch meta-tool, not a server-side tool."""
+    tools = payload.get("tools", [])
+    entries = tools if isinstance(tools, list) else [tools]
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        function = entry.get("function")
+        candidate = function if isinstance(function, dict) else entry
+        if candidate.get("name") != name:
+            continue
+        schema = (
+            candidate.get("parameters")
+            or candidate.get("input_schema")
+            or candidate.get("parametersJsonSchema")
+            or candidate.get("parameters_json_schema")
+        )
+        if not isinstance(schema, dict):
+            continue
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        if name == "search_tool" and "query" not in properties:
+            continue
+        if name == "use_tool" and not {"tool_name", "tool_input"}.issubset(properties):
+            continue
+        return name, schema
+    return None
+
+
+def _search_result_contains_version_tool(value: Any) -> bool:
+    """Recognize the exact qualified name in structured Grok discovery output."""
+    if isinstance(value, dict):
+        if (
+            value.get("tool_name") == "ai-guardian__get_version"
+            and isinstance(value.get("input_schema"), dict)
+            and value["input_schema"].get("type") == "object"
+        ):
+            return True
+        return any(
+            _search_result_contains_version_tool(child) for child in value.values()
+        )
+    if isinstance(value, list):
+        return any(_search_result_contains_version_tool(child) for child in value)
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except (ValueError, RecursionError):
+            return False
+        return _search_result_contains_version_tool(decoded)
+    return False
+
+
+def _grok_search_result_confirms_version_tool(payload: Dict[str, Any]) -> bool:
+    """Require a correlated native search_tool result before Grok may dispatch."""
+    messages = payload.get("messages", [])
+    entries = messages if isinstance(messages, list) else [messages]
+    with COUNTS_LOCK:
+        issued_search_ids = set(GROK_MCP_SEARCH_TOOL_IDS)
+    return any(
+        message.get("role") == "tool"
+        and message.get("tool_call_id") in issued_search_ids
+        and _search_result_contains_version_tool(message.get("content"))
+        for message in entries
+        if isinstance(message, dict)
+    )
+
+
 def _file_write_arguments(schema: Dict[str, Any], case: str) -> Dict[str, Any]:
     properties = schema.get("properties", {})
     arguments: Dict[str, Any] = {}
@@ -667,6 +744,17 @@ def _case_tool_arguments(
         return {"code": 'return await tools["ai-guardian"].get_version({})'}
 
     if case in MCP_VERSION_CASES:
+        properties = schema.get("properties", {})
+        if tool_name == "search_tool":
+            arguments: Dict[str, Any] = {"query": "ai-guardian get_version"}
+            if isinstance(properties, dict) and "limit" in properties:
+                arguments["limit"] = 5
+            return arguments
+        if tool_name == "use_tool":
+            return {
+                "tool_name": "ai-guardian__get_version",
+                "tool_input": {},
+            }
         return {}
     if case in FILE_WRITE_CASES:
         return _file_write_arguments(schema, case)
@@ -688,21 +776,20 @@ def _record_request(case: str, payload: Dict[str, Any]) -> Tuple[int, int]:
                 name = case_tool[0].casefold()
                 if name in NATIVE_FILE_WRITE_TOOLS:
                     FILE_WRITE_TOOL_NAME_COUNTS.setdefault(case, Counter())[name] += 1
-        elif case_tool is not None:
-            if case in MCP_VERSION_CASES:
+        elif case_tool is not None and case in MCP_VERSION_CASES:
+            if case_tool[0] == "search_tool":
+                GROK_MCP_SEARCH_REQUEST_COUNTS[case] += 1
+                tool_call_number = GROK_MCP_SEARCH_REQUEST_COUNTS[case]
+            else:
                 MCP_VERSION_TOOL_REQUEST_COUNTS[case] += 1
                 tool_call_number = MCP_VERSION_TOOL_REQUEST_COUNTS[case]
                 if tool_call_number == 1:
                     TOOL_OFFER_COUNTS[case] += 1
                     MCP_VERSION_TOOL_OFFER_COUNTS[case] += 1
-            else:
-                COMMAND_TOOL_REQUEST_COUNTS[case] += 1
-                tool_call_number = COMMAND_TOOL_REQUEST_COUNTS[case]
-            if (
-                case in TOOL_CASES
-                and case not in MCP_VERSION_CASES
-                and tool_call_number == 1
-            ):
+        elif case_tool is not None and case in TOOL_CASES:
+            COMMAND_TOOL_REQUEST_COUNTS[case] += 1
+            tool_call_number = COMMAND_TOOL_REQUEST_COUNTS[case]
+            if tool_call_number == 1:
                 TOOL_OFFER_COUNTS[case] += 1
                 name = case_tool[0].casefold()
                 if name in NATIVE_COMMAND_TOOL_NAMES:
@@ -794,12 +881,20 @@ def chat_response(
     tool = _find_case_tool(payload, case)
     if case in TOOL_CASES and tool_call_number == 1 and tool:
         name, schema = tool
+        issued_id = _issued_tool_id(
+            case,
+            "call_",
+            track_case=not (case in MCP_VERSION_CASES and name == "search_tool"),
+        )
+        if case in MCP_VERSION_CASES and name == "search_tool":
+            with COUNTS_LOCK:
+                GROK_MCP_SEARCH_TOOL_IDS.add(issued_id)
         message = {
             "role": "assistant",
             "content": None,
             "tool_calls": [
                 {
-                    "id": _issued_tool_id(case, "call_"),
+                    "id": issued_id,
                     "type": "function",
                     "function": {
                         "name": name,
