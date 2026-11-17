@@ -21,9 +21,9 @@ from ai_guardian.web.components.local_time import (
     local_time_label,
 )
 from ai_guardian.web.pages.violations import (
-    DETAIL_FIELDS,
     _ALLOWLIST_TYPES,
     _NO_SUPPRESSION_TYPES,
+    _detail_fields,
     _format_violation_markdown,
     _load_local_violations,
     _render_tool_diagnostics,
@@ -150,7 +150,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
     render_mirror_attribution(v, service)
 
     # --- Blocked details ---
-    fields = DETAIL_FIELDS.get(vtype, [])
+    fields = _detail_fields(vtype, blocked)
     if fields:
         with ui.card().classes("w-full"):
             ui.label("Details").classes("text-sm font-bold")

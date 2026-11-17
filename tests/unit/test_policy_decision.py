@@ -115,9 +115,13 @@ def test_policy_decision_serialization_keeps_schema_valid_for_bad_metadata():
     assert decision["latency_ms"] is None
 
 
-def test_violation_jsonl_adds_canonical_record_without_changing_legacy_fields(
-    tmp_path,
+def test_violation_jsonl_adds_canonical_record_with_sanitized_command_fallback(
+    tmp_path, monkeypatch
 ):
+    monkeypatch.setattr(
+        "ai_guardian.violations.command_context.sanitize_origin_command",
+        lambda command: command[:500],
+    )
     log_path = tmp_path / "violations.jsonl"
     logger = ViolationLogger(log_path=log_path, config={"enabled": True})
     logger.log_violation(
@@ -137,7 +141,8 @@ def test_violation_jsonl_adds_canonical_record_without_changing_legacy_fields(
     )
 
     entry = logger.get_recent_violations(limit=1)[0]
-    assert entry["blocked"]["command"].startswith("curl ")
+    assert "command" not in entry["blocked"]
+    assert entry["blocked"]["source_command"].startswith("curl ")
     assert entry["context"]["run_id"] == "run-1"
     assert entry["policy_decision"]["decision"] == "block"
     assert entry["policy_decision"]["correlation_id"] == "run-1"

@@ -34,6 +34,46 @@ budget_tokens: 1000
   target), error-only Pylint, mypy, and `git diff --check` pass.
   Release Readiness run `44160977835` is evaluating commit `20e04b9c`.
   **Next:** record that run's result, especially the Grok and OpenCode V2 lanes.
+## Issue #2759 sanitized context for locationless violations — 2026-11-17
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2759` on the
+  existing `2759` branch. Added an invocation-only command context that is
+  persisted as normalized `blocked.source_command` only for detailed violations
+  without a usable source file path and only after secret and PII verification.
+  Commands are capped at 500 characters after the full command is verified;
+  scanner failures, sensitive matches, controls, and oversized inputs are omitted.
+- File paths from blocked data or context retain precedence; line/column metadata
+  remains untouched. Secret/PII findings keep the minimal audit envelope, and
+  command-credential/password findings retain no command values. The Web Console
+  detail and copy views display the optional fallback while older records remain
+  valid without it.
+- Added tests across command sanitization, central persistence, PostScan and
+  ToolPolicy propagation, sensitive privacy, location precedence, legacy history,
+  and complete related Web/UX contracts. Updated Violation Logging docs and the
+  Unreleased changelog.
+- **Validation:** 417 related unit/UX tests pass (1 skipped). Full Ruff, Black
+  (Python 3.10 target), error-level Pylint, buglog JSON, and `git diff --check`
+  pass. Package Mypy reports the same 14 existing errors in untouched
+  `skill_discovery.py` and `scanners/secret_validator.py`; no changed module has
+  Mypy errors.
+- Posted the completed acceptance checklist and validation at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2759#issuecomment-6936782392,
+  applied the `done` label, and saved a DAF note. The implementation is published
+  in PR #2769 on branch `2759`.
+- **CI follow-up:** The initial Tests run failed across the matrix only because
+  `test_violation_jsonl_adds_canonical_record_without_changing_legacy_fields`
+  still expected raw `blocked.command`. Updated it to verify raw-command removal
+  and the sanitized `blocked.source_command` fallback. The affected policy and
+  logger tests pass (38); Ruff, Black, and `git diff --check` pass. Published as
+  `386859c4`.
+- **CodeRabbit follow-up:** Confirmed missing/unparseable bundled PII rules could
+  yield an empty matcher set and let an unchanged command pass. `SecretRedactor`
+  now records successfully compiled PII types, and origin-command sanitization
+  fails closed unless the complete expected set is present. Added missing/malformed
+  TOML, partial-set, logger-history, and UX regressions. 93 related unit/UX tests,
+  Ruff, Black, error-level Pylint, and diff checks pass; package Mypy retains 14
+  known errors in untouched modules. Published as `c5422775`; PR checks rerun.
+  **Next:** review the new CI results, then user review and external `daf complete`.
 
 ## Issue #2758 PyPI social preview image — 2026-11-16
 

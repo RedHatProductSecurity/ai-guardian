@@ -40,6 +40,66 @@ _SENSITIVE_FINDING_FILTER_ALIASES = frozenset(
     {"secret_detected", "image_secret_detected", "pii_detected"}
 )
 _SENSITIVE_FINDING_TYPES = _SENSITIVE_FINDING_FILTER_ALIASES | {"sensitive_finding"}
+_COMMAND_ORIGIN_PRIVATE_TYPES = frozenset(
+    {
+        "suspected_password",
+        "command_credential_detected",
+        "http_request_credential_detected",
+    }
+)
+_SHELL_TOOL_NAMES = frozenset({"bash", "shell"})
+
+
+def _prepare_command_details(
+    violation_type: str,
+    blocked: Dict[str, Any],
+    context: Dict[str, Any],
+    origin_command: Optional[str],
+) -> Dict[str, Any]:
+    """Keep only a verified command fallback when no source file is locatable."""
+    from ai_guardian.violations.command_context import (
+        has_usable_source_file,
+        sanitize_origin_command,
+    )
+
+    safe_blocked = dict(blocked)
+    if violation_type in _COMMAND_ORIGIN_PRIVATE_TYPES:
+        safe_blocked.pop("source_command", None)
+        safe_blocked.pop("command", None)
+        safe_blocked.pop("origin_command", None)
+        safe_blocked.pop("tool_value", None)
+        return safe_blocked
+
+    candidate = origin_command
+    existing_source_command = safe_blocked.pop("source_command", None)
+    if candidate is None:
+        candidate = existing_source_command
+    blocked_origin_command = safe_blocked.pop("origin_command", None)
+    if candidate is None:
+        candidate = blocked_origin_command
+
+    tool_name = safe_blocked.get("tool_name")
+    shell_tool = (
+        isinstance(tool_name, str) and tool_name.casefold() in _SHELL_TOOL_NAMES
+    )
+    command_field = safe_blocked.pop("command", None)
+    if candidate is None:
+        candidate = command_field
+
+    if violation_type == "tool_permission" and shell_tool:
+        tool_value = safe_blocked.pop("tool_value", None)
+        if candidate is None:
+            candidate = tool_value
+
+    has_source_file = has_usable_source_file(
+        safe_blocked.get("file_path")
+    ) or has_usable_source_file(context.get("file_path"))
+    if not has_source_file and candidate is not None:
+        sanitized = sanitize_origin_command(candidate)
+        if sanitized:
+            safe_blocked["source_command"] = sanitized
+
+    return safe_blocked
 
 
 def _safe_violation_label(violation_type: str) -> str:
@@ -215,6 +275,7 @@ class ViolationLogger:
         violation_id: Optional[str] = None,
         allowlist_context: Optional[Dict] = None,
         policy_decision: Optional[Union[PolicyDecision, Dict[str, Any]]] = None,
+        origin_command: Optional[str] = None,
     ):
         """
         Log a violation to JSONL file.
@@ -227,6 +288,8 @@ class ViolationLogger:
             severity: Severity level (warning, high, critical)
             allowlist_context: Safe source metadata for deferred annotation.
             policy_decision: Optional safe, versioned policy decision metadata.
+            origin_command: Invocation-only raw command, stored only as a verified
+                bounded fallback when no usable source file path is available.
         """
         if violation_type in _SENSITIVE_FINDING_FILTER_ALIASES:
             self.log_sensitive_finding(
@@ -269,13 +332,22 @@ class ViolationLogger:
             if canonical_decision is not None:
                 canonical_decision["violation_type"] = persisted_type
                 canonical_decision["severity"] = persisted_severity
+            safe_blocked = _prepare_command_details(
+                violation_type,
+                blocked if isinstance(blocked, dict) else {},
+                context if isinstance(context, dict) else {},
+                origin_command,
+            )
+            safe_context = dict(context) if isinstance(context, dict) else {}
+            for command_key in ("command", "source_command", "origin_command"):
+                safe_context.pop(command_key, None)
             entry = {
                 "id": violation_id,
                 "timestamp": timestamp,
                 "violation_type": persisted_type,
                 "severity": persisted_severity,
-                "blocked": blocked,
-                "context": context,
+                "blocked": safe_blocked,
+                "context": safe_context,
                 "suggestion": suggestion or {},
                 "policy_decision": canonical_decision,
                 "resolved": False,

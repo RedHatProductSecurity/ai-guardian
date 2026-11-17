@@ -45,6 +45,8 @@ class ScanContext:
     allowlist_file_path: Optional[str] = None
     allowlist_sensitive_values: Optional[List[str]] = None
     allowlist_context: Optional[Dict[str, Any]] = None
+    # Raw command is invocation-only and is never included in serialized context.
+    origin_command: Optional[str] = None
 
     @classmethod
     def from_hook_dicts(
@@ -235,6 +237,8 @@ def log_violation(
             "severity": result.severity,
             "violation_id": result.id,
         }
+        if not private_candidate and context.origin_command:
+            log_kwargs["origin_command"] = context.origin_command
         if metadata:
             log_kwargs["allowlist_context"] = metadata
         log_kwargs["policy_decision"] = canonical_decision

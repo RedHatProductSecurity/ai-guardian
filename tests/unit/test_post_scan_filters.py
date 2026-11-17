@@ -175,6 +175,22 @@ class TestLogScanViolation:
         assert vctx["session_id"] == "sess-1"
         assert vctx["hook_event"] == "PreToolUse"
 
+    def test_origin_command_is_forwarded_outside_serialized_context(self):
+        ctx = _make_ctx(origin_command="printf safe-command")
+        entry = _make_entry()
+        result = _detected_result(
+            file_path=None,
+            line_number=7,
+            start_column=3,
+        )
+
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            log_scan_violation(entry, result, ctx)
+
+        call_kwargs = ctx.violation_logger.log_violation.call_args.kwargs
+        assert call_kwargs["origin_command"] == "printf safe-command"
+        assert "origin_command" not in call_kwargs["context"]
+
     def test_fail_open_on_logger_error(self):
         ctx = _make_ctx()
         ctx.violation_logger.log_violation.side_effect = RuntimeError("boom")

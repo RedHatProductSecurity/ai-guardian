@@ -146,6 +146,7 @@ class SecretRedactor:
                 logger.warning(f"Failed to compile custom pattern: {e}")
 
         # Load PII patterns if enabled (Issue #262, pattern server support #644)
+        self.compiled_pii_types = set()
         if is_feature_enabled(self.pii_config.get("enabled"), default=False):
             pii_types = self.pii_config.get(
                 "pii_types",
@@ -167,6 +168,7 @@ class SecretRedactor:
                             continue
                         compiled = re.compile(pattern)
                         self.compiled_patterns.append((compiled, strategy, label))
+                        self.compiled_pii_types.add(pii_type)
                         logger.debug(f"Added PII pattern: {label}")
                     except re.error as e:
                         logger.warning(

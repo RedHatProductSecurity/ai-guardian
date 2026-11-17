@@ -82,21 +82,21 @@ class TestExtractContextSnippet(unittest.TestCase):
         self.assertLessEqual(len(snippet), 200)
 
 
-class TestViolationCommandField(unittest.TestCase):
-    """Test that command field is included for Bash PostToolUse violations."""
+class TestSensitiveViolationCommandPrivacy(unittest.TestCase):
+    """Sensitive PostToolUse findings never retain their originating command."""
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.scanners.secret_scanning.check_secrets")
-    def test_pii_violation_includes_command_for_bash(
+    def test_pii_violation_omits_command_from_blocked_details(
         self,
         mock_check_secrets,
         mock_redaction_config,
         mock_secret_config,
         mock_pii_config,
     ):
-        """PII detected in Bash PostToolUse should include command in blocked dict."""
+        """PII detected in Bash PostToolUse adds no command detail fields."""
         mock_secret_config.return_value = ({"enabled": True}, None)
         mock_check_secrets.return_value = (False, None)
         mock_redaction_config.return_value = (None, None)
@@ -118,12 +118,7 @@ class TestViolationCommandField(unittest.TestCase):
             }
         )
 
-        with patch(
-            "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-        ) as MockLogger:
-            mock_instance = MagicMock()
-            MockLogger.return_value = mock_instance
-
+        with patch("ai_guardian.hook_events.post_tool_use.log_violation") as log:
             with patch("ai_guardian.hook_processing._scan_for_pii") as mock_scan_pii:
                 mock_scan_pii.return_value = (
                     True,
@@ -135,27 +130,29 @@ class TestViolationCommandField(unittest.TestCase):
                 with patch("sys.stdin", StringIO(hook_input)):
                     ai_guardian.process_hook_input()
 
-                if mock_instance.log_violation.called:
-                    call_args = mock_instance.log_violation.call_args
-                    blocked = (
-                        call_args.kwargs.get("blocked", call_args[1].get("blocked", {}))
-                        if call_args.kwargs
-                        else call_args[1].get("blocked", {})
-                    )
-                    self.assertEqual(blocked.get("command"), "cat /data/employees.csv")
+        pii_calls = [
+            call
+            for call in log.call_args_list
+            if getattr(call.args[0], "violation_type", None) == "pii_detected"
+        ]
+        self.assertEqual(len(pii_calls), 1)
+        self.assertNotIn("command", pii_calls[0].kwargs.get("blocked_overrides", {}))
+        self.assertNotIn(
+            "source_command", pii_calls[0].kwargs.get("blocked_overrides", {})
+        )
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.scanners.secret_scanning.check_secrets")
-    def test_command_truncated_to_500_chars(
+    def test_sensitive_pii_event_never_includes_long_command(
         self,
         mock_check_secrets,
         mock_redaction_config,
         mock_secret_config,
         mock_pii_config,
     ):
-        """Long commands should be truncated to 500 chars."""
+        """A long command is not added to sensitive PII history."""
         mock_secret_config.return_value = ({"enabled": True}, None)
         mock_check_secrets.return_value = (False, None)
         mock_redaction_config.return_value = (None, None)
@@ -174,12 +171,7 @@ class TestViolationCommandField(unittest.TestCase):
             }
         )
 
-        with patch(
-            "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-        ) as MockLogger:
-            mock_instance = MagicMock()
-            MockLogger.return_value = mock_instance
-
+        with patch("ai_guardian.hook_events.post_tool_use.log_violation") as log:
             with patch("ai_guardian.hook_processing._scan_for_pii") as mock_scan_pii:
                 mock_scan_pii.return_value = (
                     True,
@@ -191,15 +183,16 @@ class TestViolationCommandField(unittest.TestCase):
                 with patch("sys.stdin", StringIO(hook_input)):
                     ai_guardian.process_hook_input()
 
-                if mock_instance.log_violation.called:
-                    call_args = mock_instance.log_violation.call_args
-                    blocked = (
-                        call_args.kwargs.get("blocked", call_args[1].get("blocked", {}))
-                        if call_args.kwargs
-                        else call_args[1].get("blocked", {})
-                    )
-                    cmd = blocked.get("command", "")
-                    self.assertLessEqual(len(cmd), 500)
+        pii_calls = [
+            call
+            for call in log.call_args_list
+            if getattr(call.args[0], "violation_type", None) == "pii_detected"
+        ]
+        self.assertEqual(len(pii_calls), 1)
+        self.assertNotIn("command", pii_calls[0].kwargs.get("blocked_overrides", {}))
+        self.assertNotIn(
+            "source_command", pii_calls[0].kwargs.get("blocked_overrides", {})
+        )
 
 
 class TestViolationToolUseId(unittest.TestCase):
@@ -473,8 +466,8 @@ class TestToolPolicyViolationIds(unittest.TestCase):
 class TestWebViolationDisplay(unittest.TestCase):
     """Test web-console violation card data structure for new fields."""
 
-    def test_secret_redaction_violation_has_command(self):
-        """Violation data for Bash secret_redaction should include command field."""
+    def test_secret_redaction_violation_has_sanitized_source_command(self):
+        """Violation data can expose a sanitized command fallback."""
         violation = {
             "timestamp": "2026-05-03T14:00:00Z",
             "violation_type": "secret_redaction",
@@ -485,7 +478,7 @@ class TestWebViolationDisplay(unittest.TestCase):
                 "line_number": 5,
                 "redaction_count": 1,
                 "redacted_types": ["API Key"],
-                "command": "env | grep API_KEY",
+                "source_command": "env | grep API_KEY",
                 "context_snippet": "...API_KEY=[REDACTED]...",
             },
             "context": {
@@ -499,7 +492,7 @@ class TestWebViolationDisplay(unittest.TestCase):
         }
 
         blocked = violation["blocked"]
-        self.assertEqual(blocked["command"], "env | grep API_KEY")
+        self.assertEqual(blocked["source_command"], "env | grep API_KEY")
         self.assertEqual(blocked["context_snippet"], "...API_KEY=[REDACTED]...")
         self.assertIsNone(blocked["file_path"])
         self.assertEqual(violation["context"]["tool_use_id"], "toolu_test")
@@ -518,7 +511,6 @@ class TestWebViolationDisplay(unittest.TestCase):
                 "line_number": 2,
                 "pii_count": 1,
                 "pii_types": ["SSN"],
-                "command": "cat records.csv",
                 "context_snippet": "...row 2: [REDACTED-SSN]...",
             },
             "context": {"action": "warn", "hook_event": "posttooluse"},
@@ -528,7 +520,8 @@ class TestWebViolationDisplay(unittest.TestCase):
 
         blocked = violation["blocked"]
         self.assertIsNone(blocked["file_path"])
-        self.assertEqual(blocked["command"], "cat records.csv")
+        self.assertNotIn("command", blocked)
+        self.assertNotIn("source_command", blocked)
         self.assertIn("[REDACTED-SSN]", blocked["context_snippet"])
 
     def test_details_modal_shows_all_fields_in_json(self):
@@ -537,7 +530,7 @@ class TestWebViolationDisplay(unittest.TestCase):
             "timestamp": "2026-05-03T14:00:00Z",
             "violation_type": "pii_detected",
             "severity": "warning",
-            "blocked": {"tool": "Bash", "command": "echo test"},
+            "blocked": {"tool": "Bash"},
             "context": {
                 "tool_use_id": "toolu_detail_test",
                 "session_id": "sess_detail_test",
