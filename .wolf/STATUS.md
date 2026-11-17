@@ -16,22 +16,22 @@ budget_tokens: 1000
   and now waits for a correlated `tools/list` result containing `get_version` on a
   persistent server before starting smoke sessions. Goose intentionally disables
   MCP and reports **UNSUPPORTED**, never PASS.
-- Pushed commits `5f761105`, `571ddd56`, `5fb33518`, and `8690a1a0` to
+- Pushed commits `5f761105`, `571ddd56`, `5fb33518`, `8690a1a0`, and `24be242d` to
   `origin/2764` in PR #2770. Release Readiness run `44128748557` completed with
   Grok and OpenCode V2 failures: Grok made provider requests but no native MCP
   tool call; V2 offered Code Mode's `execute` wrapper but produced no witnessed
   JSON-RPC call. Run `44138913355` also failed both lanes: Grok had no correlated
   result, and V2 had no get_version RPC. Local changes now distinguish mock-issued
   calls from actual RPCs, add Grok to stdio evidence, and wait for V2's exact tool
-  listing before running cases. These follow-up changes have not yet been pushed
-  or exercised in Release Readiness.
+  listing before running cases. The follow-up is pushed; Release Readiness run
+  `44149430049` is evaluating code at `24be242d`.
 - A timeout/nonzero exit can qualify only `mcp_version`, and only with prompt,
   offer, issued call, correlated exact-version response, and zero new violations.
   **Local validation:** 517 related unit/UX tests pass; Ruff, Black (Python 3.10
   target), and error-only Pylint pass. `mypy src/ai_guardian/` still reports 14
   existing errors in untouched `skill_discovery.py` and `scanners/secret_validator.py`.
-  **Next:** push the local follow-up, run Release Readiness again, and verify Grok
-  and OpenCode V2 produce the required correlated evidence.
+  **Next:** review run `44149430049`, especially Grok and OpenCode V2, and record
+  whether both produce the required correlated evidence.
 
 ## Issue #2758 PyPI social preview image — 2026-11-16
 
