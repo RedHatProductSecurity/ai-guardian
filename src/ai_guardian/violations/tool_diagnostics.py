@@ -145,7 +145,96 @@ def safe_tool_correlation(violation: Dict) -> Dict:
 
 
 def diagnostic_safe_violation(violation: Dict) -> Dict:
-    """Scrub added diagnostics from human detail/JSON copies, preserving legacy fields."""
+    """Scrub human detail/JSON copies, preserving only safe sensitive locators."""
+    violation_type = violation.get("violation_type", violation.get("type", ""))
+    if violation_type in {
+        "sensitive_finding",
+        "secret_detected",
+        "image_secret_detected",
+        "pii_detected",
+    }:
+        import copy
+
+        from ai_guardian.violations.command_context import (
+            sanitize_sensitive_file_path,
+            sensitive_source_context_label,
+        )
+
+        legacy_sensitive_type = violation_type != "sensitive_finding"
+        result = {
+            key: copy.deepcopy(violation[key])
+            for key in (
+                "id",
+                "timestamp",
+                "violation_type",
+                "type",
+                "severity",
+                "resolved",
+                "resolved_at",
+                "resolved_action",
+            )
+            if key in violation
+        }
+        if violation_type != "sensitive_finding":
+            if "violation_type" in result:
+                result["violation_type"] = "sensitive_finding"
+            if "type" in result:
+                result["type"] = "sensitive_finding"
+        flat_file = violation.get("file")
+        if legacy_sensitive_type:
+            flat_file = sanitize_sensitive_file_path(flat_file)
+        if (
+            isinstance(flat_file, str)
+            and 0 < len(flat_file) <= 4096
+            and flat_file.isprintable()
+        ):
+            result["file"] = flat_file
+        for key, minimum in (
+            ("line", 1),
+            ("end_line", 1),
+            ("start_column", 1),
+            ("end_column", 1),
+        ):
+            value = violation.get(key)
+            if type(value) is int and minimum <= value <= 2**31:
+                result[key] = value
+        source_context = sensitive_source_context_label(violation.get("source_context"))
+        if source_context:
+            result["source_context"] = source_context
+        raw_blocked = violation.get("blocked")
+        raw_blocked = raw_blocked if isinstance(raw_blocked, dict) else {}
+        safe_blocked: Dict[str, Any] = {}
+        file_path = raw_blocked.get("file_path")
+        if legacy_sensitive_type:
+            file_path = sanitize_sensitive_file_path(file_path)
+        if (
+            isinstance(file_path, str)
+            and 0 < len(file_path) <= 4096
+            and file_path.isprintable()
+        ):
+            safe_blocked["file_path"] = file_path
+        for key, minimum in (
+            ("line_number", 1),
+            ("end_line", 1),
+            ("start_column", 0),
+            ("end_column", 0),
+        ):
+            value = raw_blocked.get(key)
+            if type(value) is int and minimum <= value <= 2**31 - 1:
+                safe_blocked[key] = value
+        source_context = sensitive_source_context_label(
+            raw_blocked.get("source_context")
+        )
+        if source_context:
+            safe_blocked["source_context"] = source_context
+        result["blocked"] = safe_blocked
+        from ai_guardian.violations.utils import safe_mirror_metadata
+
+        mirror = safe_mirror_metadata(violation.get("mirror"))
+        if mirror is not None:
+            result["mirror"] = mirror
+        return result
+
     blocked = violation.get("blocked")
     if not isinstance(blocked, dict) or "input_diagnostics" not in blocked:
         return violation

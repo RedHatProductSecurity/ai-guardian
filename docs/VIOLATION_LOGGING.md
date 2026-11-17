@@ -26,7 +26,7 @@ Every time AI Guardian blocks something, it creates a log entry:
 |----------------|-------------------|-------------|
 | **Tool Permission** | Blocked command execution | Tool name and policy rule; a bounded, sanitized source command only when no usable file path is available |
 | **Directory Blocking** | Restricted path access | File path, requested operation |
-| **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, and timestamp only; no per-finding details |
+| **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, timestamp, and an optional verified file path/position or fixed source-context label; no matched values, snippets, detector details, or original subtype |
 | **Command Credential** | Literal credential in a supported command argument, or incomplete command analysis | Fixed option/classification labels and argument positions only; no argument values or full command |
 | **Secret Redaction** | Secret masked in output | Secret type, masking strategy, and an optional sanitized command fallback when no usable file path is available |
 | **Prompt Injection** | Malicious prompt detected | Pattern matched, confidence score |
@@ -92,8 +92,15 @@ normalized and capped at 500 characters, and is included only when secret and
 PII checks verify the full command as safe. Detected sensitive values, scanner
 errors, and commands too large to verify cause the command to be omitted. A usable
 file path takes precedence; any available line/column data remains unchanged.
-Sensitive secret/PII findings keep their minimal audit record, and command-
-credential findings retain only fixed labels and argument positions.
+Sensitive secret/PII findings may retain a bounded printable file path and
+validated line/column coordinates when the path passes the bundled secret and
+PII checks. If no safe file path is available, history may retain a fixed source
+context label such as `tool_output`; it never stores the scanned content, matched
+value, snippet, detector subtype, or arbitrary scanner metadata. Source columns
+are stored as zero-based offsets and displayed as one-based columns. Paths and
+positions are exposed by Console/CLI/MCP/SDK views through bounded field
+projections; malformed legacy locator values are omitted. Command-credential
+findings retain only fixed labels and argument positions.
 
 The existing top-level JSONL fields remain unchanged for standard violation
 types; sensitive findings use the minimal record described below. Consumers that
@@ -186,19 +193,28 @@ Immutable input failures remain blocked and do not gain override actions.
   "timestamp": "2026-11-02T08:35:42Z",
   "violation_type": "sensitive_finding",
   "severity": "high",
+  "blocked": {
+    "file_path": "src/config.py",
+    "line_number": 42,
+    "start_column": 3,
+    "end_column": 19
+  },
   "resolved": false,
   "resolved_at": null,
   "resolved_action": null
 }
 ```
 
-For `secret_detected`, `image_secret_detected`, and `pii_detected`, JSONL keeps
-only the generic category, ID, timestamp, severity, and resolution state. It does
-not retain source paths/positions, matched values, detector metadata, context,
-suggestions, policy-decision details, or allowlist snippets. The original finding
-remains available to the in-memory caller; the persistent history does not
-distinguish which sensitive type was detected. Aggregate secret counts remain
-available separately.
+For `secret_detected`, `image_secret_detected`, and `pii_detected`, JSONL always
+uses the generic category, ID, timestamp, severity, and resolution state. It may
+also retain a verified file path and source position, or a fixed source-context
+label when an exact file location is unavailable. It never retains matched
+values, snippets, detector metadata, arbitrary context, suggestions,
+policy-decision details, or allowlist snippets. The original finding remains
+available to the in-memory caller; persistent history does not distinguish
+which sensitive type was detected. Aggregate secret counts remain available
+separately. Older records without location fields remain readable and display
+without a fabricated location.
 
 Ask-mode history does not store the matched input or scanner error text; it keeps
 a fixed description and available source position. CLI scan history stores the

@@ -178,6 +178,18 @@ def _safe_severity_label(severity: str) -> str:
     return "warning"
 
 
+def _first_present(*values: Any) -> Any:
+    """Return the first non-None locator candidate, preserving valid zero columns."""
+    return next((value for value in values if value is not None), None)
+
+
+def _safe_sensitive_coordinate(value: Any, *, minimum: int) -> Optional[int]:
+    """Keep only bounded integer source coordinates; booleans are not coordinates."""
+    if type(value) is int and minimum <= value <= 2**31 - 1:
+        return value
+    return None
+
+
 @dataclass
 class _LogRotationState:
     """Cheap per-process bookkeeping for append-only violation histories."""
@@ -219,18 +231,56 @@ class ViolationLogger:
         violation_type: str,
         severity: str = "warning",
         violation_id: Optional[str] = None,
+        *,
+        file_path: Any = None,
+        line_number: Any = None,
+        end_line: Any = None,
+        start_column: Any = None,
+        end_column: Any = None,
+        source_context: Any = None,
     ) -> None:
-        """Persist only the minimal audit envelope for a sensitive finding."""
+        """Persist a minimal audit envelope plus a verified source locator."""
         if violation_type not in _SENSITIVE_FINDING_FILTER_ALIASES:
             logger.warning("Refusing non-sensitive type in sensitive finding logger")
             return
+        if not violation_id:
+            from ai_guardian.violations.notifications import new_violation_event_id
+
+            violation_id = new_violation_event_id()
         self._notify_violation(violation_type, severity, violation_id)
         if not self._is_logging_enabled() or not self._should_log_type(violation_type):
             return
 
         try:
             timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            entry = {
+            from ai_guardian.violations.command_context import (
+                normalize_sensitive_source_context,
+                sanitize_sensitive_file_path,
+            )
+
+            safe_file_path = sanitize_sensitive_file_path(file_path)
+            safe_blocked: Dict[str, Any] = {}
+            if safe_file_path:
+                safe_blocked["file_path"] = safe_file_path
+
+            safe_line = _safe_sensitive_coordinate(line_number, minimum=1)
+            safe_end_line = _safe_sensitive_coordinate(end_line, minimum=1)
+            safe_start_column = _safe_sensitive_coordinate(start_column, minimum=0)
+            safe_end_column = _safe_sensitive_coordinate(end_column, minimum=0)
+            if safe_line is not None:
+                safe_blocked["line_number"] = safe_line
+            if safe_end_line is not None:
+                safe_blocked["end_line"] = safe_end_line
+            if safe_start_column is not None:
+                safe_blocked["start_column"] = safe_start_column
+            if safe_end_column is not None:
+                safe_blocked["end_column"] = safe_end_column
+
+            safe_context = normalize_sensitive_source_context(source_context)
+            if not safe_file_path and safe_context:
+                safe_blocked["source_context"] = safe_context
+
+            entry: Dict[str, Any] = {
                 "id": violation_id,
                 "timestamp": timestamp,
                 "violation_type": "sensitive_finding",
@@ -239,6 +289,8 @@ class ViolationLogger:
                 "resolved_at": None,
                 "resolved_action": None,
             }
+            if safe_blocked:
+                entry["blocked"] = safe_blocked
             serialized_line = json.dumps(entry) + "\n"
             with _LOG_MAINTENANCE_LOCK:
                 try:
@@ -292,10 +344,47 @@ class ViolationLogger:
                 bounded fallback when no usable source file path is available.
         """
         if violation_type in _SENSITIVE_FINDING_FILTER_ALIASES:
+            blocked_data = blocked if isinstance(blocked, dict) else {}
+            context_data = context if isinstance(context, dict) else {}
+            from ai_guardian.violations.command_context import (
+                normalize_sensitive_source_context,
+            )
+
+            source_context = next(
+                (
+                    normalized
+                    for candidate in (
+                        blocked_data.get("source_context"),
+                        blocked_data.get("source"),
+                        context_data.get("source_context"),
+                        context_data.get("source"),
+                        context_data.get("hook_event"),
+                    )
+                    if (normalized := normalize_sensitive_source_context(candidate))
+                ),
+                None,
+            )
             self.log_sensitive_finding(
                 violation_type=violation_type,
                 severity=severity,
                 violation_id=violation_id,
+                file_path=_first_present(
+                    blocked_data.get("file_path"), context_data.get("file_path")
+                ),
+                line_number=_first_present(
+                    blocked_data.get("line_number"), context_data.get("line_number")
+                ),
+                end_line=_first_present(
+                    blocked_data.get("end_line"), context_data.get("end_line")
+                ),
+                start_column=_first_present(
+                    blocked_data.get("start_column"),
+                    context_data.get("start_column"),
+                ),
+                end_column=_first_present(
+                    blocked_data.get("end_column"), context_data.get("end_column")
+                ),
+                source_context=source_context,
             )
             return
 

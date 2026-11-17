@@ -34,6 +34,9 @@ _SAFE_SUGGESTIONS: Dict[str, str] = {
     ),
     "secret_detected": "Remove the secret and use environment variables or a secret manager",
     "pii_detected": "Remove PII from the file or use anonymized test data",
+    "sensitive_finding": (
+        "Review the reported location privately; matched values and snippets are withheld"
+    ),
     "directory_blocking": "This path is protected by security policy",
     "tool_permission": "This tool requires explicit permission from your admin",
     "prompt_injection": "The content contains patterns that match injection detection",
@@ -714,9 +717,10 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         ``config_file_exfil``.
         Sensitive records use the consolidated ``sensitive_finding`` category.
         The legacy filters ``secret_detected``, ``image_secret_detected``, and
-        ``pii_detected`` remain aliases for that category. Because the persisted
-        record omits the original subtype and finding details, these filters may
-        return any sensitive finding.
+        ``pii_detected`` remain aliases for that category. The persisted record
+        may include a sanitized file path and source position, but omits the
+        original subtype, matched values, snippets, and detector details; these
+        filters may return any sensitive finding.
         """
         try:
             from ai_guardian.violations.logger import ViolationLogger
@@ -741,23 +745,55 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                 if not isinstance(blocked, dict):
                     blocked = {}
                 vtype = v.get("violation_type", "")
+                is_sensitive = vtype in {
+                    "sensitive_finding",
+                    "secret_detected",
+                    "image_secret_detected",
+                    "pii_detected",
+                }
+                display_type = "sensitive_finding" if is_sensitive else vtype
                 ctx = v.get("context", {})
                 if not isinstance(ctx, dict):
                     ctx = {}
                 entry = {
                     "timestamp": v.get("timestamp", ""),
-                    "type": vtype,
+                    "type": display_type,
                     "severity": v.get("severity", ""),
-                    "tool": ctx.get("tool_name", "")
-                    or blocked.get("tool", "")
-                    or blocked.get("tool_name", ""),
-                    "file": blocked.get("file_path", "") or ctx.get("file_path", ""),
+                    "tool": (
+                        ""
+                        if is_sensitive
+                        else (
+                            ctx.get("tool_name", "")
+                            or blocked.get("tool", "")
+                            or blocked.get("tool_name", "")
+                        )
+                    ),
+                    "file": (
+                        blocked.get("file_path", "")
+                        if is_sensitive
+                        else blocked.get("file_path", "") or ctx.get("file_path", "")
+                    ),
                     "action": "blocked" if v.get("blocked") else "logged",
                     "suggestion": _SAFE_SUGGESTIONS.get(
-                        vtype, "Review the security policy for this violation type"
+                        display_type,
+                        "Review the security policy for this violation type",
                     ),
                 }
-                diagnostics = violation_input_diagnostics(v)
+                if is_sensitive:
+                    file_path = entry["file"]
+                    if vtype != "sensitive_finding":
+                        from ai_guardian.violations.command_context import (
+                            sanitize_sensitive_file_path,
+                        )
+
+                        file_path = sanitize_sensitive_file_path(file_path)
+                    if not (
+                        isinstance(file_path, str)
+                        and 0 < len(file_path) <= 4096
+                        and file_path.isprintable()
+                    ):
+                        entry["file"] = ""
+                diagnostics = None if is_sensitive else violation_input_diagnostics(v)
                 if diagnostics is not None:
                     entry["input_diagnostics"] = diagnostics
                     entry.update(safe_tool_correlation(v))
@@ -768,15 +804,43 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                             "Built-in protection blocked this operation; review the "
                             "reported target and diagnostic details"
                         )
-                if ctx.get("source"):
+                if ctx.get("source") and not is_sensitive:
                     entry["source"] = ctx["source"]
-                if blocked.get("line_number"):
+                if (
+                    type(blocked.get("line_number")) is int
+                    and 0 < blocked["line_number"] <= 2**31 - 1
+                ):
                     entry["line"] = blocked["line_number"]
-                if blocked.get("start_column") is not None:
+                if (
+                    type(blocked.get("end_line")) is int
+                    and 0 < blocked["end_line"] <= 2**31 - 1
+                ):
+                    entry["end_line"] = blocked["end_line"]
+                if (
+                    type(blocked.get("start_column")) is int
+                    and 0 <= blocked["start_column"] <= 2**31 - 1
+                ):
                     entry["start_column"] = blocked["start_column"] + 1
-                if blocked.get("end_column") is not None:
+                if (
+                    type(blocked.get("end_column")) is int
+                    and 0 <= blocked["end_column"] <= 2**31 - 1
+                ):
                     entry["end_column"] = blocked["end_column"] + 1
-                policy_decision = safe_policy_decision(v.get("policy_decision"))
+                if is_sensitive and blocked.get("source_context"):
+                    from ai_guardian.violations.command_context import (
+                        sensitive_source_context_label,
+                    )
+
+                    source_context = sensitive_source_context_label(
+                        blocked["source_context"]
+                    )
+                    if source_context:
+                        entry["source_context"] = source_context
+                policy_decision = (
+                    None
+                    if is_sensitive
+                    else safe_policy_decision(v.get("policy_decision"))
+                )
                 if policy_decision is not None:
                     entry["policy_decision"] = policy_decision
                 filtered.append(entry)

@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timeout/nonzero exit after
   complete MCP evidence qualifies only this capability, not the rest of that
   CLI's smoke cases.
+- **Actionable sensitive-finding locations (#2776):** Preserve verified file paths
+  and bounded line/column coordinates for secret, image-secret, and PII history
+  without retaining matched values, snippets, or detector subtype. Console, CLI,
+  MCP, and SDK views expose only the safe locator fields and tolerate legacy
+  locationless records.
 - **Sanitized locationless violation context (#2759):** Add an optional bounded
   `source_command` fallback to detailed command-originated history only when no
   usable file path exists and secret/PII checks verify it safe. Keep source

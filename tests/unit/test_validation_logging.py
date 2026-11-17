@@ -207,13 +207,23 @@ class TestValidationFieldInViolation:
             yield
 
     @staticmethod
-    def _assert_sensitive_envelope(mock_logger, expected_type, expected_severity):
+    def _assert_sensitive_envelope(
+        mock_logger, expected_type, expected_severity, expected_line
+    ):
         mock_logger.log_sensitive_finding.assert_called_once()
         mock_logger.log_violation.assert_not_called()
         kwargs = mock_logger.log_sensitive_finding.call_args.kwargs
-        assert kwargs.keys() == {"violation_type", "severity", "violation_id"}
-        assert kwargs["violation_type"] == expected_type
-        assert kwargs["severity"] == expected_severity
+        assert kwargs == {
+            "violation_type": expected_type,
+            "severity": expected_severity,
+            "violation_id": kwargs["violation_id"],
+            "file_path": "test.py",
+            "line_number": expected_line,
+            "end_line": None,
+            "start_column": None,
+            "end_column": None,
+            "source_context": "file_content",
+        }
 
     def test_secret_violation_omits_validation_from_history(self):
         from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation
@@ -232,7 +242,9 @@ class TestValidationFieldInViolation:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        self._assert_sensitive_envelope(mock_logger, "secret_detected", "critical")
+        self._assert_sensitive_envelope(
+            mock_logger, "secret_detected", "critical", expected_line=42
+        )
         assert details["validation"]["status"] == "verified"
         assert details["validation"]["elapsed_ms"] == 156
 
@@ -248,7 +260,9 @@ class TestValidationFieldInViolation:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        self._assert_sensitive_envelope(mock_logger, "secret_detected", "critical")
+        self._assert_sensitive_envelope(
+            mock_logger, "secret_detected", "critical", expected_line=42
+        )
 
     def test_pii_finding_omits_validation_from_history(self):
         from ai_guardian.scanners.secret_scanning import _log_finding_violation
@@ -266,7 +280,9 @@ class TestValidationFieldInViolation:
             },
         }
         _log_finding_violation("test.py", {}, details, violation_logger=mock_logger)
-        self._assert_sensitive_envelope(mock_logger, "pii_detected", "high")
+        self._assert_sensitive_envelope(
+            mock_logger, "pii_detected", "high", expected_line=10
+        )
         assert details["validation"]["status"] == "unverified"
 
     def test_pii_finding_without_validation_uses_minimal_history(self):
@@ -280,7 +296,9 @@ class TestValidationFieldInViolation:
             "line_number": 10,
         }
         _log_finding_violation("test.py", {}, details, violation_logger=mock_logger)
-        self._assert_sensitive_envelope(mock_logger, "pii_detected", "high")
+        self._assert_sensitive_envelope(
+            mock_logger, "pii_detected", "high", expected_line=10
+        )
 
     def test_inactive_validation_status_is_not_persisted(self):
         """Inactive secrets still produce an envelope without validation text."""
@@ -300,7 +318,9 @@ class TestValidationFieldInViolation:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        self._assert_sensitive_envelope(mock_logger, "secret_detected", "critical")
+        self._assert_sensitive_envelope(
+            mock_logger, "secret_detected", "critical", expected_line=5
+        )
         assert details["validation"]["status"] == "inactive"
         assert details["validation"]["message"] == "Token returned 401"
 
@@ -321,6 +341,8 @@ class TestValidationFieldInViolation:
         _log_secret_detection_violation(
             "test.py", {}, details, violation_logger=mock_logger
         )
-        self._assert_sensitive_envelope(mock_logger, "secret_detected", "critical")
+        self._assert_sensitive_envelope(
+            mock_logger, "secret_detected", "critical", expected_line=5
+        )
         assert details["validation"]["status"] == "error"
         assert "Timeout" in details["validation"]["message"]

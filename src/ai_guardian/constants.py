@@ -433,7 +433,7 @@ VIOLATION_FILTER_TYPES = [
     (
         "Sensitive Finding",
         "sensitive_finding",
-        "Secret and PII events; per-finding details are not retained in history",
+        "Secret and PII events; safe source locations may be retained, never matched values",
     ),
     (
         "Secret Redaction",

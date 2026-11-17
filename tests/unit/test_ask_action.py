@@ -3476,8 +3476,9 @@ class TestLogAskDecisionBlock:
         mock_vl.log_sensitive_finding.assert_called_once()
         call_kwargs = mock_vl.log_sensitive_finding.call_args.kwargs
         assert call_kwargs["violation_type"] == "secret_detected"
-        assert "file_path" not in call_kwargs
-        assert "line_number" not in call_kwargs
+        assert call_kwargs["file_path"] == "/app/config.py"
+        assert call_kwargs["line_number"] == 42
+        assert call_kwargs["source_context"] is None
         assert "dialog_wait_ms" not in call_kwargs
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
