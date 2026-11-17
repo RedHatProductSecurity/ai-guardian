@@ -85,7 +85,7 @@ class TestSensitiveViolationProjection:
         from ai_guardian.violations import command_context
 
         monkeypatch.setattr(
-            command_context, "_source_text_is_verified_safe", lambda _value: True
+            command_context, "_source_path_is_verified_safe", lambda _value: True
         )
 
         private_marker = "synthetic-private-rest-value"

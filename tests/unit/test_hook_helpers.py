@@ -213,6 +213,12 @@ class TestLogViolationPii:
             "violation_type": "pii_detected",
             "severity": result.severity,
             "violation_id": result.id,
+            "file_path": None,
+            "line_number": None,
+            "end_line": None,
+            "start_column": None,
+            "end_column": None,
+            "source_context": None,
         }
 
     def test_context_overrides_are_not_persisted(self):

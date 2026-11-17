@@ -36,7 +36,7 @@ _SENSITIVE_SOURCE_CONTEXTS = {
 
 @lru_cache(maxsize=1)
 def _origin_command_redactor():
-    """Build the bundled secret/PII matcher used for command privacy checks."""
+    """Build the bundled secret/PII matcher used for source-metadata checks."""
     from ai_guardian.scanners.secret_redactor import SecretRedactor
 
     return SecretRedactor(
@@ -53,14 +53,26 @@ def _source_text_is_verified_safe(text: str) -> bool:
         has_secrets, scan_error = check_secrets(text, filename="source_context")
         if has_secrets or scan_error:
             return False
+    except Exception:
+        logger.warning(
+            "Could not verify source context; omitting it from violation history"
+        )
+        return False
 
+    return _bundled_redactor_verifies_safe(text, source_name="source context")
+
+
+def _bundled_redactor_verifies_safe(text: str, *, source_name: str) -> bool:
+    """Check bounded source metadata with bundled secret/PII rules in-process."""
+    try:
         redactor = _origin_command_redactor()
         compiled_pii_types = getattr(redactor, "compiled_pii_types", None)
         if not isinstance(compiled_pii_types, set) or not set(
             _ORIGIN_COMMAND_PII_TYPES
         ).issubset(compiled_pii_types):
             logger.warning(
-                "PII rules unavailable; omitting source context from violation history"
+                "PII rules unavailable; omitting %s from violation history",
+                source_name,
             )
             return False
 
@@ -76,11 +88,16 @@ def _source_text_is_verified_safe(text: str) -> bool:
             return False
     except Exception:
         logger.warning(
-            "Could not verify source context; omitting it from violation history"
+            "Could not verify %s; omitting it from violation history", source_name
         )
         return False
 
     return True
+
+
+def _source_path_is_verified_safe(file_path: str) -> bool:
+    """Verify a file path with bundled rules without spawning scanner processes."""
+    return _bundled_redactor_verifies_safe(file_path, source_name="source path")
 
 
 def sanitize_origin_command(command: object) -> Optional[str]:
@@ -121,7 +138,7 @@ def has_usable_source_file(file_path: object) -> bool:
 
 
 def sanitize_sensitive_file_path(file_path: object) -> Optional[str]:
-    """Return a bounded printable path only when secret and PII checks verify it safe."""
+    """Return a bounded printable path only when bundled secret/PII checks verify it."""
     if not isinstance(file_path, str) or not has_usable_source_file(file_path):
         return None
     candidate = file_path.strip()
@@ -131,7 +148,7 @@ def sanitize_sensitive_file_path(file_path: object) -> Optional[str]:
     # useful for a warning, but is not an exact locator suitable for history.
     if candidate.startswith(("...", "…")):
         return None
-    if not _source_text_is_verified_safe(file_path):
+    if not _source_path_is_verified_safe(file_path):
         return None
     return file_path
 

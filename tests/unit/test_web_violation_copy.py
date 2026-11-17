@@ -25,7 +25,7 @@ class TestFormatViolationMarkdown:
             },
         }
         with patch(
-            "ai_guardian.violations.command_context._source_text_is_verified_safe",
+            "ai_guardian.violations.command_context._source_path_is_verified_safe",
             return_value=True,
         ):
             md = _format_violation_markdown(v)
@@ -52,7 +52,7 @@ class TestFormatViolationMarkdown:
             },
         }
         with patch(
-            "ai_guardian.violations.command_context._source_text_is_verified_safe",
+            "ai_guardian.violations.command_context._source_path_is_verified_safe",
             return_value=True,
         ):
             md = _format_violation_markdown(v)
@@ -84,7 +84,7 @@ class TestFormatViolationMarkdown:
             "blocked": {"file_path": "test.py"},
         }
         with patch(
-            "ai_guardian.violations.command_context._source_text_is_verified_safe",
+            "ai_guardian.violations.command_context._source_path_is_verified_safe",
             return_value=True,
         ):
             md = _format_violation_markdown(v)
@@ -282,7 +282,7 @@ class TestFormatViolationMarkdown:
 
     def test_legacy_sensitive_copy_omits_unverified_path(self):
         with patch(
-            "ai_guardian.violations.command_context._source_text_is_verified_safe",
+            "ai_guardian.violations.command_context._source_path_is_verified_safe",
             return_value=False,
         ):
             markdown = _format_violation_markdown(

@@ -428,7 +428,7 @@ def test_sensitive_finding_rejects_unverified_path_and_invalid_coordinates(
     from ai_guardian.violations import command_context
 
     monkeypatch.setattr(
-        command_context, "_source_text_is_verified_safe", lambda _: False
+        command_context, "_source_path_is_verified_safe", lambda _: False
     )
     logger = _logger(tmp_path / "violations.jsonl")
     logger.log_sensitive_finding(

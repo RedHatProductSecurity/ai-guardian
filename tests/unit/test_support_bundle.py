@@ -180,7 +180,7 @@ class TestSanitizeViolations:
         from ai_guardian.violations import command_context
 
         monkeypatch.setattr(
-            command_context, "_source_text_is_verified_safe", lambda _value: False
+            command_context, "_source_path_is_verified_safe", lambda _value: False
         )
         private_marker = "unverified-path-value"
         sanitized, _count = _sanitize_violations(

@@ -148,7 +148,7 @@ def test_legacy_sensitive_cli_history_shows_generic_safe_location(capsys, monkey
     from ai_guardian.violations import command_context
 
     monkeypatch.setattr(
-        command_context, "_source_text_is_verified_safe", lambda _value: True
+        command_context, "_source_path_is_verified_safe", lambda _value: True
     )
 
     private_marker = "synthetic-private-cli-value"

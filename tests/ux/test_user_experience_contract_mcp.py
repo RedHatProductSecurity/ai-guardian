@@ -879,7 +879,7 @@ class MCPBlockReasonUXTest(TestCase):
         private_marker = "synthetic-legacy-match-marker"
         with (
             patch(
-                "ai_guardian.violations.command_context._source_text_is_verified_safe",
+                "ai_guardian.violations.command_context._source_path_is_verified_safe",
                 return_value=True,
             ),
             patch("ai_guardian.violations.logger.ViolationLogger") as mock_vl_cls,

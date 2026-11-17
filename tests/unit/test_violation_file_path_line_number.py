@@ -227,8 +227,23 @@ class TestSensitiveViolationHistory:
         from ai_guardian.violations import command_context
 
         monkeypatch.setattr(
-            command_context, "_source_text_is_verified_safe", lambda _value: True
+            command_context, "_source_path_is_verified_safe", lambda _value: True
         )
+
+    def test_path_validation_uses_bundled_checks_without_external_scanner(self):
+        from ai_guardian.violations.command_context import sanitize_sensitive_file_path
+
+        with mock.patch(
+            "ai_guardian.scanners.secret_scanning.check_secrets",
+            side_effect=AssertionError("path validation must not spawn a scanner"),
+        ):
+            assert sanitize_sensitive_file_path("/repo/src/data.csv") == (
+                "/repo/src/data.csv"
+            )
+            assert (
+                sanitize_sensitive_file_path("/repo/person@example.test/data.csv")
+                is None
+            )
 
     def test_pretooluse_pii_retains_safe_path(self, monkeypatch):
         self._allow_synthetic_paths(monkeypatch)
