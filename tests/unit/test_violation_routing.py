@@ -45,7 +45,17 @@ class TestCategoryViolationRouting:
     def test_pii_persistence_omits_engine_and_rule_details(self):
         mock_logger = self._call_log_finding("pii", rule_id="pii-ssn")
         kwargs = mock_logger.log_sensitive_finding.call_args.kwargs
-        assert set(kwargs) == {"violation_type", "severity", "violation_id"}
+        assert kwargs == {
+            "violation_type": "pii_detected",
+            "severity": "high",
+            "violation_id": kwargs["violation_id"],
+            "file_path": "test.py",
+            "line_number": 1,
+            "end_line": None,
+            "start_column": None,
+            "end_column": None,
+            "source_context": "file_content",
+        }
         assert "toml-patterns" not in str(kwargs)
         assert "pii-ssn" not in str(kwargs)
 
@@ -115,7 +125,17 @@ class TestSecretDetectionReasonString:
             "test.py", {}, details, violation_logger=mock_logger
         )
         kwargs = mock_logger.log_sensitive_finding.call_args.kwargs
-        assert set(kwargs) == {"violation_type", "severity", "violation_id"}
+        assert kwargs == {
+            "violation_type": "secret_detected",
+            "severity": "critical",
+            "violation_id": kwargs["violation_id"],
+            "file_path": "test.py",
+            "line_number": None,
+            "end_line": None,
+            "start_column": None,
+            "end_column": None,
+            "source_context": "file_content",
+        }
         assert "toml-patterns" not in str(kwargs)
 
     def test_rule_detail_is_not_persisted(self):

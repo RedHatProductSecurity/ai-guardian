@@ -222,8 +222,29 @@ class GuardSession:
         if not isinstance(ctx, dict):
             ctx = {}
 
+        violation_type = v.get("violation_type", "")
+        legacy_sensitive_type = violation_type in {
+            "secret_detected",
+            "image_secret_detected",
+            "pii_detected",
+        }
+        is_sensitive = violation_type in {
+            "sensitive_finding",
+            "secret_detected",
+            "image_secret_detected",
+            "pii_detected",
+        }
+        if is_sensitive:
+            violation_type = "sensitive_finding"
         raw_message = (
-            v.get("message") or blocked.get("reason") or blocked.get("message") or ""
+            ""
+            if is_sensitive
+            else (
+                v.get("message")
+                or blocked.get("reason")
+                or blocked.get("message")
+                or ""
+            )
         )
         if raw_message:
             result = sanitize_fn(raw_message)
@@ -231,16 +252,54 @@ class GuardSession:
         else:
             safe_message = ""
 
-        return {
-            "violation_type": v.get("violation_type", ""),
+        safe_violation = {
+            "violation_type": violation_type,
             "message": safe_message,
-            "tool_name": ctx.get("tool_name", "") or blocked.get("tool", ""),
-            "tool_use_id": ctx.get("tool_use_id", ""),
-            "session_id": ctx.get("session_id", ""),
+            "tool_name": (
+                ""
+                if is_sensitive
+                else (ctx.get("tool_name", "") or blocked.get("tool", ""))
+            ),
+            "tool_use_id": "" if is_sensitive else ctx.get("tool_use_id", ""),
+            "session_id": "" if is_sensitive else ctx.get("session_id", ""),
             "timestamp": v.get("timestamp", ""),
             "severity": v.get("severity", ""),
-            "policy_decision": safe_policy_decision(v.get("policy_decision")),
+            "policy_decision": (
+                None if is_sensitive else safe_policy_decision(v.get("policy_decision"))
+            ),
         }
+        if is_sensitive:
+            file_path = blocked.get("file_path")
+            if legacy_sensitive_type:
+                from ai_guardian.violations.command_context import (
+                    sanitize_sensitive_file_path,
+                )
+
+                file_path = sanitize_sensitive_file_path(file_path)
+            if (
+                isinstance(file_path, str)
+                and 0 < len(file_path) <= 4096
+                and file_path.isprintable()
+            ):
+                safe_violation["file_path"] = file_path
+            for key, minimum in (
+                ("line_number", 1),
+                ("end_line", 1),
+                ("start_column", 0),
+                ("end_column", 0),
+            ):
+                coordinate = blocked.get(key)
+                if type(coordinate) is int and minimum <= coordinate <= 2**31 - 1:
+                    safe_violation[key] = coordinate
+            if blocked.get("source_context"):
+                from ai_guardian.violations.command_context import (
+                    sensitive_source_context_label,
+                )
+
+                source_label = sensitive_source_context_label(blocked["source_context"])
+                if source_label:
+                    safe_violation["source_context"] = source_label
+        return safe_violation
 
     @staticmethod
     def _merge_results(results: List[CheckResult]) -> CheckResult:

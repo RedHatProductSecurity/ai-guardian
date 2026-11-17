@@ -17,6 +17,10 @@ from ai_guardian.violations.guidance import (
     IMMUTABLE_VIOLATION_NOTICE,
     get_resolution_instructions,
 )
+from ai_guardian.violations.command_context import (
+    sanitize_sensitive_file_path,
+    sensitive_source_context_label,
+)
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.violations.utils import (
     is_immutable_violation,
@@ -52,6 +56,14 @@ DETAIL_FIELDS = {
         ("Action", "action"),
         ("Findings", "total_findings"),
         ("Reason", "reason"),
+    ],
+    "sensitive_finding": [
+        ("File", "file_path"),
+        ("Source", "source_context"),
+        ("Line", "line_number"),
+        ("Column", "start_column"),
+        ("End Line", "end_line"),
+        ("End Column", "end_column"),
     ],
     "tool_permission": [
         ("Tool", "tool_name"),
@@ -200,6 +212,77 @@ def _detail_fields(violation_type: str, blocked: dict) -> list:
     return fields
 
 
+def _sensitive_detail_value(violation_type: str, key: str, value):
+    """Validate optional locator fields before displaying sensitive history."""
+    if violation_type != "sensitive_finding" or value is None:
+        return value
+    if key == "source_context":
+        return sensitive_source_context_label(value)
+    if key == "file_path":
+        return (
+            value
+            if isinstance(value, str) and 0 < len(value) <= 4096 and value.isprintable()
+            else None
+        )
+    if key == "source_command":
+        return (
+            value
+            if isinstance(value, str) and 0 < len(value) <= 500 and value.isprintable()
+            else None
+        )
+    if key in {"line_number", "end_line"}:
+        return value if type(value) is int and 1 <= value <= 2**31 - 1 else None
+    if key in {"start_column", "end_column"}:
+        return value if type(value) is int and 0 <= value <= 2**31 - 1 else None
+    return value
+
+
+def _with_sensitive_blocked_details(violation: dict) -> dict:
+    """Normalize safe locator fields from flat daemon responses for Console views."""
+    vtype = violation.get("violation_type", violation.get("type", ""))
+    if vtype not in {
+        "sensitive_finding",
+        "secret_detected",
+        "image_secret_detected",
+        "pii_detected",
+    }:
+        return violation
+    legacy_sensitive_type = vtype != "sensitive_finding"
+    existing = violation.get("blocked")
+    blocked = dict(existing) if isinstance(existing, dict) else {}
+    for external_key, blocked_key in (
+        ("file", "file_path"),
+        ("line", "line_number"),
+        ("end_line", "end_line"),
+        ("source_context", "source_context"),
+    ):
+        if blocked_key not in blocked and violation.get(external_key) is not None:
+            blocked[blocked_key] = violation[external_key]
+    for external_key, blocked_key in (
+        ("start_column", "start_column"),
+        ("end_column", "end_column"),
+    ):
+        value = violation.get(external_key)
+        if blocked_key not in blocked and type(value) is int and value > 0:
+            # Daemon APIs expose one-based columns; history stores zero-based offsets.
+            blocked[blocked_key] = value - 1
+    file_path = blocked.get("file_path")
+    if legacy_sensitive_type:
+        file_path = sanitize_sensitive_file_path(file_path)
+    if file_path is not None:
+        blocked["file_path"] = file_path
+    else:
+        blocked.pop("file_path", None)
+    normalized = dict(violation)
+    normalized["violation_type"] = "sensitive_finding"
+    normalized.pop("file", None)
+    if "type" in normalized:
+        normalized["type"] = "sensitive_finding"
+    if blocked:
+        normalized["blocked"] = blocked
+    return normalized
+
+
 def _tool_diagnostic_items(violation: dict) -> list:
     """Use one vetted projection for the detail page, dialog, and Markdown copy."""
     diagnostics = violation_input_diagnostics(violation)
@@ -279,7 +362,7 @@ def _render_tool_diagnostics(violation: dict):
 
 def _format_violation_markdown(v: dict) -> str:
     """Format a violation dict as readable Markdown for clipboard sharing."""
-    v = diagnostic_safe_violation(v)
+    v = _with_sensitive_blocked_details(diagnostic_safe_violation(v))
     vtype = v.get("violation_type", v.get("type", "unknown"))
     severity = v.get("severity", "warning")
     timestamp = v.get("timestamp", "")
@@ -292,8 +375,13 @@ def _format_violation_markdown(v: dict) -> str:
 
     fields = _detail_fields(vtype, blocked)
     for label, key in fields:
-        val = blocked.get(key)
+        val = _sensitive_detail_value(vtype, key, blocked.get(key))
         if val is not None:
+            if vtype == "sensitive_finding" and key in {
+                "start_column",
+                "end_column",
+            }:
+                val += 1
             if key == "secret_type":
                 from ai_guardian.scanners.secret_types import get_secret_type_display
 
@@ -310,7 +398,8 @@ def _format_violation_markdown(v: dict) -> str:
 
     suggestion = v.get("suggestion", {})
     if (
-        not is_immutable_violation(v)
+        vtype != "sensitive_finding"
+        and not is_immutable_violation(v)
         and isinstance(suggestion, dict)
         and suggestion.get("rule")
     ):
@@ -318,6 +407,10 @@ def _format_violation_markdown(v: dict) -> str:
             f"**Suggested Rule:**\n```json\n"
             f"{json.dumps(suggestion['rule'], indent=2)}\n```"
         )
+
+    if vtype == "sensitive_finding":
+        instructions, _snippet = get_resolution_instructions(v)
+        lines.append(f"**Privacy Note:** {instructions}")
 
     return "\n".join(lines)
 
@@ -753,7 +846,7 @@ _NO_SUPPRESSION_TYPES = frozenset(
 
 
 def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
-    v = diagnostic_safe_violation(v)
+    v = _with_sensitive_blocked_details(diagnostic_safe_violation(v))
     vtype = v.get("violation_type", v.get("type", "unknown"))
     severity = v.get("severity", "warning")
     timestamp = v.get("timestamp", "")
@@ -801,7 +894,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
         if fields:
             with ui.grid(columns=2).classes("gap-1 mt-1"):
                 for label, key in fields:
-                    val = blocked.get(key)
+                    val = _sensitive_detail_value(vtype, key, blocked.get(key))
                     if val is not None:
                         ui.label(f"{label}:").classes("text-xs text-grey-6")
                         display = str(val)
@@ -812,6 +905,12 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
 
                             display = get_secret_type_display(display)
                         if key == "start_column" and isinstance(val, int):
+                            display = str(val + 1)
+                        if (
+                            vtype == "sensitive_finding"
+                            and key == "end_column"
+                            and isinstance(val, int)
+                        ):
                             display = str(val + 1)
                         if isinstance(val, list):
                             display = ", ".join(str(x) for x in val)

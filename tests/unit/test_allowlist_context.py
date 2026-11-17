@@ -176,7 +176,15 @@ def test_sensitive_shared_logger_omits_allowlist_source_metadata():
         "violation_type": "secret_detected",
         "severity": result.severity,
         "violation_id": result.id,
+        "file_path": source_path,
+        "line_number": 1,
+        "end_line": None,
+        "start_column": None,
+        "end_column": None,
+        "source_context": None,
     }
+    assert "SENSITIVE_VALUE" not in str(logger_calls[0])
+    assert "allowlist_content" not in str(logger_calls[0])
     assert "SENSITIVE_VALUE" not in json.dumps(logger_calls)
 
 

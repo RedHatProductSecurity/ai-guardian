@@ -1655,6 +1655,12 @@ def _log_scan_findings(findings: list, args) -> None:
                 vlogger.log_sensitive_finding(
                     violation_type=vtype,
                     severity=finding.get("severity", "warning"),
+                    file_path=finding.get("file_path"),
+                    line_number=finding.get("line_number"),
+                    end_line=finding.get("end_line"),
+                    start_column=finding.get("start_column"),
+                    end_column=finding.get("end_column"),
+                    source_context="file_scan",
                 )
                 continue
 

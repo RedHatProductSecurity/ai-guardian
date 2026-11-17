@@ -161,10 +161,42 @@ def log_violation(
             or sensitive_type == "image_secret_detected"
             or sensitive_type == "pii_detected"
         ):
+            overrides = blocked_overrides or {}
+            from ai_guardian.violations.command_context import (
+                normalize_sensitive_source_context,
+            )
+
+            safe_source_context = normalize_sensitive_source_context(source)
+            if safe_source_context is None:
+                safe_source_context = normalize_sensitive_source_context(
+                    context.hook_event
+                )
             violation_logger.log_sensitive_finding(
                 violation_type=sensitive_type,
                 severity=result.severity,
                 violation_id=result.id,
+                file_path=result.file_path or overrides.get("file_path"),
+                line_number=(
+                    result.line_number
+                    if result.line_number is not None
+                    else overrides.get("line_number")
+                ),
+                end_line=(
+                    result.end_line
+                    if result.end_line is not None
+                    else overrides.get("end_line")
+                ),
+                start_column=(
+                    result.start_column
+                    if result.start_column is not None
+                    else overrides.get("start_column")
+                ),
+                end_column=(
+                    result.end_column
+                    if result.end_column is not None
+                    else overrides.get("end_column")
+                ),
+                source_context=safe_source_context,
             )
             return
 
