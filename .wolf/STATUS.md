@@ -7,6 +7,18 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-16 (UTC)
 
+## Issue #2758 PyPI social preview image — 2026-11-16
+
+- Confirmed the live `ai-guardian` PyPI page uses PyPI's generic `og:image`; the
+  project logo appears in the README body only. PyPI's public project metadata
+  docs and the `[project]` metadata specification do not offer a social-image
+  field or documented maintainer setting.
+- Warehouse issue #2211 remains open (latest activity Sep 6, 2026). No supported
+  package-metadata-only fix is available; do not add a non-standard field.
+- Checked the applicable acceptance criteria, added the evidence to GitHub #2758,
+  applied the `done` label, and saved a DAF note. No repository code/docs changes
+  were needed.
+
 ## Issue #2760 setup scanner availability — 2026-11-16
 
 - On the existing managed DAF branch `2760`, updated every setup path that
