@@ -77,6 +77,65 @@ class TestLocalRouting:
         ]
 
 
+class TestSensitiveViolationProjection:
+    def test_local_api_projects_only_safe_locator_fields(self, monkeypatch):
+        from unittest.mock import MagicMock, patch
+
+        from ai_guardian.daemon.multi_client import MultiDaemonClient
+        from ai_guardian.violations import command_context
+
+        monkeypatch.setattr(
+            command_context, "_source_text_is_verified_safe", lambda _value: True
+        )
+
+        private_marker = "synthetic-private-rest-value"
+        history = MagicMock()
+        history.get_recent_violations.return_value = [
+            {
+                "violation_type": "secret_detected",
+                "severity": "high",
+                "file_path": "/should/not/use/context.csv",
+                "blocked": {
+                    "file_path": "/repo/source.csv",
+                    "line_number": 9,
+                    "start_column": 0,
+                    "end_line": 9,
+                    "end_column": 5,
+                    "source_context": "posttooluse",
+                    "matched_text": private_marker,
+                },
+                "suggestion": {"message": private_marker},
+                "policy_decision": {"reason": private_marker},
+            }
+        ]
+
+        with (
+            patch(
+                "ai_guardian.violations.logger.ViolationLogger", return_value=history
+            ),
+            patch(
+                "ai_guardian.violations.notifications.get_recent_notification_events",
+                return_value=[],
+            ),
+        ):
+            response = MultiDaemonClient._local_violations(10, None)
+
+        violation = response["violations"][0]
+        assert violation["violation_type"] == "sensitive_finding"
+        assert violation["file"] == "/repo/source.csv"
+        assert violation["line"] == 9
+        assert violation["start_column"] == 1
+        assert violation["end_line"] == 9
+        assert violation["end_column"] == 6
+        assert violation["source_context"] == "Tool output"
+        assert "tool" not in violation
+        assert "session_id" not in violation
+        assert "action" not in violation
+        assert "suggestion" not in violation
+        assert "policy_decision" not in violation
+        assert private_marker not in str(violation)
+
+
 class TestPerformanceRouting:
     def test_local_performance_exposes_paused_state(self):
         from ai_guardian.reporting.latency import LatencyReport

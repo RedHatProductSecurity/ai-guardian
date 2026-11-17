@@ -1676,7 +1676,10 @@ Returns a dict:
 
 Returns recent hook-triggered violation records as a list. Results are sanitized
 before returning and include `violation_type`, `message`, `tool_name`,
-`tool_use_id`, `session_id`, `timestamp`, and `severity`.
+`tool_use_id`, `session_id`, `timestamp`, and `severity`. Sensitive findings may
+also include a verified `file_path`, `line_number`, and source columns when
+available, or a fixed `source_context` label; matched values and snippets are
+excluded.
 
 Use `sensitive_finding` to filter the consolidated, privacy-safe sensitive
 category. For compatibility, `secret_detected`, `image_secret_detected`, and

@@ -729,17 +729,17 @@ class MCPBlockReasonUXTest(TestCase):
 
     def test_violations_provide_actual_block_reason(self):
         """
-        USER EXPERIENCE: sensitive findings use the privacy-safe generic category
+        USER EXPERIENCE: sensitive findings expose only a safe locator
 
-        Sensitive history intentionally does not preserve the scanner subtype,
-        source content, location, or per-finding details. The MCP response must
-        report the consolidated category instead of implying a more specific
-        reason than the stored record supports.
+        Sensitive history does not preserve the scanner subtype, source content,
+        matched values, or per-finding detector details. A sanitized file path and
+        source coordinates may be exposed when they were safely retained.
 
         Expected:
         ✅ Violation type is "sensitive_finding"
         ✅ Severity remains available
-        ❌ No original subtype, finding ID, file path, or line is exposed
+        ❌ No original subtype, finding ID, matched value, or snippet is exposed
+        ✅ Missing safe location remains unavailable rather than fabricated
         """
         from unittest.mock import MagicMock, patch
         from ai_guardian.mcp.server import create_server
@@ -821,6 +821,93 @@ class MCPBlockReasonUXTest(TestCase):
             assert "private-event-id" not in str(violation)
             assert "id" not in violation
             assert "line" not in violation
+
+    def test_sensitive_history_returns_safe_location_without_finding_content(self):
+        """
+        USER EXPERIENCE: safe sensitive locator → MCP reports file and coordinates.
+
+        The generic category and severity remain available, but matched values,
+        snippets, original subtypes, IDs, context, and detector metadata stay out
+        of the agent-facing response.
+        """
+        from unittest.mock import MagicMock, patch
+
+        from ai_guardian.mcp.server import create_server
+
+        private_marker = "synthetic-private-match-marker"
+        with patch("ai_guardian.violations.logger.ViolationLogger") as mock_vl_cls:
+            mock_vl = MagicMock()
+            mock_vl.get_recent_violations.return_value = [
+                {
+                    "timestamp": "2026-05-13T10:00:00Z",
+                    "violation_type": "sensitive_finding",
+                    "severity": "high",
+                    "blocked": {
+                        "file_path": "/workspace/src/data.csv",
+                        "line_number": 12,
+                        "start_column": 0,
+                        "end_column": 8,
+                        "matched_text": private_marker,
+                        "secret_type": "synthetic-secret-kind",
+                    },
+                    "context": {"source": private_marker},
+                    "policy_decision": {"reason": private_marker},
+                }
+            ]
+            mock_vl_cls.return_value = mock_vl
+
+            tool = create_server()._tool_manager._tools["get_violations"]
+            result = tool.fn(limit=1)
+
+        violation = result["violations"][0]
+        assert violation["type"] == "sensitive_finding"
+        assert violation["tool"] == ""
+        assert violation["file"] == "/workspace/src/data.csv"
+        assert violation["line"] == 12
+        assert violation["start_column"] == 1
+        assert violation["end_column"] == 9
+        assert private_marker not in str(violation)
+        assert "secret_type" not in violation
+        assert "policy_decision" not in violation
+
+    def test_legacy_sensitive_history_is_projected_to_generic_safe_location(self):
+        """Legacy subtype records retain only safe locator fields in MCP output."""
+        from unittest.mock import MagicMock, patch
+
+        from ai_guardian.mcp.server import create_server
+
+        private_marker = "synthetic-legacy-match-marker"
+        with (
+            patch(
+                "ai_guardian.violations.command_context._source_text_is_verified_safe",
+                return_value=True,
+            ),
+            patch("ai_guardian.violations.logger.ViolationLogger") as mock_vl_cls,
+        ):
+            mock_vl = MagicMock()
+            mock_vl.get_recent_violations.return_value = [
+                {
+                    "violation_type": "secret_detected",
+                    "severity": "warning",
+                    "blocked": {
+                        "file_path": "/workspace/legacy.txt",
+                        "line_number": 4,
+                        "matched_text": private_marker,
+                        "secret_type": "legacy-subtype",
+                    },
+                }
+            ]
+            mock_vl_cls.return_value = mock_vl
+
+            tool = create_server()._tool_manager._tools["get_violations"]
+            result = tool.fn(violation_type="secret_detected", limit=1)
+
+        violation = result["violations"][0]
+        assert violation["type"] == "sensitive_finding"
+        assert violation["file"] == "/workspace/legacy.txt"
+        assert violation["line"] == 4
+        assert private_marker not in str(violation)
+        assert "secret_type" not in violation
 
     def test_file_content_prompt_injection_reports_scanned_path(self):
         """

@@ -86,6 +86,66 @@ def _format_duration_ago(secs):
     return f"{secs // 86400}d ago"
 
 
+def _sensitive_finding_location_lines(blocked):
+    """Format only the safe locator fields retained for sensitive history."""
+    from ai_guardian.violations.command_context import (
+        sensitive_source_context_label,
+    )
+
+    file_path = blocked.get("file_path")
+    if not (
+        isinstance(file_path, str)
+        and 0 < len(file_path) <= 4096
+        and file_path.isprintable()
+    ):
+        file_path = None
+    line = blocked.get("line_number")
+    line = line if type(line) is int and 1 <= line <= 2**31 - 1 else None
+    end_line = blocked.get("end_line")
+    end_line = (
+        end_line if type(end_line) is int and 1 <= end_line <= 2**31 - 1 else None
+    )
+    column = blocked.get("start_column")
+    column = column if type(column) is int and 0 <= column <= 2**31 - 1 else None
+    end_column = blocked.get("end_column")
+    end_column = (
+        end_column if type(end_column) is int and 0 <= end_column <= 2**31 - 1 else None
+    )
+    lines = []
+    if file_path:
+        location = f"  File: {file_path}"
+        if line is not None:
+            line_detail = (
+                f"lines {line}-{end_line}"
+                if end_line is not None and end_line != line
+                else f"line {line}"
+            )
+            if column is not None:
+                line_detail += f", column {column + 1}"
+                if end_column is not None:
+                    line_detail += f"-{end_column + 1}"
+            location += f" ({line_detail})"
+        lines.append(location)
+    else:
+        source_label = sensitive_source_context_label(blocked.get("source_context"))
+        if source_label:
+            context_line = f"  Source: {source_label}"
+            if line is not None:
+                context_line += f" (line {line}"
+                if column is not None:
+                    context_line += f", column {column + 1}"
+                context_line += ")"
+            context_line += "; precise location was not retained"
+            lines.append(context_line)
+        elif line is not None:
+            lines.append(f"  Line: {line}; precise file location was not retained")
+        else:
+            lines.append(
+                "  Source location unavailable; precise location was not retained"
+            )
+    return lines
+
+
 def _handle_violations_command(args):
     """
     Handle the violations subcommand.
@@ -145,10 +205,22 @@ def _handle_violations_command(args):
 
     for v in violations:
         timestamp = v.get("timestamp", "Unknown")
-        vtype = v.get("violation_type", "unknown").upper().replace("_", " ")
+        sensitive_type = v.get("violation_type") in {
+            "sensitive_finding",
+            "secret_detected",
+            "image_secret_detected",
+            "pii_detected",
+        }
+        vtype = (
+            "SENSITIVE FINDING"
+            if sensitive_type
+            else v.get("violation_type", "unknown").upper().replace("_", " ")
+        )
         severity = v.get("severity", "warning").upper()
         blocked = v.get("blocked", {})
         suggestion = v.get("suggestion", {})
+        if sensitive_type:
+            suggestion = {}
 
         # Format severity with color indicators
         severity_indicator = {"WARNING": "⚠", "HIGH": "🔴", "CRITICAL": "🔒"}.get(
@@ -173,28 +245,20 @@ def _handle_violations_command(args):
             print(f"  File: {file_path}")
             print(f"  Denied by: {denied_dir}/.ai-read-deny")
 
-        elif v.get("violation_type") == ViolationType.SECRET_DETECTED:
-            source = blocked.get("source", "unknown")
-            file_path = blocked.get("file_path")
-            if file_path:
-                location = f"  File: {file_path}"
-                line_number = blocked.get("line_number")
-                if line_number:
-                    end_line = blocked.get("end_line")
-                    start_col = blocked.get("start_column")
-                    if end_line and end_line != line_number:
-                        location += f" (lines {line_number}-{end_line})"
-                    elif start_col is not None:
-                        location += f" (line {line_number}, col {start_col + 1})"
-                    else:
-                        location += f" (line {line_number})"
-                print(location)
-            else:
-                print(f"  Source: {source}")
-            from ai_guardian.scanners.secret_types import get_secret_type_display
+        elif sensitive_type:
+            if v.get("violation_type") != "sensitive_finding":
+                from ai_guardian.violations.command_context import (
+                    sanitize_sensitive_file_path,
+                )
 
-            secret_type = blocked.get("secret_type", "Unknown")
-            print(f"  Secret type: {get_secret_type_display(secret_type)}")
+                blocked = dict(blocked) if isinstance(blocked, dict) else {}
+                blocked["file_path"] = sanitize_sensitive_file_path(
+                    blocked.get("file_path")
+                )
+            for locator_line in _sensitive_finding_location_lines(
+                blocked if isinstance(blocked, dict) else {}
+            ):
+                print(locator_line)
 
         elif v.get("violation_type") in (
             ViolationType.PROMPT_INJECTION,

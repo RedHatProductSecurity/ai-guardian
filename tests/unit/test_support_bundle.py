@@ -117,7 +117,7 @@ class TestSanitizeViolations:
         violations = [
             {
                 "timestamp": "2026-05-09T10:00:00Z",
-                "violation_type": "secret_detected",
+                "violation_type": "prompt_injection",
                 "context": {"file_path": "/home/user/project/src/secrets.py"},
             }
         ]
@@ -135,6 +135,70 @@ class TestSanitizeViolations:
         ]
         sanitized, count = _sanitize_violations(violations)
         assert "content_preview" not in sanitized[0]["context"]
+
+    def test_sensitive_history_keeps_only_truncated_safe_locator(self):
+        private_marker = "synthetic-private-history-value"
+        violations = [
+            {
+                "id": "viol_safe123",
+                "timestamp": "2026-05-09T10:00:00Z",
+                "violation_type": "sensitive_finding",
+                "severity": "high",
+                "context": {"matched_text": private_marker},
+                "blocked": {
+                    "file_path": "/home/user/project/src/data.csv",
+                    "line_number": 7,
+                    "start_column": 0,
+                    "end_column": 8,
+                    "source_context": "tool_output",
+                    "matched_text": private_marker,
+                    "secret_type": "private-subtype",
+                    "source_command": private_marker,
+                },
+                "suggestion": {"message": private_marker},
+                "policy_decision": {"reason": private_marker},
+            }
+        ]
+
+        sanitized, count = _sanitize_violations(violations)
+
+        entry = sanitized[0]
+        assert entry["blocked"] == {
+            "file_path": str(Path("...") / "src" / "data.csv"),
+            "line_number": 7,
+            "start_column": 0,
+            "end_column": 8,
+            "source_context": "Tool output",
+        }
+        assert "context" not in entry
+        assert "suggestion" not in entry
+        assert "policy_decision" not in entry
+        assert private_marker not in json.dumps(entry)
+        assert count >= 1
+
+    def test_legacy_sensitive_history_drops_unverified_path(self, monkeypatch):
+        from ai_guardian.violations import command_context
+
+        monkeypatch.setattr(
+            command_context, "_source_text_is_verified_safe", lambda _value: False
+        )
+        private_marker = "unverified-path-value"
+        sanitized, _count = _sanitize_violations(
+            [
+                {
+                    "violation_type": "secret_detected",
+                    "blocked": {
+                        "file_path": f"/private/{private_marker}/data.csv",
+                        "line_number": 6,
+                        "secret_type": "legacy-subtype",
+                    },
+                }
+            ]
+        )
+
+        assert sanitized[0]["violation_type"] == "sensitive_finding"
+        assert "file_path" not in sanitized[0]["blocked"]
+        assert private_marker not in json.dumps(sanitized)
 
 
 class TestGetSystemInfo:

@@ -103,8 +103,8 @@ def test_heuristic_details_offer_private_review_not_candidate_enrollment():
     assert "SYNTHETIC_CANDIDATE" not in instructions
 
 
-def test_sensitive_history_entry_explains_details_are_not_retained():
-    """USER EXPERIENCE: sensitive event → generic, privacy-preserving history."""
+def test_sensitive_history_entry_explains_safe_location_retention():
+    """USER EXPERIENCE: sensitive event → safe locator when available, no content."""
     instructions, snippet = get_resolution_instructions(
         {
             "violation_type": "sensitive_finding",
@@ -114,14 +114,71 @@ def test_sensitive_history_entry_explains_details_are_not_retained():
     )
 
     assert instructions == (
-        "A secret or personal-data finding was recorded. Per-finding details "
-        "are intentionally not retained in violation history for privacy."
+        "A secret or personal-data finding was recorded. No safe source location "
+        "or origin context was available, so the precise location was not retained. "
+        "Matched values and snippets are not retained."
     )
     assert snippet == ""
     assert any(
         label == "Sensitive Finding" and value == "sensitive_finding"
         for label, value, _ in VIOLATION_FILTER_TYPES
     )
+
+
+def test_sensitive_history_guidance_reports_a_safe_location_without_subtype():
+    instructions, snippet = get_resolution_instructions(
+        {
+            "violation_type": "sensitive_finding",
+            "blocked": {"file_path": "/repo/data.csv", "line_number": 12},
+        }
+    )
+
+    assert "sanitized file path and any available position are retained" in instructions
+    assert "Matched values and snippets are not retained" in instructions
+    assert "secret" not in instructions.lower().replace("secret or personal-data", "")
+    assert snippet == ""
+
+
+def test_legacy_sensitive_cli_history_shows_generic_safe_location(capsys, monkeypatch):
+    """USER EXPERIENCE: CLI history → generic category and safe location only."""
+    from argparse import Namespace
+    from unittest.mock import MagicMock, patch
+
+    from ai_guardian.cli_handlers import _handle_violations_command
+    from ai_guardian.violations import command_context
+
+    monkeypatch.setattr(
+        command_context, "_source_text_is_verified_safe", lambda _value: True
+    )
+
+    private_marker = "synthetic-private-cli-value"
+    history = MagicMock()
+    history.get_recent_violations.return_value = [
+        {
+            "violation_type": "secret_detected",
+            "severity": "high",
+            "timestamp": "2026-05-13T10:00:00Z",
+            "blocked": {
+                "file_path": "/repo/data.csv",
+                "line_number": 8,
+                "matched_text": private_marker,
+                "secret_type": "legacy-secret-kind",
+                "source": "legacy-source-detail",
+            },
+            "suggestion": {"action": private_marker},
+        }
+    ]
+    args = Namespace(clear=False, yes=False, export=None, limit=10, type=None)
+
+    with patch("ai_guardian.violations.logger.ViolationLogger", return_value=history):
+        assert _handle_violations_command(args) == 0
+
+    output = capsys.readouterr().out
+    assert "SENSITIVE FINDING" in output
+    assert "File: /repo/data.csv (line 8)" in output
+    assert private_marker not in output
+    assert "legacy-secret-kind" not in output
+    assert "legacy-source-detail" not in output
 
 
 def test_secret_statistics_disclose_aggregate_only_history():

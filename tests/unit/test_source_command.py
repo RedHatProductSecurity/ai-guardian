@@ -232,6 +232,12 @@ class TestSourceCommandInViolationDicts:
             "violation_type": "pii_detected",
             "severity": result.severity,
             "violation_id": result.id,
+            "file_path": "tool_result:grep",
+            "line_number": 1,
+            "end_line": None,
+            "start_column": None,
+            "end_column": None,
+            "source_context": None,
         }
         mock_logger.log_violation.assert_not_called()
 
