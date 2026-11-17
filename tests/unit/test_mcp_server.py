@@ -936,12 +936,13 @@ class TestGetViolations:
         result = tool.fn()
         assert result["count"] == 1
         v = result["violations"][0]
-        assert v["type"] == "secret_detected"
+        assert v["type"] == "sensitive_finding"
         assert v["severity"] == "critical"
         assert "context" not in v
         assert "blocked" not in v
-        assert v["policy_decision"]["decision"] == "block"
-        assert "secret_value" not in json.dumps(v["policy_decision"])
+        assert v["tool"] == ""
+        assert v["file"] == ""
+        assert "policy_decision" not in v
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_filters_annotation_suppressed(self, mock_vl_cls):
@@ -969,7 +970,7 @@ class TestGetViolations:
         tool = server._tool_manager._tools["get_violations"]
         result = tool.fn()
         assert result["count"] == 1
-        assert result["violations"][0]["type"] == "secret_detected"
+        assert result["violations"][0]["type"] == "sensitive_finding"
         assert all(v["type"] != "annotation_suppressed" for v in result["violations"])
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
@@ -1071,8 +1072,10 @@ class TestGetViolations:
         assert v["line"] == 5
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
-    def test_violations_include_tool_from_context(self, mock_vl_cls):
-        """tool field reads from context['tool_name'] with priority."""
+    def test_sensitive_violations_do_not_expose_tool_or_source_context(
+        self, mock_vl_cls
+    ):
+        """Legacy sensitive tool/context details are not exposed to MCP."""
         mock_vl = MagicMock()
         mock_vl.get_recent_violations.return_value = [
             {
@@ -1093,9 +1096,10 @@ class TestGetViolations:
         tool = server._tool_manager._tools["get_violations"]
         result = tool.fn()
         v = result["violations"][0]
-        assert v["tool"] == "Bash"
-        assert v["file"] == "/tmp/test.py"
-        assert v["source"] == "scanner"
+        assert v["type"] == "sensitive_finding"
+        assert v["tool"] == ""
+        assert v["file"] == ""
+        assert "source" not in v
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_violations_source_field_distinguishes_redaction(self, mock_vl_cls):
@@ -1124,11 +1128,12 @@ class TestGetViolations:
         result = tool.fn()
         assert result["count"] == 2
         assert result["violations"][0]["source"] == "redaction"
-        assert result["violations"][1]["source"] == "scanner"
+        assert result["violations"][1]["type"] == "sensitive_finding"
+        assert "source" not in result["violations"][1]
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_violations_file_fallback_to_context(self, mock_vl_cls):
-        """file field falls back to context['file_path'] when blocked lacks it."""
+        """Sensitive legacy records do not use an unverified context path."""
         mock_vl = MagicMock()
         mock_vl.get_recent_violations.return_value = [
             {
@@ -1144,7 +1149,8 @@ class TestGetViolations:
         server = create_server()
         tool = server._tool_manager._tools["get_violations"]
         result = tool.fn()
-        assert result["violations"][0]["file"] == "/tmp/from_context.py"
+        assert result["violations"][0]["type"] == "sensitive_finding"
+        assert result["violations"][0]["file"] == ""
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_prompt_injection_file_content_includes_location(self, mock_vl_cls):

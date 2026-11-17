@@ -72,9 +72,32 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
             "",
         )
     if vtype == "sensitive_finding":
+        from ai_guardian.violations.command_context import (
+            sensitive_source_context_label,
+        )
+
+        blocked = violation.get("blocked", {})
+        blocked = blocked if isinstance(blocked, dict) else {}
+        if blocked.get("file_path"):
+            detail = (
+                "A sanitized file path and any available position are retained "
+                "below to help locate the finding."
+            )
+        else:
+            source_label = sensitive_source_context_label(blocked.get("source_context"))
+            if source_label:
+                detail = (
+                    f"Source context ({source_label}) is retained, but the precise "
+                    "location was not retained."
+                )
+            else:
+                detail = (
+                    "No safe source location or origin context was available, so "
+                    "the precise location was not retained."
+                )
         return (
-            "A secret or personal-data finding was recorded. Per-finding details "
-            "are intentionally not retained in violation history for privacy.",
+            "A secret or personal-data finding was recorded. "
+            f"{detail} Matched values and snippets are not retained.",
             "",
         )
     blocked = violation.get("blocked", {})

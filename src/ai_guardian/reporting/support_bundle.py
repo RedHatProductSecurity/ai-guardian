@@ -170,6 +170,76 @@ def _sanitize_violations(violations: List[Dict]) -> tuple:
             redactions += 1
 
         entry["context"] = ctx
+        if entry.get("violation_type") in {
+            "sensitive_finding",
+            "secret_detected",
+            "image_secret_detected",
+            "pii_detected",
+        }:
+            legacy_sensitive_type = entry.get("violation_type") != "sensitive_finding"
+            blocked = entry.get("blocked")
+            blocked = blocked if isinstance(blocked, dict) else {}
+            safe_blocked: Dict[str, Any] = {}
+            file_path = blocked.get("file_path")
+            if legacy_sensitive_type:
+                from ai_guardian.violations.command_context import (
+                    sanitize_sensitive_file_path,
+                )
+
+                file_path = sanitize_sensitive_file_path(file_path)
+            if isinstance(file_path, str) and file_path:
+                parts = Path(file_path).parts
+                safe_blocked["file_path"] = (
+                    str(Path("...") / Path(*parts[-2:]))
+                    if len(parts) > 2
+                    else file_path
+                )
+                redactions += int(len(parts) > 2)
+            for key, minimum in (
+                ("line_number", 1),
+                ("end_line", 1),
+                ("start_column", 0),
+                ("end_column", 0),
+            ):
+                value = blocked.get(key)
+                if type(value) is int and minimum <= value <= 2**31 - 1:
+                    safe_blocked[key] = value
+            if blocked.get("source_context") is not None:
+                from ai_guardian.violations.command_context import (
+                    sensitive_source_context_label,
+                )
+
+                source_label = sensitive_source_context_label(
+                    blocked.get("source_context")
+                )
+                if source_label:
+                    safe_blocked["source_context"] = source_label
+            redactions += len(set(blocked) - set(safe_blocked))
+            entry["blocked"] = safe_blocked
+            for key in (
+                "context",
+                "suggestion",
+                "policy_decision",
+                "source_command",
+                "origin_command",
+            ):
+                if entry.pop(key, None) is not None:
+                    redactions += 1
+            allowed_top_level = {
+                "id",
+                "timestamp",
+                "violation_type",
+                "severity",
+                "resolved",
+                "resolved_at",
+                "resolved_action",
+                "blocked",
+            }
+            redactions += len(set(entry) - allowed_top_level)
+            entry = {
+                key: value for key, value in entry.items() if key in allowed_top_level
+            }
+            entry["violation_type"] = "sensitive_finding"
         sanitized.append(entry)
 
     return sanitized, redactions

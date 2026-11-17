@@ -30,6 +30,8 @@ from ai_guardian.web.pages.violations import (
     _show_allow_always_flow,
     _show_ignore_file_flow,
     _show_suppress_in_source_flow,
+    _sensitive_detail_value,
+    _with_sensitive_blocked_details,
 )
 
 
@@ -106,7 +108,7 @@ def create_violation_detail_page(service, daemon_name: str):
 
 def _render_violation_detail(v: dict, service, daemon_name: str):
     """Render full violation details inline on the page."""
-    v = diagnostic_safe_violation(v)
+    v = _with_sensitive_blocked_details(diagnostic_safe_violation(v))
     vtype = v.get("violation_type", v.get("type", "unknown"))
     severity = v.get("severity", "warning")
     timestamp = v.get("timestamp", "")
@@ -156,7 +158,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
             ui.label("Details").classes("text-sm font-bold")
             with ui.grid(columns=2).classes("gap-2 mt-1"):
                 for label, key in fields:
-                    val = blocked.get(key)
+                    val = _sensitive_detail_value(vtype, key, blocked.get(key))
                     if val is not None:
                         ui.label(f"{label}:").classes("text-xs text-grey-6")
                         display = str(val)
@@ -167,6 +169,12 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
 
                             display = get_secret_type_display(display)
                         if key == "start_column" and isinstance(val, int):
+                            display = str(val + 1)
+                        if (
+                            vtype == "sensitive_finding"
+                            and key == "end_column"
+                            and isinstance(val, int)
+                        ):
                             display = str(val + 1)
                         if isinstance(val, list):
                             display = ", ".join(str(x) for x in val)

@@ -467,6 +467,7 @@ def _log_ask_decision(
     finding_fingerprints=None,
     invocation_allowed_findings=None,
     ide_type="unknown",
+    source_context=None,
 ):
     """Log an ask-mode decision (allow or block) to violations.jsonl.
 
@@ -523,6 +524,9 @@ def _log_ask_decision(
                 violation_type=vtype_str,
                 severity="info",
                 violation_id=generate_violation_id(),
+                file_path=file_path,
+                line_number=line_number,
+                source_context=source_context,
             )
         else:
             blocked_info = {

@@ -773,13 +773,46 @@ class TestDirectSessionGetViolations:
 
         assert len(violations) == 1
         v = violations[0]
-        assert v["violation_type"] == "secret_detected"
-        assert v["message"] == "[REDACTED]"
-        assert v["tool_name"] == "Bash"
-        assert v["tool_use_id"] == "toolu_abc123"
-        assert v["session_id"] == "sess_xyz"
+        assert v["violation_type"] == "sensitive_finding"
+        assert v["message"] == ""
+        assert v["tool_name"] == ""
+        assert v["tool_use_id"] == ""
+        assert v["session_id"] == ""
         assert v["timestamp"] == "2026-08-04T12:00:00Z"
         assert v["severity"] == "high"
+        assert v["policy_decision"] is None
+        mock_sanitize.assert_not_called()
+
+    def test_sensitive_violations_include_only_safe_location_fields(self):
+        from ai_guardian.sdk import _DirectSession
+
+        private_marker = "synthetic-private-sdk-value"
+        violation = _DirectSession._sanitize_violation(
+            {
+                "violation_type": "sensitive_finding",
+                "message": private_marker,
+                "severity": "warning",
+                "blocked": {
+                    "file_path": "/repo/private.csv",
+                    "line_number": 10,
+                    "start_column": 0,
+                    "matched_text": private_marker,
+                    "source_context": "tool_input",
+                },
+                "context": {"tool_use_id": private_marker},
+                "policy_decision": {"reason": private_marker},
+            },
+            lambda text: {"sanitized_text": text},
+        )
+
+        assert violation["file_path"] == "/repo/private.csv"
+        assert violation["line_number"] == 10
+        assert violation["start_column"] == 0
+        assert violation["source_context"] == "Tool input"
+        assert violation["message"] == ""
+        assert violation["tool_use_id"] == ""
+        assert violation["policy_decision"] is None
+        assert private_marker not in str(violation)
 
     @patch("ai_guardian.sdk._DirectSession._ensure_config")
     @patch("ai_guardian.violations.logger.ViolationLogger.get_recent_violations")

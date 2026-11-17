@@ -220,9 +220,33 @@ class TestSecretRedactionViolationFields:
 
 
 class TestSensitiveViolationHistory:
-    """Sensitive detections persist only the minimal audit envelope."""
+    """Sensitive detections retain safe locators, never finding content."""
 
-    def test_pretooluse_pii_uses_minimal_history(self):
+    @staticmethod
+    def _allow_synthetic_paths(monkeypatch):
+        from ai_guardian.violations import command_context
+
+        monkeypatch.setattr(
+            command_context, "_source_path_is_verified_safe", lambda _value: True
+        )
+
+    def test_path_validation_uses_bundled_checks_without_external_scanner(self):
+        from ai_guardian.violations.command_context import sanitize_sensitive_file_path
+
+        with mock.patch(
+            "ai_guardian.scanners.secret_scanning.check_secrets",
+            side_effect=AssertionError("path validation must not spawn a scanner"),
+        ):
+            assert sanitize_sensitive_file_path("/repo/src/data.csv") == (
+                "/repo/src/data.csv"
+            )
+            assert (
+                sanitize_sensitive_file_path("/repo/person@example.test/data.csv")
+                is None
+            )
+
+    def test_pretooluse_pii_retains_safe_path(self, monkeypatch):
+        self._allow_synthetic_paths(monkeypatch)
         from ai_guardian.violations.logger import ViolationLogger
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -243,10 +267,11 @@ class TestSensitiveViolationHistory:
                 violations = vl.get_recent_violations(limit=10)
                 assert len(violations) == 1
                 assert violations[0]["violation_type"] == "sensitive_finding"
-                assert "blocked" not in violations[0]
+                assert violations[0]["blocked"] == {"file_path": "/home/user/data.csv"}
                 assert "context" not in violations[0]
 
-    def test_posttooluse_pii_uses_minimal_history(self):
+    def test_posttooluse_pii_retains_fixed_source_context(self, monkeypatch):
+        self._allow_synthetic_paths(monkeypatch)
         from ai_guardian.violations.logger import ViolationLogger
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -267,7 +292,7 @@ class TestSensitiveViolationHistory:
                 violations = vl.get_recent_violations(limit=10)
                 assert len(violations) == 1
                 assert violations[0]["violation_type"] == "sensitive_finding"
-                assert "blocked" not in violations[0]
+                assert violations[0]["blocked"] == {"source_context": "tool_output"}
                 assert "context" not in violations[0]
 
 
@@ -298,10 +323,11 @@ class TestConfigFileExfilViolationFields:
                 assert "line_number" in blocked
 
 
-class TestSecretDetectedViolationFieldsOmitted:
-    """Verify secret findings are persisted without source-derived detail."""
+class TestSecretDetectedViolationFields:
+    """Verify secret history keeps safe locations but omits finding details."""
 
-    def test_secret_details_are_not_persisted(self):
+    def test_secret_retains_safe_path_and_position_only(self, monkeypatch):
+        TestSensitiveViolationHistory._allow_synthetic_paths(monkeypatch)
         from ai_guardian.violations.logger import ViolationLogger
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -327,7 +353,11 @@ class TestSecretDetectedViolationFieldsOmitted:
                 violations = vl.get_recent_violations(limit=10)
                 assert len(violations) == 1
                 assert violations[0]["violation_type"] == "sensitive_finding"
-                assert "blocked" not in violations[0]
+                assert violations[0]["blocked"] == {
+                    "file_path": "/repo/config.py",
+                    "line_number": 42,
+                    "end_line": 42,
+                }
                 assert "context" not in violations[0]
 
 
@@ -382,7 +412,8 @@ class TestViolationHistoryFilePathFields:
         )
         assert "file_path" in blocked
 
-    def test_secret_detected_uses_minimal_history_entry(self):
+    def test_secret_detected_retains_safe_location(self, monkeypatch):
+        TestSensitiveViolationHistory._allow_synthetic_paths(monkeypatch)
         entry = self._log_and_get_entry(
             "secret_detected",
             {
@@ -395,7 +426,10 @@ class TestViolationHistoryFilePathFields:
             severity="critical",
         )
         assert entry["violation_type"] == "sensitive_finding"
-        assert "blocked" not in entry
+        assert entry["blocked"] == {
+            "file_path": "/repo/config.py",
+            "line_number": 10,
+        }
 
     def test_prompt_injection_has_file_path_key(self):
         blocked = self._log_and_get(
@@ -441,7 +475,8 @@ class TestViolationHistoryFilePathFields:
         assert "file_path" in blocked
         assert "line_number" in blocked
 
-    def test_pii_detected_uses_minimal_history_entry(self):
+    def test_pii_detected_retains_safe_location(self, monkeypatch):
+        TestSensitiveViolationHistory._allow_synthetic_paths(monkeypatch)
         entry = self._log_and_get_entry(
             "pii_detected",
             {
@@ -454,7 +489,7 @@ class TestViolationHistoryFilePathFields:
             },
         )
         assert entry["violation_type"] == "sensitive_finding"
-        assert "blocked" not in entry
+        assert entry["blocked"] == {"file_path": "/repo/data.csv"}
 
     def test_config_file_exfil_has_file_path_key(self):
         blocked = self._log_and_get(

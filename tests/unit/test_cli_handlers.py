@@ -11,12 +11,40 @@ from ai_guardian.cli_handlers import (
     _get_client_timeout,
     _set_daemon_mode_in_config,
     _handle_daemon_command,
+    _sensitive_finding_location_lines,
 )
 
 
 class TestGetDaemonMode:
     def test_always_returns_auto(self):
         assert _get_daemon_mode() == "auto"
+
+
+class TestSensitiveFindingLocationOutput:
+    def test_formats_file_location_with_one_based_column(self):
+        assert _sensitive_finding_location_lines(
+            {
+                "file_path": "/repo/data.csv",
+                "line_number": 8,
+                "start_column": 0,
+                "end_column": 10,
+            }
+        ) == ["  File: /repo/data.csv (line 8, column 1-11)"]
+
+    def test_falls_back_to_safe_source_label_without_fabricating_path(self):
+        assert _sensitive_finding_location_lines(
+            {"source_context": "tool_output", "line_number": 5}
+        ) == ["  Source: Tool output (line 5); precise location was not retained"]
+
+    def test_rejects_malformed_location_values(self):
+        assert _sensitive_finding_location_lines(
+            {
+                "file_path": "bad\npath",
+                "line_number": True,
+                "start_column": -1,
+                "source_context": "private user text",
+            }
+        ) == ["  Source location unavailable; precise location was not retained"]
 
 
 class TestGetClientTimeout:

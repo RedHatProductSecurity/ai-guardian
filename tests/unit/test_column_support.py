@@ -738,9 +738,9 @@ class TestSSRFColumn(unittest.TestCase):
 
 
 class TestPiiViolationColumn(unittest.TestCase):
-    """PII history omits source locations via the sensitive logger path."""
+    """PII history forwards only file path and source coordinates."""
 
-    def test_column_is_not_persisted(self):
+    def test_column_is_forwarded_to_sensitive_logger(self):
         from unittest.mock import MagicMock
         from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
         from ai_guardian.violations.log_violation import ScanContext, log_violation
@@ -761,6 +761,19 @@ class TestPiiViolationColumn(unittest.TestCase):
             mock_logger.log_sensitive_finding.call_args.kwargs["violation_type"],
             "pii_detected",
         )
+        self.assertEqual(
+            mock_logger.log_sensitive_finding.call_args.kwargs["file_path"],
+            "test.py",
+        )
+        self.assertEqual(
+            mock_logger.log_sensitive_finding.call_args.kwargs["line_number"], 5
+        )
+        self.assertEqual(
+            mock_logger.log_sensitive_finding.call_args.kwargs["start_column"], 10
+        )
+        self.assertEqual(
+            mock_logger.log_sensitive_finding.call_args.kwargs["end_column"], 30
+        )
         mock_logger.log_violation.assert_not_called()
 
     def test_column_absent_when_none(self):
@@ -778,11 +791,11 @@ class TestPiiViolationColumn(unittest.TestCase):
         )
         log_violation(result, ScanContext(), violation_logger=mock_logger)
         mock_logger.log_sensitive_finding.assert_called_once()
-        self.assertNotIn(
-            "start_column", mock_logger.log_sensitive_finding.call_args.kwargs
+        self.assertIsNone(
+            mock_logger.log_sensitive_finding.call_args.kwargs["start_column"]
         )
-        self.assertNotIn(
-            "end_column", mock_logger.log_sensitive_finding.call_args.kwargs
+        self.assertIsNone(
+            mock_logger.log_sensitive_finding.call_args.kwargs["end_column"]
         )
 
 

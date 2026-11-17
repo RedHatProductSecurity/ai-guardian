@@ -212,8 +212,13 @@ also be returned. An MCP startup failure reports `startup_failure` or
 Use `sensitive_finding` to query the consolidated, privacy-safe sensitive
 category. The legacy filters `secret_detected`, `image_secret_detected`, and
 `pii_detected` remain supported and match consolidated records; a current record
-does not retain which sensitive subtype produced it. The canonical filter also
-includes type-specific sensitive records from older history.
+does not retain which sensitive subtype produced it. When safely available, the
+response includes the sanitized file path and source line/column; otherwise it
+may include a fixed source-context label. Matched values, snippets, detector
+metadata, and sensitive context are never returned. Legacy records are projected
+to the same generic category and safe locator fields, and locationless records
+remain locationless. The canonical filter also includes type-specific sensitive
+records from older history.
 
 Tool-permission entries can include `input_diagnostics` with fixed validation
 subreasons and schema-recognized argument names/types, never payload values or

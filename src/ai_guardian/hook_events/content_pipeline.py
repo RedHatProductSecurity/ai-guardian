@@ -823,6 +823,14 @@ def _handle_pii_result(
     pii_result.extra["action"] = pii_action
     if pii_redactions and pii_redactions[0].get("line_number") is not None:
         pii_result.line_number = pii_redactions[0]["line_number"]
+    if pii_redactions:
+        first_redaction = pii_redactions[0]
+        column = first_redaction.get("column")
+        original_length = first_redaction.get("original_length")
+        if type(column) is int and column > 0:
+            pii_result.start_column = column - 1
+            if type(original_length) is int and original_length > 0:
+                pii_result.end_column = pii_result.start_column + original_length
     pii_result.matched_text = _extract_pii_matched_text(pii_redactions, pii_content)
     pii_result.findings = _pii_redactions_to_findings(
         pii_redactions, pii_content, pii_warning

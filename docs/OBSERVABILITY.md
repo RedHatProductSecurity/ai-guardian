@@ -90,9 +90,10 @@ scanner payloads are not copied into these attributes.
 
 The same decision metadata is embedded in standard `violations.jsonl` entries,
 returned by the daemon REST violation and check endpoints, and exposed in SARIF
-result properties. Sensitive finding history uses a minimal record and omits the
-per-finding policy decision. Existing fields and OTEL span names remain
-compatible with older consumers.
+result properties. Sensitive finding history may retain a verified source path
+and position, but omits matched content, detector details, and the per-finding
+policy decision. Existing fields and OTEL span names remain compatible with
+older consumers.
 
 ## What Gets Exported
 

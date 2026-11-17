@@ -255,7 +255,7 @@ def test_resolution_rewrites_skip_corrupt_and_non_object_lines(tmp_path):
     ["secret_detected", "image_secret_detected", "pii_detected"],
 )
 def test_sensitive_violation_storage_omits_values_and_partial_hints(
-    tmp_path, violation_type
+    tmp_path, violation_type, _safe_origin_command_scanners
 ):
     log_path = tmp_path / "violations.jsonl"
     logger = _logger(log_path)
@@ -302,7 +302,7 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
     stored = json.loads(serialized)
     assert sensitive_value not in serialized
     assert partial_hint not in serialized
-    assert stored["id"] is None
+    assert isinstance(stored["id"], str) and stored["id"]
     assert stored["timestamp"]
     assert stored["violation_type"] == "sensitive_finding"
     assert stored["severity"] == "warning"
@@ -314,7 +314,9 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
         "resolved",
         "resolved_at",
         "resolved_action",
+        "blocked",
     }
+    assert stored["blocked"] == {"file_path": "/repo/config.txt", "line_number": 17}
     assert logger.get_recent_violations(violation_type="sensitive_finding")
     for filtered in (
         logger.get_recent_violations(),
@@ -376,7 +378,7 @@ def test_sensitive_finding_filters_include_legacy_history(tmp_path, legacy_type)
     ],
 )
 def test_sensitive_finding_severity_is_limited_to_known_labels(
-    tmp_path, input_severity, expected_severity
+    tmp_path, input_severity, expected_severity, _safe_origin_command_scanners
 ):
     log_path = tmp_path / "violations.jsonl"
     logger = _logger(log_path)
@@ -388,6 +390,67 @@ def test_sensitive_finding_severity_is_limited_to_known_labels(
 
     stored = json.loads(log_path.read_text(encoding="utf-8"))
     assert stored["severity"] == expected_severity
+
+
+def test_sensitive_finding_keeps_only_safe_location_and_fixed_source_label(
+    tmp_path, _safe_origin_command_scanners
+):
+    logger = _logger(tmp_path / "violations.jsonl")
+
+    logger.log_violation(
+        "pii_detected",
+        blocked={
+            "file_path": "tool_result:grep",
+            "line_number": 5,
+            "end_line": 6,
+            "start_column": 0,
+            "end_column": 14,
+            "source": "PostToolUse",
+            "matched_text": "synthetic-private-value",
+        },
+        context={"hook_event": "PostToolUse", "raw_input": "synthetic-private"},
+    )
+
+    stored = json.loads(logger.log_path.read_text(encoding="utf-8"))
+    assert stored["blocked"] == {
+        "line_number": 5,
+        "end_line": 6,
+        "start_column": 0,
+        "end_column": 14,
+        "source_context": "tool_output",
+    }
+    assert "synthetic-private" not in json.dumps(stored)
+
+
+def test_sensitive_finding_rejects_unverified_path_and_invalid_coordinates(
+    tmp_path, monkeypatch
+):
+    from ai_guardian.violations import command_context
+
+    monkeypatch.setattr(
+        command_context, "_source_path_is_verified_safe", lambda _: False
+    )
+    logger = _logger(tmp_path / "violations.jsonl")
+    logger.log_sensitive_finding(
+        "image_secret_detected",
+        file_path="/repo/private-file.png",
+        line_number=True,
+        start_column=-1,
+        source_context="untrusted user-provided context",
+    )
+
+    stored = json.loads(logger.log_path.read_text(encoding="utf-8"))
+    assert "blocked" not in stored
+
+
+def test_sensitive_finding_generates_id_when_missing(tmp_path):
+    logger = _logger(tmp_path / "violations.jsonl")
+
+    logger.log_sensitive_finding("secret_detected")
+
+    stored = json.loads(logger.log_path.read_text(encoding="utf-8"))
+    assert isinstance(stored["id"], str)
+    assert stored["id"]
 
 
 def test_non_sensitive_violation_storage_keeps_matched_text(tmp_path):

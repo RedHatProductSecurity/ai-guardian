@@ -181,6 +181,7 @@ def log_scan_violation(
     ctx: PostScanContext,
     *,
     source: str = "",
+    file_path: Optional[str] = None,
     blocked_overrides: Optional[Dict[str, Any]] = None,
     context_overrides: Optional[Dict[str, Any]] = None,
     severity_override: Optional[str] = None,
@@ -191,6 +192,13 @@ def log_scan_violation(
         return
 
     result = _effective_scan_result(entry, result, severity_override)
+    if (
+        result.violation_type
+        in {"secret_detected", "image_secret_detected", "pii_detected"}
+        and not result.file_path
+        and file_path
+    ):
+        blocked_overrides = {**(blocked_overrides or {}), "file_path": file_path}
 
     log_violation(
         result,
@@ -341,6 +349,7 @@ def apply_post_scan_pipeline(
                 error_msg=error_msg,
                 file_path=file_path,
                 line_number=result.line_number,
+                source_context=ctx.hook_event,
                 dialog_wait_ms=ask_result.dialog_wait_ms,
                 ide_type=ctx.ide_type_value,
                 invocation_allowed_findings=ctx.invocation_allowed_findings,
@@ -425,6 +434,7 @@ def apply_post_scan_pipeline(
             result,
             ctx,
             source=source,
+            file_path=file_path,
             blocked_overrides=blocked_overrides,
             context_overrides=context_overrides,
             severity_override=severity_override,

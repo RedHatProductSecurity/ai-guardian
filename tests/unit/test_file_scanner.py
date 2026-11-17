@@ -50,6 +50,12 @@ class TestFileScannerSecretScanning:
         violation_logger.log_sensitive_finding.assert_called_once_with(
             violation_type="secret_detected",
             severity="critical",
+            file_path=None,
+            line_number=None,
+            end_line=None,
+            start_column=None,
+            end_column=None,
+            source_context="file_scan",
         )
         violation_logger.log_violation.assert_not_called()
 

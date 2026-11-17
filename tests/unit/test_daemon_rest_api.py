@@ -454,9 +454,9 @@ class TestViolationsEndpoint:
         assert data["notification_events"] == []
         v = data["violations"][0]
         assert re.fullmatch(r"viol_[0-9a-f]{32}", v["id"])
-        assert v["violation_type"] == "secret_detected"
+        assert v["violation_type"] == "sensitive_finding"
         assert v["severity"] == "high"
-        assert v["suggestion"]["text"] == "Remove the secret"
+        assert set(v) == {"timestamp", "id", "violation_type", "severity"}
         assert "blocked" not in v
         assert "context" not in v
 

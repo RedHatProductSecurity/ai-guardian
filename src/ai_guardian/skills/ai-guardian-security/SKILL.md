@@ -108,7 +108,10 @@ Security config can change at any time (via Console, tray, CLI, or file edit). W
 
 Sensitive history records are reported as `sensitive_finding` and intentionally
 do not retain whether the finding was a secret, PII, or image-secret finding.
-Report that consolidated category; do not infer a more specific subtype.
+Report that consolidated category; do not infer a more specific subtype. A
+sanitized file path and source position, or a fixed source-context label when no
+file path is available, may be present. Matched values, snippets, and detector
+details are never retained.
 
 When showing violations to the user, always include the file path and line number when the response contains them. This helps the user locate exactly where the issue was detected.
 

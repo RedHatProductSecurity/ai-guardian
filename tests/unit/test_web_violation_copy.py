@@ -1,6 +1,7 @@
 """Tests for violation copy buttons and markdown formatter."""
 
 import pytest
+from unittest.mock import patch
 
 pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 
@@ -23,13 +24,18 @@ class TestFormatViolationMarkdown:
                 "total_findings": 1,
             },
         }
-        md = _format_violation_markdown(v)
-        assert "**Type:** secret_detected" in md
+        with patch(
+            "ai_guardian.violations.command_context._source_path_is_verified_safe",
+            return_value=True,
+        ):
+            md = _format_violation_markdown(v)
+        assert "**Type:** sensitive_finding" in md
         assert "**Severity:** critical" in md
         assert "**File:** src/app.py" in md
         assert "**Line:** 42" in md
         assert "**Time:** 2026-06-06T10:45:15" in md
-        assert "**Source:** gitleaks" in md
+        assert "**Source:**" not in md
+        assert "github-pat-fine-grained" not in md
 
     def test_tool_permission_with_suggestion(self):
         v = {
@@ -45,7 +51,11 @@ class TestFormatViolationMarkdown:
                 "rule": {"tool": "Bash", "command": "rm"},
             },
         }
-        md = _format_violation_markdown(v)
+        with patch(
+            "ai_guardian.violations.command_context._source_path_is_verified_safe",
+            return_value=True,
+        ):
+            md = _format_violation_markdown(v)
         assert "**Type:** tool_permission" in md
         assert "**Tool:** Bash" in md
         assert "**Reason:** not allowed" in md
@@ -73,7 +83,11 @@ class TestFormatViolationMarkdown:
             "timestamp": "2026-06-06T12:00:00",
             "blocked": {"file_path": "test.py"},
         }
-        md = _format_violation_markdown(v)
+        with patch(
+            "ai_guardian.violations.command_context._source_path_is_verified_safe",
+            return_value=True,
+        ):
+            md = _format_violation_markdown(v)
         assert "**File:** test.py" in md
         assert "**Line:**" not in md
         assert "**Source:**" not in md
@@ -89,7 +103,7 @@ class TestFormatViolationMarkdown:
             },
         }
         md = _format_violation_markdown(v)
-        assert "**Types:** ssn, credit_card, phone" in md
+        assert "**Types:**" not in md
 
     def test_no_timestamp(self):
         v = {
@@ -222,3 +236,64 @@ class TestFormatViolationMarkdown:
 
         assert "**Line:** 7" in markdown
         assert "Source Command" not in markdown
+
+    def test_sensitive_finding_copy_includes_safe_locator_not_private_values(self):
+        private_marker = "synthetic-private-match-marker"
+        markdown = _format_violation_markdown(
+            {
+                "violation_type": "sensitive_finding",
+                "severity": "high",
+                "blocked": {
+                    "file_path": "/repo/data.csv",
+                    "line_number": 12,
+                    "start_column": 0,
+                    "end_column": 8,
+                    "matched_text": private_marker,
+                    "secret_type": "private-subtype",
+                },
+            }
+        )
+
+        assert "**File:** /repo/data.csv" in markdown
+        assert "**Line:** 12" in markdown
+        assert "**Column:** 1" in markdown
+        assert "**End Column:** 9" in markdown
+        assert "**Privacy Note:**" in markdown
+        assert private_marker not in markdown
+        assert "private-subtype" not in markdown
+
+    def test_flat_daemon_sensitive_locator_is_displayed(self):
+        markdown = _format_violation_markdown(
+            {
+                "type": "sensitive_finding",
+                "file": "/repo/remote.csv",
+                "line": 6,
+                "start_column": 3,
+                "end_column": 7,
+                "source_context": "Tool input",
+            }
+        )
+
+        assert "**File:** /repo/remote.csv" in markdown
+        assert "**Line:** 6" in markdown
+        assert "**Column:** 3" in markdown
+        assert "**End Column:** 7" in markdown
+        assert "**Source:** Tool input" in markdown
+
+    def test_legacy_sensitive_copy_omits_unverified_path(self):
+        with patch(
+            "ai_guardian.violations.command_context._source_path_is_verified_safe",
+            return_value=False,
+        ):
+            markdown = _format_violation_markdown(
+                {
+                    "violation_type": "secret_detected",
+                    "blocked": {
+                        "file_path": "/private/path/with-unverified-value",
+                        "line_number": 4,
+                    },
+                }
+            )
+
+        assert "with-unverified-value" not in markdown
+        assert "**File:**" not in markdown
