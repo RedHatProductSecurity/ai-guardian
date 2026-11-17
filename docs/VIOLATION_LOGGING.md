@@ -24,11 +24,11 @@ Every time AI Guardian blocks something, it creates a log entry:
 
 | Violation Type | What Triggered It | Log Details |
 |----------------|-------------------|-------------|
-| **Tool Permission** | Blocked command execution | Command, tool name, policy rule |
+| **Tool Permission** | Blocked command execution | Tool name and policy rule; a bounded, sanitized source command only when no usable file path is available |
 | **Directory Blocking** | Restricted path access | File path, requested operation |
 | **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, and timestamp only; no per-finding details |
 | **Command Credential** | Literal credential in a supported command argument, or incomplete command analysis | Fixed option/classification labels and argument positions only; no argument values or full command |
-| **Secret Redaction** | Secret masked in output | Secret type, masking strategy |
+| **Secret Redaction** | Secret masked in output | Secret type, masking strategy, and an optional sanitized command fallback when no usable file path is available |
 | **Prompt Injection** | Malicious prompt detected | Pattern matched, confidence score |
 | **SSRF Protection** | Dangerous network request | URL, reason (private IP, metadata, etc.) |
 | **Config File Threat** | Exfiltration in config file | Pattern, file, line/column number |
@@ -85,6 +85,15 @@ The object contains policy metadata only. Raw commands, matched text, snippets,
 and scanner payloads are excluded by default. The correlation ID uses an
 explicit run ID when available, then the session ID or tool-use ID, so related
 checks can be grouped without copying agent content.
+
+For detailed command-originated violations without a usable source file path,
+history may include the optional `blocked.source_command` fallback. It is
+normalized and capped at 500 characters, and is included only when secret and
+PII checks verify the full command as safe. Detected sensitive values, scanner
+errors, and commands too large to verify cause the command to be omitted. A usable
+file path takes precedence; any available line/column data remains unchanged.
+Sensitive secret/PII findings keep their minimal audit record, and command-
+credential findings retain only fixed labels and argument positions.
 
 The existing top-level JSONL fields remain unchanged for standard violation
 types; sensitive findings use the minimal record described below. Consumers that
@@ -148,8 +157,8 @@ Immutable input failures remain blocked and do not gain override actions.
   "violation_type": "tool_permission",
   "severity": "warning",
   "blocked": {
-    "tool": "Bash",
-    "command": "rm -rf /tmp/*",
+    "tool_name": "Bash",
+    "source_command": "rm -rf /tmp/*",
     "reason": "Destructive command pattern"
   },
   "context": {

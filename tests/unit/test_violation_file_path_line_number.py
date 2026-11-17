@@ -112,8 +112,11 @@ class TestToolPermissionViolationFilePath:
             matcher="Bash",
             hook_data={},
         )
-        blocked = mock_logger.log_violation.call_args[1]["blocked"]
+        call_kwargs = mock_logger.log_violation.call_args[1]
+        blocked = call_kwargs["blocked"]
         assert blocked.get("file_path") is None
+        assert "tool_value" not in blocked
+        assert call_kwargs["origin_command"] == "rm -rf /"
 
     @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)

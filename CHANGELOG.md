@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Sanitized locationless violation context (#2759):** Add an optional bounded
+  `source_command` fallback to detailed command-originated history only when no
+  usable file path exists and secret/PII checks verify it safe. Keep source
+  locations preferred and sensitive findings minimal.
 - **Pi setup and native MCP registration (#2762):** Detect an installed Pi CLI
   before its AI Guardian extension exists and register AI Guardian through Pi's
   native extension API so it appears in `/mcp` (Pi 0.99.0+).
@@ -23,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Locationless violation command privacy (#2759):** Omit command-origin
+  context unless every expected bundled PII matcher compiled successfully, so
+  missing or invalid PII rules cannot make an unchecked command appear verified.
 - **IDE setup scanner availability (#2760):** Report when the built-in
   `toml-patterns` engine keeps secret scanning available without Gitleaks, and
   warn that scanning will not run only when no configured engine is available.

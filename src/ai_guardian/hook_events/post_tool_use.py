@@ -19,6 +19,7 @@ from ai_guardian.hook_events.utils import (
 )
 from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
 from ai_guardian.violations.log_violation import ScanContext, log_violation
+from ai_guardian.violations.command_context import MAX_ORIGIN_COMMAND_LEN
 from ai_guardian.scanners.transcript import _advance_transcript_position
 from ai_guardian.violations.decision import PolicyDecision
 
@@ -61,7 +62,7 @@ def _agent_type_value(adapter, ide_type):
 
 
 _MAX_REDACTED_CONTEXT_BYTES = 102400
-_MAX_SOURCE_COMMAND_LEN = 500
+_MAX_SOURCE_COMMAND_LEN = MAX_ORIGIN_COMMAND_LEN
 
 
 def _non_blocking_policy_decision(result, action, enabled, scan_context, source):
@@ -198,17 +199,11 @@ def _extract_context_snippet(text, line_number):
     return _ecs(text, line_number)
 
 
-def _sanitize_source_command(command: str) -> str:
-    """Sanitize a Bash command through secret scanning before storing."""
-    try:
-        from ai_guardian.scanners.secret_scanning import check_secrets
+def _sanitize_source_command(command: str) -> Optional[str]:
+    """Sanitize a Bash command before making it available to violation logging."""
+    from ai_guardian.violations.command_context import sanitize_origin_command
 
-        has_secrets, _ = check_secrets(command, filename="source_command")
-        if has_secrets:
-            return "[redacted — command contains secrets]"
-    except Exception:
-        pass
-    return command[:_MAX_SOURCE_COMMAND_LEN]
+    return sanitize_origin_command(command)
 
 
 # ---------------------------------------------------------------------------
@@ -315,12 +310,10 @@ def handle_post_tool_use(ctx=None, **kwargs):
     logger.info(f"PostToolUse tool_identifier: {tool_identifier}")
 
     # Extract command for Bash tool (for violation context)
-    bash_command = None
     source_command = None
     if tool_name == "Bash":
         raw_cmd = tool_input.get("command", "")
         if raw_cmd:
-            bash_command = raw_cmd[:_MAX_SOURCE_COMMAND_LEN]
             source_command = _sanitize_source_command(raw_cmd)
 
     _scan_ctx = ScanContext(
@@ -330,6 +323,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
         session_id=hook_session_id,
         tool_use_id=hook_tool_use_id,
         tool_name=tool_name,
+        origin_command=source_command,
     )
 
     # Independent of credential-engine selection, annotation/project exclusions,
@@ -350,6 +344,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 hook_session_id=hook_session_id,
                 hook_tool_use_id=hook_tool_use_id,
                 tool_name=tool_name,
+                origin_command=source_command,
                 ide_type_value=agent_type,
                 violation_logger=violation_logger,
                 latency_timer=_latency_timer,
@@ -612,13 +607,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     "redaction_count": len(redactions),
                     "redacted_types": [r["type"] for r in redactions],
                 }
-                if bash_command:
-                    blocked_info["command"] = bash_command
-                if (
-                    source_command
-                    and file_path_for_ctx
-                    and str(file_path_for_ctx).startswith("tool_result:")
-                ):
+                if source_command:
                     blocked_info["source_command"] = source_command
                 snippet = _extract_context_snippet(redacted_text, first_line)
                 if snippet:
@@ -843,14 +832,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     "pii_count": len(pii_redactions),
                     "pii_types": pii_types,
                 }
-                if bash_command:
-                    _pii_overrides["command"] = bash_command
-                if (
-                    source_command
-                    and pii_file_path
-                    and str(pii_file_path).startswith("tool_result:")
-                ):
-                    _pii_overrides["source_command"] = source_command
                 _pii_snippet = _extract_context_snippet(
                     pii_snippet_text, _pii_first.get("line_number")
                 )

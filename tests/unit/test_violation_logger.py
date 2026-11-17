@@ -264,6 +264,8 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
     blocked = {
         "file_path": "/repo/config.txt",
         "line_number": 17,
+        "command": sensitive_value,
+        "source_command": sensitive_value,
         "rule_id": "synthetic-rule",
         "description": sensitive_value,
         "matched_text": sensitive_value,
@@ -293,6 +295,7 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
         context=context,
         suggestion=suggestion,
         allowlist_context=allowlist_context,
+        origin_command=sensitive_value,
     )
 
     serialized = log_path.read_text(encoding="utf-8")
@@ -433,3 +436,196 @@ def test_known_non_enum_violation_labels_are_preserved(tmp_path, violation_type)
     stored = json.loads(log_path.read_text(encoding="utf-8"))
     assert stored["violation_type"] == violation_type
     assert stored["policy_decision"]["violation_type"] == violation_type
+
+
+@pytest.fixture
+def _safe_origin_command_scanners(monkeypatch):
+    from types import SimpleNamespace
+
+    from ai_guardian.violations import command_context
+    from ai_guardian.violations.command_context import _ORIGIN_COMMAND_PII_TYPES
+
+    monkeypatch.setattr(
+        "ai_guardian.scanners.secret_scanning.check_secrets",
+        lambda *_args, **_kwargs: (False, None),
+    )
+    monkeypatch.setattr(
+        command_context,
+        "_origin_command_redactor",
+        lambda: SimpleNamespace(
+            compiled_pii_types=set(_ORIGIN_COMMAND_PII_TYPES),
+            redact=lambda command: {
+                "redacted_text": command,
+                "redactions": [],
+            },
+        ),
+    )
+
+
+def test_locationless_violation_persists_bounded_sanitized_origin_command(
+    tmp_path, _safe_origin_command_scanners
+):
+    logger = _logger(tmp_path / "violations.jsonl")
+    command = "printf safe-command"
+
+    logger.log_violation(
+        "exfil_detection",
+        blocked={"file_path": "", "line_number": 7, "start_column": 2},
+        context={},
+        origin_command=command,
+    )
+
+    stored = logger.get_recent_violations()[0]
+    assert stored["blocked"]["source_command"] == command
+    assert stored["blocked"]["line_number"] == 7
+    assert stored["blocked"]["start_column"] == 2
+    assert "command" not in stored["blocked"]
+
+
+def test_usable_file_path_takes_precedence_over_origin_command(
+    tmp_path, _safe_origin_command_scanners
+):
+    logger = _logger(tmp_path / "violations.jsonl")
+
+    logger.log_violation(
+        "exfil_detection",
+        blocked={
+            "file_path": "/repo/source.py",
+            "line_number": 7,
+            "command": "printf safe-command",
+        },
+        context={},
+        origin_command="printf safe-command",
+    )
+
+    blocked = logger.get_recent_violations()[0]["blocked"]
+    assert blocked["file_path"] == "/repo/source.py"
+    assert blocked["line_number"] == 7
+    assert "source_command" not in blocked
+    assert "command" not in blocked
+
+
+def test_context_file_path_takes_precedence_over_tool_result_pseudo_path(
+    tmp_path, _safe_origin_command_scanners
+):
+    logger = _logger(tmp_path / "violations.jsonl")
+
+    logger.log_violation(
+        "exfil_detection",
+        blocked={"file_path": "tool_result:grep", "line_number": 7},
+        context={"file_path": "/repo/source.py"},
+        origin_command="printf safe-command",
+    )
+
+    entry = logger.get_recent_violations()[0]
+    assert entry["context"]["file_path"] == "/repo/source.py"
+    assert "source_command" not in entry["blocked"]
+
+
+def test_unverifiable_command_is_omitted_and_raw_command_is_removed(
+    tmp_path, monkeypatch
+):
+    secret = "synthetic-sensitive-command-value"
+    monkeypatch.setattr(
+        "ai_guardian.scanners.secret_scanning.check_secrets",
+        lambda *_args, **_kwargs: (True, "finding"),
+    )
+    logger = _logger(tmp_path / "violations.jsonl")
+
+    logger.log_violation(
+        "exfil_detection",
+        blocked={"command": secret, "file_path": None},
+        context={},
+        origin_command=secret,
+    )
+
+    serialized = logger.log_path.read_text(encoding="utf-8")
+    assert secret not in serialized
+    blocked = json.loads(serialized)["blocked"]
+    assert "command" not in blocked
+    assert "source_command" not in blocked
+
+
+def test_command_is_omitted_when_secret_scanner_reports_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "ai_guardian.scanners.secret_scanning.check_secrets",
+        lambda *_args, **_kwargs: (False, "scanner unavailable"),
+    )
+    logger = _logger(tmp_path / "violations.jsonl")
+
+    logger.log_violation(
+        "tool_permission",
+        blocked={"tool_name": "Bash", "tool_value": "printf safe-command"},
+        context={},
+    )
+
+    blocked = logger.get_recent_violations()[0]["blocked"]
+    assert "tool_value" not in blocked
+    assert "source_command" not in blocked
+
+
+def test_command_fields_are_never_serialized_from_context(tmp_path):
+    secret = "synthetic-context-command-value"
+    logger = _logger(tmp_path / "violations.jsonl")
+
+    logger.log_violation(
+        "tool_permission",
+        blocked={"tool_name": "Read"},
+        context={
+            "command": secret,
+            "source_command": secret,
+            "origin_command": secret,
+        },
+    )
+
+    serialized = logger.log_path.read_text(encoding="utf-8")
+    assert secret not in serialized
+    assert json.loads(serialized)["context"] == {}
+
+
+def test_private_command_credential_violation_never_persists_command_fields(
+    tmp_path, _safe_origin_command_scanners
+):
+    logger = _logger(tmp_path / "violations.jsonl")
+    command = "curl --user username:synthetic-sensitive-value https://example.test"
+
+    logger.log_violation(
+        "command_credential_detected",
+        blocked={
+            "command": command,
+            "source_command": command,
+            "origin_command": command,
+            "tool_value": command,
+            "finding_classes": ["inline_literal"],
+        },
+        context={},
+        origin_command=command,
+    )
+
+    serialized = logger.log_path.read_text(encoding="utf-8")
+    assert command not in serialized
+    blocked = json.loads(serialized)["blocked"]
+    assert "command" not in blocked
+    assert "source_command" not in blocked
+    assert "origin_command" not in blocked
+    assert "tool_value" not in blocked
+
+
+def test_legacy_record_without_optional_command_remains_readable(tmp_path):
+    log_path = tmp_path / "violations.jsonl"
+    log_path.write_text(
+        json.dumps(
+            {
+                "id": "legacy",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "violation_type": "tool_permission",
+                "blocked": {"tool_name": "Bash"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    entry = _logger(log_path).get_recent_violations()[0]
+    assert entry["id"] == "legacy"
+    assert entry["blocked"] == {"tool_name": "Bash"}

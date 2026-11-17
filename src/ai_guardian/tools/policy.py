@@ -2151,10 +2151,21 @@ class ToolPolicyChecker:
                 tool_use_id=hook_data.get("tool_use_id"),
                 tool_name=tool_name,
                 repository=project_path or None,
+                origin_command=(
+                    check_value
+                    if isinstance(tool_name, str)
+                    and tool_name.casefold() in {"bash", "shell"}
+                    else None
+                ),
             ),
             blocked_overrides={
                 "tool_name": tool_name,
-                "tool_value": check_value or "",
+                **(
+                    {}
+                    if isinstance(tool_name, str)
+                    and tool_name.casefold() in {"bash", "shell"}
+                    else {"tool_value": check_value or ""}
+                ),
                 "matcher": matcher,
                 **(
                     {"input_diagnostics": diagnostics, "file_path": file_path}

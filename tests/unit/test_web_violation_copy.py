@@ -196,3 +196,29 @@ class TestFormatViolationMarkdown:
             assert value in markdown
         assert "PRIVATE_" not in markdown
         assert "Suggested Rule" not in markdown
+
+    def test_locationless_violation_includes_optional_source_command(self):
+        markdown = _format_violation_markdown(
+            {
+                "violation_type": "exfil_detection",
+                "blocked": {
+                    "source_command": "printf safe-command",
+                    "line_number": 7,
+                    "start_column": 2,
+                },
+            }
+        )
+
+        assert "**Source Command:** printf safe-command" in markdown
+        assert "**Line:** 7" in markdown
+
+    def test_legacy_violation_without_source_command_stays_readable(self):
+        markdown = _format_violation_markdown(
+            {
+                "violation_type": "exfil_detection",
+                "blocked": {"line_number": 7},
+            }
+        )
+
+        assert "**Line:** 7" in markdown
+        assert "Source Command" not in markdown

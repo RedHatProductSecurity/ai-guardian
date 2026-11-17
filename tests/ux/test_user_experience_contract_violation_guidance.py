@@ -316,3 +316,67 @@ def test_input_diagnostic_console_copy_keeps_correlation_and_unknown_metadata():
     assert "call_2627test" in text
     assert "ses_2627test" in text
     assert "Suggested Rule" not in text
+
+
+def test_locationless_command_fallback_is_available_in_violation_history():
+    """USER EXPERIENCE: locationless command finding → safe detail/copy context.
+
+    The history keeps file/line data when available, and older entries without an
+    optional command remain readable. Sensitive-finding records remain separate.
+    """
+    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
+    from ai_guardian.web.pages.violations import _format_violation_markdown
+
+    text = _format_violation_markdown(
+        {
+            "violation_type": "exfil_detection",
+            "blocked": {
+                "source_command": "printf safe-command",
+                "line_number": 7,
+                "start_column": 2,
+            },
+        }
+    )
+    assert "**Source Command:** printf safe-command" in text
+    assert "**Line:** 7" in text
+
+    legacy = _format_violation_markdown(
+        {"violation_type": "exfil_detection", "blocked": {"line_number": 7}}
+    )
+    assert "**Line:** 7" in legacy
+    assert "Source Command" not in legacy
+
+
+def test_unverified_command_is_omitted_from_violation_history(tmp_path, monkeypatch):
+    """USER EXPERIENCE: incomplete PII rules → no command fallback in history.
+
+    A command is shown only when secret scanning and the complete expected PII
+    matcher set successfully verify it; unavailable coverage fails closed.
+    """
+    from types import SimpleNamespace
+
+    from ai_guardian.scanners import secret_scanning
+    from ai_guardian.violations import command_context
+    from ai_guardian.violations.logger import ViolationLogger
+
+    monkeypatch.setattr(
+        secret_scanning, "check_secrets", lambda *_a, **_kw: (False, None)
+    )
+    monkeypatch.setattr(
+        command_context,
+        "_origin_command_redactor",
+        lambda: SimpleNamespace(compiled_pii_types=set(), redact=lambda text: {}),
+    )
+    logger = ViolationLogger(
+        log_path=tmp_path / "violations.jsonl", config={"enabled": True}
+    )
+
+    logger.log_violation(
+        "exfil_detection",
+        blocked={},
+        context={},
+        origin_command="printf safe",
+    )
+
+    entry = logger.get_recent_violations(limit=1)[0]
+    assert "source_command" not in entry["blocked"]
