@@ -88,15 +88,23 @@ def test_json_config_wraps_only_the_ai_guardian_stdio_command(
 
 
 @pytest.mark.parametrize("cli", ("codex", "grok"))
-def test_toml_config_wraps_only_ai_guardian_server(tmp_path, cli, monkeypatch):
+@pytest.mark.parametrize("multiline_args", (False, True))
+def test_toml_config_wraps_only_ai_guardian_server(
+    tmp_path, cli, monkeypatch, multiline_args
+):
     monkeypatch.setattr(proxy, "_installed_version", lambda _command: __version__)
     path = tmp_path / "config.toml"
+    args_text = (
+        'args = [\n    "mcp-server",\n    "value]inside-string",\n]\n'
+        if multiline_args
+        else 'args = ["mcp-server"]\n'
+    )
     path.write_text(
         "[mcp_servers.ai-guardian]\n"
         'command = "/opt/ai-guardian"\n'
-        'args = ["mcp-server"]\n'
-        "enabled = true\n\n"
-        '[model.smoke]\nmodel = "local"\n',
+        + args_text
+        + "enabled = true\n\n"
+        + '[model.smoke]\nmodel = "local"\n',
         encoding="utf-8",
     )
 
@@ -116,6 +124,7 @@ def test_toml_config_wraps_only_ai_guardian_server(tmp_path, cli, monkeypatch):
         "--",
         "/opt/ai-guardian",
         "mcp-server",
+        *(["value]inside-string"] if multiline_args else []),
     ]
     assert entry["enabled"] is True
     assert updated["model"]["smoke"]["model"] == "local"

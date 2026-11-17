@@ -545,12 +545,24 @@ print(json.dumps(out,sort_keys=True))
 """
 
 _READ_OPENCODE_HEALTH = r"""
-import json,sys,urllib.request
+import base64,json,os,sys,urllib.request
 try:
-  with urllib.request.urlopen(sys.argv[1],timeout=2) as r: p=json.loads(r.read())
+  request=urllib.request.Request(sys.argv[1])
+  password=os.environ.get('OPENCODE_SERVER_PASSWORD')
+  if password:
+    username=os.environ.get('OPENCODE_SERVER_USERNAME','opencode')
+    token=base64.b64encode((username+':'+password).encode()).decode('ascii')
+    request.add_header('Authorization','Basic '+token)
+  with urllib.request.urlopen(request,timeout=2) as r: p=json.loads(r.read())
 except (OSError,json.JSONDecodeError):
   raise SystemExit(1)
-raise SystemExit(0 if p.get('healthy') is True else 1)
+if sys.argv[2] == 'v2':
+  ready=(isinstance(p,dict) and isinstance(p.get('version'),str)
+         and bool(p['version']) and isinstance(p.get('capabilities'),dict)
+         and isinstance(p.get('paths'),dict))
+else:
+  ready=isinstance(p,dict) and p.get('healthy') is True
+raise SystemExit(0 if ready else 1)
 """
 
 _READ_REST_STATE = r"""
@@ -755,6 +767,7 @@ def build_agent_command(
     *,
     opencode_v2: bool = False,
     opencode_attach_url: Optional[str] = None,
+    grok_mcp_version: bool = False,
 ) -> List[str]:
     """Build one non-interactive invocation of the selected installed CLI."""
     if cli_name == "codex":
@@ -774,16 +787,14 @@ def build_agent_command(
     if cli_name == "opencode":
         command = ["opencode"]
         if opencode_v2 and opencode_attach_url:
-            command.extend(["--server", opencode_attach_url, "run"])
+            command.extend(["run", "--server", opencode_attach_url])
         else:
             command.append("run")
         if opencode_v2 and not opencode_attach_url:
             # Keep direct invocations isolated when no shared smoke server exists.
             command.append("--standalone")
         elif opencode_attach_url:
-            if opencode_v2:
-                command.extend(["--dir", "/sandbox/repo"])
-            else:
+            if not opencode_v2:
                 command.extend(
                     ["--attach", opencode_attach_url, "--dir", "/sandbox/repo"]
                 )
@@ -840,7 +851,7 @@ def build_agent_command(
             prompt,
         ]
     if cli_name == "grok":
-        return [
+        command = [
             "grok",
             "--no-auto-update",
             "-p",
@@ -849,11 +860,20 @@ def build_agent_command(
             MOCK_MODEL,
             "--output-format",
             "json",
-            # Only the harmless clean probe needs native execution permission.
-            # Native hook/project trust is neither bypassed nor persisted.
-            "--allow",
-            "Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case clean_tool)",
         ]
+        if grok_mcp_version:
+            # Headless Grok asks before invoking MCP tools by default. Grant only
+            # this read-only smoke capability, not broad always-approve access.
+            command.extend(["--allow", "MCPTool(ai-guardian__get_version)"])
+        command.extend(
+            [
+                # Only the harmless clean probe needs native execution permission.
+                # Native hook/project trust is neither bypassed nor persisted.
+                "--allow",
+                "Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case clean_tool)",
+            ]
+        )
+        return command
     raise ValueError(f"unsupported CLI: {cli_name}")
 
 
@@ -2075,10 +2095,12 @@ def _opencode_uses_v2(
     return major >= 2
 
 
-def _start_opencode_server(engine: str, name: str, timeout: int) -> bool:
+def _start_opencode_server(
+    engine: str, name: str, timeout: int, *, opencode_v2: bool = False
+) -> bool:
     """Start one headless backend so smoke cases reuse its MCP startup."""
     command = [engine, "exec", "--detach"]
-    for entry in build_agent_environment("opencode"):
+    for entry in build_agent_environment("opencode", opencode_v2=opencode_v2):
         command.extend(["--env", entry])
     command.extend(
         [
@@ -2099,22 +2121,31 @@ def _start_opencode_server(engine: str, name: str, timeout: int) -> bool:
         return False
 
     _progress("Waiting for the persistent OpenCode server")
-    health_url = f"{OPENCODE_SERVER_URL}/global/health"
+    health_mode = "v2" if opencode_v2 else "v1"
+    health_path = "/api/info" if opencode_v2 else "/global/health"
+    health_url = f"{OPENCODE_SERVER_URL}{health_path}"
     deadline = time.monotonic() + min(timeout, 60)
     last_heartbeat = time.monotonic()
     last_result: Optional[subprocess.CompletedProcess] = None
     while time.monotonic() < deadline:
         remaining = max(1, int(deadline - time.monotonic()))
-        result = _exec(
-            engine,
-            name,
-            ["python3", "-c", _READ_OPENCODE_HEALTH, health_url],
-            min(3, remaining),
-        )
-        if result.returncode == 0:
-            _progress("Persistent OpenCode server is ready")
-            return True
-        last_result = result
+        try:
+            result = _exec(
+                engine,
+                name,
+                ["python3", "-c", _READ_OPENCODE_HEALTH, health_url, health_mode],
+                min(3, remaining),
+                env=build_agent_environment("opencode", opencode_v2=opencode_v2),
+            )
+        except subprocess.TimeoutExpired:
+            # During startup even the container-exec health probe can exceed its
+            # short per-attempt budget. Keep polling until the overall deadline.
+            result = None
+        if result is not None:
+            if result.returncode == 0:
+                _progress("Persistent OpenCode server is ready")
+                return True
+            last_result = result
         elapsed = int(time.monotonic() - last_heartbeat)
         if elapsed >= 15:
             _progress(f"OpenCode server is still starting ({elapsed}s elapsed)")
@@ -2147,18 +2178,27 @@ print('1' if ready else '0')
     last_heartbeat = time.monotonic()
     while time.monotonic() < deadline:
         remaining = max(1, int(deadline - time.monotonic()))
-        result = _exec(
-            engine,
-            name,
-            [
-                "python3",
-                "-c",
-                ready_reader,
-                f"{STATE_DIR}/mcp_version_rpc.jsonl",
-            ],
-            min(3, remaining),
-        )
-        if result.returncode == 0 and result.stdout.strip() == "1":
+        try:
+            result = _exec(
+                engine,
+                name,
+                [
+                    "python3",
+                    "-c",
+                    ready_reader,
+                    f"{STATE_DIR}/mcp_version_rpc.jsonl",
+                ],
+                min(3, remaining),
+                env=build_agent_environment("opencode", opencode_v2=True),
+            )
+        except subprocess.TimeoutExpired:
+            # Container-exec latency is transient while V2 starts its backend.
+            result = None
+        if (
+            result is not None
+            and result.returncode == 0
+            and result.stdout.strip() == "1"
+        ):
             _progress("OpenCode V2 has listed the exact AI Guardian get_version tool")
             return True
         elapsed = int(time.monotonic() - last_heartbeat)
@@ -2199,7 +2239,7 @@ def _warm_opencode_server(
             opencode_attach_url=OPENCODE_SERVER_URL,
         ),
         timeout,
-        env=build_agent_environment("opencode"),
+        env=build_agent_environment("opencode", opencode_v2=opencode_v2),
         workdir="/sandbox/repo",
         progress=(
             "Warming the OpenCode V2 backend with the local mock provider"
@@ -2287,7 +2327,7 @@ def _run_case(
             _progress(detail)
         return False
 
-    env = build_agent_environment(cli)
+    env = build_agent_environment(cli, opencode_v2=opencode_v2)
     try:
         invocation = _exec(
             engine,
@@ -2298,6 +2338,7 @@ def _run_case(
                 case.prompt,
                 opencode_v2=opencode_v2,
                 opencode_attach_url=opencode_attach_url,
+                grok_mcp_version=cli == "grok" and is_mcp_version_case,
             ),
             timeout,
             env=env,
@@ -2793,7 +2834,7 @@ def _report_case_failure_details(
         print(f"  NOTE: {CODEX_BWRAP_PERMISSION_GUIDANCE}", flush=True)
 
 
-def build_agent_environment(cli: str) -> List[str]:
+def build_agent_environment(cli: str, *, opencode_v2: bool = False) -> List[str]:
     """Return synthetic endpoint/auth and smoke-only settings for the CLI."""
     env: List[str] = []
     if cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS:
@@ -2812,6 +2853,10 @@ def build_agent_environment(cli: str) -> List[str]:
                 "OPENCODE_DISABLE_MODELS_FETCH=true",
             ]
         )
+        if opencode_v2:
+            # OpenCode V2 requires Basic auth for its server API. Keep one
+            # synthetic password shared by the isolated service and clients.
+            env.append(f"OPENCODE_SERVER_PASSWORD={MOCK_KEY}")
     if cli == "pi":
         env.append("PI_CODING_AGENT_DIR=/sandbox/.pi/agent")
     if cli == "claude":
@@ -3388,19 +3433,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             _progress(
                 f"Starting a persistent OpenCode {generation} server for all cases"
             )
-            if not _start_opencode_server(args.container_engine, name, args.timeout):
-                return 1
-            opencode_attach_url = OPENCODE_SERVER_URL
-            if opencode_v2 and not _wait_for_opencode_v2_mcp_tools(
-                args.container_engine, name, args.timeout
+            if not _start_opencode_server(
+                args.container_engine,
+                name,
+                args.timeout,
+                opencode_v2=opencode_v2,
             ):
                 return 1
+            opencode_attach_url = OPENCODE_SERVER_URL
             if not _warm_opencode_server(
                 args.container_engine,
                 name,
                 args.agent,
                 args.timeout,
                 opencode_v2=opencode_v2,
+            ):
+                return 1
+            if opencode_v2 and not _wait_for_opencode_v2_mcp_tools(
+                args.container_engine, name, args.timeout
             ):
                 return 1
         passed = True

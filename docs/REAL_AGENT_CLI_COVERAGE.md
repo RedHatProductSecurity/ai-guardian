@@ -247,10 +247,11 @@ The credential-free CLI smoke separately calls AI Guardian's native
 requires an issued call, a correlated tool result, and the exact installed
 package version at the local mock provider; a final-answer claim alone is not
 evidence. This capability check does not expand Grok's pre-tool-only security
-qualification. OpenCode V2 normally routes MCP through Code Mode, but this smoke
-sets `codemode: false` for this server and invokes the individual MCP tool rather
-than qualifying Code Mode's `execute` interpreter. Grok follows its native
-`search_tool` → `use_tool` flow; dispatch is allowed only after a correlated
+qualification. Its headless invocation allows only this exact read-only MCP tool,
+not global always-approve. OpenCode V2 normally routes MCP through Code Mode, but
+this smoke sets `codemode: false` for this server and invokes the individual MCP
+tool rather than qualifying Code Mode's `execute` interpreter. Grok follows its
+native `search_tool` → `use_tool` flow; dispatch is allowed only after a correlated
 search result identifies the exact qualified `ai-guardian__get_version` tool
 and its schema. The mock-issued provider call is counted separately from the
 client's actual MCP RPC. Grok keeps the `use_tool` result local, so its smoke

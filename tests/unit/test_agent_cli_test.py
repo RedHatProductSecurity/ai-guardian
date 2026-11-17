@@ -1,6 +1,7 @@
 """Contracts for the credential-free real-agent CLI hook smoke check."""
 
 import ast
+import base64
 import importlib.util
 import io
 import json
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import threading
 import urllib.request
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -471,11 +473,9 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
         opencode_attach_url="http://127.0.0.1:4096",
     ) == [
         "opencode",
+        "run",
         "--server",
         "http://127.0.0.1:4096",
-        "run",
-        "--dir",
-        "/sandbox/repo",
         "--agent",
         "build",
         "--auto",
@@ -527,6 +527,13 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     opencode_environment = runner.build_agent_environment("opencode")
     assert "OPENCODE_DISABLE_AUTOUPDATE=true" in opencode_environment
     assert "OPENCODE_DISABLE_MODELS_FETCH=true" in opencode_environment
+    assert not any(
+        item.startswith("OPENCODE_SERVER_PASSWORD=") for item in opencode_environment
+    )
+    opencode_v2_environment = runner.build_agent_environment(
+        "opencode", opencode_v2=True
+    )
+    assert f"OPENCODE_SERVER_PASSWORD={runner.MOCK_KEY}" in opencode_v2_environment
     assert "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json" in (
         opencode_environment
     )
@@ -534,6 +541,23 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     assert "GOOGLE_GEMINI_BASE_URL=http://127.0.0.1:18765" in gemini_environment
     assert f"GEMINI_API_KEY={runner.MOCK_KEY}" in gemini_environment
     assert all("GOOGLE_API_KEY=" not in item for item in gemini_environment)
+
+
+def test_grok_mcp_version_invocation_allows_only_the_exact_read_only_tool():
+    runner = _load(RUNNER_PATH, "agent_cli_grok_mcp_permission")
+    normal = runner.build_agent_command("grok", "default", "clean smoke")
+    version = runner.build_agent_command(
+        "grok", "default", "mcp version smoke", grok_mcp_version=True
+    )
+
+    assert "--always-approve" not in version
+    assert "MCPTool(ai-guardian__get_version)" not in normal
+    assert version.count("--allow") == 2
+    assert version[version.index("--allow") + 1] == "MCPTool(ai-guardian__get_version)"
+    assert version[-2:] == [
+        "--allow",
+        "Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case clean_tool)",
+    ]
 
 
 def test_sandbox_create_uses_supplied_image_prepared_config_and_isolated_workspace(
@@ -1001,7 +1025,9 @@ def test_main_starts_one_persistent_opencode_server_for_all_cases(
     runner._check_podman_smoke_image = lambda *_args: True
     runner._setup_podman_firewall = lambda *_args: True
     server_starts = []
-    runner._start_opencode_server = lambda *args: server_starts.append(args) or True
+    runner._start_opencode_server = (
+        lambda *args, **kwargs: server_starts.append((args, kwargs)) or True
+    )
     warmups = []
     runner._warm_opencode_server = (
         lambda *args, **kwargs: warmups.append((args, kwargs)) or True
@@ -1034,7 +1060,8 @@ def test_main_starts_one_persistent_opencode_server_for_all_cases(
     )
 
     assert len(server_starts) == 1
-    assert server_starts[0][0] == "podman"
+    assert server_starts[0][0][0] == "podman"
+    assert server_starts[0][1] == {"opencode_v2": False}
     assert len(warmups) == 1
     assert warmups[0][0][0] == "podman"
     expected_cases = [
@@ -1230,8 +1257,8 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
     monkeypatch.setattr(runner, "_delete_sandbox", lambda *args: None)
     starts, warmups, waits, cases, sequence = [], [], [], [], []
 
-    def start_server(*args):
-        starts.append(args)
+    def start_server(*args, **kwargs):
+        starts.append((args, kwargs))
         sequence.append("start")
         return True
 
@@ -1276,8 +1303,9 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
     else:
         v2 = installed.startswith("2.")
         assert len(starts) == len(warmups) == 1
+        assert starts[0][1] == {"opencode_v2": v2}
         assert len(waits) == int(v2)
-        assert sequence == (["start", "wait", "warm"] if v2 else ["start", "warm"])
+        assert sequence == (["start", "warm", "wait"] if v2 else ["start", "warm"])
         assert warmups[0][1] == {"opencode_v2": v2}
         expected_cases = [
             case
@@ -1293,7 +1321,8 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
     assert [engine, "image", "rm", "localhost/versioned-smoke:test"] in commands
 
 
-def test_opencode_server_starts_detached_and_waits_for_health(monkeypatch):
+@pytest.mark.parametrize("opencode_v2", (False, True))
+def test_opencode_server_starts_detached_and_waits_for_health(monkeypatch, opencode_v2):
     runner = _load(RUNNER_PATH, "agent_cli_opencode_server_start")
     commands = []
     probes = []
@@ -1302,14 +1331,14 @@ def test_opencode_server_starts_detached_and_waits_for_health(monkeypatch):
         commands.append(list(command))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-    def fake_exec(engine, name, command, *_args, **_kwargs):
-        probes.append((engine, name, list(command)))
+    def fake_exec(engine, name, command, *_args, **kwargs):
+        probes.append((engine, name, list(command), kwargs.get("env")))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(runner, "_run", fake_run)
     monkeypatch.setattr(runner, "_exec", fake_exec)
 
-    assert runner._start_opencode_server("podman", "smoke", 30)
+    assert runner._start_opencode_server("podman", "smoke", 30, opencode_v2=opencode_v2)
 
     command = commands[0]
     assert command[:3] == ["podman", "exec", "--detach"]
@@ -1324,7 +1353,108 @@ def test_opencode_server_starts_detached_and_waits_for_health(monkeypatch):
         str(runner.OPENCODE_SERVER_PORT),
     ]
     assert probes[0][0:2] == ("podman", "smoke")
-    assert probes[0][2][-1] == f"{runner.OPENCODE_SERVER_URL}/global/health"
+    health_path = "/api/info" if opencode_v2 else "/global/health"
+    health_mode = "v2" if opencode_v2 else "v1"
+    assert probes[0][2][-2:] == [
+        f"{runner.OPENCODE_SERVER_URL}{health_path}",
+        health_mode,
+    ]
+    assert probes[0][3] == runner.build_agent_environment(
+        "opencode", opencode_v2=opencode_v2
+    )
+    assert (f"OPENCODE_SERVER_PASSWORD={runner.MOCK_KEY}" in command) is opencode_v2
+
+
+@pytest.mark.parametrize(
+    ("password", "expected_returncode"),
+    (("synthetic-server-password", 0), ("incorrect-password", 1), (None, 1)),
+)
+@pytest.mark.parametrize("opencode_v2", (False, True))
+def test_opencode_health_reader_uses_server_basic_auth(
+    password, expected_returncode, opencode_v2
+):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_health_auth")
+    expected_auth = "Basic " + base64.b64encode(
+        b"opencode:synthetic-server-password"
+    ).decode("ascii")
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            expected_path = "/api/info" if opencode_v2 else "/global/health"
+            if (
+                self.headers.get("Authorization") == expected_auth
+                and self.path == expected_path
+            ):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                body = (
+                    b'{"version":"2.0.24","capabilities":{},"paths":{}}'
+                    if opencode_v2
+                    else b'{"healthy":true}'
+                )
+                self.wfile.write(body)
+            else:
+                self.send_error(401)
+
+        def log_message(self, *_args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    environment = dict(os.environ)
+    environment.pop("OPENCODE_SERVER_PASSWORD", None)
+    if password is not None:
+        environment["OPENCODE_SERVER_PASSWORD"] = password
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                runner._READ_OPENCODE_HEALTH,
+                f"http://127.0.0.1:{server.server_port}"
+                + ("/api/info" if opencode_v2 else "/global/health"),
+                "v2" if opencode_v2 else "v1",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
+
+    assert result.returncode == expected_returncode
+
+
+@pytest.mark.parametrize("opencode_v2", (False, True))
+def test_opencode_server_readiness_retries_a_timed_out_probe(monkeypatch, opencode_v2):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_server_probe_timeout")
+    attempts = []
+
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda command, *_args, **_kwargs: subprocess.CompletedProcess(
+            command, 0, "", ""
+        ),
+    )
+
+    def fake_exec(_engine, _name, command, *_args, **_kwargs):
+        attempts.append(command)
+        if len(attempts) == 1:
+            raise subprocess.TimeoutExpired(command, 3)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+
+    assert runner._start_opencode_server("podman", "smoke", 30, opencode_v2=opencode_v2)
+    assert len(attempts) == 2
 
 
 def test_opencode_v2_waits_for_correlated_exact_mcp_tool_listing(monkeypatch, capsys):
@@ -1332,8 +1462,8 @@ def test_opencode_v2_waits_for_correlated_exact_mcp_tool_listing(monkeypatch, ca
     responses = iter(("0\n", "1\n"))
     commands = []
 
-    def fake_exec(engine, name, command, timeout):
-        commands.append((engine, name, command, timeout))
+    def fake_exec(engine, name, command, timeout, **kwargs):
+        commands.append((engine, name, command, timeout, kwargs.get("env")))
         return subprocess.CompletedProcess(command, 0, next(responses), "")
 
     monkeypatch.setattr(runner, "_exec", fake_exec)
@@ -1345,6 +1475,10 @@ def test_opencode_v2_waits_for_correlated_exact_mcp_tool_listing(monkeypatch, ca
     assert len(commands) == 2
     assert all(command[0:2] == ("podman", "smoke") for command in commands)
     assert all(
+        command[4] == runner.build_agent_environment("opencode", opencode_v2=True)
+        for command in commands
+    )
+    assert all(
         command[2][-1] == f"{runner.STATE_DIR}/mcp_version_rpc.jsonl"
         for command in commands
     )
@@ -1355,6 +1489,23 @@ def test_opencode_v2_waits_for_correlated_exact_mcp_tool_listing(monkeypatch, ca
     assert "exact AI Guardian get_version tool" in capsys.readouterr().out
 
 
+def test_opencode_v2_mcp_readiness_retries_a_timed_out_probe(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v2_mcp_probe_timeout")
+    attempts = []
+
+    def fake_exec(_engine, _name, command, *_args, **_kwargs):
+        attempts.append(command)
+        if len(attempts) == 1:
+            raise subprocess.TimeoutExpired(command, 3)
+        return subprocess.CompletedProcess(command, 0, "1\n", "")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+
+    assert runner._wait_for_opencode_v2_mcp_tools("podman", "smoke", 30)
+    assert len(attempts) == 2
+
+
 def test_opencode_v2_mcp_readiness_times_out_without_exact_tool_listing(
     monkeypatch, capsys
 ):
@@ -1362,7 +1513,7 @@ def test_opencode_v2_mcp_readiness_times_out_without_exact_tool_listing(
     now = [0.0]
     probes = []
 
-    def fake_exec(engine, name, command, timeout):
+    def fake_exec(engine, name, command, timeout, **_kwargs):
         probes.append((engine, name, command, timeout))
         return subprocess.CompletedProcess(command, 0, "0\n", "")
 
@@ -3539,6 +3690,47 @@ def test_mcp_version_smoke_passes_with_a_matching_correlated_result(
     assert "PASS mcp_version" in output
     if exit_code:
         assert "the CLI exited 1 after the MCP response" in output
+
+
+def test_grok_mcp_version_case_passes_only_exact_mcp_allow(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_grok_mcp_permission_wiring")
+    case = next(case for case in runner.CASES if case.name == "mcp_version")
+    evidence = {
+        "mcp_version_tool_offers": 1,
+        "mcp_version_provider_calls": 1,
+        "mcp_version_rpc_calls": 1,
+        "mcp_version_tool_calls": 1,
+        "mcp_version_tool_results": 1,
+        "mcp_version_matches": 1,
+        "mcp_version_mismatches": 0,
+    }
+    requests = iter(({"mcp_version": 0}, {"mcp_version": 2}))
+    hooks = iter(({}, {"prompt": 1}))
+    tool_evidence = iter(({key: 0 for key in evidence}, evidence))
+    monkeypatch.setattr(runner, "_violation_counts", lambda *_a, **_k: {})
+    monkeypatch.setattr(runner, "_provider_stats", lambda *_a, **_k: next(requests))
+    monkeypatch.setattr(runner, "_hook_counts", lambda *_a, **_k: next(hooks))
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *_a, **_k: next(tool_evidence))
+    commands = []
+    original_builder = runner.build_agent_command
+
+    def capture_command(*args, **kwargs):
+        command = original_builder(*args, **kwargs)
+        commands.append(command)
+        return command
+
+    monkeypatch.setattr(runner, "build_agent_command", capture_command)
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
+    )
+
+    assert runner._run_case("podman", "smoke", "grok", "default", case, 30)
+    command = commands[0]
+    assert command.count("--allow") == 2
+    assert "MCPTool(ai-guardian__get_version)" in command
+    assert "--always-approve" not in command
 
 
 @pytest.mark.parametrize(

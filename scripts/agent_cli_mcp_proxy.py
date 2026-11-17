@@ -376,10 +376,60 @@ def _patch_toml_config(path: Path, proxy_path: str) -> bool:
 
     def replace_field(text: str, key: str, value: str) -> str:
         pattern = re.compile(rf"(?m)^[ \t]*{re.escape(key)}[ \t]*=.*$")
+        match = pattern.search(text)
         line = f"{key} = {value}"
-        if pattern.search(text):
+        if match is None:
+            return text.rstrip() + "\n" + line + "\n"
+        if key != "args":
             return pattern.sub(line, text, count=1)
-        return text.rstrip() + "\n" + line + "\n"
+
+        # Setup can format string arrays across multiple TOML lines. Replace the
+        # full array value, not just its first line, or the remaining items make
+        # the smoke config invalid before the CLI reaches its provider.
+        value_start = text.find("=", match.start(), match.end()) + 1
+        array_start = value_start
+        while array_start < len(text) and text[array_start].isspace():
+            array_start += 1
+        if array_start >= len(text) or text[array_start] != "[":
+            raise ValueError("AI Guardian MCP args are not a TOML array")
+
+        depth = 0
+        quote: Optional[str] = None
+        escaped = False
+        comment = False
+        array_end: Optional[int] = None
+        for index in range(array_start, len(text)):
+            char = text[index]
+            if comment:
+                if char == "\n":
+                    comment = False
+                continue
+            if quote is not None:
+                if quote == '"' and escaped:
+                    escaped = False
+                elif quote == '"' and char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = None
+                continue
+            if char == "#":
+                comment = True
+            elif char in {'"', "'"}:
+                quote = char
+            elif char == "[":
+                depth += 1
+            elif char == "]":
+                depth -= 1
+                if depth == 0:
+                    array_end = index + 1
+                    break
+        if array_end is None:
+            raise ValueError("AI Guardian MCP args TOML array is incomplete")
+        line_end = text.find("\n", array_end)
+        if line_end == -1:
+            line_end = len(text)
+        suffix = text[array_end:line_end]
+        return text[: match.start()] + line + suffix + text[line_end:]
 
     section = replace_field(section, "command", json.dumps(sys.executable))
     section = replace_field(section, "args", json.dumps(wrapped_args))
