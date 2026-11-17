@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-14
+> Last updated: 2026-11-17
 
 ## User Preferences
 
@@ -334,6 +334,13 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-17 — Unified violation logging boundary (#2759):** PostToolUse
+  sensitive-privacy tests should intercept `hook_events.post_tool_use.log_violation`;
+  that wrapper routes secret/PII categories to the minimal logger before it reaches
+  a `ViolationLogger` instance. Sanitizer test doubles must return both unchanged
+  `redacted_text` and an empty `redactions` list; incomplete results correctly
+  fail closed.
 
 - **2026-11-16 — Tray plugin cache across rediscovery (#2756):** Discovery may
   replace non-SSH `DaemonTarget` objects while keeping the same logical menu

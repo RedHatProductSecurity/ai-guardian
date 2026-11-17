@@ -223,3 +223,29 @@ def test_input_diagnostic_detail_renders_safe_fields_and_keeps_immutable_actions
     assert "Suppress in Source..." not in buttons
     # View/copy projection must not mutate the persisted compatibility record.
     assert violation["blocked"]["input_diagnostics"]["raw_payload"] == "PRIVATE_PAYLOAD"
+
+
+def test_optional_source_command_renders_on_violation_detail_page():
+    from unittest.mock import patch
+
+    from ai_guardian.web.pages.violation_detail import _render_violation_detail
+
+    violation = {
+        "id": "viol_origin_test",
+        "violation_type": "exfil_detection",
+        "blocked": {
+            "source_command": "printf safe-command",
+            "line_number": 7,
+        },
+        "context": {},
+    }
+    with (
+        patch("ai_guardian.web.pages.violation_detail.ui") as ui,
+        patch("ai_guardian.web.pages.violation_detail.local_time_label"),
+        patch("ai_guardian.web.pages.violations.ui", ui),
+    ):
+        _render_violation_detail(violation, None, "local")
+
+    labels = [str(call.args[0]) for call in ui.label.call_args_list if call.args]
+    assert "Source Command:" in labels
+    assert "printf safe-command" in labels

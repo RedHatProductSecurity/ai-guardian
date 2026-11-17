@@ -5,7 +5,35 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-16 (UTC)
+> Last updated: 2026-11-17 (UTC)
+
+## Issue #2759 sanitized context for locationless violations — 2026-11-17
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2759` on the
+  existing `2759` branch. Added an invocation-only command context that is
+  persisted as normalized `blocked.source_command` only for detailed violations
+  without a usable source file path and only after secret and PII verification.
+  Commands are capped at 500 characters after the full command is verified;
+  scanner failures, sensitive matches, controls, and oversized inputs are omitted.
+- File paths from blocked data or context retain precedence; line/column metadata
+  remains untouched. Secret/PII findings keep the minimal audit envelope, and
+  command-credential/password findings retain no command values. The Web Console
+  detail and copy views display the optional fallback while older records remain
+  valid without it.
+- Added tests across command sanitization, central persistence, PostScan and
+  ToolPolicy propagation, sensitive privacy, location precedence, legacy history,
+  and complete related Web/UX contracts. Updated Violation Logging docs and the
+  Unreleased changelog.
+- **Validation:** 417 related unit/UX tests pass (1 skipped). Full Ruff, Black
+  (Python 3.10 target), error-level Pylint, buglog JSON, and `git diff --check`
+  pass. Package Mypy reports the same 14 existing errors in untouched
+  `skill_discovery.py` and `scanners/secret_validator.py`; no changed module has
+  Mypy errors.
+- Posted the completed acceptance checklist and validation at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2759#issuecomment-6936782392,
+  applied the `done` label, and saved a DAF note. Changes remain uncommitted on
+  branch `2759`; no push or PR was created. **Next:** user review and external
+  `daf complete`.
 
 ## Issue #2760 setup scanner availability — 2026-11-16
 

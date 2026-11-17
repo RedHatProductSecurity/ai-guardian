@@ -316,3 +316,32 @@ def test_input_diagnostic_console_copy_keeps_correlation_and_unknown_metadata():
     assert "call_2627test" in text
     assert "ses_2627test" in text
     assert "Suggested Rule" not in text
+
+
+def test_locationless_command_fallback_is_available_in_violation_history():
+    """USER EXPERIENCE: locationless command finding → safe detail/copy context.
+
+    The history keeps file/line data when available, and older entries without an
+    optional command remain readable. Sensitive-finding records remain separate.
+    """
+    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
+    from ai_guardian.web.pages.violations import _format_violation_markdown
+
+    text = _format_violation_markdown(
+        {
+            "violation_type": "exfil_detection",
+            "blocked": {
+                "source_command": "printf safe-command",
+                "line_number": 7,
+                "start_column": 2,
+            },
+        }
+    )
+    assert "**Source Command:** printf safe-command" in text
+    assert "**Line:** 7" in text
+
+    legacy = _format_violation_markdown(
+        {"violation_type": "exfil_detection", "blocked": {"line_number": 7}}
+    )
+    assert "**Line:** 7" in legacy
+    assert "Source Command" not in legacy

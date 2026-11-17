@@ -190,6 +190,16 @@ def _get_resolution_instructions(violation: dict):
     return get_resolution_instructions(violation)
 
 
+def _detail_fields(violation_type: str, blocked: dict) -> list:
+    """Return standard detail fields plus an optional command fallback."""
+    fields = list(DETAIL_FIELDS.get(violation_type, []))
+    if blocked.get("source_command") and not any(
+        key == "source_command" for _label, key in fields
+    ):
+        fields.insert(0, ("Source Command", "source_command"))
+    return fields
+
+
 def _tool_diagnostic_items(violation: dict) -> list:
     """Use one vetted projection for the detail page, dialog, and Markdown copy."""
     diagnostics = violation_input_diagnostics(violation)
@@ -280,7 +290,7 @@ def _format_violation_markdown(v: dict) -> str:
     lines = [f"**Type:** {vtype}"]
     lines.append(f"**Severity:** {severity}")
 
-    fields = DETAIL_FIELDS.get(vtype, [])
+    fields = _detail_fields(vtype, blocked)
     for label, key in fields:
         val = blocked.get(key)
         if val is not None:
@@ -787,7 +797,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
 
         render_mirror_attribution(v, service)
 
-        fields = DETAIL_FIELDS.get(vtype, [])
+        fields = _detail_fields(vtype, blocked)
         if fields:
             with ui.grid(columns=2).classes("gap-1 mt-1"):
                 for label, key in fields:

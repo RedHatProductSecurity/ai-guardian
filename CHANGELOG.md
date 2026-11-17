@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Sanitized locationless violation context (#2759):** Add an optional bounded
+  `source_command` fallback to detailed command-originated history only when no
+  usable file path exists and secret/PII checks verify it safe. Keep source
+  locations preferred and sensitive findings minimal.
 - **Trusted developer-session non-blocking findings (#2755):** Add a separate,
   default-off global opt-in to surface successful block-action findings as
   advisory diagnostics while preserving scanning, violation logging, and

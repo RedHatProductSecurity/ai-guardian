@@ -2641,6 +2641,13 @@ def _process_hook_data(hook_data, daemon_state=None):
         )
 
         _registry = get_default_registry()
+        origin_command = None
+        if tool_name in {"Bash", "Shell"} and isinstance(tool_input, dict):
+            for argument_name in ("command", "cmd", "input"):
+                candidate_command = _shell_command_value(tool_input.get(argument_name))
+                if candidate_command:
+                    origin_command = candidate_command
+                    break
         _post_scan_ctx = PostScanContext(
             handle_ask_mode_auto=_handle_ask_mode_auto,
             log_ask_decision=_log_ask_decision,
@@ -2650,6 +2657,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             hook_tool_use_id=hook_tool_use_id,
             correlation_id=_latency_correlation_id,
             tool_name=tool_name,
+            origin_command=origin_command,
             # This field is persisted as context.ide_type.  Keep it separate
             # from ``ide_type``, which controls the response protocol.
             ide_type_value=agent_type,
@@ -2772,9 +2780,6 @@ def _process_hook_data(hook_data, daemon_state=None):
                             _registry.get(ScannerName.BASH_EXFIL),
                             bash_exfil_result,
                             _post_scan_ctx,
-                            blocked_overrides={
-                                "command": bash_command[:500],
-                            },
                         )
                         warning_messages.extend(be_decision.warnings)
                         if be_decision.warnings:
@@ -2813,9 +2818,6 @@ def _process_hook_data(hook_data, daemon_state=None):
                             _registry.get(ScannerName.EXFIL_DETECTION),
                             exfil_detection_result,
                             _post_scan_ctx,
-                            blocked_overrides={
-                                "command": bash_command[:500],
-                            },
                         )
                         warning_messages.extend(ed_decision.warnings)
                         if ed_decision.warnings:
