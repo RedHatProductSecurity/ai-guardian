@@ -21,13 +21,19 @@ budget_tokens: 1000
 - Release Readiness now performs an interactive stdio JSON-RPC `get_version`
   call, checks the exact installed version, and preserves `get_config` protocol
   coverage. Updated unit, provider-protocol, smoke, workflow, and UX contracts.
-- **Validation:** 437 directly related unit/UX tests pass; the exact extracted
-  Release Readiness MCP protocol step passes locally. Ruff, Black (Python 3.10
-  target), error-only Pylint, package Mypy (342 files), JSON validation, and
-  `git diff --check` pass. No real agent CLI/container smoke was run locally;
-  native CLI verification remains for CI.
-- Changes remain uncommitted on branch `2764`; no push, PR, or issue update was
-  made. **Next:** user review, then normal DAF/CI workflow.
+- **Initial validation:** 437 directly related unit/UX tests pass; the exact
+  extracted Release Readiness MCP protocol step passes locally. Ruff, Black
+  (Python 3.10 target), error-only Pylint, package Mypy (342 files), JSON
+  validation, and `git diff --check` pass. No real agent CLI/container smoke was
+  run locally; native CLI verification remains for CI.
+- Published as `5921dcea` in PR #2770. CI failed in the Tests matrix on
+  `test_tool_evidence_reader_accepts_only_aggregate_counts`: the accepted
+  aggregate fixture had not been extended with the five MCP-version counters
+  now required by the strict evidence schema. Added those zero-valued counters
+  to the fixture without loosening exact-field validation; all 157 tests in
+  `tests/unit/test_agent_cli_tool_results.py` pass locally. The follow-up is
+  uncommitted and not pushed. **Next:** publish the test-contract correction and
+  confirm the refreshed CI run.
 
 ## Issue #2758 PyPI social preview image — 2026-11-16
 

@@ -1104,6 +1104,11 @@ def test_tool_evidence_reader_accepts_only_aggregate_counts(monkeypatch):
         "native_tool_name_run_shell_command": 0,
         "native_tool_name_run_terminal_command": 0,
         "native_file_write_tool_name_write": 0,
+        "mcp_version_tool_offers": 0,
+        "mcp_version_tool_calls": 0,
+        "mcp_version_tool_results": 0,
+        "mcp_version_matches": 0,
+        "mcp_version_mismatches": 0,
     }
     monkeypatch.setattr(
         runner,
