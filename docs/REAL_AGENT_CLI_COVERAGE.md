@@ -90,8 +90,8 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
   the normal image; npm metadata reports **Apache-2.0**. Version 1.0.63 fixes
   custom Chat Completions models failing with connected MCP servers ([official
   changelog][grok-mcp-fix]).
-  Registry metadata and archive integrity were verified; this version is required
-  for the credential-free MCP smoke.
+  Registry metadata was checked, and the smoke image installs this exact pinned
+  version through npm; it is required for the credential-free MCP smoke.
   [Package metadata][grok-package] and [CLI documentation][grok-settings].
 - **Unattended / local protocol:** `grok --no-auto-update -p ... --model ag-smoke
   --output-format json`. A private `[model.ag-smoke]` in user `config.toml` sets
