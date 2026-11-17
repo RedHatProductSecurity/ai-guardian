@@ -2293,6 +2293,17 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
     } == job_names
 
 
+def test_pi_release_readiness_requires_native_mcp_registration():
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["pi-cli-smoke"]["steps"]
+    verify = next(
+        step for step in steps if step.get("name") == "Verify Pi CLI and extension"
+    )
+
+    assert 'grep -q "registerMcpServer"' in verify["run"]
+    assert "/sandbox/.pi/agent/extensions/ai-guardian/index.ts" in verify["run"]
+
+
 def test_release_readiness_runs_clients_against_the_current_wheel_image():
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     smoke_jobs = {

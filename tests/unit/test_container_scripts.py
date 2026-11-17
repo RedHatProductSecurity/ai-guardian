@@ -191,7 +191,7 @@ class TestContainerLaunchers:
     def test_normal_image_includes_the_pinned_pi_cli(self):
         normal_image = DOCKERFILE.read_text(encoding="utf-8")
 
-        assert "ARG PI_VERSION=0.86.0" in normal_image
+        assert "ARG PI_VERSION=0.99.0" in normal_image
         assert '"@earendil-works/pi-coding-agent@${PI_VERSION}"' in normal_image
         assert "/opt/npm/lib/node_modules/@earendil-works/pi-coding-agent" in (
             normal_image

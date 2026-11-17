@@ -269,6 +269,86 @@ def _node_supports_type_stripping() -> bool:
     return result.returncode == 0
 
 
+@pytest.mark.skipif(
+    not _node_supports_type_stripping(),
+    reason="Node.js with TypeScript type stripping is required",
+)
+def test_pi_native_mcp_registration_and_safe_failure_diagnostics(tmp_path):
+    """Pi registers the native server and never displays raw registration errors."""
+    (tmp_path / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
+    extension = tmp_path / "index.ts"
+    source = _render_pi_extension_source(True, NODE).replace(
+        "const GUARDIAN_BINARY_ARGS: string[] = [];",
+        'const GUARDIAN_BINARY_ARGS: string[] = ["--eval", ""];',
+    )
+    extension.write_text(source, encoding="utf-8")
+
+    runner = tmp_path / "run-pi-extension.mjs"
+    runner.write_text(
+        """import assert from 'node:assert/strict';
+import extension from './index.ts';
+
+const handlers = new Map();
+const notifications = [];
+let registration;
+const pi = {
+  on(name, handler) { handlers.set(name, handler); },
+};
+if (process.env.PI_MCP_CASE !== 'missing-api') {
+  pi.registerMcpServer = (name, config) => {
+    if (process.env.PI_MCP_CASE === 'failure') {
+      throw new Error('already registered: Bearer synthetic-secret /home/private/args');
+    }
+    registration = { name, config };
+  };
+}
+extension(pi);
+await handlers.get('session_start')({}, {
+  cwd: '/workspace/project',
+  sessionManager: { getSessionId: () => 'session', getSessionFile: () => undefined },
+  ui: { notify: (message) => notifications.push(message) },
+});
+console.log(JSON.stringify({ registration, notifications }));
+""",
+        encoding="utf-8",
+    )
+
+    results = {}
+    for case in ("success", "failure", "missing-api"):
+        completed = subprocess.run(
+            [NODE, "--experimental-strip-types", str(runner)],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=tmp_path,
+            env={**os.environ, "PI_MCP_CASE": case},
+        )
+        assert completed.returncode == 0, completed.stderr
+        results[case] = json.loads(completed.stdout)
+
+    registered = results["success"]["registration"]
+    assert registered["name"] == "ai-guardian"
+    assert registered["config"] == {
+        "command": NODE,
+        "args": ["--eval", "", "mcp-server"],
+        "cwd": "/workspace/project",
+        "env": {"AI_GUARDIAN_PROJECT_DIR": "/workspace/project"},
+        "exposure": "direct",
+    }
+    assert results["success"]["notifications"] == []
+
+    failure_notice = results["failure"]["notifications"][0]
+    assert "server name conflict" in failure_notice
+    assert "Bearer" not in failure_notice
+    assert "/home/private" not in failure_notice
+    assert "synthetic-secret" not in failure_notice
+    assert "Check /mcp in Pi for server diagnostics" in failure_notice
+
+    unsupported_notice = results["missing-api"]["notifications"][0]
+    assert "Pi 0.99.0 or newer" in unsupported_notice
+    assert "registerMcpServer" not in unsupported_notice
+
+
 def _write_bridge_runtime(tmp_path: Path) -> tuple[Path, Path]:
     (tmp_path / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
     bridge_path = tmp_path / "ai-guardian-bridge.ts"

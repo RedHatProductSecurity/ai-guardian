@@ -20,18 +20,8 @@ from ai_guardian.setup.hooks import (
     IDESetup,
     _PI_EXTENSION_TS,
     _PI_PACKAGE_JSON,
-    _install_pi_mcp_sdk,
 )
 from ai_guardian.setup.mcp import get_pi_extension_dir, verify_mcp_config
-
-
-@pytest.fixture(autouse=True)
-def _mock_pi_mcp_sdk_install(monkeypatch):
-    """Keep setup unit tests offline while testing the installer separately."""
-    monkeypatch.setattr(
-        "ai_guardian.setup.hooks._install_pi_mcp_sdk",
-        lambda _extension_dir: (True, "installed the pinned Pi MCP SDK"),
-    )
 
 
 def test_pi_detection_and_identity():
@@ -163,50 +153,6 @@ def test_pi_missing_managed_extension_reports_repair_path(tmp_path, monkeypatch)
     assert verification["mcp_extension_path"] in verification["mcp_diagnostic"]
 
 
-def test_pi_mcp_sdk_installer_runs_safe_npm_command(tmp_path):
-    with (
-        mock.patch("ai_guardian.setup.hooks.shutil.which", return_value="/usr/bin/npm"),
-        mock.patch(
-            "ai_guardian.setup.hooks.subprocess.run",
-            return_value=mock.Mock(returncode=0, stdout="", stderr=""),
-        ) as run,
-    ):
-        installed, message = _install_pi_mcp_sdk(tmp_path)
-
-    assert installed is True
-    assert message == "installed the pinned Pi MCP SDK"
-    run.assert_called_once_with(
-        ["/usr/bin/npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"],
-        cwd=str(tmp_path),
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=120,
-    )
-
-
-def test_pi_mcp_sdk_installer_reports_missing_npm(tmp_path):
-    with mock.patch("ai_guardian.setup.hooks.shutil.which", return_value=None):
-        installed, message = _install_pi_mcp_sdk(tmp_path)
-
-    assert installed is False
-    assert "npm was not found" in message
-
-
-def test_pi_mcp_sdk_installer_reports_failed_npm_command(tmp_path):
-    with (
-        mock.patch("ai_guardian.setup.hooks.shutil.which", return_value="/usr/bin/npm"),
-        mock.patch(
-            "ai_guardian.setup.hooks.subprocess.run",
-            return_value=mock.Mock(returncode=7, stdout="", stderr="registry error"),
-        ),
-    ):
-        installed, message = _install_pi_mcp_sdk(tmp_path)
-
-    assert installed is False
-    assert message == "npm install failed with exit code 7"
-
-
 def test_pi_setup_writes_extension_to_relocated_agent_home(tmp_path, monkeypatch):
     agent_home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
@@ -222,13 +168,15 @@ def test_pi_setup_writes_extension_to_relocated_agent_home(tmp_path, monkeypatch
     extension = extension_dir / "index.ts"
     assert success is True
     assert extension.is_file()
-    assert (extension_dir / "package.json").read_text(
-        encoding="utf-8"
-    ) == _PI_PACKAGE_JSON
+    package = json.loads((extension_dir / "package.json").read_text(encoding="utf-8"))
+    assert package == json.loads(_PI_PACKAGE_JSON)
+    assert "dependencies" not in package
     assert "Pi" in message
+    assert "Pi 0.99.0+ required" in message
+    assert "npm" not in message
     verification = setup.verify_hooks_for_ide("pi")
     assert verification["healthy"] is True, verification
-    assert verification["mcp_status"] == "missing_dependencies"
+    assert verification["mcp_status"] == "healthy"
     content = extension.read_text(encoding="utf-8")
     assert 'AI_GUARDIAN_IDE_TYPE: "pi"' in content
     assert 'pi.on("tool_call"' in content
@@ -318,9 +266,14 @@ def test_pi_project_setup_remains_project_local(tmp_path, monkeypatch):
     assert success is True
     assert (project / ".pi" / "extensions" / "ai-guardian" / "index.ts").is_file()
     assert not (tmp_path / "agent-home" / "extensions" / "ai-guardian.ts").exists()
+    source = (project / ".pi" / "extensions" / "ai-guardian" / "index.ts").read_text(
+        encoding="utf-8"
+    )
+    assert "registerMcpServer" in source
+    assert "AI_GUARDIAN_PROJECT_DIR" in source
 
 
-def test_pi_managed_mcp_health_becomes_healthy_after_pinned_sdk_install(
+def test_pi_managed_mcp_health_is_healthy_with_native_registration(
     tmp_path, monkeypatch
 ):
     agent_home = tmp_path / "pi-agent"
@@ -333,96 +286,51 @@ def test_pi_managed_mcp_health_becomes_healthy_after_pinned_sdk_install(
     ):
         assert setup.setup_ide_hooks("pi", force=True)[0] is True
 
-    sdk_dir = (
-        agent_home
-        / "extensions"
-        / "ai-guardian"
-        / "node_modules"
-        / "@modelcontextprotocol"
-        / "sdk"
-    )
-    sdk_dir.mkdir(parents=True)
-    (sdk_dir / "package.json").write_text(
-        json.dumps({"name": "@modelcontextprotocol/sdk", "version": "1.30.1"}),
-        encoding="utf-8",
-    )
-
     verification = setup.verify_ide_setup("pi")
     assert verification["healthy"] is True, verification
     assert verification["mcp_status"] == "healthy"
     assert verification["mcp_installed"] is True
 
 
-def test_pi_setup_auto_installs_sdk_before_health_check(tmp_path, monkeypatch):
+def test_pi_setup_creates_native_mcp_without_npm(tmp_path, monkeypatch):
     agent_home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
     monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "guardian-config"))
     setup = IDESetup()
 
-    def install_sdk(extension_dir):
-        sdk_dir = extension_dir / "node_modules" / "@modelcontextprotocol" / "sdk"
-        sdk_dir.mkdir(parents=True)
-        (sdk_dir / "package.json").write_text(
-            json.dumps({"name": "@modelcontextprotocol/sdk", "version": "1.30.1"}),
-            encoding="utf-8",
-        )
-        return True, "installed the pinned Pi MCP SDK"
-
-    with (
-        mock.patch.object(
-            setup, "verify_gitleaks_installed", return_value=(True, "ok")
-        ),
-        mock.patch(
-            "ai_guardian.setup.hooks._install_pi_mcp_sdk", side_effect=install_sdk
-        ),
+    with mock.patch.object(
+        setup, "verify_gitleaks_installed", return_value=(True, "ok")
     ):
         success, message = setup.setup_ide_hooks("pi", force=True)
 
     assert success is True, message
+    assert "registered through Pi's native extension API" in message
+    assert not (agent_home / "extensions" / "ai-guardian" / "node_modules").exists()
     verification = setup.verify_ide_setup("pi")
     assert verification["healthy"] is True, verification
     assert verification["mcp_status"] == "healthy"
     assert verification["mcp_installed"] is True
 
 
-def test_pi_setup_retries_pending_sdk_install_without_force(tmp_path, monkeypatch):
+def test_pi_setup_is_idempotent_without_npm_dependency_install(tmp_path, monkeypatch):
     agent_home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
     monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "guardian-config"))
     setup = IDESetup()
 
-    with (
-        mock.patch.object(
-            setup, "verify_gitleaks_installed", return_value=(True, "ok")
-        ),
-        mock.patch(
-            "ai_guardian.setup.hooks._install_pi_mcp_sdk",
-            return_value=(False, "npm was not found"),
-        ),
+    with mock.patch.object(
+        setup, "verify_gitleaks_installed", return_value=(True, "ok")
     ):
         assert setup.setup_ide_hooks("pi", force=True)[0] is True
 
-    def install_sdk(extension_dir):
-        sdk_dir = extension_dir / "node_modules" / "@modelcontextprotocol" / "sdk"
-        sdk_dir.mkdir(parents=True)
-        (sdk_dir / "package.json").write_text(
-            json.dumps({"name": "@modelcontextprotocol/sdk", "version": "1.30.1"}),
-            encoding="utf-8",
-        )
-        return True, "installed the pinned Pi MCP SDK"
-
-    with (
-        mock.patch.object(
-            setup, "verify_gitleaks_installed", return_value=(True, "ok")
-        ),
-        mock.patch(
-            "ai_guardian.setup.hooks._install_pi_mcp_sdk", side_effect=install_sdk
-        ),
+    with mock.patch.object(
+        setup, "verify_gitleaks_installed", return_value=(True, "ok")
     ):
         success, message = setup.setup_ide_hooks("pi")
 
-    assert success is True, message
-    assert "installed the pinned Pi MCP SDK" in message
+    assert success is False
+    assert "already configured for Pi" in message
+    assert "npm" not in message
     assert setup.verify_ide_setup("pi")["healthy"] is True
 
 
@@ -554,11 +462,14 @@ def test_pi_extension_template_contains_all_managed_events():
     )[0]
     assert "return event.payload;" in provider_hook
     assert "runGuardian" not in provider_hook
-    assert "@modelcontextprotocol/sdk/client/index.js" in _PI_EXTENSION_TS
-    assert "StdioClientTransport" in _PI_EXTENSION_TS
-    assert "pi.registerTool" in _PI_EXTENSION_TS
+    assert "registerMcpServer" in _PI_EXTENSION_TS
+    assert 'mcpApi.registerMcpServer("ai-guardian"' in _PI_EXTENSION_TS
+    assert 'exposure: "direct"' in _PI_EXTENSION_TS
     assert "mcp-server" in _PI_EXTENSION_TS
-    assert "AI_GUARDIAN_PROJECT_DIR: ctx.cwd || process.cwd()" in _PI_EXTENSION_TS
+    assert "AI_GUARDIAN_PROJECT_DIR: projectDir" in _PI_EXTENSION_TS
+    assert "MCP_FAILURE_TEXT" not in _PI_EXTENSION_TS
+    assert "safeMcpRegistrationDiagnostic" in _PI_EXTENSION_TS
+    assert "@modelcontextprotocol/sdk" not in _PI_EXTENSION_TS
 
 
 def test_pi_transcript_text_extraction():
