@@ -345,3 +345,38 @@ def test_locationless_command_fallback_is_available_in_violation_history():
     )
     assert "**Line:** 7" in legacy
     assert "Source Command" not in legacy
+
+
+def test_unverified_command_is_omitted_from_violation_history(tmp_path, monkeypatch):
+    """USER EXPERIENCE: incomplete PII rules → no command fallback in history.
+
+    A command is shown only when secret scanning and the complete expected PII
+    matcher set successfully verify it; unavailable coverage fails closed.
+    """
+    from types import SimpleNamespace
+
+    from ai_guardian.scanners import secret_scanning
+    from ai_guardian.violations import command_context
+    from ai_guardian.violations.logger import ViolationLogger
+
+    monkeypatch.setattr(
+        secret_scanning, "check_secrets", lambda *_a, **_kw: (False, None)
+    )
+    monkeypatch.setattr(
+        command_context,
+        "_origin_command_redactor",
+        lambda: SimpleNamespace(compiled_pii_types=set(), redact=lambda text: {}),
+    )
+    logger = ViolationLogger(
+        log_path=tmp_path / "violations.jsonl", config={"enabled": True}
+    )
+
+    logger.log_violation(
+        "exfil_detection",
+        blocked={},
+        context={},
+        origin_command="printf safe",
+    )
+
+    entry = logger.get_recent_violations(limit=1)[0]
+    assert "source_command" not in entry["blocked"]

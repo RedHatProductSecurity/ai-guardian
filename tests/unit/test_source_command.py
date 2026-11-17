@@ -59,10 +59,15 @@ class TestSanitizeSourceCommand:
                 "ai_guardian.violations.command_context._origin_command_redactor"
             ) as mock_redactor,
         ):
+            from ai_guardian.violations.command_context import _ORIGIN_COMMAND_PII_TYPES
+
             mock_redactor.return_value.redact.side_effect = lambda command: {
                 "redacted_text": command,
                 "redactions": [],
             }
+            mock_redactor.return_value.compiled_pii_types = set(
+                _ORIGIN_COMMAND_PII_TYPES
+            )
             from ai_guardian.hook_events.post_tool_use import (
                 _MAX_SOURCE_COMMAND_LEN,
                 _sanitize_source_command,
@@ -114,6 +119,45 @@ class TestSanitizeSourceCommand:
 
         assert sanitize_origin_command("x" * 65_537) is None
 
+    @pytest.mark.parametrize("compiled_pii_types", [None, set(), {"ssn"}])
+    @patch(
+        "ai_guardian.scanners.secret_scanning.check_secrets",
+        return_value=(False, None),
+    )
+    @patch("ai_guardian.violations.command_context._origin_command_redactor")
+    def test_unavailable_or_incomplete_pii_rules_fail_closed(
+        self, mock_redactor, _mock_check, compiled_pii_types
+    ):
+        from ai_guardian.violations.command_context import sanitize_origin_command
+
+        mock_redactor.return_value.compiled_pii_types = compiled_pii_types
+        assert sanitize_origin_command("printf safe") is None
+        mock_redactor.return_value.redact.assert_not_called()
+
+    @pytest.mark.parametrize("pii_toml_content", [None, "invalid = ["])
+    def test_missing_or_invalid_bundled_pii_rules_fail_closed(
+        self, tmp_path, monkeypatch, pii_toml_content
+    ):
+        from ai_guardian.patterns import BUNDLED_FILES
+        from ai_guardian.scanners import secret_scanning
+        from ai_guardian.violations import command_context
+
+        pii_path = tmp_path / "pii.toml"
+        if pii_toml_content is None:
+            pii_path = tmp_path / "missing-pii.toml"
+        else:
+            pii_path.write_text(pii_toml_content, encoding="utf-8")
+
+        monkeypatch.setitem(BUNDLED_FILES, "pii", pii_path)
+        monkeypatch.setattr(
+            secret_scanning, "check_secrets", lambda *_a, **_kw: (False, None)
+        )
+        command_context._origin_command_redactor.cache_clear()
+        try:
+            assert command_context.sanitize_origin_command("echo 123-45-6789") is None
+        finally:
+            command_context._origin_command_redactor.cache_clear()
+
     def test_command_with_control_character_is_omitted(self):
         from ai_guardian.violations.command_context import sanitize_origin_command
 
@@ -145,8 +189,12 @@ class TestSanitizeSourceCommand:
     def test_inconsistent_redactor_result_fails_closed(
         self, mock_redactor, _mock_check
     ):
-        from ai_guardian.violations.command_context import sanitize_origin_command
+        from ai_guardian.violations.command_context import (
+            _ORIGIN_COMMAND_PII_TYPES,
+            sanitize_origin_command,
+        )
 
+        mock_redactor.return_value.compiled_pii_types = set(_ORIGIN_COMMAND_PII_TYPES)
         mock_redactor.return_value.redact.return_value = {
             "redacted_text": "[REDACTED]",
             "redactions": [],

@@ -443,6 +443,7 @@ def _safe_origin_command_scanners(monkeypatch):
     from types import SimpleNamespace
 
     from ai_guardian.violations import command_context
+    from ai_guardian.violations.command_context import _ORIGIN_COMMAND_PII_TYPES
 
     monkeypatch.setattr(
         "ai_guardian.scanners.secret_scanning.check_secrets",
@@ -452,10 +453,11 @@ def _safe_origin_command_scanners(monkeypatch):
         command_context,
         "_origin_command_redactor",
         lambda: SimpleNamespace(
+            compiled_pii_types=set(_ORIGIN_COMMAND_PII_TYPES),
             redact=lambda command: {
                 "redacted_text": command,
                 "redactions": [],
-            }
+            },
         ),
     )
 

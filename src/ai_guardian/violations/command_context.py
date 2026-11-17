@@ -56,7 +56,17 @@ def sanitize_origin_command(command: object) -> Optional[str]:
         if has_secrets or scan_error:
             return None
 
-        redaction_result = _origin_command_redactor().redact(command)
+        redactor = _origin_command_redactor()
+        compiled_pii_types = getattr(redactor, "compiled_pii_types", None)
+        if not isinstance(compiled_pii_types, set) or not set(
+            _ORIGIN_COMMAND_PII_TYPES
+        ).issubset(compiled_pii_types):
+            logger.warning(
+                "PII rules unavailable; omitting origin command from violation history"
+            )
+            return None
+
+        redaction_result = redactor.redact(command)
         if not isinstance(redaction_result, dict):
             return None
         redactions = redaction_result.get("redactions")
