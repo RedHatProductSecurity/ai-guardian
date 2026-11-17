@@ -36,6 +36,27 @@ budget_tokens: 1000
   same 14 errors in untouched `skill_discovery.py` and `scanners/secret_validator.py`.
 - Published as `3318d3ff` to PR #2765. The refreshed CodeQL check passed
   (`133672389250`), as did the current Analyze matrix and Read the Docs build.
+## Issue #2762 Pi CLI detection and native MCP registration — 2026-11-16
+
+- Continued on the existing `2762` branch. Pi installation detection now accepts
+  the `pi` CLI and real Pi agent-home artifacts, including `PI_CODING_AGENT_DIR`,
+  before AI Guardian's managed extension exists; tray health marks that state as
+  installed but unconfigured.
+- Replaced the managed extension's private MCP client/tool bridge and local npm
+  SDK dependency with Pi's native `registerMcpServer()` API (Pi 0.99.0+). The
+  registered stdio server uses the active project `cwd` and
+  `AI_GUARDIAN_PROJECT_DIR`; safe extension-registration notices point users to
+  Pi's in-session `/mcp` diagnostics. Updated the normal container pin, setup
+  health, release-readiness assertion, docs and Unreleased changelog.
+- **Validation:** 795 related unit tests and all 57 affected UX-contract tests
+  pass. Ruff, Black (Python 3.10 target), error-only Pylint, package Mypy,
+  `git diff --check`, and buglog JSON validation pass. Integration and live Pi
+  runtime/container tests were not run locally.
+- The original commit was pushed to `origin/2762`. Rebase rewrites it locally;
+  `origin/2762` still points to the pre-rebase commit. No force-push, issue
+  comment, or PR update was made. **Next:** review the rebased commit and
+  acceptance criteria; coordinate a push if desired. Live `/mcp` behavior remains
+  for CI or maintainer runtime qualification.
 
 ## Issue #2763 Quay usernames from Actions variables — 2026-11-16
 

@@ -17,7 +17,7 @@ from ai_guardian.doctor import (
     format_json,
 )
 from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
-from ai_guardian.setup import setup_hooks
+from ai_guardian.setup import _discover_unconfigured_ides, setup_hooks
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.health import TrayHealthMonitor
 from ai_guardian.tray.menu_builder import TrayMenuBuilder
@@ -1418,74 +1418,50 @@ def test_cursor_health_reports_user_install_scope_and_project_effective_scope():
     assert "Cursor IDE/CLI (scope: user; effective: project; MCP: missing)" in message
 
 
-def test_pi_health_check_reports_dependency_repair_path(tmp_path):
+def test_pi_cli_without_extension_is_detected_and_reported_as_unconfigured(
+    tmp_path, monkeypatch
+):
     """
-    USER EXPERIENCE: Pi setup -> report pending SDK installation precisely.
+    USER EXPERIENCE: Installed Pi CLI without AI Guardian -> offer setup.
 
     Expected User Experience:
-    - The managed extension is recognized as installed for hooks.
-    - The missing SDK dependency is distinguished from a missing MCP bridge.
-    - The tray gives the exact install command and managed extension directory.
+    - The Pi executable is enough to distinguish an installed CLI from no Pi.
+    - A missing extension remains an actionable unconfigured state.
+    - The tray identifies Pi and points to its managed extension setup.
     """
-    package_path = tmp_path / "extensions" / "ai-guardian" / "package.json"
-    verification = {
-        "healthy": False,
-        "hooks_healthy": True,
-        "mcp_installed": False,
-        "mcp_status": "missing_dependencies",
-        "mcp_registration": "extension",
-        "mcp_diagnostic": (
-            "Install the pinned Pi MCP SDK with "
-            "npm install --ignore-scripts --no-audit --no-fund"
+    agent_dir = tmp_path / "custom-pi-home"
+    agent_dir.mkdir()
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
+    setup = IDESetup()
+
+    with (
+        patch.object(setup, "IDE_CONFIGS", {"pi": setup.IDE_CONFIGS["pi"]}),
+        patch(
+            "ai_guardian.setup.hooks.shutil.which",
+            side_effect=lambda executable: (
+                "/usr/local/bin/pi" if executable == "pi" else None
+            ),
         ),
-        "mcp_extension_path": str(package_path.parent / "index.ts"),
-        "mcp_package_path": str(package_path),
-        "events": {"extension": "healthy"},
-        "obsolete": [],
-    }
+    ):
+        installed, unconfigured = _discover_unconfigured_ides(setup)
+        verification = setup.verify_ide_setup("pi")
+
+    assert installed == ["pi"]
+    assert unconfigured == ["pi"]
+    assert verification["mcp_status"] == "missing"
 
     with patch("ai_guardian.tray.plugins.send_notification") as notify:
         TrayHealthMonitor._notify_ide_check_result(
-            ["pi"],
-            unconfigured=["pi"],
+            installed,
+            unconfigured=unconfigured,
             statuses={"pi": verification},
         )
 
     message = notify.call_args.args[1]
-    assert "Pi (MCP SDK dependencies missing;" in message
-    assert "npm install --ignore-scripts --no-audit --no-fund" in message
-    assert str(package_path.parent) in message
-    assert "MCP server (missing)" not in message
-
-
-def test_pi_setup_result_reports_dependency_repair_path(tmp_path):
-    verification = {
-        "healthy": False,
-        "mcp_installed": False,
-        "mcp_status": "missing_dependencies",
-        "mcp_registration": "extension",
-        "mcp_diagnostic": (
-            "Install the pinned Pi MCP SDK with "
-            "npm install --ignore-scripts --no-audit --no-fund"
-        ),
-        "mcp_extension_path": str(tmp_path / "extensions" / "ai-guardian" / "index.ts"),
-        "mcp_package_path": str(
-            tmp_path / "extensions" / "ai-guardian" / "package.json"
-        ),
-        "events": {"extension": "healthy"},
-        "obsolete": [],
-    }
-
-    with patch("ai_guardian.tray.plugins.send_notification") as notify:
-        TrayHealthMonitor._notify_ide_setup_result(
-            [{"ide": "pi", "success": True, "verification": verification}]
-        )
-
-    message = notify.call_args.args[1]
-    assert "[WARN] Pi: 1/1 hooks configured" in message
-    assert "MCP SDK dependencies missing" in message
-    assert "npm install --ignore-scripts --no-audit --no-fund" in message
-    assert "MCP server (missing)" not in message
+    assert (
+        "IDE/CLI integrations need setup: Pi (MCP managed extension missing;" in message
+    )
+    assert "run ai-guardian setup --ide pi" in message
 
 
 def test_pi_mcp_health_states_are_not_collapsed_to_missing():
@@ -1499,7 +1475,6 @@ def test_pi_mcp_health_states_are_not_collapsed_to_missing():
     }
     expected_labels = {
         "missing": "MCP managed extension missing",
-        "missing_dependencies": "MCP SDK dependencies missing",
         "identity_missing": "MCP identity missing",
         "identity_invalid": "MCP identity invalid",
         "disabled": "MCP disabled",

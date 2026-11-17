@@ -384,6 +384,54 @@ class TestIDESetup:
             ):
                 assert setup.list_installed_ides() == ["gemini", "antigravity"]
 
+    def test_list_installed_ides_detects_pi_cli_without_guardian_extension(
+        self, monkeypatch
+    ):
+        """Pi's executable proves installation before its extension is set up."""
+        setup = IDESetup()
+        monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
+        with (
+            mock.patch.object(setup, "IDE_CONFIGS", {"pi": setup.IDE_CONFIGS["pi"]}),
+            mock.patch(
+                "ai_guardian.setup.hooks.shutil.which",
+                side_effect=lambda executable: (
+                    "/usr/local/bin/pi" if executable == "pi" else None
+                ),
+            ),
+        ):
+            assert setup.list_installed_ides() == ["pi"]
+
+    def test_list_installed_ides_detects_pi_agent_config_in_relocated_home(
+        self, tmp_path, monkeypatch
+    ):
+        """Pi settings in PI_CODING_AGENT_DIR prove use without a CLI on PATH."""
+        agent_dir = tmp_path / "custom-pi-home"
+        agent_dir.mkdir()
+        (agent_dir / "settings.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
+        setup = IDESetup()
+
+        with (
+            mock.patch.object(setup, "IDE_CONFIGS", {"pi": setup.IDE_CONFIGS["pi"]}),
+            mock.patch("ai_guardian.setup.hooks.shutil.which", return_value=None),
+        ):
+            assert setup.list_installed_ides() == ["pi"]
+
+    def test_list_installed_ides_does_not_treat_empty_pi_home_as_installed(
+        self, tmp_path, monkeypatch
+    ):
+        """An empty relocated Pi directory is not installation evidence."""
+        agent_dir = tmp_path / "custom-pi-home"
+        (agent_dir / "extensions").mkdir(parents=True)
+        monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
+        setup = IDESetup()
+
+        with (
+            mock.patch.object(setup, "IDE_CONFIGS", {"pi": setup.IDE_CONFIGS["pi"]}),
+            mock.patch("ai_guardian.setup.hooks.shutil.which", return_value=None),
+        ):
+            assert setup.list_installed_ides() == []
+
     def test_backup_config(self, tmp_path):
         """Test creating backup of config file."""
         setup = IDESetup()

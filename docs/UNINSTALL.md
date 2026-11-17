@@ -193,7 +193,7 @@ retry/continuation unverified. `—`: no managed surface for that stage.
 | AiderDesk (`aiderdesk`) | L/U | L/U | L/U | L/U | M/U if configured | TypeScript entrypoint delegates to shared child-process bridge |
 | OpenClaw (`openclaw`) | L/U | L/U | L/U | L/U | M/U if configured | Plugin discovery and child-process failure are separate boundaries |
 | OpenCode V1/V2 (`opencode`) | L/U | L/U | L/U | L/U | M/U if configured | V1 explicit registration and V2 auto-discovery; V2 MCP uses `mcp.servers` |
-| Pi (`pi`) | L/U | L/U | L/U | L/U | L/U | Managed extension owns both hooks and MCP tool bridge; no native MCP file |
+| Pi (`pi`) | L/U | L/U | L/U | L/U | L/U | Managed extension owns hooks and registers MCP through Pi's native extension API; no separate MCP settings file |
 | Augment (`augment`) | — | — | H/U | — | M/U if configured | Pre/post-tool hook integration |
 | Crush (`crush`) | — | — | H/U | — | M/U | Partial managed event coverage, not universal enforcement |
 | Junie (`junie`) | — | — | — | — | M/U | MCP-only, static guidelines do not invoke a runtime |

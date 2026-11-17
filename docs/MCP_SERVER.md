@@ -37,17 +37,19 @@ The tray exposes the same operation as **Cursor Cloud (project setup)...**;
 it does not modify the project's `.cursor/mcp.json`. Without `--project`, setup
 remains user/desktop-scoped.
 
-Pi has no native MCP configuration file. Pi setup creates the managed extension
-at `~/.pi/agent/extensions/ai-guardian/` (or the project
-`.pi/extensions/ai-guardian/`) with a pinned
-`@modelcontextprotocol/sdk` dependency. Setup installs that dependency in the
-managed directory with `npm install --ignore-scripts --no-audit --no-fund` when
-Node.js/npm is available. If installation fails, setup leaves the hook bridge in
-place and reports the retry command; `--no-mcp` installs the hook-only variant
-without the bridge. The extension launches the resolved local `ai-guardian
-mcp-server`, verifies the server identity before registering tools, and preserves
-the existing signed identity/nonce attestation. A failed attestation exposes no
-MCP tools.
+Pi supports MCP servers through its extension API. Setup creates the managed
+extension at `~/.pi/agent/extensions/ai-guardian/` (or the project
+`.pi/extensions/ai-guardian/`), which registers the resolved local
+`ai-guardian mcp-server` with Pi's native MCP support. The server then appears
+in the in-session `/mcp` list with Pi's connection and tool diagnostics. This
+requires Pi 0.99.0 or newer; older Pi versions keep hook protection and show an
+upgrade notice instead of claiming MCP registration. The extension preserves
+AI Guardian's signed identity/nonce attestation, and a failed attestation
+exposes no usable MCP tools. No extension-local MCP SDK or npm install is needed.
+`--no-mcp` installs the hook-only variant.
+
+Pi's shell command `pi mcp list` does not load extensions; use `/mcp` inside the
+active Pi session to inspect AI Guardian's extension-registered server.
 
 ### Manual setup
 
@@ -58,8 +60,8 @@ refresh a valid identity record, so setup does not need to be rerun.
 `ai-guardian doctor` and IDE setup health checks report the local MCP
 registration state for supported clients without starting the server. A
 `healthy` registration means the client config contains an enabled
-`ai-guardian` entry, or (for Pi) the managed extension, pinned SDK, and identity
-registration are present; `missing`, `disabled`, and `invalid` states identify
+`ai-guardian` entry, or (for Pi) the managed extension and identity registration
+are present; `missing`, `disabled`, and `invalid` states identify
 configuration problems separately from runtime identity failures.
 
 Add to `~/.claude.json` (or `~/.claude/settings.json`):
@@ -109,15 +111,16 @@ For a manual Cursor registration, add the following to `~/.cursor/mcp.json`:
 | Claude Code | `~/.claude/settings.json` or `~/.claude.json` → `mcpServers` |
 | Cursor desktop / CLI | `~/.cursor/mcp.json` (`type: "stdio"`) |
 | Windsurf | `~/.windsurf/mcp.json` |
+| Pi | Managed extension API (`registerMcpServer`; Pi 0.99.0+) |
 
 ## Enable / Disable
 
-The MCP server is controlled by IDE config. Install/uninstall via:
+The MCP server is controlled by the integration setup. Install/disable via:
 
 ```bash
 ai-guardian setup --ide claude             # Install (default)
 ai-guardian setup --ide claude --no-mcp   # Uninstall
-ai-guardian setup --ide pi --no-mcp       # Keep Pi hooks, omit MCP bridge
+ai-guardian setup --ide pi --no-mcp       # Keep Pi hooks, omit MCP registration
 ```
 
 ## Proactive Level

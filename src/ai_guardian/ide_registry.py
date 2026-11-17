@@ -362,7 +362,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("session_shutdown", ("allow",)),
         ),
         project_scope=True,
-        platform_contract="global and project-local managed Pi extensions; native MCP config is unavailable",
+        platform_contract="global and project-local managed Pi extensions register MCP through the native extension API; no separate MCP config file",
         cli_capable=True,
         cli_executables=("pi",),
         safe_post_output_replacement=True,
