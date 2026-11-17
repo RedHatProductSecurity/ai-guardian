@@ -86,9 +86,12 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
 
 ## grok
 
-- **Reviewed version / installation:** `@xai-official/grok` **1.0.41**, already
-  pinned in the normal image by `GROK_VERSION`; npm declares **Apache-2.0**.
-  Registry archive integrity was verified during static review; no binary ran.
+- **Reviewed version / installation:** `@xai-official/grok` **1.0.63**, pinned in
+  the normal image; npm metadata reports **Apache-2.0**. Version 1.0.63 fixes
+  custom Chat Completions models failing with connected MCP servers ([official
+  changelog][grok-mcp-fix]).
+  Registry metadata and archive integrity were verified; this version is required
+  for the credential-free MCP smoke.
   [Package metadata][grok-package] and [CLI documentation][grok-settings].
 - **Unattended / local protocol:** `grok --no-auto-update -p ... --model ag-smoke
   --output-format json`. A private `[model.ag-smoke]` in user `config.toml` sets
@@ -101,8 +104,10 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
   `run_terminal_command` is required, not an advisory MCP checker. Global managed
   hooks are used; project hooks require separate upstream trust, which the runner
   does not grant. [Hook contract][grok-hooks], [headless flags][grok-headless].
-- **Next action / priority:** **P1** — run the new five-case CI subset against the
-  audited version. Version drift fails without rebuilding a supplied image.
+- **Next action / priority:** **P1** — run the five-case CI subset and the separate
+  `get_version` MCP check against the exact audited version. The MCP check requires
+  a model-facing tool offer, issued call, correlated server result and exact
+  installed version. Version drift fails without rebuilding a supplied image.
   Record aggregate native evidence; leave prompt/output containment unqualified.
   No OpenShell or additional host-platform support is added.
 - **Native execution in this change:** not run; no new tested native version.
@@ -264,7 +269,8 @@ booleans and fixed categories, never prompts, credentials or CLI/model/tool bodi
 
 [copilot-license]: https://github.com/github/copilot-cli/blob/main/LICENSE.md
 [copilot-byok]: https://docs.github.com/copilot/how-tos/copilot-cli/customize-copilot/add-llm-models
-[grok-package]: https://registry.npmjs.org/@xai-official/grok/1.0.41
+[grok-package]: https://registry.npmjs.org/@xai-official/grok/1.0.63
+[grok-mcp-fix]: https://x.ai/cli/changelogs/1.0.63.external.md
 [grok-settings]: https://docs.x.ai/build/settings
 [grok-hooks]: https://docs.x.ai/build/features/hooks
 [grok-headless]: https://docs.x.ai/build/cli/headless-scripting

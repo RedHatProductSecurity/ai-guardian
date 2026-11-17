@@ -68,11 +68,14 @@ Manual qualification on Linux/macOS Podman:
     denied-command non-execution, and clean execution/continuation, not offers or
     passive hook observations alone. Grok's version must match the reviewed pin.
 20. Full smoke lanes and Grok call the configured AI Guardian `get_version` MCP
-      tool. OpenCode V2 may expose MCP through Code Mode, so its `execute` wrapper
-      calls `tools["ai-guardian"].get_version({})`. Require an issued call, correlated
-      tool result, and exact installed-package version evidence at the mock provider;
-      final-answer text alone is not evidence. Goose's `--no-mcp` lane reports this
-      capability as UNSUPPORTED, never PASS.
+    tool. OpenCode V2 may expose MCP through Code Mode, so its `execute` wrapper
+    calls `tools["ai-guardian"].get_version({})`. Require a model-facing tool offer,
+    an issued call, a JSON-RPC result correlated by request ID, and an exact match
+    with the installed server executable's version. Aggregate evidence comes
+    from the provider and the smoke-only stdio witness; assistant text alone is
+    never evidence. If a CLI times out after the matched MCP response, only this
+    capability can pass, and the timeout is reported. Goose's `--no-mcp` lane
+    reports this capability as UNSUPPORTED, never PASS.
 """
 
 import importlib.util
@@ -939,7 +942,7 @@ def test_unreviewed_grok_version_never_qualifies_by_running_a_different_version(
     )
     assert not runner._verify_grok_version("docker", "owned", 30)
     assert capsys.readouterr().out.strip() == (
-        "FAIL Grok: the image must contain audited Grok 1.0.41; no image was rebuilt."
+        "FAIL Grok: the image must contain audited Grok 1.0.63; no image was rebuilt."
     )
 
 

@@ -275,12 +275,12 @@ def test_blocked_clients_exit_nonzero_before_any_runtime_or_installation(
 @pytest.mark.parametrize(
     "output,exit_code,expected",
     [
-        ("grok 1.0.41\n", 0, True),
-        ("1.0.41\n", 0, True),
-        ("grok 1.0.42\nprivate diagnostic", 0, False),
-        ("grok 1.0.41-beta.1\n", 0, False),
-        ("grok 1.0.41+unreviewed\n", 0, False),
-        ("grok 1.0.41\n", 1, False),
+        ("grok 1.0.63\n", 0, True),
+        ("1.0.63\n", 0, True),
+        ("grok 1.0.64\nprivate diagnostic", 0, False),
+        ("grok 1.0.63-beta.1\n", 0, False),
+        ("grok 1.0.63+unreviewed\n", 0, False),
+        ("grok 1.0.63\n", 1, False),
         ("unknown private diagnostic", 0, False),
     ],
 )
@@ -314,6 +314,7 @@ def test_grok_invocation_uses_local_model_without_granting_native_hook_trust(run
         "--dangerously-skip-permissions",
     }.intersection(command)
     assert runner.build_agent_environment("grok") == [
+        f"AI_GUARDIAN_MCP_EVIDENCE_FILE={runner.STATE_DIR}/mcp_version_rpc.jsonl",
         "GROK_HOME=/sandbox/.grok",
         f"XAI_API_KEY={runner.MOCK_KEY}",
     ]

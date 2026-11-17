@@ -10,9 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **MCP version query and CLI smoke coverage (#2764):** Expose the installed
   AI Guardian package version through `get_version` and verify a native agent
-  CLI calls the configured MCP tool and returns that version in the isolated
-  local-mock smoke. OpenCode V2's Code Mode `execute` wrapper is exercised without
-  weakening the correlated-result check.
+  CLI calls the configured MCP tool and receives a correlated JSON-RPC result
+  containing the exact installed version in the isolated local-mock smoke. OpenCode
+  V2's Code Mode `execute` wrapper is exercised without relying on assistant text.
+  Grok is pinned to 1.0.63, which fixes custom Chat Completions models with MCP.
 - **Pi setup and native MCP registration (#2762):** Detect an installed Pi CLI
   before its AI Guardian extension exists and register AI Guardian through Pi's
   native extension API so it appears in `/mcp` (Pi 0.99.0+).

@@ -1532,6 +1532,7 @@ def test_opencode_mock_window_preserves_native_continuations_and_existing_settin
         )
 
     monkeypatch.setattr(runner, "_exec", execute_config)
+    monkeypatch.setattr(runner, "_configure_mcp_evidence_proxy", lambda *args: True)
     assert runner._configure_agent("podman", "synthetic", "opencode", "build", 5)
     config = json.loads(path.read_text(encoding="utf-8"))
     model = config["provider"]["ai_guardian_smoke"]["models"][runner.MOCK_MODEL]
@@ -1547,6 +1548,24 @@ def test_opencode_mock_window_preserves_native_continuations_and_existing_settin
     first = path.read_bytes()
     assert runner._configure_agent("podman", "synthetic", "opencode", "build", 5)
     assert path.read_bytes() == first
+
+
+def test_configure_agent_installs_the_mcp_evidence_proxy(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_mcp_proxy_install")
+    configured = []
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess([], 0, "", ""),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_configure_mcp_evidence_proxy",
+        lambda _engine, _name, cli, _timeout: configured.append(cli) or True,
+    )
+
+    assert runner._configure_agent("podman", "sandbox", "pi", "openai", 5)
+    assert configured == ["pi"]
 
 
 def test_mock_provider_configuration_is_written_to_each_clients_native_config(
@@ -2356,6 +2375,7 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
     def fake_exec(_engine, _name, command, _timeout, diagnostics=None):
         del diagnostics
         calls["reader"] = command[2]
+        calls["evidence_path"] = command[5]
         return subprocess.CompletedProcess(command, 0, json.dumps(expected), "")
 
     monkeypatch.setattr(runner, "_exec", fake_exec)
@@ -2368,6 +2388,8 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
     assert "out['function_call_output_category_'+category]" in calls["reader"]
     assert "out['native_file_write_tool_name_'+name]" in calls["reader"]
     assert "out['file_written']" in calls["reader"]
+    assert calls["evidence_path"] == f"{runner.STATE_DIR}/mcp_version_rpc.jsonl"
+    assert "Path(sys.argv[3])" in calls["reader"]
     assert "private-tool-name" not in calls["reader"]
 
 
@@ -3151,7 +3173,10 @@ def test_mcp_version_smoke_prompt_asks_for_the_server_result():
     (
         ("offer", "AI Guardian get_version MCP tool was not offered to the model"),
         ("call", "the local mock did not issue the get_version MCP call"),
-        ("result", "the MCP tool result did not return to the local mock"),
+        (
+            "result",
+            "the AI Guardian MCP server did not return a correlated get_version result",
+        ),
         ("match", "the correlated MCP result did not contain the installed version"),
         ("mismatch", "the correlated MCP result contained a mismatched version"),
     ),
@@ -3225,6 +3250,72 @@ def test_mcp_version_smoke_passes_with_a_matching_correlated_result(
 
     assert runner._run_case("docker", "owned", "opencode", "build", case, 30)
     assert "PASS mcp_version" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("result_count", "match_count", "expected_pass"),
+    ((1, 1, True), (0, 0, False), (1, 0, False)),
+)
+def test_mcp_version_timeout_uses_only_aggregate_rpc_evidence(
+    monkeypatch, capsys, result_count, match_count, expected_pass
+):
+    runner = _load(RUNNER_PATH, "agent_cli_mcp_timeout_evidence")
+    case = next(case for case in runner.CASES if case.name == "mcp_version")
+    monkeypatch.setattr(runner, "_violation_counts", lambda *_a, **_k: {})
+    request_reads = iter(({"mcp_version": 0}, {"mcp_version": 1}))
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *_a, **_k: next(request_reads)
+    )
+    hook_reads = iter(({}, {"prompt": 1, "posttooluse": 1}))
+    monkeypatch.setattr(runner, "_hook_counts", lambda *_a, **_k: next(hook_reads))
+    tool_reads = iter(
+        (
+            {
+                "mcp_version_tool_offers": 0,
+                "mcp_version_tool_calls": 0,
+                "mcp_version_tool_results": 0,
+                "mcp_version_matches": 0,
+                "mcp_version_mismatches": 0,
+            },
+            {
+                "mcp_version_tool_offers": 1,
+                "mcp_version_tool_calls": 1,
+                "mcp_version_tool_results": result_count,
+                "mcp_version_matches": match_count,
+                "mcp_version_mismatches": 0,
+            },
+        )
+    )
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *_a, **_k: next(tool_reads))
+    reported = {}
+    monkeypatch.setattr(
+        runner,
+        "_report_case_failure_details",
+        lambda *_a, **kwargs: reported.update(kwargs),
+    )
+
+    def timeout_exec(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(
+            ["gemini"], 30, output="synthetic-package-version", stderr="private"
+        )
+
+    monkeypatch.setattr(runner, "_exec", timeout_exec)
+
+    result = runner._run_case("docker", "owned", "gemini", "default", case, 30)
+    output = capsys.readouterr().out
+    assert result is expected_pass
+    assert "synthetic-package-version" not in output
+    assert "private" not in output
+    if expected_pass:
+        assert (
+            "PASS mcp_version: correlated get_version result matched the installed "
+            "version; the CLI turn timed out after the MCP response"
+        ) in output
+        assert not reported
+    else:
+        assert "FAIL mcp_version: agent CLI timed out" in output
+        assert reported["tool_deltas"]["mcp_version_tool_results"] == result_count
+        assert reported["tool_deltas"]["mcp_version_matches"] == match_count
 
 
 @pytest.mark.parametrize(

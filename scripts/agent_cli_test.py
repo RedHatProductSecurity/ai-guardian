@@ -28,6 +28,8 @@ RUNNER_HOST_IS_LINUX = sys.platform.startswith("linux")
 CONTAINER_DIR = ROOT / "container"
 STRICT_PROFILE = ROOT / "src/ai_guardian/templates/profiles/strict.json"
 MOCK_PROVIDER = Path(__file__).with_name("agent_cli_mock_provider.py")
+MCP_EVIDENCE_PROXY = Path(__file__).with_name("agent_cli_mcp_proxy.py")
+MCP_EVIDENCE_PROXY_CONTAINER = "/tmp/ai_guardian_agent_cli_mcp_proxy.py"
 SMOKE_FIREWALL = Path(__file__).with_name("agent_cli_smoke_firewall.py")
 SMOKE_GATE = Path(__file__).with_name("agent_cli_smoke_gate.py")
 FIREWALL_IMAGE_LABEL = "nftables-v1"
@@ -40,7 +42,7 @@ MOCK_GEMINI_MODEL = "gemini-2.5-flash"
 MOCK_URL = f"http://127.0.0.1:{MOCK_PORT}/v1"
 MOCK_ANTHROPIC_BASE_URL = f"http://127.0.0.1:{MOCK_PORT}"
 MOCK_KEY = "ai-guardian-local-smoke-only"
-GROK_VERSION = "1.0.41"
+GROK_VERSION = "1.0.63"
 GOOSE_VERSION = "1.59.0"
 RUNNABLE_CLI_NAMES = ("claude", "codex", "gemini", "opencode", "pi", "grok", "goose")
 BLOCKED_SMOKE_CLIS = {
@@ -55,6 +57,9 @@ MCP_VERSION_CASES = frozenset({"mcp_version"})
 # Keep this explicit: adding a runnable CLI must not silently claim MCP support.
 # Goose's isolated smoke setup deliberately uses --no-mcp.
 MCP_VERSION_SMOKE_CLIS = ("claude", "codex", "gemini", "opencode", "pi", "grok")
+# Some clients keep MCP results inside their local stdio transport rather than
+# forwarding them in a provider continuation; only those lanes need the witness.
+MCP_EVIDENCE_PROXY_SMOKE_CLIS = frozenset({"gemini", "opencode", "pi", "grok"})
 # Goose is host-only in the product registry. Its smoke uses a supplied,
 # disposable test image, not the supported sandbox create/entrypoint path.
 PRE_TOOL_SMOKE_CASE_NAMES = frozenset(
@@ -460,7 +465,7 @@ print(json.dumps(p.get('requests',{}),sort_keys=True))
 """
 
 _READ_TOOL_EVIDENCE = r"""
-import json,sys,urllib.request
+import collections,json,sys,urllib.request
 from pathlib import Path
 case=sys.argv[2]
 if case not in ('ssrf','config_exfil','command_credential','http_request_credential',
@@ -507,6 +512,20 @@ for key in ('mcp_version_tool_offers','mcp_version_tool_calls',
             'mcp_version_tool_results','mcp_version_matches','mcp_version_mismatches'):
     values=stats.get(key,{})
     out[key]=values.get(case,0) if isinstance(values,dict) else 0
+if case == 'mcp_version':
+    rpc_events=collections.Counter()
+    evidence=Path(sys.argv[3])
+    if evidence.is_file():
+        for line in evidence.read_text(encoding='utf-8').splitlines():
+            try: item=json.loads(line)
+            except json.JSONDecodeError: continue
+            event=item.get('event')
+            if event in ('mcp_call','mcp_result_match','mcp_result_mismatch'):
+                rpc_events[event]+=1
+    out['mcp_version_tool_calls']=rpc_events['mcp_call']
+    out['mcp_version_tool_results']=rpc_events['mcp_result_match']+rpc_events['mcp_result_mismatch']
+    out['mcp_version_matches']=rpc_events['mcp_result_match']
+    out['mcp_version_mismatches']=rpc_events['mcp_result_mismatch']
 path=Path('/sandbox/repo/.agent-cli-smoke-results')/(case+'.executed')
 out['executed']=int(path.is_file() and path.read_text(encoding='ascii') == 'executed\n')
 written_paths={
@@ -1328,6 +1347,45 @@ def _configure_agent(
     if result.returncode != 0:
         _report_failure_details("Local mock-provider configuration", result, 1200)
         return False
+    if cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS and not _configure_mcp_evidence_proxy(
+        engine, name, cli, timeout
+    ):
+        return False
+    return True
+
+
+def _configure_mcp_evidence_proxy(
+    engine: str, name: str, cli: str, timeout: int
+) -> bool:
+    """Wrap only the isolated AI Guardian stdio server for result evidence."""
+    if not _write_file(
+        engine,
+        name,
+        MCP_EVIDENCE_PROXY_CONTAINER,
+        MCP_EVIDENCE_PROXY.read_bytes(),
+        timeout,
+    ):
+        print("FAIL: unable to stage the MCP result evidence proxy")
+        return False
+    result = _exec(
+        engine,
+        name,
+        [
+            "python3",
+            MCP_EVIDENCE_PROXY_CONTAINER,
+            "install",
+            "--cli",
+            cli,
+            "--home",
+            "/sandbox",
+            "--pi-agent-dir",
+            "/sandbox/.pi/agent",
+        ],
+        timeout,
+    )
+    if result.returncode != 0:
+        _report_failure_details("MCP result evidence proxy configuration", result, 1200)
+        return False
     return True
 
 
@@ -1524,8 +1582,12 @@ def _tool_evidence(
     diagnostics: Optional[List[str]] = None,
 ) -> Optional[Dict[str, int]]:
     url = f"http://127.0.0.1:{MOCK_PORT}/__ai_guardian_smoke/stats"
+    evidence_path = f"{STATE_DIR}/mcp_version_rpc.jsonl"
     result = _exec(
-        engine, name, ["python3", "-c", _READ_TOOL_EVIDENCE, url, case], timeout
+        engine,
+        name,
+        ["python3", "-c", _READ_TOOL_EVIDENCE, url, case, evidence_path],
+        timeout,
     )
     fields = {
         "executed",
@@ -2077,6 +2139,25 @@ def _warm_opencode_v1_server(engine: str, name: str, agent: str, timeout: int) -
     return True
 
 
+def _mcp_version_evidence_is_complete(
+    request_delta: Optional[int],
+    hook_deltas: Optional[Dict[str, int]],
+    tool_deltas: Optional[Dict[str, int]],
+) -> bool:
+    """Require a live offer, prompt event, issued call, and exact RPC result."""
+    if request_delta is None or request_delta < 1 or hook_deltas is None:
+        return False
+    if hook_deltas.get("prompt", 0) < 1 or tool_deltas is None:
+        return False
+    return (
+        tool_deltas.get("mcp_version_tool_offers", 0) >= 1
+        and tool_deltas.get("mcp_version_tool_calls", 0) >= 1
+        and tool_deltas.get("mcp_version_tool_results", 0) >= 1
+        and tool_deltas.get("mcp_version_matches", 0) >= 1
+        and tool_deltas.get("mcp_version_mismatches", 0) == 0
+    )
+
+
 def _run_case(
     engine: str,
     name: str,
@@ -2116,24 +2197,88 @@ def _run_case(
         return False
 
     env = build_agent_environment(cli)
-    invocation = _exec(
-        engine,
-        name,
-        build_agent_command(
-            cli,
-            agent,
-            case.prompt,
-            opencode_v2=opencode_v2,
-            opencode_attach_url=opencode_attach_url,
-        ),
-        timeout,
-        env=env,
-        workdir="/sandbox/repo",
-        progress=f"Running the {case.name} case",
-    )
+    try:
+        invocation = _exec(
+            engine,
+            name,
+            build_agent_command(
+                cli,
+                agent,
+                case.prompt,
+                opencode_v2=opencode_v2,
+                opencode_attach_url=opencode_attach_url,
+            ),
+            timeout,
+            env=env,
+            workdir="/sandbox/repo",
+            progress=f"Running the {case.name} case",
+        )
+    except subprocess.TimeoutExpired:
+        # Some clients stay open after the MCP transport has already returned.
+        # The result witness is independent of assistant prose or completion.
+        invocation = subprocess.CompletedProcess([], 124, "", "")
     if invocation.returncode == 124:
+        timed_out_violations = _violation_counts(engine, name, timeout, diagnostics)
+        timed_out_requests = _provider_stats(engine, name, timeout, diagnostics)
+        timed_out_hooks = _hook_counts(engine, name, timeout, diagnostics)
+        timed_out_tools = (
+            _tool_evidence(engine, name, case.name, timeout, diagnostics)
+            if has_tool_evidence
+            else {}
+        )
+        request_delta = (
+            timed_out_requests.get(case.name, 0) - old_requests.get(case.name, 0)
+            if timed_out_requests is not None
+            else None
+        )
+        hook_deltas = (
+            {
+                key: value - old_hooks.get(key, 0)
+                for key, value in timed_out_hooks.items()
+            }
+            if timed_out_hooks is not None
+            else None
+        )
+        tool_deltas = (
+            {
+                key: value - old_tools.get(key, 0)
+                for key, value in timed_out_tools.items()
+            }
+            if timed_out_tools is not None
+            else None
+        )
+        violation_deltas = (
+            {
+                key: value - old_violations.get(key, 0)
+                for key, value in timed_out_violations.items()
+                if value > old_violations.get(key, 0)
+            }
+            if timed_out_violations is not None
+            else {}
+        )
+        if (
+            is_mcp_version_case
+            and timed_out_violations is not None
+            and not violation_deltas
+            and _mcp_version_evidence_is_complete(
+                request_delta, hook_deltas, tool_deltas
+            )
+        ):
+            _progress(
+                "PASS mcp_version: correlated get_version result matched the "
+                "installed version; the CLI turn timed out after the MCP response"
+            )
+            return True
         print(f"FAIL {case.name}: agent CLI timed out")
-        _report_case_failure_details(case, invocation, {}, None, cli=cli)
+        _report_case_failure_details(
+            case,
+            invocation,
+            violation_deltas,
+            request_delta,
+            hook_deltas=hook_deltas,
+            tool_deltas=tool_deltas,
+            cli=cli,
+        )
         return False
 
     new_violations = _violation_counts(engine, name, timeout, diagnostics)
@@ -2245,8 +2390,10 @@ def _run_case(
             return fail("AI Guardian get_version MCP tool was not offered to the model")
         if tool_deltas.get("mcp_version_tool_calls", 0) < 1:
             return fail("the local mock did not issue the get_version MCP call")
-        if tool_deltas.get("mcp_version_tool_results", 0) < 1 or request_delta < 2:
-            return fail("the MCP tool result did not return to the local mock")
+        if tool_deltas.get("mcp_version_tool_results", 0) < 1:
+            return fail(
+                "the AI Guardian MCP server did not return a correlated get_version result"
+            )
         if tool_deltas.get("mcp_version_matches", 0) < 1:
             return fail(
                 "the correlated MCP result did not contain the installed version"
@@ -2502,6 +2649,8 @@ def _report_case_failure_details(
 def build_agent_environment(cli: str) -> List[str]:
     """Return synthetic endpoint/auth and smoke-only settings for the CLI."""
     env: List[str] = []
+    if cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS:
+        env.append(f"AI_GUARDIAN_MCP_EVIDENCE_FILE={STATE_DIR}/mcp_version_rpc.jsonl")
     if cli == "codex":
         env.extend(["CODEX_HOME=/sandbox/.codex", f"OPENAI_API_KEY={MOCK_KEY}"])
     elif cli == "pi":
