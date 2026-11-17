@@ -2047,6 +2047,7 @@ Options:
 | `check_command` | Check if a command would be blocked |
 | `check_mcp_trust` | Check if an MCP server is trusted |
 | `sanitize_text` | Redact secrets and PII from text |
+| `get_version` | Get the installed AI Guardian package version |
 | `get_config` | Get current security posture |
 | `get_violations` | Get recent security violations |
 | `get_metrics` | Get violation statistics |

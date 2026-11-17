@@ -106,18 +106,28 @@ Codex alone retains its explicitly reported, temporary smoke-failure exception.
 | `clean_tool` | Real execution witness, pre/post-tool hooks, clean correlated tool result received by the mock, no violation and successful CLI exit |
 | `tool_output_secret`, `tool_output_pii` | Real execution witness, pre/post-tool hooks, `sensitive_finding`, no original synthetic value in any mock request |
 | `allowed` | Prompt hook, successful CLI exit, provider request and no violation |
+| `mcp_version` | Native MCP tool offer, issued `get_version` call, correlated JSON-RPC result, and exact installed package version; assistant text alone is not evidence |
 
-Grok **1.0.41** and Goose **1.59.0** run only `ssrf`, `config_exfil`,
-`command_credential`, `clean_tool`, and `allowed`. Denied probes require native
+Grok **1.0.63** and Goose **1.59.0** run `ssrf`, `config_exfil`,
+`command_credential`, `clean_tool`, and `allowed`; Grok additionally runs
+`mcp_version`, while Goose reports MCP as **UNSUPPORTED** because its smoke
+intentionally disables MCP. Denied probes require native
 tool/result correlation and non-execution; clean tools require real execution,
 pre/post hooks, correlated clean output and exit zero. Prompt and post-tool hooks
 are observational for these integrations: **prompt denial and sensitive-output
 containment are NOT QUALIFIED**. The process-wide raw-delivery check is retained.
-Grok uses the existing normal smoke lifecycle/local Chat Completions mock and
-fails on version drift without changing a supplied image. Goose retains its
+Grok uses the existing normal smoke lifecycle/local Chat Completions mock; 1.0.63
+contains xAI's fix for custom Chat Completions models with connected MCP servers.
+It fails on version drift without changing a supplied image. Goose retains its
 separate network-none, mount-free smoke-only image; neither lane qualifies a new
 product runtime. Five other clients currently fail preflight with a documented
 blocker, not a passing skip. See the ledger before selecting a client.
+
+The isolated `mcp_version` capability may pass if the CLI times out or exits
+nonzero only after the smoke has independently confirmed the native tool offer,
+issued call, correlated server result and exact installed version with no new
+violation. This does not qualify the CLI's final turn or relax exit checks for
+any other smoke case.
 
 The output probes generate public synthetic test data inside a harmless local
 Python tool; neither their prompts nor tool commands contain the values. The

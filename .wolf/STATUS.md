@@ -7,6 +7,43 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-17 (UTC)
 
+## Issue #2764 MCP version tool in agent CLI smoke — 2026-11-17
+
+- Added the MCP version capability to supported native CLI smoke lanes. Grok's
+  `search_tool` → `use_tool` dispatch requires an issued search result with the
+  exact qualified name and schema; its result is checked by the stdio witness and
+  headless approval is limited to that exact read-only tool. The proxy replaces
+  the complete multiline TOML `args` array so Grok's generated config remains
+  valid. OpenCode V2 uses `codemode: false`, shares `OPENCODE_CONFIG` across
+  setup/runtime, checks authenticated `/api/info`, warms its persistent server
+  before waiting for the exact correlated `tools/list`, and invokes
+  `opencode run --server URL` from the server workspace. Transient short
+  container-exec probe timeouts are retried. Goose intentionally disables MCP and
+  reports **UNSUPPORTED**, never PASS.
+- PR #2770 is on branch `2764`; pushed baseline commits include `5f761105`,
+  `571ddd56`, `5fb33518`, `8690a1a0`, and `24be242d`, with smoke fix `20e04b9c`.
+  Release Readiness run `44160977835` passed on `20e04b9c`, including Grok and
+  OpenCode V2 CLI smoke jobs. The smoke remains qualified for Grok's pre-tool
+  subset plus correlated MCP version result and OpenCode V2 **2.0.24** across its
+  complete matrix. A timeout/nonzero CLI exit counts only when the prompt, issued
+  call, correlated exact installed version, and zero new violations are confirmed.
+- PR checks on merged head `a3bef94b` then failed 11 Windows proxy tests on Python
+  3.10, 3.13, and 3.14. `re.sub` interpreted backslashes in replacement strings,
+  corrupting TOML and Pi extension paths; a config regression also searched raw
+  serialized text. This follow-up uses callable replacements, deterministic
+  Windows-style path regressions, and parsed JSON/TOML/TypeScript-array assertions.
+- **Local validation:** all 24 tests in `tests/unit/test_agent_cli_mcp_proxy.py`
+  pass. Full Ruff, Black (Python 3.10 target), and error-only Pylint pass;
+  project-managed Mypy passes all 343 source files. `git diff --check` passes.
+  The standalone system Mypy executable reports 14 existing typing errors in
+  untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+- Rerun `44173164123` passed the Windows Python 3.13 and 3.14 jobs. Python 3.10
+  instead encountered suite-wide setup errors in `tests/conftest.py` after the
+  Doctor tests began; its proxy tests had passed earlier in the run. Tightened
+  the synthetic path tests to replace only the proxy module's `sys` binding, not
+  process-wide `sys.executable`. The proxy and Doctor unit files pass together
+  under pytest 9.2.0 (**201 tests**). **Next:** publish this test-isolation fix
+  and verify the fresh Python 3.10 Windows job.
 ## Issue #2759 sanitized context for locationless violations — 2026-11-17
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2759` on the

@@ -1,5 +1,7 @@
 """Contracts for the credential-free real-agent CLI hook smoke check."""
 
+import ast
+import base64
 import importlib.util
 import io
 import json
@@ -8,6 +10,7 @@ import subprocess
 import sys
 import threading
 import urllib.request
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -58,6 +61,7 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
         "clean_tool",
         "tool_output_secret",
         "tool_output_pii",
+        "mcp_version",
         "allowed",
     }
     assert all(
@@ -69,6 +73,7 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
             "clean_tool",
             "http_request_credential_clean",
             "http_request_credential_ts_clean",
+            "mcp_version",
         )
     )
     assert runner.CASES[-1].expected_violation is None
@@ -95,11 +100,23 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
         True,
         True,
         True,
+        True,
     ]
+    version_case = next(case for case in runner.CASES if case.name == "mcp_version")
+    assert version_case.cli_names == runner.MCP_VERSION_SMOKE_CLIS
+    assert runner.MCP_VERSION_SMOKE_CLIS == (
+        "claude",
+        "codex",
+        "gemini",
+        "opencode",
+        "pi",
+        "grok",
+    )
 
 
 def test_goose_smoke_uses_only_enforceable_cases_and_a_network_none_test_image():
     runner = _load(RUNNER_PATH, "agent_cli_goose_contract")
+    assert "mcp_version" not in {case.name for case in runner.smoke_cases("goose")}
     assert runner.PRE_TOOL_SMOKE_CASE_NAMES == {
         "ssrf",
         "config_exfil",
@@ -244,7 +261,7 @@ def test_goose_smoke_failure_cleans_only_owned_container(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("version_output", ("1.59.0", "goose 1.59.0"))
 def test_goose_smoke_runs_only_the_pre_tool_subset_and_always_cleans_up(
-    monkeypatch, version_output
+    monkeypatch, version_output, capsys
 ):
     runner = _load(RUNNER_PATH, "agent_cli_goose_flow")
     commands = []
@@ -280,6 +297,12 @@ def test_goose_smoke_runs_only_the_pre_tool_subset_and_always_cleans_up(
         "clean_tool",
         "allowed",
     ]
+    output = capsys.readouterr().out
+    assert (
+        "UNSUPPORTED mcp_version for goose: smoke intentionally disables MCP; "
+        "this is not a pass."
+    ) in output
+    assert "PASS mcp_version" not in output
     assert commands[-1][:3] == ["docker", "rm", "--force"]
     assert commands[-1][-1] == commands[0][commands[0].index("--name") + 1]
 
@@ -442,6 +465,26 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
         "ai_guardian_smoke/ag-smoke",
         "hello",
     ]
+    assert runner.build_agent_command(
+        "opencode",
+        "build",
+        "hello",
+        opencode_v2=True,
+        opencode_attach_url="http://127.0.0.1:4096",
+    ) == [
+        "opencode",
+        "run",
+        "--server",
+        "http://127.0.0.1:4096",
+        "--agent",
+        "build",
+        "--auto",
+        "--format",
+        "json",
+        "--model",
+        "ai_guardian_smoke/ag-smoke",
+        "hello",
+    ]
     assert runner.build_agent_command("pi", "openai", "hello") == [
         "pi",
         "-p",
@@ -484,6 +527,13 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     opencode_environment = runner.build_agent_environment("opencode")
     assert "OPENCODE_DISABLE_AUTOUPDATE=true" in opencode_environment
     assert "OPENCODE_DISABLE_MODELS_FETCH=true" in opencode_environment
+    assert not any(
+        item.startswith("OPENCODE_SERVER_PASSWORD=") for item in opencode_environment
+    )
+    opencode_v2_environment = runner.build_agent_environment(
+        "opencode", opencode_v2=True
+    )
+    assert f"OPENCODE_SERVER_PASSWORD={runner.MOCK_KEY}" in opencode_v2_environment
     assert "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json" in (
         opencode_environment
     )
@@ -491,6 +541,23 @@ def test_agent_cli_invocations_use_native_noninteractive_clients():
     assert "GOOGLE_GEMINI_BASE_URL=http://127.0.0.1:18765" in gemini_environment
     assert f"GEMINI_API_KEY={runner.MOCK_KEY}" in gemini_environment
     assert all("GOOGLE_API_KEY=" not in item for item in gemini_environment)
+
+
+def test_grok_mcp_version_invocation_allows_only_the_exact_read_only_tool():
+    runner = _load(RUNNER_PATH, "agent_cli_grok_mcp_permission")
+    normal = runner.build_agent_command("grok", "default", "clean smoke")
+    version = runner.build_agent_command(
+        "grok", "default", "mcp version smoke", grok_mcp_version=True
+    )
+
+    assert "--always-approve" not in version
+    assert "MCPTool(ai-guardian__get_version)" not in normal
+    assert version.count("--allow") == 2
+    assert version[version.index("--allow") + 1] == "MCPTool(ai-guardian__get_version)"
+    assert version[-2:] == [
+        "--allow",
+        "Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case clean_tool)",
+    ]
 
 
 def test_sandbox_create_uses_supplied_image_prepared_config_and_isolated_workspace(
@@ -518,6 +585,7 @@ def test_sandbox_create_uses_supplied_image_prepared_config_and_isolated_workspa
     assert "--profile" not in command
     assert command[command.index("--repo") + 1] == str(workspace)
     assert command[command.index("--agent") + 1] == "build"
+    assert "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json" in command
     assert (
         command[command.index("--container-network") + 1]
         == "ag-cli-smoke-opencode-test-internal"
@@ -806,6 +874,7 @@ def test_podman_smoke_matches_normal_rootless_container_profile(tmp_path):
     )
     assert "127.0.0.1::63152" in command
     assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
+    assert "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json" in command
     assert f"AI_GUARDIAN_STATE_DIR={runner.STATE_DIR}" in command
     assert "ai-guardian.daemon=true" in command
     assert (
@@ -941,8 +1010,10 @@ def test_main_sets_up_smoke_isolation_and_cleans_up(
     assert not any(command[1:3] == ["network", "connect"] for command in commands)
 
 
-def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path):
-    runner = _load(RUNNER_PATH, "agent_cli_smoke_opencode_v1_server")
+def test_main_starts_one_persistent_opencode_server_for_all_cases(
+    monkeypatch, tmp_path
+):
+    runner = _load(RUNNER_PATH, "agent_cli_smoke_opencode_server")
     runner._temp_parent = lambda: tmp_path
     runner.sanitized_host_environment = lambda _home: {"HOME": str(tmp_path)}
     monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/available")
@@ -954,9 +1025,13 @@ def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path)
     runner._check_podman_smoke_image = lambda *_args: True
     runner._setup_podman_firewall = lambda *_args: True
     server_starts = []
-    runner._start_opencode_v1_server = lambda *args: server_starts.append(args) or True
+    runner._start_opencode_server = (
+        lambda *args, **kwargs: server_starts.append((args, kwargs)) or True
+    )
     warmups = []
-    runner._warm_opencode_v1_server = lambda *args: warmups.append(args) or True
+    runner._warm_opencode_server = (
+        lambda *args, **kwargs: warmups.append((args, kwargs)) or True
+    )
     case_calls = []
     runner._run_case = lambda *args, **kwargs: case_calls.append(kwargs) or True
 
@@ -985,9 +1060,10 @@ def test_main_starts_one_opencode_v1_server_for_all_cases(monkeypatch, tmp_path)
     )
 
     assert len(server_starts) == 1
-    assert server_starts[0][0] == "podman"
+    assert server_starts[0][0][0] == "podman"
+    assert server_starts[0][1] == {"opencode_v2": False}
     assert len(warmups) == 1
-    assert warmups[0][0] == "podman"
+    assert warmups[0][0][0] == "podman"
     expected_cases = [
         case
         for case in runner.CASES
@@ -1179,9 +1255,26 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
 
     monkeypatch.setattr(runner, "_exec", fake_exec)
     monkeypatch.setattr(runner, "_delete_sandbox", lambda *args: None)
-    starts, warmups, cases = [], [], []
-    runner._start_opencode_v1_server = lambda *args: starts.append(args) or True
-    runner._warm_opencode_v1_server = lambda *args: warmups.append(args) or True
+    starts, warmups, waits, cases, sequence = [], [], [], [], []
+
+    def start_server(*args, **kwargs):
+        starts.append((args, kwargs))
+        sequence.append("start")
+        return True
+
+    def warm_server(*args, **kwargs):
+        warmups.append((args, kwargs))
+        sequence.append("warm")
+        return True
+
+    def wait_for_mcp(*args):
+        waits.append(args)
+        sequence.append("wait")
+        return True
+
+    runner._start_opencode_server = start_server
+    runner._warm_opencode_server = warm_server
+    runner._wait_for_opencode_v2_mcp_tools = wait_for_mcp
     runner._run_case = lambda *args, **kwargs: cases.append(kwargs) or True
     argv = [
         "--cli-name",
@@ -1201,7 +1294,7 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
     assert builds == [{"install_claude_code": False, "opencode_version": requested}]
     output = capsys.readouterr().out
     if exit_code:
-        assert not starts and not warmups and not cases
+        assert not starts and not warmups and not waits and not cases
         assert (
             f"installed OpenCode version does not match --cli-version {requested}"
             in output
@@ -1209,7 +1302,11 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
         assert "smoke test passed" not in output
     else:
         v2 = installed.startswith("2.")
-        assert len(starts) == len(warmups) == (0 if v2 else 1)
+        assert len(starts) == len(warmups) == 1
+        assert starts[0][1] == {"opencode_v2": v2}
+        assert len(waits) == int(v2)
+        assert sequence == (["start", "warm", "wait"] if v2 else ["start", "warm"])
+        assert warmups[0][1] == {"opencode_v2": v2}
         expected_cases = [
             case
             for case in runner.CASES
@@ -1218,15 +1315,15 @@ def test_cli_version_is_forwarded_and_verified_before_warmup_or_cases(
         assert len(cases) == len(expected_cases)
         assert all(call["opencode_v2"] is v2 for call in cases)
         assert all(
-            call["opencode_attach_url"] == (None if v2 else runner.OPENCODE_SERVER_URL)
-            for call in cases
+            call["opencode_attach_url"] == runner.OPENCODE_SERVER_URL for call in cases
         )
         assert f"Detected OpenCode {'V2' if v2 else 'V1'}: {installed}" in output
     assert [engine, "image", "rm", "localhost/versioned-smoke:test"] in commands
 
 
-def test_opencode_v1_server_starts_detached_and_waits_for_health(monkeypatch):
-    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_server_start")
+@pytest.mark.parametrize("opencode_v2", (False, True))
+def test_opencode_server_starts_detached_and_waits_for_health(monkeypatch, opencode_v2):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_server_start")
     commands = []
     probes = []
 
@@ -1234,14 +1331,14 @@ def test_opencode_v1_server_starts_detached_and_waits_for_health(monkeypatch):
         commands.append(list(command))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-    def fake_exec(engine, name, command, *_args, **_kwargs):
-        probes.append((engine, name, list(command)))
+    def fake_exec(engine, name, command, *_args, **kwargs):
+        probes.append((engine, name, list(command), kwargs.get("env")))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(runner, "_run", fake_run)
     monkeypatch.setattr(runner, "_exec", fake_exec)
 
-    assert runner._start_opencode_v1_server("podman", "smoke", 30)
+    assert runner._start_opencode_server("podman", "smoke", 30, opencode_v2=opencode_v2)
 
     command = commands[0]
     assert command[:3] == ["podman", "exec", "--detach"]
@@ -1256,11 +1353,185 @@ def test_opencode_v1_server_starts_detached_and_waits_for_health(monkeypatch):
         str(runner.OPENCODE_SERVER_PORT),
     ]
     assert probes[0][0:2] == ("podman", "smoke")
-    assert probes[0][2][-1] == f"{runner.OPENCODE_SERVER_URL}/global/health"
+    health_path = "/api/info" if opencode_v2 else "/global/health"
+    health_mode = "v2" if opencode_v2 else "v1"
+    assert probes[0][2][-2:] == [
+        f"{runner.OPENCODE_SERVER_URL}{health_path}",
+        health_mode,
+    ]
+    assert probes[0][3] == runner.build_agent_environment(
+        "opencode", opencode_v2=opencode_v2
+    )
+    assert (f"OPENCODE_SERVER_PASSWORD={runner.MOCK_KEY}" in command) is opencode_v2
 
 
-def test_opencode_v1_warmup_uses_clean_case_and_local_provider(monkeypatch):
-    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_warmup")
+@pytest.mark.parametrize(
+    ("password", "expected_returncode"),
+    (("synthetic-server-password", 0), ("incorrect-password", 1), (None, 1)),
+)
+@pytest.mark.parametrize("opencode_v2", (False, True))
+def test_opencode_health_reader_uses_server_basic_auth(
+    password, expected_returncode, opencode_v2
+):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_health_auth")
+    expected_auth = "Basic " + base64.b64encode(
+        b"opencode:synthetic-server-password"
+    ).decode("ascii")
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            expected_path = "/api/info" if opencode_v2 else "/global/health"
+            if (
+                self.headers.get("Authorization") == expected_auth
+                and self.path == expected_path
+            ):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                body = (
+                    b'{"version":"2.0.24","capabilities":{},"paths":{}}'
+                    if opencode_v2
+                    else b'{"healthy":true}'
+                )
+                self.wfile.write(body)
+            else:
+                self.send_error(401)
+
+        def log_message(self, *_args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    environment = dict(os.environ)
+    environment.pop("OPENCODE_SERVER_PASSWORD", None)
+    if password is not None:
+        environment["OPENCODE_SERVER_PASSWORD"] = password
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                runner._READ_OPENCODE_HEALTH,
+                f"http://127.0.0.1:{server.server_port}"
+                + ("/api/info" if opencode_v2 else "/global/health"),
+                "v2" if opencode_v2 else "v1",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
+
+    assert result.returncode == expected_returncode
+
+
+@pytest.mark.parametrize("opencode_v2", (False, True))
+def test_opencode_server_readiness_retries_a_timed_out_probe(monkeypatch, opencode_v2):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_server_probe_timeout")
+    attempts = []
+
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda command, *_args, **_kwargs: subprocess.CompletedProcess(
+            command, 0, "", ""
+        ),
+    )
+
+    def fake_exec(_engine, _name, command, *_args, **_kwargs):
+        attempts.append(command)
+        if len(attempts) == 1:
+            raise subprocess.TimeoutExpired(command, 3)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+
+    assert runner._start_opencode_server("podman", "smoke", 30, opencode_v2=opencode_v2)
+    assert len(attempts) == 2
+
+
+def test_opencode_v2_waits_for_correlated_exact_mcp_tool_listing(monkeypatch, capsys):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v2_mcp_readiness")
+    responses = iter(("0\n", "1\n"))
+    commands = []
+
+    def fake_exec(engine, name, command, timeout, **kwargs):
+        commands.append((engine, name, command, timeout, kwargs.get("env")))
+        return subprocess.CompletedProcess(command, 0, next(responses), "")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(runner.time, "monotonic", lambda: 0)
+
+    assert runner._wait_for_opencode_v2_mcp_tools("podman", "smoke", 30)
+
+    assert len(commands) == 2
+    assert all(command[0:2] == ("podman", "smoke") for command in commands)
+    assert all(
+        command[4] == runner.build_agent_environment("opencode", opencode_v2=True)
+        for command in commands
+    )
+    assert all(
+        command[2][-1] == f"{runner.STATE_DIR}/mcp_version_rpc.jsonl"
+        for command in commands
+    )
+    assert all(
+        any("mcp_tools_list_match" in item for item in command[2])
+        for command in commands
+    )
+    assert "exact AI Guardian get_version tool" in capsys.readouterr().out
+
+
+def test_opencode_v2_mcp_readiness_retries_a_timed_out_probe(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v2_mcp_probe_timeout")
+    attempts = []
+
+    def fake_exec(_engine, _name, command, *_args, **_kwargs):
+        attempts.append(command)
+        if len(attempts) == 1:
+            raise subprocess.TimeoutExpired(command, 3)
+        return subprocess.CompletedProcess(command, 0, "1\n", "")
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+
+    assert runner._wait_for_opencode_v2_mcp_tools("podman", "smoke", 30)
+    assert len(attempts) == 2
+
+
+def test_opencode_v2_mcp_readiness_times_out_without_exact_tool_listing(
+    monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_v2_mcp_readiness_timeout")
+    now = [0.0]
+    probes = []
+
+    def fake_exec(engine, name, command, timeout, **_kwargs):
+        probes.append((engine, name, command, timeout))
+        return subprocess.CompletedProcess(command, 0, "0\n", "")
+
+    def fake_sleep(seconds):
+        now[0] += seconds
+
+    monkeypatch.setattr(runner, "_exec", fake_exec)
+    monkeypatch.setattr(runner.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(runner.time, "sleep", fake_sleep)
+
+    assert not runner._wait_for_opencode_v2_mcp_tools("podman", "smoke", 1)
+
+    assert len(probes) == 2
+    assert "did not list AI Guardian get_version" in capsys.readouterr().out
+
+
+def test_opencode_warmup_uses_clean_case_and_local_provider(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_warmup")
     violations = iter(({}, {}))
     requests = iter(({"allowed": 0}, {"allowed": 1}))
     commands = []
@@ -1278,7 +1549,7 @@ def test_opencode_v1_warmup_uses_clean_case_and_local_provider(monkeypatch):
 
     monkeypatch.setattr(runner, "_exec", fake_exec)
 
-    assert runner._warm_opencode_v1_server("podman", "smoke", "build", 30)
+    assert runner._warm_opencode_server("podman", "smoke", "build", 30)
 
     assert commands[0][0:4] == [
         "opencode",
@@ -1289,8 +1560,8 @@ def test_opencode_v1_warmup_uses_clean_case_and_local_provider(monkeypatch):
     assert "AGENT_CLI_SMOKE_CASE: allowed" in commands[0][-1]
 
 
-def test_opencode_v1_warmup_fails_if_clean_case_creates_a_violation(monkeypatch):
-    runner = _load(RUNNER_PATH, "agent_cli_opencode_v1_warmup_violation")
+def test_opencode_warmup_fails_if_clean_case_creates_a_violation(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_opencode_warmup_violation")
     violations = iter(({}, {"prompt_injection": 1}))
     requests = iter(({"allowed": 0}, {"allowed": 1}))
     monkeypatch.setattr(
@@ -1307,7 +1578,7 @@ def test_opencode_v1_warmup_fails_if_clean_case_creates_a_violation(monkeypatch)
         ),
     )
 
-    assert not runner._warm_opencode_v1_server("podman", "smoke", "build", 30)
+    assert not runner._warm_opencode_server("podman", "smoke", "build", 30)
 
 
 def test_main_removes_smoke_network_when_sandbox_creation_fails(monkeypatch, tmp_path):
@@ -1511,6 +1782,7 @@ def test_opencode_mock_window_preserves_native_continuations_and_existing_settin
         )
 
     monkeypatch.setattr(runner, "_exec", execute_config)
+    monkeypatch.setattr(runner, "_configure_mcp_evidence_proxy", lambda *args: True)
     assert runner._configure_agent("podman", "synthetic", "opencode", "build", 5)
     config = json.loads(path.read_text(encoding="utf-8"))
     model = config["provider"]["ai_guardian_smoke"]["models"][runner.MOCK_MODEL]
@@ -1526,6 +1798,24 @@ def test_opencode_mock_window_preserves_native_continuations_and_existing_settin
     first = path.read_bytes()
     assert runner._configure_agent("podman", "synthetic", "opencode", "build", 5)
     assert path.read_bytes() == first
+
+
+def test_configure_agent_installs_the_mcp_evidence_proxy(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_mcp_proxy_install")
+    configured = []
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess([], 0, "", ""),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_configure_mcp_evidence_proxy",
+        lambda _engine, _name, cli, _timeout: configured.append(cli) or True,
+    )
+
+    assert runner._configure_agent("podman", "sandbox", "pi", "openai", 5)
+    assert configured == ["pi"]
 
 
 def test_mock_provider_configuration_is_written_to_each_clients_native_config(
@@ -1844,6 +2134,471 @@ def test_local_mock_returns_native_tool_calls_for_only_fixed_probe_cases():
     )
 
 
+@pytest.mark.parametrize(
+    "tool",
+    (
+        {
+            "type": "function",
+            "function": {
+                "name": "mcp__ai-guardian__get_version",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "name": "mcp__ai-guardian__get_version",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "mcp__ai-guardian__get_version",
+            "input_schema": {"type": "object", "properties": {}},
+        },
+        {
+            "functionDeclarations": [
+                {
+                    "name": "mcp__ai-guardian__get_version",
+                    "parameters": {"type": "OBJECT", "properties": {}},
+                }
+            ]
+        },
+    ),
+)
+def test_local_mock_finds_ai_guardian_version_tool_in_native_schemas(tool):
+    mock = _load(MOCK_PATH, f"agent_cli_mcp_schema_{len(json.dumps(tool))}")
+
+    assert mock._find_case_tool({"tools": [tool]}, "mcp_version") == (
+        "mcp__ai-guardian__get_version",
+        tool.get("function", {}).get("parameters")
+        or tool.get("parameters")
+        or tool.get("input_schema")
+        or tool["functionDeclarations"][0]["parameters"],
+    )
+    assert (
+        mock._find_case_tool(
+            {"tools": [{"name": "other-server__get_version"}]}, "mcp_version"
+        )
+        is None
+    )
+    assert (
+        mock._find_case_tool(
+            {"tools": [{"name": "mcp__not-ai-guardian__get_version"}]},
+            "mcp_version",
+        )
+        is None
+    )
+    assert (
+        mock._find_case_tool(
+            {"tools": [{"name": "mcp__ai-guardian__other__get_version"}]},
+            "mcp_version",
+        )
+        is None
+    )
+
+
+def test_local_mock_calls_mcp_version_through_opencode_codemode(monkeypatch):
+    mock = _load(MOCK_PATH, "agent_cli_mcp_version_codemode")
+    expected_version = "synthetic-package-version"
+    monkeypatch.setattr(
+        mock, "_installed_ai_guardian_version", lambda: expected_version
+    )
+    tool = {
+        "type": "function",
+        "function": {
+            "name": "execute",
+            "description": "OpenCode Code Mode execution tool",
+            "parameters": {
+                "type": "object",
+                "properties": {"code": {"type": "string"}},
+                "required": ["code"],
+            },
+        },
+    }
+    payload = {"tools": [tool]}
+
+    call_number, tool_call_number = mock._record_request("mcp_version", payload)
+    response = mock.chat_response(payload, "mcp_version", call_number, tool_call_number)
+    call = response["choices"][0]["message"]["tool_calls"][0]
+    assert call["function"]["name"] == "execute"
+    assert json.loads(call["function"]["arguments"]) == {
+        "code": 'return await tools["ai-guardian"].get_version({})'
+    }
+    assert (
+        mock._find_case_tool(
+            {
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "execute",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"command": {"type": "string"}},
+                            },
+                        },
+                    }
+                ]
+            },
+            "mcp_version",
+        )
+        is None
+    )
+
+    mock._observe_request(
+        {
+            "messages": [
+                {
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": json.dumps({"version": expected_version}),
+                }
+            ]
+        }
+    )
+    stats = mock._stats()
+    assert stats["mcp_version_tool_offers"] == {"mcp_version": 1}
+    assert stats["mcp_version_tool_calls"] == {"mcp_version": 1}
+    assert stats["mcp_version_tool_results"] == {"mcp_version": 1}
+    assert stats["mcp_version_matches"] == {"mcp_version": 1}
+    assert stats["mcp_version_mismatches"] == {}
+    assert expected_version not in json.dumps(stats)
+
+
+def test_local_mock_qualifies_grok_search_and_use_tool_round_trip(monkeypatch):
+    mock = _load(MOCK_PATH, "agent_cli_grok_mcp_meta_tools")
+    expected_version = "synthetic-package-version"
+    monkeypatch.setattr(
+        mock, "_installed_ai_guardian_version", lambda: expected_version
+    )
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "use_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tool_name": {"type": "string"},
+                        "tool_input": {"type": "object"},
+                    },
+                    "required": ["tool_name", "tool_input"],
+                },
+            },
+        },
+    ]
+    initial = {
+        "messages": [{"role": "user", "content": "AGENT_CLI_SMOKE_CASE: mcp_version"}],
+        "tools": tools,
+    }
+
+    call_number, tool_call_number = mock._record_request("mcp_version", initial)
+    search_response = mock.chat_response(
+        initial, "mcp_version", call_number, tool_call_number
+    )
+    search_call = search_response["choices"][0]["message"]["tool_calls"][0]
+    assert search_call["function"]["name"] == "search_tool"
+    assert json.loads(search_call["function"]["arguments"]) == {
+        "query": "ai-guardian get_version",
+        "limit": 5,
+    }
+    assert mock._stats()["mcp_version_tool_offers"] == {}
+    assert mock._stats()["mcp_version_tool_calls"] == {}
+
+    discovered = {
+        "results": [
+            {
+                "server": "ai-guardian",
+                "tools": [
+                    {
+                        "tool_name": "ai-guardian__get_version",
+                        "input_schema": {"type": "object", "properties": {}},
+                    }
+                ],
+            }
+        ],
+        "total_hidden_tools": 1,
+        "status": "ready",
+    }
+    after_search = {
+        "messages": [
+            *initial["messages"],
+            {
+                "role": "tool",
+                "tool_call_id": search_call["id"],
+                "content": json.dumps(discovered),
+            },
+        ],
+        "tools": tools,
+    }
+    mock._observe_request(after_search)
+    call_number, tool_call_number = mock._record_request("mcp_version", after_search)
+    use_response = mock.chat_response(
+        after_search, "mcp_version", call_number, tool_call_number
+    )
+    use_call = use_response["choices"][0]["message"]["tool_calls"][0]
+    assert use_call["function"]["name"] == "use_tool"
+    assert json.loads(use_call["function"]["arguments"]) == {
+        "tool_name": "ai-guardian__get_version",
+        "tool_input": {},
+    }
+    assert mock._stats()["mcp_version_tool_offers"] == {"mcp_version": 1}
+    assert mock._stats()["mcp_version_tool_calls"] == {"mcp_version": 1}
+
+    mock._observe_request(
+        {
+            "messages": [
+                *after_search["messages"],
+                {
+                    "role": "tool",
+                    "tool_call_id": use_call["id"],
+                    "content": json.dumps({"version": expected_version}),
+                },
+            ]
+        }
+    )
+    stats = mock._stats()
+    assert stats["mcp_version_tool_results"] == {"mcp_version": 1}
+    assert stats["mcp_version_matches"] == {"mcp_version": 1}
+    assert stats["mcp_version_mismatches"] == {}
+    assert expected_version not in json.dumps(stats)
+
+
+def test_grok_mcp_dispatch_requires_issued_search_result_and_exact_schema():
+    mock = _load(MOCK_PATH, "agent_cli_grok_mcp_search_evidence")
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "use_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tool_name": {"type": "string"},
+                        "tool_input": {"type": "object"},
+                    },
+                },
+            },
+        },
+    ]
+    payload = {
+        "messages": [
+            {
+                "role": "tool",
+                "tool_call_id": "not-issued-by-the-mock",
+                "content": json.dumps(
+                    {
+                        "tool_name": "ai-guardian__get_version",
+                        "input_schema": {"type": "object"},
+                    }
+                ),
+            }
+        ],
+        "tools": tools,
+    }
+
+    assert mock._find_case_tool(payload, "mcp_version")[0] == "search_tool"
+    search_id = mock._issued_tool_id("mcp_version", "call_", track_case=False)
+    with mock.COUNTS_LOCK:
+        mock.GROK_MCP_SEARCH_TOOL_IDS.add(search_id)
+    payload["messages"][0].update(
+        {
+            "tool_call_id": search_id,
+            "content": json.dumps(
+                {
+                    "tool_name": "other-server__get_version",
+                    "input_schema": {"type": "object"},
+                }
+            ),
+        }
+    )
+
+    assert mock._find_case_tool(payload, "mcp_version")[0] == "search_tool"
+
+
+def test_local_mock_requires_correlated_mcp_version_result(monkeypatch):
+    mock = _load(MOCK_PATH, "agent_cli_mcp_version_round_trip")
+    expected_version = "synthetic-package-version"
+    monkeypatch.setattr(
+        mock, "_installed_ai_guardian_version", lambda: expected_version
+    )
+    tool = {
+        "type": "function",
+        "function": {
+            "name": "mcp__ai-guardian__get_version",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    }
+    payload = {"tools": [tool]}
+
+    call_number, tool_call_number = mock._record_request("mcp_version", payload)
+    response = mock.chat_response(payload, "mcp_version", call_number, tool_call_number)
+    call = response["choices"][0]["message"]["tool_calls"][0]
+    assert call["function"]["name"] == "mcp__ai-guardian__get_version"
+    assert json.loads(call["function"]["arguments"]) == {}
+
+    mock._observe_request(
+        {
+            "messages": [
+                {"role": "user", "content": "AGENT_CLI_SMOKE_CASE: mcp_version"},
+                {
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": json.dumps({"version": expected_version}),
+                },
+            ]
+        }
+    )
+    stats = mock._stats()
+    assert stats["mcp_version_tool_offers"] == {"mcp_version": 1}
+    assert stats["mcp_version_tool_calls"] == {"mcp_version": 1}
+    assert stats["mcp_version_tool_results"] == {"mcp_version": 1}
+    assert stats["mcp_version_matches"] == {"mcp_version": 1}
+    assert stats["mcp_version_mismatches"] == {}
+    assert expected_version not in json.dumps(stats)
+
+    final_only = _load(MOCK_PATH, "agent_cli_mcp_final_answer_only")
+    monkeypatch.setattr(
+        final_only, "_installed_ai_guardian_version", lambda: expected_version
+    )
+    final_only._observe_request(
+        {
+            "messages": [
+                {"role": "user", "content": "AGENT_CLI_SMOKE_CASE: mcp_version"},
+                {
+                    "role": "assistant",
+                    "content": f"The installed version is {expected_version}.",
+                },
+            ]
+        }
+    )
+    final_stats = final_only._stats()
+    assert final_stats["mcp_version_tool_results"] == {}
+    assert final_stats["mcp_version_matches"] == {}
+
+
+def test_local_mock_records_each_correlated_version_result(monkeypatch):
+    mock = _load(MOCK_PATH, "agent_cli_mcp_multiple_version_results")
+    expected_version = "synthetic-package-version"
+    monkeypatch.setattr(
+        mock, "_installed_ai_guardian_version", lambda: expected_version
+    )
+    matching_id = mock._issued_tool_id("mcp_version", "call_")
+    mismatching_id = mock._issued_tool_id("mcp_version", "call_")
+
+    mock._observe_request(
+        {
+            "messages": [
+                {
+                    "role": "tool",
+                    "tool_call_id": matching_id,
+                    "content": json.dumps({"version": expected_version}),
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": mismatching_id,
+                    "content": json.dumps({"version": "different-version"}),
+                },
+            ]
+        }
+    )
+
+    stats = mock._stats()
+    assert stats["mcp_version_tool_results"] == {"mcp_version": 2}
+    assert stats["mcp_version_matches"] == {"mcp_version": 1}
+    assert stats["mcp_version_mismatches"] == {"mcp_version": 1}
+
+
+@pytest.mark.parametrize(
+    "protocol",
+    ("chat", "responses", "anthropic", "gemini"),
+)
+def test_local_mock_issues_get_version_call_for_supported_provider_protocols(protocol):
+    mock = _load(MOCK_PATH, f"agent_cli_mcp_protocol_{protocol}")
+    tool = {
+        "type": "function",
+        "function": {
+            "name": "mcp__ai-guardian__get_version",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    }
+    payload = {"tools": [tool]}
+
+    if protocol == "chat":
+        call_number, tool_call_number = mock._record_request("mcp_version", payload)
+        response = mock.chat_response(
+            payload, "mcp_version", call_number, tool_call_number
+        )
+        issued = response["choices"][0]["message"]["tool_calls"][0]["function"]
+        assert issued["name"] == "mcp__ai-guardian__get_version"
+        assert json.loads(issued["arguments"]) == {}
+    elif protocol == "responses":
+        call_number, tool_call_number = mock._record_request("mcp_version", payload)
+        response = mock.responses_response(
+            payload, "mcp_version", call_number, tool_call_number
+        )
+        issued = response["output"][0]
+        assert issued["type"] == "function_call"
+        assert issued["name"] == "mcp__ai-guardian__get_version"
+        assert json.loads(issued["arguments"]) == {}
+    elif protocol == "anthropic":
+        call_number, tool_call_number = mock._record_request("mcp_version", payload)
+        response = mock.anthropic_response(
+            payload, "mcp_version", call_number, tool_call_number
+        )
+        issued = response["content"][0]
+        assert issued["type"] == "tool_use"
+        assert issued["name"] == "mcp__ai-guardian__get_version"
+        assert issued["input"] == {}
+    else:
+        payload["contents"] = [
+            {"role": "user", "parts": [{"text": "AGENT_CLI_SMOKE_CASE: mcp_version"}]}
+        ]
+        payload["tools"] = [
+            {
+                "functionDeclarations": [
+                    {
+                        "name": "mcp__ai-guardian__get_version",
+                        "parametersJsonSchema": {
+                            "type": "OBJECT",
+                            "properties": {},
+                        },
+                    }
+                ]
+            }
+        ]
+        # Gemini discovers its native function result by function name.
+        call_number, tool_call_number = mock._record_request("mcp_version", payload)
+        response = mock.gemini_response(
+            payload, "mcp_version", call_number, tool_call_number
+        )
+        issued = response["candidates"][0]["content"]["parts"][0]["functionCall"]
+        assert issued["name"] == "mcp__ai-guardian__get_version"
+        assert issued["args"] == {}
+
+
 def test_local_mock_offers_native_write_for_http_credential_cases():
     mock = _load(MOCK_PATH, "agent_cli_local_http_write_mock")
     tools = [
@@ -1951,6 +2706,11 @@ def test_local_mock_stats_report_tool_availability_without_payloads():
         "function_call_outputs": {},
         "known_function_call_outputs": {},
         "unknown_function_call_outputs": {},
+        "mcp_version_tool_offers": {},
+        "mcp_version_tool_calls": {},
+        "mcp_version_tool_results": {},
+        "mcp_version_matches": {},
+        "mcp_version_mismatches": {},
         "function_call_output_shapes": {},
         "function_call_output_categories": {},
     }
@@ -2029,12 +2789,20 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
         "native_tool_name_run_shell_command": 0,
         "native_tool_name_run_terminal_command": 0,
         "native_file_write_tool_name_write": 0,
+        "mcp_version_tool_offers": 0,
+        "mcp_version_provider_calls": 0,
+        "mcp_version_rpc_calls": 0,
+        "mcp_version_tool_calls": 0,
+        "mcp_version_tool_results": 0,
+        "mcp_version_matches": 0,
+        "mcp_version_mismatches": 0,
     }
     calls = {}
 
     def fake_exec(_engine, _name, command, _timeout, diagnostics=None):
         del diagnostics
         calls["reader"] = command[2]
+        calls["evidence_path"] = command[5]
         return subprocess.CompletedProcess(command, 0, json.dumps(expected), "")
 
     monkeypatch.setattr(runner, "_exec", fake_exec)
@@ -2047,6 +2815,9 @@ def test_tool_evidence_reports_only_allowlisted_native_tool_name_counts(monkeypa
     assert "out['function_call_output_category_'+category]" in calls["reader"]
     assert "out['native_file_write_tool_name_'+name]" in calls["reader"]
     assert "out['file_written']" in calls["reader"]
+    assert calls["evidence_path"] == f"{runner.STATE_DIR}/mcp_version_rpc.jsonl"
+    assert "Path(sys.argv[3])" in calls["reader"]
+    assert "sys.argv[4] == '1'" in calls["reader"]
     assert "private-tool-name" not in calls["reader"]
 
 
@@ -2285,12 +3056,34 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
         "openshell-image-validation": "OpenShell Image Validation",
         "config-validation": "Configuration, Migration & Security Feature Qualification",
         "install-script": "POSIX Install Tests (Linux/macOS, Python ${{ matrix.python-version }})",
-        "mcp-server": "MCP Initialize & get_config JSON-RPC Calls",
+        "mcp-server": "MCP Initialize & Read-Only Tool JSON-RPC Calls",
         "openshell-middleware-runtime": "OpenShell Middleware Compatibility & Runtime Tests",
     }
     assert {
         job_id: job["name"] for job_id, job in workflow["jobs"].items()
     } == job_names
+
+
+def test_release_readiness_limits_github_token_to_read_only_contents():
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+    assert workflow["permissions"] == {"contents": "read"}
+
+
+def test_release_readiness_mcp_protocol_checks_installed_version_tool_result():
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    step = next(
+        step
+        for step in workflow["jobs"]["mcp-server"]["steps"]
+        if step.get("name") == "Test MCP server tool call"
+    )
+    script = step["run"].split("python << 'PYEOF'\n", 1)[1].split("\nPYEOF", 1)[0]
+
+    ast.parse(script)
+    assert '"name": "get_version"' in script
+    assert "from ai_guardian import __version__" in script
+    assert "returned_versions != [__version__]" in script
+    assert '"name": "get_config"' in script
 
 
 def test_pi_release_readiness_requires_native_mcp_registration():
@@ -2794,6 +3587,222 @@ def test_counter_read_diagnostics_truncate_stderr():
     assert diagnostics[0].endswith("x" * 1200)
 
 
+def test_mcp_version_smoke_prompt_asks_for_the_server_result():
+    runner = _load(RUNNER_PATH, "agent_cli_mcp_version_prompt")
+    case = next(case for case in runner.CASES if case.name == "mcp_version")
+
+    assert case.prompt.endswith(
+        "using ai-guardian mcp tell me what is ai-guardian version"
+    )
+
+
+@pytest.mark.parametrize(
+    ("missing", "expected_reason"),
+    (
+        ("offer", "AI Guardian get_version MCP tool was not offered to the model"),
+        ("provider_call", "the local mock did not issue the get_version MCP call"),
+        (
+            "call",
+            "the CLI did not send the issued get_version call to the MCP server",
+        ),
+        (
+            "result",
+            "the AI Guardian MCP server did not return a correlated get_version result",
+        ),
+        ("match", "the correlated MCP result did not contain the installed version"),
+        ("mismatch", "the correlated MCP result contained a mismatched version"),
+    ),
+)
+def test_mcp_version_smoke_requires_correlated_installed_version(
+    missing, expected_reason, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, f"agent_cli_mcp_evidence_{missing}")
+    case = next(case for case in runner.CASES if case.name == "mcp_version")
+    tool_evidence = {
+        "mcp_version_tool_offers": int(missing != "offer"),
+        "mcp_version_provider_calls": int(missing != "provider_call"),
+        "mcp_version_rpc_calls": int(missing != "call"),
+        "mcp_version_tool_calls": int(missing != "call"),
+        "mcp_version_tool_results": int(missing != "result"),
+        "mcp_version_matches": int(missing not in ("match", "result")),
+        "mcp_version_mismatches": int(missing == "mismatch"),
+    }
+    monkeypatch.setattr(runner, "_violation_counts", lambda *_a, **_k: {})
+    request_reads = iter(({}, {"mcp_version": 2}))
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *_a, **_k: next(request_reads)
+    )
+    hook_reads = iter(({}, {"prompt": 1}))
+    monkeypatch.setattr(runner, "_hook_counts", lambda *_a, **_k: next(hook_reads))
+    tool_reads = iter(({}, tool_evidence))
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *_a, **_k: next(tool_reads))
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *_a, **_k: subprocess.CompletedProcess(
+            [], 1, "AI Guardian version is synthetic-package-version", ""
+        ),
+    )
+
+    assert not runner._run_case("docker", "owned", "opencode", "build", case, 30)
+    output = capsys.readouterr().out
+    assert f"FAIL mcp_version: {expected_reason}" in output
+    assert "PASS mcp_version" not in output
+    assert "synthetic-package-version" not in output
+
+
+@pytest.mark.parametrize("exit_code", (0, 1))
+def test_mcp_version_smoke_passes_with_a_matching_correlated_result(
+    monkeypatch, capsys, exit_code
+):
+    runner = _load(RUNNER_PATH, "agent_cli_mcp_evidence_complete")
+    case = next(case for case in runner.CASES if case.name == "mcp_version")
+    monkeypatch.setattr(runner, "_violation_counts", lambda *_a, **_k: {})
+    request_reads = iter(({}, {"mcp_version": 2}))
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *_a, **_k: next(request_reads)
+    )
+    hook_reads = iter(({}, {"prompt": 1}))
+    monkeypatch.setattr(runner, "_hook_counts", lambda *_a, **_k: next(hook_reads))
+    tool_reads = iter(
+        (
+            {},
+            {
+                "mcp_version_tool_offers": 1,
+                "mcp_version_provider_calls": 1,
+                "mcp_version_rpc_calls": 1,
+                "mcp_version_tool_calls": 1,
+                "mcp_version_tool_results": 1,
+                "mcp_version_matches": 1,
+                "mcp_version_mismatches": 0,
+            },
+        )
+    )
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *_a, **_k: next(tool_reads))
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *_a, **_k: subprocess.CompletedProcess([], exit_code, "answer", ""),
+    )
+
+    assert runner._run_case("docker", "owned", "opencode", "build", case, 30)
+    output = capsys.readouterr().out
+    assert "PASS mcp_version" in output
+    if exit_code:
+        assert "the CLI exited 1 after the MCP response" in output
+
+
+def test_grok_mcp_version_case_passes_only_exact_mcp_allow(monkeypatch):
+    runner = _load(RUNNER_PATH, "agent_cli_grok_mcp_permission_wiring")
+    case = next(case for case in runner.CASES if case.name == "mcp_version")
+    evidence = {
+        "mcp_version_tool_offers": 1,
+        "mcp_version_provider_calls": 1,
+        "mcp_version_rpc_calls": 1,
+        "mcp_version_tool_calls": 1,
+        "mcp_version_tool_results": 1,
+        "mcp_version_matches": 1,
+        "mcp_version_mismatches": 0,
+    }
+    requests = iter(({"mcp_version": 0}, {"mcp_version": 2}))
+    hooks = iter(({}, {"prompt": 1}))
+    tool_evidence = iter(({key: 0 for key in evidence}, evidence))
+    monkeypatch.setattr(runner, "_violation_counts", lambda *_a, **_k: {})
+    monkeypatch.setattr(runner, "_provider_stats", lambda *_a, **_k: next(requests))
+    monkeypatch.setattr(runner, "_hook_counts", lambda *_a, **_k: next(hooks))
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *_a, **_k: next(tool_evidence))
+    commands = []
+    original_builder = runner.build_agent_command
+
+    def capture_command(*args, **kwargs):
+        command = original_builder(*args, **kwargs)
+        commands.append(command)
+        return command
+
+    monkeypatch.setattr(runner, "build_agent_command", capture_command)
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
+    )
+
+    assert runner._run_case("podman", "smoke", "grok", "default", case, 30)
+    command = commands[0]
+    assert command.count("--allow") == 2
+    assert "MCPTool(ai-guardian__get_version)" in command
+    assert "--always-approve" not in command
+
+
+@pytest.mark.parametrize(
+    ("result_count", "match_count", "expected_pass"),
+    ((1, 1, True), (0, 0, False), (1, 0, False)),
+)
+def test_mcp_version_timeout_uses_only_aggregate_rpc_evidence(
+    monkeypatch, capsys, result_count, match_count, expected_pass
+):
+    runner = _load(RUNNER_PATH, "agent_cli_mcp_timeout_evidence")
+    case = next(case for case in runner.CASES if case.name == "mcp_version")
+    monkeypatch.setattr(runner, "_violation_counts", lambda *_a, **_k: {})
+    request_reads = iter(({"mcp_version": 0}, {"mcp_version": 1}))
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *_a, **_k: next(request_reads)
+    )
+    hook_reads = iter(({}, {"prompt": 1, "posttooluse": 1}))
+    monkeypatch.setattr(runner, "_hook_counts", lambda *_a, **_k: next(hook_reads))
+    tool_reads = iter(
+        (
+            {
+                "mcp_version_tool_offers": 0,
+                "mcp_version_provider_calls": 0,
+                "mcp_version_rpc_calls": 0,
+                "mcp_version_tool_calls": 0,
+                "mcp_version_tool_results": 0,
+                "mcp_version_matches": 0,
+                "mcp_version_mismatches": 0,
+            },
+            {
+                "mcp_version_tool_offers": 1,
+                "mcp_version_provider_calls": 1,
+                "mcp_version_rpc_calls": 1,
+                "mcp_version_tool_calls": 1,
+                "mcp_version_tool_results": result_count,
+                "mcp_version_matches": match_count,
+                "mcp_version_mismatches": 0,
+            },
+        )
+    )
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *_a, **_k: next(tool_reads))
+    reported = {}
+    monkeypatch.setattr(
+        runner,
+        "_report_case_failure_details",
+        lambda *_a, **kwargs: reported.update(kwargs),
+    )
+
+    def timeout_exec(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(
+            ["gemini"], 30, output="synthetic-package-version", stderr="private"
+        )
+
+    monkeypatch.setattr(runner, "_exec", timeout_exec)
+
+    result = runner._run_case("docker", "owned", "gemini", "default", case, 30)
+    output = capsys.readouterr().out
+    assert result is expected_pass
+    assert "synthetic-package-version" not in output
+    assert "private" not in output
+    if expected_pass:
+        assert (
+            "PASS mcp_version: correlated get_version result matched the installed "
+            "version; the CLI turn timed out after the MCP response"
+        ) in output
+        assert not reported
+    else:
+        assert "FAIL mcp_version: agent CLI timed out" in output
+        assert reported["tool_deltas"]["mcp_version_tool_results"] == result_count
+        assert reported["tool_deltas"]["mcp_version_matches"] == match_count
+
+
 @pytest.mark.parametrize(
     "case_name,exit_code,expected_diagnostic",
     [
@@ -2892,6 +3901,11 @@ def test_agent_case_failures_report_only_aggregate_diagnostics(
             "unclassified",
         ),
         ("stdout", "private invalid output compaction.failed", "unclassified"),
+        ("stderr", "MCP server failed to initialize", "mcp_startup"),
+        ("stderr", "Invalid config.toml syntax", "configuration"),
+        ("stderr", "Unauthorized: API key rejected", "authentication"),
+        ("stderr", "error: unknown option --future-flag", "cli_arguments"),
+        ("stderr", "Fetch failed: connection refused", "transport"),
         ("stdout", None, "unclassified"),
     ),
 )

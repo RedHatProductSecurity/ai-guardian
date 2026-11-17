@@ -850,6 +850,13 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
             return {"violations": [], "count": 0}
 
     @server.tool()
+    def get_version() -> Dict[str, str]:
+        """Get the installed AI Guardian package version."""
+        from ai_guardian import __version__
+
+        return {"version": __version__}
+
+    @server.tool()
     def get_config(project_dir: Optional[str] = None) -> Dict[str, Any]:
         """Get current security posture summary.
 

@@ -86,9 +86,12 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
 
 ## grok
 
-- **Reviewed version / installation:** `@xai-official/grok` **1.0.41**, already
-  pinned in the normal image by `GROK_VERSION`; npm declares **Apache-2.0**.
-  Registry archive integrity was verified during static review; no binary ran.
+- **Reviewed version / installation:** `@xai-official/grok` **1.0.63**, pinned in
+  the normal image; npm metadata reports **Apache-2.0**. Version 1.0.63 fixes
+  custom Chat Completions models failing with connected MCP servers ([official
+  changelog][grok-mcp-fix]).
+  Registry metadata was checked, and the smoke image installs this exact pinned
+  version through npm; it is required for the credential-free MCP smoke.
   [Package metadata][grok-package] and [CLI documentation][grok-settings].
 - **Unattended / local protocol:** `grok --no-auto-update -p ... --model ag-smoke
   --output-format json`. A private `[model.ag-smoke]` in user `config.toml` sets
@@ -101,8 +104,10 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
   `run_terminal_command` is required, not an advisory MCP checker. Global managed
   hooks are used; project hooks require separate upstream trust, which the runner
   does not grant. [Hook contract][grok-hooks], [headless flags][grok-headless].
-- **Next action / priority:** **P1** — run the new five-case CI subset against the
-  audited version. Version drift fails without rebuilding a supplied image.
+- **Next action / priority:** **P1** — run the five-case CI subset and the separate
+  `get_version` MCP check against the exact audited version. The MCP check requires
+  a model-facing tool offer, issued call, correlated server result and exact
+  installed version. Version drift fails without rebuilding a supplied image.
   Record aggregate native evidence; leave prompt/output containment unqualified.
   No OpenShell or additional host-platform support is added.
 - **Native execution in this change:** not run; no new tested native version.
@@ -235,6 +240,28 @@ Pi **0.86.0** is recorded in #2662/#2670; it is not a new run of this change.
 Gemini containment is native refusal. The tolerated Codex CI failure stays failed
 and unqualified. Claude requires its separate explicit installation consent.
 
+## MCP version smoke
+
+The credential-free CLI smoke separately calls AI Guardian's native
+`get_version` MCP tool for Claude, Codex, Gemini, OpenCode, Pi, and Grok. It
+requires an issued call, a correlated tool result, and the exact installed
+package version at the local mock provider; a final-answer claim alone is not
+evidence. This capability check does not expand Grok's pre-tool-only security
+qualification. Its headless invocation allows only this exact read-only MCP tool,
+not global always-approve. OpenCode V2 normally routes MCP through Code Mode, but
+this smoke sets `codemode: false` for this server and invokes the individual MCP
+tool rather than qualifying Code Mode's `execute` interpreter. Grok follows its
+native `search_tool` → `use_tool` flow; dispatch is allowed only after a correlated
+search result identifies the exact qualified `ai-guardian__get_version` tool
+and its schema. The mock-issued provider call is counted separately from the
+client's actual MCP RPC. Grok keeps the `use_tool` result local, so its smoke
+uses the stdio witness to correlate the call and exact installed version.
+Clients that keep MCP results local must produce that witness; clients that
+forward correlated tool results use provider evidence. Goose intentionally uses
+`--no-mcp`, so its runner reports the MCP version check as **UNSUPPORTED**, never
+as a pass. Other clients without a credential-free smoke lane remain explicitly
+blocked in the coverage ledger.
+
 ## Runtime and diagnostics boundaries
 
 The [canonical registry](../src/ai_guardian/ide_registry.py) remains authoritative:
@@ -250,7 +277,8 @@ booleans and fixed categories, never prompts, credentials or CLI/model/tool bodi
 
 [copilot-license]: https://github.com/github/copilot-cli/blob/main/LICENSE.md
 [copilot-byok]: https://docs.github.com/copilot/how-tos/copilot-cli/customize-copilot/add-llm-models
-[grok-package]: https://registry.npmjs.org/@xai-official/grok/1.0.41
+[grok-package]: https://registry.npmjs.org/@xai-official/grok/1.0.63
+[grok-mcp-fix]: https://x.ai/cli/changelogs/1.0.63.external.md
 [grok-settings]: https://docs.x.ai/build/settings
 [grok-hooks]: https://docs.x.ai/build/features/hooks
 [grok-headless]: https://docs.x.ai/build/cli/headless-scripting
