@@ -8,7 +8,7 @@ import pytest
 from ai_guardian.hook_adapters.pi import PiAdapter
 from ai_guardian.hook_processing import process_hook_data
 from ai_guardian.setup import _setup_hooks_json_output
-from ai_guardian.setup.hooks import IDESetup
+from ai_guardian.setup.hooks import IDESetup, _PI_EXTENSION_TS
 from ai_guardian.tools.policy import ToolPolicyChecker
 
 
@@ -202,36 +202,29 @@ def test_pi_lowercase_native_shell_uses_bash_permissions(isolated_pi_prompt_hook
     assert result["_blocked"] is True
 
 
-def test_pi_setup_reports_managed_mcp_extension(tmp_path, monkeypatch, capsys):
+def test_pi_setup_reports_native_mcp_extension_registration(
+    tmp_path, monkeypatch, capsys
+):
     """
-    USER EXPERIENCE: Pi setup -> hooks and MCP tools share one managed extension.
+    USER EXPERIENCE: Pi setup -> native MCP servers include AI Guardian in /mcp.
 
     Expected User Experience:
     - Setup writes the Pi extension in the configured agent directory.
-    - JSON setup reports an extension-backed MCP registration, not a fake MCP file.
-    - Missing npm dependencies are diagnosable and do not disable the hook bridge.
+    - JSON setup reports native extension registration, not a fabricated MCP file.
+    - Setup does not require npm packages for Pi's built-in MCP support.
     """
     agent_home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
     monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
 
-    with (
-        patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")),
-        patch(
-            "ai_guardian.setup.hooks._install_pi_mcp_sdk",
-            return_value=(True, "installed the pinned Pi MCP SDK"),
-        ),
-    ):
+    with patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")):
         assert _setup_hooks_json_output("pi", force=True) is True
 
     result = json.loads(capsys.readouterr().out)
     assert result["success"] is True
-    assert result["mcp_status"] == "missing_dependencies"
+    assert result["mcp_status"] == "healthy"
     assert result["mcp_registration"] == "extension"
     assert result["mcp_identity_registered"] is True
-    assert (
-        "npm install --ignore-scripts --no-audit --no-fund" in result["mcp_diagnostic"]
-    )
     assert result["mcp_config_path"] is None
     assert (
         result["mcp_extension_path"]
@@ -240,32 +233,47 @@ def test_pi_setup_reports_managed_mcp_extension(tmp_path, monkeypatch, capsys):
     )
     assert (agent_home / "extensions" / "ai-guardian" / "index.ts").is_file()
     assert not (agent_home / "extensions" / "ai-guardian.ts").exists()
+    source = (agent_home / "extensions" / "ai-guardian" / "index.ts").read_text(
+        encoding="utf-8"
+    )
+    assert "registerMcpServer" in source
+    assert "mcp-server" in source
 
 
-def test_pi_setup_is_idempotent_before_npm_dependencies_are_installed(
-    tmp_path, monkeypatch, capsys
-):
+def test_pi_setup_is_idempotent_without_npm_dependencies(tmp_path, monkeypatch, capsys):
     """
     USER EXPERIENCE: Re-running Pi setup -> existing hooks remain usable.
 
-    Missing SDK dependencies are reported as a repair diagnostic, not as a
-    reason to discard the hook bridge or report a false setup failure.
+    Pi's native MCP support has no extension-local SDK dependency to install.
+    Re-running setup preserves a healthy extension without an npm side effect.
     """
     agent_home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
     monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
 
-    with (
-        patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")),
-        patch(
-            "ai_guardian.setup.hooks._install_pi_mcp_sdk",
-            return_value=(False, "npm was not found"),
-        ),
-    ):
+    with patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")):
         assert _setup_hooks_json_output("pi", force=True) is True
         capsys.readouterr()
 
         assert _setup_hooks_json_output("pi") is True
         result = json.loads(capsys.readouterr().out)
     assert result["success"] is True
-    assert result["mcp_status"] == "missing_dependencies"
+    assert result["mcp_status"] == "healthy"
+
+
+def test_pi_native_mcp_failures_keep_pi_diagnostics_and_safe_registration_errors():
+    """
+    USER EXPERIENCE: Pi MCP failure -> keep host diagnostics, hide raw exceptions.
+
+    Expected User Experience:
+    - Pi's native MCP layer owns server startup and tool-call diagnostics shown in /mcp.
+    - Extension registration failures show a safe category and direct the user to /mcp.
+    - Raw exception text, paths, and credentials are never copied into the notice.
+    """
+    assert "registerMcpServer" in _PI_EXTENSION_TS
+    assert 'mcpApi.registerMcpServer("ai-guardian"' in _PI_EXTENSION_TS
+    assert "Check /mcp in Pi for server diagnostics." in _PI_EXTENSION_TS
+    assert "safeMcpRegistrationDiagnostic(error)" in _PI_EXTENSION_TS
+    assert "MCP_FAILURE_TEXT" not in _PI_EXTENSION_TS
+    assert "StdioClientTransport" not in _PI_EXTENSION_TS
+    assert "callTool(" not in _PI_EXTENSION_TS

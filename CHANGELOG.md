@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `source_command` fallback to detailed command-originated history only when no
   usable file path exists and secret/PII checks verify it safe. Keep source
   locations preferred and sensitive findings minimal.
+- **Pi setup and native MCP registration (#2762):** Detect an installed Pi CLI
+  before its AI Guardian extension exists and register AI Guardian through Pi's
+  native extension API so it appears in `/mcp` (Pi 0.99.0+).
 - **Trusted developer-session non-blocking findings (#2755):** Add a separate,
   default-off global opt-in to surface successful block-action findings as
   advisory diagnostics while preserving scanning, violation logging, and

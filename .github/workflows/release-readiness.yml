@@ -976,7 +976,7 @@ jobs:
             -e AI_GUARDIAN_SETUP_SCOPE=selected \
             -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=false \
             ai-guardian-readiness \
-            /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts'
+            /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts && grep -q "registerMcpServer" /sandbox/.pi/agent/extensions/ai-guardian/index.ts'
 
       - name: Pi CLI Smoke (local mock provider)
         id: pi_smoke

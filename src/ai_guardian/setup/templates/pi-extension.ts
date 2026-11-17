@@ -5,8 +5,7 @@ import { execFileSync } from "node:child_process";
 const GUARDIAN_BINARY = "ai-guardian";
 const GUARDIAN_BINARY_ARGS: string[] = [];
 const PI_MCP_ENABLED = __AI_GUARDIAN_PI_MCP_ENABLED__;
-const MCP_TOOL_PREFIX = "mcp__ai-guardian__";
-const MCP_FAILURE_TEXT = "AI Guardian MCP tools are unavailable.";
+const PI_MCP_MIN_VERSION = __AI_GUARDIAN_PI_MCP_MIN_VERSION__;
 
 interface GuardianResult {
   blocked: boolean;
@@ -132,124 +131,66 @@ function replaceMessageText(message: any, replacement: string): any {
   return replaced ? { ...message, content } : message;
 }
 
-type McpClient = {
-  connect(transport: unknown): Promise<void>;
-  listTools(): Promise<{ tools?: Array<Record<string, any>> }>;
-  callTool(request: Record<string, unknown>): Promise<Record<string, any>>;
-  getServerVersion?(): { name?: string; version?: string } | undefined;
-  close?(): Promise<void>;
+type PiMcpServerConfig = {
+  command: string;
+  args: string[];
+  cwd: string;
+  env: Record<string, string>;
+  exposure: "direct";
 };
 
-type McpTransport = { close(): Promise<void> };
+type PiMcpRegistrationApi = {
+  registerMcpServer?: (name: string, config: PiMcpServerConfig) => void;
+};
 
-let mcpClient: McpClient | undefined;
-let mcpTransport: McpTransport | undefined;
-let mcpInitAttempted = false;
+let mcpRegistrationAttempted = false;
 
-function mcpToolResult(result: Record<string, any>): Record<string, unknown> {
-  const content = Array.isArray(result.content)
-    ? result.content
-    : [{ type: "text", text: MCP_FAILURE_TEXT }];
-  return {
-    content,
-    details: {},
-    isError: result.isError === true,
-  };
+function safeMcpRegistrationDiagnostic(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/already registered|duplicate|name conflict/i.test(message)) {
+    return "server name conflict";
+  }
+  if (/invalid.*(server|config|registration)|(server|config).*invalid/i.test(message)) {
+    return "invalid server registration";
+  }
+  if (/not supported|not a function/i.test(message)) {
+    return "Pi MCP registration API unavailable";
+  }
+  const code = error && typeof error === "object" && "code" in error
+    ? (error as { code?: unknown }).code
+    : undefined;
+  if (code === "ENOENT") return "local server command not found";
+  if (code === "EACCES" || code === "EPERM") return "local server command is not executable";
+  return "registration failed";
 }
 
-async function closeMcp(): Promise<void> {
-  const client = mcpClient;
-  const transport = mcpTransport;
-  mcpClient = undefined;
-  mcpTransport = undefined;
-  try {
-    await client?.close?.();
-  } catch {
-    // The Pi process is already shutting down or the child has exited.
-  }
-  try {
-    await transport?.close?.();
-  } catch {
-    // The Pi process is already shutting down or the child has exited.
-  }
-}
+function registerMcpServer(pi: ExtensionAPI, ctx: any): void {
+  if (!PI_MCP_ENABLED || mcpRegistrationAttempted) return;
+  mcpRegistrationAttempted = true;
 
-async function registerMcpTools(pi: ExtensionAPI, ctx: any): Promise<void> {
-  if (!PI_MCP_ENABLED || mcpInitAttempted) return;
-  mcpInitAttempted = true;
-
-  let client: McpClient | undefined;
-  let transport: McpTransport | undefined;
-  try {
-    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
-    const { StdioClientTransport } = await import(
-      "@modelcontextprotocol/sdk/client/stdio.js"
+  const mcpApi = pi as ExtensionAPI & PiMcpRegistrationApi;
+  if (typeof mcpApi.registerMcpServer !== "function") {
+    ctx?.ui?.notify?.(
+      `AI Guardian MCP requires Pi ${PI_MCP_MIN_VERSION} or newer to appear in /mcp. Update Pi and restart the session.`,
+      "error",
     );
-    const env = {
-      ...Object.fromEntries(
-        Object.entries(process.env).filter((entry): entry is [string, string] =>
-          typeof entry[1] === "string",
-        ),
-      ),
-      AI_GUARDIAN_PROJECT_DIR: ctx.cwd || process.cwd(),
-    };
-    transport = new StdioClientTransport({
+    return;
+  }
+
+  const projectDir = ctx.cwd || process.cwd();
+  try {
+    mcpApi.registerMcpServer("ai-guardian", {
       command: GUARDIAN_BINARY,
       args: [...GUARDIAN_BINARY_ARGS, "mcp-server"],
-      env,
-    }) as McpTransport;
-    client = new Client({ name: "ai-guardian-pi", version: "1.0.0" }) as McpClient;
-    await client.connect(transport);
-    const server = client.getServerVersion?.();
-    if (!server || server.name !== "ai-guardian") {
-      throw new Error("unexpected MCP server identity");
-    }
-
-    const listed = await client.listTools();
-    for (const tool of listed.tools || []) {
-      if (!tool || typeof tool.name !== "string" || !tool.name) continue;
-      const name = `${MCP_TOOL_PREFIX}${tool.name}`;
-      const activeClient = client;
-      pi.registerTool({
-        name,
-        label: `AI Guardian: ${tool.name}`,
-        description: typeof tool.description === "string"
-          ? tool.description
-          : "AI Guardian security advisor",
-        parameters: (tool.inputSchema || {
-          type: "object",
-          properties: {},
-        }) as any,
-        async execute(_toolCallId: string, params: Record<string, unknown>) {
-          try {
-            return mcpToolResult(await activeClient.callTool({
-              name: tool.name,
-              arguments: params || {},
-            }));
-          } catch {
-            return {
-              content: [{ type: "text", text: MCP_FAILURE_TEXT }],
-              details: {},
-              isError: true,
-            };
-          }
-        },
-      });
-    }
-    mcpClient = client;
-    mcpTransport = transport;
-  } catch {
-    try {
-      await client?.close?.();
-    } catch {
-      // The child may have failed closed before the client connected.
-    }
-    try {
-      await transport?.close?.();
-    } catch {
-      // The child may have failed closed before the client connected.
-    }
-    ctx?.ui?.notify?.(MCP_FAILURE_TEXT, "error");
+      cwd: projectDir,
+      env: { AI_GUARDIAN_PROJECT_DIR: projectDir },
+      exposure: "direct",
+    });
+  } catch (error) {
+    ctx?.ui?.notify?.(
+      `AI Guardian MCP registration failed (${safeMcpRegistrationDiagnostic(error)}). Check /mcp in Pi for server diagnostics.`,
+      "error",
+    );
   }
 }
 
@@ -345,7 +286,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    await registerMcpTools(pi, ctx);
+    registerMcpServer(pi, ctx);
     const result = runGuardian(hookData(ctx, "SessionStart"));
     if (result.blocked) {
       ctx.ui.notify(result.error || "Session blocked by ai-guardian", "error");
@@ -353,7 +294,6 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
-    await closeMcp();
     runGuardian(hookData(ctx, "SessionEnd"));
   });
 }

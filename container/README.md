@@ -1298,7 +1298,7 @@ Access from the host: `http://localhost:63152`
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
 | `OPENCODE_VERSION` | `1.19.0` | OpenCode V1 version for both support images |
-| `PI_VERSION` | `0.86.0` | Pi coding agent version for the normal image |
+| `PI_VERSION` | `0.99.0` | Pi coding agent version for the normal image (native MCP registration support) |
 
 The dedicated OpenShell image also records its qualification inputs as OCI
 labels: the report schema version, AI Guardian build value, pinned NVIDIA base

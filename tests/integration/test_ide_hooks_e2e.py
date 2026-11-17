@@ -189,20 +189,11 @@ def isolated_ide_environment(tmp_path, monkeypatch):
 
 def _install_and_verify(ide_type: str) -> Tuple[IDESetup, Dict[str, Any]]:
     setup = IDESetup()
-    pi_install = (
-        patch(
-            "ai_guardian.setup.hooks._install_pi_mcp_sdk",
-            return_value=(True, "installed the pinned Pi MCP SDK"),
-        )
-        if ide_type == "pi"
-        else contextlib.nullcontext()
-    )
     # Setup and MCP helpers print human-facing status text. Keep the matrix
     # output focused on assertion failures, which include IDE/event names.
     with (
         contextlib.redirect_stdout(io.StringIO()),
         contextlib.redirect_stderr(io.StringIO()),
-        pi_install,
     ):
         success, message = setup.setup_ide_hooks(ide_type, force=True)
         assert success, f"{ide_type}/setup: {message}"
@@ -212,13 +203,7 @@ def _install_and_verify(ide_type: str) -> Tuple[IDESetup, Dict[str, Any]]:
     assert verification["healthy"], (
         f"{ide_type}/verification: " f"{json.dumps(verification, sort_keys=True)}"
     )
-    if ide_type == "pi" and verification.get("mcp_status") == "missing_dependencies":
-        # The generated extension remains a healthy hook bridge before the
-        # user installs its pinned SDK dependency. Combined integrity reports
-        # the missing dependency separately.
-        configured, detail = setup.check_hooks_for_ide(ide_type, integrity=False)
-    else:
-        configured, detail = setup.check_hooks_for_ide(ide_type, integrity=True)
+    configured, detail = setup.check_hooks_for_ide(ide_type, integrity=True)
     assert configured, f"{ide_type}/integrity: {detail}"
     return setup, verification
 
@@ -247,7 +232,9 @@ def _assert_mcp_registration(
             status = verify_pi_mcp_extension()
             assert status["mcp_registration"] == "extension"
             assert Path(status["mcp_extension_path"]).is_file()
-            assert status["mcp_status"] in {"healthy", "missing_dependencies"}
+            source = Path(status["mcp_extension_path"]).read_text(encoding="utf-8")
+            assert "registerMcpServer" in source
+            assert status["mcp_status"] == "healthy"
             return
         # Copilot has no local MCP config target; its hook integration is
         # verified below.

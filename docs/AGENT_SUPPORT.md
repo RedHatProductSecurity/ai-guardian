@@ -58,7 +58,7 @@ upstream distinction.
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | **Complete** |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | **Complete** |
 | OpenCode V1/V2 | `--ide opencode` | Version-aware plugin | N/A | **Host contracts complete; normal-image V1 supported; OpenShell V1 Vertex path implemented, live qualification manual** |
-| Pi | `--ide pi` | Managed extension (hooks + MCP tool bridge; eight callbacks) | Managed extension (`@modelcontextprotocol/sdk` pinned) | **Complete** |
+| Pi | `--ide pi` | Managed extension (hooks + native MCP registration; eight callbacks) | Pi extension API (`registerMcpServer`; Pi 0.99.0+) | **Complete** |
 | Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
@@ -91,7 +91,7 @@ home. With no variables set, the existing defaults below are unchanged.
 | AiderDesk | `AIDER_DESK_DIR`, then `AIDER_DESK_HOME_DIR` | Extension: `<dir>/extensions/ai-guardian`; MCP: `<dir>/settings.json` | Project transcript history remains `.aider.chat.history.md` |
 | OpenClaw | `OPENCLAW_STATE_DIR`, then `OPENCLAW_HOME`; `OPENCLAW_CONFIG_PATH` is an explicit MCP file | Plugin: `<state>/plugins/ai-guardian`; MCP: the exact `OPENCLAW_CONFIG_PATH`, otherwise `<state>/settings.json` | Explicit config-file selection does not redirect plugin state |
 | OpenCode V1/V2 | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory); V2 may also use `OPENCODE_DB` | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins`; shared bridge: `<config-dir>/ai-guardian`; V2 local discovery: `.opencode/plugins/` | Project-local config remains project-local; V2 database discovery uses `opencode debug paths db` when available |
-| Pi | `PI_CODING_AGENT_DIR` for the agent home; `PI_CODING_AGENT_SESSION_DIR` for sessions | Managed extension: `<dir>/extensions/ai-guardian/index.ts` plus `package.json`; sessions: `<session-dir>/*.jsonl` | Project extension remains under `<project>/.pi/extensions/ai-guardian`; MCP is bridged through the managed extension |
+| Pi | `PI_CODING_AGENT_DIR` for the agent home; `PI_CODING_AGENT_SESSION_DIR` for sessions | Managed extension: `<dir>/extensions/ai-guardian/index.ts` plus `package.json`; sessions: `<session-dir>/*.jsonl` | Project extension remains under `<project>/.pi/extensions/ai-guardian`; native MCP registration is supplied by the extension |
 | Windsurf | No documented home relocation variable; `WINDSURF_TRANSCRIPTS_DIR` is transcript-only | Existing defaults remain unchanged | Project hooks/settings retain their existing scope |
 | Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
 | Crush | `CRUSH_GLOBAL_CONFIG` for the global MCP file; `CRUSH_GLOBAL_DATA` is not used for setup | Explicit global MCP file only | Hook and default `.crush.json` setup remain project-local |
@@ -144,7 +144,7 @@ bridge contracts because their host SDKs are not repository dependencies.
 | `aiderdesk` | Extension bridge/package registration and shared TypeScript process/response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
 | `openclaw` | Plugin bridge/package registration, rules setup, and shared TypeScript process/response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
 | `opencode` | Version-aware V1/V2 plugin bridge, SQLite/session setup, and shared TypeScript process/response boundary | OpenCode SQLite with V1 fallback and V2 runtime path discovery; browser session adapter | Generated plugin/registration E2E boundary; V1/V2 config-key reconciliation |
-| `pi` | Dedicated adapter, managed extension/MCP bridge, and Claude-compatible response boundary | Pi JSONL; browser session adapter | Generated extension/registration E2E boundary; project/user trust and pinned SDK dependency diagnostics |
+| `pi` | Dedicated adapter, managed extension/native MCP registration, and Claude-compatible response boundary | Pi JSONL; browser session adapter | Generated extension/registration E2E boundary; project/user trust and native MCP registration diagnostics |
 | `augment` | Dedicated adapter/tool-name mapping and Pre/Post command-hook setup | No local transcript; server-side storage documented | Isolated Pre/Post matrix; local-hook and no-local-transcript limitation |
 | `crush` | Dedicated adapter and PreToolUse-only setup/response contract | No transcript/session adapter; upstream surface is partial | Isolated PreToolUse matrix; Windows generated-hook structure and partial-surface limitation |
 | `junie` | MCP/rules setup and explicit no-hook adapter placeholder | No transcript/session adapter | Isolated MCP-only registration/health boundary; advisory, non-enforcing behavior |
@@ -636,12 +636,13 @@ named matcher, and the flat handler list documented upstream were all observed n
 
 ### Pi - managed TypeScript extension
 
-Pi uses a generated `ai-guardian/index.ts` extension rather than a native MCP
-configuration file or a Python GuardedAgent loop. The extension is installed
-with its pinned dependency manifest globally at
+Pi uses a generated `ai-guardian/index.ts` extension rather than a Python
+GuardedAgent loop. The extension is installed globally at
 `~/.pi/agent/extensions/ai-guardian/` (or under `$PI_CODING_AGENT_DIR`) or
 project-locally at `<project>/.pi/extensions/ai-guardian/`. Pi automatically
 discovers extensions in those locations and `/reload` reloads an updated extension.
+The native `registerMcpServer()` integration requires Pi 0.99.0 or newer; setup
+does not write or modify Pi's `mcp.json`.
 
 Pi extensions execute with the host process's permissions. Project-local
 extensions are loaded only after Pi's project-trust decision, so project setup
@@ -650,14 +651,15 @@ provider-request, tool-call, tool-result, user-bash, session, and assistant-outp
 checks to the existing `ai-guardian` CLI and preserves unrelated extensions.
 The global generated extension is version-stamped and refreshed by the daemon
 after an AI Guardian upgrade; project-local extensions remain explicit project
-setup targets. The extension launches the resolved local `ai-guardian mcp-server`
-executable, discovers its tools with `listTools()`, and registers them under the
-`mcp__ai-guardian__*` namespace. Setup installs the pinned MIT-licensed MCP SDK
-with `npm install --ignore-scripts --no-audit --no-fund` when npm is available and
-registers the existing signed identity manifest; server startup still performs
-the existing nonce attestation, and a failed attestation registers no MCP tools.
-If npm is unavailable or the install fails, setup leaves the extension in place
-and reports the retry command.
+setup targets. On session start, the extension registers the resolved local
+`ai-guardian mcp-server` with Pi's native MCP support using direct tool exposure.
+The server appears in the in-session `/mcp` list, where Pi reports connection and
+tool-call failures. Setup registers the existing signed identity manifest;
+server startup still performs the nonce attestation, and a failed attestation
+exposes no usable MCP tools. Pi's `pi mcp list` shell command does not load
+extensions, so it does not show this registration. Older Pi versions retain hook
+protection and receive a safe notice that native MCP registration requires Pi
+0.99.0 or newer.
 
 Pi can advertise its session transcript path before creating the file. AI Guardian
 records byte zero for this expected initial absence without creating a fabricated
@@ -672,8 +674,7 @@ names are not rewritten.
 This is agent-level protection for activity routed through a user-controlled Pi
 process. It does not enforce policy on activity outside that process; OpenShell
 or another outer runtime boundary is required for that enforcement. Pi setup
-never creates a fabricated native MCP configuration or launches an arbitrary
-MCP package.
+does not modify Pi's native MCP configuration or launch an arbitrary MCP package.
 
 ### OpenCode, AiderDesk, and OpenClaw - shared TypeScript process bridge
 

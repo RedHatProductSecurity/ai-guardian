@@ -72,6 +72,7 @@ _TYPESCRIPT_VERSION_TOKEN = "__AI_GUARDIAN_VERSION__"
 _TYPESCRIPT_VERSION_MARKER = "// ai-guardian-generated-version:"
 _OPENCODE_GENERATION_MARKER = "// ai-guardian-opencode-generation:"
 _PI_MCP_ENABLED_TOKEN = "__AI_GUARDIAN_PI_MCP_ENABLED__"
+_PI_MCP_MIN_VERSION_TOKEN = "__AI_GUARDIAN_PI_MCP_MIN_VERSION__"
 
 logger = logging.getLogger(__name__)
 
@@ -268,61 +269,11 @@ def _render_guardian_command(source: str, binary_path: str) -> str:
 
 def _render_pi_extension_source(enable_mcp: bool, binary_path: str) -> str:
     """Render the managed Pi extension with a pinned local server command."""
-    source = _render_typescript_source(_PI_EXTENSION_TS).replace(
+    source = _render_typescript_source(_PI_EXTENSION_TS)
+    source = source.replace(
         _PI_MCP_ENABLED_TOKEN, "true" if enable_mcp else "false"
-    )
+    ).replace(_PI_MCP_MIN_VERSION_TOKEN, json.dumps(PI_MCP_MIN_VERSION))
     return _render_guardian_command(source, binary_path)
-
-
-def _install_pi_mcp_sdk(extension_dir: Path) -> Tuple[bool, str]:
-    """Install Pi's pinned MCP SDK without executing package scripts."""
-    package_path = (
-        extension_dir
-        / "node_modules"
-        / "@modelcontextprotocol"
-        / "sdk"
-        / "package.json"
-    )
-    try:
-        package = json.loads(package_path.read_text(encoding="utf-8"))
-        if package.get("version") == "1.30.1":
-            return True, "using preinstalled pinned Pi MCP SDK"
-    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
-        pass
-
-    npm = shutil.which("npm") or shutil.which("npm.cmd")
-    if not npm:
-        message = "npm was not found; install Node.js/npm before retrying Pi setup"
-        logger.warning("Unable to install the Pi MCP SDK: %s", message)
-        return False, message
-
-    try:
-        result = subprocess.run(
-            [npm, "install", "--ignore-scripts", "--no-audit", "--no-fund"],
-            cwd=str(extension_dir),
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired:
-        message = "npm install timed out after 120 seconds"
-        logger.warning("Unable to install the Pi MCP SDK: %s", message)
-        return False, message
-    except OSError as exc:
-        logger.warning("Unable to run npm install for the Pi MCP SDK: %s", exc)
-        return False, "Unable to run npm install for the Pi MCP SDK"
-
-    if result.returncode != 0:
-        logger.warning(
-            "Pi MCP SDK installation failed with exit code %s: %s",
-            result.returncode,
-            (result.stderr or "").strip().splitlines()[-1:]
-            or (result.stdout or "").strip().splitlines()[-1:],
-        )
-        return False, f"npm install failed with exit code {result.returncode}"
-
-    return True, "installed the pinned Pi MCP SDK"
 
 
 def _typescript_source_version(source: str) -> Optional[str]:
@@ -1397,8 +1348,6 @@ class IDESetup:
             mcp_status = str(mcp.get("mcp_status", "missing"))
             healthy_hook_statuses = {
                 "healthy",
-                "missing_dependencies",
-                "invalid_dependencies",
                 "identity_missing",
                 "identity_invalid",
                 "disabled",
@@ -2290,9 +2239,16 @@ class IDESetup:
             return config_path.is_file()
 
         if ide_type == "pi":
-            return (config_path / "ai-guardian" / "index.ts").is_file() or (
-                config_path / "ai-guardian.ts"
-            ).is_file()
+            agent_dir = config_path.parent
+            return (
+                shutil.which("pi") is not None
+                or any(
+                    (agent_dir / filename).is_file()
+                    for filename in ("settings.json", "mcp.json")
+                )
+                or (config_path / "ai-guardian" / "index.ts").is_file()
+                or (config_path / "ai-guardian.ts").is_file()
+            )
 
         executable = self.IDE_CONFIGS.get(ide_type, {}).get("executable")
         if executable:
@@ -3374,7 +3330,7 @@ class IDESetup:
         dry_run: bool = False,
         enable_mcp: bool = True,
     ) -> Tuple[bool, str]:
-        """Install Pi hooks and the managed MCP bridge in one extension."""
+        """Install Pi hooks and native MCP registration in one extension."""
         extension_dir = ext_dir / "ai-guardian"
         extension_path = extension_dir / "index.ts"
         package_path = extension_dir / "package.json"
@@ -3423,15 +3379,10 @@ class IDESetup:
         )
 
         identity_registered = True
-        mcp_install_success = None
-        mcp_install_message = None
         if enable_mcp:
             from ai_guardian.setup.mcp import _register_mcp_identity
 
             identity_registered = _register_mcp_identity(abs_path)
-            mcp_install_success, mcp_install_message = _install_pi_mcp_sdk(
-                extension_dir
-            )
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
         scanner_notice, no_scanner_available = self._secret_scanning_setup_notice(
@@ -3442,29 +3393,19 @@ class IDESetup:
         if migrated_legacy:
             message += f"  Migrated legacy extension: {legacy_path}\n"
         if enable_mcp:
-            message += f"  MCP server: pinned to {abs_path} mcp-server\n"
+            message += (
+                "  MCP server: registered through Pi's native extension API "
+                f"for /mcp (Pi {PI_MCP_MIN_VERSION}+ required)\n"
+            )
             if not identity_registered:
                 message += (
                     "  ⚠️  WARNING: MCP identity registration failed; MCP tools "
                     "will fail closed until setup succeeds.\n"
                 )
-            if mcp_install_success:
-                message += f"  MCP SDK: {mcp_install_message}\n"
-            else:
-                message += (
-                    "  ⚠️  WARNING: "
-                    f"{mcp_install_message}; MCP tools remain unavailable.\n"
-                )
         message += f"\n  {gitleaks_message}\n"
         message += scanner_notice
         message += "\n  Next steps:\n"
         step = 1
-        if enable_mcp and not mcp_install_success:
-            message += (
-                f"  {step}. Run: cd {extension_dir} && "
-                "npm install --ignore-scripts --no-audit --no-fund\n"
-            )
-            step += 1
         if no_scanner_available:
             message += (
                 f"  {step}. Install a configured scanner or update "
@@ -3571,8 +3512,6 @@ class IDESetup:
                         scope=scope, project_dir=project_dir
                     ).get("mcp_status")
                     if mcp_status in {
-                        "missing_dependencies",
-                        "invalid_dependencies",
                         "identity_missing",
                         "stale",
                         "invalid",
@@ -4570,20 +4509,9 @@ _AIDERDESK_EXTENSION_TS = _load_typescript_template("aiderdesk-extension.ts")
 # Pi extension file contents.
 _PI_EXTENSION_TS = _load_typescript_template("pi-extension.ts")
 
-_PI_PACKAGE_JSON = """\
-{
-  "name": "ai-guardian-pi-extension",
-  "private": true,
-  "type": "module",
-  "description": "Managed AI Guardian extension for Pi",
-  "main": "index.ts",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.1"
-  }
-}
-"""
+PI_MCP_MIN_VERSION = "0.99.0"
 
-_PI_HOOKS_ONLY_PACKAGE_JSON = """\
+_PI_PACKAGE_JSON = """\
 {
   "name": "ai-guardian-pi-extension",
   "private": true,
@@ -4592,6 +4520,8 @@ _PI_HOOKS_ONLY_PACKAGE_JSON = """\
   "main": "index.ts"
 }
 """
+
+_PI_HOOKS_ONLY_PACKAGE_JSON = _PI_PACKAGE_JSON
 
 # OpenCode plugin file contents (Issue #640)
 _OPENCODE_PLUGIN_TS = _load_typescript_template("opencode-plugin-v1.ts")

@@ -2130,6 +2130,17 @@
 - **Pi SDK setup policy:** The managed extension should automatically run `npm install --ignore-scripts --no-audit --no-fund` when npm is available. If npm is unavailable or the install fails, preserve hook protection and expose the retry command; a later setup without `--force` must retry pending SDK states. Setup and check commands may resolve different `ai-guardian` executables, so executable-pin diagnostics must remain distinct from missing SDK dependencies.
 - **Pi MCP bridge policy boundary (#2440):** Pi registers the managed server's tools as `mcp__ai-guardian__*` and sends them through its normal `tool_call` hook. A live identity attestation is the authorization boundary: scanners and immutable protections still run, but ordinary host MCP permission rules must not block the verified security advisor.
 
+- **2026-11-16 — Pi native MCP registration (#2762):** Pi 0.99.0+ exposes
+  `pi.registerMcpServer(name, config)` for extension-owned MCP servers. Register
+  AI Guardian with a stdio config from the managed extension so Pi owns startup,
+  tool handling, and in-session `/mcp` diagnostics; do not add a private MCP
+  client or write a separate MCP settings entry. Supply both `cwd` and
+  `AI_GUARDIAN_PROJECT_DIR` from `ctx.cwd` so out-of-process MCP checks use the
+  active project policy. `pi mcp list` is a shell-config listing and does not
+  load extension registrations. This supersedes the earlier Pi SDK dependency
+  and tool-bridge setup notes above; server identity/nonce attestation remains
+  required.
+
 - **MCP command-check context (#2471):** `check_command` runs outside the daemon, so project policy must be selected through an explicit `project_dir` or `AI_GUARDIAN_PROJECT_DIR`; otherwise the server launch directory is the documented fallback. Capture the developer-session trust state at MCP startup, keep identity failures fail-closed, and have managed Pi pass `ctx.cwd` automatically.
 
 - **MCP paused responses (#2472):** A skipped action-gating check must not carry normalized `policy_decision.decision="allow"`, because consumers may treat it as authorization; omit policy metadata when no decision was evaluated. Diagnostic tools that report effective directory state must accept the same explicit `project_dir` context as the action check.
