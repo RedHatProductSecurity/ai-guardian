@@ -314,10 +314,11 @@ def test_grok_invocation_uses_local_model_without_granting_native_hook_trust(run
         "--dangerously-skip-permissions",
     }.intersection(command)
     assert runner.build_agent_environment("grok") == [
-        f"AI_GUARDIAN_MCP_EVIDENCE_FILE={runner.STATE_DIR}/mcp_version_rpc.jsonl",
         "GROK_HOME=/sandbox/.grok",
         f"XAI_API_KEY={runner.MOCK_KEY}",
     ]
+    assert "grok" not in runner.MCP_EVIDENCE_PROXY_SMOKE_CLIS
+    assert runner.MCP_VERSION_CASES == frozenset({"mcp_version"})
     with pytest.raises(ValueError, match="Grok's default agent"):
         runner._validate_agent("grok", "unreviewed-agent")
 

@@ -539,6 +539,7 @@ def test_sandbox_create_uses_supplied_image_prepared_config_and_isolated_workspa
     assert "--profile" not in command
     assert command[command.index("--repo") + 1] == str(workspace)
     assert command[command.index("--agent") + 1] == "build"
+    assert "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json" in command
     assert (
         command[command.index("--container-network") + 1]
         == "ag-cli-smoke-opencode-test-internal"
@@ -827,6 +828,7 @@ def test_podman_smoke_matches_normal_rootless_container_profile(tmp_path):
     )
     assert "127.0.0.1::63152" in command
     assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
+    assert "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json" in command
     assert f"AI_GUARDIAN_STATE_DIR={runner.STATE_DIR}" in command
     assert "ai-guardian.daemon=true" in command
     assert (
@@ -3206,7 +3208,7 @@ def test_mcp_version_smoke_requires_correlated_installed_version(
         runner,
         "_exec",
         lambda *_a, **_k: subprocess.CompletedProcess(
-            [], 0, "AI Guardian version is synthetic-package-version", ""
+            [], 1, "AI Guardian version is synthetic-package-version", ""
         ),
     )
 
@@ -3217,8 +3219,9 @@ def test_mcp_version_smoke_requires_correlated_installed_version(
     assert "synthetic-package-version" not in output
 
 
+@pytest.mark.parametrize("exit_code", (0, 1))
 def test_mcp_version_smoke_passes_with_a_matching_correlated_result(
-    monkeypatch, capsys
+    monkeypatch, capsys, exit_code
 ):
     runner = _load(RUNNER_PATH, "agent_cli_mcp_evidence_complete")
     case = next(case for case in runner.CASES if case.name == "mcp_version")
@@ -3245,11 +3248,14 @@ def test_mcp_version_smoke_passes_with_a_matching_correlated_result(
     monkeypatch.setattr(
         runner,
         "_exec",
-        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "answer", ""),
+        lambda *_a, **_k: subprocess.CompletedProcess([], exit_code, "answer", ""),
     )
 
     assert runner._run_case("docker", "owned", "opencode", "build", case, 30)
-    assert "PASS mcp_version" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "PASS mcp_version" in output
+    if exit_code:
+        assert "the CLI exited 1 after the MCP response" in output
 
 
 @pytest.mark.parametrize(
@@ -3416,6 +3422,11 @@ def test_agent_case_failures_report_only_aggregate_diagnostics(
             "unclassified",
         ),
         ("stdout", "private invalid output compaction.failed", "unclassified"),
+        ("stderr", "MCP server failed to initialize", "mcp_startup"),
+        ("stderr", "Invalid config.toml syntax", "configuration"),
+        ("stderr", "Unauthorized: API key rejected", "authentication"),
+        ("stderr", "error: unknown option --future-flag", "cli_arguments"),
+        ("stderr", "Fetch failed: connection refused", "transport"),
         ("stdout", None, "unclassified"),
     ),
 )

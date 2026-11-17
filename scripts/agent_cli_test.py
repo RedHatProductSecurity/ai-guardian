@@ -57,9 +57,9 @@ MCP_VERSION_CASES = frozenset({"mcp_version"})
 # Keep this explicit: adding a runnable CLI must not silently claim MCP support.
 # Goose's isolated smoke setup deliberately uses --no-mcp.
 MCP_VERSION_SMOKE_CLIS = ("claude", "codex", "gemini", "opencode", "pi", "grok")
-# Some clients keep MCP results inside their local stdio transport rather than
-# forwarding them in a provider continuation; only those lanes need the witness.
-MCP_EVIDENCE_PROXY_SMOKE_CLIS = frozenset({"gemini", "opencode", "pi", "grok"})
+# These clients keep MCP results inside local stdio rather than forwarding them
+# in a provider continuation. Grok 1.0.63 uses its Chat Completions continuation.
+MCP_EVIDENCE_PROXY_SMOKE_CLIS = frozenset({"gemini", "opencode", "pi"})
 # Goose is host-only in the product registry. Its smoke uses a supplied,
 # disposable test image, not the supported sandbox create/entrypoint path.
 PRE_TOOL_SMOKE_CASE_NAMES = frozenset(
@@ -662,6 +662,9 @@ def build_create_command(
     if cli_name == "codex":
         command.extend(["--env", "CODEX_HOME=/sandbox/.codex"])
     if cli_name == "opencode":
+        command.extend(
+            ["--env", "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json"]
+        )
         command.extend(["--agent", agent])
     return command
 
@@ -719,6 +722,9 @@ def build_podman_create_command(
     ):
         command.extend(["--env", value])
     if cli_name == "opencode":
+        command.extend(
+            ["--env", "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json"]
+        )
         command.extend(["--env", f"AI_GUARDIAN_OPENCODE_AGENT={agent}"])
     if cli_name == "codex":
         command.extend(["--env", "CODEX_HOME=/sandbox/.codex"])
@@ -2410,6 +2416,19 @@ def _run_case(
             return fail("blocked prompt reached the local mock provider")
     else:
         if invocation.returncode != 0:
+            if (
+                is_mcp_version_case
+                and not deltas
+                and _mcp_version_evidence_is_complete(
+                    request_delta, hook_deltas, tool_deltas
+                )
+            ):
+                _progress(
+                    "PASS mcp_version: correlated get_version result matched the "
+                    f"installed version; the CLI exited {invocation.returncode} "
+                    "after the MCP response"
+                )
+                return True
             return fail("clean agent CLI invocation exited nonzero")
         if deltas:
             return fail("clean path created a violation")
@@ -2421,9 +2440,11 @@ def _run_case(
 
 def _agent_error_category(invocation: subprocess.CompletedProcess) -> str:
     """Classify structured CLI errors without releasing their private bodies."""
+    content: List[str] = []
     for stream in (invocation.stdout, invocation.stderr):
         if not isinstance(stream, str):
             continue
+        content.append(stream)
         for line in stream.splitlines():
             try:
                 event = json.loads(line)
@@ -2438,6 +2459,41 @@ def _agent_error_category(invocation: subprocess.CompletedProcess) -> str:
                     pending.extend(value.values())
                 elif isinstance(value, list):
                     pending.extend(value)
+    normalized = "\n".join(content).casefold()
+    if "mcp" in normalized and any(
+        marker in normalized
+        for marker in ("error", "failed", "missing", "unavailable", "could not")
+    ):
+        return "mcp_startup"
+    if any(
+        marker in normalized
+        for marker in ("api key", "unauthorized", "unauthenticated", "authentication")
+    ):
+        return "authentication"
+    if any(
+        marker in normalized
+        for marker in ("unknown option", "unknown argument", "unexpected argument")
+    ):
+        return "cli_arguments"
+    if any(
+        marker in normalized
+        for marker in (
+            "invalid config",
+            "configuration error",
+            "failed to parse config",
+        )
+    ):
+        return "configuration"
+    if any(
+        marker in normalized
+        for marker in (
+            "connection refused",
+            "network error",
+            "fetch failed",
+            "timed out",
+        )
+    ):
+        return "transport"
     return "unclassified"
 
 

@@ -73,9 +73,9 @@ Manual qualification on Linux/macOS Podman:
     an issued call, a JSON-RPC result correlated by request ID, and an exact match
     with the installed server executable's version. Aggregate evidence comes
     from the provider and the smoke-only stdio witness; assistant text alone is
-    never evidence. If a CLI times out after the matched MCP response, only this
-    capability can pass, and the timeout is reported. Goose's `--no-mcp` lane
-    reports this capability as UNSUPPORTED, never PASS.
+    never evidence. If a CLI times out or exits nonzero after the matched MCP
+    response, only this capability can pass, and that process outcome is reported.
+    Goose's `--no-mcp` lane reports this capability as UNSUPPORTED, never PASS.
 """
 
 import importlib.util

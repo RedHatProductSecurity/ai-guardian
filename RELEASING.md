@@ -123,6 +123,12 @@ separate network-none, mount-free smoke-only image; neither lane qualifies a new
 product runtime. Five other clients currently fail preflight with a documented
 blocker, not a passing skip. See the ledger before selecting a client.
 
+The isolated `mcp_version` capability may pass if the CLI times out or exits
+nonzero only after the smoke has independently confirmed the native tool offer,
+issued call, correlated server result and exact installed version with no new
+violation. This does not qualify the CLI's final turn or relax exit checks for
+any other smoke case.
+
 The output probes generate public synthetic test data inside a harmless local
 Python tool; neither their prompts nor tool commands contain the values. The
 execution witness contains only a fixed status, not tool output. The mock inspects
