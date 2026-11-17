@@ -52,11 +52,14 @@ budget_tokens: 1000
   pass. Ruff, Black (Python 3.10 target), error-only Pylint, package Mypy,
   `git diff --check`, and buglog JSON validation pass. Integration and live Pi
   runtime/container tests were not run locally.
-- The original commit was pushed to `origin/2762`. Rebase rewrites it locally;
-  `origin/2762` still points to the pre-rebase commit. No force-push, issue
-  comment, or PR update was made. **Next:** review the rebased commit and
-  acceptance criteria; coordinate a push if desired. Live `/mcp` behavior remains
-  for CI or maintainer runtime qualification.
+- Rebased original commit `61b4693c` onto `origin/main` (`fed4c2d3`), resolving
+  the setup conflict by retaining upstream scanner-availability messaging and
+  native Pi registration. Revalidated 799 related unit and 60 UX tests, Ruff,
+  Black, Pylint, Mypy, and diff checks.
+- At the user's request, pushed rewritten feature commit `0e0dd0fd` to
+  `origin/2762` with `--force-with-lease`. No issue comment or PR update was
+  made. **Next:** review/CI; live `/mcp` behavior remains for CI or maintainer
+  runtime qualification.
 
 ## Issue #2763 Quay usernames from Actions variables — 2026-11-16
 
