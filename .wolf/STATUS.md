@@ -21,22 +21,23 @@ budget_tokens: 1000
   container-exec probe timeouts are retried. Goose intentionally disables MCP and
   reports **UNSUPPORTED**, never PASS.
 - PR #2770 is on branch `2764`; pushed baseline commits include `5f761105`,
-  `571ddd56`, `5fb33518`, `8690a1a0`, and `24be242d`, with final follow-up
-  `20e04b9c` now pushed. Release Readiness run `44149430049` exposed the
-  remaining Grok config/approval and OpenCode V2 endpoint/session/argument
-  issues. Local smoke qualification now passes for
-  Grok's pre-tool subset plus correlated MCP version result and OpenCode V2
-  **2.0.24** across its complete smoke matrix. Grok's CLI turn timed out after
-  the witnessed result; V2 exited 1 after its witnessed result; both count only
-  because the prompt, issued call, correlated exact installed version, and zero
-  new violations were confirmed.
-- **Local validation:** 531 related unit/UX tests pass; Ruff, Black (Python 3.10
-  target), error-only Pylint, mypy, and `git diff --check` pass.
-  Release Readiness run `44160977835` completed successfully on commit
-  `20e04b9c`, including Grok and OpenCode V2 CLI smoke jobs. PR #2770 has since
-  advanced to `dc0e4f74` with a merge from `main`; its regular matrix/build checks
-  are still running on that newer head. **Next:** review those checks for failures;
-  no #2764 smoke issue remains locally or in Release Readiness.
+  `571ddd56`, `5fb33518`, `8690a1a0`, and `24be242d`, with smoke fix `20e04b9c`.
+  Release Readiness run `44160977835` passed on `20e04b9c`, including Grok and
+  OpenCode V2 CLI smoke jobs. The smoke remains qualified for Grok's pre-tool
+  subset plus correlated MCP version result and OpenCode V2 **2.0.24** across its
+  complete matrix. A timeout/nonzero CLI exit counts only when the prompt, issued
+  call, correlated exact installed version, and zero new violations are confirmed.
+- PR checks on merged head `a3bef94b` then failed 11 Windows proxy tests on Python
+  3.10, 3.13, and 3.14. `re.sub` interpreted backslashes in replacement strings,
+  corrupting TOML and Pi extension paths; a config regression also searched raw
+  serialized text. This follow-up uses callable replacements, deterministic
+  Windows-style path regressions, and parsed JSON/TOML/TypeScript-array assertions.
+- **Local validation:** all 24 tests in `tests/unit/test_agent_cli_mcp_proxy.py`
+  pass. Full Ruff, Black (Python 3.10 target), and error-only Pylint pass;
+  project-managed Mypy passes all 343 source files. `git diff --check` passes.
+  The standalone system Mypy executable reports 14 existing typing errors in
+  untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+  **Next:** publish the Windows regression fix and verify the refreshed PR checks.
 ## Issue #2759 sanitized context for locationless violations — 2026-11-17
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2759` on the

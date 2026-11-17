@@ -381,7 +381,7 @@ def _patch_toml_config(path: Path, proxy_path: str) -> bool:
         if match is None:
             return text.rstrip() + "\n" + line + "\n"
         if key != "args":
-            return pattern.sub(line, text, count=1)
+            return pattern.sub(lambda _match: line, text, count=1)
 
         # Setup can format string arrays across multiple TOML lines. Replace the
         # full array value, not just its first line, or the remaining items make
@@ -474,10 +474,14 @@ def _patch_pi_extension(extension: Path, proxy_path: str) -> bool:
         *args,
     ]
     source = binary_pattern.sub(
-        f"const GUARDIAN_BINARY = {json.dumps(sys.executable)};", source, count=1
+        lambda _match: f"const GUARDIAN_BINARY = {json.dumps(sys.executable)};",
+        source,
+        count=1,
     )
     source = args_pattern.sub(
-        "const GUARDIAN_BINARY_ARGS: string[] = " + json.dumps(wrapped_args) + ";",
+        lambda _match: "const GUARDIAN_BINARY_ARGS: string[] = "
+        + json.dumps(wrapped_args)
+        + ";",
         source,
         count=1,
     )

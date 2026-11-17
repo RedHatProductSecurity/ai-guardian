@@ -93,7 +93,9 @@ def test_toml_config_wraps_only_ai_guardian_server(
     tmp_path, cli, monkeypatch, multiline_args
 ):
     monkeypatch.setattr(proxy, "_installed_version", lambda _command: __version__)
+    monkeypatch.setattr(proxy.sys, "executable", r"C:\Python\python.exe")
     path = tmp_path / "config.toml"
+    proxy_path = r"C:\smoke\agent_cli_mcp_proxy.py"
     args_text = (
         'args = [\n    "mcp-server",\n    "value]inside-string",\n]\n'
         if multiline_args
@@ -108,16 +110,16 @@ def test_toml_config_wraps_only_ai_guardian_server(
         encoding="utf-8",
     )
 
-    proxy._patch_toml_config(path, "/tmp/proxy.py")
+    proxy._patch_toml_config(path, proxy_path)
     try:
         import tomllib
     except ImportError:
         import tomli as tomllib
     updated = tomllib.loads(path.read_text(encoding="utf-8"))
     entry = updated["mcp_servers"]["ai-guardian"]
-    assert entry["command"] == sys.executable
+    assert entry["command"] == r"C:\Python\python.exe"
     assert entry["args"] == [
-        "/tmp/proxy.py",
+        proxy_path,
         "proxy",
         "--expected-version",
         __version__,
@@ -134,6 +136,7 @@ def test_pi_extension_wraps_managed_mcp_launch_without_touching_other_source(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(proxy, "_installed_version", lambda _command: __version__)
+    monkeypatch.setattr(proxy.sys, "executable", r"C:\Python\python.exe")
     extension = tmp_path / "index.ts"
     extension.write_text(
         "// generated extension\n"
@@ -145,14 +148,20 @@ def test_pi_extension_wraps_managed_mcp_launch_without_touching_other_source(
         encoding="utf-8",
     )
 
-    proxy._patch_pi_extension(extension, "/tmp/proxy.py")
+    proxy_path = r"C:\smoke\agent_cli_mcp_proxy.py"
+    proxy._patch_pi_extension(extension, proxy_path)
     source = extension.read_text(encoding="utf-8")
-    assert f"const GUARDIAN_BINARY = {json.dumps(sys.executable)};" in source
-    assert (
-        "const GUARDIAN_BINARY_ARGS: string[] = "
-        '["/tmp/proxy.py", "proxy", "--expected-version", '
-        f'"{__version__}", "--", "/opt/ai-guardian"];'
-    ) in source
+    assert f"const GUARDIAN_BINARY = {json.dumps(proxy.sys.executable)};" in source
+    args_prefix = "const GUARDIAN_BINARY_ARGS: string[] = "
+    encoded_args = source.split(args_prefix, 1)[1].split(";", 1)[0]
+    assert json.loads(encoded_args) == [
+        proxy_path,
+        "proxy",
+        "--expected-version",
+        __version__,
+        "--",
+        "/opt/ai-guardian",
+    ]
     assert 'registerMcpServer("ai-guardian"' in source
     assert "const PI_MCP_ENABLED = true;" in source
 
@@ -418,4 +427,22 @@ def test_install_proxy_targets_each_smoke_cli_managed_config(
 
     assert proxy._install_proxy(cli, home, None) == 0
     assert config_path.is_file()
-    assert str(SCRIPT_PATH.resolve()) in config_path.read_text(encoding="utf-8")
+    content = config_path.read_text(encoding="utf-8")
+    if cli in {"claude", "gemini", "opencode"}:
+        config = json.loads(content)
+        if cli == "opencode":
+            configured_args = config["mcp"]["servers"]["ai-guardian"]["command"]
+        else:
+            configured_args = config["mcpServers"]["ai-guardian"]["args"]
+    elif cli in {"codex", "grok"}:
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
+        config = tomllib.loads(content)
+        configured_args = config["mcp_servers"]["ai-guardian"]["args"]
+    else:
+        args_prefix = "const GUARDIAN_BINARY_ARGS: string[] = "
+        encoded_args = content.split(args_prefix, 1)[1].split(";", 1)[0]
+        configured_args = json.loads(encoded_args)
+    assert str(SCRIPT_PATH.resolve()) in configured_args

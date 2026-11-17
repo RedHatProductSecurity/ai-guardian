@@ -335,6 +335,12 @@
 
 ## Key Learnings
 
+- **2026-11-17 — Windows config proxy substitutions (#2764):** Python
+  `re.Pattern.sub` treats backslashes in string replacements as replacement
+  syntax. Use a callback when inserting serialized Windows paths into TOML or
+  generated TypeScript. Tests of JSON/TOML/JSON-in-source configs should parse
+  the serialized value before asserting paths, rather than compare raw text.
+
 - **2026-11-17 — Grok/OpenCode V2 MCP smoke evidence (#2764):** Grok exposes
   server tools through `search_tool`/`use_tool`; require an issued search result
   with the exact qualified name and schema before modeling dispatch, and headless
