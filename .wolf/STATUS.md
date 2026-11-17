@@ -38,8 +38,15 @@ budget_tokens: 1000
   still expected raw `blocked.command`. Updated it to verify raw-command removal
   and the sanitized `blocked.source_command` fallback. The affected policy and
   logger tests pass (38); Ruff, Black, and `git diff --check` pass. Published as
-  `386859c4`; PR checks are rerunning. **Next:** review the new CI results, then
-  user review and external `daf complete`.
+  `386859c4`.
+- **CodeRabbit follow-up:** Confirmed missing/unparseable bundled PII rules could
+  yield an empty matcher set and let an unchanged command pass. `SecretRedactor`
+  now records successfully compiled PII types, and origin-command sanitization
+  fails closed unless the complete expected set is present. Added missing/malformed
+  TOML, partial-set, logger-history, and UX regressions. 93 related unit/UX tests,
+  Ruff, Black, error-level Pylint, and diff checks pass; package Mypy retains 14
+  known errors in untouched modules. Published as `c5422775`; PR checks rerun.
+  **Next:** review the new CI results, then user review and external `daf complete`.
 
 ## Issue #2758 PyPI social preview image — 2026-11-16
 
