@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Violation ID lookup and JSON output (#2790):** Show IDs in recent CLI
   violation listings and support full-record lookup by ID, with clean JSON output
   for list and detail views.
+- **Human-readable violation details (#2793):** Render ID lookups as labeled,
+  indented terminal details by default while preserving machine-readable JSON with
+  `--json`.
 - **Web Console port environment override (#2787):** Allow
   `AI_GUARDIAN_CONSOLE_PORT` to override `console.web.port` for `console` and
   `tui`, while retaining explicit `--port` precedence and automatic assignment.

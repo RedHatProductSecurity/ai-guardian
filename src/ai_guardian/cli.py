@@ -593,7 +593,7 @@ def main():
         violations_parser.add_argument(
             "violation_id",
             nargs="?",
-            help="Show a specific violation by ID",
+            help="Show a specific violation by ID (use --json for JSON output)",
         )
         violations_parser.add_argument(
             "--type", choices=list(ViolationType), help="Filter by violation type"
@@ -614,7 +614,7 @@ def main():
             "--json",
             action="store_true",
             dest="json_output",
-            help="Output the violation list or detail as JSON",
+            help="Output the violation list or detail as machine-readable JSON",
         )
         violations_parser.add_argument(
             "--yes",
