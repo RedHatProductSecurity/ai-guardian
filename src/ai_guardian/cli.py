@@ -354,6 +354,29 @@ def _canonical_ide(ide_type):
     return canonical_ide(ide_type)
 
 
+def _add_daemon_listener_options(parser):
+    """Add per-invocation REST listener overrides to daemon commands."""
+    parser.add_argument(
+        "--host",
+        dest="rest_host",
+        default=None,
+        help=(
+            "REST API listener host (precedence: CLI, environment, daemon "
+            "config, container-aware default)"
+        ),
+    )
+    parser.add_argument(
+        "--port",
+        dest="rest_port",
+        type=int,
+        default=None,
+        help=(
+            "REST API listener port (precedence: CLI, environment, daemon "
+            "config, default 63152)"
+        ),
+    )
+
+
 def main():
     """Main entry point for the hook."""
     if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
@@ -1489,6 +1512,7 @@ def main():
             default=None,
             help="Idle timeout in minutes (0 = disabled, default: 0)",
         )
+        _add_daemon_listener_options(daemon_start_parser)
         daemon_start_parser.add_argument(
             "--no-tray",
             action="store_true",
@@ -1496,7 +1520,8 @@ def main():
         )
         daemon_sub.add_parser("stop", help="Stop running daemon")
         daemon_sub.add_parser("status", help="Show daemon status")
-        daemon_sub.add_parser("restart", help="Restart daemon")
+        daemon_restart_parser = daemon_sub.add_parser("restart", help="Restart daemon")
+        _add_daemon_listener_options(daemon_restart_parser)
         daemon_sub.add_parser("reload", help="Force config reload without restart")
         daemon_sub.add_parser(
             "reset", help="Kill daemon and clean up state files for recovery"

@@ -166,6 +166,7 @@ upstream references. That guide is the source of truth for this summary.
 | LeakTK listen mode | [Scanner Installation][scanners] |
 | Scan-and-configure workflow | [Console Guide][console] |
 | Security SDK and REST API | [SDK Guide][sdk] |
+| Per-invocation daemon REST listener overrides | [Configuration Guide][configuration] |
 
 ## License and Contributions
 

@@ -125,6 +125,50 @@ class TestDaemonCommandsNoAutoStart:
         self._run_main_with_args(["ai-guardian", "daemon", "restart"], mock_ensure)
         mock_ensure.assert_not_called()
 
+    @pytest.mark.parametrize("command", ["start", "restart"])
+    def test_daemon_listener_options_are_parsed(self, command):
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "ai-guardian",
+                    "daemon",
+                    command,
+                    "--host",
+                    "192.0.2.25",
+                    "--port",
+                    "63161",
+                ],
+            ),
+            mock.patch(
+                "ai_guardian.cli._handle_daemon_command", return_value=0
+            ) as handler,
+        ):
+            from ai_guardian.cli import main
+
+            main()
+
+        parsed_args = handler.call_args.args[0]
+        assert parsed_args.rest_host == "192.0.2.25"
+        assert parsed_args.rest_port == 63161
+
+    @pytest.mark.parametrize("command", ["start", "restart"])
+    def test_daemon_listener_options_are_documented(self, command, capsys):
+        with mock.patch.object(
+            sys, "argv", ["ai-guardian", "daemon", command, "--help"]
+        ):
+            from ai_guardian.cli import main
+
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 0
+        output = " ".join(capsys.readouterr().out.split())
+        assert "--host REST_HOST" in output
+        assert "--port REST_PORT" in output
+        assert "precedence: CLI, environment, daemon config" in output
+
     @pytest.mark.parametrize(
         "argv, command, minutes",
         [

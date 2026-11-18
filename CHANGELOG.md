@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Daemon listener CLI options (#2785):** Add `--host` and `--port` to
+  `daemon start` and `daemon restart`, with CLI > environment > daemon config
+  precedence and the existing defaults when omitted.
 - **Tray integration status indicators (#2771):** Show detected CLI/IDE status
   through enabled/disabled setup entries, show verified AI Guardian hook/MCP
   health separately, and disable setup when installation is not detected.
