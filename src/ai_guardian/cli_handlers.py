@@ -210,6 +210,8 @@ def _handle_violations_command(args):
     from ai_guardian.violations.logger import ViolationLogger
 
     violation_logger = ViolationLogger()
+    violation_id = getattr(args, "violation_id", None)
+    json_output = getattr(args, "json_output", False)
 
     # Handle --clear
     if args.clear:
@@ -240,12 +242,43 @@ def _handle_violations_command(args):
             )
             return 1
 
+    # Look up a specific record across unresolved and resolved history.
+    if violation_id is not None:
+        violations = violation_logger.get_recent_violations(
+            limit=10_000,
+            resolved=None,
+        )
+        violation = next(
+            (
+                entry
+                for entry in violations
+                if entry.get("id") == violation_id
+                or entry.get("violation_id") == violation_id
+            ),
+            None,
+        )
+        if violation is None:
+            print("Error: Violation ID not found", file=sys.stderr)
+            return 1
+
+        serialized = json.dumps(violation, indent=2, ensure_ascii=False)
+        if json_output:
+            print(serialized)
+        else:
+            print(f"Violation ID: {json.dumps(violation_id)}")
+            print(serialized)
+        return 0
+
     # Display violations
     violations = violation_logger.get_recent_violations(
         limit=args.limit,
         violation_type=args.type,
         resolved=False,  # Only show unresolved violations by default
     )
+
+    if json_output:
+        print(json.dumps(violations, indent=2, ensure_ascii=False))
+        return 0
 
     if not violations:
         print("No recent violations found")
@@ -282,6 +315,8 @@ def _handle_violations_command(args):
         outcome_badges = _format_violation_outcome_badges(v)
         if outcome_badges:
             print(f"  {' '.join(outcome_badges)}")
+        violation_id = v.get("id") or v.get("violation_id") or "Unknown"
+        print(f"  ID: {json.dumps(violation_id)}")
 
         # Display blocked details based on violation type
         if v.get("violation_type") == ViolationType.TOOL_PERMISSION:

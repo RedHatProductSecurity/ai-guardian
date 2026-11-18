@@ -591,6 +591,11 @@ def main():
             "violations", help="View and manage violation log"
         )
         violations_parser.add_argument(
+            "violation_id",
+            nargs="?",
+            help="Show a specific violation by ID",
+        )
+        violations_parser.add_argument(
             "--type", choices=list(ViolationType), help="Filter by violation type"
         )
         violations_parser.add_argument(
@@ -604,6 +609,12 @@ def main():
         )
         violations_parser.add_argument(
             "--export", metavar="FILE", help="Export violations to JSON file"
+        )
+        violations_parser.add_argument(
+            "--json",
+            action="store_true",
+            dest="json_output",
+            help="Output the violation list or detail as JSON",
         )
         violations_parser.add_argument(
             "--yes",
