@@ -102,6 +102,13 @@ certificate/key/listener changes require an explicit daemon restart. Invalid TLS
 prevents REST startup rather than selecting HTTP. Existing local IPC remains
 independent of this listener.
 
+For a one-time listener override, pass `--host HOST` and/or `--port PORT` to
+`ai-guardian daemon start` or `ai-guardian daemon restart`. Values resolve
+independently in this order: command-line option, `AI_GUARDIAN_REST_HOST` /
+`AI_GUARDIAN_REST_PORT`, `daemon.rest_host` / `daemon.rest_port`, then the
+default (port `63152`; host remains container-aware). CLI options do not modify
+the saved daemon configuration.
+
 Manual targets store equivalent client-only `tls` trust in `tray-targets.json`.
 Remote hook/SDK clients accept `AI_GUARDIAN_DAEMON_CA_FILE`,
 `AI_GUARDIAN_DAEMON_SERVER_NAME`, and `AI_GUARDIAN_DAEMON_CERT_SHA256` alongside

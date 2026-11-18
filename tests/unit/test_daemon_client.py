@@ -302,6 +302,40 @@ class TestSendReloadConfig:
 
 
 class TestStartDaemonBackground:
+    def test_passes_listener_options_to_background_process(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        sock_path = tmp_path / "daemon.sock"
+        sock_path.touch()
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client._find_executable",
+                return_value=["/usr/bin/ai-guardian"],
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.get_socket_path", return_value=sock_path
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", side_effect=[False, True]
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.platform.system", return_value="Linux"
+            ),
+            mock.patch("ai_guardian.daemon.client.subprocess.Popen") as popen,
+            mock.patch("ai_guardian.daemon.client.time.sleep"),
+        ):
+            assert start_daemon_background(rest_host="192.0.2.25", rest_port=63161)
+
+        assert popen.call_args.args[0] == [
+            "/usr/bin/ai-guardian",
+            "daemon",
+            "start",
+            "--host",
+            "192.0.2.25",
+            "--port",
+            "63161",
+        ]
+
     def test_returns_false_on_popen_failure(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
         with mock.patch(
