@@ -14,6 +14,7 @@ from ai_guardian import __version__
 from ai_guardian.setup import (
     _AIDERDESK_EXTENSION_TS,
     _AI_GUARDIAN_BRIDGE_TS,
+    _KILO_PLUGIN_TS,
     _OPENCLAW_PLUGIN_TS,
     _OPENCODE_PLUGIN_TS,
     _OPENCODE_PLUGIN_V2_TS,
@@ -32,6 +33,7 @@ TYPESCRIPT_TEMPLATES = {
     "pi-extension.ts": _PI_EXTENSION_TS,
     "opencode-plugin-v1.ts": _OPENCODE_PLUGIN_TS,
     "opencode-plugin-v2.ts": _OPENCODE_PLUGIN_V2_TS,
+    "kilo-plugin-v1.ts": _KILO_PLUGIN_TS,
     "openclaw-plugin.ts": _OPENCLAW_PLUGIN_TS,
 }
 
@@ -76,10 +78,11 @@ def test_generated_hosts_delegate_to_shared_bridge():
         (_AIDERDESK_EXTENSION_TS, "aiderdesk"),
         (_OPENCLAW_PLUGIN_TS, "openclaw"),
         (_OPENCODE_PLUGIN_TS, "opencode"),
+        (_KILO_PLUGIN_TS, "kilo"),
     ):
         bridge_import = (
             "../ai-guardian/ai-guardian-bridge"
-            if ide_type == "opencode"
+            if ide_type in {"opencode", "kilo"}
             else "./ai-guardian-bridge"
         )
         assert bridge_import in source
@@ -128,7 +131,7 @@ def test_setup_renders_python_module_command_as_executable_and_args():
     assert 'const GUARDIAN_BINARY_ARGS: string[] = ["-m", "ai_guardian"];' in rendered
 
 
-@pytest.mark.parametrize("ide_type", ["aiderdesk", "openclaw", "opencode"])
+@pytest.mark.parametrize("ide_type", ["aiderdesk", "openclaw", "opencode", "kilo"])
 def test_setup_and_health_check_include_shared_bridge(tmp_path, ide_type):
     setup = IDESetup()
     install_root = tmp_path / ide_type
@@ -151,7 +154,7 @@ def test_setup_and_health_check_include_shared_bridge(tmp_path, ide_type):
     bridge_path = install_root / setup.IDE_CONFIGS[ide_type]["bridge_file"]
     assert bridge_path.is_file()
     assert verification["healthy"] is True, verification
-    host_file = "ai-guardian.ts" if ide_type == "opencode" else "index.ts"
+    host_file = "ai-guardian.ts" if ide_type in {"opencode", "kilo"} else "index.ts"
     for artifact in (
         install_root / host_file,
         bridge_path,
@@ -159,6 +162,23 @@ def test_setup_and_health_check_include_shared_bridge(tmp_path, ide_type):
         assert f"// ai-guardian-generated-version: {__version__}" in artifact.read_text(
             encoding="utf-8"
         )
+
+
+def test_kilo_plugin_uses_v1_callbacks_and_refuses_unqualified_result_changes():
+    assert "import type { Plugin } from '@kilocode/plugin';" in _KILO_PLUGIN_TS
+    assert "async 'tool.execute.before'" in _KILO_PLUGIN_TS
+    assert "async 'tool.execute.after'" in _KILO_PLUGIN_TS
+    assert "hook_source: 'kilo'" in _KILO_PLUGIN_TS
+    assert "kilo_plugin_api: 'v1'" in _KILO_PLUGIN_TS
+    assert "if (result.blocked) throw new Error(PRE_TOOL_REFUSAL_NOTICE);" in (
+        _KILO_PLUGIN_TS
+    )
+    assert (
+        "if (result.blocked || result.updatedOutput !== undefined) {" in _KILO_PLUGIN_TS
+    )
+    assert "throw new Error(POST_TOOL_REFUSAL_NOTICE);" in _KILO_PLUGIN_TS
+    assert "output.output = result.updatedOutput" not in _KILO_PLUGIN_TS
+    assert "chat.message" not in _KILO_PLUGIN_TS
 
 
 def test_existing_opencode_is_upgraded_without_first_run_setup(tmp_path):

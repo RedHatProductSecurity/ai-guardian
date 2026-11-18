@@ -19,7 +19,7 @@ from ai_guardian.config.utils import get_cache_dir, get_config_dir
 
 logger = logging.getLogger(__name__)
 
-_PROJECT_SCOPED_IDES = frozenset({"cursor", "grok", "pi", "goose"})
+_PROJECT_SCOPED_IDES = frozenset({"cursor", "grok", "kilo", "pi", "goose"})
 
 
 def _supports_project_scope(ide_type: Optional[str]) -> bool:
@@ -42,7 +42,7 @@ def _normalize_project_setup_target(
             return (
                 scope,
                 project_dir,
-                "Project-scoped setup is supported only for Cursor, Grok, Pi, and Goose.",
+                "Project-scoped setup is supported only for Cursor, Grok, Kilo, Pi, and Goose.",
             )
         return "user", None, None
 
@@ -130,6 +130,7 @@ from ai_guardian.setup.hooks import (  # noqa: F811,F401
     _AI_GUARDIAN_BRIDGE_TS,
     _OPENCODE_PLUGIN_TS,
     _OPENCODE_PLUGIN_V2_TS,
+    _KILO_PLUGIN_TS,
     _PI_EXTENSION_TS,
     _PI_HOOKS_ONLY_PACKAGE_JSON,
     _PI_PACKAGE_JSON,

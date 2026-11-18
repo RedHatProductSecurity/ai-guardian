@@ -174,6 +174,8 @@ def isolated_ide_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("CODEX_HOME", str(home / "codex"))
     monkeypatch.delenv("AI_GUARDIAN_IDE_TYPE", raising=False)
     monkeypatch.delenv("AI_GUARDIAN_DAEMON_URL", raising=False)
+    monkeypatch.delenv("KILO_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("KILO_CONFIG", raising=False)
     monkeypatch.delenv("GOOSE_PATH_ROOT", raising=False)
     monkeypatch.chdir(project)
 
@@ -215,16 +217,22 @@ def _read_json_config(path: Path) -> Dict[str, Any]:
     return json.loads(raw) if raw.strip() else {}
 
 
-def _mcp_config_path(ide_type: str) -> Optional[Path]:
-    return get_mcp_config_path(ide_type)
+def _mcp_config_path(
+    ide_type: str, scope: str = "user", project_dir: Optional[str] = None
+) -> Optional[Path]:
+    return get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
 
 
 def _assert_mcp_registration(
-    ide_type: str, opencode_generation: Optional[str] = None
+    ide_type: str,
+    opencode_generation: Optional[str] = None,
+    *,
+    scope: str = "user",
+    project_dir: Optional[str] = None,
 ) -> None:
     """Verify MCP registration, including the intentional Copilot limitation."""
     spec = _MCP_IDE_CONFIGS[ide_type]
-    path = _mcp_config_path(ide_type)
+    path = _mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
     if path is None:
         if ide_type == "pi":
             from ai_guardian.setup.mcp import verify_pi_mcp_extension
@@ -264,6 +272,8 @@ def _assert_mcp_registration(
             servers, dict
         ), f"opencode/mcp-config: {generation} server container must be an object"
         entry = servers.get("ai-guardian")
+    elif ide_type == "kilo":
+        entry = config.get("mcp", {}).get("ai-guardian")
     else:
         entry = config.get(spec["config_key"], {}).get("ai-guardian")
 
@@ -276,8 +286,13 @@ def _assert_mcp_registration(
         else:
             assert entry.get("enabled") is True
     else:
-        assert entry.get("args") == ["mcp-server"]
-        assert entry.get("command"), f"{ide_type}/mcp-config: command missing"
+        if ide_type == "kilo":
+            assert entry.get("type") == "local"
+            assert entry.get("command", [None, None])[1:] == ["mcp-server"]
+            assert entry.get("enabled") is True
+        else:
+            assert entry.get("args") == ["mcp-server"]
+            assert entry.get("command"), f"{ide_type}/mcp-config: command missing"
         if ide_type == "cursor":
             assert entry.get("type") == "stdio"
 
@@ -699,6 +714,12 @@ def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
             'pi.on("session_start"',
             'pi.on("session_shutdown"',
         )
+    elif ide_type == "kilo":
+        required_events = (
+            "async 'tool.execute.before'",
+            "async 'tool.execute.after'",
+            "kilo_plugin_api: 'v1'",
+        )
     else:
         required_events = ("prompt_submit", "pre_tool_use", "post_tool_use")
     for event_name in required_events:
@@ -777,6 +798,41 @@ def test_install_verify_and_exercise_ide_integration(
         assert (cloud_project / ".cursor" / "hooks.json").is_file()
         assert project_verification["mcp_status"] == "external"
         assert not (cloud_project / ".cursor" / "mcp.json").exists()
+
+    if ide_type == "kilo":
+        kilo_project = isolated_ide_environment["project"] / "kilo-project"
+        kilo_project.mkdir()
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            success, message = setup.setup_ide_hooks(
+                "kilo",
+                force=True,
+                scope="project",
+                project_dir=str(kilo_project),
+            )
+            assert success, f"kilo/project-setup: {message}"
+            _install_mcp_config(
+                setup, "kilo", scope="project", project_dir=str(kilo_project)
+            )
+
+        project_verification = setup.verify_ide_setup(
+            "kilo", scope="project", project_dir=str(kilo_project)
+        )
+        assert project_verification["healthy"], (
+            "kilo/project-verification: "
+            f"{json.dumps(project_verification, sort_keys=True)}"
+        )
+        _assert_mcp_registration("kilo", scope="project", project_dir=str(kilo_project))
+        assert (kilo_project / ".kilo" / "plugin" / "ai-guardian.ts").is_file()
+        assert (kilo_project / "kilo.json").is_file()
+        assert (
+            Path(setup.get_config_path("kilo"))
+            .expanduser()
+            .joinpath("ai-guardian.ts")
+            .is_file()
+        )
 
     if setup.IDE_CONFIGS[ide_type].get("mcp_only"):
         assert verification["events"] == {}

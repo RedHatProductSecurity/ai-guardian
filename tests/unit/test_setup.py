@@ -6362,6 +6362,70 @@ class TestOpenCodeMcpConfig:
         _install_mcp_config(mock.MagicMock(), "unknown_ide")
 
 
+class TestKiloMcpConfig:
+    """Tests for Kilo CLI v7.8.27's native ``mcp`` config shape."""
+
+    def test_setup_registers_native_local_entry_and_preserves_other_servers(
+        self, tmp_path, monkeypatch
+    ):
+        from ai_guardian.setup.hooks import IDESetup
+        from ai_guardian.setup.mcp import _install_mcp_config, verify_mcp_config
+
+        config_root = tmp_path / "kilo-profile"
+        config_root.mkdir()
+        config_path = config_root / "kilo.jsonc"
+        config_path.write_text(
+            '{"provider": {"local": {}}, "mcp": {"other": {"type": "remote", '
+            '"url": "https://example.test/mcp"}}}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("KILO_CONFIG_DIR", str(config_root))
+        setup = IDESetup()
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.mcp._resolve_binary_path",
+                return_value="/usr/bin/ai-guardian",
+            ),
+            mock.patch("ai_guardian.setup.mcp._register_mcp_identity"),
+        ):
+            _install_mcp_config(setup, "kilo")
+
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        assert config["provider"] == {"local": {}}
+        assert config["mcp"]["other"] == {
+            "type": "remote",
+            "url": "https://example.test/mcp",
+        }
+        assert config["mcp"]["ai-guardian"] == {
+            "type": "local",
+            "command": ["/usr/bin/ai-guardian", "mcp-server"],
+            "enabled": True,
+        }
+        status = verify_mcp_config("kilo")
+        assert status["mcp_status"] == "healthy"
+        assert status["mcp_config_path"] == str(config_path)
+
+    def test_invalid_mcp_container_stops_without_rewriting_kilo_config(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from ai_guardian.setup.hooks import IDESetup
+        from ai_guardian.setup.mcp import _install_mcp_config
+
+        config_root = tmp_path / "kilo-config"
+        config_root.mkdir()
+        config_path = config_root / "kilo.json"
+        original = b'{"mcp": []}\n'
+        config_path.write_bytes(original)
+        monkeypatch.setenv("KILO_CONFIG_DIR", str(config_root))
+
+        with mock.patch("ai_guardian.setup.mcp._register_mcp_identity"):
+            _install_mcp_config(IDESetup(), "kilo")
+
+        assert "'mcp' must be an object/mapping" in capsys.readouterr().err
+        assert config_path.read_bytes() == original
+
+
 class TestResolveBinaryPath:
     """Tests for _resolve_binary_path helper."""
 

@@ -345,6 +345,25 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         safe_prompt_replacement=True,
     ),
     IDEIntegration(
+        "kilo",
+        "Kilo Code",
+        "KiloAdapter",
+        ("kilo",),
+        "plugin",
+        "local",
+        (),
+        "none",
+        project_scope=True,
+        post_output_transform=True,
+        safe_post_output_replacement=False,
+        platform_contract=(
+            "Kilo CLI 7.8.27 plugin callback/discovery source reviewed; native "
+            "execution and refusal delivery qualification pending"
+        ),
+        cli_capable=True,
+        cli_executables=("kilo", "kilocode"),
+    ),
+    IDEIntegration(
         "pi",
         "Pi",
         "PiAdapter",
@@ -458,10 +477,11 @@ SUPPORTED_IDE_TYPES: Tuple[str, ...] = tuple(
 SUPPORTED_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in SUPPORTED_IDE_REGISTRY if integration.cli_capable
 )
-# Host CLI support is independent of image contents. Goose is not distributed
-# in either published image and must not leak into sandbox/tray selectors.
+# Host CLI support is independent of image/runtime qualification. Goose is not
+# distributed in published images, and Kilo's native CLI is not yet qualified
+# in the container runtime; neither should leak into sandbox/tray selectors.
 SUPPORTED_CONTAINER_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
-    key for key in SUPPORTED_CLI_IDE_TYPES if key != "goose"
+    key for key in SUPPORTED_CLI_IDE_TYPES if key not in {"goose", "kilo"}
 )
 # The OpenShell image bundles OpenCode and Codex; Claude Code is installed at
 # runtime only after explicit ToS consent. Keep this separate from the broader

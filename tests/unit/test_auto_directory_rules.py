@@ -444,6 +444,12 @@ class TestMultiIDESupport:
                 "/workspace/vscode/.vscode/skills",
                 id="VSCODE_CWD",
             ),
+            pytest.param(
+                "KILO_CONFIG_DIR",
+                "/custom/kilo",
+                "/custom/kilo/skills",
+                id="KILO_CONFIG_DIR",
+            ),
         ],
     )
     @patch("ai_guardian.tools.directory_rules.Path.is_dir")
@@ -492,6 +498,9 @@ class TestMultiIDESupport:
         assert any(".cursor/skills" in d for d in all_dirs)
         assert any(".vscode/skills" in d for d in all_dirs)
         assert any(".windsurf/skills" in d for d in all_dirs)
+        assert any(".kilo/skills" in d for d in all_dirs)
+        assert any(".kilocode/skills" in d for d in all_dirs)
+        assert any(".agents/skills" in d for d in all_dirs)
 
     @patch("ai_guardian.tools.directory_rules.Path.is_dir")
     @patch("ai_guardian.tools.directory_rules.Path.exists")

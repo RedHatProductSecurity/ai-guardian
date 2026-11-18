@@ -193,11 +193,17 @@ class DirectoryRuleGenerator:
                 Path("./.cursor/skills"),
                 Path("./.vscode/skills"),
                 Path("./.windsurf/skills"),
+                Path("./.kilo/skills"),
+                Path("./.kilocode/skills"),
+                Path("./.agents/skills"),
                 # User home directories
                 Path.home() / ".claude" / "skills",
                 Path.home() / ".cursor" / "skills",
                 Path.home() / ".vscode" / "skills",
                 Path.home() / ".windsurf" / "skills",
+                Path.home() / ".kilo" / "skills",
+                Path.home() / ".kilocode" / "skills",
+                Path.home() / ".agents" / "skills",
                 Path.home() / ".pi" / "agent" / "skills",
             ]
 
@@ -218,6 +224,7 @@ class DirectoryRuleGenerator:
                 "aiderdesk": "~/.aider-desk/skills",
                 "openclaw": "~/.openclaw/skills",
                 "opencode": "~/.config/opencode/skills",
+                "kilo": "~/.kilo/skills",
                 "pi": "~/.pi/agent/skills",
                 "augment": "~/.augment/skills",
             }

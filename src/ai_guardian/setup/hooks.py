@@ -71,6 +71,7 @@ ANTIGRAVITY_HOOK_NAME = "ai-guardian"
 _TYPESCRIPT_VERSION_TOKEN = "__AI_GUARDIAN_VERSION__"
 _TYPESCRIPT_VERSION_MARKER = "// ai-guardian-generated-version:"
 _OPENCODE_GENERATION_MARKER = "// ai-guardian-opencode-generation:"
+_KILO_GENERATION_MARKER = "// ai-guardian-kilo-generation:"
 _PI_MCP_ENABLED_TOKEN = "__AI_GUARDIAN_PI_MCP_ENABLED__"
 _PI_MCP_MIN_VERSION_TOKEN = "__AI_GUARDIAN_PI_MCP_MIN_VERSION__"
 
@@ -293,6 +294,14 @@ def _opencode_plugin_generation(source: str) -> str:
         return "v2"
     if '"@opencode-ai/plugin"' in source or "'@opencode-ai/plugin'" in source:
         return "v1"
+    return "unknown"
+
+
+def _kilo_plugin_generation(source: str) -> str:
+    """Identify the Kilo plugin API used by generated source."""
+    for line in source.splitlines()[:8]:
+        if line.startswith(_KILO_GENERATION_MARKER):
+            return line.split(":", 1)[1].strip()
     return "unknown"
 
 
@@ -698,6 +707,17 @@ class IDESetup:
             # bridge outside it so OpenCode does not load the helper itself.
             "bridge_file": "../ai-guardian/ai-guardian-bridge.ts",
         },
+        "kilo": {
+            "name": "Kilo Code",
+            "mcp_client_name": "kilo",
+            "config_path": "~/.config/kilo/plugin",
+            "config_dir_env_var": "KILO_CONFIG_DIR",
+            "config_filename": None,
+            "plugin_file": True,
+            # Kilo auto-discovers plugin/*.ts. Keep the shared helper outside
+            # that directory so it is not imported as a second plugin.
+            "bridge_file": "../ai-guardian/ai-guardian-bridge.ts",
+        },
         "pi": {
             "name": "Pi",
             "mcp_client_name": "pi",
@@ -912,6 +932,12 @@ class IDESetup:
             raise ValueError("Cursor scope must be 'user', 'project', or 'auto'")
         if ide_type == "pi" and scope not in ("user", "auto"):
             raise ValueError("Pi scope must be 'user', 'project', or 'auto'")
+        if ide_type == "kilo" and scope == "project":
+            from ai_guardian.ide_paths import resolve_kilo_plugin_dir
+
+            return str(
+                resolve_kilo_plugin_dir(scope="project", project_dir=project_dir)
+            )
 
         ide_config = self.IDE_CONFIGS[ide_type]
         base_config_path = ide_config["config_path"]
@@ -927,6 +953,10 @@ class IDESetup:
                 base_config_path,
                 env_subdir=("plugins",),
             )
+        if ide_type == "kilo":
+            from ai_guardian.ide_paths import resolve_kilo_plugin_dir
+
+            return str(resolve_kilo_plugin_dir(scope=scope, project_dir=project_dir))
         if ide_type == "aiderdesk":
             return resolve_ide_config_path(
                 ide_type,
@@ -1377,24 +1407,29 @@ class IDESetup:
                 result["opencode_version"] = runtime.get("version")
                 result["opencode_generation"] = runtime_generation
                 result["opencode_package"] = runtime.get("package")
-            host_config_path = _resolve_opencode_config()
-            host_config, host_config_error = _load_cli_config(host_config_path)
-            result["host_config_path"] = str(host_config_path)
-            if host_config_error:
-                result["diagnostics"].append(host_config_error)
-            elif host_config is not None:
-                schema_error = _opencode_config_schema_error(
-                    host_config, host_config_path
-                )
-                if schema_error:
-                    result["diagnostics"].append(schema_error)
+            if ide_type == "opencode":
+                host_config_path = _resolve_opencode_config()
+                host_config, host_config_error = _load_cli_config(host_config_path)
+                result["host_config_path"] = str(host_config_path)
+                if host_config_error:
+                    result["diagnostics"].append(host_config_error)
+                elif host_config is not None:
+                    schema_error = _opencode_config_schema_error(
+                        host_config, host_config_path
+                    )
+                    if schema_error:
+                        result["diagnostics"].append(schema_error)
             plugin_file = path / "ai-guardian.ts"
             bridge_file = path / config.get("bridge_file", "ai-guardian-bridge.ts")
             try:
                 content = plugin_file.read_text(encoding="utf-8")
             except OSError:
                 content = ""
-            plugin_generation = _opencode_plugin_generation(content)
+            plugin_generation = (
+                _kilo_plugin_generation(content)
+                if ide_type == "kilo"
+                else _opencode_plugin_generation(content)
+            )
             if (
                 ide_type == "opencode"
                 and runtime_generation in {"v1", "v2"}
@@ -1410,13 +1445,18 @@ class IDESetup:
                 result["plugin_generation"] = plugin_generation
                 if runtime_generation == "v2":
                     result["plugin_runtime_status"] = "unverified"
+            elif ide_type == "kilo":
+                result["plugin_generation"] = plugin_generation
+                result["plugin_runtime_status"] = "unverified"
             if not bridge_file.is_file() or not self.check_hooks_configured(
                 path, ide_type
             ):
                 status = "missing"
             elif result["diagnostics"]:
                 status = "changed"
-            elif plugin_generation not in {"v1", "v2"}:
+            elif plugin_generation not in (
+                {"v1"} if ide_type == "kilo" else {"v1", "v2"}
+            ):
                 status = "changed"
             elif not (
                 f"--ide {ide_type}" in content
@@ -2822,6 +2862,12 @@ class IDESetup:
                         return False
                 except Exception:
                     return False
+                if ide_type == "kilo":
+                    return (
+                        _kilo_plugin_generation(content) == "v1"
+                        and "ideType: 'kilo'" in content
+                        and (config_path / ide_config["bridge_file"]).is_file()
+                    )
                 plugin_generation = _opencode_plugin_generation(content)
                 runtime_generation = detect_opencode_runtime().get(
                     "generation", "unknown"
@@ -2832,6 +2878,8 @@ class IDESetup:
                     and runtime_generation != plugin_generation
                 ):
                     return False
+                if ide_type == "kilo":
+                    return True
                 if plugin_generation == "v2":
                     # OpenCode V2 auto-discovers direct TypeScript files from
                     # this plugins directory. Its configured plugin entries
@@ -3156,9 +3204,13 @@ class IDESetup:
         legacy_bridge_file = plugins_dir / "ai-guardian-bridge.ts"
         runtime = detect_opencode_runtime() if ide_type == "opencode" else {}
         generation = (
-            runtime.get("generation")
-            if runtime.get("generation") in {"v1", "v2"}
-            else self._opencode_generation(plugin_file)
+            "v1"
+            if ide_type == "kilo"
+            else (
+                runtime.get("generation")
+                if runtime.get("generation") in {"v1", "v2"}
+                else self._opencode_generation(plugin_file)
+            )
         )
         version = runtime.get("version")
 
@@ -3172,25 +3224,35 @@ class IDESetup:
             if ide_type == "opencode":
                 detected = f" {version}" if version else " (CLI version unavailable)"
                 message += f"  Use OpenCode {generation}{detected} plugin contract\n"
+            elif ide_type == "kilo":
+                message += "  Kilo auto-discovers local plugin files; no config entry is added\n"
             message += f"  Create: {plugin_file}\n"
             message += f"  Create: {bridge_file}\n"
             if ide_type == "opencode" and legacy_bridge_file.is_file():
                 message += f"  Remove stale generated bridge: {legacy_bridge_file}\n"
-            reg_msg = self._register_opencode_plugin(
-                plugin_file,
-                plugins_dir,
-                dry_run=True,
-                generation=generation,
+            reg_msg = (
+                self._register_opencode_plugin(
+                    plugin_file,
+                    plugins_dir,
+                    dry_run=True,
+                    generation=generation,
+                )
+                if ide_type == "opencode"
+                else None
             )
             if reg_msg:
                 message += reg_msg
             return True, message
 
-        registration_error = self._register_opencode_plugin(
-            plugin_file,
-            plugins_dir,
-            generation=generation,
-            validate_only=True,
+        registration_error = (
+            self._register_opencode_plugin(
+                plugin_file,
+                plugins_dir,
+                generation=generation,
+                validate_only=True,
+            )
+            if ide_type == "opencode"
+            else None
         )
         if registration_error:
             return False, registration_error
@@ -3200,15 +3262,25 @@ class IDESetup:
         abs_path = _resolve_binary_path()
         plugin_file.write_text(
             _render_typescript_source(
-                _OPENCODE_PLUGIN_V2_TS if generation == "v2" else _OPENCODE_PLUGIN_TS
+                _KILO_PLUGIN_TS
+                if ide_type == "kilo"
+                else (
+                    _OPENCODE_PLUGIN_V2_TS
+                    if generation == "v2"
+                    else _OPENCODE_PLUGIN_TS
+                )
             ),
             encoding="utf-8",
         )
         bridge_file.parent.mkdir(parents=True, exist_ok=True)
         bridge_file.write_text(self._render_guardian_bridge(abs_path), encoding="utf-8")
 
-        registration_error = self._register_opencode_plugin(
-            plugin_file, plugins_dir, generation=generation
+        registration_error = (
+            self._register_opencode_plugin(
+                plugin_file, plugins_dir, generation=generation
+            )
+            if ide_type == "opencode"
+            else None
         )
         if registration_error:
             return False, registration_error
@@ -3235,6 +3307,11 @@ class IDESetup:
                     "  ⚠️  WARNING: An existing bridge remains in the OpenCode "
                     f"plugin directory: {legacy_bridge_file}\n"
                 )
+        elif ide_type == "kilo":
+            message += (
+                "  Kilo local plugin discovery is configured; native activation "
+                "and result delivery remain unverified\n"
+            )
         message += f"\n  {gitleaks_message}\n"
 
         message += scanner_notice
@@ -4527,6 +4604,8 @@ _PI_HOOKS_ONLY_PACKAGE_JSON = _PI_PACKAGE_JSON
 _OPENCODE_PLUGIN_TS = _load_typescript_template("opencode-plugin-v1.ts")
 
 _OPENCODE_PLUGIN_V2_TS = _load_typescript_template("opencode-plugin-v2.ts")
+
+_KILO_PLUGIN_TS = _load_typescript_template("kilo-plugin-v1.ts")
 
 _OPENCLAW_PACKAGE_JSON = """\
 {

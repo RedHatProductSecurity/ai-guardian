@@ -117,12 +117,12 @@ export function createGuardianBridge(options: GuardianBridgeOptions) {
       // OpenCode's server may host sessions outside the plugin's startup CWD.
       // A per-child CWD also binds daemon forwarding and direct fallback to the
       // same workspace, without changing shared process state.
-      const opencode = options.ideType === 'opencode';
+      const workspaceBound = options.ideType === 'opencode' || options.ideType === 'kilo';
       const lifecycle = hookData.hook_event_name === 'SessionEnd'
         || hookData.hook_event_name === 'Stop';
       const cwd = typeof hookData.cwd === 'string' && isAbsolute(hookData.cwd)
         && !hookData.cwd.includes('\0') ? hookData.cwd : undefined;
-      if (opencode && !lifecycle && !cwd) {
+      if (workspaceBound && !lifecycle && !cwd) {
         return { blocked: true, error: 'AI Guardian could not establish the operation workspace' };
       }
       try {
@@ -130,7 +130,7 @@ export function createGuardianBridge(options: GuardianBridgeOptions) {
           input: JSON.stringify(hookData),
           encoding: 'utf-8',
           timeout: timeoutMs,
-          cwd: opencode ? cwd : undefined,
+          cwd: workspaceBound ? cwd : undefined,
           env: { ...process.env, AI_GUARDIAN_IDE_TYPE: options.ideType },
           stdio: ['pipe', 'pipe', 'pipe'],
         });
@@ -151,7 +151,7 @@ export function createGuardianBridge(options: GuardianBridgeOptions) {
             output: output || undefined,
           };
         }
-        if (opencode && !lifecycle) {
+        if (workspaceBound && !lifecycle) {
           return { blocked: true, error: 'AI Guardian could not validate the operation in its workspace' };
         }
         return { blocked: false, output: output || undefined };

@@ -1721,6 +1721,7 @@ def test_sandbox_create_environment_strips_provider_secrets_and_host_config(
     monkeypatch.setenv("OPENAI_API_KEY", "synthetic-host-value")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-host-value")
     monkeypatch.setenv("GITHUB_TOKEN", "synthetic-host-value")
+    monkeypatch.setenv("KILO_CONFIG_DIR", str(host_config / "kilo"))
     monkeypatch.setenv("AWS_PROFILE", "developer")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(host_config))
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
@@ -1731,6 +1732,7 @@ def test_sandbox_create_environment_strips_provider_secrets_and_host_config(
     assert "OPENAI_API_KEY" not in environment
     assert "ANTHROPIC_API_KEY" not in environment
     assert "GITHUB_TOKEN" not in environment
+    assert "KILO_CONFIG_DIR" not in environment
     assert "AWS_PROFILE" not in environment
     assert "ACCEPT_PROPRIETARY_TOS" not in environment
     assert environment["HOME"] == str(tmp_path / "clean-home")

@@ -460,11 +460,17 @@ class ConfigDisplay:
                 "./.cursor/skills",
                 "./.vscode/skills",
                 "./.windsurf/skills",
+                "./.kilo/skills",
+                "./.kilocode/skills",
+                "./.agents/skills",
                 # User home directories
                 str(Path.home() / ".claude" / "skills"),
                 str(Path.home() / ".cursor" / "skills"),
                 str(Path.home() / ".vscode" / "skills"),
                 str(Path.home() / ".windsurf" / "skills"),
+                str(Path.home() / ".kilo" / "skills"),
+                str(Path.home() / ".kilocode" / "skills"),
+                str(Path.home() / ".agents" / "skills"),
                 str(Path.home() / ".pi" / "agent" / "skills"),
             ]
 
@@ -483,6 +489,7 @@ class ConfigDisplay:
                 "aiderdesk": "~/.aider-desk/skills",
                 "openclaw": "~/.openclaw/skills",
                 "opencode": "~/.config/opencode/skills",
+                "kilo": "~/.kilo/skills",
                 "pi": "~/.pi/agent/skills",
                 "augment": "~/.augment/skills",
             }

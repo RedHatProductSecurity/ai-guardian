@@ -34,7 +34,7 @@ Options:
                         installed IDEs and set up their hooks automatically
                         Choices: claude, cursor, copilot, grok, codex, windsurf,
                                  gemini, antigravity, cline, zoocode, kiro, aiderdesk,
-                                  openclaw, opencode, pi, augment, crush, junie, goose
+                                  openclaw, opencode, kilo, pi, augment, crush, junie, goose
     --no-setup          Install only, don't auto-detect or update IDE hooks
     --profile PROFILE   Security profile: @minimal, @standard (default), @strict
     --version VERSION   Install a specific version or a local .whl file
@@ -170,6 +170,19 @@ detect_installed_agents() {
     else
         local opencode_dir="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
         [ -d "$opencode_dir" ] && agents+=("opencode")
+    fi
+
+    # Kilo 7.8.x supports both `kilo` and `kilocode` commands. Config and
+    # plugin roots are Kilo-specific and must not inherit OpenCode settings.
+    local kilo_dir="${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}"
+    local explicit_kilo_dir=""
+    if [ -n "${KILO_CONFIG:-}" ]; then
+        explicit_kilo_dir="$(dirname "$KILO_CONFIG")"
+    fi
+    if [ -d "$kilo_dir" ] \
+        || { [ -n "$explicit_kilo_dir" ] && [ -d "$explicit_kilo_dir" ]; } \
+        || command -v kilo >/dev/null 2>&1 || command -v kilocode >/dev/null 2>&1; then
+        agents+=("kilo")
     fi
 
     if [ -n "${AIDER_DESK_DIR:-}" ] || [ -n "${AIDER_DESK_HOME_DIR:-}" ]; then

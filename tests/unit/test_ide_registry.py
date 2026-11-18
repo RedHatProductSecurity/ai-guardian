@@ -14,11 +14,14 @@ from ai_guardian.constants import HookEvent
 from ai_guardian.hook_adapters import (
     ADAPTERS_BY_IDE_TYPE,
     _ENV_ALIAS_MAP,
+    detect_adapter,
 )
+from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
 from ai_guardian.hook_adapters.base import NormalizedHookInput
 from ai_guardian.ide_registry import (
     ALL_IDE_TYPES,
     SUPPORTED_CLI_IDE_TYPES,
+    SUPPORTED_CONTAINER_CLI_IDE_TYPES,
     SUPPORTED_IDE_REGISTRY,
     SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
     SUPPORTED_IDE_TYPES,
@@ -101,6 +104,13 @@ def test_cli_capable_integrations_have_executable_and_identity_metadata():
     assert get_cli_executables_for_agent_type("claude_code") == ("claude",)
     assert get_cli_executables_for_agent_type("github_copilot") == ("copilot",)
     assert get_cli_executables_for_agent_type("gemini_cli") == ("gemini",)
+    assert get_cli_executables_for_agent_type("kilo") == ("kilo", "kilocode")
+
+
+def test_kilo_host_cli_support_does_not_imply_container_runtime_qualification():
+    assert "kilo" in SUPPORTED_CLI_IDE_TYPES
+    assert "kilo" not in SUPPORTED_CONTAINER_CLI_IDE_TYPES
+    assert "kilo" not in SUPPORTED_OPENSHELL_CLI_IDE_TYPES
 
 
 def test_setup_registry_matches_canonical_registry():
@@ -162,6 +172,40 @@ def test_gemini_registry_marks_aftertool_refusal_as_nontransforming():
 
     assert integration.post_output_transform is False
     assert "not safe output replacement" in integration.platform_contract
+
+
+def test_kilo_registry_separates_transform_support_from_safe_replacement():
+    integration = next(item for item in SUPPORTED_IDE_REGISTRY if item.key == "kilo")
+
+    assert integration.post_output_transform is True
+    assert integration.safe_post_output_replacement is False
+    assert integration.safe_prompt_replacement is False
+    assert "7.8.27" in integration.platform_contract
+    assert "qualification pending" in integration.platform_contract
+
+
+def test_kilo_plugin_payload_keeps_kilo_identity_and_normalizes_v1_file_input(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("AI_GUARDIAN_IDE_TYPE", raising=False)
+    payload = {
+        "hook_event_name": "tool.execute.before",
+        "hook_source": "kilo",
+        "kilo_plugin_api": "v1",
+        "tool_use": {"name": "read", "input": {"filePath": "README.md"}},
+        "cwd": str(tmp_path),
+    }
+
+    adapter = detect_adapter(payload)
+    normalized = adapter.normalize_input(payload)
+
+    assert adapter.__class__.__name__ == "KiloAdapter"
+    assert adapter.agent_type == "kilo"
+    assert adapter.ide_type.value == "kilo"
+    assert OpenCodeAdapter.can_handle(payload) is False
+    assert normalized.event == HookEvent.PRE_TOOL_USE
+    assert normalized.tool_name == "Read"
+    assert normalized.file_path == str(tmp_path / "README.md")
 
 
 def test_transcript_and_session_capabilities_have_registered_implementations():
@@ -357,6 +401,7 @@ def test_support_capability_matrix_covers_registry_and_variants():
         "codex": ("Codex mode",),
         "kiro": ("Kiro IDE", "Kiro CLI"),
         "opencode": ("V1", "V2"),
+        "kilo": ("7.8.27", "native"),
     }
     for ide_type, variants in variant_requirements.items():
         integration_rows = [row for row in rows if row.startswith(f"| `{ide_type}` |")]

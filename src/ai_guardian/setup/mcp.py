@@ -70,10 +70,10 @@ def _opencode_mcp_generation() -> str:
     return generation if generation in {"v1", "v2"} else "v1"
 
 
-def _opencode_mcp_schema_error(
+def _plugin_mcp_schema_error(
     config: Dict[str, Any], config_path: Path, generation: str
 ) -> Optional[str]:
-    """Validate the MCP server container used by the selected OpenCode version."""
+    """Validate the direct or versioned MCP container used by plugin CLIs."""
     error = _mcp_schema_error(config, config_path, "mcp")
     if error:
         return error
@@ -298,9 +298,7 @@ def _verify_opencode_mcp_config(
         if layer_path.is_file():
             config, config_error = _load_opencode_layer_config(layer_path)
             if config_error is None and config is not None:
-                config_error = _opencode_mcp_schema_error(
-                    config, layer_path, generation
-                )
+                config_error = _plugin_mcp_schema_error(config, layer_path, generation)
             if config_error:
                 layer_result.update({"status": "invalid", "diagnostic": config_error})
             elif config is not None:
@@ -496,6 +494,11 @@ _MCP_IDE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "config_file": "~/.config/opencode/opencode.jsonc",
         "config_key": "mcp",
         "skill_dir": ".opencode/skills",
+    },
+    "kilo": {
+        "config_file": "~/.config/kilo/kilo.json",
+        "config_key": "mcp",
+        "skill_dir": ".kilo/skills",
     },
     # Pi's native extension API owns registration; setup does not edit a
     # separate MCP settings file.
@@ -835,6 +838,10 @@ def get_mcp_config_path(
         return project_root / ".grok" / "config.toml"
     if ide_type == "opencode":
         return _resolve_opencode_config()
+    if ide_type == "kilo":
+        from ai_guardian.ide_paths import resolve_kilo_config_file
+
+        return resolve_kilo_config_file(scope=scope, project_dir=project_dir)
     return resolve_ide_mcp_path(ide_type, config_file)
 
 
@@ -1352,8 +1359,11 @@ def _install_mcp_config(
 
     # Read or create config file
     config, config_error = _load_mcp_config(config_path, mcp_ide)
-    if config_error is None and config is not None and generation is not None:
-        config_error = _opencode_mcp_schema_error(config, config_path, generation)
+    if config_error is None and config is not None:
+        if ide_type == "opencode" and generation is not None:
+            config_error = _plugin_mcp_schema_error(config, config_path, generation)
+        elif ide_type == "kilo":
+            config_error = _plugin_mcp_schema_error(config, config_path, "v1")
     if config_error:
         # Never replace a non-empty user config that cannot be parsed or does
         # not have the host's expected MCP container shape.
@@ -1368,12 +1378,12 @@ def _install_mcp_config(
     abs_path = _resolve_binary_path()
     key = mcp_ide["config_key"]
 
-    if ide_type == "opencode":
+    if ide_type in {"opencode", "kilo"}:
         mcp_entry: Dict[str, Any] = {
             "type": "local",
             "command": [abs_path, "mcp-server"],
         }
-        if generation == "v1":
+        if ide_type == "kilo" or generation == "v1":
             mcp_entry["enabled"] = True
     else:
         mcp_entry = dict(_MCP_SERVER_ENTRY)
@@ -1389,6 +1399,9 @@ def _install_mcp_config(
             servers["ai-guardian"] = mcp_entry
         else:
             mcp_config["ai-guardian"] = mcp_entry
+    elif ide_type == "kilo":
+        mcp_config = config.setdefault("mcp", {})
+        mcp_config["ai-guardian"] = mcp_entry
     else:
         if key not in config:
             config[key] = {}

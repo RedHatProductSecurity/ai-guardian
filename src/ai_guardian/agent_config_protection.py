@@ -181,6 +181,14 @@ _PROJECT_ARTIFACTS: Dict[str, Tuple[Tuple[str, bool], ...]] = {
         ("opencode.jsonc", False),
         (".opencode", True),
     ),
+    "kilo": (
+        ("kilo.json", False),
+        ("kilo.jsonc", False),
+        ("opencode.json", False),
+        ("opencode.jsonc", False),
+        (".kilo", True),
+        (".kilocode", True),
+    ),
     "pi": ((".pi", True),),
     "augment": ((".augment", True),),
     "crush": ((".crush.json", False), (".crush", True)),
@@ -203,6 +211,7 @@ _GLOBAL_ARTIFACT_ROOTS: Dict[str, Tuple[str, ...]] = {
     "aiderdesk": ("~/.aider-desk",),
     "openclaw": ("~/.openclaw",),
     "opencode": ("~/.config/opencode",),
+    "kilo": ("~/.config/kilo", "~/.kilo", "~/.kilocode"),
     "pi": ("~/.pi",),
     "augment": ("~/.augment",),
     "crush": ("~/.config/crush",),
@@ -533,7 +542,7 @@ def build_agent_config_inventory(
     from ai_guardian.setup.mcp import get_mcp_config_path, get_pi_extension_dir
 
     setup = IDESetup()
-    global_directory_integrations = {"aiderdesk", "openclaw", "opencode"}
+    global_directory_integrations = {"aiderdesk", "openclaw", "opencode", "kilo"}
     for integration in SUPPORTED_IDE_REGISTRY:
         key = integration.key
         global_roots = _GLOBAL_ARTIFACT_ROOTS.get(key, ())
@@ -550,7 +559,15 @@ def build_agent_config_inventory(
                 str(goose_user_settings_path().parent),
             )
         relocated_home = get_ide_home(key)
-        if relocated_home is not None:
+        if key == "kilo":
+            default_config_root = (
+                Path(os.environ.get("XDG_CONFIG_HOME", "~/.config")).expanduser()
+                / "kilo"
+            )
+            global_roots = tuple(
+                str(root) for root in (relocated_home, default_config_root) if root
+            ) + ("~/.kilo", "~/.kilocode")
+        elif relocated_home is not None:
             global_roots = (str(relocated_home),)
         for root in global_roots:
             _add_path(
@@ -620,6 +637,19 @@ def build_agent_config_inventory(
                 active_project,
                 kind="MCP configuration",
             )
+
+        if key == "kilo":
+            explicit_config = get_explicit_ide_config_path(key)
+            if explicit_config:
+                _add_path(
+                    paths,
+                    seen,
+                    str(explicit_config),
+                    key,
+                    "global",
+                    active_project,
+                    kind="explicit agent configuration",
+                )
 
         if key == "opencode":
             config_path = get_explicit_ide_config_path(key)

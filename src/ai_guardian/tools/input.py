@@ -61,6 +61,21 @@ def is_opencode_hook(hook_data: Dict) -> bool:
     )
 
 
+def is_kilo_hook(hook_data: Dict) -> bool:
+    """Return whether a payload carries Kilo's distinct plugin identity."""
+    return bool(
+        hook_data.get("kilo_plugin_api")
+        or hook_data.get("hook_source") == "kilo"
+        or str(hook_data.get("_ide_type", "")).lower() == "kilo"
+        or os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower() == "kilo"
+    )
+
+
+def is_opencode_compatible_hook(hook_data: Dict) -> bool:
+    """Return whether native input uses the OpenCode/Kilo plugin payload shape."""
+    return is_opencode_hook(hook_data) or is_kilo_hook(hook_data)
+
+
 def opencode_native_input(hook_data: Dict) -> Any:
     """Read the host payload, not a possibly conflicting canonical wrapper."""
     tool_use = hook_data.get("tool_use")
@@ -236,14 +251,14 @@ def build_input_diagnostics(
     normalized_input: Any,
     target_known: bool = False,
 ) -> Dict:
-    opencode = is_opencode_hook(hook_data)
-    raw_input = opencode_native_input(hook_data) if opencode else normalized_input
+    plugin_native = is_opencode_compatible_hook(hook_data)
+    raw_input = opencode_native_input(hook_data) if plugin_native else normalized_input
     native = (
         opencode_native_name(hook_data)
-        if opencode
+        if plugin_native
         else hook_data.get("toolName") or hook_data.get("tool_name")
     )
-    if not opencode:
+    if not plugin_native:
         for container_key in ("tool_use", "tool", "toolCall", "tool_info"):
             container = hook_data.get(container_key)
             if isinstance(container, dict) and isinstance(container.get("name"), str):
@@ -260,10 +275,12 @@ def build_input_diagnostics(
         if tool_name in FILE_TOOLS
         else "command" if tool_name in {"Bash", "Shell"} else None
     )
-    if opencode and tool_name in OPENCODE_FILE_TOOLS:
+    if is_opencode_hook(hook_data) and tool_name in OPENCODE_FILE_TOOLS:
         version = hook_data.get("opencode_version", "")
         major = version.split(".")[0] if isinstance(version, str) else ""
         expected = "path" if major == "2" else "filePath" if major == "1" else None
+    elif is_kilo_hook(hook_data) and tool_name in OPENCODE_FILE_TOOLS:
+        expected = "filePath"
     return {
         "schema_version": 1,
         "subreason": (

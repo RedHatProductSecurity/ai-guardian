@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Kilo Code CLI integration:** Add a Kilo-identified V1 plugin bridge, user and
+  project setup, native `mcp` configuration, protected-config inventory, and
+  installer detection, plus automatic scanning for documented Kilo skill roots.
+  Source-reviewed against Kilo CLI 7.8.27; native execution, enforcement, and
+  result delivery remain unqualified, with safe post-output replacement
+  unsupported.
 - **Violation outcome metadata (#2781):** Persist the effective action and
   redaction status in violation JSONL records; display validated outcomes as
   rounded badges in the Web Console (including the `tui` alias) and bracketed
