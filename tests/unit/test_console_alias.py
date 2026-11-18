@@ -15,11 +15,14 @@ class TestConsoleAlias:
         mock_app = MagicMock()
         mock_console_cls.return_value = mock_app
 
-        with patch.object(sys, "argv", ["ai-guardian", "console"]):
+        with (
+            patch.object(sys, "argv", ["ai-guardian", "console"]),
+            patch("ai_guardian.cli._load_config_file", return_value=(None, None)),
+        ):
             result = ai_guardian.main()
 
         mock_console_cls.assert_called_once()
-        mock_app.run.assert_called_once_with(port=0, show=True)
+        mock_app.run.assert_called_once_with(host="127.0.0.1", port=0, show=True)
         assert result == 0
 
     @patch("ai_guardian.web.WebConsole")
@@ -27,11 +30,14 @@ class TestConsoleAlias:
         mock_app = MagicMock()
         mock_console_cls.return_value = mock_app
 
-        with patch.object(sys, "argv", ["ai-guardian", "tui"]):
+        with (
+            patch.object(sys, "argv", ["ai-guardian", "tui"]),
+            patch("ai_guardian.cli._load_config_file", return_value=(None, None)),
+        ):
             result = ai_guardian.main()
 
         mock_console_cls.assert_called_once()
-        mock_app.run.assert_called_once_with(port=0, show=True)
+        mock_app.run.assert_called_once_with(host="127.0.0.1", port=0, show=True)
         assert result == 0
 
     def test_help_shows_console_command(self, capsys):

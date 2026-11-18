@@ -108,7 +108,15 @@ one run on **Sessions**.
 ```
 
 - `port`: Web-console port. `0` selects an available port.
-- `host`: Bind address. `127.0.0.1` is the secure local default.
+- `host`: Bind address. `127.0.0.1` is the secure local default. Use
+  `0.0.0.0` only when access through another interface is intended (for example,
+  through a published container port); it listens on all IPv4 interfaces, so
+  restrict network access appropriately.
+
+`ai-guardian console` uses these settings when the corresponding command-line
+option is omitted. An explicit `--port` overrides `console.web.port`, including
+`--port 0` to select an available port. Without a configuration value, the
+console keeps its defaults: `127.0.0.1` and an automatically assigned port.
 
 The preferred dialog setting supports `auto`, `tkinter`, `nicegui`, and
 `headless`. Existing persisted `textual` values are treated as `nicegui` for

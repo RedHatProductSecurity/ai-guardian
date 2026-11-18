@@ -655,8 +655,11 @@ def main():
         console_parser.add_argument(
             "--port",
             type=int,
-            default=0,
-            help="Port for web console (default: auto-assign, only used with --web)",
+            default=None,
+            help=(
+                "Port for web console (overrides console.web.port; default: "
+                "configured value or auto-assign, only used with --web)"
+            ),
         )
         console_parser.add_argument(
             "--no-open",
@@ -680,8 +683,11 @@ def main():
         tui_parser.add_argument(
             "--port",
             type=int,
-            default=0,
-            help="Port for web console (default: auto-assign, only used with --web)",
+            default=None,
+            help=(
+                "Port for web console (overrides console.web.port; default: "
+                "configured value or auto-assign, only used with --web)"
+            ),
         )
         tui_parser.add_argument(
             "--no-open",
@@ -2033,9 +2039,26 @@ def main():
             try:
                 from ai_guardian.web import WebConsole
 
+                config, _ = _load_config_file()
+                console_config = (
+                    config.get("console", {}) if isinstance(config, dict) else {}
+                )
+                web_config = (
+                    console_config.get("web", {})
+                    if isinstance(console_config, dict)
+                    else {}
+                )
+                if not isinstance(web_config, dict):
+                    web_config = {}
+
+                port = getattr(args, "port", None)
+                if port is None:
+                    port = web_config.get("port", 0)
+                host = web_config.get("host", "127.0.0.1")
+
                 console = WebConsole()
                 show = not getattr(args, "no_open", False)
-                console.run(port=getattr(args, "port", 0), show=show)
+                console.run(host=host, port=port, show=show)
                 return 0
             except ImportError as e:
                 print(
