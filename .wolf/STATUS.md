@@ -17,8 +17,9 @@ budget_tokens: 1000
   and Codex/Cursor agent config compatibility.
 - Added Python/Node runtime and prompt contracts. **Validation:** 3 Python tests,
   5 Node tests, Ruff, Black (Python 3.10 target), JSON parsing and diff checks pass.
-- Changes remain local and uncommitted; no push or PR metadata update. **Next:**
-  user review; decide whether to publish and update PR #2794.
+- Implementation and tests were committed as `a0cff558` and pushed to
+  `origin/fix_openwolf`; no PR metadata was changed. **Next:** user review/CI;
+  decide separately whether the PR description needs updating.
 
 ## Issue #2779 privacy-safe WebFetch locations — 2026-11-18
 
