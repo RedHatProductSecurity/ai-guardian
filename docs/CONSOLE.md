@@ -45,6 +45,9 @@ ai-guardian console --web
 
 # Use a specific port
 ai-guardian console --web --port 8080
+
+# Override the configured port with an environment variable
+AI_GUARDIAN_CONSOLE_PORT=8080 ai-guardian console
 ```
 
 The console binds to `127.0.0.1` by default. Keep the host restricted to a
@@ -114,9 +117,18 @@ one run on **Sessions**.
   restrict network access appropriately.
 
 `ai-guardian console` uses these settings when the corresponding command-line
-option is omitted. An explicit `--port` overrides `console.web.port`, including
-`--port 0` to select an available port. Without a configuration value, the
-console keeps its defaults: `127.0.0.1` and an automatically assigned port.
+option is omitted. The Web Console port precedence is:
+
+1. An explicit `--port` argument
+2. `AI_GUARDIAN_CONSOLE_PORT`
+3. `console.web.port`
+4. An automatically assigned port (`0`)
+
+The environment variable must be an integer from `0` through `65535`; `0`
+selects an available port. An invalid value is ignored with a warning, and the
+configured port or automatic assignment is used instead. The environment
+variable only controls the port; the bind host remains controlled by
+`console.web.host` (default `127.0.0.1`).
 
 The preferred dialog setting supports `auto`, `tkinter`, `nicegui`, and
 `headless`. Existing persisted `textual` values are treated as `nicegui` for
