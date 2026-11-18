@@ -726,7 +726,10 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         """
         try:
             from ai_guardian.violations.logger import ViolationLogger
-            from ai_guardian.violations.decision import safe_policy_decision
+            from ai_guardian.violations.decision import (
+                safe_policy_decision,
+                safe_violation_outcome,
+            )
             from ai_guardian.tools.input import INPUT_FAILURE_LABELS
             from ai_guardian.violations.tool_diagnostics import (
                 INPUT_FAILURE_GUIDANCE,
@@ -850,6 +853,12 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                 )
                 if policy_decision is not None:
                     entry["policy_decision"] = policy_decision
+                if "action_taken" in v or "redaction_status" in v:
+                    entry.update(
+                        safe_violation_outcome(
+                            v.get("action_taken"), v.get("redaction_status")
+                        )
+                    )
                 filtered.append(entry)
             return {"violations": filtered, "count": len(filtered)}
         except Exception as e:

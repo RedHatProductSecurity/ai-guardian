@@ -9,8 +9,8 @@ never copied into this record.
 
 from __future__ import annotations
 
-import os
 import math
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional
@@ -33,6 +33,41 @@ _DECISION_ALIASES = {
     "log-only": "log",
     "redact": "redact",
     "error": "error",
+}
+
+ACTION_TAKEN_VALUES = frozenset({"block", "warn", "log", "allow", "unknown"})
+REDACTION_STATUS_VALUES = frozenset(
+    {"redacted", "not_redacted", "not_applicable", "unknown"}
+)
+
+_ACTION_TAKEN_ALIASES = {
+    "block": "block",
+    "blocked": "block",
+    "deny": "block",
+    "denied": "block",
+    "warn": "warn",
+    "warned": "warn",
+    "warning": "warn",
+    "log": "log",
+    "logged": "log",
+    "log-only": "log",
+    "log_only": "log",
+    "allow": "allow",
+    "allowed": "allow",
+    "approve": "allow",
+    "approved": "allow",
+    "redacted": "allow",
+    "unknown": "unknown",
+}
+
+_REDACTION_STATUS_ALIASES = {
+    "redacted": "redacted",
+    "not_redacted": "not_redacted",
+    "not-redacted": "not_redacted",
+    "unredacted": "not_redacted",
+    "not_applicable": "not_applicable",
+    "not-applicable": "not_applicable",
+    "unknown": "unknown",
 }
 
 _REASON_LABELS = {
@@ -416,3 +451,43 @@ def safe_policy_decision(value: Any) -> Optional[Dict[str, Any]]:
     if isinstance(value, Mapping):
         return PolicyDecision.from_dict(value).to_dict()
     return None
+
+
+def normalize_action_taken(value: Any) -> str:
+    """Return a fixed-vocabulary effective action, never an arbitrary label."""
+    raw = _string_value(value).strip().lower()
+    return _ACTION_TAKEN_ALIASES.get(raw, "unknown")
+
+
+def normalize_redaction_status(value: Any) -> str:
+    """Return a fixed-vocabulary content-redaction status."""
+    raw = _string_value(value).strip().lower()
+    return _REDACTION_STATUS_ALIASES.get(raw, "unknown")
+
+
+def action_taken_from_policy_decision(value: Any) -> str:
+    """Map a safe policy decision to an outcome without changing its semantics.
+
+    ``redact`` describes a content-handling mode, not whether replacement
+    succeeded or what the operation's final disposition was. Callers must pass
+    the verified effective action separately for that case.
+    """
+    decision_value: Any
+    if isinstance(value, PolicyDecision):
+        decision_value = value.decision
+    elif isinstance(value, Mapping):
+        decision_value = value.get("decision")
+    else:
+        return "unknown"
+    normalized = normalize_decision(decision_value, default="unknown")
+    return normalize_action_taken(normalized)
+
+
+def safe_violation_outcome(
+    action_taken: Any = None, redaction_status: Any = None
+) -> Dict[str, str]:
+    """Return only the two validated, display-safe violation outcome fields."""
+    return {
+        "action_taken": normalize_action_taken(action_taken),
+        "redaction_status": normalize_redaction_status(redaction_status),
+    }

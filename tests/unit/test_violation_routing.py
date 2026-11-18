@@ -55,9 +55,31 @@ class TestCategoryViolationRouting:
             "start_column": None,
             "end_column": None,
             "source_context": "file_content",
+            "action_taken": "block",
+            "redaction_status": "not_redacted",
         }
         assert "toml-patterns" not in str(kwargs)
         assert "pii-ssn" not in str(kwargs)
+
+    def test_allowed_validation_outcome_is_forwarded_to_sensitive_logger(self):
+        from ai_guardian.scanners.secret_scanning import _log_finding_violation
+
+        mock_logger = MagicMock()
+        _log_finding_violation(
+            "test.py",
+            {"action_taken": "allow"},
+            {
+                "rule_id": "pii-ssn",
+                "category": "pii",
+                "line_number": 1,
+            },
+            violation_logger=mock_logger,
+        )
+
+        assert (
+            mock_logger.log_sensitive_finding.call_args.kwargs["action_taken"]
+            == "allow"
+        )
 
     def test_secrets_category_routes_to_secret_detected(self):
         mock_logger = self._call_log_finding("secrets", rule_id="openai-api-key")
@@ -135,6 +157,8 @@ class TestSecretDetectionReasonString:
             "start_column": None,
             "end_column": None,
             "source_context": "file_content",
+            "action_taken": "block",
+            "redaction_status": "not_redacted",
         }
         assert "toml-patterns" not in str(kwargs)
 

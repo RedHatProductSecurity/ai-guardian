@@ -213,6 +213,14 @@ def _make_mirror_record(
         ),
         "mirror": mirror,
     }
+    if "action_taken" in record or "redaction_status" in record:
+        from ai_guardian.violations.decision import safe_violation_outcome
+
+        entry.update(
+            safe_violation_outcome(
+                record.get("action_taken"), record.get("redaction_status")
+            )
+        )
     for key, maximum in (
         ("tool", 128),
         ("file", 4096),

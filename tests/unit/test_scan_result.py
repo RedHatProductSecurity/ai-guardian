@@ -55,6 +55,7 @@ class TestFromSecretScan:
         assert r.matched_text == "AKIA..."
         assert r.line_number == 42
         assert r.start_column == 10
+        assert r.rule_id == "aws-access-key"
         assert r.findings == [{"rule_id": "aws-access-key"}]
         assert r.total_findings == 1
         assert r.scan_time_ms == 150.5

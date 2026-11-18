@@ -94,6 +94,8 @@ class TestSensitiveViolationProjection:
             {
                 "violation_type": "secret_detected",
                 "severity": "high",
+                "action_taken": "allow",
+                "redaction_status": "redacted",
                 "file_path": "/should/not/use/context.csv",
                 "blocked": {
                     "file_path": "/repo/source.csv",
@@ -128,6 +130,8 @@ class TestSensitiveViolationProjection:
         assert violation["end_line"] == 9
         assert violation["end_column"] == 6
         assert violation["source_context"] == "Tool output"
+        assert violation["action_taken"] == "allow"
+        assert violation["redaction_status"] == "redacted"
         assert "tool" not in violation
         assert "session_id" not in violation
         assert "action" not in violation

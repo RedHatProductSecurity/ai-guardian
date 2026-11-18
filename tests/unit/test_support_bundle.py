@@ -136,6 +136,21 @@ class TestSanitizeViolations:
         sanitized, count = _sanitize_violations(violations)
         assert "content_preview" not in sanitized[0]["context"]
 
+    def test_outcome_metadata_is_validated_and_redaction_counted(self):
+        sanitized, count = _sanitize_violations(
+            [
+                {
+                    "violation_type": "prompt_injection",
+                    "action_taken": "unexpected action label",
+                    "redaction_status": "not_applicable",
+                }
+            ]
+        )
+
+        assert sanitized[0]["action_taken"] == "unknown"
+        assert sanitized[0]["redaction_status"] == "not_applicable"
+        assert count == 1
+
     def test_sensitive_history_keeps_only_truncated_safe_locator(self):
         private_marker = "synthetic-private-history-value"
         violations = [

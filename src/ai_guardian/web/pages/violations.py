@@ -232,6 +232,67 @@ def _detail_fields(violation_type: str, blocked: dict) -> list:
     return fields
 
 
+def _violation_outcome_items(violation: dict) -> list[tuple[str, str]]:
+    """Return validated action/redaction labels for Console display and copy."""
+    if "action_taken" not in violation and "redaction_status" not in violation:
+        return []
+    from ai_guardian.violations.decision import safe_violation_outcome
+
+    outcome = safe_violation_outcome(
+        violation.get("action_taken"), violation.get("redaction_status")
+    )
+    items = []
+    action_labels = {
+        "block": "Blocked",
+        "warn": "Warned",
+        "log": "Logged",
+        "allow": "Allowed",
+        "unknown": "Unknown",
+    }
+    action_label = action_labels.get(outcome["action_taken"])
+    if action_label:
+        items.append(("Action Taken", action_label))
+    redaction_labels = {
+        "redacted": "Redacted",
+        "not_redacted": "Not redacted",
+        "not_applicable": "Not applicable",
+        "unknown": "Unknown",
+    }
+    redaction_label = redaction_labels.get(outcome["redaction_status"])
+    if redaction_label:
+        items.append(("Redaction Status", redaction_label))
+    return items
+
+
+def _render_violation_outcome_badges(violation: dict) -> bool:
+    """Render safe action/redaction outcomes as non-interactive pill badges."""
+    items = _violation_outcome_items(violation)
+    if not items:
+        return False
+
+    action_colors = {
+        "Blocked": "negative",
+        "Warned": "warning",
+        "Logged": "info",
+        "Allowed": "positive",
+        "Unknown": "grey",
+    }
+    redaction_colors = {
+        "Redacted": "positive",
+        "Not redacted": "grey",
+        "Not applicable": "blue-grey",
+        "Unknown": "grey",
+    }
+
+    with ui.row().classes("items-center gap-1 flex-wrap mt-1"):
+        for label, value in items:
+            colors = action_colors if label == "Action Taken" else redaction_colors
+            ui.badge(f"{label}: {value}", color=colors.get(value, "grey")).props(
+                "rounded"
+            ).classes("text-xs")
+    return True
+
+
 def _sensitive_detail_value(violation_type: str, key: str, value):
     """Validate optional locator fields before displaying sensitive history."""
     if key == "source_url":
@@ -396,6 +457,8 @@ def _format_violation_markdown(v: dict) -> str:
 
     lines = [f"**Type:** {vtype}"]
     lines.append(f"**Severity:** {severity}")
+    for label, value in _violation_outcome_items(v):
+        lines.append(f"**{label}:** {value}")
 
     fields = _detail_fields(vtype, blocked)
     for label, key in fields:
@@ -907,6 +970,8 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
             if daemon:
                 ui.badge(daemon, color="blue-grey").classes("text-xs")
             local_time_label(timestamp).classes("ml-auto")
+
+        _render_violation_outcome_badges(v)
 
         from ai_guardian.web.components.violation_mirror import (
             render_mirror_attribution,

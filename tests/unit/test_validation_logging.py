@@ -223,7 +223,25 @@ class TestValidationFieldInViolation:
             "start_column": None,
             "end_column": None,
             "source_context": "file_content",
+            "action_taken": "block",
+            "redaction_status": "not_redacted",
         }
+
+    def test_validated_inactive_context_records_allow_without_internal_flag(self):
+        from ai_guardian.scanners.secret_scanning import (
+            _allowed_validation_context,
+        )
+
+        original = {
+            "source_context": "tool_output",
+            "_defer_secret_violation_logging": True,
+        }
+
+        assert _allowed_validation_context(original) == {
+            "source_context": "tool_output",
+            "action_taken": "allow",
+        }
+        assert "action_taken" not in original
 
     def test_secret_violation_omits_validation_from_history(self):
         from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation

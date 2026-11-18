@@ -219,6 +219,8 @@ class TestLogViolationPii:
             "start_column": None,
             "end_column": None,
             "source_context": None,
+            "action_taken": "block",
+            "redaction_status": "not_redacted",
         }
 
     def test_context_overrides_are_not_persisted(self):

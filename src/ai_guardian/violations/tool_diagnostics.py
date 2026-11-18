@@ -147,6 +147,13 @@ def safe_tool_correlation(violation: Dict) -> Dict:
 def diagnostic_safe_violation(violation: Dict) -> Dict:
     """Scrub human detail/JSON copies, preserving only safe sensitive locators."""
     violation_type = violation.get("violation_type", violation.get("type", ""))
+    outcome_fields = {}
+    if "action_taken" in violation or "redaction_status" in violation:
+        from ai_guardian.violations.decision import safe_violation_outcome
+
+        outcome_fields = safe_violation_outcome(
+            violation.get("action_taken"), violation.get("redaction_status")
+        )
     if violation_type in {
         "sensitive_finding",
         "secret_detected",
@@ -176,6 +183,7 @@ def diagnostic_safe_violation(violation: Dict) -> Dict:
             )
             if key in violation
         }
+        result.update(outcome_fields)
         if violation_type != "sensitive_finding":
             if "violation_type" in result:
                 result["violation_type"] = "sensitive_finding"
@@ -240,6 +248,8 @@ def diagnostic_safe_violation(violation: Dict) -> Dict:
             result["mirror"] = mirror
         return result
 
+    violation = dict(violation)
+    violation.update(outcome_fields)
     from ai_guardian.violations.command_context import sanitize_source_url_metadata
 
     violation = sanitize_source_url_metadata(violation)

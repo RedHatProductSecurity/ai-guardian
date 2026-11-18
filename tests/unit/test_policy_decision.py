@@ -9,9 +9,15 @@ from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.observability.otel_exporter import _violation_entry_to_span
 from ai_guardian.reporting.sarif import SARIFFormatter
 from ai_guardian.violations.decision import (
+    ACTION_TAKEN_VALUES,
     POLICY_DECISION_SCHEMA_VERSION,
+    REDACTION_STATUS_VALUES,
     PolicyDecision,
+    action_taken_from_policy_decision,
+    normalize_action_taken,
+    normalize_redaction_status,
     safe_policy_decision,
+    safe_violation_outcome,
 )
 from ai_guardian.violations.logger import ViolationLogger
 
@@ -95,6 +101,19 @@ def test_safe_policy_decision_allowlists_legacy_mapping_fields():
     assert "command" not in safe
     assert "cat ~/.aws/credentials" not in json.dumps(safe)
     assert safe["reason"] == "policy evaluation completed"
+
+
+def test_violation_outcome_normalization_uses_fixed_display_safe_values():
+    assert normalize_action_taken("allowed") == "allow"
+    assert normalize_action_taken("block") == "block"
+    assert normalize_action_taken("private raw payload") == "unknown"
+    assert normalize_redaction_status("unredacted") == "not_redacted"
+    assert normalize_redaction_status("private raw payload") == "unknown"
+    assert set(safe_violation_outcome("warn", "redacted").values()) <= (
+        ACTION_TAKEN_VALUES | REDACTION_STATUS_VALUES
+    )
+    assert action_taken_from_policy_decision({"decision": "block"}) == "block"
+    assert action_taken_from_policy_decision({"decision": "redact"}) == "unknown"
 
 
 def test_policy_decision_serialization_keeps_schema_valid_for_bad_metadata():

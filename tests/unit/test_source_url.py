@@ -142,7 +142,7 @@ def fetched_history(tmp_path, monkeypatch):
     from ai_guardian.hook_events.post_tool_use import handle_post_tool_use
     from ai_guardian.hook_processing import _ensure_hook_events_imported
     from ai_guardian.reporting.latency import _CheckTimer
-    from ai_guardian.scanners.secret_scanning import _log_secret_detection_violation
+    from ai_guardian.scanners import secret_scanning
 
     _ensure_hook_events_imported()
     history = ViolationLogger(
@@ -179,17 +179,22 @@ def fetched_history(tmp_path, monkeypatch):
 
     def detect(content, filename, *, context, **_kwargs):
         assert content == RESPONSE
-        _log_secret_detection_violation(
-            _kwargs.get("file_path") or filename,
-            context,
-            {
-                "line_number": 2,
-                "start_column": 0,
-                "end_column": len(PRIVATE_VALUE),
-                "end_line": 2,
-                "matched_text": PRIVATE_VALUE,
-            },
-            violation_logger=history,
+        # Match the scanner's side-channel metadata contract; PostToolUse defers
+        # logging until the effective redaction outcome is known.
+        monkeypatch.setattr(secret_scanning, "_last_secret_matched_text", PRIVATE_VALUE)
+        monkeypatch.setattr(secret_scanning, "_last_secret_line_number", 2)
+        monkeypatch.setattr(secret_scanning, "_last_secret_start_column", 0)
+        monkeypatch.setattr(
+            secret_scanning,
+            "_last_secret_findings",
+            [
+                {
+                    "line_number": 2,
+                    "end_line": 2,
+                    "start_column": 0,
+                    "end_column": len(PRIVATE_VALUE),
+                }
+            ],
         )
         return True, "Synthetic sensitive finding"
 

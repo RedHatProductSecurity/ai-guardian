@@ -238,6 +238,8 @@ class TestSourceCommandInViolationDicts:
             "start_column": None,
             "end_column": None,
             "source_context": None,
+            "action_taken": "block",
+            "redaction_status": "not_redacted",
         }
         mock_logger.log_violation.assert_not_called()
 

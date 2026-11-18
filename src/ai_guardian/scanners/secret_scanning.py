@@ -296,6 +296,9 @@ def _log_secret_detection_violation(
     if not HAS_VIOLATION_LOGGER:
         return
 
+    if isinstance(context, dict) and context.get("_defer_secret_violation_logging"):
+        return
+
     from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
     from ai_guardian.violations.log_violation import ScanContext, log_violation
 
@@ -343,6 +346,7 @@ def _log_secret_detection_violation(
         violation_logger=violation_logger,
         source="prompt" if filename == "user_prompt" else "file",
         blocked_overrides=extras,
+        action_taken=ctx.get("action_taken"),
         suggestion={
             "action": "review_and_remove_secret",
             "warning": "Secrets should never be committed to code or shared with AI",
@@ -443,11 +447,23 @@ def _log_finding_violation(
         violation_logger=violation_logger,
         source="prompt" if filename == "user_prompt" else "file",
         blocked_overrides=extras,
+        action_taken=ctx.get("action_taken"),
         suggestion={
             "action": "review_finding",
             "false_positive": _build_false_positive_msg(details),
         },
     )
+
+
+def _allowed_validation_context(context: Optional[Dict]) -> Dict:
+    """Return a logging context that records validated-inactive findings as allowed."""
+    result = {
+        key: value
+        for key, value in (context.items() if isinstance(context, dict) else ())
+        if key != "_defer_secret_violation_logging"
+    }
+    result["action_taken"] = "allow"
+    return result
 
 
 def _count_gitleaks_patterns(config_path):
@@ -1383,11 +1399,12 @@ def check_secrets(
                             secret_details["validation"] = validation_info
 
                         if should_skip:
+                            log_context = _allowed_validation_context(context)
                             _log_finding_violation(
                                 file_path or filename,
-                                context,
+                                log_context,
                                 secret_details,
-                                hook_context=context,
+                                hook_context=log_context,
                             )
                             logger.info(
                                 "All secrets validated as inactive (strategy path) — allowing"
@@ -1722,11 +1739,12 @@ def check_secrets(
                                     secret_details["validation"] = fb_validation_info
 
                                 if fb_should_skip:
+                                    log_context = _allowed_validation_context(context)
                                     _log_finding_violation(
                                         file_path or filename,
-                                        context,
+                                        log_context,
                                         secret_details,
-                                        hook_context=context,
+                                        hook_context=log_context,
                                     )
                                     logger.info(
                                         "All secrets validated as inactive (fallthrough 1) — allowing"
@@ -1943,11 +1961,12 @@ def check_secrets(
                         )
                         if secret_details is not None:
                             secret_details.setdefault("engine", scanner_name)
+                        log_context = _allowed_validation_context(context)
                         _log_finding_violation(
                             file_path or filename,
-                            context,
+                            log_context,
                             secret_details,
-                            hook_context=context,
+                            hook_context=log_context,
                         )
                         logger.info(
                             "All secrets validated as inactive (legacy path) — allowing"
@@ -2091,11 +2110,12 @@ def check_secrets(
                                 secret_details["validation"] = fb2_validation_info
 
                             if fb2_should_skip:
+                                log_context = _allowed_validation_context(context)
                                 _log_finding_violation(
                                     file_path or filename,
-                                    context,
+                                    log_context,
                                     secret_details,
-                                    hook_context=context,
+                                    hook_context=log_context,
                                 )
                                 logger.info(
                                     "All secrets validated as inactive (fallthrough 2) — allowing"

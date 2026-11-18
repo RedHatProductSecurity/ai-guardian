@@ -16,7 +16,10 @@ from ai_guardian.developer_session import (
     should_downgrade_blocking_finding,
 )
 from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
-from ai_guardian.violations.decision import PolicyDecision
+from ai_guardian.violations.decision import (
+    PolicyDecision,
+    action_taken_from_policy_decision,
+)
 from ai_guardian.violations.log_violation import ScanContext, log_violation
 
 logger = logging.getLogger(__name__)
@@ -186,6 +189,8 @@ def log_scan_violation(
     context_overrides: Optional[Dict[str, Any]] = None,
     severity_override: Optional[str] = None,
     policy_decision: Optional[PolicyDecision] = None,
+    action_taken: Optional[str] = None,
+    redaction_status: Optional[str] = None,
 ) -> None:
     """Log a violation using ScannerEntry metadata + ScanResult fields."""
     if ctx.violation_logger is None:
@@ -213,6 +218,8 @@ def log_scan_violation(
         ),
         source=source,
         policy_decision=policy_decision,
+        action_taken=action_taken,
+        redaction_status=redaction_status,
     )
 
 
@@ -298,6 +305,15 @@ def apply_post_scan_pipeline(
     warnings: List[str] = []
     effective_result = _effective_scan_result(entry, result, severity_override)
 
+    def _outcome(decision: PolicyDecision, blocked: bool) -> tuple[str, str]:
+        sensitive = result.violation_type in {"secret_detected", "pii_detected"}
+        if sensitive_replacement_verified and not blocked:
+            return "allow", "redacted"
+        action = action_taken_from_policy_decision(decision)
+        if action == "unknown" and blocked:
+            action = "block"
+        return action, "not_redacted" if sensitive else "not_applicable"
+
     if entry.supports_ask_mode and should_block:
         action_str = result.extra.get("action", "block") if result.extra else "block"
 
@@ -362,6 +378,7 @@ def apply_post_scan_pipeline(
                 source=source,
                 decision_override="block" if should_block else "allow",
             )
+            action_taken, redaction_status = _outcome(canonical_decision, should_block)
             if not skip_violation_log:
                 logged_result = (
                     replace(
@@ -384,6 +401,8 @@ def apply_post_scan_pipeline(
                     context_overrides=context_overrides,
                     severity_override=severity_override,
                     policy_decision=canonical_decision,
+                    action_taken=action_taken,
+                    redaction_status=redaction_status,
                 )
 
             return PostScanDecision(
@@ -428,6 +447,7 @@ def apply_post_scan_pipeline(
             "allow" if block_downgraded else "block" if should_block else None
         ),
     )
+    action_taken, redaction_status = _outcome(canonical_decision, should_block)
     if not skip_violation_log:
         log_scan_violation(
             entry,
@@ -439,6 +459,8 @@ def apply_post_scan_pipeline(
             context_overrides=context_overrides,
             severity_override=severity_override,
             policy_decision=canonical_decision,
+            action_taken=action_taken,
+            redaction_status=redaction_status,
         )
 
     return PostScanDecision(

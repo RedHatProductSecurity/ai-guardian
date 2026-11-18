@@ -825,6 +825,7 @@ def run_secret_scan(
     ignore_tools=None,
     allowlist_patterns=None,
     latency_timer=None,
+    defer_violation_logging=False,
     **_kwargs,
 ):
     """Run secret scan on content using gitleaks/scanner engines.
@@ -840,6 +841,7 @@ def run_secret_scan(
         ignore_tools: Ignore tool patterns (extracted from config if None).
         allowlist_patterns: Secret allowlist patterns (extracted from config if None).
         latency_timer: Optional _CheckTimer for performance tracking.
+        defer_violation_logging: Defer a finding until its final hook action is known.
 
     Returns:
         None if scanner disabled or no content.
@@ -862,6 +864,10 @@ def run_secret_scan(
         ignore_tools = config.get("ignore_tools", []) if config else []
     if allowlist_patterns is None:
         allowlist_patterns = config.get("allowlist_patterns", []) if config else []
+
+    if defer_violation_logging:
+        secret_context = dict(secret_context or {})
+        secret_context["_defer_secret_violation_logging"] = True
 
     with (latency_timer or _NULL_TIMER).check("secret_scanning"):
         has_secrets, error_message = _secret_scanning_mod.check_secrets(

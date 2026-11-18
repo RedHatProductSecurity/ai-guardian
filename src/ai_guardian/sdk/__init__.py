@@ -213,7 +213,10 @@ class GuardSession:
     @staticmethod
     def _sanitize_violation(v: Dict, sanitize_fn) -> Dict[str, Any]:
         """Extract and sanitize a single violation record."""
-        from ai_guardian.violations.decision import safe_policy_decision
+        from ai_guardian.violations.decision import (
+            safe_policy_decision,
+            safe_violation_outcome,
+        )
         from ai_guardian.violations.command_context import (
             sanitize_source_url,
             sensitive_source_context_label,
@@ -286,6 +289,11 @@ class GuardSession:
                 and file_path.isprintable()
             ):
                 safe_violation["file_path"] = file_path
+
+        if "action_taken" in v or "redaction_status" in v:
+            safe_violation.update(
+                safe_violation_outcome(v.get("action_taken"), v.get("redaction_status"))
+            )
 
         source_url = sanitize_source_url(blocked.get("source_url"))
         if source_url:
