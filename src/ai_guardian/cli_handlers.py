@@ -1217,6 +1217,11 @@ def _handle_tray_start(args):
     """Start the standalone multi-daemon tray client."""
     import subprocess
 
+    wait_for_pid = getattr(args, "wait_for_pid", None)
+    if isinstance(wait_for_pid, int) and not isinstance(wait_for_pid, bool):
+        if wait_for_pid > 0:
+            _wait_for_pid_exit(wait_for_pid)
+
     from ai_guardian.daemon.path_env import ensure_scanner_path
 
     ensure_scanner_path()
@@ -1335,6 +1340,16 @@ def _handle_tray_start(args):
     print("ai-guardian tray started (multi-daemon mode)")
     tray.run_blocking()
     return 0
+
+
+def _wait_for_pid_exit(pid):
+    """Wait for a previous tray process to exit before starting its replacement."""
+    import time
+
+    from ai_guardian.daemon import is_pid_alive
+
+    while is_pid_alive(pid):
+        time.sleep(0.1)
 
 
 def _handle_prompt(args):

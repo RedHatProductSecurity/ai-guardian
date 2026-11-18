@@ -1576,6 +1576,12 @@ def main():
             action="store_true",
             help="Disable auto-discovery (manual targets only)",
         )
+        tray_start_parser.add_argument(
+            "--wait-for-pid",
+            type=int,
+            default=None,
+            help=argparse.SUPPRESS,
+        )
         tray_sub.add_parser("stop", help="Stop running standalone tray")
         tray_sub.add_parser("restart", help="Restart standalone tray")
         tray_parser.add_argument(

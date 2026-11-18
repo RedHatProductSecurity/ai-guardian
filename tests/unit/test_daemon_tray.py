@@ -163,6 +163,85 @@ class TestDaemonTrayCallbacks:
         tray._on_quit(mock.MagicMock(), mock.MagicMock())
         assert stopped == [True]
 
+
+class TestTrayRestartHandoff:
+    def test_menu_restart_waits_for_current_process_before_starting(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda: None,
+        )
+        events = []
+        tray.stop = lambda: events.append("stop")
+        tray._stop = lambda: events.append("stop_callback")
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.app.tray_plugins.resolve_cli_cmd",
+                return_value=["ai-guardian", "tray", "start"],
+            ),
+            mock.patch("ai_guardian.tray.app.os.getpid", return_value=4321),
+            mock.patch("ai_guardian.tray.app.subprocess.Popen") as mock_popen,
+        ):
+            mock_popen.side_effect = lambda *args, **kwargs: events.append("spawn")
+            tray._on_restart_tray(None, None)
+
+        assert events == ["stop", "stop_callback", "spawn"]
+        assert mock_popen.call_args.args[0] == [
+            "ai-guardian",
+            "tray",
+            "start",
+            "--wait-for-pid",
+            "4321",
+        ]
+
+    def test_stop_keeps_lock_until_icon_loop_exits(self, tmp_path, monkeypatch):
+        from ai_guardian.tray import app as tray_app
+
+        lock_path = tmp_path / "tray.lock"
+        lock_path.write_text(str(os.getpid()))
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda: None,
+        )
+        icon = mock.MagicMock()
+
+        def stop_from_icon_loop():
+            tray.stop()
+            assert lock_path.exists()
+
+        icon.run.side_effect = stop_from_icon_loop
+        for method in (
+            "_ensure_macos_activation_policy",
+            "_schedule_appindicator_menu_watch",
+            "_start_stats_refresh",
+            "_start_subscriber",
+            "_start_prompt_poll",
+            "_start_remote_violation_mirror_poll",
+            "_start_web_console",
+            "_register_wake_handler",
+        ):
+            monkeypatch.setattr(tray, method, lambda: None)
+        monkeypatch.setattr(tray, "_build_tray_menu", lambda: None)
+        monkeypatch.setattr(tray, "_create_icon", lambda: object())
+        monkeypatch.setattr(tray._health, "_on_startup_ide_setup", lambda: None)
+        monkeypatch.setattr(tray, "_stop_web_console", lambda: None)
+        monkeypatch.setattr(tray, "_unregister_wake_handler", lambda: None)
+        monkeypatch.setattr(
+            tray_app, "pystray", types.SimpleNamespace(Icon=lambda *a: icon)
+        )
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.app._get_tray_lock_path", return_value=lock_path
+            ),
+            mock.patch("platform.system", return_value="Darwin"),
+        ):
+            tray._run()
+
+        assert not lock_path.exists()
+
     def test_resume_label_shows_remaining_time(self):
         tray = DaemonTray(
             get_stats_callback=lambda: {"pause_remaining_seconds": 125},

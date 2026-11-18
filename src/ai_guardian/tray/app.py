@@ -429,7 +429,6 @@ class DaemonTray:
                 self._icon.stop()
             except Exception:
                 pass  # intentionally silent — cleanup best-effort
-        _remove_tray_lock()
 
     def _stop_web_console(self):
         """Stop the web console subprocess if we started it."""
@@ -658,37 +657,42 @@ class DaemonTray:
 
     def _run(self):
         """Run tray icon (blocking, called in thread)."""
-        self._ensure_macos_activation_policy()
-        menu = self._build_tray_menu()
-        self._icon = pystray.Icon(
-            "ai-guardian", self._create_icon(), "AI Guardian Tray", menu
-        )
-        self._schedule_appindicator_menu_watch()
-        if self._discovery:
-            self._anim._is_initial_discovery = True
-            self._anim._discovery_in_progress = True
-            self._anim._start_discovery_animation(delay=0)
-            self._discovery.start_background_discovery(self._on_targets_updated)
-            self._discovery.start_container_event_stream(
-                callback=lambda: self._refresh_event.set()
+        try:
+            self._ensure_macos_activation_policy()
+            menu = self._build_tray_menu()
+            self._icon = pystray.Icon(
+                "ai-guardian", self._create_icon(), "AI Guardian Tray", menu
             )
-        self._start_stats_refresh()
-        # Check setup status as soon as the tray is available. The callback
-        # starts a worker so tray startup/restart is not blocked by the UI.
-        self._health._on_startup_ide_setup()
-        self._start_subscriber()
-        self._start_prompt_poll()
-        self._start_remote_violation_mirror_poll()
-        self._start_web_console()
-        self._register_wake_handler()
-        import platform
+            self._schedule_appindicator_menu_watch()
+            if self._discovery:
+                self._anim._is_initial_discovery = True
+                self._anim._discovery_in_progress = True
+                self._anim._start_discovery_animation(delay=0)
+                self._discovery.start_background_discovery(self._on_targets_updated)
+                self._discovery.start_container_event_stream(
+                    callback=lambda: self._refresh_event.set()
+                )
+            self._start_stats_refresh()
+            # Check setup status as soon as the tray is available. The callback
+            # starts a worker so tray startup/restart is not blocked by the UI.
+            self._health._on_startup_ide_setup()
+            self._start_subscriber()
+            self._start_prompt_poll()
+            self._start_remote_violation_mirror_poll()
+            self._start_web_console()
+            self._register_wake_handler()
+            import platform
 
-        if platform.system() == "Linux":
-            saved_fd = _suppress_gtk_stderr()
-            threading.Timer(0.5, _restore_stderr, args=[saved_fd]).start()
-            self._icon.run()
-        else:
-            self._icon.run()
+            if platform.system() == "Linux":
+                saved_fd = _suppress_gtk_stderr()
+                threading.Timer(0.5, _restore_stderr, args=[saved_fd]).start()
+                self._icon.run()
+            else:
+                self._icon.run()
+        finally:
+            # Keep the lock while the native icon loop is still active so a
+            # replacement cannot start alongside this tray instance.
+            _remove_tray_lock()
 
     def _create_icon(self):
         """Create tray icon from monochrome shield template images."""
@@ -2001,6 +2005,7 @@ class DaemonTray:
         import subprocess
 
         cmd = tray_plugins.resolve_cli_cmd("tray", "start")
+        cmd.extend(["--wait-for-pid", str(os.getpid())])
         logger.debug("Restarting tray with command: %s", cmd)
         self.stop()
         self._stop()
