@@ -1,3 +1,4 @@
+import {observeTaskReview} from "./task-review.js";
 import {hookReceipt} from './visibility.js';
 import {observeCheckpoint} from "./handoff-state.js";
 import {bridgedInput, delegateRuntime, scheduleUpdate} from "./runtime-updates.js";
@@ -123,11 +124,16 @@ export function hookMain(hookName: string, fn: () => void | Promise<void>): void
     process.stdout.write(`ok ${hookName}`);
     process.exit(0);
   }
+  // Casepod: cached registrations must stay inert after disabling the project.
+  if (readJSON<{openwolf?: {enabled?: boolean}} | null>(path.join(getWolfDir(), "config.json"), null)?.openwolf?.enabled === false) {
+    process.exit(0);
+  }
   Promise.resolve()
     .then(() => readStdin())
     .then(async raw => {
       if (hookName === "session-start" || hookName === "user-prompt-submit") scheduleUpdate(getProjectDir());
       try { if (await delegateRuntime(getProjectDir(), hookName, raw)) return true; } catch {}
+      try {observeTaskReview(getProjectDir(),detectAgent(),hookName,JSON.parse(raw))} catch {}
       await fn();
       try { if (["precompact","session-end","stop","user-prompt-submit","post-write","post-bash"].includes(hookName)) observeCheckpoint(getProjectDir(),detectAgent(),hookName,JSON.parse(raw)); } catch {}
       if(hookName==="stop")try{const notice=hookReceipt(getProjectDir(),detectAgent(),{...JSON.parse(raw),prompt_id:String(readJSON<Record<string,unknown>>(getSessionFilePath(JSON.parse(raw)),{}).stop_count??0)});if(notice)process.stdout.write(JSON.stringify({systemMessage:notice}))}catch{}

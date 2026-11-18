@@ -22,14 +22,12 @@ export interface OpenCodeEventOptions {
   toast?: (message: string) => void
 }
 
-/** Return an object value without exposing unsafe casts to callers. */
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
 }
 
-/** Read the V2 data envelope, falling back to the V1 properties envelope. */
 function eventData(event: OpenCodeEvent): Record<string, unknown> {
   const data = record(event.data)
   if (Object.keys(data).length > 0) return data
@@ -70,36 +68,32 @@ export function extractSessionId(source: unknown): string {
   return ""
 }
 
-/** Return the event discriminator when OpenCode supplied one. */
 function eventType(event: OpenCodeEvent): string {
   return typeof event.type === "string" ? event.type : ""
 }
 
-/** Persist one V2 usage snapshot without counting repeated deliveries twice. */
-function recordV2Usage(directory: string, event: OpenCodeEvent): void {
-  const data = eventData(event)
-  const sessionId = typeof data.sessionID === "string" ? data.sessionID : ""
-  if (!sessionId || !data.tokens) return
+// OpenCode 2 can deliver more than one turn-end event for one turn
+// (session.execution.succeeded plus session.idle), so remember sessions that
+// already stopped since their last observed activity.
+const stoppedSinceActivity = new Set<string>()
 
-  // V2 publishes cumulative usage as a session event rather than the V1
-  // message.updated/info payload. Current V2 events do not carry an id, so
-  // use one stable per-session identity and replace that session snapshot.
-  // Preserve event ids when a future V2 payload provides one.
-  const eventId = typeof event.id === "string" && event.id ? event.id : undefined
-  const id = eventId ?? `session:${sessionId}`
-  recordUsage(directory, {
-    id,
-    role: "assistant",
-    sessionID: sessionId,
-    providerID: data.providerID,
-    modelID: data.modelID,
-    tokens: data.tokens,
-    time: { completed: event.created },
-    replaceSnapshot: eventId === undefined,
-  })
+// OpenCode 2's session.usage.updated carries CUMULATIVE session totals, so
+// per-message usage must come from the per-step events instead. The model is
+// only reported on session.step.started, so it is remembered by assistant
+// message id until the matching session.step.ended (or failed) arrives.
+const stepModels = new Map<string, { providerID?: string; modelID?: string; sessionID: string }>()
+
+// OpenCode 2 does not deliver session.created for a session that already
+// existed when the plugin subscribed, so the session file is created lazily,
+// once, on the first event or tool call that names the session.
+const startedSessions = new Set<string>()
+
+function ensureSession(directory: string, sessionId: string): void {
+  if (!wolfDirExists(directory) || startedSessions.has(path.resolve(directory)+":"+sessionId)) return
+  startedSessions.add(path.resolve(directory)+":"+sessionId)
+  handleSessionStart(directory, sessionId)
 }
 
-/** Apply one OpenCode lifecycle or usage event to the OpenWolf state. */
 export async function handleOpenCodeEvent(
   directory: string,
   event: OpenCodeEvent,
@@ -115,29 +109,101 @@ export async function handleOpenCodeEvent(
       try { recordUsage(directory, info) } catch (error) { console.warn(String(error)) }
     }
   }
-  if (type === "session.usage.updated" || type === "session.usage.recorded") {
-    try { recordV2Usage(directory, event) } catch (error) { console.warn(String(error)) }
-  }
 
   const sessionId = extractSessionId(event)
   if (!sessionId) return
 
+  // Any event that names the session is activity for the turn-end dedupe.
+  if (type === "session.created" || type === "message.updated" || type === "session.step.started") {
+    stoppedSinceActivity.delete(path.resolve(directory)+":"+sessionId)
+  }
+
+  // Lazily create the session for v2 sessions that never got
+  // session.created; deletion drops the lazy-start marker instead.
+  if (type === "session.deleted") {
+    startedSessions.delete(path.resolve(directory)+":"+sessionId)
+  } else {
+    ensureSession(directory, sessionId)
+  }
+
+  if (type === "session.step.started") {
+    const data = eventData(event)
+    const messageID = typeof data.assistantMessageID === "string" ? data.assistantMessageID : ""
+    const model = record(data.model)
+    if (messageID) {
+      stepModels.set(path.resolve(directory)+":"+messageID, {
+        providerID: typeof model.providerID === "string" ? model.providerID : undefined,
+        modelID: typeof model.id === "string" ? model.id : undefined,
+        sessionID: typeof data.sessionID === "string" ? data.sessionID : sessionId,
+      })
+    }
+  }
+
+  // A failed step (e.g. content filter, stream cut off) may still report the
+  // tokens the provider billed, with the same shape as step.ended.
+  if (type === "session.step.ended" || type === "session.step.failed") {
+    const data = eventData(event)
+    const messageID = typeof data.assistantMessageID === "string" ? data.assistantMessageID : ""
+    const step = messageID ? stepModels.get(path.resolve(directory)+":"+messageID) : undefined
+    stepModels.delete(path.resolve(directory)+":"+messageID)
+    if (messageID && data.tokens) {
+      try {
+        recordUsage(directory, {
+          // id = assistantMessageID keeps a redelivered step.ended idempotent.
+          id: messageID,
+          role: "assistant",
+          sessionID: typeof data.sessionID === "string" ? data.sessionID : (step?.sessionID ?? sessionId),
+          providerID: step?.providerID,
+          modelID: step?.modelID,
+          tokens: data.tokens,
+          time: { created: event.created, completed: event.created },
+        })
+      } catch (error) {
+        console.warn(String(error))
+      }
+    }
+  }
+
+  // Title generation and compaction run outside the step events and report
+  // their usage once each (not cumulative); the event id keeps redelivery
+  // idempotent. The event carries no model, so it is recorded as unknown.
+  if (type === "session.usage.recorded") {
+    const data = eventData(event)
+    if (typeof event.id === "string" && data.tokens) {
+      try {
+        recordUsage(directory, {
+          id: `usage:${event.id}`,
+          role: "assistant",
+          sessionID: sessionId,
+          tokens: data.tokens,
+          time: { created: event.created, completed: event.created },
+        })
+      } catch (error) {
+        console.warn(String(error))
+      }
+    }
+  }
+
   if (type === "session.created") {
-    handleSessionStart(directory, sessionId)
+    ensureSession(directory, sessionId)
     scheduleUpdate(directory)
     const notice = updateNotice(directory, sessionId)
     if (notice) options.toast?.(notice)
   }
 
-  // V1 and V2 use different error/execution event names, but both retain an
-  // idle boundary. Do not treat execution success as a stop: V2 also emits an
-  // idle event and doing both would increment stop_count twice per turn.
+  // OpenCode 2.0.32 ends a successful turn with
+  // session.execution.succeeded and never delivered session.idle in tests,
+  // so both end the turn; the dedupe below keeps a turn from stopping twice
+  // if both fire (v1's idle-only turns still stop exactly once).
   const ended = type === "session.idle" ||
     type === "session.error" ||
     type === "session.deleted" ||
+    type === "session.execution.succeeded" ||
     type === "session.execution.failed" ||
     type === "session.execution.interrupted"
   if (!ended) return
+
+  if (type !== "session.deleted" && stoppedSinceActivity.has(path.resolve(directory)+":"+sessionId)) return
 
   scheduleUpdate(directory)
   const update = updateNotice(directory, sessionId)
@@ -163,6 +229,12 @@ export async function handleOpenCodeEvent(
   }
   handleStop(directory, sessionId)
 
+  // A finished turn owns no in-flight steps; drop any model info still
+  // keyed to this session.
+  for (const [messageID, step] of stepModels) {
+    if (messageID.startsWith(path.resolve(directory)+":") && step.sessionID === sessionId) stepModels.delete(messageID)
+  }
+
   if (type === "session.deleted") {
     const file = sessionFilePath(pathForHooks(directory), sessionId)
     mutateJSON<Record<string, unknown>>(
@@ -172,20 +244,20 @@ export async function handleOpenCodeEvent(
       state => { state.ended = new Date().toISOString() },
     )
     deleteSession(sessionId)
+    stoppedSinceActivity.delete(path.resolve(directory)+":"+sessionId)
+  } else {
+    stoppedSinceActivity.add(path.resolve(directory)+":"+sessionId)
   }
 }
 
-/** Return the directory containing OpenWolf hook session state. */
 function pathForHooks(directory: string): string {
   return path.join(getWolfDir(directory), "hooks")
 }
 
-/** Normalize tool arguments to an object for V1 and V2 callers. */
 function toolArgs(value: unknown): Record<string, unknown> {
   return record(value)
 }
 
-/** Record the pre-execution state for OpenCode read, write, and edit tools. */
 export function handleOpenCodeToolBefore(
   directory: string,
   sessionId: string,
@@ -194,16 +266,23 @@ export function handleOpenCodeToolBefore(
 ): void {
   if (!wolfDirExists(directory) || !sessionId || typeof toolName !== "string") return
 
+  // v2: tool calls are activity and can arrive before any session event, so
+  // lazily start the session and clear the turn-end dedupe.
+  ensureSession(directory, sessionId)
+  stoppedSinceActivity.delete(path.resolve(directory)+":"+sessionId)
+
   const args = toolArgs(input)
   const tool = toolName.toLowerCase()
   if (tool === "read") {
-    const filePath = String(args.filePath || args.file_path || "")
+    // OpenCode 2 tool input names the file "path" (v1 used "filePath").
+    const filePath = String(args.path || args.filePath || args.file_path || "")
     const ranged = args.offset !== undefined || args.limit !== undefined
     if (filePath) handlePreRead(directory, sessionId, filePath, ranged)
   }
 
   if (tool === "write" || tool === "edit") {
-    const filePath = String(args.filePath || args.file_path || "")
+    // OpenCode 2 tool input names the file "path" (v1 used "filePath").
+    const filePath = String(args.path || args.filePath || args.file_path || "")
     const content = String(args.content || "")
     const oldStr = String(args.old_string || args.oldString || "")
     const newStr = String(args.new_string || args.newString || "")
@@ -211,12 +290,15 @@ export function handleOpenCodeToolBefore(
   }
 }
 
-/** Extract readable text from OpenCode's result shapes. */
 function contentText(value: unknown): string {
   if (typeof value === "string") return value
   if (!value || typeof value !== "object") return value === undefined ? "" : String(value)
   const object = value as Record<string, unknown>
   if (typeof object.output === "string") return object.output
+  // OpenCode 2 read results carry the raw file text in output.content; the
+  // content[] text parts add a header and line-number prefixes.
+  const output = record(object.output)
+  if (typeof output.content === "string") return output.content
   if (typeof object.text === "string") return object.text
   if (Array.isArray(object.content)) {
     return object.content
@@ -230,7 +312,6 @@ function contentText(value: unknown): string {
   return JSON.stringify(value) || ""
 }
 
-/** Record tool output and post-execution state for OpenCode file tools. */
 export function handleOpenCodeToolAfter(
   directory: string,
   sessionId: string,
@@ -241,16 +322,23 @@ export function handleOpenCodeToolAfter(
 ): void {
   if (!wolfDirExists(directory) || !sessionId || typeof toolName !== "string") return
 
+  // v2: tool results are activity and can arrive before any session event,
+  // so lazily start the session and clear the turn-end dedupe.
+  ensureSession(directory, sessionId)
+  stoppedSinceActivity.delete(path.resolve(directory)+":"+sessionId)
+
   const args = toolArgs(input)
   const tool = toolName.toLowerCase()
   if (tool === "read") {
-    const filePath = String(args.filePath || args.file_path || "")
+    // OpenCode 2 tool input names the file "path" (v1 used "filePath").
+    const filePath = String(args.path || args.filePath || args.file_path || "")
     const ranged = args.offset !== undefined || args.limit !== undefined
     if (filePath) handlePostRead(directory, sessionId, filePath, contentText(result), ranged, callId)
   }
 
   if (tool === "write" || tool === "edit") {
-    const filePath = String(args.filePath || args.file_path || "")
+    // OpenCode 2 tool input names the file "path" (v1 used "filePath").
+    const filePath = String(args.path || args.filePath || args.file_path || "")
     const content = String(args.content || "")
     const oldStr = String(args.old_string || args.oldString || "")
     const newStr = String(args.new_string || args.newString || "")
@@ -258,21 +346,18 @@ export function handleOpenCodeToolAfter(
   }
 }
 
-/** Flush the session state for a stop event that bypasses the event stream. */
 export function handleOpenCodeStop(directory: string, source: unknown): void {
   if (!wolfDirExists(directory)) return
   const sessionId = extractSessionId(source)
   if (sessionId) handleStop(directory, sessionId)
 }
 
-/** Return approved OPENWOLF.md content wrapped for the OpenCode context hook. */
 export function openWolfSystemText(directory: string): string | undefined {
   if (!wolfDirExists(directory)) return
   const openwolfPath = path.join(getWolfDir(directory), "OPENWOLF.md")
   try {
     if (!fs.existsSync(openwolfPath)) return
     const openwolfContent = approvedMemory(getWolfDir(directory), "OPENWOLF.md")
-    if (!openwolfContent) return
     return `\n<openwolf-protocol>\n${openwolfContent}\n</openwolf-protocol>`
   } catch {}
 }

@@ -26,7 +26,21 @@
         ".netlify",
         ".output",
         "*.min.js",
-        "*.min.css"
+        "*.min.css",
+        ".venv",
+        "venv",
+        "site-packages",
+        ".gradle",
+        ".DS_Store",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".tox",
+        "*.pyc",
+        ".m2",
+        ".cargo",
+        "Thumbs.db",
+        "*.map"
       ],
       "respect_gitignore": true
     },
@@ -121,9 +135,13 @@
     },
     "agents": [
       "claude",
-      "codex",
-      "opencode",
-      "cursor"
-    ]
+      "opencode"
+    ],
+    "task_review": {
+      "enabled": false,
+      "failure_threshold": 2,
+      "interval_minutes": 5,
+      "cooldown_minutes": 5
+    }
   }
 }

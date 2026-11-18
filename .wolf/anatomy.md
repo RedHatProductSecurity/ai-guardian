@@ -1,7 +1,7 @@
 # anatomy.md
 
 > Auto-maintained by OpenWolf. Last scanned: 2026-10-30T18:14:36.659Z
-> Files: 1301 tracked | Anatomy hits: 0 | Misses: 0
+> Files: 1310 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -12,22 +12,22 @@
 - `.gitleaks.toml` — Test files for secret redaction - contain intentional fake secrets for testing (~333 tok)
 - `.readthedocs.yaml` (~55 tok)
 - `.release-config.json` (~147 tok)
-- `AGENTS.md` — Agent Instructions for AI Guardian (~20012 tok)
-- `ai-guardian-example.json` (~22452 tok)
-- `CHANGELOG.md` — Change log (~86700 tok)
+- `AGENTS.md` — Agent Instructions for AI Guardian (~19933 tok)
+- `ai-guardian-example.json` (~22534 tok)
+- `CHANGELOG.md` — Change log (~89081 tok)
 - `CLAUDE.md` — OpenWolf (~82 tok)
 - `cliff.toml` — git-cliff configuration for AI Guardian (~337 tok)
 - `CONTRIBUTING.md` — Contributing to AI Guardian (~680 tok)
 - `GEMINI.md` — OpenWolf (~68 tok)
-- `install.ps1` — Requires -Version 5.1 (~3280 tok)
-- `install.sh` (~8726 tok)
+- `install.ps1` — Requires -Version 5.1 (~3302 tok)
+- `install.sh` (~8875 tok)
 - `LICENSE` — Project license (~196 tok)
 - `Makefile` — Make build targets (~62 tok)
-- `mkdocs.yml` (~1282 tok)
+- `mkdocs.yml` (~1291 tok)
 - `NOTICE` (~55 tok)
 - `pyproject.toml` — Python project configuration (~2605 tok)
-- `README.md` — Project documentation (~1910 tok)
-- `RELEASING.md` — Release Management Process (~14426 tok)
+- `README.md` — Project documentation (~4100 tok)
+- `RELEASING.md` — Release Management Process (~16870 tok)
 - `skills-lock.json` (~491 tok)
 - `test_ai-guardian.sh` — Test script for ai-guardian hook (~674 tok)
 - `uninstall.ps1` — Declares and (~994 tok)
@@ -145,9 +145,13 @@
 - `feature-request.yml` (~601 tok)
 - `pattern-enhancement.md` — 📚 Source Information (~1124 tok)
 
+## .github/actions/prepare-cli-smoke/
+
+- `action.yml` — CI: Prepare real-agent CLI smoke (~474 tok)
+
 ## .github/workflows/
 
-- `build-container.yml` — GitHub Actions CI/CD - Build Container Image (~2341 tok)
+- `build-container.yml` — GitHub Actions CI/CD - Build Container Image (~2348 tok)
 - `build-wheel.yml` — CI: Build Wheel (~981 tok)
 - `cli-version-health.yml` — CI: Support-image Terminal CLI Version Health (~2458 tok)
 - `container-build-validation.yml` — CI: Container Build Validation (~1020 tok)
@@ -157,7 +161,8 @@
 - `parser-compat.yml` — CI: Parser Compatibility Check (~2048 tok)
 - `pattern-research-reminder.yml` — CI: Security Pattern Research Reminder (~3367 tok)
 - `publish.yml` — GitHub Actions CI/CD - Publish Workflow (~2061 tok)
-- `release-readiness.yml` — CI: Release Readiness (~15295 tok)
+- `release-readiness.yml` — CI: Release Readiness (~17063 tok)
+- `release-references.yml` — CI: Release References (~244 tok)
 - `scenario-tests.yml` — CI: Dummy-Agent Scenario Tests (~727 tok)
 - `smoke-tests.yml` — CI: Smoke Tests (~7340 tok)
 - `tag-monitor.yml` — CI: Tag Creation Monitor (~2368 tok)
@@ -798,13 +803,13 @@
 
 - `.dockerignore` — Docker ignore rules (~7 tok)
 - `compose_openshell_policy.py` — Compose OpenShell policy fragments into one schema-valid YAML document. (~905 tok)
-- `Dockerfile` — Docker container definition (~3874 tok)
+- `Dockerfile` — Docker container definition (~3878 tok)
 - `Dockerfile.openshell` — syntax=docker/dockerfile:1 (~2493 tok)
 - `Dockerfile.test` — ai-guardian hook-testing image (NOT for distribution) (~559 tok)
 - `entrypoint.sh` (~8520 tok)
 - `openshell-github-readonly-policy.yaml` — /info/refs*" } (~358 tok)
 - `openshell-github-readwrite-policy.yaml` — /info/refs*" } (~367 tok)
-- `README.md` — Project documentation (~14706 tok)
+- `README.md` — Project documentation (~14715 tok)
 - `run-scenarios.sh` (~313 tok)
 - `run.sh` (~3500 tok)
 
@@ -904,51 +909,53 @@
 
 ## docs/
 
-- `AGENT_SUPPORT.md` — Agent Support (~21457 tok)
+- `AGENT_SUPPORT.md` — Agent Support (~22280 tok)
 - `AIDER.md` — Aider Integration Guide (~2682 tok)
 - `AIDERDESK.md` — AiderDesk Integration (~1093 tok)
 - `ANNOTATIONS.md` — Inline Annotation Suppression (~1259 tok)
 - `AUDIT_LOGGING.md` — Compliance Audit Logging (~1442 tok)
-- `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4456 tok)
+- `CLI_RUNTIME_CHECKLIST.md` — CLI/Runtime Integration Checklist (~4839 tok)
 - `CODEX_SANDBOX_RUNTIME.md` — Codex Linux sandbox runtime troubleshooting (~793 tok)
-- `CONFIGURATION.md` — Configuration Guide (~7897 tok)
-- `CONSOLE.md` — AI Guardian Console Guide (~1583 tok)
-- `COOKBOOK.md` — Configuration Cookbook (~15647 tok)
+- `CONFIGURATION.md` — Configuration Guide (~8443 tok)
+- `CONSOLE.md` — AI Guardian Console Guide (~1811 tok)
+- `COOKBOOK.md` — Configuration Cookbook (~15664 tok)
 - `DEVELOPER_GUIDE.md` — Developer Guide (~3796 tok)
 - `documentation.md` — 8<-- "docs/README.md" (~6 tok)
 - `GITHUB_COPILOT.md` — GitHub Copilot Integration Guide (~2967 tok)
+- `GOOSE.md` — Goose CLI support (~2304 tok)
 - `hook-flow-diagram.mmd` (~1330 tok)
 - `HOOKS.md` — Hook Configuration Guide (~4240 tok)
-- `IDE_INTEGRATION_CHECKLIST.md` — IDE/Agent Integration Checklist (~8146 tok)
+- `IDE_INTEGRATION_CHECKLIST.md` — IDE/Agent Integration Checklist (~8509 tok)
 - `index.md` — 8<-- "README.md" (~5 tok)
 - `kubernetes.md` — Kubernetes Deployment Guide (~1866 tok)
-- `MCP_SERVER.md` — MCP Security Advisor Server (~5424 tok)
+- `MCP_SERVER.md` — MCP Security Advisor Server (~5587 tok)
 - `ML_ENGINE_SUPPORT.md` — Multi-Engine ML Support for Prompt Injection Detection (~1772 tok)
 - `MODAL_PROVIDERS.md` — Modal providers and runtime fallback (~8019 tok)
-- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~20749 tok)
+- `MULTI_DAEMON_TRAY.md` — Multi-Daemon Tray Client (~20936 tok)
 - `MULTI_ENGINE_SUPPORT.md` — Multi-Engine Support for Secret Scanning (~9506 tok)
 - `notebooklm-export.md` — AI Guardian — Combined Documentation (~235824 tok)
-- `OBSERVABILITY.md` — Observability (~3569 tok)
-- `OPENCODE.md` — OpenCode Support (~4141 tok)
+- `OBSERVABILITY.md` — Observability (~3586 tok)
+- `OPENCODE.md` — OpenCode Support (~4300 tok)
 - `OPENSHELL_MIDDLEWARE.md` — OpenShell Supervisor Middleware (~8431 tok)
 - `PATTERN_SERVER.md` — Pattern Server (~3072 tok)
 - `PERMISSIONS_COMPARISON.md` — AI Guardian vs settings.json: Permission Systems Comparison (~5065 tok)
 - `POTENTIAL_INTEGRATIONS.md` — Potential Integrations (~507 tok)
 - `PRE_COMMIT.md` — Pre-commit Hook (~1210 tok)
-- `README.md` — Project documentation (~1868 tok)
+- `README.md` — Project documentation (~1936 tok)
+- `REAL_AGENT_CLI_COVERAGE.md` — Real-agent CLI coverage ledger (~5198 tok)
 - `requirements.txt` — Python dependencies (~59 tok)
 - `Sandbox.md` — Sandbox CLI (~5794 tok)
 - `SCANNER_INSTALLATION.md` — Scanner Installation Guide (~2935 tok)
-- `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2372 tok)
-- `SDK.md` — AI Guardian SDK (~21727 tok)
-- `SECURITY_DESIGN.md` — Security Design (~3877 tok)
+- `SCANNER_INTEGRATION_CHECKLIST.md` — Scanner Integration Checklist (~2434 tok)
+- `SDK.md` — AI Guardian SDK (~21774 tok)
+- `SECURITY_DESIGN.md` — Security Design (~4061 tok)
 - `SUPPORT.md` — Support bundles and public GitHub Discussions (~8241 tok)
 - `TOML_PATTERNS.md` — TOML Pattern Engine (~3843 tok)
-- `TOOL_POLICY.md` — Tool Policy System (~5839 tok)
+- `TOOL_POLICY.md` — Tool Policy System (~5882 tok)
 - `TROUBLESHOOTING.md` — Troubleshooting Guide (~8613 tok)
 - `UBUNTU_VM.md` — Headless Ubuntu VM: HTTPS and SSH quickstart (~8350 tok)
-- `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3729 tok)
-- `VIOLATION_LOGGING.md` — Violation Logging (~5871 tok)
+- `UNINSTALL.md` — Uninstall and orphaned-integration recovery (~3846 tok)
+- `VIOLATION_LOGGING.md` — Violation Logging (~7246 tok)
 
 ## docs/api/
 
@@ -1037,12 +1044,14 @@
 
 ## scripts/
 
-- `agent_cli_mock_provider.py` — Credential-free local model protocols for the agent CLI hook smoke test. (~11369 tok)
+- `agent_cli_coverage.json` (~662 tok)
+- `agent_cli_mcp_proxy.py` — Smoke-only stdio proxy that records aggregate MCP version evidence. (~5848 tok)
+- `agent_cli_mock_provider.py` — Credential-free local model protocols for the agent CLI hook smoke test. (~14707 tok)
 - `agent_cli_smoke_firewall.py` — Trusted one-shot nftables setup, only in a smoke sandbox's network namespace. (~390 tok)
 - `agent_cli_smoke_gate.py` — Do not start smoke setup, daemon or agents until trusted firewall setup succeeds. (~618 tok)
-- `agent_cli_test.py` — Run actual agent CLI hooks in a credential-free, strict-derived smoke sandbox. (~28161 tok)
+- `agent_cli_test.py` — Run actual agent CLI hooks in a credential-free, strict-derived smoke sandbox. (~37752 tok)
 - `agent-cli-test` (~36 tok)
-- `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~9012 tok)
+- `ai_guardian_recovery.py` — Operator-invoked integration recovery, independent of the installed package. (~9275 tok)
 - `check_cli_versions.py` — Check explicitly managed terminal CLI versions in the support images. (~2778 tok)
 - `check_openshell_compatibility.py` — Verify the qualified OpenShell release and protocol contract. (~1717 tok)
 - `check_parser_compat.py` — get_leaktk_url, fetch_url, fetch_pattern_data, extract_schema + 4 more (~3274 tok)
@@ -1050,47 +1059,48 @@
 - `install` (~202 tok)
 - `qualify_password_likelihood.py` — Offline #2612 qualification; print aggregate measurements, never sample values. (~1784 tok)
 - `release_ci_gate.py` — Dispatch, persist, validate, and resume the release CI gate. (~7327 tok)
-- `release.sh` — Fully automated release script for AI Guardian. (~8428 tok)
+- `release.sh` — Fully automated release script for AI Guardian. (~8714 tok)
 - `resolve_release_merge.py` — Resolve the narrow, expected conflicts from merging a stable release to main. (~2864 tok)
-- `sync_release_versions.py` — Synchronize AI Guardian's active stable-release references. (~2301 tok)
+- `sync_release_versions.py` — Synchronize AI Guardian's active stable-release references. (~2248 tok)
 - `sync_rust_middleware_version.py` — Keep the Rust OpenShell middleware version aligned with an AI Guardian release. (~1756 tok)
 - `unittest` (~62 tok)
 - `verify_container_images.py` — Verify versioned container manifests with bounded retries. (~1380 tok)
 
 ## src/
 
-- `ai_guardian_hook_runtime.py` — Dependency-light hook launcher and failure-response boundary. (~4528 tok)
+- `ai_guardian_hook_runtime.py` — Dependency-light hook launcher and failure-response boundary. (~5037 tok)
 
 ## src/ai_guardian/
 
 - `__init__.py` — Declares and (~1879 tok)
 - `__main__.py` — main (~70 tok)
-- `agent_config_protection.py` — Canonical inventory and matching for supported agent configuration paths. (~5988 tok)
+- `agent_config_protection.py` — Canonical inventory and matching for supported agent configuration paths. (~6652 tok)
 - `aiguardignore.py` — "]          # all scanners (~3654 tok)
 - `allowlist_utils.py` — extract_pattern_string, is_allowlist_pattern_valid, validate_allowlist_patterns, filter_valid_patterns + 2 more (~1175 tok)
 - `annotations.py` — get_suppressed_lines, apply_suppressions, process_annotations (~2446 tok)
-- `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~6580 tok)
-- `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~13357 tok)
+- `ask_mode.py` — Ask-mode dialog helpers extracted from hook_processing.py (Phase 5c, #1491). (~6649 tok)
+- `cli_handlers.py` — CLI and daemon handler functions for AI Guardian. (~15021 tok)
 - `cli_runtime.py` — Shared version detection and stability advisories for agent CLIs. (~877 tok)
-- `cli.py` — main (~31206 tok)
+- `cli.py` — main (~32028 tok)
 - `code_annotator.py` — Batch annotation engine for init-project --scan --annotate. (~3110 tok)
-- `constants.py` — Constants for AI Guardian. (~5807 tok)
+- `constants.py` — Constants for AI Guardian. (~5860 tok)
 - `desktop_utils.py` — Desktop integration utilities for opening browser URLs. (~978 tok)
-- `developer_session.py` — Trusted developer-session configuration. (~485 tok)
-- `doctor.py` — URL configuration (~33784 tok)
+- `developer_session.py` — Trusted developer-session configuration. (~951 tok)
+- `doctor.py` — URL configuration (~33880 tok)
 - `dummy_agent.py` — run_interactive (~6239 tok)
 - `git_workflow.py` — Git workflow helpers for init-project --annotate. (~1960 tok)
+- `goose_support.py` — Goose v1.59 host paths shared by setup, health, and protection inventory. (~547 tok)
 - `help_content.py` — Centralized help content for all AI Guardian scanner pages. (~10238 tok)
 - `hook_context.py` — HookContextManager: save_pretool_context, get_pretool_context, cleanup_session, cleanup (~2346 tok)
-- `hook_processing.py` — URL configuration (~41266 tok)
-- `ide_paths.py` — Canonical path resolution for supported IDE and agent integrations. (~3451 tok)
-- `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4444 tok)
+- `hook_processing.py` — URL configuration (~42692 tok)
+- `ide_paths.py` — Canonical path resolution for supported IDE and agent integrations. (~3493 tok)
+- `ide_registry.py` — Canonical metadata for supported AI coding-agent integrations. (~4940 tok)
 - `logging_utils.py` — Shared logging utilities. (~254 tok)
 - `opencode_support.py` — OpenCode runtime generation and version helpers. (~909 tok)
 - `openshell_policy.py` — OpenShell policy discovery and validation helpers. (~3025 tok)
 - `profile_manager.py` — URL configuration (~1996 tok)
 - `project_init.py` — class: detect_languages, generate_allowlist, generate_config, write_config + 4 more (~10923 tok)
-- `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1360 tok)
+- `response_format.py` — IDEType: detect_ide_type, format_response, detect_hook_event (~1380 tok)
 - `sandbox.py` — Lifecycle management for AI Guardian container sandboxes. (~31156 tok)
 - `scan_analyzer.py` — class: run_scan_pipeline, merge_and_write_config, updater, all_high_frequency + 3 more (~5921 tok)
 - `self_protection.py` — Configuration helpers for immutable AI Guardian self-protection. (~273 tok)
@@ -1116,34 +1126,34 @@
 
 - `__init__.py` — URL patterns: 1 routes (~1937 tok)
 - `about.py` — Shared About info for daemon, tray, and REST API. (~1065 tok)
-- `auto_setup.py` — First-run auto-setup for tray shortcut, autostart, and tray launch. (~1717 tok)
-- `client.py` — URL configuration (~6433 tok)
+- `auto_setup.py` — First-run auto-setup for tray shortcut, autostart, and tray launch. (~1716 tok)
+- `client.py` — URL configuration (~6532 tok)
 - `desktop.py` — Desktop shortcut and autostart integration for the ai-guardian tray. (~4266 tok)
 - `discovery.py` — class: is_container_id, should_use_container_api_name, should_update_target_name, ssh_manager + 6 more (~20762 tok)
-- `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~20283 tok)
+- `multi_client.py` — MultiDaemonClient: get_status, send_pause, send_resume, send_pause_dir + 5 more (~21180 tok)
 - `notification_relay.py` — Deliver privacy-safe remote violation alerts through local settings. (~1532 tok)
 - `path_env.py` — URL configuration (~1228 tok)
 - `protocol.py` — encode_message, decode_message, make_hook_request, make_response + 14 more (~2027 tok)
 - `rest_api.py` — _ThreadedHTTPServer: get_request, handle_error, log_message, do_GET + 1 more (~21739 tok)
 - `rest_transport.py` — Verified daemon REST transport. Trust is explicit, never learned by discovery. (~4504 tok)
-- `server.py` — URL configuration (~15660 tok)
+- `server.py` — URL configuration (~15840 tok)
 - `ssh_commands.py` — Explicit user actions over the saved, host-key-verified SSH destination. (~1256 tok)
 - `ssh_config.py` — Bounded, declarative user OpenSSH alias enumeration. Never invokes SSH. (~3132 tok)
 - `ssh_connections.py` — Tray/Web-owned SSH connection workers. Discovery itself never waits on SSH. (~4464 tok)
 - `ssh_probe.py` — Fixed, read-only POSIX/Python 3 probe sent over authenticated SSH stdin. (~1524 tok)
 - `ssh_storage.py` — Owner-only SSH pairing storage, separate from exported daemon configuration. (~2363 tok)
 - `ssh_tunnel.py` — Bounded system-OpenSSH probing and owned loopback HTTPS tunnels. (~4823 tok)
-- `state.py` — URL configuration (~22773 tok)
+- `state.py` — URL configuration (~22821 tok)
 - `support.py` — Bounded, authenticated-API collection jobs; never review or publish remotely. (~1936 tok)
 - `trace_sync.py` — get_remote_cache_dir, get_daemon_cache_dir, persist_trace, persist_trace_meta + 5 more (~3202 tok)
 - `traces.py` — URL configuration (~10863 tok)
-- `violation_mirroring.py` — Opt-in, read-only mirroring of curated remote violation summaries. (~3320 tok)
+- `violation_mirroring.py` — Opt-in, read-only mirroring of curated remote violation summaries. (~3699 tok)
 - `violation_rescan.py` — Rescan a file at a violation location to retrieve matched text. (~3372 tok)
 - `working_dir.py` — URL configuration (~2843 tok)
 
 ## src/ai_guardian/hook_adapters/
 
-- `__init__.py` — by: detect_adapter, get_adapter_by_ide_type (~2224 tok)
+- `__init__.py` — by: detect_adapter, get_adapter_by_ide_type (~2284 tok)
 - `antigravity.py` — Google Antigravity CLI (agy) hook adapter. (~3372 tok)
 - `augment.py` — Augment Code hook adapter. (~372 tok)
 - `base_agent.py` — Base agent adapter (default response format). (~2407 tok)
@@ -1155,19 +1165,20 @@
 - `cursor.py` — Cursor IDE hook adapter. (~3093 tok)
 - `dummy_agent.py` — Dummy Agent hook adapter. (~283 tok)
 - `gemini.py` — Google Gemini CLI hook adapter. (~1534 tok)
+- `goose.py` — Goose Open Plugins command hooks (v1.59.0 contract). (~1937 tok)
 - `grok.py` — xAI Grok Build hook adapter. (~1581 tok)
 - `junie.py` — Junie (JetBrains) hook adapter. (~480 tok)
 - `kiro.py` — Kiro (AWS) hook adapter. (~1095 tok)
-- `opencode.py` — OpenCode hook adapter. (~656 tok)
+- `opencode.py` — OpenCode hook adapter. (~1280 tok)
 - `pi.py` — Pi hook adapter. (~300 tok)
 - `windsurf.py` — Windsurf hook adapter. (~1198 tok)
 
 ## src/ai_guardian/hook_events/
 
 - `__init__.py` — Per-event hook handlers for ai-guardian (Phase 5, #1491). (~19 tok)
-- `content_pipeline.py` — Shared content scanning pipeline extracted from hook_processing.py (Phase 5e.3, #1491). (~7343 tok)
-- `post_tool_use.py` — PostToolUse event handler extracted from hook_processing.py (Phase 5e.2, #1491). (~14899 tok)
-- `scanners.py` — Scanner runner functions extracted from hook_processing.py (Phase 5d, #1491). (~8589 tok)
+- `content_pipeline.py` — Shared content scanning pipeline extracted from hook_processing.py (Phase 5e.3, #1491). (~9796 tok)
+- `post_tool_use.py` — PostToolUse event handler extracted from hook_processing.py (Phase 5e.2, #1491). (~19714 tok)
+- `scanners.py` — Scanner runner functions extracted from hook_processing.py (Phase 5d, #1491). (~8666 tok)
 - `session_events.py` — Session lifecycle event handlers extracted from hook_processing.py (Phase 5e.1, #1491). (~3010 tok)
 - `utils.py` — Shared utilities for hook event handlers. (~498 tok)
 
@@ -1193,7 +1204,7 @@
 - `__init__.py` — MCP server and audit logging. (~11 tok)
 - `audit.py` — class: discover_servers, in, audit_config (~10482 tok)
 - `identity.py` — Local identity attestation for the built-in AI Guardian MCP server. (~5224 tok)
-- `server.py` — URL configuration (~14468 tok)
+- `server.py` — URL configuration (~15500 tok)
 
 ## src/ai_guardian/middleware/openshell/
 
@@ -1244,11 +1255,11 @@
 - `cli_diagnostics.py` — Bounded, sanitized host CLI configuration copies for user-reviewed support. (~3376 tok)
 - `github_gist.py` — User-owned diagnostic Gists, with separate native upload consent and receipts. (~3465 tok)
 - `github_support.py` — Public support Discussions with backend-enforced, user-only review. (~11065 tok)
-- `latency.py` — Hook latency tracking — per-hook and per-violation-type timing. (~4197 tok)
+- `latency.py` — Hook latency tracking — per-hook and per-violation-type timing. (~4325 tok)
 - `metrics.py` — class: compute, read_filtered_violations, format_human, format_json (~4844 tok)
 - `remote_support.py` — Collection-only wire format and protected desktop import of daemon diagnostics. (~3813 tok)
 - `sarif.py` — SARIFFormatter: create_sarif_report (~6573 tok)
-- `support_bundle.py` — prepare_bundle (~20957 tok)
+- `support_bundle.py` — URL configuration (~22132 tok)
 
 ## src/ai_guardian/scanners/
 
@@ -1266,7 +1277,7 @@
 - `engine_tester.py` — URL configuration (~3606 tok)
 - `executor.py` — run_single_engine, run_python_scanner (~5968 tok)
 - `exfil_detection.py` — ExfilDetectionScanner: check_command, scan (~4083 tok)
-- `file_scanner.py` — URL configuration (~17829 tok)
+- `file_scanner.py` — URL configuration (~17991 tok)
 - `gitleaks.py` — class: find_project_root, load_gitleaks_allowlist, should_skip_file, filter_findings + 2 more (~2822 tok)
 - `image_scanner.py` — class: is_image_file, is_image_bytes, is_base64_image, strip_base64_images + 6 more (~3596 tok)
 - `installer.py` — InstallMethod: get_github_repo, get_pattern_servers, get_pinned_version, detect_platform + 2 more (~15496 tok)
@@ -1277,16 +1288,16 @@
 - `output_parsers.py` — ScannerOutputParser: parse, parse, parse, parse + 1 more (~6182 tok)
 - `password_likelihood.py` — Bounded, offline suspected-password heuristics, never password identification. (~3882 tok)
 - `pipeline.py` — Shared content scanning pipeline for SDK and hooks. (~4102 tok)
-- `post_scan_filters.py` — Post-scan filter pipeline for the ScannerRegistry. (~4025 tok)
+- `post_scan_filters.py` — Post-scan filter pipeline for the ScannerRegistry. (~4822 tok)
 - `prompt_injection.py` — Declares UnicodeAttackDetector (~23251 tok)
 - `python_loader.py` — URL configuration (~2209 tok)
 - `remote_config.py` — fetch_remote_engine_config, merge_engine_configs (~826 tok)
 - `sanitizer.py` — get_sanitize_config, sanitize_text, sanitize_text_batch (~8778 tok)
-- `scan_result.py` — for: generate_violation_id, clean, from_secret_scan, from_pii_scan + 8 more (~7039 tok)
+- `scan_result.py` — for: generate_violation_id, clean, from_secret_scan, from_pii_scan + 7 more (~7118 tok)
 - `scanner_registry.py` — Scanner registry for declarative, loop-based scanner invocation. (~4872 tok)
 - `sdk.py` — MyScanner: scan, scan, configure (~908 tok)
-- `secret_redactor.py` — ai-guardian:begin-allow (~7596 tok)
-- `secret_scanning.py` — Secret scanning functions extracted from hook_processing.py (Phase 5a, #1491). (~30317 tok)
+- `secret_redactor.py` — ai-guardian:begin-allow (~7711 tok)
+- `secret_scanning.py` — Secret scanning functions extracted from hook_processing.py (Phase 5a, #1491). (~30664 tok)
 - `secret_types.py` — Human-readable display names for secret scanner rule IDs. (~1616 tok)
 - `secret_validator.py` — from: parse_custom_validator (~5974 tok)
 - `ssrf.py` — Declares SSRFProtector (~14282 tok)
@@ -1312,7 +1323,7 @@
 
 ## src/ai_guardian/schemas/
 
-- `ai-guardian-config.schema.json` (~42927 tok)
+- `ai-guardian-config.schema.json` (~43206 tok)
 - `aiguardignore.schema.json` (~620 tok)
 - `policy-decision.schema.json` (~584 tok)
 - `scenario.schema.json` — Declares to (~1315 tok)
@@ -1320,7 +1331,7 @@
 
 ## src/ai_guardian/sdk/
 
-- `__init__.py` — URL configuration (~7724 tok)
+- `__init__.py` — URL configuration (~8432 tok)
 - `run_context.py` — RunContext — correlate multiple SDK calls within a program run. (~553 tok)
 
 ## src/ai_guardian/sessions/
@@ -1333,21 +1344,22 @@
 
 ## src/ai_guardian/setup/
 
-- `__init__.py` — setup_hooks (~11018 tok)
-- `config.py` — Default configuration creation for ai-guardian. (~8738 tok)
-- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~50693 tok)
-- `mcp.py` — MCP server configuration for ai-guardian setup. (~17615 tok)
-- `rules.py` — Rules/guidelines file setup for ai-guardian. (~779 tok)
+- `__init__.py` — setup_hooks (~11031 tok)
+- `config.py` — Default configuration creation for ai-guardian. (~8865 tok)
+- `goose.py` — Install and inspect the owned Goose Open Plugins command-hook plugin. (~4216 tok)
+- `hooks.py` — IDE hook setup and pre-commit hook management for ai-guardian. (~52150 tok)
+- `mcp.py` — MCP server configuration for ai-guardian setup. (~17880 tok)
+- `rules.py` — Rules/guidelines file setup for ai-guardian. (~885 tok)
 - `utils.py` — Shared utility functions for ai-guardian setup modules. (~3326 tok)
 
 ## src/ai_guardian/setup/templates/
 
-- `ai-guardian-bridge.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~1420 tok)
+- `ai-guardian-bridge.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~1486 tok)
 - `aiderdesk-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~928 tok)
 - `openclaw-plugin.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~470 tok)
-- `opencode-plugin-v1.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~1106 tok)
-- `opencode-plugin-v2.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~2972 tok)
-- `pi-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~3203 tok)
+- `opencode-plugin-v1.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~1456 tok)
+- `opencode-plugin-v2.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~3174 tok)
+- `pi-extension.ts` — ai-guardian-generated-version: __AI_GUARDIAN_VERSION__ (~2697 tok)
 
 ## src/ai_guardian/skills/
 
@@ -1355,7 +1367,7 @@
 
 ## src/ai_guardian/skills/ai-guardian-security/
 
-- `SKILL.md` — AI Guardian Security Advisor (~3180 tok)
+- `SKILL.md` — AI Guardian Security Advisor (~3315 tok)
 
 ## src/ai_guardian/skills/ai-guardian-security/references/
 
@@ -1363,10 +1375,10 @@
 
 ## src/ai_guardian/templates/profiles/
 
-- `minimal.json` (~5566 tok)
-- `moderator.json` (~5919 tok)
-- `standard.json` (~6306 tok)
-- `strict.json` (~5515 tok)
+- `minimal.json` (~5687 tok)
+- `moderator.json` (~6040 tok)
+- `standard.json` (~6427 tok)
+- `strict.json` (~5637 tok)
 
 ## src/ai_guardian/templates/tray-plugins/
 
@@ -1378,27 +1390,27 @@
 - `__init__.py` — Tool policy, patterns, directory rules, and diff provider. (~19 tok)
 - `diff_provider.py` — DiffProviderError: parse_pr_ref, parse_mr_ref, detect_platform, get_merge_base + 8 more (~3283 tok)
 - `directory_rules.py` — URL patterns: 2 routes (~5244 tok)
-- `input.py` — Native tool argument normalization and value-free input diagnostics. (~2795 tok)
+- `input.py` — Native tool argument normalization and value-free input diagnostics. (~2970 tok)
 - `patterns.py` (~12732 tok)
-- `policy.py` — ToolPolicyChecker: is_shell_tool_name (~36387 tok)
+- `policy.py` — ToolPolicyChecker: is_shell_tool_name (~36703 tok)
 
 ## src/ai_guardian/tray/
 
 - `__init__.py` — System tray UI and daemon client. (~12 tok)
 - `animation.py` — Declares TrayIconManager (~1492 tok)
-- `app.py` — URL configuration (~22354 tok)
+- `app.py` — URL configuration (~22430 tok)
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~2440 tok)
-- `health.py` — URL configuration (~18367 tok)
+- `health.py` — URL configuration (~18446 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — _SandboxOutput: append, launch, action (~42745 tok)
+- `menu_builder.py` — _SandboxOutput: append, launch, action (~43750 tok)
 - `menu.py` — URL configuration (~3254 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1131 tok)
 - `openshell_middleware_probe.py` — Direct gRPC Describe probe for configured OpenShell middleware endpoints. (~2297 tok)
 - `openshell_middleware.py` — OpenShell middleware readiness checks used by the system tray. (~5878 tok)
 - `pause.py` — Tray pause hierarchy. UI receives display rows, never transport credentials. (~4644 tok)
-- `plugin_runner.py` — Declares TrayPluginMenuBuilder (~10790 tok)
+- `plugin_runner.py` — Declares TrayPluginMenuBuilder (~10869 tok)
 - `plugins.py` — class: dedup_key, load_plugins, find_project_plugins_dir, load_merged_plugins (~23338 tok)
-- `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~11312 tok)
+- `proactive_prompt.py` — Reusable proactive prompts for tray-managed user actions. (~12120 tok)
 - `sandbox_dialog.py` — Small native forms used by tray-managed sandbox actions. (~25184 tok)
 - `ssh_connections.py` — SSH tray menus use cached state; every action runs outside the GUI thread. (~3047 tok)
 - `support.py` — Nonblocking tray support workflow; every native window owns a child process. (~2504 tok)

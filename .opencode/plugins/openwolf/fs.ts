@@ -10,7 +10,7 @@ export function getWolfDir(directory: string): string {
 }
 
 export function wolfDirExists(directory: string): boolean {
-  return fs.existsSync(getWolfDir(directory))
+  return fs.existsSync(getWolfDir(directory)) && readJSON<any>(path.join(getWolfDir(directory), "config.json"), {})?.openwolf?.enabled !== false
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {

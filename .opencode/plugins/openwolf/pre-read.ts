@@ -1,3 +1,4 @@
+import {anatomyReadEligible} from './anatomy-scope.js'
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { getWolfDir, writeJSON, readJSON, normalizePath, sessionFilePath } from "./fs.js"
@@ -80,8 +81,11 @@ export function handlePreRead(directory: string, sessionId: string, filePath: st
     }
   }
 
+  if (anatomyReadEligible(directory, relative.replace(/\\/g, "/"))) {
   session.anatomy_hits = (session.anatomy_hits || 0) + (found ? 1 : 0)
   session.anatomy_misses = (session.anatomy_misses || 0) + (found ? 0 : 1)
+
+  }
 
   // Record initial read entry (tokens will be updated in post-read)
   let readMtime: number | undefined
