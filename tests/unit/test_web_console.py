@@ -37,22 +37,22 @@ class TestCLIWebFlag:
             sub = parser.add_subparsers(dest="command")
             cp = sub.add_parser("console")
             cp.add_argument("--web", action="store_true")
-            cp.add_argument("--port", type=int, default=0)
+            cp.add_argument("--port", type=int, default=None)
             cp.add_argument("--panel", default=None)
             args = parser.parse_args(["console", "--web"])
             assert args.web is True
             assert args.command == "console"
 
-    def test_port_flag_default_zero(self):
+    def test_port_flag_defaults_to_unspecified(self):
         import argparse
 
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers(dest="command")
         cp = sub.add_parser("console")
         cp.add_argument("--web", action="store_true")
-        cp.add_argument("--port", type=int, default=0)
+        cp.add_argument("--port", type=int, default=None)
         args = parser.parse_args(["console", "--web"])
-        assert args.port == 0
+        assert args.port is None
 
     def test_port_flag_custom(self):
         import argparse
@@ -61,7 +61,7 @@ class TestCLIWebFlag:
         sub = parser.add_subparsers(dest="command")
         cp = sub.add_parser("console")
         cp.add_argument("--web", action="store_true")
-        cp.add_argument("--port", type=int, default=0)
+        cp.add_argument("--port", type=int, default=None)
         args = parser.parse_args(["console", "--web", "--port", "8080"])
         assert args.port == 8080
 

@@ -354,6 +354,29 @@ def _canonical_ide(ide_type):
     return canonical_ide(ide_type)
 
 
+def _add_daemon_listener_options(parser):
+    """Add per-invocation REST listener overrides to daemon commands."""
+    parser.add_argument(
+        "--host",
+        dest="rest_host",
+        default=None,
+        help=(
+            "REST API listener host (precedence: CLI, environment, daemon "
+            "config, container-aware default)"
+        ),
+    )
+    parser.add_argument(
+        "--port",
+        dest="rest_port",
+        type=int,
+        default=None,
+        help=(
+            "REST API listener port (precedence: CLI, environment, daemon "
+            "config, default 63152)"
+        ),
+    )
+
+
 def main():
     """Main entry point for the hook."""
     if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
@@ -655,8 +678,11 @@ def main():
         console_parser.add_argument(
             "--port",
             type=int,
-            default=0,
-            help="Port for web console (default: auto-assign, only used with --web)",
+            default=None,
+            help=(
+                "Port for web console (overrides console.web.port; default: "
+                "configured value or auto-assign, only used with --web)"
+            ),
         )
         console_parser.add_argument(
             "--no-open",
@@ -680,8 +706,11 @@ def main():
         tui_parser.add_argument(
             "--port",
             type=int,
-            default=0,
-            help="Port for web console (default: auto-assign, only used with --web)",
+            default=None,
+            help=(
+                "Port for web console (overrides console.web.port; default: "
+                "configured value or auto-assign, only used with --web)"
+            ),
         )
         tui_parser.add_argument(
             "--no-open",
@@ -1483,6 +1512,7 @@ def main():
             default=None,
             help="Idle timeout in minutes (0 = disabled, default: 0)",
         )
+        _add_daemon_listener_options(daemon_start_parser)
         daemon_start_parser.add_argument(
             "--no-tray",
             action="store_true",
@@ -1490,7 +1520,8 @@ def main():
         )
         daemon_sub.add_parser("stop", help="Stop running daemon")
         daemon_sub.add_parser("status", help="Show daemon status")
-        daemon_sub.add_parser("restart", help="Restart daemon")
+        daemon_restart_parser = daemon_sub.add_parser("restart", help="Restart daemon")
+        _add_daemon_listener_options(daemon_restart_parser)
         daemon_sub.add_parser("reload", help="Force config reload without restart")
         daemon_sub.add_parser(
             "reset", help="Kill daemon and clean up state files for recovery"
@@ -2033,9 +2064,26 @@ def main():
             try:
                 from ai_guardian.web import WebConsole
 
+                config, _ = _load_config_file()
+                console_config = (
+                    config.get("console", {}) if isinstance(config, dict) else {}
+                )
+                web_config = (
+                    console_config.get("web", {})
+                    if isinstance(console_config, dict)
+                    else {}
+                )
+                if not isinstance(web_config, dict):
+                    web_config = {}
+
+                port = getattr(args, "port", None)
+                if port is None:
+                    port = web_config.get("port", 0)
+                host = web_config.get("host", "127.0.0.1")
+
                 console = WebConsole()
                 show = not getattr(args, "no_open", False)
-                console.run(port=getattr(args, "port", 0), show=show)
+                console.run(host=host, port=port, show=show)
                 return 0
             except ImportError as e:
                 print(

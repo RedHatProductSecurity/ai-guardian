@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   redaction status in violation JSONL records; display validated outcomes as
   rounded badges in the Web Console (including the `tui` alias) and bracketed
   labels in terminal history, with matching safe copies for sensitive findings.
+- **Daemon listener CLI options (#2785):** Add `--host` and `--port` to
+  `daemon start` and `daemon restart`, with CLI > environment > daemon config
+  precedence and the existing defaults when omitted.
 - **Tray integration status indicators (#2771):** Show detected CLI/IDE status
   through enabled/disabled setup entries, show verified AI Guardian hook/MCP
   health separately, and disable setup when installation is not detected.
@@ -55,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Web Console configuration (#2782):** Apply `console.web.host` and
+  `console.web.port` when launching from the CLI, while preserving defaults and
+  explicit `--port` precedence.
 - **WebFetch violation locations (#2779):** Preserve a privacy-validated request
   URL for sensitive findings and redaction events instead of a synthetic output
   filename. Retain response coordinates across history, Console/copy, CLI, REST,
