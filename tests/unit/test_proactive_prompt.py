@@ -124,19 +124,34 @@ def test_sync_ide_setup_state_separates_cli_availability_and_setup_health(tmp_pa
         snapshot = sync_ide_setup_state(state=state, setup=FakeIDESetup())
 
     statuses = snapshot["tray_status"]
-    assert statuses["claude"] == {"cli": "installed", "setup": "configured"}
-    assert statuses["codex"] == {"cli": "installed", "setup": "needs_setup"}
+    assert statuses["claude"] == {
+        "cli": "installed",
+        "ide_detected": True,
+        "setup": "configured",
+    }
+    assert statuses["codex"] == {
+        "cli": "installed",
+        "ide_detected": False,
+        "setup": "needs_setup",
+    }
     assert statuses["cursor"] == {
         "cli": "not_applicable",
+        "ide_detected": True,
         "setup": "unknown",
     }
     assert statuses["gemini"] == {
         "cli": "not_installed",
+        "ide_detected": False,
         "setup": "not_detected",
     }
-    assert statuses["antigravity"] == {"cli": "unknown", "setup": "unknown"}
+    assert statuses["antigravity"] == {
+        "cli": "unknown",
+        "ide_detected": False,
+        "setup": "unknown",
+    }
     assert statuses["cline"] == {
         "cli": "not_applicable",
+        "ide_detected": False,
         "setup": "not_detected",
     }
 
@@ -162,10 +177,12 @@ def test_sync_ide_setup_state_keeps_cli_result_when_install_discovery_fails(tmp_
     assert snapshot["error"] == "IDE discovery unavailable"
     assert snapshot["tray_status"]["claude"] == {
         "cli": "installed",
+        "ide_detected": None,
         "setup": "unknown",
     }
     assert snapshot["tray_status"]["cursor"] == {
         "cli": "not_applicable",
+        "ide_detected": None,
         "setup": "unknown",
     }
 

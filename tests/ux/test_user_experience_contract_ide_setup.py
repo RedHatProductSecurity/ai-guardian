@@ -849,14 +849,19 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
     1. The tray has a cached health snapshot from its background check.
     2. The user opens IDE/CLI Setup while some integrations are healthy,
        incomplete, not detected, or have an unavailable check.
-    3. The user may still choose manual setup for any integration.
+    3. A missing CLI disables only that CLI integration's setup entry.
 
     Expected User Experience:
     - CLI availability and verified AI Guardian setup use separate indicators.
     - A configured indicator means required hooks and applicable MCP are healthy.
-    - CLI-not-applicable, not-detected, and unknown states are distinct.
-    - The legend explains every indicator and setup actions remain available.
-    - Opening the submenu reads cached state only; it does not run checks.
+    - Only detected installations have enabled setup entries; a leading install
+      checkmark is not used.
+    - Configured entries add (Cfg ✓) only after verified hook/MCP health.
+    - Undetected or unknown installations are disabled; the legend explains why.
+    - Opening the submenu checks CLI availability against the current PATH but
+      does not run hook/MCP verification or IDE discovery.
+    - OpenCode and Pi stay enabled when their installation is detected from
+      IDE/config evidence even if the tray's PATH lacks their executable.
     """
     health = SimpleNamespace(
         _ide_setup_snapshot={
@@ -864,9 +869,27 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
                 "claude": {"cli": "installed", "setup": "configured"},
                 "codex": {"cli": "installed", "setup": "needs_setup"},
                 "gemini": {"cli": "not_installed", "setup": "not_detected"},
-                "cursor": {"cli": "not_applicable", "setup": "unknown"},
+                "opencode": {
+                    "cli": "not_installed",
+                    "ide_detected": True,
+                    "setup": "needs_setup",
+                },
+                "pi": {
+                    "cli": "not_installed",
+                    "ide_detected": True,
+                    "setup": "needs_setup",
+                },
+                "cursor": {
+                    "cli": "not_applicable",
+                    "ide_detected": True,
+                    "setup": "unknown",
+                },
                 "copilot": {"cli": "unknown", "setup": "unknown"},
-                "cline": {"cli": "not_applicable", "setup": "not_detected"},
+                "cline": {
+                    "cli": "not_applicable",
+                    "ide_detected": False,
+                    "setup": "not_detected",
+                },
             }
         },
         _on_check_ide_setup=lambda *_: None,
@@ -880,6 +903,7 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
         patch("ai_guardian.tray.app.pystray", create=True) as pystray,
         patch("ai_guardian.tray.menu_builder.pystray", new=pystray),
         patch("ai_guardian.tray.plugin_runner.pystray", new=pystray),
+        patch("ai_guardian.tray.menu_builder.shutil.which", return_value=None),
     ):
         pystray.MenuItem = MagicMock()
         pystray.Menu = MagicMock()
@@ -888,21 +912,39 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
         calls = pystray.MenuItem.call_args_list
 
     dynamic_rows = {
-        call.args[0](None): call.args[1] for call in calls if callable(call.args[0])
+        call.args[0](None): call for call in calls if callable(call.args[0])
     }
-    assert "  Claude Code [CLI ✓] [AI Guardian ✓]" in dynamic_rows
-    assert "  OpenAI Codex (CLI + Desktop) [CLI ✓] [AI Guardian !]" in dynamic_rows
-    assert "  Google Gemini CLI [CLI ✗] [AI Guardian —]" in dynamic_rows
-    assert "  Cursor IDE/CLI [CLI —] [AI Guardian ?]" in dynamic_rows
-    assert "  GitHub Copilot [CLI ?] [AI Guardian ?]" in dynamic_rows
-    assert "  Cline [CLI —] [AI Guardian —]" in dynamic_rows
-    assert all(callable(action) for action in dynamic_rows.values())
+    assert "  Claude Code (Cfg ✓)" in dynamic_rows
+    assert "  OpenAI Codex (CLI + Desktop)" in dynamic_rows
+    assert "  Google Gemini CLI" in dynamic_rows
+    assert "  OpenCode" in dynamic_rows
+    assert "  Pi" in dynamic_rows
+    assert "  Cursor IDE/CLI (Cfg ?)" in dynamic_rows
+    assert "  GitHub Copilot (Cfg ?)" in dynamic_rows
+    assert "  Cline" in dynamic_rows
+    assert all(callable(call.args[1]) for call in dynamic_rows.values())
+    with patch(
+        "ai_guardian.tray.menu_builder.shutil.which",
+        side_effect=lambda executable: (
+            f"/usr/bin/{executable}" if executable in {"claude", "codex"} else None
+        ),
+    ):
+        assert dynamic_rows["  Google Gemini CLI"].kwargs["enabled"](None) is False
+        assert dynamic_rows["  Claude Code (Cfg ✓)"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  OpenCode"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  Pi"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  Cursor IDE/CLI (Cfg ?)"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  GitHub Copilot (Cfg ?)"].kwargs["enabled"](None) is False
+        assert dynamic_rows["  Cline"].kwargs["enabled"](None) is False
 
     labels = [call.args[0] for call in calls if not callable(call.args[0])]
     assert "Status legend" in labels
-    assert "CLI: ✓ available · ✗ not detected · — N/A · ? unknown" in labels
     assert (
-        "AI Guardian: ✓ verified healthy · ! setup incomplete · — not detected · ? unknown"
+        "Enabled = installation detected · disabled = not detected or check unavailable"
+        in labels
+    )
+    assert (
+        "(Cfg ✓) = hooks/MCP healthy · (Cfg ?) = check failed · no Cfg = not verified healthy"
         in labels
     )
     assert "Check hooks/MCP installation..." in labels
@@ -911,12 +953,12 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
     claude_label = next(
         call.args[0]
         for call in calls
-        if callable(call.args[0]) and call.args[0](None).startswith("  Claude Code ")
+        if callable(call.args[0]) and call.args[0](None).startswith("  Claude Code")
     )
     health._ide_setup_snapshot = {
         "tray_status": {"claude": {"cli": "installed", "setup": "needs_setup"}}
     }
-    assert claude_label(None) == "  Claude Code [CLI ✓] [AI Guardian !]"
+    assert claude_label(None) == "  Claude Code"
     health._refresh_ide_setup_state.assert_not_called()
 
 

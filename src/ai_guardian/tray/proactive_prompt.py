@@ -272,6 +272,7 @@ def sync_ide_setup_state(
     unknown_tray_status = {
         integration.key: {
             "cli": cli_statuses[integration.key],
+            "ide_detected": None,
             "setup": "unknown",
         }
         for integration in SUPPORTED_IDE_REGISTRY
@@ -386,7 +387,11 @@ def sync_ide_setup_state(
                 setup_status = "configured"
             else:
                 setup_status = "needs_setup"
-        tray_status[ide_type] = {"cli": cli_status, "setup": setup_status}
+        tray_status[ide_type] = {
+            "cli": cli_status,
+            "ide_detected": ide_detected,
+            "setup": setup_status,
+        }
 
     configured = [
         ide_type
