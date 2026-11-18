@@ -26,7 +26,13 @@ from ai_guardian.storage import (
     check_storage_file,
     make_private_directory,
 )
-from ai_guardian.violations.decision import PolicyDecision, safe_policy_decision
+from ai_guardian.violations.decision import (
+    PolicyDecision,
+    action_taken_from_policy_decision,
+    normalize_action_taken,
+    safe_policy_decision,
+    safe_violation_outcome,
+)
 
 logger = logging.getLogger(__name__)
 _MIRRORED_LOG_LOCK = threading.Lock()
@@ -239,6 +245,8 @@ class ViolationLogger:
         end_column: Any = None,
         source_context: Any = None,
         source_url: Any = None,
+        action_taken: Any = None,
+        redaction_status: Any = None,
     ) -> None:
         """Persist a minimal audit envelope plus a verified source locator."""
         if violation_type not in _SENSITIVE_FINDING_FILTER_ALIASES:
@@ -293,6 +301,14 @@ class ViolationLogger:
                 "resolved": False,
                 "resolved_at": None,
                 "resolved_action": None,
+                **safe_violation_outcome(
+                    action_taken,
+                    (
+                        redaction_status
+                        if redaction_status is not None
+                        else "not_redacted"
+                    ),
+                ),
             }
             if safe_blocked:
                 entry["blocked"] = safe_blocked
@@ -333,6 +349,8 @@ class ViolationLogger:
         allowlist_context: Optional[Dict] = None,
         policy_decision: Optional[Union[PolicyDecision, Dict[str, Any]]] = None,
         origin_command: Optional[str] = None,
+        action_taken: Any = None,
+        redaction_status: Any = None,
     ):
         """
         Log a violation to JSONL file.
@@ -347,6 +365,8 @@ class ViolationLogger:
             policy_decision: Optional safe, versioned policy decision metadata.
             origin_command: Invocation-only raw command, stored only as a verified
                 bounded fallback when no usable source file path is available.
+            action_taken: Optional effective outcome from the completed policy flow.
+            redaction_status: Optional content-redaction outcome.
         """
         if violation_type in _SENSITIVE_FINDING_FILTER_ALIASES:
             blocked_data = blocked if isinstance(blocked, dict) else {}
@@ -369,6 +389,24 @@ class ViolationLogger:
                 ),
                 None,
             )
+            decision_for_outcome = safe_policy_decision(policy_decision) or (
+                PolicyDecision.from_violation(
+                    violation_type,
+                    blocked=blocked_data,
+                    context=context_data,
+                    severity=severity,
+                    violation_id=violation_id,
+                )
+            )
+            effective_action = normalize_action_taken(action_taken)
+            if effective_action == "unknown":
+                effective_action = normalize_action_taken(
+                    context_data.get("action_taken") or context_data.get("action")
+                )
+            if effective_action == "unknown":
+                effective_action = action_taken_from_policy_decision(
+                    decision_for_outcome
+                )
             self.log_sensitive_finding(
                 violation_type=violation_type,
                 severity=severity,
@@ -390,6 +428,10 @@ class ViolationLogger:
                     blocked_data.get("end_column"), context_data.get("end_column")
                 ),
                 source_context=source_context,
+                action_taken=(effective_action),
+                redaction_status=(
+                    redaction_status if redaction_status is not None else "not_redacted"
+                ),
                 **(
                     {
                         "source_url": _first_present(
@@ -436,6 +478,32 @@ class ViolationLogger:
             if canonical_decision is not None:
                 canonical_decision["violation_type"] = persisted_type
                 canonical_decision["severity"] = persisted_severity
+            outcome_context = context if isinstance(context, dict) else {}
+            effective_action = normalize_action_taken(action_taken)
+            if effective_action == "unknown":
+                effective_action = normalize_action_taken(
+                    outcome_context.get("action_taken") or outcome_context.get("action")
+                )
+            if effective_action == "unknown":
+                effective_action = action_taken_from_policy_decision(canonical_decision)
+            blocked_data = blocked if isinstance(blocked, dict) else {}
+            redaction_count = blocked_data.get("redaction_count")
+            default_redaction_status = "not_applicable"
+            if persisted_type == "secret_redaction":
+                default_redaction_status = (
+                    "redacted"
+                    if (type(redaction_count) is int and redaction_count > 0)
+                    or outcome_context.get("action") == "redacted"
+                    else "not_redacted"
+                )
+            outcome = safe_violation_outcome(
+                effective_action,
+                (
+                    redaction_status
+                    if redaction_status is not None
+                    else default_redaction_status
+                ),
+            )
             safe_blocked = _prepare_command_details(
                 violation_type,
                 blocked if isinstance(blocked, dict) else {},
@@ -460,6 +528,7 @@ class ViolationLogger:
                 "context": safe_context,
                 "suggestion": suggestion or {},
                 "policy_decision": canonical_decision,
+                **outcome,
                 "resolved": False,
                 "resolved_at": None,
                 "resolved_action": None,

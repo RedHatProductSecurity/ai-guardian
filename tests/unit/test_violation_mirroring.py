@@ -47,6 +47,8 @@ def _remote_record(**overrides):
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "violation_type": "secret_detected",
         "severity": "high",
+        "action_taken": "allow",
+        "redaction_status": "redacted",
         "file": "src/example.py",
         "line": 17,
         "blocked": {"value": "private-blocked-content"},
@@ -181,6 +183,8 @@ def test_mirror_imports_only_curated_fields_and_preserves_source_identity(tmp_pa
     assert mirrored["mirror"]["source_violation_id"] == source["id"]
     assert mirrored["resolved"] is True
     assert mirrored["resolved_at"] == source["resolved_at"]
+    assert mirrored["action_taken"] == "allow"
+    assert mirrored["redaction_status"] == "redacted"
     assert re.fullmatch(r"viol_[0-9a-f]{32}", mirrored["id"])
     serialized = json.dumps(mirrored)
     assert "private-blocked-content" not in serialized

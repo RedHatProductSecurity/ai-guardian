@@ -167,6 +167,22 @@ def _sanitize_violations(violations: List[Dict]) -> tuple:
                     entry = safe
                 else:
                     entry[key] = safe
+
+        if "action_taken" in entry or "redaction_status" in entry:
+            from ai_guardian.violations.decision import safe_violation_outcome
+
+            raw_outcome = {
+                key: entry[key]
+                for key in ("action_taken", "redaction_status")
+                if key in entry
+            }
+            safe_outcome = safe_violation_outcome(
+                entry.get("action_taken"), entry.get("redaction_status")
+            )
+            redactions += sum(
+                raw_outcome[key] != safe_outcome[key] for key in raw_outcome
+            )
+            entry.update(safe_outcome)
         ctx = entry.get("context", {})
 
         if "file_path" in ctx and ctx["file_path"]:
@@ -250,6 +266,8 @@ def _sanitize_violations(violations: List[Dict]) -> tuple:
                 "resolved_at",
                 "resolved_action",
                 "blocked",
+                "action_taken",
+                "redaction_status",
             }
             redactions += len(set(entry) - allowed_top_level)
             entry = {

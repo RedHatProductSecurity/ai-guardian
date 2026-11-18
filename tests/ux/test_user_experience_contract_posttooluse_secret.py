@@ -147,6 +147,8 @@ def test_fetched_response_history_has_private_safe_source(
         "sensitive_finding",
         "secret_redaction",
     }
+    assert all(r["action_taken"] == "allow" for r in records)
+    assert all(r["redaction_status"] == "redacted" for r in records)
     for record in records:
         blocked = record["blocked"]
         assert blocked.get("source_url") == (source_url if safe_location else None)

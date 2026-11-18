@@ -438,6 +438,8 @@ class TestViolationsEndpoint:
                 "timestamp": "2026-05-01T10:00:00Z",
                 "violation_type": "secret_detected",
                 "severity": "high",
+                "action_taken": "allow",
+                "redaction_status": "redacted",
                 "blocked": True,
                 "context": {"tool": "Write", "file": "config.py", "line": 42},
                 "suggestion": {"text": "Remove the secret"},
@@ -456,7 +458,16 @@ class TestViolationsEndpoint:
         assert re.fullmatch(r"viol_[0-9a-f]{32}", v["id"])
         assert v["violation_type"] == "sensitive_finding"
         assert v["severity"] == "high"
-        assert set(v) == {"timestamp", "id", "violation_type", "severity"}
+        assert set(v) == {
+            "timestamp",
+            "id",
+            "violation_type",
+            "severity",
+            "action_taken",
+            "redaction_status",
+        }
+        assert v["action_taken"] == "allow"
+        assert v["redaction_status"] == "redacted"
         assert "blocked" not in v
         assert "context" not in v
 

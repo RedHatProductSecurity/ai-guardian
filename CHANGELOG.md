@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Violation outcome metadata (#2781):** Persist the effective action and
+  redaction status in violation JSONL records; display validated outcomes as
+  rounded badges in the Web Console (including the `tui` alias) and bracketed
+  labels in terminal history, with matching safe copies for sensitive findings.
 - **Tray integration status indicators (#2771):** Show detected CLI/IDE status
   through enabled/disabled setup entries, show verified AI Guardian hook/MCP
   health separately, and disable setup when installation is not detected.

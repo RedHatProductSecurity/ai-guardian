@@ -1,6 +1,7 @@
 """PostToolUse event handler extracted from hook_processing.py (Phase 5e.2, #1491)."""
 
 import logging
+from dataclasses import replace
 from typing import Any, Dict, Optional
 
 import ai_guardian.config.loaders as _loaders
@@ -79,6 +80,32 @@ def _non_blocking_policy_decision(result, action, enabled, scan_context, source)
         scan_context.to_dict(),
         source=source,
         decision_override="allow",
+    )
+
+
+def _log_post_tool_sensitive_outcome(
+    scan_result,
+    scan_context: ScanContext,
+    violation_logger,
+    action_taken: str,
+    redaction_status: str,
+) -> None:
+    """Persist a PostToolUse sensitive finding after its effective action is known."""
+    if scan_result is None or not scan_result.detected:
+        return
+    if getattr(scan_result.violation_type, "value", scan_result.violation_type) == (
+        ViolationType.SECRET_DETECTED
+    ):
+        # The legacy secret scanner audit path recorded secrets as critical even
+        # though its generic ScanResult wrapper defaults to high severity.
+        scan_result = replace(scan_result, severity="critical")
+    log_violation(
+        scan_result,
+        scan_context,
+        violation_logger=violation_logger,
+        source="tool_output",
+        action_taken=action_taken,
+        redaction_status=redaction_status,
     )
 
 
@@ -557,6 +584,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
             ignore_tools=ignore_tools,
             allowlist_patterns=secret_allowlist,
             latency_timer=_latency_timer,
+            defer_violation_logging=True,
         )
         has_secrets = post_secret_result.detected if post_secret_result else False
         error_message = post_secret_result.error_message if post_secret_result else None
@@ -582,6 +610,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
             logger.warning(f"Config error loading secret_redaction: {redaction_error}")
             # Fall back to blocking
             logger.warning(f"Secrets detected in {tool_identifier} output - blocking")
+            _log_post_tool_sensitive_outcome(
+                post_secret_result, _scan_ctx, violation_logger, "block", "not_redacted"
+            )
             result = _format_response(
                 adapter,
                 has_secrets=True,
@@ -625,6 +656,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     logger.warning(
                         "Secret detected but redactor produced 0 redactions "
                         f"for {tool_identifier} output — falling back to block"
+                    )
+                    _log_post_tool_sensitive_outcome(
+                        post_secret_result,
+                        _scan_ctx,
+                        violation_logger,
+                        "block",
+                        "not_redacted",
                     )
                     _advance_transcript_position(hook_data)
                     return _format_response(
@@ -696,7 +734,29 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         blocked=blocked_info,
                         context=ctx,
                         violation_id=vid,
+                        policy_decision=PolicyDecision(
+                            event=HookEvent.POST_TOOL_USE,
+                            decision="allow",
+                            reason="secret_redaction",
+                            severity="critical",
+                            source="redaction",
+                            agent=agent_type,
+                            repository=_scan_ctx.project_path,
+                            correlation_id=hook_tool_use_id,
+                            violation_id=vid,
+                            violation_type=ViolationType.SECRET_REDACTION,
+                        ),
+                        action_taken="allow",
+                        redaction_status="redacted",
                     )
+
+                _log_post_tool_sensitive_outcome(
+                    post_secret_result,
+                    _scan_ctx,
+                    violation_logger,
+                    "allow",
+                    "redacted",
+                )
 
                 # Return redacted output (allow, with modifications)
                 # For warn mode, include a warning message
@@ -744,6 +804,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 logger.error(traceback.format_exc())
                 # Fall back to blocking on redaction errors
                 logger.warning("Redaction failed, falling back to blocking")
+                _log_post_tool_sensitive_outcome(
+                    post_secret_result,
+                    _scan_ctx,
+                    violation_logger,
+                    "block",
+                    "not_redacted",
+                )
                 result = _format_response(
                     adapter,
                     has_secrets=True,
@@ -795,6 +862,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         warning_message = warning_message.replace(
                             detected_value, "[REDACTED]"
                         )
+                    _log_post_tool_sensitive_outcome(
+                        post_secret_result,
+                        _scan_ctx,
+                        violation_logger,
+                        "allow",
+                        "redacted",
+                    )
                     result = _format_response(
                         adapter,
                         has_secrets=False,
@@ -814,6 +888,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 )
 
             logger.warning("Secrets detected and redaction disabled - blocking output")
+            _log_post_tool_sensitive_outcome(
+                post_secret_result, _scan_ctx, violation_logger, "block", "not_redacted"
+            )
             result = _format_response(
                 adapter,
                 has_secrets=True,
@@ -873,7 +950,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
             if has_pii and pii_redactions:
                 if not pii_file_path and not is_url_output:
                     pii_file_path = _extract_file_path_from_pii_warning(pii_warning)
-                pii_snippet_text = redacted_text if redacted_text else tool_output
                 post_pii_config, _ = _loaders._load_pii_config()
                 _pii_cfg = post_pii_config or {
                     "action": post_pii_result.extra.get("action", "block")
@@ -890,20 +966,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     _orig_len = _pii_first.get("original_length", 0)
                     if _orig_len:
                         _pii_ec = _pii_sc + _orig_len
-                _pii_overrides = {
-                    "tool": tool_identifier,
-                    "hook": HookEvent.POST_TOOL_USE.display_name,
-                    "pii_count": len(pii_redactions),
-                    "pii_types": pii_types,
-                }
-                _pii_snippet = _extract_context_snippet(
-                    pii_snippet_text, _pii_first.get("line_number")
-                )
-                if _pii_snippet:
-                    _pii_overrides["context_snippet"] = _pii_snippet
-                _pii_ctx_overrides = {"action": pii_action}
-                if pretool_ctx:
-                    _pii_ctx_overrides["pretool_context"] = pretool_ctx
                 _pii_log_result = ScanResult(
                     detected=True,
                     violation_type=ViolationType.PII_DETECTED,
@@ -913,21 +975,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     start_column=_pii_sc,
                     end_column=_pii_ec,
                     error_message=pii_warning or "",
-                )
-                log_violation(
-                    _pii_log_result,
-                    _scan_ctx,
-                    violation_logger=violation_logger,
-                    blocked_overrides=_pii_overrides,
-                    context_overrides=_pii_ctx_overrides,
-                    suggestion={
-                        "action": "review_pii_detection",
-                        "false_positive": (
-                            "Allowlist the value in scan_pii.allowlist_patterns, "
-                            "disable specific PII types in scan_pii.pii_types, "
-                            "or add '# ai-guardian:allow' inline"
-                        ),
-                    },
                 )
                 logger.warning(f"PII detected in {tool_identifier} output: {pii_types}")
 
@@ -1017,6 +1064,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     pii_session_downgraded = False
 
                 if pii_action == "block":
+                    _log_post_tool_sensitive_outcome(
+                        _pii_log_result,
+                        _scan_ctx,
+                        violation_logger,
+                        "block",
+                        "not_redacted",
+                    )
                     result = _format_response(
                         adapter,
                         has_secrets=True,
@@ -1037,6 +1091,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             ):
                                 pii_redacted_lines[idx] = pii_original_lines[idx]
                             redacted_text = "\n".join(pii_redacted_lines)
+                    _log_post_tool_sensitive_outcome(
+                        _pii_log_result,
+                        _scan_ctx,
+                        violation_logger,
+                        "allow",
+                        "redacted",
+                    )
                     result = _format_response(
                         adapter,
                         has_secrets=False,
@@ -1051,6 +1112,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     _advance_transcript_position(hook_data)
                     return result
                 elif pii_action == "warn":
+                    _log_post_tool_sensitive_outcome(
+                        _pii_log_result,
+                        _scan_ctx,
+                        violation_logger,
+                        "warn",
+                        "redacted" if pii_session_downgraded else "not_redacted",
+                    )
                     result = _format_response(
                         adapter,
                         has_secrets=False,
@@ -1067,6 +1135,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     _advance_transcript_position(hook_data)
                     return result
                 elif pii_action == "log-only":
+                    _log_post_tool_sensitive_outcome(
+                        _pii_log_result,
+                        _scan_ctx,
+                        violation_logger,
+                        "log",
+                        "not_redacted",
+                    )
                     result = _format_response(
                         adapter, has_secrets=False, hook_event=hook_event
                     )
@@ -1077,6 +1152,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 else:
                     logger.warning(
                         f"Unknown PII action '{pii_action}', allowing through"
+                    )
+                    _log_post_tool_sensitive_outcome(
+                        _pii_log_result,
+                        _scan_ctx,
+                        violation_logger,
+                        "allow",
+                        "not_redacted",
                     )
                     _advance_transcript_position(hook_data)
                     return _format_response(

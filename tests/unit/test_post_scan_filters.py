@@ -255,6 +255,27 @@ class TestApplyPostScanPipeline:
             "policy_decision"
         ]
         assert logged_decision.decision == "allow"
+        logged = ctx.violation_logger.log_violation.call_args[1]
+        assert logged["action_taken"] == "allow"
+        assert logged["redaction_status"] == "not_applicable"
+
+    def test_verified_sensitive_replacement_logs_redacted_allow_outcome(self):
+        ctx = _make_ctx(non_blocking_findings_enabled=True)
+        entry = _make_entry(violation_type="secret_detected")
+        result = _detected_result(violation_type="secret_detected")
+
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            decision = apply_post_scan_pipeline(
+                entry,
+                result,
+                ctx,
+                sensitive_replacement_verified=True,
+            )
+
+        assert decision.should_block is False
+        logged = ctx.violation_logger.log_sensitive_finding.call_args[1]
+        assert logged["action_taken"] == "allow"
+        assert logged["redaction_status"] == "redacted"
 
     def test_warn_action_is_unchanged_when_non_blocking_is_enabled(self):
         ctx = _make_ctx(non_blocking_findings_enabled=True)

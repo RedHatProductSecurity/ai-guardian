@@ -932,7 +932,10 @@ class MultiDaemonClient:
     @staticmethod
     def _local_violations(limit: int, violation_type: Optional[str]) -> dict:
         from ai_guardian.violations.logger import ViolationLogger
-        from ai_guardian.violations.decision import safe_policy_decision
+        from ai_guardian.violations.decision import (
+            safe_policy_decision,
+            safe_violation_outcome,
+        )
         from ai_guardian.violations.identity import stable_violation_id
         from ai_guardian.violations.command_context import (
             sanitize_source_url,
@@ -958,6 +961,8 @@ class MultiDaemonClient:
             "session_id",
             "ide_type",
             "policy_decision",
+            "action_taken",
+            "redaction_status",
             "resolved",
             "resolved_at",
         }
@@ -1028,6 +1033,12 @@ class MultiDaemonClient:
                 item["mirror"] = mirror
             if "policy_decision" in item:
                 item["policy_decision"] = safe_policy_decision(item["policy_decision"])
+            if "action_taken" in entry or "redaction_status" in entry:
+                item.update(
+                    safe_violation_outcome(
+                        entry.get("action_taken"), entry.get("redaction_status")
+                    )
+                )
             curated.append(item)
         from ai_guardian.violations.notifications import get_recent_notification_events
 

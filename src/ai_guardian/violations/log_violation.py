@@ -12,7 +12,11 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 from ai_guardian.scanners.scan_result import ScanResult
-from ai_guardian.violations.decision import PolicyDecision
+from ai_guardian.violations.decision import (
+    PolicyDecision,
+    action_taken_from_policy_decision,
+    normalize_action_taken,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +141,8 @@ def log_violation(
     source: str = "",
     allowlist_context: Optional[Dict[str, Any]] = None,
     policy_decision: Optional[Union[PolicyDecision, Dict[str, Any]]] = None,
+    action_taken: Optional[str] = None,
+    redaction_status: Optional[str] = None,
 ) -> None:
     """Log a single violation to ``violations.jsonl``.
 
@@ -152,6 +158,8 @@ def log_violation(
         allowlist_context: Pre-built safe source metadata, if available.
         policy_decision: Optional pre-built safe decision metadata.  When it is
             omitted, the record is derived from ``result`` and ``context``.
+        action_taken: Effective outcome after policy overrides and replacement.
+        redaction_status: Whether sensitive content was redacted.
     """
     if violation_logger is None:
         from ai_guardian.violations.logger import ViolationLogger
@@ -160,6 +168,26 @@ def log_violation(
 
     sensitive_type = getattr(result.violation_type, "value", result.violation_type)
     try:
+        decision_context = context.to_dict()
+        if context_overrides:
+            decision_context.update(context_overrides)
+        canonical_decision = policy_decision or PolicyDecision.from_scan_result(
+            result,
+            decision_context,
+            source=source,
+        )
+        effective_action = normalize_action_taken(action_taken)
+        if effective_action == "unknown":
+            effective_action = normalize_action_taken(
+                decision_context.get("action_taken")
+                or getattr(context, "action_taken", None)
+                or getattr(context, "action", None)
+            )
+        if effective_action == "unknown":
+            effective_action = action_taken_from_policy_decision(canonical_decision)
+        if effective_action == "unknown" and result.should_block:
+            effective_action = "block"
+
         if (
             sensitive_type == "secret_detected"
             or sensitive_type == "image_secret_detected"
@@ -203,6 +231,10 @@ def log_violation(
                     else overrides.get("end_column")
                 ),
                 source_context=safe_source_context,
+                action_taken=effective_action,
+                redaction_status=(
+                    redaction_status if redaction_status is not None else "not_redacted"
+                ),
                 **(
                     {"source_url": context.source_url}
                     if context.source_url is not None
@@ -234,12 +266,6 @@ def log_violation(
             ctx.pop("tool_name", None)
             policy_decision = None
             source = "scanner"
-
-        canonical_decision = policy_decision or PolicyDecision.from_scan_result(
-            result,
-            ctx,
-            source=source,
-        )
 
         metadata = (
             None
@@ -289,6 +315,10 @@ def log_violation(
         if metadata:
             log_kwargs["allowlist_context"] = metadata
         log_kwargs["policy_decision"] = canonical_decision
+        log_kwargs["action_taken"] = effective_action
+        log_kwargs["redaction_status"] = (
+            redaction_status if redaction_status is not None else "not_applicable"
+        )
         violation_logger.log_violation(**log_kwargs)
     except Exception as e:
         if (

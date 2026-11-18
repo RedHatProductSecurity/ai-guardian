@@ -231,7 +231,7 @@ class TestCollectContextPoisoning:
 
 
 class TestCollectSecret:
-    """SECRET branch: uses skip_violation_log, error_override=result.error_message."""
+    """SECRET branch: logs after the post-scan pipeline decides the outcome."""
 
     def test_secret_block_uses_result_error(self):
         """SECRET blocking uses result.error_message, not decision.error_message."""
@@ -250,7 +250,7 @@ class TestCollectSecret:
         assert "pipeline says blocked" not in resp["output"]
 
     def test_secret_skip_violation_log_kwarg(self):
-        """SECRET passes skip_violation_log=True to apply_post_scan_pipeline."""
+        """SECRET does not skip outcome logging after policy evaluation."""
         results = [
             ScanResult.from_secret_scan(
                 has_secrets=True,
@@ -264,7 +264,7 @@ class TestCollectSecret:
             return PostScanDecision(should_block=True, error_message="blocked")
 
         _run_pipeline(results, pipeline)
-        assert captured_kwargs.get("skip_violation_log") is True
+        assert captured_kwargs.get("skip_violation_log", False) is False
 
     def test_secret_not_blocked_by_pipeline(self):
         """SECRET allows through when pipeline says should_block=False."""

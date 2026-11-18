@@ -26,9 +26,9 @@ Every time AI Guardian blocks something, it creates a log entry:
 |----------------|-------------------|-------------|
 | **Tool Permission** | Blocked command execution | Tool name and policy rule; a bounded, sanitized source command only when no usable file path is available |
 | **Directory Blocking** | Restricted path access | File path, requested operation |
-| **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, timestamp, and an optional verified file path/position or fixed source-context label; no matched values, snippets, detector details, or original subtype |
+| **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, effective action, redaction status, ID, timestamp, and an optional verified file path/position or fixed source-context label; no matched values, snippets, detector details, or original subtype |
 | **Command Credential** | Literal credential in a supported command argument, or incomplete command analysis | Fixed option/classification labels and argument positions only; no argument values or full command |
-| **Secret Redaction** | Secret masked in output | Secret type, masking strategy, and an optional sanitized command fallback when no usable file path is available |
+| **Secret Redaction** | Secret masked in output | Effective action, redaction status, secret type, masking strategy, and an optional sanitized command fallback when no usable file path is available |
 | **Prompt Injection** | Malicious prompt detected | Pattern matched, confidence score |
 | **SSRF Protection** | Dangerous network request | URL, reason (private IP, metadata, etc.) |
 | **Config File Threat** | Exfiltration in config file | Pattern, file, line/column number |
@@ -86,6 +86,26 @@ and scanner payloads are excluded by default. The correlation ID uses an
 explicit run ID when available, then the session ID or tool-use ID, so related
 checks can be grouped without copying agent content.
 
+New violation records also include two fixed-vocabulary top-level outcome fields:
+
+| Field | Values | Meaning |
+|-------|--------|---------|
+| `action_taken` | `block`, `warn`, `log`, `allow`, `unknown` | Effective disposition after applicable policy and user decisions. `unknown` is used when the final disposition cannot be established. |
+| `redaction_status` | `redacted`, `not_redacted`, `not_applicable`, `unknown` | Whether a sensitive value was replaced before the relevant content was passed on. |
+
+These fields describe the completed hook outcome, not just the scanner's
+configured mode. A PostToolUse finding that is successfully sanitized records
+`action_taken: "allow"` and `redaction_status: "redacted"`; a blocked output
+records `block` and `not_redacted`. Ask-mode approvals and non-blocking policy
+overrides are reflected in the effective action. Sensitive records retain only
+these validated labels alongside their existing minimal safe locators. The
+Web Console list and Details views show non-interactive rounded badges; the
+legacy `ai-guardian tui` command opens the same Console. The terminal
+`ai-guardian violations` listing shows bracketed labels, with color only when
+stdout is an interactive terminal. JSON/Markdown copies show the same outcome
+metadata. Legacy records without these fields remain readable and do not display
+invented outcomes.
+
 For detailed command-originated violations without a usable source file path,
 history may include the optional `blocked.source_command` fallback. It is
 normalized and capped at 500 characters, and is included only when secret and
@@ -122,10 +142,11 @@ projections without changing existing file-path fields or processing-source
 semantics. Older records and responses without URL metadata remain supported.
 
 The existing top-level JSONL fields remain unchanged for standard violation
-types; sensitive findings use the minimal record described below. Consumers that
-read older entries can treat a missing `policy_decision` field as a legacy
-record. Current REST, SDK, SARIF, and OTEL adapters preserve their existing
-shapes and add the normalized record or its safe fields.
+types, with the additive `action_taken` and `redaction_status` fields; sensitive
+findings retain their minimal record plus these safe outcomes. Consumers that
+read older entries can treat missing policy/outcome fields as legacy metadata.
+Current REST, SDK, MCP, mirror, support-bundle, and Console projections preserve
+their existing shapes and expose only validated outcome labels.
 
 ### Tool Input Diagnostics
 

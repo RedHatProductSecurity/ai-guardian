@@ -311,11 +311,15 @@ def test_sensitive_violation_storage_omits_values_and_partial_hints(
         "timestamp",
         "violation_type",
         "severity",
+        "action_taken",
+        "redaction_status",
         "resolved",
         "resolved_at",
         "resolved_action",
         "blocked",
     }
+    assert stored["action_taken"] == "block"
+    assert stored["redaction_status"] == "not_redacted"
     assert stored["blocked"] == {"file_path": "/repo/config.txt", "line_number": 17}
     assert logger.get_recent_violations(violation_type="sensitive_finding")
     for filtered in (
@@ -469,6 +473,27 @@ def test_non_sensitive_violation_storage_keeps_matched_text(tmp_path):
     assert stored["severity"] == "high"
     assert stored["blocked"]["matched_text"] == "ignore previous instructions"
     assert stored["policy_decision"]["violation_type"] == "prompt_injection"
+    assert stored["action_taken"] == "block"
+    assert stored["redaction_status"] == "not_applicable"
+
+
+def test_sensitive_outcome_fields_are_fixed_vocabulary_and_redaction_safe(
+    tmp_path, _safe_origin_command_scanners
+):
+    logger = _logger(tmp_path / "violations.jsonl")
+
+    logger.log_violation(
+        "secret_detected",
+        blocked={"matched_text": "synthetic-private-value"},
+        context={},
+        action_taken="allowed by an unexpected label",
+        redaction_status="redacted",
+    )
+
+    stored = json.loads(logger.log_path.read_text(encoding="utf-8"))
+    assert stored["action_taken"] == "block"
+    assert stored["redaction_status"] == "redacted"
+    assert "synthetic-private-value" not in json.dumps(stored)
 
 
 def test_non_sensitive_violation_normalizes_unknown_severity(tmp_path):

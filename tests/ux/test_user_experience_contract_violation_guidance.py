@@ -139,6 +139,114 @@ def test_sensitive_history_guidance_reports_a_safe_location_without_subtype():
     assert snippet == ""
 
 
+def test_console_violation_details_show_effective_action_and_redaction_status():
+    """USER EXPERIENCE: outcomes appear as badges in Console and Markdown copy.
+
+    Manual verification: run ``ai-guardian console`` or its ``tui`` alias, then
+    open Violations and Details for a redacted finding. The list and detail view
+    show rounded, non-interactive outcome badges; Copy as Markdown retains the
+    readable outcome labels without exposing scanner content.
+    """
+    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
+    from ai_guardian.web.pages.violations import (
+        _format_violation_markdown,
+        _render_violation_card,
+        _violation_outcome_items,
+    )
+    from ai_guardian.web.pages.violation_detail import _render_violation_detail
+
+    violation = {
+        "violation_type": "sensitive_finding",
+        "action_taken": "allow",
+        "redaction_status": "redacted",
+        "blocked": {},
+    }
+
+    assert _violation_outcome_items(violation) == [
+        ("Action Taken", "Allowed"),
+        ("Redaction Status", "Redacted"),
+    ]
+    assert "_render_violation_outcome_badges(v)" in inspect.getsource(
+        _render_violation_card
+    )
+    assert "_render_violation_outcome_badges(v)" in inspect.getsource(
+        _render_violation_detail
+    )
+    markdown = _format_violation_markdown(violation)
+    assert "**Action Taken:** Allowed" in markdown
+    assert "**Redaction Status:** Redacted" in markdown
+
+
+def test_terminal_violation_history_shows_safe_outcome_badges(capsys):
+    """USER EXPERIENCE: terminal history uses safe bracketed outcome badges.
+
+    When stdout is not a terminal (including redirected output), badges remain
+    readable plain text. Invalid or missing metadata is never echoed verbatim.
+    """
+    from argparse import Namespace
+    from unittest.mock import MagicMock, patch
+
+    from ai_guardian.cli_handlers import _handle_violations_command
+
+    history = MagicMock()
+    history.get_recent_violations.return_value = [
+        {
+            "violation_type": "tool_permission",
+            "severity": "warning",
+            "timestamp": "2026-05-13T10:00:00Z",
+            "action_taken": "warn",
+            "redaction_status": "not_applicable",
+            "blocked": {},
+            "suggestion": {},
+        },
+        {
+            "violation_type": "sensitive_finding",
+            "severity": "high",
+            "timestamp": "2026-05-13T10:01:00Z",
+            "action_taken": "private-value-must-not-appear",
+            "redaction_status": "private-value-must-not-appear-either",
+            "blocked": {},
+            "suggestion": {},
+        },
+    ]
+    args = Namespace(clear=False, yes=False, export=None, limit=10, type=None)
+
+    with patch("ai_guardian.violations.logger.ViolationLogger", return_value=history):
+        assert _handle_violations_command(args) == 0
+
+    output = capsys.readouterr().out
+    assert "[Action Taken: Warned]" in output
+    assert "[Redaction Status: Not applicable]" in output
+    assert "[Action Taken: Unknown]" in output
+    assert "[Redaction Status: Unknown]" in output
+    assert "private-value-must-not-appear" not in output
+
+
+def test_terminal_outcome_badges_use_color_only_for_interactive_output(monkeypatch):
+    """USER EXPERIENCE: terminal badges are colored only when appropriate."""
+    from unittest.mock import MagicMock, patch
+
+    from ai_guardian.cli_handlers import _format_violation_outcome_badges
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "xterm")
+    terminal = MagicMock()
+    terminal.isatty.return_value = True
+    violation = {"action_taken": "allow", "redaction_status": "redacted"}
+
+    with patch("ai_guardian.cli_handlers.sys.stdout", terminal):
+        colored = _format_violation_outcome_badges(violation)
+    assert colored == [
+        "\033[1;37;42m[Action Taken: Allowed]\033[0m",
+        "\033[1;37;42m[Redaction Status: Redacted]\033[0m",
+    ]
+
+    monkeypatch.setenv("NO_COLOR", "")
+    with patch("ai_guardian.cli_handlers.sys.stdout", terminal):
+        plain = _format_violation_outcome_badges(violation)
+    assert plain == ["[Action Taken: Allowed]", "[Redaction Status: Redacted]"]
+
+
 def test_fetched_history_guidance_distinguishes_response_from_remote_document():
     """USER EXPERIENCE: URL-backed finding → URL and response-position explanation.
 

@@ -77,6 +77,9 @@ class ScanResult:
         file_path: Optional[str] = None,
     ) -> "ScanResult":
         """Wrap secret scanner (check_secrets) result."""
+        first_finding = (
+            findings[0] if findings and isinstance(findings[0], dict) else {}
+        )
         return cls(
             detected=has_secrets,
             violation_type="secret_detected",
@@ -86,6 +89,9 @@ class ScanResult:
             matched_text=matched_text,
             line_number=line_number,
             start_column=start_column,
+            end_line=first_finding.get("end_line"),
+            end_column=first_finding.get("end_column"),
+            rule_id=first_finding.get("rule_id", ""),
             findings=findings,
             total_findings=len(findings) if findings else (1 if has_secrets else 0),
             scan_time_ms=scan_time_ms,

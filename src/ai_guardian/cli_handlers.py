@@ -147,6 +147,56 @@ def _sensitive_finding_location_lines(blocked):
     return lines
 
 
+def _format_violation_outcome_badges(violation):
+    """Return safe bracketed action/redaction labels for terminal history."""
+    if "action_taken" not in violation and "redaction_status" not in violation:
+        return []
+
+    from ai_guardian.violations.decision import safe_violation_outcome
+
+    outcome = safe_violation_outcome(
+        violation.get("action_taken"), violation.get("redaction_status")
+    )
+    action_labels = {
+        "block": "Blocked",
+        "warn": "Warned",
+        "log": "Logged",
+        "allow": "Allowed",
+        "unknown": "Unknown",
+    }
+    redaction_labels = {
+        "redacted": "Redacted",
+        "not_redacted": "Not redacted",
+        "not_applicable": "Not applicable",
+        "unknown": "Unknown",
+    }
+    badges = [
+        f"[Action Taken: {action_labels[outcome['action_taken']]}]",
+        f"[Redaction Status: {redaction_labels[outcome['redaction_status']]}]",
+    ]
+    if (
+        os.environ.get("NO_COLOR") is not None
+        or os.environ.get("TERM") == "dumb"
+        or not getattr(sys.stdout, "isatty", lambda: False)()
+    ):
+        return badges
+
+    colors = {
+        "block": "1;37;41",
+        "warn": "1;30;43",
+        "log": "1;37;44",
+        "allow": "1;37;42",
+        "redacted": "1;37;42",
+        "not_redacted": "1;30;47",
+        "not_applicable": "1;37;100",
+        "unknown": "1;30;47",
+    }
+    return [
+        f"\033[{colors[outcome[key]]}m{badge}\033[0m"
+        for badge, key in zip(badges, ("action_taken", "redaction_status"))
+    ]
+
+
 def _handle_violations_command(args):
     """
     Handle the violations subcommand.
@@ -229,6 +279,9 @@ def _handle_violations_command(args):
         )
 
         print(f"[{timestamp}] {severity_indicator} {vtype} ({severity.lower()})")
+        outcome_badges = _format_violation_outcome_badges(v)
+        if outcome_badges:
+            print(f"  {' '.join(outcome_badges)}")
 
         # Display blocked details based on violation type
         if v.get("violation_type") == ViolationType.TOOL_PERMISSION:

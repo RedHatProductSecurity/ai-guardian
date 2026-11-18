@@ -56,6 +56,8 @@ class TestFileScannerSecretScanning:
             start_column=None,
             end_column=None,
             source_context="file_scan",
+            action_taken="log",
+            redaction_status="not_redacted",
         )
         violation_logger.log_violation.assert_not_called()
 

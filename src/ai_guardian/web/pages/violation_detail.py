@@ -27,6 +27,7 @@ from ai_guardian.web.pages.violations import (
     _format_violation_markdown,
     _load_local_violations,
     _render_tool_diagnostics,
+    _render_violation_outcome_badges,
     _show_allow_always_flow,
     _show_ignore_file_flow,
     _show_suppress_in_source_flow,
@@ -146,6 +147,8 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
         with ui.row().classes("items-center gap-2 mt-1"):
             ui.label("Time:").classes("text-xs text-grey-6")
             local_time_label(timestamp).classes("text-xs")
+
+    _render_violation_outcome_badges(v)
 
     from ai_guardian.web.components.violation_mirror import render_mirror_attribution
 

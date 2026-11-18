@@ -305,6 +305,7 @@ def run_content_pipeline(
             "source": "scanner",
             "_allowlist_content": content_to_scan,
             "_allowlist_file_path": file_path,
+            "_defer_secret_violation_logging": True,
         }
         if file_path:
             pre_secret_ctx["file_path"] = file_path
@@ -538,7 +539,6 @@ def run_content_pipeline(
                 scanner_name,
                 result,
                 vtype,
-                skip_violation_log=True,
                 error_override=result.error_message,
                 diagnostic_values=diagnostic_values_by_result.get(id(result)),
                 sensitive_replacement_verified=prompt_replacement_verified,

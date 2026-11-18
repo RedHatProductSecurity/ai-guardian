@@ -1,11 +1,60 @@
-"""Tests for violation copy buttons and markdown formatter."""
+"""Tests for violation copy buttons, outcome badges and markdown formatting."""
+
+from unittest.mock import MagicMock, call, patch
 
 import pytest
-from unittest.mock import patch
 
 pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 
-from ai_guardian.web.pages.violations import _format_violation_markdown
+from ai_guardian.web.pages.violations import (
+    _format_violation_markdown,
+    _render_violation_outcome_badges,
+)
+
+
+def test_outcome_badges_render_as_rounded_semantic_chips():
+    badge_element = MagicMock()
+
+    with (
+        patch("ai_guardian.web.pages.violations.ui.row") as row,
+        patch(
+            "ai_guardian.web.pages.violations.ui.badge",
+            return_value=badge_element,
+        ) as badge,
+    ):
+        assert _render_violation_outcome_badges(
+            {
+                "action_taken": "block",
+                "redaction_status": "not_applicable",
+            }
+        )
+
+    assert [item.args for item in badge.call_args_list] == [
+        ("Action Taken: Blocked",),
+        ("Redaction Status: Not applicable",),
+    ]
+    assert [item.kwargs["color"] for item in badge.call_args_list] == [
+        "negative",
+        "blue-grey",
+    ]
+    assert badge_element.props.call_args_list == [call("rounded"), call("rounded")]
+    assert badge_element.props.return_value.classes.call_args_list == [
+        call("text-xs"),
+        call("text-xs"),
+    ]
+
+
+def test_legacy_violation_does_not_render_outcome_badges():
+    with (
+        patch("ai_guardian.web.pages.violations.ui.row") as row,
+        patch("ai_guardian.web.pages.violations.ui.badge") as badge,
+    ):
+        assert not _render_violation_outcome_badges(
+            {"violation_type": "secret_detected"}
+        )
+
+    row.assert_not_called()
+    badge.assert_not_called()
 
 
 class TestFormatViolationMarkdown:
@@ -36,6 +85,33 @@ class TestFormatViolationMarkdown:
         assert "**Time:** 2026-06-06T10:45:15" in md
         assert "**Source:**" not in md
         assert "github-pat-fine-grained" not in md
+
+    def test_action_and_redaction_outcomes_are_in_copyable_markdown(self):
+        md = _format_violation_markdown(
+            {
+                "violation_type": "sensitive_finding",
+                "action_taken": "allow",
+                "redaction_status": "redacted",
+                "blocked": {},
+            }
+        )
+
+        assert "**Action Taken:** Allowed" in md
+        assert "**Redaction Status:** Redacted" in md
+
+    def test_invalid_outcome_values_are_not_copied(self):
+        md = _format_violation_markdown(
+            {
+                "violation_type": "sensitive_finding",
+                "action_taken": "private-value-must-not-appear",
+                "redaction_status": "private-value-must-not-appear-either",
+                "blocked": {},
+            }
+        )
+
+        assert "private-value-must-not-appear" not in md
+        assert "**Action Taken:** Unknown" in md
+        assert "**Redaction Status:** Unknown" in md
 
     def test_tool_permission_with_suggestion(self):
         v = {

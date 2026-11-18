@@ -527,6 +527,8 @@ def _log_ask_decision(
                 file_path=file_path,
                 line_number=line_number,
                 source_context=source_context,
+                action_taken=action_taken,
+                redaction_status="not_redacted",
             )
         else:
             blocked_info = {

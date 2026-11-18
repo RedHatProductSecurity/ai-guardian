@@ -990,6 +990,7 @@ class FileScanner:
             has_secrets, error_message = check_secrets(
                 content,
                 filename=os.path.basename(file_path),
+                context={"action_taken": "log"},
                 file_path=absolute_path,
                 allowlist_patterns=secret_config.get("allowlist_patterns"),
                 ignore_files=secret_config.get("ignore_files"),
@@ -1661,6 +1662,8 @@ def _log_scan_findings(findings: list, args) -> None:
                     start_column=finding.get("start_column"),
                     end_column=finding.get("end_column"),
                     source_context="file_scan",
+                    action_taken="log",
+                    redaction_status="not_redacted",
                 )
                 continue
 
@@ -1679,6 +1682,8 @@ def _log_scan_findings(findings: list, args) -> None:
                 blocked=blocked,
                 context=context,
                 severity=finding.get("severity", "warning"),
+                action_taken="log",
+                redaction_status="not_applicable",
             )
     except Exception as e:
         print(f"Warning: Could not log violations: {e}", file=sys.stderr)
