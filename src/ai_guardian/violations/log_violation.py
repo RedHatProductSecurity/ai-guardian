@@ -8,7 +8,7 @@ Replaces 10 separate ``_log_*_violation()`` functions with a single
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Dict, List, Optional, Union
 
 from ai_guardian.scanners.scan_result import ScanResult
@@ -264,7 +264,11 @@ def log_violation(
             # No source snippets, candidate hashes, commands or arbitrary extra
             # payloads in this type's audit/retrieval/support paths.
             ctx.pop("tool_name", None)
-            policy_decision = None
+            if isinstance(canonical_decision, PolicyDecision):
+                canonical_decision = replace(canonical_decision, source="scanner")
+            else:
+                canonical_decision = dict(canonical_decision)
+                canonical_decision["source"] = "scanner"
             source = "scanner"
 
         metadata = (

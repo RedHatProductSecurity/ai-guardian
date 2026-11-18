@@ -778,6 +778,7 @@ def test_persisted_violation_record_omits_source_and_credential_values(tmp_path)
     assert stored["blocked"]["findings"][0]["sink"] == "authentication"
     assert stored["suggestion"] == {}
     assert "tool_name" not in stored["context"]
+    assert stored["policy_decision"]["source"] == "scanner"
 
 
 def test_violations_console_never_renders_source_credential_text():

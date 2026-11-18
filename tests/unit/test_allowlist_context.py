@@ -182,6 +182,8 @@ def test_sensitive_shared_logger_omits_allowlist_source_metadata():
         "start_column": None,
         "end_column": None,
         "source_context": None,
+        "action_taken": "block",
+        "redaction_status": "not_redacted",
     }
     assert "SENSITIVE_VALUE" not in str(logger_calls[0])
     assert "allowlist_content" not in str(logger_calls[0])
