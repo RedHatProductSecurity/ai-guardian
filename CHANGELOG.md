@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Web Console port environment override (#2787):** Allow
+  `AI_GUARDIAN_CONSOLE_PORT` to override `console.web.port` for `console` and
+  `tui`, while retaining explicit `--port` precedence and automatic assignment.
 - **Daemon listener CLI options (#2785):** Add `--host` and `--port` to
   `daemon start` and `daemon restart`, with CLI > environment > daemon config
   precedence and the existing defaults when omitted.
