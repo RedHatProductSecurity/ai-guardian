@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Kilo orphan recovery:** Include the generated Kilo plugin, shared bridge, and
+  owned MCP registration in the selected user or explicit project cleanup scope.
 - **Web Console configuration (#2782):** Apply `console.web.host` and
   `console.web.port` when launching from the CLI, while preserving defaults and
   explicit `--port` precedence.

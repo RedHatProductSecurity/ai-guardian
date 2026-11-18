@@ -27,7 +27,8 @@ HOME_VARIABLES = (
     "CLAUDE_CONFIG_DIR CURSOR_CONFIG_DIR COPILOT_HOME GROK_HOME CODEX_HOME "
     "GEMINI_CLI_HOME CLINE_DATA_DIR KIRO_HOME JUNIE_HOME AIDER_DESK_DIR "
     "AIDER_DESK_HOME_DIR OPENCLAW_STATE_DIR OPENCLAW_HOME OPENCLAW_CONFIG_PATH "
-    "OPENCODE_CONFIG_DIR OPENCODE_CONFIG CRUSH_GLOBAL_CONFIG PI_CODING_AGENT_DIR GOOSE_PATH_ROOT"
+    "OPENCODE_CONFIG_DIR OPENCODE_CONFIG CRUSH_GLOBAL_CONFIG PI_CODING_AGENT_DIR "
+    "GOOSE_PATH_ROOT KILO_CONFIG_DIR"
 ).split()
 GENERATED = "// ai-guardian-generated-version: 1.20.0\n"
 
@@ -495,6 +496,55 @@ def test_managed_and_legacy_artifacts_preserve_unowned_files(
     assert not (base / "ai-guardian.ts").exists()
     assert (package / "user-notes.txt").read_text() == "keep"
     assert (base / "other.ts").read_text() == "keep"
+
+
+@pytest.mark.parametrize("scope", ["user", "project"])
+def test_kilo_recovery_removes_owned_plugin_bridge_and_mcp_entry(
+    engine, isolated_home, tmp_path, scope
+):
+    if scope == "user":
+        root = isolated_home / ".config/kilo"
+        plugin_root = root
+        config_path = root / "kilo.json"
+        arguments = ["--yes"]
+    else:
+        project = tmp_path / "selected-kilo-project"
+        project.mkdir()
+        root = project / ".kilo"
+        plugin_root = root
+        config_path = root / "kilo.json"
+        arguments = ["--scope", "project", "--project", str(project), "--yes"]
+
+    plugin = plugin_root / "plugin/ai-guardian.ts"
+    bridge = plugin_root / "ai-guardian/ai-guardian-bridge.ts"
+    plugin.parent.mkdir(parents=True)
+    plugin.write_text(GENERATED, encoding="utf-8")
+    bridge.parent.mkdir(parents=True)
+    bridge.write_text(GENERATED, encoding="utf-8")
+    unrelated_plugin = plugin.parent / "other-plugin.ts"
+    unrelated_plugin.write_text("// user-owned", encoding="utf-8")
+    config = write_json(
+        config_path,
+        {
+            "mcp": {
+                "ai-guardian": hook(),
+                "other": {"command": "other-server"},
+            },
+            "theme": "user-owned",
+        },
+    )
+
+    assert engine["main"](arguments) == 0
+    assert not plugin.exists()
+    assert not bridge.exists()
+    assert unrelated_plugin.read_text(encoding="utf-8") == "// user-owned"
+    assert json.loads(config.read_text(encoding="utf-8")) == {
+        "mcp": {"other": {"command": "other-server"}},
+        "theme": "user-owned",
+    }
+    assert len(list(plugin.parent.glob("*.bak"))) == 1
+    assert len(list(bridge.parent.glob("*.bak"))) == 1
+    assert len(list(config.parent.glob("*.bak"))) == 1
 
 
 def test_project_cleanup_requires_explicit_scope_and_never_walks(

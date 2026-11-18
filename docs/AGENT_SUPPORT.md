@@ -58,7 +58,7 @@ upstream distinction.
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | **Complete** |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | **Complete** |
 | OpenCode V1/V2 | `--ide opencode` | Version-aware plugin | N/A | **Host contracts complete; normal-image V1 supported; OpenShell V1 Vertex path implemented, live qualification manual** |
-| Kilo Code CLI | `--ide kilo` | V1 plugin callbacks | `~/.config/kilo/kilo.json` (`mcp`) | **Host setup contract reviewed for 7.8.27; native execution, result delivery, and sandbox runtime unqualified** |
+| Kilo Code CLI | `--ide kilo` | V1 plugin callbacks | `~/.config/kilo/kilo.json` (`mcp`) | **Host setup contract reviewed for 7.8.27; native execution, enforcement, result delivery, and sandbox runtime unqualified** |
 | Pi | `--ide pi` | Managed extension (hooks + native MCP registration; eight callbacks) | Pi extension API (`registerMcpServer`; Pi 0.99.0+) | **Complete** |
 | Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
