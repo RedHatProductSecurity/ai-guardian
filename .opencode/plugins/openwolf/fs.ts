@@ -9,8 +9,29 @@ export function getWolfDir(directory: string): string {
   return path.join(directory, ".wolf")
 }
 
+const enabledConfigCache = new Map<string, { mtimeMs: number; size: number; enabled: boolean }>()
+
 export function wolfDirExists(directory: string): boolean {
-  return fs.existsSync(getWolfDir(directory)) && readJSON<any>(path.join(getWolfDir(directory), "config.json"), {})?.openwolf?.enabled !== false
+  const wolfDir = getWolfDir(directory)
+  if (!fs.existsSync(wolfDir)) return false
+
+  const configPath = path.resolve(wolfDir, "config.json")
+  let stat: fs.Stats
+  try {
+    stat = fs.statSync(configPath)
+  } catch {
+    enabledConfigCache.delete(configPath)
+    return true
+  }
+
+  const cached = enabledConfigCache.get(configPath)
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.enabled
+  }
+
+  const enabled = readJSON<any>(configPath, {})?.openwolf?.enabled !== false
+  enabledConfigCache.set(configPath, { mtimeMs: stat.mtimeMs, size: stat.size, enabled })
+  return enabled
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {

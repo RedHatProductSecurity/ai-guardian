@@ -135,7 +135,9 @@
     },
     "agents": [
       "claude",
-      "opencode"
+      "codex",
+      "opencode",
+      "cursor"
     ],
     "task_review": {
       "enabled": false,

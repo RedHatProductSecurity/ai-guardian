@@ -1,5 +1,5 @@
 // @ts-nocheck
-// Generated from the locked ignore dependency; do not edit.
+// Generated from the locked ignore dependency; local wildcard matching fix is inline.
 /*
 Copyright (c) 2013 Kael Zhang <i@kael.me>, contributors
 http://kael.me/
@@ -740,15 +740,13 @@ const TRAILING_WILD_CARD_REPLACERS = {
 
 const WILDCARD = '[^\\/]*'
 
-// Where a run of non-slash wildcards is split by single fixed characters --
-//   `[^/]*x[^/]*y...` -- the engine has many equivalent ways to lay the
-//   input across the wildcards, and on input that does not match it works
-//   through all of them, so the time grows with the number of wildcards
-//   rather than the length of the path. Every wildcard but the last in such a
-//   run can be pinned to stop at the character that follows it, which leaves
-//   one way to lay out the input and no rewinding, without changing which
-//   paths match: the fixed characters still bound the count, and the last
-//   wildcard still absorbs the rest.
+// Where a run of non-slash wildcards is split by fixed tokens, unrestricted
+//   regex wildcards can explore many equivalent layouts on a non-match. Pin
+//   every wildcard but the last before the complete fixed-token run that
+//   follows it. Stopping at only the next character is incorrect when that
+//   character occurs before the rest of the literal (for example, `*test*`
+//   against `target-test`). The last wildcard retains the normal regex behavior
+//   and can search for its following suffix.
 //
 // The source is read one token at a time -- a wildcard, a single-character
 //   piece (a literal, an escape, a class), or a parenthesised group or anchor
@@ -840,14 +838,23 @@ const pinWildcards = source => {
         return
       }
 
-      // A wildcard that is not the last in the run is always immediately
-      //   followed by the single character that separates it from the next
-      //   one, because a run never holds two wildcards in a row, so it can be
-      //   pinned to stop there. The last wildcard stays as it is and takes up
-      //   the rest.
-      out += at === lastWildcard
-        ? WILDCARD
-        : `(?:(?!${run[at + 1].single})[^\\/])*`
+      if (at === lastWildcard) {
+        out += WILDCARD
+        return
+      }
+
+      // Pin to the complete next fixed-token run. A later wildcard can still
+      //   consume through repeated occurrences, while the regex engine has
+      //   only one choice for this wildcard and does not need to backtrack.
+      let nextWildcard = at + 1
+      while (nextWildcard < run.length && !run[nextWildcard].wildcard) nextWildcard++
+      const delimiter = run
+        .slice(at + 1, nextWildcard)
+        .map(token => token.single)
+        .join(EMPTY)
+      out += delimiter
+        ? `(?:(?!${delimiter})[^\\/])*`
+        : WILDCARD
     })
 
     run = []

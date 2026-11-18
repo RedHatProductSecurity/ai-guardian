@@ -100,8 +100,6 @@ export async function handleOpenCodeEvent(
   options: OpenCodeEventOptions = {},
 ): Promise<void> {
   const type = eventType(event)
-  if (type === "session.created" && !wolfDirExists(directory)) return
-
   if (!wolfDirExists(directory)) return
   if (type === "message.updated") {
     const info = record(eventData(event).info)

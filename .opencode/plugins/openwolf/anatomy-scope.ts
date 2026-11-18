@@ -112,7 +112,20 @@ export function createIgnoreMatcher(root: string): (relative: string, directory:
   const rules = (dir: string) => {
     if (!cache.has(dir)) {
       let text = "";
-      try { text = fs.readFileSync(path.join(root, dir, ".gitignore"), "utf8"); } catch {}
+      let fd: number | undefined;
+      try {
+        let flags = fs.constants.O_RDONLY;
+        if (typeof fs.constants.O_NONBLOCK === "number") flags |= fs.constants.O_NONBLOCK;
+        if (typeof fs.constants.O_NOFOLLOW === "number") flags |= fs.constants.O_NOFOLLOW;
+        fd = fs.openSync(path.join(root, dir, ".gitignore"), flags);
+        if (fs.fstatSync(fd).isFile()) text = fs.readFileSync(fd, "utf8");
+      } catch {
+        // Treat rejected, special, and unreadable ignore files as absent.
+      } finally {
+        if (fd !== undefined) {
+          try { fs.closeSync(fd); } catch {}
+        }
+      }
       cache.set(dir, ignore().add(text));
     }
     return cache.get(dir)!;

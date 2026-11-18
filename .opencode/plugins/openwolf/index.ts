@@ -103,7 +103,11 @@ export async function setupOpenWolfV2(ctx: V2Context): Promise<(() => void) | vo
       try {
         for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
           backoffMs = 500
-          await handleOpenCodeEvent(directory, event as unknown as Record<string, unknown>)
+          try {
+            await handleOpenCodeEvent(directory, event as unknown as Record<string, unknown>)
+          } catch (error) {
+            console.warn(`OpenWolf: event handler failed: ${error}`)
+          }
         }
       } catch {
         // A failed or closed stream is retried by the loop below.
