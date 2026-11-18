@@ -7,6 +7,20 @@ budget_tokens: 1000
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Last updated: 2026-11-18 (UTC)
 
+## PR #2794 OpenWolf plugin/reframe follow-up — 2026-11-18
+
+- On existing branch `fix_openwolf`, corrected OpenWolf event/config behavior,
+  safe `.gitignore` loading and vendored wildcard matching. Removed the undelivered
+  task-review hook path while preserving ordinary hook processing. Reframe prompts
+  now preserve existing-app migration scope and use current Chakra UI v3, DaisyUI
+  Tailwind v4 and framework-matched Flowbite guidance. Restored OpenWolf directives
+  and Codex/Cursor agent config compatibility.
+- Added Python/Node runtime and prompt contracts. **Validation:** 3 Python tests,
+  5 Node tests, Ruff, Black (Python 3.10 target), JSON parsing and diff checks pass.
+- Implementation and tests were committed as `a0cff558` and pushed to
+  `origin/fix_openwolf`; no PR metadata was changed. **Next:** user review/CI;
+  decide separately whether the PR description needs updating.
+
 ## Issue #2779 privacy-safe WebFetch locations — 2026-11-18
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2779`, existing

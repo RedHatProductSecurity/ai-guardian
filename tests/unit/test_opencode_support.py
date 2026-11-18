@@ -423,25 +423,37 @@ def test_v2_tool_blocks_add_safe_pre_and_post_refusal_notices():
 
 
 def test_openwolf_plugin_review_regressions_are_present():
-    """Keep usage, context, and event-loop review fixes in the project plugin."""
+    """Keep current usage, context, and event-loop contracts in the plugin."""
     core = (OPENWOLF_PLUGIN_DIR / "core.ts").read_text(encoding="utf-8")
     index = (OPENWOLF_PLUGIN_DIR / "index.ts").read_text(encoding="utf-8")
     usage = (OPENWOLF_PLUGIN_DIR / "usage.ts").read_text(encoding="utf-8")
 
-    assert "const id = eventId ?? `session:${sessionId}`" in core
-    assert "replaceSnapshot: eventId === undefined" in core
-    assert "if (!openwolfContent) return" in core
+    assert "id: messageID" in core
+    assert "id: `usage:${event.id}`" in core
     assert (
-        'const id = typeof event.id === "string" ? event.id : `${sessionId}:'
-        not in core
+        'approvedMemory(getWolfDir(directory), "OPENWOLF.md")' in core
+        and "<openwolf-protocol>" in core
     )
-    assert "if (!info.replaceSnapshot)" in usage
     assert (
-        "for await (const event of ctx.event.subscribe({ signal: controller.signal })) {\n"
-        "        try {\n"
-        "          await handleOpenCodeEvent"
-    ) in index
-    assert "console.warn(String(error))" in index
+        'const id = crypto.createHash("sha256").update(`${info.sessionID}:${info.id}`)'
+        in usage
+    )
+    assert (
+        "if (previous?.time?.completed && !info.time?.completed) return true" in usage
+    )
+    assert (
+        "if ((previous?.time?.completed ?? 0) > (info.time?.completed ?? 0)) return true"
+        in usage
+    )
+
+    subscription = index.index(
+        "for await (const event of ctx.event.subscribe({ signal: controller.signal }))"
+    )
+    event_call = index.index("await handleOpenCodeEvent(", subscription)
+    handler_failure = index.index("OpenWolf: event handler failed", event_call)
+    event_handling = index[subscription:handler_failure]
+    assert "try {" in event_handling
+    assert "} catch (error) {" in event_handling
 
 
 def test_v2_registration_removes_direct_file_entry_and_preserves_packages(tmp_path):

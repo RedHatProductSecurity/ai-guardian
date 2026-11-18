@@ -49,30 +49,6 @@ export function handleSessionStart(directory: string, sessionId: string): void {
   const header = `\n## Session: ${now.toISOString().slice(0, 10)} ${timeShort()}\n\n| Time | Action | File(s) | Outcome | ~Tokens |\n|------|--------|---------|---------|--------|\n`
   appendMarkdown(memoryPath, header)
 
-  try {
-    const cerebrumPath = path.join(wolfDir, "cerebrum.md")
-    const cerebrumContent = fs.readFileSync(cerebrumPath, "utf-8")
-    const stat = fs.statSync(cerebrumPath)
-    const daysSinceUpdate = (Date.now() - stat.mtimeMs) / (1000 * 60 * 60 * 24)
-    const entryLines = cerebrumContent.split("\n").filter(l => {
-      const t = l.trim()
-      return t.startsWith("- ") || t.startsWith("* ") || (t.startsWith("[") && t.includes("]"))
-    })
-    if (entryLines.length < 3) {
-      console.warn(`💡 OpenWolf: cerebrum.md has only ${entryLines.length} entries. Learn from this session — record user preferences, project conventions, and mistakes to .wolf/cerebrum.md.`)
-    } else if (daysSinceUpdate > 3) {
-      console.warn(`💡 OpenWolf: cerebrum.md hasn't been updated in ${Math.floor(daysSinceUpdate)} days. Look for opportunities to add learnings this session.`)
-    }
-  } catch {}
-
-  try {
-    const buglogPath = path.join(wolfDir, "buglog.json")
-    const buglog = readJSON<{ bugs: unknown[] }>(buglogPath, { bugs: [] })
-    if (buglog.bugs.length === 0) {
-      console.warn(`📋 OpenWolf: buglog.json is empty. If you encounter or fix any bugs, errors, or failed tests this session, log them to .wolf/buglog.json.`)
-    }
-  } catch {}
-
   // Count the new session in the lifetime totals. readJSON deep-merges the
   // fallback, so a pre-2.0 ledger without `lifetime` still gets the default;
   // the guard below covers a ledger where `lifetime` is not an object at all.

@@ -126,6 +126,13 @@ export function hookMain(hookName: string, fn: () => void | Promise<void>): void
   Promise.resolve()
     .then(() => readStdin())
     .then(async raw => {
+      // Resolve the project only after stdin has supplied the hook's cwd.
+      // Cached registrations must stay inert after the project is disabled.
+      const projectDir = getProjectDir();
+      if (readJSON<{openwolf?: {enabled?: boolean}} | null>(path.join(projectDir, ".wolf", "config.json"), null)?.openwolf?.enabled === false) {
+        process.exit(0);
+        return true;
+      }
       if (hookName === "session-start" || hookName === "user-prompt-submit") scheduleUpdate(getProjectDir());
       try { if (await delegateRuntime(getProjectDir(), hookName, raw)) return true; } catch {}
       await fn();

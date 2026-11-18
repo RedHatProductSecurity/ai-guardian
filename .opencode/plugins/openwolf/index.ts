@@ -1,3 +1,4 @@
+import {wolfDirExists} from "./fs.js"
 import { pathToFileURL } from "node:url"
 import * as path from "node:path"
 import { pinRuntime, scheduleUpdate } from "./runtime-updates.js"
@@ -44,12 +45,34 @@ type V2Plugin = {
 }
 
 /**
+ * Wait out a resubscribe backoff. The timer is unref'd so it cannot keep the
+ * process alive, and the wait resolves immediately when the plugin aborts.
+ */
+function waitWithBackoff(signal: AbortSignal, ms: number): Promise<void> {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {signal.removeEventListener("abort", onAbort);resolve()}, ms)
+    const timeout = timer as { unref?: () => void }
+    if (typeof timeout.unref === "function") timeout.unref()
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    signal.addEventListener("abort", onAbort, { once: true })
+  })
+}
+
+/**
  * The installed entrypoint owns runtime selection. A staged release imports
  * this function directly so it can replace only the implementation while the
  * current OpenCode plugin instance remains pinned for its lifetime.
  */
 export async function setupOpenWolfV2(ctx: V2Context): Promise<(() => void) | void> {
   const directory = ctx.location.directory
+  if (!wolfDirExists(directory)) return () => {}
   const sessionKey = `opencode-server:${process.pid}:${Date.now()}`
   scheduleUpdate(directory)
 
@@ -71,41 +94,65 @@ export async function setupOpenWolfV2(ctx: V2Context): Promise<(() => void) | vo
   }
 
   const controller = new AbortController()
+  // OpenCode 2's event subscription can fail or end at any time, after which
+  // no further events arrive unless we subscribe again; retry with capped
+  // exponential backoff (reset by any received event) until teardown.
   void (async () => {
-    try {
-      for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
-        try {
-          await handleOpenCodeEvent(directory, event as unknown as Record<string, unknown>)
-        } catch (error) {
-          console.warn(String(error))
+    let backoffMs = 500
+    while (!controller.signal.aborted) {
+      try {
+        for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+          backoffMs = 500
+          try {
+            await handleOpenCodeEvent(directory, event as unknown as Record<string, unknown>)
+          } catch (error) {
+            console.warn(`OpenWolf: event handler failed: ${error}`)
+          }
         }
+      } catch {
+        // A failed or closed stream is retried by the loop below.
       }
-    } catch {
-      // Subscription ends normally when OpenCode unloads the plugin.
+      if (controller.signal.aborted) return
+      console.warn(`OpenWolf: event stream ended; resubscribing in ${backoffMs}ms`)
+      await waitWithBackoff(controller.signal, backoffMs)
+      backoffMs = Math.min(backoffMs * 2, 30000)
     }
   })()
 
+  // A throw inside a hook would fail the agent's tool call; tracking must not.
   await ctx.tool.hook("execute.before", event => {
-    handleOpenCodeToolBefore(directory, extractSessionId(event), event.tool, event.input)
+    try {
+      handleOpenCodeToolBefore(directory, extractSessionId(event), event.tool, event.input)
+    } catch (error) {
+      console.warn(`OpenWolf: execute.before: ${error}`)
+    }
   })
 
   await ctx.tool.hook("execute.after", event => {
-    const result = event.status === "completed"
-      ? event.result
-      : { output: event.error?.message ?? "" }
-    handleOpenCodeToolAfter(
-      directory,
-      extractSessionId(event),
-      event.tool,
-      event.input,
-      result,
-      event.id,
-    )
+    try {
+      // A failed tool call changed nothing; recording it would log edits
+      // that never happened (e.g. an edit whose oldString was not found).
+      if (event.status !== "completed") return
+      handleOpenCodeToolAfter(
+        directory,
+        extractSessionId(event),
+        event.tool,
+        event.input,
+        event.result,
+        event.id,
+      )
+    } catch (error) {
+      console.warn(`OpenWolf: execute.after: ${error}`)
+    }
   })
 
   await ctx.session.hook("context", event => {
-    const text = openWolfSystemText(directory)
-    if (text) event.system.push({ type: "text", text })
+    try {
+      const text = openWolfSystemText(directory)
+      if (text) event.system.push({ type: "text", text })
+    } catch (error) {
+      console.warn(`OpenWolf: context: ${error}`)
+    }
   })
 
   return () => controller.abort()
