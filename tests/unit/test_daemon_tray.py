@@ -1062,6 +1062,155 @@ class TestIDESetupMenu:
             assert "Manual setup (specific IDE)" in item_names
             assert "  Cursor Cloud (project setup)..." in item_names
 
+    def test_build_ide_setup_menu_uses_live_cli_and_cached_health_evidence(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._health._ide_setup_snapshot = {
+            "tray_status": {
+                "claude": {"cli": "installed", "setup": "configured"},
+                "codex": {"cli": "installed", "setup": "needs_setup"},
+                "gemini": {"cli": "not_installed", "setup": "not_detected"},
+                "opencode": {
+                    "cli": "not_installed",
+                    "ide_detected": True,
+                    "setup": "needs_setup",
+                },
+                "pi": {
+                    "cli": "not_installed",
+                    "ide_detected": True,
+                    "setup": "needs_setup",
+                },
+                "cursor": {
+                    "cli": "not_applicable",
+                    "ide_detected": True,
+                    "setup": "unknown",
+                },
+                "copilot": {"cli": "unknown", "setup": "unknown"},
+                "cline": {
+                    "cli": "not_applicable",
+                    "ide_detected": False,
+                    "setup": "not_detected",
+                },
+            }
+        }
+        with (
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+            mock.patch(
+                "ai_guardian.tray.menu_builder.shutil.which",
+                side_effect=lambda executable: (
+                    f"/usr/bin/{executable}"
+                    if executable in {"claude", "codex"}
+                    else None
+                ),
+            ),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            refresh = mock.Mock(side_effect=AssertionError("menu must use cache"))
+            tray._health._refresh_ide_setup_state = refresh
+
+            tray._menu._build_ide_setup_menu_items()
+            calls = mock_pystray.MenuItem.call_args_list
+
+        rendered = {}
+        for call in calls:
+            label = call[0][0]
+            if callable(label):
+                rendered[label(None)] = call
+
+        assert "  Claude Code (Cfg ✓)" in rendered
+        assert "  OpenAI Codex (CLI + Desktop)" in rendered
+        assert "  Google Gemini CLI" in rendered
+        assert "  OpenCode" in rendered
+        assert "  Pi" in rendered
+        assert "  Cursor IDE/CLI (Cfg ?)" in rendered
+        assert "  GitHub Copilot (Cfg ?)" in rendered
+        assert "  Cline" in rendered
+        assert all(callable(call.args[1]) for call in rendered.values())
+        with mock.patch(
+            "ai_guardian.tray.menu_builder.shutil.which",
+            side_effect=lambda executable: (
+                f"/usr/bin/{executable}" if executable in {"claude", "codex"} else None
+            ),
+        ):
+            assert rendered["  Google Gemini CLI"].kwargs["enabled"](None) is False
+            assert rendered["  Claude Code (Cfg ✓)"].kwargs["enabled"](None) is True
+            assert rendered["  OpenCode"].kwargs["enabled"](None) is True
+            assert rendered["  Pi"].kwargs["enabled"](None) is True
+            assert rendered["  Cursor IDE/CLI (Cfg ?)"].kwargs["enabled"](None) is True
+            assert rendered["  GitHub Copilot (Cfg ?)"].kwargs["enabled"](None) is False
+            assert rendered["  Cline"].kwargs["enabled"](None) is False
+
+        static_labels = [call[0][0] for call in calls if not callable(call[0][0])]
+        assert "Status legend" in static_labels
+        assert (
+            "Enabled = installation detected · disabled = not detected or check unavailable"
+            in static_labels
+        )
+        assert (
+            "(Cfg ✓) = hooks/MCP healthy · (Cfg ?) = check failed · no Cfg = not verified healthy"
+            in static_labels
+        )
+        assert "Check hooks/MCP installation..." in static_labels
+        refresh.assert_not_called()
+
+    def test_cli_setup_enabled_state_refreshes_when_menu_opens(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._health._ide_setup_snapshot = {
+            "tray_status": {
+                "opencode": {
+                    "cli": "not_installed",
+                    "ide_detected": False,
+                    "setup": "not_detected",
+                },
+                "pi": {
+                    "cli": "not_installed",
+                    "ide_detected": False,
+                    "setup": "not_detected",
+                },
+            }
+        }
+        installed = set()
+        with (
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+            mock.patch(
+                "ai_guardian.tray.menu_builder.shutil.which",
+                side_effect=lambda executable: (
+                    f"/usr/bin/{executable}" if executable in installed else None
+                ),
+            ),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_ide_setup_menu_items()
+            rows = {
+                call.args[0](None): call
+                for call in mock_pystray.MenuItem.call_args_list
+                if callable(call.args[0])
+            }
+
+            opencode = rows["  OpenCode"]
+            pi = rows["  Pi"]
+            assert opencode.kwargs["enabled"](None) is False
+            assert pi.kwargs["enabled"](None) is False
+
+            installed.update({"opencode", "pi"})
+            assert opencode.kwargs["enabled"](None) is True
+            assert pi.kwargs["enabled"](None) is True
+
     def test_run_exposes_health_check_inside_ide_setup_menu(self):
         tray = DaemonTray(
             get_stats_callback=lambda: {},
@@ -1127,9 +1276,15 @@ class TestIDESetupMenu:
             mock_pystray.Menu = mock.MagicMock()
             mock_pystray.Menu.SEPARATOR = mock.MagicMock()
             tray._menu._build_ide_setup_menu_items()
-            item_names = [
-                call[0][0] for call in mock_pystray.MenuItem.call_args_list[:-1]
-            ]
+            item_names = []
+            for call in mock_pystray.MenuItem.call_args_list[:-1]:
+                label = call[0][0]
+                if callable(label):
+                    label = label(None)[2:]
+                    if label.startswith(("✓ ", "? ")):
+                        label = label[2:]
+                    label = "  " + label.split(" (Cfg ", 1)[0]
+                item_names.append(label)
             assert "Manual setup (specific IDE)" in item_names
             assert "  Create Config..." in item_names
             assert "  Cursor Cloud (project setup)..." in item_names
@@ -1162,9 +1317,21 @@ class TestIDESetupMenu:
             mock_pystray.Menu.SEPARATOR = mock.MagicMock()
             tray._menu._build_ide_setup_menu_items()
 
-            item_names = [call[0][0] for call in mock_pystray.MenuItem.call_args_list]
+            item_names = []
+            for call in mock_pystray.MenuItem.call_args_list:
+                label = call[0][0]
+                if callable(label):
+                    label = label(None)[2:]
+                    if label.startswith(("✓ ", "? ")):
+                        label = label[2:]
+                    label = "  " + label.split(" (Cfg ", 1)[0]
+                item_names.append(label)
 
-        indented_names = [name for name in item_names if name.startswith("  ")]
+        indented_names = [
+            name
+            for name in item_names
+            if isinstance(name, str) and name.startswith("  ")
+        ]
         primary_names = [
             name[2:]
             for name in indented_names

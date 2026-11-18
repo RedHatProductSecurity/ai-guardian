@@ -85,6 +85,17 @@ The MCP Proactive submenu includes `low`, `medium`, `high`, and `paused`.
 Daemon pauses temporarily use the `paused` effective state without changing the
 saved proactive level; hooks continue enforcing security.
 
+The global **IDE/CLI Setup...** submenu enables setup entries only when the
+integration is detected; undetected or unavailable checks leave the entry
+disabled. CLI availability is checked against the current `PATH` when the menu
+opens, with cached IDE/config evidence as a fallback for integrations such as
+OpenCode and Pi. IDE-only detection uses available IDE/config artifacts, so an
+installed IDE without those artifacts may remain disabled until it can be
+detected. A configured integration adds **(Cfg ✓)** only after required hooks
+and applicable MCP registration are verified healthy. Hook/MCP verification
+and IDE discovery continue in the background; opening the submenu does not run
+those checks. The submenu legend explains the state.
+
 **About** shows **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**,
 without displaying the full profile URL, alongside the existing
 version, system, scanner and repository details. With Tk available, click the

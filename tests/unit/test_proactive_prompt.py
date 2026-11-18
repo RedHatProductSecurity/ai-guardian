@@ -96,6 +96,121 @@ def test_sync_ide_setup_state_records_current_reality_and_keeps_history(tmp_path
     assert saved["ide_setup_status"] == snapshot
 
 
+def test_sync_ide_setup_state_separates_cli_availability_and_setup_health(tmp_path):
+    class FakeIDESetup:
+        IDE_CONFIGS = {
+            "claude": {"name": "Claude Code"},
+            "codex": {"name": "OpenAI Codex"},
+            "cursor": {"name": "Cursor IDE"},
+        }
+
+        def list_installed_ides(self):
+            return ["claude", "cursor"]
+
+        def verify_ide_setup(self, ide_type):
+            if ide_type == "cursor":
+                raise OSError("verification unavailable")
+            return {"healthy": ide_type == "claude", "events": {}}
+
+    def which(executable):
+        if executable in {"claude", "codex"}:
+            return f"/usr/bin/{executable}"
+        if executable == "agy":
+            raise OSError("PATH lookup unavailable")
+        return None
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    with patch("ai_guardian.tray.proactive_prompt.shutil.which", side_effect=which):
+        snapshot = sync_ide_setup_state(state=state, setup=FakeIDESetup())
+
+    statuses = snapshot["tray_status"]
+    assert statuses["claude"] == {
+        "cli": "installed",
+        "ide_detected": True,
+        "setup": "configured",
+    }
+    assert statuses["codex"] == {
+        "cli": "installed",
+        "ide_detected": False,
+        "setup": "needs_setup",
+    }
+    assert statuses["cursor"] == {
+        "cli": "not_applicable",
+        "ide_detected": True,
+        "setup": "unknown",
+    }
+    assert statuses["gemini"] == {
+        "cli": "not_installed",
+        "ide_detected": False,
+        "setup": "not_detected",
+    }
+    assert statuses["antigravity"] == {
+        "cli": "unknown",
+        "ide_detected": False,
+        "setup": "unknown",
+    }
+    assert statuses["cline"] == {
+        "cli": "not_applicable",
+        "ide_detected": False,
+        "setup": "not_detected",
+    }
+
+    # CLI-only detection is separate from the older installed-IDE prompt list.
+    assert snapshot["installed"] == ["claude", "cursor"]
+    assert snapshot["needs_setup"] == ["cursor"]
+
+
+def test_sync_ide_setup_state_keeps_cli_result_when_install_discovery_fails(tmp_path):
+    class FakeIDESetup:
+        def list_installed_ides(self):
+            raise OSError("IDE discovery unavailable")
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    with patch(
+        "ai_guardian.tray.proactive_prompt.shutil.which",
+        side_effect=lambda executable: (
+            "/usr/bin/claude" if executable == "claude" else None
+        ),
+    ):
+        snapshot = sync_ide_setup_state(state=state, setup=FakeIDESetup())
+
+    assert snapshot["error"] == "IDE discovery unavailable"
+    assert snapshot["tray_status"]["claude"] == {
+        "cli": "installed",
+        "ide_detected": None,
+        "setup": "unknown",
+    }
+    assert snapshot["tray_status"]["cursor"] == {
+        "cli": "not_applicable",
+        "ide_detected": None,
+        "setup": "unknown",
+    }
+
+
+def test_tray_health_keeps_partial_cli_snapshot_after_setup_discovery_failure(
+    tmp_path,
+):
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    snapshot = {
+        "error": "IDE discovery unavailable",
+        "tray_status": {"claude": {"cli": "installed", "setup": "unknown"}},
+    }
+    monitor = TrayHealthMonitor(SimpleNamespace(_standalone=False, _targets=[]))
+
+    with (
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptState", return_value=state
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.sync_ide_setup_state",
+            return_value=snapshot,
+        ),
+    ):
+        assert monitor._refresh_ide_setup_state() is None
+
+    assert monitor._ide_setup_snapshot is snapshot
+
+
 def test_sync_ide_setup_state_replaces_stale_snapshot_with_new_codex(tmp_path):
     class FakeIDESetup:
         IDE_CONFIGS = {"claude": {"name": "Claude Code"}, "codex": {"name": "Codex"}}

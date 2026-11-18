@@ -10,6 +10,7 @@ import logging
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -23,6 +24,7 @@ from ai_guardian.daemon.about import AUTHOR_HANDLE, AUTHOR_URL
 from ai_guardian.ide_registry import (
     SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
     SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
+    get_ide_integration,
 )
 from ai_guardian.openshell_policy import (
     NO_POLICY_CHOICE,
@@ -3693,6 +3695,18 @@ class TrayMenuBuilder:
             return action
 
         ide_items = [
+            pystray.MenuItem("Status legend", None),
+            pystray.MenuItem(
+                "Enabled = installation detected · disabled = not detected or check unavailable",
+                None,
+                enabled=False,
+            ),
+            pystray.MenuItem(
+                "(Cfg ✓) = hooks/MCP healthy · (Cfg ?) = check failed · no Cfg = not verified healthy",
+                None,
+                enabled=False,
+            ),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Check hooks/MCP installation...",
                 self._tray._health._on_check_ide_setup,
@@ -3703,6 +3717,65 @@ class TrayMenuBuilder:
 
         def _ide_display_name(ide_key, ide_cfg):
             return "Cursor IDE/CLI" if ide_key == "cursor" else ide_cfg["name"]
+
+        def _ide_installation_status(ide_key):
+            """Return current CLI availability or cached IDE/config evidence."""
+            integration = get_ide_integration(ide_key)
+            snapshot = getattr(self._tray._health, "_ide_setup_snapshot", None)
+            statuses = (
+                snapshot.get("tray_status", {}) if isinstance(snapshot, dict) else {}
+            )
+            status = statuses.get(ide_key, {}) if isinstance(statuses, dict) else {}
+            if integration is None:
+                return "unknown"
+            if integration.cli_capable:
+                try:
+                    cli_installed = any(
+                        shutil.which(executable)
+                        for executable in integration.cli_executables
+                    )
+                except Exception as exc:
+                    logger.debug(
+                        "Unable to check %s CLI availability in tray menu: %s",
+                        ide_key,
+                        exc,
+                    )
+                    cli_installed = None
+
+                # A tray launched outside the user's interactive shell may not
+                # inherit PATH entries for an installed CLI. Preserve the
+                # setup detector's independent IDE/config evidence as a
+                # positive installation signal (not as setup-health evidence).
+                if cli_installed is True or status.get("ide_detected") is True:
+                    return "installed"
+                if cli_installed is False:
+                    return "not_installed"
+                return status.get("cli", "unknown")
+            ide_detected = status.get("ide_detected")
+            if ide_detected is True:
+                return "installed"
+            if ide_detected is False:
+                return "not_installed"
+            return "unknown"
+
+        def _ide_status_label(ide_key, ide_label):
+            """Render verified setup state from the cached health snapshot."""
+            snapshot = getattr(self._tray._health, "_ide_setup_snapshot", None)
+            statuses = (
+                snapshot.get("tray_status", {}) if isinstance(snapshot, dict) else {}
+            )
+            status = statuses.get(ide_key, {}) if isinstance(statuses, dict) else {}
+
+            setup_status = status.get("setup", "unknown")
+            config_indicator = {
+                "configured": " (Cfg ✓)",
+                "unknown": " (Cfg ?)",
+            }.get(setup_status, "")
+            return f"  {ide_label}{config_indicator}"
+
+        def _ide_setup_action_enabled(ide_key):
+            """Enable setup only when the cached check detects the integration."""
+            return _ide_installation_status(ide_key) == "installed"
 
         # Dummy Agent is an internal hook-testing harness, not a user-facing
         # IDE/CLI integration with a manual setup flow.
@@ -3715,7 +3788,13 @@ class TrayMenuBuilder:
         ):
             ide_label = _ide_display_name(ide_key, ide_cfg)
             ide_items.append(
-                pystray.MenuItem(f"  {ide_label}", _mk_ide_action(ide_key))
+                pystray.MenuItem(
+                    lambda _item, key=ide_key, label=ide_label: _ide_status_label(
+                        key, label
+                    ),
+                    _mk_ide_action(ide_key),
+                    enabled=lambda _item, key=ide_key: _ide_setup_action_enabled(key),
+                )
             )
             if ide_key == "cursor":
                 ide_items.append(

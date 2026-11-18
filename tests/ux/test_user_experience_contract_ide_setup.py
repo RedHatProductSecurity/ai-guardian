@@ -840,6 +840,167 @@ def test_cursor_cloud_setup_requires_explicit_project_selection():
     )
 
 
+def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status():
+    """
+    USER EXPERIENCE: Setup submenu -> see CLI availability and AI Guardian
+    health independently without delaying menu opening.
+
+    Scenario:
+    1. The tray has a cached health snapshot from its background check.
+    2. The user opens IDE/CLI Setup while some integrations are healthy,
+       incomplete, not detected, or have an unavailable check.
+    3. A missing CLI disables only that CLI integration's setup entry.
+
+    Expected User Experience:
+    - CLI availability and verified AI Guardian setup use separate indicators.
+    - A configured indicator means required hooks and applicable MCP are healthy.
+    - Only detected installations have enabled setup entries; a leading install
+      checkmark is not used.
+    - Configured entries add (Cfg ✓) only after verified hook/MCP health.
+    - Undetected or unknown installations are disabled; the legend explains why.
+    - Opening the submenu checks CLI availability against the current PATH but
+      does not run hook/MCP verification or IDE discovery.
+    - OpenCode and Pi stay enabled when their installation is detected from
+      IDE/config evidence even if the tray's PATH lacks their executable.
+    """
+    health = SimpleNamespace(
+        _ide_setup_snapshot={
+            "tray_status": {
+                "claude": {"cli": "installed", "setup": "configured"},
+                "codex": {"cli": "installed", "setup": "needs_setup"},
+                "gemini": {"cli": "not_installed", "setup": "not_detected"},
+                "opencode": {
+                    "cli": "not_installed",
+                    "ide_detected": True,
+                    "setup": "needs_setup",
+                },
+                "pi": {
+                    "cli": "not_installed",
+                    "ide_detected": True,
+                    "setup": "needs_setup",
+                },
+                "cursor": {
+                    "cli": "not_applicable",
+                    "ide_detected": True,
+                    "setup": "unknown",
+                },
+                "copilot": {"cli": "unknown", "setup": "unknown"},
+                "cline": {
+                    "cli": "not_applicable",
+                    "ide_detected": False,
+                    "setup": "not_detected",
+                },
+            }
+        },
+        _on_check_ide_setup=lambda *_: None,
+        _refresh_ide_setup_state=MagicMock(
+            side_effect=AssertionError("opening the menu must not run checks")
+        ),
+    )
+    builder = TrayMenuBuilder(SimpleNamespace(_health=health, _targets=[]))
+
+    with (
+        patch("ai_guardian.tray.app.pystray", create=True) as pystray,
+        patch("ai_guardian.tray.menu_builder.pystray", new=pystray),
+        patch("ai_guardian.tray.plugin_runner.pystray", new=pystray),
+        patch("ai_guardian.tray.menu_builder.shutil.which", return_value=None),
+    ):
+        pystray.MenuItem = MagicMock()
+        pystray.Menu = MagicMock()
+        pystray.Menu.SEPARATOR = MagicMock()
+        builder._build_ide_setup_menu_items()
+        calls = pystray.MenuItem.call_args_list
+
+    dynamic_rows = {
+        call.args[0](None): call for call in calls if callable(call.args[0])
+    }
+    assert "  Claude Code (Cfg ✓)" in dynamic_rows
+    assert "  OpenAI Codex (CLI + Desktop)" in dynamic_rows
+    assert "  Google Gemini CLI" in dynamic_rows
+    assert "  OpenCode" in dynamic_rows
+    assert "  Pi" in dynamic_rows
+    assert "  Cursor IDE/CLI (Cfg ?)" in dynamic_rows
+    assert "  GitHub Copilot (Cfg ?)" in dynamic_rows
+    assert "  Cline" in dynamic_rows
+    assert all(callable(call.args[1]) for call in dynamic_rows.values())
+    with patch(
+        "ai_guardian.tray.menu_builder.shutil.which",
+        side_effect=lambda executable: (
+            f"/usr/bin/{executable}" if executable in {"claude", "codex"} else None
+        ),
+    ):
+        assert dynamic_rows["  Google Gemini CLI"].kwargs["enabled"](None) is False
+        assert dynamic_rows["  Claude Code (Cfg ✓)"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  OpenCode"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  Pi"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  Cursor IDE/CLI (Cfg ?)"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  GitHub Copilot (Cfg ?)"].kwargs["enabled"](None) is False
+        assert dynamic_rows["  Cline"].kwargs["enabled"](None) is False
+
+    labels = [call.args[0] for call in calls if not callable(call.args[0])]
+    assert "Status legend" in labels
+    assert (
+        "Enabled = installation detected · disabled = not detected or check unavailable"
+        in labels
+    )
+    assert (
+        "(Cfg ✓) = hooks/MCP healthy · (Cfg ?) = check failed · no Cfg = not verified healthy"
+        in labels
+    )
+    assert "Check hooks/MCP installation..." in labels
+
+    # Replacing the cache updates the already-built item's next rendered label.
+    claude_label = next(
+        call.args[0]
+        for call in calls
+        if callable(call.args[0]) and call.args[0](None).startswith("  Claude Code")
+    )
+    health._ide_setup_snapshot = {
+        "tray_status": {"claude": {"cli": "installed", "setup": "needs_setup"}}
+    }
+    assert claude_label(None) == "  Claude Code"
+    health._refresh_ide_setup_state.assert_not_called()
+
+
+def test_remote_only_tray_refreshes_local_setup_status_without_auto_prompting():
+    """
+    USER EXPERIENCE: Remote-only tray -> refresh workstation setup indicators
+    without showing automatic local setup prompts.
+
+    Scenario:
+    1. The tray controls a container daemon but no local daemon.
+    2. Its background health worker refreshes IDE/CLI status for the workstation.
+    3. Automatic setup prompts remain restricted to local-daemon trays.
+
+    Expected User Experience:
+    - The global IDE/CLI Setup submenu can show current local status.
+    - Refresh runs in the existing background check, not while opening the menu.
+    - No automatic setup prompt is opened for a remote-only tray.
+    """
+    tray = SimpleNamespace(
+        _standalone=False,
+        _targets=[SimpleNamespace(runtime="container")],
+    )
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state") as refresh,
+        patch.object(
+            monitor,
+            "_get_installed_ides",
+            side_effect=AssertionError("remote-only tray must not prompt"),
+        ),
+        patch.object(
+            monitor,
+            "_get_unconfigured_ides",
+            side_effect=AssertionError("remote-only tray must not prompt"),
+        ),
+    ):
+        monitor._check_ide_setup_notification()
+
+    refresh.assert_called_once_with(include_excluded=False)
+
+
 def test_first_run_setup_offers_profile_and_configures_before_hooks():
     """
     USER EXPERIENCE: First-run setup -> choose a profile before hook setup.

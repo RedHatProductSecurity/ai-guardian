@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Tray integration status indicators (#2771):** Show detected CLI/IDE status
+  through enabled/disabled setup entries, show verified AI Guardian hook/MCP
+  health separately, and disable setup when installation is not detected.
 - **MCP version query and CLI smoke coverage (#2764):** Expose the installed
   AI Guardian package version through `get_version` and verify a native agent
   CLI calls the configured MCP tool and receives a correlated MCP result

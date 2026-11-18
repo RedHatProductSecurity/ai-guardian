@@ -9,11 +9,13 @@ notifications to share the same snooze/dismiss behavior.
 import json
 import logging
 import os
+import shutil
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
 
+from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
 from ai_guardian.ui.display import (
     _ensure_tcl_library,
     get_preferred_ui,
@@ -42,6 +44,23 @@ IDE_SETUP_STATUS_KEY = "ide_setup_status"
 IDE_SETUP_KEY_PREFIX = "ide_setup_"
 
 _PROFILE_NOT_SELECTED = object()
+
+
+def _cli_installation_status(integration):
+    """Return PATH-based CLI availability without invoking the executable."""
+    if not integration.cli_capable:
+        return "not_applicable"
+    if not integration.cli_executables:
+        logger.warning("CLI integration %s has no executable metadata", integration.key)
+        return "unknown"
+
+    try:
+        if any(shutil.which(executable) for executable in integration.cli_executables):
+            return "installed"
+    except Exception as exc:
+        logger.warning("Unable to check %s CLI availability: %s", integration.key, exc)
+        return "unknown"
+    return "not_installed"
 
 
 def _state_path() -> Path:
@@ -246,16 +265,37 @@ def sync_ide_setup_state(
 
         setup = IDESetup()
 
+    cli_statuses = {
+        integration.key: _cli_installation_status(integration)
+        for integration in SUPPORTED_IDE_REGISTRY
+    }
+    unknown_tray_status = {
+        integration.key: {
+            "cli": cli_statuses[integration.key],
+            "ide_detected": None,
+            "setup": "unknown",
+        }
+        for integration in SUPPORTED_IDE_REGISTRY
+    }
+
     try:
         installed = setup.list_installed_ides()
     except Exception as exc:
         logger.warning("Unable to sync IDE setup state: %s", exc)
-        return {"path": str(state.path), "error": str(exc)}
+        return {
+            "path": str(state.path),
+            "error": str(exc),
+            "tray_status": unknown_tray_status,
+        }
 
     if not isinstance(installed, (list, tuple, set)):
         error = "IDE setup discovery returned an invalid result"
         logger.warning(error)
-        return {"path": str(state.path), "error": error}
+        return {
+            "path": str(state.path),
+            "error": error,
+            "tray_status": unknown_tray_status,
+        }
 
     installed = [ide for ide in installed if isinstance(ide, str)]
     exclusions = state.get_ide_setup_exclusions()
@@ -269,8 +309,18 @@ def sync_ide_setup_state(
     if not isinstance(previous_integrations, dict):
         previous_integrations = {}
     integrations = {}
+    verifications = {}
+    ide_config_keys = set(ide_configs) if isinstance(ide_configs, dict) else set()
+    verification_ids = list(installed)
+    verification_ids.extend(
+        integration.key
+        for integration in SUPPORTED_IDE_REGISTRY
+        if cli_statuses[integration.key] == "installed"
+        and integration.key in ide_config_keys
+        and integration.key not in verification_ids
+    )
 
-    for ide_type in installed:
+    for ide_type in verification_ids:
         config = ide_configs.get(ide_type, {})
         previous_verification = previous_integrations.get(ide_type)
         if skip_excluded and ide_type in exclusions:
@@ -313,7 +363,35 @@ def sync_ide_setup_state(
         current = dict(verification)
         current["name"] = config.get("name", ide_type)
         current["excluded"] = ide_type in exclusions
-        integrations[ide_type] = current
+        verifications[ide_type] = current
+        if ide_type in installed:
+            integrations[ide_type] = current
+
+    tray_status = {}
+    for integration in SUPPORTED_IDE_REGISTRY:
+        ide_type = integration.key
+        cli_status = cli_statuses[ide_type]
+        ide_detected = ide_type in installed
+        if not ide_detected and cli_status != "installed":
+            setup_status = "unknown" if cli_status == "unknown" else "not_detected"
+        else:
+            menu_verification = verifications.get(ide_type)
+            if (
+                not isinstance(menu_verification, dict)
+                or menu_verification.get("verification_skipped")
+                or menu_verification.get("error")
+                or not isinstance(menu_verification.get("healthy"), bool)
+            ):
+                setup_status = "unknown"
+            elif menu_verification["healthy"]:
+                setup_status = "configured"
+            else:
+                setup_status = "needs_setup"
+        tray_status[ide_type] = {
+            "cli": cli_status,
+            "ide_detected": ide_detected,
+            "setup": setup_status,
+        }
 
     configured = [
         ide_type
@@ -335,6 +413,7 @@ def sync_ide_setup_state(
         "needs_setup": needs_setup,
         "never_install": sorted(exclusions),
         "integrations": integrations,
+        "tray_status": tray_status,
     }
     state.update_ide_setup_status(snapshot)
     return snapshot
