@@ -335,6 +335,31 @@
 
 ## Key Learnings
 
+- **2026-11-17 — Synthetic executable paths in tests (#2764):** `proxy.sys` is
+  normally the process-wide `sys` module. To test Windows executable strings on
+  any host, replace the proxy module's `sys` binding with a small namespace instead
+  of monkeypatching `sys.executable`; test fixtures should not mutate interpreter
+  identity globally.
+
+- **2026-11-17 — Windows config proxy substitutions (#2764):** Python
+  `re.Pattern.sub` treats backslashes in string replacements as replacement
+  syntax. Use a callback when inserting serialized Windows paths into TOML or
+  generated TypeScript. Tests of JSON/TOML/JSON-in-source configs should parse
+  the serialized value before asserting paths, rather than compare raw text.
+
+- **2026-11-17 — Grok/OpenCode V2 MCP smoke evidence (#2764):** Grok exposes
+  server tools through `search_tool`/`use_tool`; require an issued search result
+  with the exact qualified name and schema before modeling dispatch, and headless
+  Grok needs a narrow allow for the exact MCP tool. Replace the full value of
+  multiline TOML arrays when wrapping a server command. OpenCode V2 defaults
+  per-server `codemode` to true; set it false only in the smoke that qualifies
+  direct native MCP transport. Its server uses authenticated `/api/info` for
+  readiness (V1 `/global/health` falls through to HTML), and `opencode run
+  --server URL` places `--server` after `run` with no V1 `--dir`. V2's MCP catalog
+  is populated when the first session starts, so warm the persistent backend with
+  a clean session before waiting for its correlated `tools/list`. Clients with
+  provider continuations must retain correlated provider result counters instead
+  of overwriting them with an absent stdio witness.
 - **2026-11-17 — Unified violation logging boundary (#2759):** PostToolUse
   sensitive-privacy tests should intercept `hook_events.post_tool_use.log_violation`;
   that wrapper routes secret/PII categories to the minimal logger before it reaches

@@ -110,13 +110,16 @@ def test_seven_client_audit_has_versions_sources_priorities_and_no_runtime_claim
 
 @pytest.mark.parametrize("cli", ("grok", "goose"))
 def test_partial_profiles_never_run_prompt_or_sensitive_output_enforcement(cli, runner):
-    assert {case.name for case in runner.smoke_cases(cli)} == {
+    expected_cases = {
         "ssrf",
         "config_exfil",
         "command_credential",
         "clean_tool",
         "allowed",
     }
+    if cli == "grok":
+        expected_cases.add("mcp_version")
+    assert {case.name for case in runner.smoke_cases(cli)} == expected_cases
     assert not set(runner.OUTPUT_CASES - {"clean_tool"}).intersection(
         case.name for case in runner.smoke_cases(cli)
     )
@@ -272,12 +275,12 @@ def test_blocked_clients_exit_nonzero_before_any_runtime_or_installation(
 @pytest.mark.parametrize(
     "output,exit_code,expected",
     [
-        ("grok 1.0.41\n", 0, True),
-        ("1.0.41\n", 0, True),
-        ("grok 1.0.42\nprivate diagnostic", 0, False),
-        ("grok 1.0.41-beta.1\n", 0, False),
-        ("grok 1.0.41+unreviewed\n", 0, False),
-        ("grok 1.0.41\n", 1, False),
+        ("grok 1.0.63\n", 0, True),
+        ("1.0.63\n", 0, True),
+        ("grok 1.0.64\nprivate diagnostic", 0, False),
+        ("grok 1.0.63-beta.1\n", 0, False),
+        ("grok 1.0.63+unreviewed\n", 0, False),
+        ("grok 1.0.63\n", 1, False),
         ("unknown private diagnostic", 0, False),
     ],
 )
@@ -311,9 +314,12 @@ def test_grok_invocation_uses_local_model_without_granting_native_hook_trust(run
         "--dangerously-skip-permissions",
     }.intersection(command)
     assert runner.build_agent_environment("grok") == [
+        f"AI_GUARDIAN_MCP_EVIDENCE_FILE={runner.STATE_DIR}/mcp_version_rpc.jsonl",
         "GROK_HOME=/sandbox/.grok",
         f"XAI_API_KEY={runner.MOCK_KEY}",
     ]
+    assert "grok" in runner.MCP_EVIDENCE_PROXY_SMOKE_CLIS
+    assert runner.MCP_VERSION_CASES == frozenset({"mcp_version"})
     with pytest.raises(ValueError, match="Grok's default agent"):
         runner._validate_agent("grok", "unreviewed-agent")
 
@@ -418,14 +424,21 @@ def test_grok_supplied_image_lifecycle_runs_only_partial_cases_and_cleans_up(
         ]
     ) == (0 if version_ok else 1)
     assert cases == (
-        ["ssrf", "config_exfil", "command_credential", "clean_tool", "allowed"]
+        [
+            "ssrf",
+            "config_exfil",
+            "command_credential",
+            "clean_tool",
+            "mcp_version",
+            "allowed",
+        ]
         if version_ok
         else []
     )
     assert any(command[1:3] == ["sandbox", "delete"] for command in commands)
     assert not any(command[1:3] == ["image", "rm"] for command in commands)
     assert list(owned_parent.iterdir()) == []
-    assert (
-        "prompt denial and sensitive-output containment are NOT QUALIFIED"
-        in capsys.readouterr().out
-    )
+    output = capsys.readouterr().out
+    assert "prompt denial and sensitive-output containment are NOT QUALIFIED" in output
+    if version_ok:
+        assert "Agent CLI pre-tool subset and MCP version check passed." in output

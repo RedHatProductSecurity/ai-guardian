@@ -304,7 +304,7 @@ class TestContainerLaunchers:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
 
         assert "ARG OPENCODE_VERSION=1.19.0" in dockerfile
-        assert "ARG GROK_VERSION=1.0.41" in dockerfile
+        assert "ARG GROK_VERSION=1.0.63" in dockerfile
         assert '"@xai-official/grok@${GROK_VERSION}"' in dockerfile
         assert "grok --version" in dockerfile
         assert "XAI_API_KEY" in RUN_SCRIPT.read_text(encoding="utf-8")

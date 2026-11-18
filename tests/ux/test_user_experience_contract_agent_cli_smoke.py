@@ -67,6 +67,21 @@ Manual qualification on Linux/macOS Podman:
     containment remain NOT QUALIFIED. Require native issued-result correlation,
     denied-command non-execution, and clean execution/continuation, not offers or
     passive hook observations alone. Grok's version must match the reviewed pin.
+20. Full smoke lanes and Grok call the configured AI Guardian `get_version` MCP
+    tool. The OpenCode V2 smoke sets `codemode: false` on that server to qualify
+    its direct native MCP tool rather than Code Mode's `execute` interpreter.
+    Grok uses its native `search_tool` → `use_tool` continuation; dispatch requires
+    the issued search result to identify the exact qualified tool name and schema.
+    Its `use_tool` result stays local and is verified by the smoke-only stdio witness.
+    Require a model-facing offer, an issued call, a correlated result, and an exact
+    match with the installed server executable's version. Clients whose MCP result
+    stays local must also produce the smoke-only stdio witness. Preserve the
+    provider-issued-call count separately so the witness cannot erase whether the
+    mock issued a tool call. Assistant text alone is never evidence.
+    If a CLI times out or exits nonzero after the matched
+    MCP response, only this capability can pass, and that process outcome is
+    reported. Goose's `--no-mcp` lane reports this capability as UNSUPPORTED,
+    never PASS.
 """
 
 import importlib.util
@@ -858,15 +873,29 @@ def test_partial_coverage_does_not_claim_prompt_or_output_enforcement(
     assert capsys.readouterr().out.strip() == (
         f"[agent-cli-test] LIMIT {cli}: pre-tool subset only; prompt denial and "
         "sensitive-output containment are NOT QUALIFIED. Clean post-tool events "
-        "are observation evidence."
+        "are observation evidence. The MCP version check is a separate capability result."
     )
-    assert {case.name for case in runner.smoke_cases(cli)} == {
+    expected_cases = {
         "ssrf",
         "config_exfil",
         "command_credential",
         "clean_tool",
         "allowed",
     }
+    if cli == "grok":
+        expected_cases.add("mcp_version")
+    assert {case.name for case in runner.smoke_cases(cli)} == expected_cases
+
+
+def test_goose_mcp_version_is_explicitly_unsupported_not_a_pass(runner, capsys):
+    runner._report_unsupported_mcp_version("goose")
+
+    output = capsys.readouterr().out.strip()
+    assert output == (
+        "[agent-cli-test] UNSUPPORTED mcp_version for goose: smoke intentionally "
+        "disables MCP; this is not a pass."
+    )
+    assert "PASS mcp_version" not in output
 
 
 @pytest.mark.parametrize("cli", ("grok", "goose"))
@@ -919,7 +948,7 @@ def test_unreviewed_grok_version_never_qualifies_by_running_a_different_version(
     )
     assert not runner._verify_grok_version("docker", "owned", 30)
     assert capsys.readouterr().out.strip() == (
-        "FAIL Grok: the image must contain audited Grok 1.0.41; no image was rebuilt."
+        "FAIL Grok: the image must contain audited Grok 1.0.63; no image was rebuilt."
     )
 
 

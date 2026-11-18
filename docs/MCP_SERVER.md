@@ -202,6 +202,7 @@ also be returned. An MCP startup failure reports `startup_failure` or
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
 | `get_violations` | `violation_type?`, `limit?` | violation list with file:line, policy decision, optional safe input diagnostics/correlation | Recent security violations |
+| `get_version` | — | installed AI Guardian package version | Check package/runtime version |
 | `get_config` | `project_dir?` | feature enabled/disabled map | Current security posture |
 | `get_scanner_status` | — | installed scanners + versions | Scanner inventory |
 | `get_scanner_supported` | — | all available scanners | What can be installed |

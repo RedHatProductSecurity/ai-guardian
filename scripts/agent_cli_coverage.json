@@ -20,7 +20,7 @@
     "grok": {
       "runner": "pre-tool-only",
       "ci_steps": ["grok_smoke"],
-      "reviewed_versions": ["1.0.41"],
+      "reviewed_versions": ["1.0.63"],
       "blocker": null,
       "audit": "grok"
     },

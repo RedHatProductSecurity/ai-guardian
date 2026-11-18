@@ -28,6 +28,8 @@ RUNNER_HOST_IS_LINUX = sys.platform.startswith("linux")
 CONTAINER_DIR = ROOT / "container"
 STRICT_PROFILE = ROOT / "src/ai_guardian/templates/profiles/strict.json"
 MOCK_PROVIDER = Path(__file__).with_name("agent_cli_mock_provider.py")
+MCP_EVIDENCE_PROXY = Path(__file__).with_name("agent_cli_mcp_proxy.py")
+MCP_EVIDENCE_PROXY_CONTAINER = "/tmp/ai_guardian_agent_cli_mcp_proxy.py"
 SMOKE_FIREWALL = Path(__file__).with_name("agent_cli_smoke_firewall.py")
 SMOKE_GATE = Path(__file__).with_name("agent_cli_smoke_gate.py")
 FIREWALL_IMAGE_LABEL = "nftables-v1"
@@ -40,7 +42,7 @@ MOCK_GEMINI_MODEL = "gemini-2.5-flash"
 MOCK_URL = f"http://127.0.0.1:{MOCK_PORT}/v1"
 MOCK_ANTHROPIC_BASE_URL = f"http://127.0.0.1:{MOCK_PORT}"
 MOCK_KEY = "ai-guardian-local-smoke-only"
-GROK_VERSION = "1.0.41"
+GROK_VERSION = "1.0.63"
 GOOSE_VERSION = "1.59.0"
 RUNNABLE_CLI_NAMES = ("claude", "codex", "gemini", "opencode", "pi", "grok", "goose")
 BLOCKED_SMOKE_CLIS = {
@@ -51,6 +53,13 @@ BLOCKED_SMOKE_CLIS = {
     "crush": "license_review_required",
 }
 PARTIAL_SMOKE_CLIS = frozenset({"grok", "goose"})
+MCP_VERSION_CASES = frozenset({"mcp_version"})
+# Keep this explicit: adding a runnable CLI must not silently claim MCP support.
+# Goose's isolated smoke setup deliberately uses --no-mcp.
+MCP_VERSION_SMOKE_CLIS = ("claude", "codex", "gemini", "opencode", "pi", "grok")
+# These clients keep MCP results inside local stdio rather than forwarding them
+# in a provider continuation. Grok's `use_tool` result remains local as well.
+MCP_EVIDENCE_PROXY_SMOKE_CLIS = frozenset({"gemini", "grok", "opencode", "pi"})
 # Goose is host-only in the product registry. Its smoke uses a supplied,
 # disposable test image, not the supported sandbox create/entrypoint path.
 PRE_TOOL_SMOKE_CASE_NAMES = frozenset(
@@ -171,6 +180,14 @@ CASES = (
         "AGENT_CLI_SMOKE_CASE: tool_output_pii\nRun the local diagnostic requested by the test provider.",
         "sensitive_finding",
         True,
+    ),
+    SmokeCase(
+        "mcp_version",
+        "AGENT_CLI_SMOKE_CASE: mcp_version\n"
+        "using ai-guardian mcp tell me what is ai-guardian version",
+        None,
+        True,
+        MCP_VERSION_SMOKE_CLIS,
     ),
     SmokeCase(
         "allowed",
@@ -448,12 +465,13 @@ print(json.dumps(p.get('requests',{}),sort_keys=True))
 """
 
 _READ_TOOL_EVIDENCE = r"""
-import json,sys,urllib.request
+import collections,json,sys,urllib.request
 from pathlib import Path
 case=sys.argv[2]
 if case not in ('ssrf','config_exfil','command_credential','http_request_credential',
                 'http_request_credential_clean','http_request_credential_js',
-                'http_request_credential_ts_clean','clean_tool','tool_output_secret','tool_output_pii'):
+                'http_request_credential_ts_clean','clean_tool','tool_output_secret','tool_output_pii',
+                'mcp_version'):
     raise SystemExit(1)
 opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with opener.open(sys.argv[1],timeout=2) as r: stats=json.loads(r.read())
@@ -490,6 +508,30 @@ for name in ('write',):
     out['native_file_write_tool_name_'+name]=value if type(value) is int and value >= 0 else 0
 # Process-wide total: a prior delivery failure must never become a new baseline.
 out['raw_tool_output_requests']=sum(stats['raw_tool_output_requests'].values())
+for key in ('mcp_version_tool_offers','mcp_version_tool_calls',
+            'mcp_version_tool_results','mcp_version_matches','mcp_version_mismatches'):
+    values=stats.get(key,{})
+    out[key]=values.get(case,0) if isinstance(values,dict) else 0
+# Keep the mock-issued provider call separate from the client's actual MCP RPC.
+out['mcp_version_provider_calls']=out['mcp_version_tool_calls']
+out['mcp_version_rpc_calls']=0
+# Clients that keep MCP results local need the stdio witness; clients that forward
+# correlated tool results use provider evidence for the actual call/result.
+if case == 'mcp_version' and sys.argv[4] == '1':
+    rpc_events=collections.Counter()
+    evidence=Path(sys.argv[3])
+    if evidence.is_file():
+        for line in evidence.read_text(encoding='utf-8').splitlines():
+            try: item=json.loads(line)
+            except json.JSONDecodeError: continue
+            event=item.get('event')
+            if event in ('mcp_call','mcp_result_match','mcp_result_mismatch'):
+                rpc_events[event]+=1
+    out['mcp_version_rpc_calls']=rpc_events['mcp_call']
+    out['mcp_version_tool_calls']=rpc_events['mcp_call']
+    out['mcp_version_tool_results']=rpc_events['mcp_result_match']+rpc_events['mcp_result_mismatch']
+    out['mcp_version_matches']=rpc_events['mcp_result_match']
+    out['mcp_version_mismatches']=rpc_events['mcp_result_mismatch']
 path=Path('/sandbox/repo/.agent-cli-smoke-results')/(case+'.executed')
 out['executed']=int(path.is_file() and path.read_text(encoding='ascii') == 'executed\n')
 written_paths={
@@ -503,12 +545,24 @@ print(json.dumps(out,sort_keys=True))
 """
 
 _READ_OPENCODE_HEALTH = r"""
-import json,sys,urllib.request
+import base64,json,os,sys,urllib.request
 try:
-  with urllib.request.urlopen(sys.argv[1],timeout=2) as r: p=json.loads(r.read())
+  request=urllib.request.Request(sys.argv[1])
+  password=os.environ.get('OPENCODE_SERVER_PASSWORD')
+  if password:
+    username=os.environ.get('OPENCODE_SERVER_USERNAME','opencode')
+    token=base64.b64encode((username+':'+password).encode()).decode('ascii')
+    request.add_header('Authorization','Basic '+token)
+  with urllib.request.urlopen(request,timeout=2) as r: p=json.loads(r.read())
 except (OSError,json.JSONDecodeError):
   raise SystemExit(1)
-raise SystemExit(0 if p.get('healthy') is True else 1)
+if sys.argv[2] == 'v2':
+  ready=(isinstance(p,dict) and isinstance(p.get('version'),str)
+         and bool(p['version']) and isinstance(p.get('capabilities'),dict)
+         and isinstance(p.get('paths'),dict))
+else:
+  ready=isinstance(p,dict) and p.get('healthy') is True
+raise SystemExit(0 if ready else 1)
 """
 
 _READ_REST_STATE = r"""
@@ -626,6 +680,9 @@ def build_create_command(
     if cli_name == "codex":
         command.extend(["--env", "CODEX_HOME=/sandbox/.codex"])
     if cli_name == "opencode":
+        command.extend(
+            ["--env", "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json"]
+        )
         command.extend(["--agent", agent])
     return command
 
@@ -683,6 +740,9 @@ def build_podman_create_command(
     ):
         command.extend(["--env", value])
     if cli_name == "opencode":
+        command.extend(
+            ["--env", "OPENCODE_CONFIG=/sandbox/.config/opencode/opencode.json"]
+        )
         command.extend(["--env", f"AI_GUARDIAN_OPENCODE_AGENT={agent}"])
     if cli_name == "codex":
         command.extend(["--env", "CODEX_HOME=/sandbox/.codex"])
@@ -707,6 +767,7 @@ def build_agent_command(
     *,
     opencode_v2: bool = False,
     opencode_attach_url: Optional[str] = None,
+    grok_mcp_version: bool = False,
 ) -> List[str]:
     """Build one non-interactive invocation of the selected installed CLI."""
     if cli_name == "codex":
@@ -724,13 +785,19 @@ def build_agent_command(
             prompt,
         ]
     if cli_name == "opencode":
-        command = ["opencode", "run"]
-        if opencode_v2:
-            # A private server prevents the V2 CLI from reusing stale state from
-            # an earlier case in the same sandbox.
+        command = ["opencode"]
+        if opencode_v2 and opencode_attach_url:
+            command.extend(["run", "--server", opencode_attach_url])
+        else:
+            command.append("run")
+        if opencode_v2 and not opencode_attach_url:
+            # Keep direct invocations isolated when no shared smoke server exists.
             command.append("--standalone")
         elif opencode_attach_url:
-            command.extend(["--attach", opencode_attach_url, "--dir", "/sandbox/repo"])
+            if not opencode_v2:
+                command.extend(
+                    ["--attach", opencode_attach_url, "--dir", "/sandbox/repo"]
+                )
         command.extend(
             [
                 "--agent",
@@ -784,7 +851,7 @@ def build_agent_command(
             prompt,
         ]
     if cli_name == "grok":
-        return [
+        command = [
             "grok",
             "--no-auto-update",
             "-p",
@@ -793,11 +860,20 @@ def build_agent_command(
             MOCK_MODEL,
             "--output-format",
             "json",
-            # Only the harmless clean probe needs native execution permission.
-            # Native hook/project trust is neither bypassed nor persisted.
-            "--allow",
-            "Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case clean_tool)",
         ]
+        if grok_mcp_version:
+            # Headless Grok asks before invoking MCP tools by default. Grant only
+            # this read-only smoke capability, not broad always-approve access.
+            command.extend(["--allow", "MCPTool(ai-guardian__get_version)"])
+        command.extend(
+            [
+                # Only the harmless clean probe needs native execution permission.
+                # Native hook/project trust is neither bypassed nor persisted.
+                "--allow",
+                "Bash(python3 /tmp/ai_guardian_agent_cli_mock_provider.py --tool-case clean_tool)",
+            ]
+        )
+        return command
     raise ValueError(f"unsupported CLI: {cli_name}")
 
 
@@ -1311,6 +1387,45 @@ def _configure_agent(
     if result.returncode != 0:
         _report_failure_details("Local mock-provider configuration", result, 1200)
         return False
+    if cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS and not _configure_mcp_evidence_proxy(
+        engine, name, cli, timeout
+    ):
+        return False
+    return True
+
+
+def _configure_mcp_evidence_proxy(
+    engine: str, name: str, cli: str, timeout: int
+) -> bool:
+    """Wrap only the isolated AI Guardian stdio server for result evidence."""
+    if not _write_file(
+        engine,
+        name,
+        MCP_EVIDENCE_PROXY_CONTAINER,
+        MCP_EVIDENCE_PROXY.read_bytes(),
+        timeout,
+    ):
+        print("FAIL: unable to stage the MCP result evidence proxy")
+        return False
+    result = _exec(
+        engine,
+        name,
+        [
+            "python3",
+            MCP_EVIDENCE_PROXY_CONTAINER,
+            "install",
+            "--cli",
+            cli,
+            "--home",
+            "/sandbox",
+            "--pi-agent-dir",
+            "/sandbox/.pi/agent",
+        ],
+        timeout,
+    )
+    if result.returncode != 0:
+        _report_failure_details("MCP result evidence proxy configuration", result, 1200)
+        return False
     return True
 
 
@@ -1505,10 +1620,23 @@ def _tool_evidence(
     case: str,
     timeout: int,
     diagnostics: Optional[List[str]] = None,
+    cli: Optional[str] = None,
 ) -> Optional[Dict[str, int]]:
     url = f"http://127.0.0.1:{MOCK_PORT}/__ai_guardian_smoke/stats"
+    evidence_path = f"{STATE_DIR}/mcp_version_rpc.jsonl"
     result = _exec(
-        engine, name, ["python3", "-c", _READ_TOOL_EVIDENCE, url, case], timeout
+        engine,
+        name,
+        [
+            "python3",
+            "-c",
+            _READ_TOOL_EVIDENCE,
+            url,
+            case,
+            evidence_path,
+            str(int(cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS)),
+        ],
+        timeout,
     )
     fields = {
         "executed",
@@ -1551,6 +1679,13 @@ def _tool_evidence(
         "native_tool_name_run_shell_command",
         "native_tool_name_run_terminal_command",
         "native_file_write_tool_name_write",
+        "mcp_version_tool_offers",
+        "mcp_version_provider_calls",
+        "mcp_version_rpc_calls",
+        "mcp_version_tool_calls",
+        "mcp_version_tool_results",
+        "mcp_version_matches",
+        "mcp_version_mismatches",
     }
     try:
         values = json.loads(result.stdout) if result.returncode == 0 else None
@@ -1960,10 +2095,12 @@ def _opencode_uses_v2(
     return major >= 2
 
 
-def _start_opencode_v1_server(engine: str, name: str, timeout: int) -> bool:
-    """Start one headless V1 backend so all smoke cases reuse its MCP startup."""
+def _start_opencode_server(
+    engine: str, name: str, timeout: int, *, opencode_v2: bool = False
+) -> bool:
+    """Start one headless backend so smoke cases reuse its MCP startup."""
     command = [engine, "exec", "--detach"]
-    for entry in build_agent_environment("opencode"):
+    for entry in build_agent_environment("opencode", opencode_v2=opencode_v2):
         command.extend(["--env", entry])
     command.extend(
         [
@@ -1980,39 +2117,109 @@ def _start_opencode_v1_server(engine: str, name: str, timeout: int) -> bool:
     )
     started = _run(command, timeout)
     if started.returncode != 0:
-        _report_failure_details("OpenCode V1 server start", started)
+        _report_failure_details("OpenCode server start", started)
         return False
 
-    _progress("Waiting for the persistent OpenCode V1 server")
-    health_url = f"{OPENCODE_SERVER_URL}/global/health"
+    _progress("Waiting for the persistent OpenCode server")
+    health_mode = "v2" if opencode_v2 else "v1"
+    health_path = "/api/info" if opencode_v2 else "/global/health"
+    health_url = f"{OPENCODE_SERVER_URL}{health_path}"
     deadline = time.monotonic() + min(timeout, 60)
     last_heartbeat = time.monotonic()
     last_result: Optional[subprocess.CompletedProcess] = None
     while time.monotonic() < deadline:
         remaining = max(1, int(deadline - time.monotonic()))
-        result = _exec(
-            engine,
-            name,
-            ["python3", "-c", _READ_OPENCODE_HEALTH, health_url],
-            min(3, remaining),
-        )
-        if result.returncode == 0:
-            _progress("Persistent OpenCode V1 server is ready")
-            return True
-        last_result = result
+        try:
+            result = _exec(
+                engine,
+                name,
+                ["python3", "-c", _READ_OPENCODE_HEALTH, health_url, health_mode],
+                min(3, remaining),
+                env=build_agent_environment("opencode", opencode_v2=opencode_v2),
+            )
+        except subprocess.TimeoutExpired:
+            # During startup even the container-exec health probe can exceed its
+            # short per-attempt budget. Keep polling until the overall deadline.
+            result = None
+        if result is not None:
+            if result.returncode == 0:
+                _progress("Persistent OpenCode server is ready")
+                return True
+            last_result = result
         elapsed = int(time.monotonic() - last_heartbeat)
         if elapsed >= 15:
-            _progress(f"OpenCode V1 server is still starting ({elapsed}s elapsed)")
+            _progress(f"OpenCode server is still starting ({elapsed}s elapsed)")
             last_heartbeat = time.monotonic()
         time.sleep(min(0.5, max(0, deadline - time.monotonic())))
 
     if last_result is not None:
-        _report_failure_details("OpenCode V1 server readiness", last_result, 1200)
-    print("FAIL: persistent OpenCode V1 server did not become ready")
+        _report_failure_details("OpenCode server readiness", last_result, 1200)
+    print("FAIL: persistent OpenCode server did not become ready")
     return False
 
 
-def _warm_opencode_v1_server(engine: str, name: str, agent: str, timeout: int) -> bool:
+def _wait_for_opencode_v2_mcp_tools(engine: str, name: str, timeout: int) -> bool:
+    """Wait until V2 has listed get_version before creating one-shot sessions."""
+    ready_reader = r"""
+import json, pathlib, sys
+path=pathlib.Path(sys.argv[1])
+ready=False
+try:
+    for line in path.read_text(encoding='utf-8').splitlines():
+        try: event=json.loads(line).get('event')
+        except (AttributeError, TypeError, ValueError): continue
+        if event == 'mcp_tools_list_match': ready=True
+except OSError:
+    pass
+print('1' if ready else '0')
+"""
+    _progress("Waiting for OpenCode V2 to list the AI Guardian MCP tool")
+    deadline = time.monotonic() + min(timeout, 60)
+    last_heartbeat = time.monotonic()
+    while time.monotonic() < deadline:
+        remaining = max(1, int(deadline - time.monotonic()))
+        try:
+            result = _exec(
+                engine,
+                name,
+                [
+                    "python3",
+                    "-c",
+                    ready_reader,
+                    f"{STATE_DIR}/mcp_version_rpc.jsonl",
+                ],
+                min(3, remaining),
+                env=build_agent_environment("opencode", opencode_v2=True),
+            )
+        except subprocess.TimeoutExpired:
+            # Container-exec latency is transient while V2 starts its backend.
+            result = None
+        if (
+            result is not None
+            and result.returncode == 0
+            and result.stdout.strip() == "1"
+        ):
+            _progress("OpenCode V2 has listed the exact AI Guardian get_version tool")
+            return True
+        elapsed = int(time.monotonic() - last_heartbeat)
+        if elapsed >= 15:
+            _progress(
+                f"OpenCode V2 MCP tool listing is still pending ({elapsed}s elapsed)"
+            )
+            last_heartbeat = time.monotonic()
+        time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+    print("FAIL: OpenCode V2 did not list AI Guardian get_version before the smoke")
+    return False
+
+
+def _warm_opencode_server(
+    engine: str,
+    name: str,
+    agent: str,
+    timeout: int,
+    *,
+    opencode_v2: bool = False,
+) -> bool:
     """Pay the first MCP/session startup cost before reporting smoke cases."""
     case = next(case for case in CASES if case.name == "allowed")
     before_violations = _violation_counts(engine, name, timeout)
@@ -2028,15 +2235,20 @@ def _warm_opencode_v1_server(engine: str, name: str, agent: str, timeout: int) -
             "opencode",
             agent,
             case.prompt,
+            opencode_v2=opencode_v2,
             opencode_attach_url=OPENCODE_SERVER_URL,
         ),
         timeout,
-        env=build_agent_environment("opencode"),
+        env=build_agent_environment("opencode", opencode_v2=opencode_v2),
         workdir="/sandbox/repo",
-        progress="Warming the OpenCode V1 backend with the local mock provider",
+        progress=(
+            "Warming the OpenCode V2 backend with the local mock provider"
+            if opencode_v2
+            else "Warming the OpenCode V1 backend with the local mock provider"
+        ),
     )
     if invocation.returncode != 0:
-        _report_failure_details("OpenCode V1 warm-up", invocation)
+        _report_failure_details("OpenCode warm-up", invocation)
         return False
 
     after_violations = _violation_counts(engine, name, timeout)
@@ -2051,8 +2263,30 @@ def _warm_opencode_v1_server(engine: str, name: str, agent: str, timeout: int) -
         print("FAIL: OpenCode warm-up did not reach the local mock provider")
         return False
 
-    _progress("OpenCode V1 backend is warmed and ready for smoke cases")
+    _progress(
+        f"OpenCode {'V2' if opencode_v2 else 'V1'} backend is warmed and ready for smoke cases"
+    )
     return True
+
+
+def _mcp_version_evidence_is_complete(
+    request_delta: Optional[int],
+    hook_deltas: Optional[Dict[str, int]],
+    tool_deltas: Optional[Dict[str, int]],
+) -> bool:
+    """Require an offer, provider-issued call, MCP call, and exact result."""
+    if request_delta is None or request_delta < 1 or hook_deltas is None:
+        return False
+    if hook_deltas.get("prompt", 0) < 1 or tool_deltas is None:
+        return False
+    return (
+        tool_deltas.get("mcp_version_tool_offers", 0) >= 1
+        and tool_deltas.get("mcp_version_provider_calls", 0) >= 1
+        and tool_deltas.get("mcp_version_tool_calls", 0) >= 1
+        and tool_deltas.get("mcp_version_tool_results", 0) >= 1
+        and tool_deltas.get("mcp_version_matches", 0) >= 1
+        and tool_deltas.get("mcp_version_mismatches", 0) == 0
+    )
 
 
 def _run_case(
@@ -2070,14 +2304,16 @@ def _run_case(
     old_violations = _violation_counts(engine, name, timeout, diagnostics)
     old_requests = _provider_stats(engine, name, timeout, diagnostics)
     old_hooks = _hook_counts(engine, name, timeout, diagnostics)
+    is_mcp_version_case = case.name in MCP_VERSION_CASES
     is_tool_case = (
         case.name in OUTPUT_CASES
         or case.name in ("ssrf", "config_exfil", "command_credential")
         or case.name in HTTP_REQUEST_CREDENTIAL_CASES
     )
+    has_tool_evidence = is_tool_case or is_mcp_version_case
     old_tools = (
-        _tool_evidence(engine, name, case.name, timeout, diagnostics)
-        if is_tool_case
+        _tool_evidence(engine, name, case.name, timeout, diagnostics, cli=cli)
+        if has_tool_evidence
         else {}
     )
     if (
@@ -2091,33 +2327,98 @@ def _run_case(
             _progress(detail)
         return False
 
-    env = build_agent_environment(cli)
-    invocation = _exec(
-        engine,
-        name,
-        build_agent_command(
-            cli,
-            agent,
-            case.prompt,
-            opencode_v2=opencode_v2,
-            opencode_attach_url=opencode_attach_url,
-        ),
-        timeout,
-        env=env,
-        workdir="/sandbox/repo",
-        progress=f"Running the {case.name} case",
-    )
+    env = build_agent_environment(cli, opencode_v2=opencode_v2)
+    try:
+        invocation = _exec(
+            engine,
+            name,
+            build_agent_command(
+                cli,
+                agent,
+                case.prompt,
+                opencode_v2=opencode_v2,
+                opencode_attach_url=opencode_attach_url,
+                grok_mcp_version=cli == "grok" and is_mcp_version_case,
+            ),
+            timeout,
+            env=env,
+            workdir="/sandbox/repo",
+            progress=f"Running the {case.name} case",
+        )
+    except subprocess.TimeoutExpired:
+        # Some clients stay open after the MCP transport has already returned.
+        # The result witness is independent of assistant prose or completion.
+        invocation = subprocess.CompletedProcess([], 124, "", "")
     if invocation.returncode == 124:
+        timed_out_violations = _violation_counts(engine, name, timeout, diagnostics)
+        timed_out_requests = _provider_stats(engine, name, timeout, diagnostics)
+        timed_out_hooks = _hook_counts(engine, name, timeout, diagnostics)
+        timed_out_tools = (
+            _tool_evidence(engine, name, case.name, timeout, diagnostics, cli=cli)
+            if has_tool_evidence
+            else {}
+        )
+        request_delta = (
+            timed_out_requests.get(case.name, 0) - old_requests.get(case.name, 0)
+            if timed_out_requests is not None
+            else None
+        )
+        hook_deltas = (
+            {
+                key: value - old_hooks.get(key, 0)
+                for key, value in timed_out_hooks.items()
+            }
+            if timed_out_hooks is not None
+            else None
+        )
+        tool_deltas = (
+            {
+                key: value - old_tools.get(key, 0)
+                for key, value in timed_out_tools.items()
+            }
+            if timed_out_tools is not None
+            else None
+        )
+        violation_deltas = (
+            {
+                key: value - old_violations.get(key, 0)
+                for key, value in timed_out_violations.items()
+                if value > old_violations.get(key, 0)
+            }
+            if timed_out_violations is not None
+            else {}
+        )
+        if (
+            is_mcp_version_case
+            and timed_out_violations is not None
+            and not violation_deltas
+            and _mcp_version_evidence_is_complete(
+                request_delta, hook_deltas, tool_deltas
+            )
+        ):
+            _progress(
+                "PASS mcp_version: correlated get_version result matched the "
+                "installed version; the CLI turn timed out after the MCP response"
+            )
+            return True
         print(f"FAIL {case.name}: agent CLI timed out")
-        _report_case_failure_details(case, invocation, {}, None, cli=cli)
+        _report_case_failure_details(
+            case,
+            invocation,
+            violation_deltas,
+            request_delta,
+            hook_deltas=hook_deltas,
+            tool_deltas=tool_deltas,
+            cli=cli,
+        )
         return False
 
     new_violations = _violation_counts(engine, name, timeout, diagnostics)
     new_requests = _provider_stats(engine, name, timeout, diagnostics)
     new_hooks = _hook_counts(engine, name, timeout, diagnostics)
     new_tools = (
-        _tool_evidence(engine, name, case.name, timeout, diagnostics)
-        if is_tool_case
+        _tool_evidence(engine, name, case.name, timeout, diagnostics, cli=cli)
+        if has_tool_evidence
         else {}
     )
     if (
@@ -2216,6 +2517,28 @@ def _run_case(
         ):
             return fail("clean tool output did not reach the local mock")
 
+    if is_mcp_version_case:
+        if tool_deltas.get("mcp_version_tool_offers", 0) < 1:
+            return fail("AI Guardian get_version MCP tool was not offered to the model")
+        if tool_deltas.get("mcp_version_provider_calls", 0) < 1:
+            return fail("the local mock did not issue the get_version MCP call")
+        if tool_deltas.get("mcp_version_tool_calls", 0) < 1:
+            if cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS:
+                return fail(
+                    "the CLI did not send the issued get_version call to the MCP server"
+                )
+            return fail("the issued get_version call did not reach the MCP result")
+        if tool_deltas.get("mcp_version_tool_results", 0) < 1:
+            return fail(
+                "the AI Guardian MCP server did not return a correlated get_version result"
+            )
+        if tool_deltas.get("mcp_version_matches", 0) < 1:
+            return fail(
+                "the correlated MCP result did not contain the installed version"
+            )
+        if tool_deltas.get("mcp_version_mismatches", 0) != 0:
+            return fail("the correlated MCP result contained a mismatched version")
+
     if case.expected_violation:
         if deltas.get(case.expected_violation, 0) < 1:
             return fail("expected hook violation was not recorded")
@@ -2225,6 +2548,19 @@ def _run_case(
             return fail("blocked prompt reached the local mock provider")
     else:
         if invocation.returncode != 0:
+            if (
+                is_mcp_version_case
+                and not deltas
+                and _mcp_version_evidence_is_complete(
+                    request_delta, hook_deltas, tool_deltas
+                )
+            ):
+                _progress(
+                    "PASS mcp_version: correlated get_version result matched the "
+                    f"installed version; the CLI exited {invocation.returncode} "
+                    "after the MCP response"
+                )
+                return True
             return fail("clean agent CLI invocation exited nonzero")
         if deltas:
             return fail("clean path created a violation")
@@ -2236,9 +2572,11 @@ def _run_case(
 
 def _agent_error_category(invocation: subprocess.CompletedProcess) -> str:
     """Classify structured CLI errors without releasing their private bodies."""
+    content: List[str] = []
     for stream in (invocation.stdout, invocation.stderr):
         if not isinstance(stream, str):
             continue
+        content.append(stream)
         for line in stream.splitlines():
             try:
                 event = json.loads(line)
@@ -2253,6 +2591,41 @@ def _agent_error_category(invocation: subprocess.CompletedProcess) -> str:
                     pending.extend(value.values())
                 elif isinstance(value, list):
                     pending.extend(value)
+    normalized = "\n".join(content).casefold()
+    if "mcp" in normalized and any(
+        marker in normalized
+        for marker in ("error", "failed", "missing", "unavailable", "could not")
+    ):
+        return "mcp_startup"
+    if any(
+        marker in normalized
+        for marker in ("api key", "unauthorized", "unauthenticated", "authentication")
+    ):
+        return "authentication"
+    if any(
+        marker in normalized
+        for marker in ("unknown option", "unknown argument", "unexpected argument")
+    ):
+        return "cli_arguments"
+    if any(
+        marker in normalized
+        for marker in (
+            "invalid config",
+            "configuration error",
+            "failed to parse config",
+        )
+    ):
+        return "configuration"
+    if any(
+        marker in normalized
+        for marker in (
+            "connection refused",
+            "network error",
+            "fetch failed",
+            "timed out",
+        )
+    ):
+        return "transport"
     return "unclassified"
 
 
@@ -2461,9 +2834,11 @@ def _report_case_failure_details(
         print(f"  NOTE: {CODEX_BWRAP_PERMISSION_GUIDANCE}", flush=True)
 
 
-def build_agent_environment(cli: str) -> List[str]:
+def build_agent_environment(cli: str, *, opencode_v2: bool = False) -> List[str]:
     """Return synthetic endpoint/auth and smoke-only settings for the CLI."""
     env: List[str] = []
+    if cli in MCP_EVIDENCE_PROXY_SMOKE_CLIS:
+        env.append(f"AI_GUARDIAN_MCP_EVIDENCE_FILE={STATE_DIR}/mcp_version_rpc.jsonl")
     if cli == "codex":
         env.extend(["CODEX_HOME=/sandbox/.codex", f"OPENAI_API_KEY={MOCK_KEY}"])
     elif cli == "pi":
@@ -2478,6 +2853,10 @@ def build_agent_environment(cli: str) -> List[str]:
                 "OPENCODE_DISABLE_MODELS_FETCH=true",
             ]
         )
+        if opencode_v2:
+            # OpenCode V2 requires Basic auth for its server API. Keep one
+            # synthetic password shared by the isolated service and clients.
+            env.append(f"OPENCODE_SERVER_PASSWORD={MOCK_KEY}")
     if cli == "pi":
         env.append("PI_CODING_AGENT_DIR=/sandbox/.pi/agent")
     if cli == "claude":
@@ -2517,15 +2896,29 @@ def smoke_cases(cli: str) -> Sequence[SmokeCase]:
         case
         for case in CASES
         if (not case.cli_names or cli in case.cli_names)
-        and (cli not in PARTIAL_SMOKE_CLIS or case.name in PRE_TOOL_SMOKE_CASE_NAMES)
+        and (
+            cli not in PARTIAL_SMOKE_CLIS
+            or case.name in PRE_TOOL_SMOKE_CASE_NAMES
+            or case.name in MCP_VERSION_CASES
+        )
     )
 
 
 def _partial_scope(cli: str) -> None:
     _progress(
         f"LIMIT {cli}: pre-tool subset only; prompt denial and sensitive-output "
-        "containment are NOT QUALIFIED. Clean post-tool events are observation evidence."
+        "containment are NOT QUALIFIED. Clean post-tool events are observation "
+        "evidence. The MCP version check is a separate capability result."
     )
+
+
+def _report_unsupported_mcp_version(cli: str) -> None:
+    reason = (
+        "smoke intentionally disables MCP"
+        if cli == "goose"
+        else "no native MCP smoke path is configured"
+    )
+    _progress(f"UNSUPPORTED mcp_version for {cli}: {reason}; this is not a pass.")
 
 
 def _coverage_report() -> int:
@@ -2615,6 +3008,7 @@ def _run_goose_smoke(args: argparse.Namespace) -> int:
     created = False
     try:
         _partial_scope("goose")
+        _report_unsupported_mcp_version("goose")
         result = _run(
             build_goose_smoke_command(args.container_engine, args.image, name),
             args.timeout,
@@ -3034,13 +3428,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             else False
         )
         opencode_attach_url = None
-        if args.cli_name == "opencode" and not opencode_v2:
-            _progress("Starting a persistent OpenCode V1 server for all cases")
-            if not _start_opencode_v1_server(args.container_engine, name, args.timeout):
+        if args.cli_name == "opencode":
+            generation = "V2" if opencode_v2 else "V1"
+            _progress(
+                f"Starting a persistent OpenCode {generation} server for all cases"
+            )
+            if not _start_opencode_server(
+                args.container_engine,
+                name,
+                args.timeout,
+                opencode_v2=opencode_v2,
+            ):
                 return 1
             opencode_attach_url = OPENCODE_SERVER_URL
-            if not _warm_opencode_v1_server(
-                args.container_engine, name, args.agent, args.timeout
+            if not _warm_opencode_server(
+                args.container_engine,
+                name,
+                args.agent,
+                args.timeout,
+                opencode_v2=opencode_v2,
+            ):
+                return 1
+            if opencode_v2 and not _wait_for_opencode_v2_mcp_tools(
+                args.container_engine, name, args.timeout
             ):
                 return 1
         passed = True
@@ -3048,12 +3458,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if (
                 args.cli_name in PARTIAL_SMOKE_CLIS
                 and case.name not in PRE_TOOL_SMOKE_CASE_NAMES
+                and case.name not in MCP_VERSION_CASES
             ):
                 continue
             if case.cli_names and args.cli_name not in case.cli_names:
-                _progress(
-                    f"SKIP {case.name}: native Write tool smoke is not configured for {args.cli_name}"
-                )
+                if case.name in MCP_VERSION_CASES:
+                    _report_unsupported_mcp_version(args.cli_name)
+                else:
+                    _progress(
+                        f"SKIP {case.name}: native Write tool smoke is not configured for {args.cli_name}"
+                    )
                 continue
             passed = (
                 _run_case(
@@ -3068,15 +3482,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
                 and passed
             )
-        _progress(
-            (
-                "Agent CLI pre-tool subset "
-                if args.cli_name in PARTIAL_SMOKE_CLIS
-                else "Agent CLI hook smoke test "
-            )
-            + ("passed" if passed else "failed")
-            + "."
-        )
+        if args.cli_name == "grok":
+            summary = "Agent CLI pre-tool subset and MCP version check "
+        elif args.cli_name in PARTIAL_SMOKE_CLIS:
+            summary = "Agent CLI pre-tool subset "
+        else:
+            summary = "Agent CLI hook smoke test "
+        _progress(summary + ("passed" if passed else "failed") + ".")
         return 0 if passed else 1
     except subprocess.TimeoutExpired as error:
         print("ERROR: agent CLI smoke test timed out after " f"{error.timeout} seconds")
