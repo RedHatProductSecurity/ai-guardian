@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Web Console configuration (#2782):** Apply `console.web.host` and
+  `console.web.port` when launching from the CLI, while preserving defaults and
+  explicit `--port` precedence.
 - **WebFetch violation locations (#2779):** Preserve a privacy-validated request
   URL for sensitive findings and redaction events instead of a synthetic output
   filename. Retain response coordinates across history, Console/copy, CLI, REST,
