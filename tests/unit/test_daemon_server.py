@@ -1433,7 +1433,7 @@ class TestStartRestApiPortFallback:
 
 
 class TestRestApiHostResolution:
-    """REST API host resolution: config > env var > container detection > 127.0.0.1."""
+    """REST API host resolution: CLI > env var > config > container default."""
 
     def _run_start_rest_api(self, server):
         """Call _start_rest_api and return the host passed to DaemonRestAPI."""
@@ -1477,8 +1477,20 @@ class TestRestApiHostResolution:
                 host = self._run_start_rest_api(server)
         assert host == "0.0.0.0"
 
-    def test_config_overrides_env_var(self, short_state_dir, monkeypatch):
+    def test_env_var_overrides_config(self, short_state_dir, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_REST_HOST", "0.0.0.0")
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        cfg = {"daemon": {"rest_host": "10.0.0.1"}}
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(cfg, None),
+        ):
+            with mock.patch("os.path.exists", return_value=False):
+                host = self._run_start_rest_api(server)
+        assert host == "0.0.0.0"
+
+    def test_config_used_when_environment_is_absent(self, short_state_dir, monkeypatch):
+        monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)
         server = DaemonServer(idle_timeout=5, enable_rest_api=False)
         cfg = {"daemon": {"rest_host": "10.0.0.1"}}
         with mock.patch(
@@ -1509,6 +1521,62 @@ class TestRestApiHostResolution:
                 server._start_rest_api()
 
         assert captured["port"] == 63160
+
+    def test_cli_options_override_environment_and_config(
+        self, short_state_dir, monkeypatch
+    ):
+        monkeypatch.setenv("AI_GUARDIAN_REST_HOST", "0.0.0.0")
+        monkeypatch.setenv("AI_GUARDIAN_REST_PORT", "63160")
+        server = DaemonServer(
+            idle_timeout=5,
+            enable_rest_api=False,
+            rest_host="192.0.2.25",
+            rest_port=63161,
+        )
+        captured = {}
+
+        class FakeAPI:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+            def start(self):
+                return captured["port"]
+
+        with mock.patch("ai_guardian.daemon.rest_api.DaemonRestAPI", FakeAPI):
+            with mock.patch(
+                "ai_guardian.config.loaders._load_config_file",
+                return_value=(
+                    {"daemon": {"rest_host": "10.0.0.1", "rest_port": 63152}},
+                    None,
+                ),
+            ):
+                server._start_rest_api()
+
+        assert captured["host"] == "192.0.2.25"
+        assert captured["port"] == 63161
+
+    def test_config_port_used_when_environment_is_absent(
+        self, short_state_dir, monkeypatch
+    ):
+        monkeypatch.delenv("AI_GUARDIAN_REST_PORT", raising=False)
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        captured = {}
+
+        class FakeAPI:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+            def start(self):
+                return captured["port"]
+
+        with mock.patch("ai_guardian.daemon.rest_api.DaemonRestAPI", FakeAPI):
+            with mock.patch(
+                "ai_guardian.config.loaders._load_config_file",
+                return_value=({"daemon": {"rest_port": 63162}}, None),
+            ):
+                server._start_rest_api()
+
+        assert captured["port"] == 63162
 
     def test_docker_container_detection(self, short_state_dir, monkeypatch):
         monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)

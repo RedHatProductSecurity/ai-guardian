@@ -612,12 +612,16 @@ def connect_subscriber(timeout=2.0):
         return None
 
 
-def start_daemon_background():
+def start_daemon_background(rest_host=None, rest_port=None):
     """Start daemon as a background process for lazy start in auto mode.
 
     Respects the stop-requested marker written by ``daemon stop``.
     Skips auto-start when AI_GUARDIAN_DAEMON_URL is set (remote daemon
     is managed externally).
+
+    Args:
+        rest_host: Optional REST API listener host override.
+        rest_port: Optional REST API listener port override.
 
     Returns:
         bool: True if daemon started successfully
@@ -642,6 +646,10 @@ def start_daemon_background():
         # Find the ai-guardian command
         cmd = _find_executable()
         daemon_cmd = cmd + ["daemon", "start"]
+        if rest_host is not None:
+            daemon_cmd.extend(["--host", str(rest_host)])
+        if rest_port is not None:
+            daemon_cmd.extend(["--port", str(rest_port)])
         logger.info(f"Starting daemon: {' '.join(daemon_cmd)}")
 
         # Start detached daemon process

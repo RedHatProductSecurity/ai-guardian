@@ -89,6 +89,8 @@ class TestDaemonStartCommand:
         args.daemon_command = "start"
         args.background = False
         args.idle_timeout = None
+        args.rest_host = None
+        args.rest_port = None
 
         with (
             mock.patch(
@@ -100,7 +102,71 @@ class TestDaemonStartCommand:
 
         assert result == 0
         upgrade.assert_called_once_with()
+        daemon_server.assert_called_once_with(idle_timeout=0)
         daemon_server.return_value.start.assert_called_once_with()
+
+    def test_foreground_start_passes_listener_options(self):
+        from types import SimpleNamespace
+
+        args = SimpleNamespace(
+            daemon_command="start",
+            background=False,
+            idle_timeout=None,
+            rest_host="192.0.2.25",
+            rest_port=63161,
+        )
+        with (
+            mock.patch(
+                "ai_guardian.daemon.auto_setup.auto_upgrade_typescript_integrations"
+            ),
+            mock.patch("ai_guardian.daemon.server.DaemonServer") as daemon_server,
+        ):
+            assert _handle_daemon_command(args) == 0
+
+        daemon_server.assert_called_once_with(
+            idle_timeout=0, rest_host="192.0.2.25", rest_port=63161
+        )
+
+    def test_background_start_passes_listener_options(self):
+        from types import SimpleNamespace
+
+        args = SimpleNamespace(
+            daemon_command="start",
+            background=True,
+            rest_host="192.0.2.25",
+            rest_port=63161,
+        )
+        with mock.patch(
+            "ai_guardian.daemon.client.start_daemon_background", return_value=True
+        ) as start_background:
+            assert _handle_daemon_command(args) == 0
+
+        start_background.assert_called_once_with(
+            rest_host="192.0.2.25", rest_port=63161
+        )
+
+    def test_restart_passes_listener_options_to_background_start(self, tmp_path):
+        from types import SimpleNamespace
+
+        args = SimpleNamespace(
+            daemon_command="restart",
+            rest_host="192.0.2.25",
+            rest_port=63161,
+        )
+        with (
+            mock.patch("ai_guardian.daemon.get_state_dir", return_value=tmp_path),
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=False
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.start_daemon_background", return_value=True
+            ) as start_background,
+        ):
+            assert _handle_daemon_command(args) == 0
+
+        start_background.assert_called_once_with(
+            rest_host="192.0.2.25", rest_port=63161
+        )
 
 
 class TestDaemonReloadCommand:

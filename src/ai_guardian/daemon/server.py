@@ -188,16 +188,28 @@ def handle_paused_otel(state, hook_data, cwd=None):
 class DaemonServer:
     """Long-running daemon server for ai-guardian."""
 
-    def __init__(self, idle_timeout=0.0, use_tcp=False, enable_rest_api=True):
+    def __init__(
+        self,
+        idle_timeout=0.0,
+        use_tcp=False,
+        enable_rest_api=True,
+        *,
+        rest_host=None,
+        rest_port=None,
+    ):
         """Initialize daemon server.
 
         Args:
             idle_timeout: Seconds of inactivity before auto-stop (0 to disable)
             use_tcp: Force TCP mode (auto-detected on Windows)
             enable_rest_api: Enable REST API for tray/remote queries
+            rest_host: Optional REST API listener host override
+            rest_port: Optional REST API listener port override
         """
         self._use_tcp = use_tcp or (platform.system() == "Windows")
         self._enable_rest_api = enable_rest_api
+        self._rest_host_override = rest_host
+        self._rest_port_override = rest_port
         self._server_socket = None
         self._running = False
         self._shutdown_event = threading.Event()
@@ -1107,16 +1119,19 @@ class DaemonServer:
 
             self._name = full_cfg.get("name") or socket_mod.gethostname()
             env_port = os.environ.get("AI_GUARDIAN_REST_PORT")
-            try:
-                cfg_port = int(
+            selected_port = self._rest_port_override
+            if selected_port is None:
+                selected_port = (
                     env_port
                     if env_port is not None
                     else daemon_cfg.get("rest_port", DEFAULT_REST_PORT)
                 )
+            try:
+                cfg_port = int(selected_port)
             except (TypeError, ValueError):
                 logger.warning(
-                    "Invalid AI_GUARDIAN_REST_PORT=%r; using default port %s",
-                    env_port,
+                    "Invalid REST API port override %r; using default port %s",
+                    selected_port,
                     DEFAULT_REST_PORT,
                 )
                 cfg_port = DEFAULT_REST_PORT
@@ -1130,7 +1145,12 @@ class DaemonServer:
             ):
                 default_host = "0.0.0.0"
             env_host = os.environ.get("AI_GUARDIAN_REST_HOST")
-            host = daemon_cfg.get("rest_host", env_host or default_host)
+            if self._rest_host_override is not None:
+                host = self._rest_host_override
+            elif env_host:
+                host = env_host
+            else:
+                host = daemon_cfg.get("rest_host", default_host)
             auth_token = daemon_cfg.get("auth_token")
             if not auth_token:
                 auth_token = self._ensure_auth_token()

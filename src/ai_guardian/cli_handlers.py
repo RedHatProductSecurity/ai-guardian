@@ -341,6 +341,9 @@ def _handle_daemon_command(args):
     cmd = getattr(args, "daemon_command", None)
 
     if cmd == "start":
+        rest_host = getattr(args, "rest_host", None)
+        rest_port = getattr(args, "rest_port", None)
+
         # Clear stop-requested marker so auto-start resumes (#775)
         try:
             from ai_guardian.daemon import get_state_dir
@@ -355,7 +358,12 @@ def _handle_daemon_command(args):
         if args.background:
             from ai_guardian.daemon.client import start_daemon_background
 
-            if start_daemon_background():
+            start_options = {}
+            if rest_host is not None:
+                start_options["rest_host"] = rest_host
+            if rest_port is not None:
+                start_options["rest_port"] = rest_port
+            if start_daemon_background(**start_options):
                 print("ai-guardian daemon started")
                 return 0
             else:
@@ -373,9 +381,12 @@ def _handle_daemon_command(args):
             idle_timeout = (
                 args.idle_timeout if args.idle_timeout is not None else 0
             ) * 60
-            server = DaemonServer(
-                idle_timeout=idle_timeout,
-            )
+            server_options = {"idle_timeout": idle_timeout}
+            if rest_host is not None:
+                server_options["rest_host"] = rest_host
+            if rest_port is not None:
+                server_options["rest_port"] = rest_port
+            server = DaemonServer(**server_options)
             try:
                 server.start()
             except RuntimeError as e:
