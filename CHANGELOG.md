@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Kilo Code CLI integration:** Add a Kilo-identified V1 plugin bridge, user and
+  project setup, native `mcp` configuration, protected-config inventory, and
+  installer detection, plus automatic scanning for documented Kilo skill roots.
+  Source-reviewed against Kilo CLI 7.8.27; native execution, enforcement, and
+  result delivery remain unqualified, with safe post-output replacement
+  unsupported.
 - **Violation outcome metadata (#2781):** Persist the effective action and
   redaction status in violation JSONL records; display validated outcomes as
   rounded badges in the Web Console (including the `tui` alias) and bracketed
@@ -67,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Kilo orphan recovery:** Include the generated Kilo plugin, shared bridge, and
+  owned MCP registration in the selected user or explicit project cleanup scope.
 - **Web Console configuration (#2782):** Apply `console.web.host` and
   `console.web.port` when launching from the CLI, while preserving defaults and
   explicit `--port` precedence.

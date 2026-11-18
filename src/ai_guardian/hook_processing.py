@@ -2429,7 +2429,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                 # Native file arguments and immutable targets still need
                 # validation when ordinary OpenCode permission rules are off.
                 immutable_file_check_required = bool(
-                    agent_type == "opencode"
+                    agent_type in {"opencode", "kilo"}
                     and tool_name in {"Read", "Write", "Edit", "NotebookEdit"}
                 )
                 if (
@@ -2849,7 +2849,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             ):
                 # Extract file content for tools that read files
                 file_hook_data = hook_data
-                if agent_type in ("opencode", "goose") and tool_name == "Read":
+                if agent_type in ("opencode", "kilo", "goose") and tool_name == "Read":
                     # The native payload remains available for audit, but file
                     # checks must consume the same normalized target as policy,
                     # never re-extract a relative/conflicting native alias.

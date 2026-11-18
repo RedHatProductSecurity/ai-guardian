@@ -52,6 +52,13 @@
       "blocker": "no_documented_local_provider",
       "audit": "kiro"
     },
+    "kilo": {
+      "runner": "blocked",
+      "ci_steps": [],
+      "reviewed_versions": ["7.8.27"],
+      "blocker": "native_plugin_qualification",
+      "audit": "kilo"
+    },
     "openclaw": {
       "runner": "blocked",
       "ci_steps": [],

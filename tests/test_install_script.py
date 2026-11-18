@@ -225,11 +225,18 @@ class TestInstallScriptAgentDetection:
             HOME=str(home),
             CLAUDE_CONFIG_DIR="",
             PI_CODING_AGENT_DIR="",
+            KILO_CONFIG_DIR="",
+            KILO_CONFIG="",
+            XDG_CONFIG_HOME=str(tmp_path / "xdg"),
         )
+        isolated_path = tmp_path / "path"
+        isolated_path.mkdir()
+        isolated_path.joinpath("uname").symlink_to(shutil.which("uname"))
+        env["PATH"] = str(isolated_path)
 
         result = subprocess.run(
             [
-                "bash",
+                shutil.which("bash"),
                 "-c",
                 self._detection_function(script_content) + "\ndetect_installed_agents",
             ],
@@ -469,6 +476,8 @@ class TestInstallPs1:
             "JUNIE_HOME",
             "OPENCODE_CONFIG_DIR",
             "OPENCODE_CONFIG",
+            "KILO_CONFIG_DIR",
+            "KILO_CONFIG",
             "AIDER_DESK_DIR",
             "AIDER_DESK_HOME_DIR",
             "OPENCLAW_STATE_DIR",
@@ -494,6 +503,7 @@ class TestInstallPs1:
             "$kiroProjectDir",
             "$junieProjectDir",
             "$opencodeDir",
+            "$kiloDir",
             "$aiderdeskDir",
             "$openclawDir",
             "$piAgentDir",

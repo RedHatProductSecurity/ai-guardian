@@ -114,6 +114,7 @@ Run separately for other deliberately selected historical homes.
 | Codex legacy | Selected home's `codex.json`, plus historical home-level `codex.json`, only when an owned registration exists |
 | OpenCode V1/V2 | Selected JSON/JSONC, legacy `mcp.ai-guardian`, V2 `mcp.servers.ai-guardian`, owned absolute/file-URI V1 plugin registrations; current plugin/shared bridge and old discovery-directory bridge |
 | Pi | Current managed `ai-guardian/index.ts` and matching `package.json`, and owned legacy flat `ai-guardian.ts`, in user or explicitly selected project scope |
+| Kilo Code CLI | Generated `plugin/ai-guardian.ts` and shared bridge in the selected Kilo root; owned `mcp.ai-guardian` in the selected Kilo JSON/JSONC config, including explicit project scope |
 | Goose | Owned hook actions and MCP entry under the selected `.agents/plugins/ai-guardian-goose/`, plus its matching generated `plugin.json`; honors absolute `GOOSE_PATH_ROOT`; unrelated plugin content/settings/hints retained |
 | AiderDesk/OpenClaw | Generated `index.ts`, matching package manifest and shared bridge in the selected extension/plugin home |
 | Cline/ZooCode/Kiro project scripts | Only known event filenames and Windows script variants with the exact generated single-command shape; never their shared hook directories |
@@ -163,8 +164,9 @@ entrypoint is still registered.
 
 ## Missing-runtime lifecycle matrix
 
-Evidence as of **2026-10-24**: source/setup contracts and isolated recovery tests,
-**not live host qualification**. `U` means the host's exact UI/exit/continuation
+Existing rows reflect source/setup contracts and isolated recovery tests as of
+**2026-10-24**; Kilo's row reflects the source/setup review and recovery coverage
+added **2026-11-18**. This is **not live host qualification**. `U` means the host's exact UI/exit/continuation
 behavior has **not been experimentally verified** for any of these three cases:
 missing pinned executable, missing interpreter, missing launcher/module. All three
 prevent the unavailable application from returning its normal decision. A surviving
@@ -194,6 +196,7 @@ retry/continuation unverified. `—`: no managed surface for that stage.
 | OpenClaw (`openclaw`) | L/U | L/U | L/U | L/U | M/U if configured | Plugin discovery and child-process failure are separate boundaries |
 | OpenCode V1/V2 (`opencode`) | L/U | L/U | L/U | L/U | M/U if configured | V1 explicit registration and V2 auto-discovery; V2 MCP uses `mcp.servers` |
 | Pi (`pi`) | L/U | L/U | L/U | L/U | L/U | Managed extension owns hooks and registers MCP through Pi's native extension API; no separate MCP settings file |
+| Kilo Code CLI (`kilo`) | — | — | L/U | L/U | M/U | V1 tool callbacks; native tool enforcement, CLI execution, and result delivery remain unqualified |
 | Augment (`augment`) | — | — | H/U | — | M/U if configured | Pre/post-tool hook integration |
 | Crush (`crush`) | — | — | H/U | — | M/U | Partial managed event coverage, not universal enforcement |
 | Junie (`junie`) | — | — | — | — | M/U | MCP-only, static guidelines do not invoke a runtime |

@@ -329,7 +329,7 @@ jobs:
 
       - name: Test IDE adapter setup
         run: |
-          IDES="claude cursor copilot grok codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode pi augment crush junie goose"
+          IDES="claude cursor copilot grok codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode kilo pi augment crush junie goose"
           FAILED=""
           for ide in $IDES; do
             echo "--- Testing setup --ide $ide ---"
@@ -355,6 +355,12 @@ jobs:
               test ! -f "$CLOUD_PROJECT/.cursor/mcp.json"
               test -f "$HOME/.cursor/hooks.json"
               test -f "$HOME/.cursor/mcp.json"
+            fi
+            if [ "$ide" = "kilo" ]; then
+              test -f "$XDG_CONFIG_HOME/kilo/plugin/ai-guardian.ts"
+              test -f "$XDG_CONFIG_HOME/kilo/ai-guardian/ai-guardian-bridge.ts"
+              test -f "$XDG_CONFIG_HOME/kilo/kilo.json"
+              python -c 'import json, os, pathlib; p=pathlib.Path(os.environ["XDG_CONFIG_HOME"])/"kilo"/"kilo.json"; assert json.loads(p.read_text())["mcp"]["ai-guardian"]["enabled"] is True'
             fi
             if [ "$ide" = "grok" ]; then
               test -f "$HOME/.grok/hooks/ai-guardian.json"
@@ -434,6 +440,8 @@ jobs:
           - ide: opencode
             opencode_generation: v2
             variant: opencode-v2
+          - ide: kilo
+            variant: kilo
           - ide: pi
             variant: pi
           - ide: augment
@@ -489,6 +497,16 @@ jobs:
             tests/ux/test_user_experience_contract_agent_config.py \
             tests/ux/test_user_experience_contract_violation_guidance.py \
             tests/ux/test_user_experience_contract_ide_setup.py -q
+
+      - name: Verify Kilo 7.8.27 setup and unqualified native-result boundary
+        if: matrix.ide == 'kilo'
+        run: |
+          python -m pytest \
+            tests/unit/test_ide_paths.py \
+            tests/unit/test_setup.py \
+            tests/unit/test_agent_config_protection.py \
+            tests/unit/test_typescript_bridge.py \
+            tests/ux/test_user_experience_contract_kilo.py -q
 
       - name: Run isolated ${{ matrix.variant }} hook matrix
         env:

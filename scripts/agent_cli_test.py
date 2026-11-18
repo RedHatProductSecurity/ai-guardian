@@ -49,6 +49,7 @@ BLOCKED_SMOKE_CLIS = {
     "copilot": "consent_and_hook_qualification",
     "antigravity": "consent_and_versioned_installation",
     "kiro": "no_documented_local_provider",
+    "kilo": "native_plugin_qualification",
     "openclaw": "native_plugin_qualification",
     "crush": "license_review_required",
 }
@@ -911,6 +912,7 @@ def sanitized_host_environment(home: Path) -> Dict[str, str]:
         "GH_",
         "GITHUB_",
         "GITLAB_",
+        "KILO_",
         "GOOGLE_",
         "GOOSE_",
         "GROK_",

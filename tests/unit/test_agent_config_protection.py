@@ -204,6 +204,36 @@ def test_inventory_has_a_project_artifact_root_for_every_supported_integration()
     assert inventory.match_path(r"C:\\workspace\\.cursor\\hooks.json") is not None
 
 
+def test_kilo_plugin_and_config_paths_remain_under_kilo_identity(tmp_path, monkeypatch):
+    project = tmp_path / "workspace"
+    project.mkdir()
+    xdg_home = tmp_path / "xdg"
+    kilo_config_dir = tmp_path / "custom-kilo-config"
+    opencode_config_dir = tmp_path / "custom-opencode-config"
+    kilo_overlay = tmp_path / "custom-kilo.json"
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_home))
+    monkeypatch.setenv("KILO_CONFIG_DIR", str(kilo_config_dir))
+    monkeypatch.setenv("KILO_CONFIG", str(kilo_overlay))
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(opencode_config_dir))
+
+    inventory = build_agent_config_inventory(str(project))
+    kilo_global = inventory.match_path(
+        str(kilo_config_dir / "plugin" / "ai-guardian.ts")
+    )
+    kilo_project = inventory.match_path(
+        str(project / ".kilo" / "plugin" / "ai-guardian.ts")
+    )
+    opencode_global = inventory.match_path(
+        str(opencode_config_dir / "plugins" / "ai-guardian.ts")
+    )
+
+    assert kilo_global is not None and kilo_global.integration == "kilo"
+    assert kilo_project is not None and kilo_project.integration == "kilo"
+    assert opencode_global is not None and opencode_global.integration == "opencode"
+    assert inventory.match_path(str(kilo_overlay)) is not None
+
+
 @pytest.fixture
 def isolated_goose_paths(tmp_path, monkeypatch):
     home = tmp_path / "goose home"

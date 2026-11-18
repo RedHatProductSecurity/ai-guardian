@@ -28,6 +28,9 @@ IDE_HOME_ENV_VARS: Dict[str, Tuple[str, ...]] = {
     "aiderdesk": ("AIDER_DESK_DIR", "AIDER_DESK_HOME_DIR"),
     "openclaw": ("OPENCLAW_STATE_DIR", "OPENCLAW_HOME"),
     "opencode": ("OPENCODE_CONFIG_DIR",),
+    # KILO_CONFIG_DIR is an additional Kilo config directory (not an
+    # OpenCode-compatible replacement root); setup targets it when explicitly set.
+    "kilo": ("KILO_CONFIG_DIR",),
     "pi": ("PI_CODING_AGENT_DIR",),
 }
 
@@ -36,6 +39,7 @@ IDE_HOME_ENV_VARS: Dict[str, Tuple[str, ...]] = {
 IDE_CONFIG_FILE_ENV_VARS: Dict[str, str] = {
     "openclaw": "OPENCLAW_CONFIG_PATH",
     "opencode": "OPENCODE_CONFIG",
+    "kilo": "KILO_CONFIG",
     "crush": "CRUSH_GLOBAL_CONFIG",
 }
 
@@ -119,6 +123,11 @@ def resolve_ide_config_path(
             # complete-file override.
             return str(explicit_config.parent.joinpath(*env_subdir))
         home = get_ide_home(ide_type)
+        if home is None and ide_type == "kilo":
+            home = (
+                Path(os.environ.get("XDG_CONFIG_HOME", "~/.config")).expanduser()
+                / "kilo"
+            )
         if home is not None:
             path = home.joinpath(*env_subdir)
             if filename:
@@ -185,6 +194,87 @@ def resolve_ide_mcp_path(ide_type: str, default_path: Optional[str]) -> Optional
         return home / "settings.json"
 
     return Path(default_path).expanduser()
+
+
+def resolve_kilo_config_file(
+    *, scope: str = "user", project_dir: Optional[str] = None
+) -> Path:
+    """Resolve the Kilo JSON/JSONC config file used for native MCP registration.
+
+    Kilo 7.8.27 reads MCP entries from its regular ``mcp`` config section. Match
+    the native ``kilo mcp`` resolver's file precedence and ``kilo.json`` fallback
+    so setup updates the same layer. ``KILO_CONFIG`` selects a complete file;
+    ``KILO_CONFIG_DIR`` selects Kilo's config root, independently of OpenCode.
+    """
+    if scope == "project":
+        project_root = Path(project_dir).expanduser() if project_dir else Path.cwd()
+        project_candidates = (
+            project_root / ".kilo/kilo.jsonc",
+            project_root / ".kilo/kilo.json",
+            project_root / ".kilo/opencode.jsonc",
+            project_root / ".kilo/opencode.json",
+            project_root / ".kilocode/kilo.jsonc",
+            project_root / ".kilocode/kilo.json",
+            project_root / ".kilocode/opencode.jsonc",
+            project_root / ".kilocode/opencode.json",
+            project_root / "kilo.jsonc",
+            project_root / "kilo.json",
+            project_root / "opencode.jsonc",
+            project_root / "opencode.json",
+        )
+        return next(
+            (path for path in project_candidates if path.is_file()),
+            project_root / "kilo.json",
+        )
+
+    # Kilo's `mcp add` command writes into its selected config directory, not
+    # the separate KILO_CONFIG overlay file. Follow that native resolver.
+    global_root = get_ide_home("kilo")
+    if global_root is None:
+        global_root = (
+            Path(os.environ.get("XDG_CONFIG_HOME", "~/.config")).expanduser() / "kilo"
+        )
+    global_candidates = (
+        global_root / "kilo.jsonc",
+        global_root / "kilo.json",
+        global_root / "opencode.jsonc",
+        global_root / "opencode.json",
+    )
+    return next(
+        (path for path in global_candidates if path.is_file()),
+        global_root / "kilo.json",
+    )
+
+
+def resolve_kilo_plugin_dir(
+    *, scope: str = "user", project_dir: Optional[str] = None
+) -> Path:
+    """Resolve a Kilo plugin discovery directory without crossing scopes."""
+    if scope == "project":
+        root = Path(project_dir).expanduser() if project_dir else Path.cwd()
+        project_candidates = (root / ".kilo/plugin", root / ".kilocode/plugin")
+        for candidate in project_candidates:
+            if (candidate / "ai-guardian.ts").is_file():
+                return candidate
+        for candidate in project_candidates:
+            if candidate.is_dir():
+                return candidate
+        return project_candidates[0]
+
+    if scope not in ("user", "auto"):
+        raise ValueError("Kilo scope must be 'user', 'project', or 'auto'")
+
+    configured_root = get_ide_home("kilo")
+    if configured_root is not None:
+        return configured_root / "plugin"
+
+    default_root = Path(os.environ.get("XDG_CONFIG_HOME", "~/.config")).expanduser()
+    roots = (default_root / "kilo", Path.home() / ".kilocode", Path.home() / ".kilo")
+    user_candidates = tuple(root / "plugin" for root in roots)
+    for candidate in user_candidates:
+        if (candidate / "ai-guardian.ts").is_file():
+            return candidate
+    return user_candidates[0]
 
 
 def resolve_opencode_config() -> Path:

@@ -1,7 +1,8 @@
 # Real-agent CLI coverage ledger
 
-Reviewed **2026-11-13** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
-This inventory includes **Goose**, even though it already had a smoke-only lane.
+Reviewed **2026-11-18** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
+This inventory includes **Goose** and **Kilo Code CLI**, even though Goose
+already had a smoke-only lane and Kilo now has a generated host integration.
 The machine-readable ledger is [`scripts/agent_cli_coverage.json`](../scripts/agent_cli_coverage.json).
 `tests/unit/test_agent_cli_coverage.py` compares every `SUPPORTED_CLI_IDE_TYPES`
 entry with the runner, actual Release Readiness invocations, and this audit.
@@ -27,6 +28,7 @@ scripts/agent-cli-test --coverage
 | `copilot` | Blocked: consent and native-hook qualification | Local BYOK exists; obtain terms approval and qualify the installed pre-tool surface |
 | `antigravity` | Blocked: consent and versioned installation | Local Gemini override exists; qualify the exact artifact, trust and installed adapter behavior |
 | `kiro` | Blocked: no documented local-provider path | Headless authentication requires the Kiro service; do not substitute a live-provider test |
+| `kilo` | Blocked: native plugin qualification | Plugin setup and callback contracts are covered; native CLI activation, enforcement and result delivery remain unqualified |
 | `openclaw` | Blocked: native plugin qualification | Local provider exists; prove embedded CLI callback activation and fix unsupported claims separately |
 | `crush` | Blocked: license review | FSL-1.1-MIT is not a current MIT grant; no new smoke dependency is installed |
 
@@ -57,7 +59,7 @@ active; a leak cannot become the next case's baseline. The inert SSRF/config
 commands print strings and write only a fixed execution witness, without reading
 credentials or contacting those destinations.
 
-All seven records below distinguish **reviewed upstream versions** from **tested
+All eight records below distinguish **reviewed upstream versions** from **tested
 native versions**. No new native executions were run locally in this change:
 project policy reserves real containers/integration scenarios for CI. Add the CI
 run/commit, image digest, exact CLI version and platform to the issue before
@@ -155,6 +157,40 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
   upstream and audit V3 hook installation; preserve the exclusion until both exist.
   No service call, login or vendor installer is run by this ledger check.
 - **Native execution in this change:** not run; no new tested native version.
+
+## kilo
+
+- **Reviewed version / installation:** Kilo CLI **7.8.27** from the versioned
+  [`@kilocode/cli` package metadata][kilo-package]. It publishes both `kilo` and
+  `kilocode` executable names and is MIT-licensed. This is source/API review,
+  not a local CLI execution.
+- **Configuration and MCP:** The tagged [CLI MCP documentation][kilo-mcp] uses
+  `~/.config/kilo/kilo.json` with an `mcp` object; project paths include
+  `./kilo.json` and `./.kilo/kilo.json`. The tagged [`kilo mcp add` resolver]
+  writes to Kilo's config directory and uses a direct local `command` array.
+  `KILO_CONFIG_DIR` is independent of OpenCode's config variables; the separate
+  `KILO_CONFIG` overlay does not redirect the MCP writer target.
+- **Installed plugin boundary:** The generated V1 plugin uses
+  `@kilocode/plugin`. Tagged [tool execution source][kilo-tools] triggers
+  `tool.execute.before` before execution and `tool.execute.after` before
+  returning the result; thrown plugin callbacks reject that path in source.
+  Kilo's plugin loader auto-discovers local files under config roots
+  ([loader][kilo-plugin-config]). The generated plugin registers no prompt hook.
+  These source contracts do not qualify native activation or enforcement.
+- **Post-tool behavior:** AI Guardian scans/transforms the result in its shared
+  bridge, but the generated plugin does not assign a sanitized copy to Kilo's
+  result. It throws a fixed caution on a block or transform; safe post-output
+  replacement is unsupported, and native result delivery remains unqualified.
+- **Blocker:** `native_plugin_qualification` — exact-version CLI loading,
+  fail-closed pre-tool enforcement, and post-tool delivery have not been run.
+  Kilo remains excluded from container/OpenShell runtime selectors until that
+  qualification is complete.
+- **Next action / priority:** **P1** — run an isolated Kilo 7.8.27 native CLI
+  qualification with synthetic block/allow and post-tool cases, recording hook
+  activation, tool execution/non-execution, result delivery and clean exits before
+  changing this blocker. Do not claim prompt interception or sanitized replacement.
+- **Native execution in this change:** not run; reviewed version **7.8.27** is not
+  a tested native version.
 
 ## openclaw
 
@@ -289,6 +325,11 @@ booleans and fixed categories, never prompts, credentials or CLI/model/tool bodi
 [kiro-changelog]: https://kiro.dev/changelog/cli/
 [kiro-license]: https://kiro.dev/license/
 [kiro-headless]: https://kiro.dev/docs/cli/headless/
+[kilo-package]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/package.json
+[kilo-mcp]: https://kilo.ai/docs/automate/mcp/using-in-cli
+[kilo-mcp-source]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/cli/cmd/mcp.ts
+[kilo-tools]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/session/tools.ts
+[kilo-plugin-config]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/config/plugin.ts
 [openclaw-license]: https://github.com/openclaw/openclaw/blob/v2026.11.3/LICENSE
 [openclaw-agent]: https://github.com/openclaw/openclaw/blob/v2026.11.3/docs/cli/agent.md
 [openclaw-providers]: https://github.com/openclaw/openclaw/blob/v2026.11.3/docs/concepts/model-providers.md

@@ -10,7 +10,12 @@ import pytest
 
 from ai_guardian.hook_adapters.codex import CodexAdapter
 from ai_guardian.hook_adapters.copilot import CopilotAdapter
-from ai_guardian.ide_paths import get_ide_home, resolve_opencode_config_layers
+from ai_guardian.ide_paths import (
+    get_ide_home,
+    resolve_kilo_config_file,
+    resolve_kilo_plugin_dir,
+    resolve_opencode_config_layers,
+)
 from ai_guardian.mcp.audit import MCPAuditor
 from ai_guardian.scanners.supply_chain import SupplyChainScanner
 from ai_guardian.sessions.adapters import (
@@ -42,9 +47,12 @@ IDE_ENV_VARS = (
     "OPENCLAW_CONFIG_PATH",
     "OPENCODE_CONFIG_DIR",
     "OPENCODE_CONFIG",
+    "KILO_CONFIG_DIR",
+    "KILO_CONFIG",
     "PI_CODING_AGENT_DIR",
     "PI_CODING_AGENT_SESSION_DIR",
     "CRUSH_GLOBAL_CONFIG",
+    "XDG_CONFIG_HOME",
     "HOME",
     "USERPROFILE",
 )
@@ -77,6 +85,7 @@ def clear_ide_environment(monkeypatch):
         ("aiderdesk", "AIDER_DESK_DIR", ()),
         ("openclaw", "OPENCLAW_STATE_DIR", ()),
         ("opencode", "OPENCODE_CONFIG_DIR", ()),
+        ("kilo", "KILO_CONFIG_DIR", ()),
         ("pi", "PI_CODING_AGENT_DIR", ()),
     ],
 )
@@ -143,6 +152,7 @@ def test_pi_session_dir_honors_documented_override(monkeypatch, tmp_path):
         ("aiderdesk", "AIDER_DESK_DIR", "extensions/ai-guardian"),
         ("openclaw", "OPENCLAW_STATE_DIR", "plugins/ai-guardian"),
         ("opencode", "OPENCODE_CONFIG_DIR", "plugins"),
+        ("kilo", "KILO_CONFIG_DIR", "plugin"),
         ("pi", "PI_CODING_AGENT_DIR", "extensions"),
     ],
 )
@@ -165,6 +175,59 @@ def test_opencode_explicit_config_file_relocates_adjacent_plugin_directory(
 
     assert Path(IDESetup().get_config_path("opencode")) == (
         config_file.parent / "plugins"
+    )
+
+
+def test_kilo_config_and_plugin_roots_are_distinct_from_opencode(monkeypatch, tmp_path):
+    xdg_root = tmp_path / "xdg"
+    kilo_root = tmp_path / "kilo-config"
+    opencode_root = tmp_path / "opencode-config"
+    explicit_kilo_file = tmp_path / "profile" / "kilo-profile.json"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_root))
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(opencode_root))
+
+    assert resolve_kilo_plugin_dir() == xdg_root / "kilo" / "plugin"
+    assert get_mcp_config_path("kilo") == xdg_root / "kilo" / "kilo.json"
+
+    monkeypatch.setenv("KILO_CONFIG_DIR", str(kilo_root))
+    monkeypatch.setenv("KILO_CONFIG", str(explicit_kilo_file))
+    assert resolve_kilo_plugin_dir() == kilo_root / "plugin"
+    assert get_mcp_config_path("kilo") == kilo_root / "kilo.json"
+    assert Path(IDESetup().get_config_path("opencode")) == opencode_root / "plugins"
+
+
+def test_kilo_mcp_config_path_matches_native_v1_precedence(monkeypatch, tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "kilo.json").touch()
+    (project / ".kilocode").mkdir()
+    project_kilo = project / ".kilocode" / "kilo.jsonc"
+    project_kilo.touch()
+
+    assert resolve_kilo_config_file(scope="project", project_dir=str(project)) == (
+        project_kilo
+    )
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    global_root = tmp_path / "xdg" / "kilo"
+    global_root.mkdir(parents=True)
+    (global_root / "opencode.json").touch()
+    global_kilo = global_root / "kilo.json"
+    global_kilo.touch()
+    assert get_mcp_config_path("kilo") == global_root / "kilo.json"
+
+
+def test_kilo_project_paths_do_not_follow_user_config_overrides(monkeypatch, tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("KILO_CONFIG_DIR", str(tmp_path / "user-config"))
+    monkeypatch.setenv("KILO_CONFIG", str(tmp_path / "user-profile.json"))
+
+    assert resolve_kilo_plugin_dir(scope="project", project_dir=str(project)) == (
+        project / ".kilo" / "plugin"
+    )
+    assert get_mcp_config_path("kilo", scope="project", project_dir=str(project)) == (
+        project / "kilo.json"
     )
 
 
@@ -411,6 +474,7 @@ def test_installer_detection_uses_relocated_directories(tmp_path):
         "KIRO_HOME": tmp_path / "kiro",
         "JUNIE_HOME": tmp_path / "junie",
         "OPENCODE_CONFIG_DIR": tmp_path / "opencode",
+        "KILO_CONFIG_DIR": tmp_path / "kilo",
         "AIDER_DESK_DIR": tmp_path / "aiderdesk",
         "OPENCLAW_STATE_DIR": tmp_path / "openclaw",
     }
@@ -442,6 +506,7 @@ def test_installer_detection_uses_relocated_directories(tmp_path):
         "junie",
         "crush",
         "opencode",
+        "kilo",
         "aiderdesk",
         "openclaw",
     ]
@@ -457,8 +522,10 @@ def test_installer_detection_uses_explicit_config_files(tmp_path):
 
     opencode_config = tmp_path / "opencode-profile" / "config.jsonc"
     openclaw_config = tmp_path / "openclaw-profile" / "config.json"
+    kilo_config = tmp_path / "kilo-profile" / "kilo.json"
     opencode_config.parent.mkdir()
     openclaw_config.parent.mkdir()
+    kilo_config.parent.mkdir()
 
     env = dict(os.environ)
     for env_var in IDE_ENV_VARS:
@@ -467,6 +534,7 @@ def test_installer_detection_uses_explicit_config_files(tmp_path):
         {
             "HOME": str(tmp_path / "home"),
             "OPENCODE_CONFIG": str(opencode_config),
+            "KILO_CONFIG": str(kilo_config),
             "OPENCLAW_CONFIG_PATH": str(openclaw_config),
         }
     )
@@ -480,7 +548,7 @@ def test_installer_detection_uses_explicit_config_files(tmp_path):
     )
 
     assert result.returncode == 0
-    assert result.stdout.strip().split() == ["opencode", "openclaw"]
+    assert result.stdout.strip().split() == ["opencode", "kilo", "openclaw"]
 
 
 def test_daemon_mcp_status_uses_custom_copilot_home(monkeypatch, tmp_path):

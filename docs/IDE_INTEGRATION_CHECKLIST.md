@@ -308,6 +308,11 @@ health, and explicit “no hook enforcement” assertions. For a shared adapter
 set per public IDE key so aliases cannot hide a missing setup or documentation
 path.
 
+For `kilo`, OpenCode-compatible payload normalization must still preserve Kilo's
+own adapter identity and `KILO_CONFIG_DIR` root. Keep native Kilo CLI execution
+and result-delivery qualification separate from generated-plugin and MCP setup
+contracts; do not infer prompt interception or safe result replacement.
+
 For CLI-capable integrations, the evidence must identify the integration's
 actual executable and configuration roots. The Grok Build reference case uses
 `grok`, the relocated `GROK_HOME` root, and project `.grok/` artifacts; its

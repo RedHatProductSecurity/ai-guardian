@@ -77,7 +77,7 @@ from ai_guardian.tools.input import (
     INPUT_FAILURE_LABELS,
     build_input_diagnostics,
     file_input_failure,
-    is_opencode_hook,
+    is_opencode_compatible_hook,
     normalize_opencode_input,
     opencode_native_input,
     opencode_native_name,
@@ -603,7 +603,7 @@ class ToolPolicyChecker:
         self, hook_data: Dict, tool_name: str, tool_input: Dict
     ) -> Optional[Tuple[bool, Optional[str], Optional[str]]]:
         """Reject unvalidated targets without changing native protection precedence."""
-        opencode = is_opencode_hook(hook_data)
+        opencode = is_opencode_compatible_hook(hook_data)
         input_failure = None
         recovered_target = None
         if opencode and (
@@ -686,7 +686,7 @@ class ToolPolicyChecker:
 
             # OpenCode aliases must agree before a protection selects a target.
             # Other integrations retain their native immutable guards first.
-            opencode = is_opencode_hook(hook_data)
+            opencode = is_opencode_compatible_hook(hook_data)
             if opencode:
                 input_protection = self._check_tool_input(
                     hook_data, tool_name, tool_input
@@ -1243,7 +1243,9 @@ class ToolPolicyChecker:
             # and subagent arguments at the event root.  Normalize those
             # shapes here as well as in the hook adapter because this checker
             # receives the original payload for policy/audit context.
-            if isinstance(tool_input, str) and not is_opencode_hook(hook_data):
+            if isinstance(tool_input, str) and not is_opencode_compatible_hook(
+                hook_data
+            ):
                 try:
                     decoded_input = json.loads(tool_input)
                 except (TypeError, json.JSONDecodeError) as exc:
@@ -1262,7 +1264,7 @@ class ToolPolicyChecker:
 
             # OpenCode's native payload uses lowercase tool names and camelCase
             # arguments. Normalize raw policy callers as well as hook adapters.
-            is_opencode = is_opencode_hook(hook_data)
+            is_opencode = is_opencode_compatible_hook(hook_data)
             if is_opencode:
                 tool_name = opencode_native_name(hook_data) or tool_name
                 if isinstance(tool_name, str):
@@ -2113,7 +2115,7 @@ class ToolPolicyChecker:
                 target_known=bool(file_path),
                 normalized_input=self._extract_tool_info(hook_data)[1],
             )
-        workspace_unknown = is_opencode_hook(hook_data) and (
+        workspace_unknown = is_opencode_compatible_hook(hook_data) and (
             hook_data.get("workspace_source") == "unknown"
             or ("cwd" in hook_data and valid_workspace(hook_data["cwd"]) is None)
         )
@@ -2126,7 +2128,8 @@ class ToolPolicyChecker:
             {
                 "context": {
                     "message_id": hook_data.get("message_id"),
-                    "host_version": hook_data.get("opencode_version"),
+                    "host_version": hook_data.get("opencode_version")
+                    or hook_data.get("kilo_version"),
                     "integration_version": __version__,
                     "workspace_source": hook_data.get("workspace_source")
                     or ("hook" if hook_data.get("cwd") else "request"),

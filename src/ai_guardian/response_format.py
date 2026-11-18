@@ -40,6 +40,7 @@ class IDEType(Enum):
     ANTIGRAVITY = "antigravity"  # JSON: {"decision": "deny", "reason": str}
     KIRO = "kiro"  # Exit codes: 0=allow, 1=block; stdout→context, stderr→agent on error
     PI = "pi"  # Pi extension shares Claude-compatible JSON responses
+    KILO = "kilo"  # Kilo plugin callbacks share OpenCode V1 hook responses
     UNKNOWN = "unknown"  # Default to Claude Code format
 
 

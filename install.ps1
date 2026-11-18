@@ -13,7 +13,7 @@
     Setup hooks for a specific IDE. When omitted, installed IDEs are detected
     and their hooks are set up automatically.
     Choices: claude, cursor, copilot, grok, codex, windsurf, gemini, cline,
-              antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, pi, augment, crush, junie
+              antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, kilo, pi, augment, crush, junie
     Goose command hooks are POSIX-only; native Windows setup is not qualified.
 
 .PARAMETER Profile
@@ -211,6 +211,14 @@ function Detect-InstalledAgents {
     # directory so the installer can create the integration on first setup.
     $opencodeDir = if ($env:OPENCODE_CONFIG) { Split-Path -Parent $env:OPENCODE_CONFIG } elseif ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } else { Join-Path $HOME ".config\opencode" }
     if (Test-Path $opencodeDir -PathType Container) { $agents += "opencode" }
+
+    # Kilo's config/plugin root is independent from OpenCode's. The package
+    # publishes both `kilo` and `kilocode` executable names.
+    $kiloDir = if ($env:KILO_CONFIG_DIR) { $env:KILO_CONFIG_DIR } elseif ($env:XDG_CONFIG_HOME) { Join-Path $env:XDG_CONFIG_HOME "kilo" } else { Join-Path $HOME ".config\kilo" }
+    $kiloExplicitDir = if ($env:KILO_CONFIG) { Split-Path -Parent $env:KILO_CONFIG } else { $null }
+    $kiloCommand = Get-Command kilo -ErrorAction SilentlyContinue
+    if (-not $kiloCommand) { $kiloCommand = Get-Command kilocode -ErrorAction SilentlyContinue }
+    if ((Test-Path $kiloDir -PathType Container) -or ($kiloExplicitDir -and (Test-Path $kiloExplicitDir -PathType Container)) -or $kiloCommand) { $agents += "kilo" }
 
     $aiderdeskDir = if ($env:AIDER_DESK_DIR) { $env:AIDER_DESK_DIR } elseif ($env:AIDER_DESK_HOME_DIR) { $env:AIDER_DESK_HOME_DIR } else { Join-Path $HOME ".aider-desk\extensions" }
     if (Test-Path $aiderdeskDir -PathType Container) { $agents += "aiderdesk" }

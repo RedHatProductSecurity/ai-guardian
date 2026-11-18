@@ -448,6 +448,55 @@ def inventory(
         config("goose", base / "hooks/hooks.json", base / ".mcp.json")
         artifacts.append(Artifact(base / "plugin.json", "goose-manifest"))
 
+    def kilo_config(root: Path, *, project: bool = False) -> Path:
+        names = (
+            (
+                ".kilo/kilo.jsonc",
+                ".kilo/kilo.json",
+                ".kilo/opencode.jsonc",
+                ".kilo/opencode.json",
+                ".kilocode/kilo.jsonc",
+                ".kilocode/kilo.json",
+                ".kilocode/opencode.jsonc",
+                ".kilocode/opencode.json",
+                "kilo.jsonc",
+                "kilo.json",
+                "opencode.jsonc",
+                "opencode.json",
+            )
+            if project
+            else ("kilo.jsonc", "kilo.json", "opencode.jsonc", "opencode.json")
+        )
+        return next(
+            (root / name for name in names if (root / name).is_file()),
+            root / "kilo.json",
+        )
+
+    def kilo_user_plugin_root(home: Path) -> Path:
+        configured = os.environ.get("KILO_CONFIG_DIR")
+        if configured:
+            return expanded(configured)
+        default = expanded(os.environ.get("XDG_CONFIG_HOME", "~/.config")) / "kilo"
+        roots = (default, home / ".kilocode", home / ".kilo")
+        for root in roots:
+            if (root / "plugin/ai-guardian.ts").is_file():
+                return root
+        return default
+
+    def kilo_project_plugin_root(project: Path) -> Path:
+        roots = (project / ".kilo", project / ".kilocode")
+        for root in roots:
+            if (root / "plugin/ai-guardian.ts").is_file():
+                return root
+        for root in roots:
+            if (root / "plugin").is_dir():
+                return root
+        return roots[0]
+
+    def kilo_plugin_artifacts(root: Path) -> None:
+        artifacts.append(Artifact(root / "plugin/ai-guardian.ts"))
+        artifacts.append(Artifact(root / "ai-guardian/ai-guardian-bridge.ts"))
+
     if scope in {"user", "both"}:
         home = Path.home()
 
@@ -511,6 +560,13 @@ def inventory(
             / ("settings/mcp.json" if os.environ.get("KIRO_HOME") else "settings.json"),
         )
         config("junie", root(".junie", "JUNIE_HOME") / "mcp.json")
+        kilo_config_root = (
+            expanded(os.environ["KILO_CONFIG_DIR"])
+            if os.environ.get("KILO_CONFIG_DIR")
+            else expanded(os.environ.get("XDG_CONFIG_HOME", "~/.config")) / "kilo"
+        )
+        config("kilo", kilo_config(kilo_config_root))
+        kilo_plugin_artifacts(kilo_user_plugin_root(home))
         aider = root(".aider-desk", "AIDER_DESK_DIR", "AIDER_DESK_HOME_DIR")
         config("aiderdesk", aider / "settings.json")
         package(aider / "extensions/ai-guardian", "ai-guardian-aiderdesk")
@@ -561,6 +617,8 @@ def inventory(
             "crush": (".crush.json",),
         }.items():
             config(host, *(project / p for p in paths))
+        config("kilo", kilo_config(project, project=True))
+        kilo_plugin_artifacts(kilo_project_plugin_root(project))
         for folder, events in (
             (".clinerules/hooks", ("PreToolUse", "PostToolUse", "UserPromptSubmit")),
             (".kiro/hooks", ("PreToolUse", "PostToolUse", "PromptSubmit")),

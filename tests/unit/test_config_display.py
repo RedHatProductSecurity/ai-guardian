@@ -419,6 +419,9 @@ class TestMultiIDEDisplaySupport:
         assert any(".cursor/skills" in d for d in dirs)
         assert any(".vscode/skills" in d for d in dirs)
         assert any(".windsurf/skills" in d for d in dirs)
+        assert any(".kilo/skills" in d for d in dirs)
+        assert any(".kilocode/skills" in d for d in dirs)
+        assert any(".agents/skills" in d for d in dirs)
 
 
 class TestImmutableRuleVisibility:
