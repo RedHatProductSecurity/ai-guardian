@@ -62,6 +62,13 @@ def test_reframe_prompts_preserve_migration_scope_and_current_framework_apis() -
     assert "extendTheme" not in framework_prompts
     assert "ChakraProvider with `value={system}`" in framework_prompts
     assert "List.Root/List.Item" in framework_prompts
+    assert "next/font and next/image only when the existing project uses Next.js" in (
+        framework_prompts
+    )
+    assert "daisyui@^4" in framework_prompts
+    assert "@headlessui/react" in framework_prompts
+    assert "@headlessui/vue" in framework_prompts
+    assert "TransitionRoot`/`TransitionChild" in framework_prompts
 
 
 def test_openwolf_hooks_and_agent_config_keep_their_contracts() -> None:

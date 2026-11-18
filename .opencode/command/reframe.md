@@ -277,9 +277,8 @@ ANIMATION STRATEGY:
 CODE QUALITY:
 - Fully responsive with mobile breakpoints
 - Semantic HTML throughout
-- next/font for optimized typography
-- Image optimization via next/image
-- Component-per-section architecture
+- Use next/font and next/image only when the existing project uses Next.js; otherwise use its current font loading and image optimization
+- Preserve the app's existing screen/component boundaries; componentize sections only for a landing page the user explicitly requests
 ```
 
 ---
@@ -287,7 +286,7 @@ CODE QUALITY:
 ### DaisyUI
 
 **Stack:** Tailwind CSS plugin (framework-agnostic)
-**Install:** `npm i -D daisyui`. For Tailwind v4, add `@import "tailwindcss";` and `@plugin "daisyui";` to the stylesheet; alternatively load a legacy config with `@config`. For Tailwind v3, register DaisyUI in `tailwind.config.js`.
+**Install:** For Tailwind v4, use `npm i -D daisyui` and add `@import "tailwindcss";` and `@plugin "daisyui";` to the stylesheet; alternatively load a legacy config with `@config`. For Tailwind v3, use `npm i -D daisyui@^4` and register DaisyUI in `tailwind.config.js`.
 **Site:** daisyui.com
 
 ```
@@ -591,7 +590,7 @@ CODE QUALITY:
 ### Headless UI
 
 **Stack:** React or Vue, Tailwind CSS (by Tailwind Labs)
-**Install:** `npm i @headlessui/react`
+**Install:** Use `npm i @headlessui/react` for React or `npm i @headlessui/vue` for Vue 3; install only the package matching the existing framework.
 **Site:** headlessui.com
 
 ```
@@ -599,7 +598,7 @@ Migrate the existing UI to Headless UI primitives, preserving its framework, rou
 
 ARCHITECTURE:
 - Preserve the project's existing framework and routing
-- Use Headless UI only for interactive behavior supported by the current framework
+- Use the package and component APIs matching the existing framework: `@headlessui/react` for React or `@headlessui/vue` for Vue 3; do not mix their APIs or convert frameworks
 - Retain the project's existing styling system and component structure
 
 DESIGN PRINCIPLES:
@@ -622,13 +621,9 @@ OPTIONAL LANDING-PAGE EXAMPLES — only when explicitly requested:
 10. Footer — pure Tailwind grid layout
 
 HEADLESS UI COMPONENTS TO LEVERAGE:
-- Popover — navbar dropdowns
-- Disclosure — mobile menu, FAQ items
-- Dialog — modals/overlays
-- Transition — smooth enter/leave animations
-- RadioGroup — plan selection
-- Switch — toggles
-- TabGroup — tabbed content
+- React: use `Popover`, `Disclosure`, `Dialog`, `Transition`, `RadioGroup`, `Switch`, and `TabGroup` from `@headlessui/react`
+- Vue 3: use `Popover`/`PopoverButton`/`PopoverPanel`, `Disclosure`/`DisclosureButton`/`DisclosurePanel`, `Dialog`, `TransitionRoot`/`TransitionChild`, `RadioGroup`, `Switch`, and `TabGroup` from `@headlessui/vue`
+- Use each framework's documented component, state, and slot patterns
 
 CODE QUALITY:
 - 100% accessible (Headless UI's core guarantee)
