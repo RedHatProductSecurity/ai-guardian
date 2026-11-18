@@ -238,6 +238,7 @@ class ViolationLogger:
         start_column: Any = None,
         end_column: Any = None,
         source_context: Any = None,
+        source_url: Any = None,
     ) -> None:
         """Persist a minimal audit envelope plus a verified source locator."""
         if violation_type not in _SENSITIVE_FINDING_FILTER_ALIASES:
@@ -256,12 +257,16 @@ class ViolationLogger:
             from ai_guardian.violations.command_context import (
                 normalize_sensitive_source_context,
                 sanitize_sensitive_file_path,
+                sanitize_source_url,
             )
 
             safe_file_path = sanitize_sensitive_file_path(file_path)
+            safe_source_url = sanitize_source_url(source_url)
             safe_blocked: Dict[str, Any] = {}
             if safe_file_path:
                 safe_blocked["file_path"] = safe_file_path
+            if safe_source_url:
+                safe_blocked["source_url"] = safe_source_url
 
             safe_line = _safe_sensitive_coordinate(line_number, minimum=1)
             safe_end_line = _safe_sensitive_coordinate(end_line, minimum=1)
@@ -385,6 +390,16 @@ class ViolationLogger:
                     blocked_data.get("end_column"), context_data.get("end_column")
                 ),
                 source_context=source_context,
+                **(
+                    {
+                        "source_url": _first_present(
+                            blocked_data.get("source_url"),
+                            context_data.get("source_url"),
+                        )
+                    }
+                    if "source_url" in blocked_data or "source_url" in context_data
+                    else {}
+                ),
             )
             return
 
@@ -428,6 +443,12 @@ class ViolationLogger:
                 origin_command,
             )
             safe_context = dict(context) if isinstance(context, dict) else {}
+            from ai_guardian.violations.command_context import (
+                sanitize_source_url_metadata,
+            )
+
+            safe_blocked = sanitize_source_url_metadata(safe_blocked)
+            safe_context = sanitize_source_url_metadata(safe_context)
             for command_key in ("command", "source_command", "origin_command"):
                 safe_context.pop(command_key, None)
             entry = {

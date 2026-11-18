@@ -19,6 +19,7 @@ from ai_guardian.violations.guidance import (
 )
 from ai_guardian.violations.command_context import (
     sanitize_sensitive_file_path,
+    sanitize_source_url,
     sensitive_source_context_label,
 )
 from ai_guardian.web.components.header import create_header, create_sidebar
@@ -101,8 +102,11 @@ DETAIL_FIELDS = {
         ("Source Command", "source_command"),
         ("Command", "command"),
         ("File", "file_path"),
+        ("Source", "source_context"),
         ("Line", "line_number"),
         ("Column", "start_column"),
+        ("End Line", "end_line"),
+        ("End Column", "end_column"),
         ("Count", "redaction_count"),
         ("Types", "redacted_types"),
     ],
@@ -205,6 +209,22 @@ def _get_resolution_instructions(violation: dict):
 def _detail_fields(violation_type: str, blocked: dict) -> list:
     """Return standard detail fields plus an optional command fallback."""
     fields = list(DETAIL_FIELDS.get(violation_type, []))
+    if blocked.get("source_url"):
+        fields.insert(0, ("Source URL", "source_url"))
+    if sensitive_source_context_label(
+        blocked.get("source_context")
+    ) == "Tool output" or blocked.get("source_url"):
+        fields = [
+            (
+                (
+                    f"Response {label}"
+                    if key in {"line_number", "end_line", "start_column", "end_column"}
+                    else label
+                ),
+                key,
+            )
+            for label, key in fields
+        ]
     if blocked.get("source_command") and not any(
         key == "source_command" for _label, key in fields
     ):
@@ -214,10 +234,12 @@ def _detail_fields(violation_type: str, blocked: dict) -> list:
 
 def _sensitive_detail_value(violation_type: str, key: str, value):
     """Validate optional locator fields before displaying sensitive history."""
-    if violation_type != "sensitive_finding" or value is None:
-        return value
+    if key == "source_url":
+        return sanitize_source_url(value)
     if key == "source_context":
         return sensitive_source_context_label(value)
+    if violation_type != "sensitive_finding" or value is None:
+        return value
     if key == "file_path":
         return (
             value
@@ -240,14 +262,15 @@ def _sensitive_detail_value(violation_type: str, key: str, value):
 def _with_sensitive_blocked_details(violation: dict) -> dict:
     """Normalize safe locator fields from flat daemon responses for Console views."""
     vtype = violation.get("violation_type", violation.get("type", ""))
-    if vtype not in {
+    is_sensitive = vtype in {
         "sensitive_finding",
         "secret_detected",
         "image_secret_detected",
         "pii_detected",
-    }:
+    }
+    if not is_sensitive and vtype != "secret_redaction":
         return violation
-    legacy_sensitive_type = vtype != "sensitive_finding"
+    legacy_sensitive_type = is_sensitive and vtype != "sensitive_finding"
     existing = violation.get("blocked")
     blocked = dict(existing) if isinstance(existing, dict) else {}
     for external_key, blocked_key in (
@@ -255,6 +278,7 @@ def _with_sensitive_blocked_details(violation: dict) -> dict:
         ("line", "line_number"),
         ("end_line", "end_line"),
         ("source_context", "source_context"),
+        ("source_url", "source_url"),
     ):
         if blocked_key not in blocked and violation.get(external_key) is not None:
             blocked[blocked_key] = violation[external_key]
@@ -274,10 +298,10 @@ def _with_sensitive_blocked_details(violation: dict) -> dict:
     else:
         blocked.pop("file_path", None)
     normalized = dict(violation)
-    normalized["violation_type"] = "sensitive_finding"
+    normalized["violation_type"] = "sensitive_finding" if is_sensitive else vtype
     normalized.pop("file", None)
     if "type" in normalized:
-        normalized["type"] = "sensitive_finding"
+        normalized["type"] = normalized["violation_type"]
     if blocked:
         normalized["blocked"] = blocked
     return normalized
@@ -377,7 +401,7 @@ def _format_violation_markdown(v: dict) -> str:
     for label, key in fields:
         val = _sensitive_detail_value(vtype, key, blocked.get(key))
         if val is not None:
-            if vtype == "sensitive_finding" and key in {
+            if vtype in {"sensitive_finding", "secret_redaction"} and key in {
                 "start_column",
                 "end_column",
             }:
@@ -907,7 +931,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                         if key == "start_column" and isinstance(val, int):
                             display = str(val + 1)
                         if (
-                            vtype == "sensitive_finding"
+                            vtype in {"sensitive_finding", "secret_redaction"}
                             and key == "end_column"
                             and isinstance(val, int)
                         ):
@@ -916,7 +940,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                             display = ", ".join(str(x) for x in val)
                         if isinstance(val, float):
                             display = f"{val:.2f}"
-                        if len(display) > 100:
+                        if len(display) > 100 and key != "source_url":
                             display = display[:97] + "..."
                         ui.label(display).classes("text-xs")
 

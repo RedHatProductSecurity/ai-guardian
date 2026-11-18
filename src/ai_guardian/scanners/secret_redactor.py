@@ -122,6 +122,12 @@ class SecretRedactor:
                     f"Failed to compile pattern for {secret_type if isinstance(pattern_info, tuple) else pattern_info.get('secret_type', 'unknown')}: {e}"
                 )
 
+        # Metadata verification must distinguish a clean scan from missing or
+        # rejected secret rules. Custom/PII rules cannot fill this coverage gap.
+        self.secret_patterns_complete = bool(patterns_to_use) and len(
+            self.compiled_patterns
+        ) == len(patterns_to_use)
+
         # Add custom patterns from local config (always additive, skip in pii_only mode)
         additional = [] if pii_only else self.config.get("additional_patterns", [])
         for custom in additional:

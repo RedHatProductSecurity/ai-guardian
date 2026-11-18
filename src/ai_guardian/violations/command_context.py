@@ -1,14 +1,18 @@
 """Privacy-aware source context for violation history."""
 
 import logging
+import re
 from functools import lru_cache
-from typing import Optional
+from ipaddress import IPv6Address
+from typing import Any, Dict, Optional
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
 MAX_ORIGIN_COMMAND_LEN = 500
 _MAX_ORIGIN_COMMAND_SCAN_LEN = 65_536
 MAX_SENSITIVE_FILE_PATH_LEN = 4096
+MAX_SOURCE_URL_LEN = 4096
 _ORIGIN_COMMAND_PII_TYPES = (
     "ssn",
     "credit_card",
@@ -62,10 +66,21 @@ def _source_text_is_verified_safe(text: str) -> bool:
     return _bundled_redactor_verifies_safe(text, source_name="source context")
 
 
-def _bundled_redactor_verifies_safe(text: str, *, source_name: str) -> bool:
+def _bundled_redactor_verifies_safe(
+    text: str, *, source_name: str, require_secret_patterns: bool = False
+) -> bool:
     """Check bounded source metadata with bundled secret/PII rules in-process."""
     try:
         redactor = _origin_command_redactor()
+        if (
+            require_secret_patterns
+            and getattr(redactor, "secret_patterns_complete", None) is not True
+        ):
+            logger.warning(
+                "Secret rules unavailable; omitting %s from violation history",
+                source_name,
+            )
+            return False
         compiled_pii_types = getattr(redactor, "compiled_pii_types", None)
         if not isinstance(compiled_pii_types, set) or not set(
             _ORIGIN_COMMAND_PII_TYPES
@@ -151,6 +166,99 @@ def sanitize_sensitive_file_path(file_path: object) -> Optional[str]:
     if not _source_path_is_verified_safe(file_path):
         return None
     return file_path
+
+
+def sanitize_source_url(value: object) -> Optional[str]:
+    """Return a verified HTTP(S) locator, never userinfo, query or fragment data.
+
+    This is display metadata, not network authorization. Validation stays offline
+    and independent of user scanner exclusions. Ambiguous syntax, credential-like
+    paths, sensitive matches and incomplete checks all omit the locator.
+    """
+    if (
+        not isinstance(value, str)
+        or not 0 < len(value) <= MAX_SOURCE_URL_LEN
+        or not value.isascii()
+        or not value.isprintable()
+        or any(char.isspace() for char in value)
+        or "\\" in value
+    ):
+        return None
+    try:
+        parsed = urlsplit(value)
+        host = parsed.hostname
+        port = parsed.port  # Validate even when the rest of the URL is omitted.
+        if parsed.scheme not in {"http", "https"} or not host:
+            return None
+        if not re.fullmatch(r"[a-zA-Z0-9.:-]+", host):
+            return None
+        if ":" in host:
+            IPv6Address(host)
+        elif (
+            host.endswith("..")
+            or len(host) > 253
+            or any(
+                not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                for label in host.rstrip(".").split(".")
+            )
+        ):
+            return None
+        authority = f"[{host}]" if ":" in host else host
+        if not re.fullmatch(
+            re.escape(authority) + r"(?::[0-9]+)?",
+            parsed.netloc.rsplit("@", 1)[-1],
+            re.IGNORECASE,
+        ):
+            return None
+        if port is not None:
+            authority += f":{port}"
+        candidate = urlunsplit((parsed.scheme, authority, parsed.path, "", ""))
+        decoded_path = parsed.path
+        for _ in range(4):
+            if re.search(r"%(?![0-9a-fA-F]{2})", decoded_path):
+                return None
+            decoded = unquote(decoded_path, errors="strict")
+            if decoded == decoded_path:
+                break
+            decoded_path = decoded
+        else:
+            return None
+        if not re.fullmatch(r"[/a-zA-Z0-9._~-]*", decoded_path):
+            return None
+        if re.search(
+            r"(?:^|/)(?:password|passwd|(?:client[-_]?)?secret|(?:access[-_]?)?token|"
+            r"api[-_]?key|auth(?:orization)?|bearer|credentials?)(?:[/._-]|$)",
+            decoded_path,
+            re.IGNORECASE,
+        ):
+            return None
+        for text in {
+            candidate,
+            urlunsplit((parsed.scheme, authority, decoded_path, "", "")),
+        }:
+            if not _bundled_redactor_verifies_safe(
+                text, source_name="source URL", require_secret_patterns=True
+            ):
+                return None
+        return candidate
+    except (ValueError, UnicodeError):
+        return None
+
+
+def sanitize_source_url_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Revalidate optional URL metadata at persistence and safe-copy boundaries."""
+    safe = dict(data)
+    if "source_url" in safe:
+        source_url = sanitize_source_url(safe.pop("source_url"))
+        if source_url:
+            safe["source_url"] = source_url
+    pretool = safe.get("pretool_context")
+    if isinstance(pretool, dict):
+        # Correlation contexts have one fixed nesting level.
+        pretool = dict(pretool)
+        pretool.pop("pretool_context", None)
+        safe["pretool_context"] = sanitize_source_url_metadata(pretool)
+    return safe
 
 
 def normalize_sensitive_source_context(value: object) -> Optional[str]:

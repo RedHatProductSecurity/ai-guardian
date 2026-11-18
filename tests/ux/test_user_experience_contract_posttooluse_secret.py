@@ -27,6 +27,140 @@ from tests.fixtures.research_secret_tokens import (
 )
 
 
+@pytest.mark.parametrize("tool_name", ["webfetch", "WebFetch"])
+@pytest.mark.parametrize("safe_location", [True, False])
+@pytest.mark.parametrize("correlated", [True, False])
+def test_fetched_response_history_has_private_safe_source(
+    tmp_path, monkeypatch, tool_name, safe_location, correlated
+):
+    """USER EXPERIENCE: fetched sensitive content → redacted output and safe URL.
+
+    Manual verification with an isolated project and synthetic custom rule:
+    1. Ask an agent to fetch a page containing the synthetic rule's value.
+    2. Verify the value is replaced in the agent-visible tool response.
+    3. Open both history records: Source URL identifies the request, not a file.
+    4. Response line/columns refer to the converted response, not the original page.
+    5. Userinfo, query, and fragment values never appear in history or its copies.
+       An unsafe path leaves only Tool output context; no URL is invented.
+    """
+    from ai_guardian.hook_processing import (
+        _ensure_hook_events_imported,
+        _process_hook_data,
+    )
+    from ai_guardian.violations.logger import ViolationLogger
+
+    _ensure_hook_events_imported()
+    private_value = "LOCATOR_FIXTURE_" + "A1B2C3D4E5F6G7H8"
+    pattern = r"LOCATOR_FIXTURE_[A-Z0-9]{16}"
+    history = ViolationLogger(
+        log_path=tmp_path / "history.jsonl", config={"enabled": True}
+    )
+    monkeypatch.setattr(
+        "ai_guardian.hook_processing._handle_bootstrap_scan", lambda *_a, **_k: None
+    )
+    for target in (
+        "ai_guardian.hook_processing.ViolationLogger",
+        "ai_guardian.violations.logger.ViolationLogger",
+    ):
+        monkeypatch.setattr(target, lambda **_kwargs: history)
+    monkeypatch.setattr(
+        "ai_guardian.scanners.secret_scanning._load_pattern_server_config", lambda: None
+    )
+    monkeypatch.setattr(
+        "ai_guardian.config.loaders._load_secret_scanning_config",
+        lambda: (
+            {
+                "enabled": True,
+                "engines": ["toml-patterns"],
+                "additional_patterns": [
+                    {"id": "locator-fixture", "match_type": "regex", "regex": pattern}
+                ],
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        "ai_guardian.config.loaders._load_secret_redaction_config",
+        lambda: (
+            {
+                "enabled": True,
+                "action": "warn",
+                "additional_patterns": [
+                    {
+                        "pattern": pattern,
+                        "type": "synthetic-locator-value",
+                        "strategy": "full_redact",
+                    }
+                ],
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        "ai_guardian.config.loaders._load_pii_config", lambda: (None, None)
+    )
+    monkeypatch.setattr(
+        "ai_guardian.scanners.password_likelihood.run_password_likelihood_scan",
+        lambda _content: None,
+    )
+    monkeypatch.setattr(
+        "ai_guardian.tools.policy.ToolPolicyChecker.check_tool_allowed",
+        lambda *_a, **_k: (True, None, tool_name),
+    )
+    source_url = "https://example.test/docs/page"
+    request_url = (
+        "https://user:private-userinfo@example.test/docs/page?key=private-query#private-fragment"
+        if safe_location
+        else source_url + "/password/private-path"
+    )
+    shared = {
+        "hook_source": "opencode",
+        "opencode_version": "2.0.24",
+        "tool_name": tool_name,
+        "tool_use_id": "call_locator",
+        "session_id": "locator-session",
+    }
+    if correlated:
+        before = _process_hook_data(
+            {
+                **shared,
+                "hook_event_name": "tool.execute.before",
+                "tool_input": {"url": request_url},
+            }
+        )
+        assert before.get("_blocked") is not True
+    result = _process_hook_data(
+        {
+            **shared,
+            "hook_event_name": "tool.execute.after",
+            "hook_source": "opencode",
+            "opencode_version": "2.0.24",
+            "tool_name": tool_name,
+            "tool_input": {} if correlated else {"url": request_url},
+            "tool_response": {"output": "# Converted response\n" + private_value},
+        }
+    )
+    assert private_value not in result["output"]
+    assert result.get("_blocked") is not True
+    records = history.get_recent_violations()
+    assert {r["violation_type"] for r in records} == {
+        "sensitive_finding",
+        "secret_redaction",
+    }
+    for record in records:
+        blocked = record["blocked"]
+        assert blocked.get("source_url") == (source_url if safe_location else None)
+        assert blocked["source_context"] == "tool_output"
+        assert not blocked.get("file_path")
+        assert blocked["line_number"] == 2
+        assert blocked["start_column"] == 0
+        assert blocked["end_column"] == len(private_value)
+    serialized = json.dumps(records)
+    assert private_value not in serialized
+    assert "private-" not in serialized
+    assert "webfetch_output" not in serialized
+
+
 class PostToolUseSecretBlockingTests(TestCase):
     """
     Tests verifying PostToolUse correctly blocks secrets when redaction is disabled.

@@ -934,6 +934,10 @@ class MultiDaemonClient:
         from ai_guardian.violations.logger import ViolationLogger
         from ai_guardian.violations.decision import safe_policy_decision
         from ai_guardian.violations.identity import stable_violation_id
+        from ai_guardian.violations.command_context import (
+            sanitize_source_url,
+            sensitive_source_context_label,
+        )
 
         _ALLOWED_FIELDS = {
             "id",
@@ -947,6 +951,7 @@ class MultiDaemonClient:
             "end_line",
             "end_column",
             "source_context",
+            "source_url",
             "action",
             "suggestion",
             "timestamp",
@@ -968,6 +973,8 @@ class MultiDaemonClient:
                 "image_secret_detected",
                 "pii_detected",
             }
+            blocked = entry.get("blocked")
+            blocked = blocked if isinstance(blocked, dict) else {}
             if is_sensitive:
                 legacy_sensitive_type = (
                     entry.get("violation_type") != "sensitive_finding"
@@ -979,8 +986,6 @@ class MultiDaemonClient:
                 }
                 item["id"] = stable_violation_id(entry)
                 item["violation_type"] = "sensitive_finding"
-                blocked = entry.get("blocked")
-                blocked = blocked if isinstance(blocked, dict) else {}
                 file_path = blocked.get("file_path")
                 if legacy_sensitive_type:
                     from ai_guardian.violations.command_context import (
@@ -994,27 +999,28 @@ class MultiDaemonClient:
                     and file_path.isprintable()
                 ):
                     item["file"] = file_path
-                for source_key, target_key, minimum in (
-                    ("line_number", "line", 1),
-                    ("start_column", "start_column", 0),
-                    ("end_line", "end_line", 1),
-                    ("end_column", "end_column", 0),
+            source_url = sanitize_source_url(
+                blocked.get("source_url") or entry.get("source_url")
+            )
+            item.pop("source_url", None)
+            if source_url:
+                item["source_url"] = source_url
+            source_label = sensitive_source_context_label(blocked.get("source_context"))
+            if is_sensitive or source_url or source_label == "Tool output":
+                if source_label:
+                    item["source_context"] = source_label
+                for source_key, target_key in (
+                    ("line_number", "line"),
+                    ("end_line", "end_line"),
+                    ("start_column", "start_column"),
+                    ("end_column", "end_column"),
                 ):
                     coordinate = blocked.get(source_key)
+                    minimum = 0 if "column" in source_key else 1
                     if type(coordinate) is int and minimum <= coordinate <= 2**31 - 1:
                         item[target_key] = coordinate + (
-                            1 if source_key in {"start_column", "end_column"} else 0
+                            1 if "column" in source_key else 0
                         )
-                if blocked.get("source_context"):
-                    from ai_guardian.violations.command_context import (
-                        sensitive_source_context_label,
-                    )
-
-                    source_label = sensitive_source_context_label(
-                        blocked["source_context"]
-                    )
-                    if source_label:
-                        item["source_context"] = source_label
             from ai_guardian.violations.utils import safe_mirror_metadata
 
             mirror = safe_mirror_metadata(entry.get("mirror"))

@@ -304,6 +304,8 @@ def _log_secret_detection_violation(
     hctx = hook_context or {}
     engine_name = details.get("engine", "Gitleaks")
     file_path = filename if filename != "user_prompt" else None
+    if ctx.get("source_context") == "tool_output":
+        file_path = ctx.get("file_path")
 
     result = ScanResult(
         detected=True,
@@ -313,6 +315,7 @@ def _log_secret_detection_violation(
         rule_id=details.get("rule_id", ""),
         file_path=file_path,
         line_number=details.get("line_number"),
+        end_line=details.get("end_line") or None,
         start_column=details.get("start_column"),
         end_column=details.get("end_column"),
         error_message=f"{engine_name} detected sensitive information",
@@ -402,6 +405,8 @@ def _log_finding_violation(
     ctx = context or {}
     hctx = hook_context or {}
     file_path = filename if filename != "user_prompt" else None
+    if ctx.get("source_context") == "tool_output":
+        file_path = ctx.get("file_path")
 
     result = ScanResult(
         detected=True,
@@ -411,6 +416,7 @@ def _log_finding_violation(
         rule_id=rule_id,
         file_path=file_path,
         line_number=details.get("line_number"),
+        end_line=details.get("end_line") or None,
         start_column=details.get("start_column"),
         end_column=details.get("end_column"),
         error_message=f"{engine_name}: {reason_label} ({rule_id})",

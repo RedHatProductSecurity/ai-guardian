@@ -3146,9 +3146,19 @@ def _process_hook_data(hook_data, daemon_state=None):
                 # Save minimal PreToolUse context for correlation (#366)
                 if context_mgr and hook_tool_use_id:
                     try:
+                        source_metadata = {}
+                        if str(tool_name).casefold() == "webfetch":
+                            from ai_guardian.violations.command_context import (
+                                sanitize_source_url,
+                            )
+
+                            source_url = sanitize_source_url(tool_input.get("url"))
+                            if source_url:
+                                source_metadata["source_url"] = source_url
                         context_mgr.save_pretool_context(
                             hook_tool_use_id,
                             {
+                                **source_metadata,
                                 "file_path": None,
                                 "tool_name": tool_identifier or tool_name,
                                 "scan_results": {

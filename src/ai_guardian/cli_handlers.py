@@ -89,6 +89,7 @@ def _format_duration_ago(secs):
 def _sensitive_finding_location_lines(blocked):
     """Format only the safe locator fields retained for sensitive history."""
     from ai_guardian.violations.command_context import (
+        sanitize_source_url,
         sensitive_source_context_label,
     )
 
@@ -112,31 +113,31 @@ def _sensitive_finding_location_lines(blocked):
         end_column if type(end_column) is int and 0 <= end_column <= 2**31 - 1 else None
     )
     lines = []
-    if file_path:
-        location = f"  File: {file_path}"
-        if line is not None:
-            line_detail = (
-                f"lines {line}-{end_line}"
-                if end_line is not None and end_line != line
-                else f"line {line}"
-            )
-            if column is not None:
-                line_detail += f", column {column + 1}"
-                if end_column is not None:
-                    line_detail += f"-{end_column + 1}"
-            location += f" ({line_detail})"
-        lines.append(location)
+    source_url = sanitize_source_url(blocked.get("source_url"))
+    source_label = sensitive_source_context_label(blocked.get("source_context"))
+    position = ""
+    if line is not None:
+        line_detail = (
+            f"lines {line}-{end_line}"
+            if end_line is not None and end_line != line
+            else f"line {line}"
+        )
+        if column is not None:
+            line_detail += f", column {column + 1}"
+            if end_column is not None:
+                line_detail += f"-{end_column + 1}"
+        response_position = source_url or (
+            not file_path and source_label == "Tool output"
+        )
+        position = f" ({'response ' if response_position else ''}{line_detail})"
+    if file_path or source_url:
+        location = f"  URL: {source_url}" if source_url else f"  File: {file_path}"
+        lines.append(location + position)
     else:
-        source_label = sensitive_source_context_label(blocked.get("source_context"))
         if source_label:
-            context_line = f"  Source: {source_label}"
-            if line is not None:
-                context_line += f" (line {line}"
-                if column is not None:
-                    context_line += f", column {column + 1}"
-                context_line += ")"
-            context_line += "; precise location was not retained"
-            lines.append(context_line)
+            lines.append(
+                f"  Source: {source_label}{position}; precise location was not retained"
+            )
         elif line is not None:
             lines.append(f"  Line: {line}; precise file location was not retained")
         else:
@@ -255,6 +256,12 @@ def _handle_violations_command(args):
                 blocked["file_path"] = sanitize_sensitive_file_path(
                     blocked.get("file_path")
                 )
+            for locator_line in _sensitive_finding_location_lines(
+                blocked if isinstance(blocked, dict) else {}
+            ):
+                print(locator_line)
+
+        elif v.get("violation_type") == ViolationType.SECRET_REDACTION:
             for locator_line in _sensitive_finding_location_lines(
                 blocked if isinstance(blocked, dict) else {}
             ):

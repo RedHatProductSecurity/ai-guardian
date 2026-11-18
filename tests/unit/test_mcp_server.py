@@ -909,6 +909,8 @@ class TestGetViolations:
         assert "image_secret_detected" in tool.description
         assert "pii_detected" in tool.description
         assert "original subtype" in tool.description
+        assert "source_url" in tool.description
+        assert "scanned tool response" in tool.description
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_returns_filtered_violations(self, mock_vl_cls):

@@ -214,6 +214,10 @@ class GuardSession:
     def _sanitize_violation(v: Dict, sanitize_fn) -> Dict[str, Any]:
         """Extract and sanitize a single violation record."""
         from ai_guardian.violations.decision import safe_policy_decision
+        from ai_guardian.violations.command_context import (
+            sanitize_source_url,
+            sensitive_source_context_label,
+        )
 
         blocked = v.get("blocked", {})
         if not isinstance(blocked, dict):
@@ -282,23 +286,19 @@ class GuardSession:
                 and file_path.isprintable()
             ):
                 safe_violation["file_path"] = file_path
-            for key, minimum in (
-                ("line_number", 1),
-                ("end_line", 1),
-                ("start_column", 0),
-                ("end_column", 0),
-            ):
+
+        source_url = sanitize_source_url(blocked.get("source_url"))
+        if source_url:
+            safe_violation["source_url"] = source_url
+        source_label = sensitive_source_context_label(blocked.get("source_context"))
+        if is_sensitive or source_url or source_label == "Tool output":
+            if source_label:
+                safe_violation["source_context"] = source_label
+            for key in ("line_number", "end_line", "start_column", "end_column"):
                 coordinate = blocked.get(key)
+                minimum = 0 if "column" in key else 1
                 if type(coordinate) is int and minimum <= coordinate <= 2**31 - 1:
                     safe_violation[key] = coordinate
-            if blocked.get("source_context"):
-                from ai_guardian.violations.command_context import (
-                    sensitive_source_context_label,
-                )
-
-                source_label = sensitive_source_context_label(blocked["source_context"])
-                if source_label:
-                    safe_violation["source_context"] = source_label
         return safe_violation
 
     @staticmethod

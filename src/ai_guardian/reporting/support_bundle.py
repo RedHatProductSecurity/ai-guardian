@@ -148,12 +148,25 @@ def _sanitize_config(config: Dict) -> tuple:
 def _sanitize_violations(violations: List[Dict]) -> tuple:
     """Sanitize violation entries. Returns (sanitized_list, redaction_count)."""
     import copy
+    from ai_guardian.violations.command_context import (
+        sanitize_source_url,
+        sanitize_source_url_metadata,
+    )
 
     sanitized = []
     redactions = 0
 
     for v in violations:
         entry = copy.deepcopy(v)
+        for key in (None, "blocked", "context"):
+            raw = entry if key is None else entry.get(key)
+            if isinstance(raw, dict):
+                safe = sanitize_source_url_metadata(raw)
+                redactions += int(safe != raw)
+                if key is None:
+                    entry = safe
+                else:
+                    entry[key] = safe
         ctx = entry.get("context", {})
 
         if "file_path" in ctx and ctx["file_path"]:
@@ -180,6 +193,9 @@ def _sanitize_violations(violations: List[Dict]) -> tuple:
             blocked = entry.get("blocked")
             blocked = blocked if isinstance(blocked, dict) else {}
             safe_blocked: Dict[str, Any] = {}
+            source_url = sanitize_source_url(blocked.get("source_url"))
+            if source_url:
+                safe_blocked["source_url"] = source_url
             file_path = blocked.get("file_path")
             if legacy_sensitive_type:
                 from ai_guardian.violations.command_context import (

@@ -48,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **WebFetch violation locations (#2779):** Preserve a privacy-validated request
+  URL for sensitive findings and redaction events instead of a synthetic output
+  filename. Retain response coordinates across history, Console/copy, CLI, REST,
+  MCP, and SDK views, with safe URL correlation and locationless fallbacks.
 - **Locationless violation command privacy (#2759):** Omit command-origin
   context unless every expected bundled PII matcher compiled successfully, so
   missing or invalid PII rules cannot make an unchecked command appear verified.

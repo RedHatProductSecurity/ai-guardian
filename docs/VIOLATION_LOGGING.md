@@ -102,6 +102,25 @@ positions are exposed by Console/CLI/MCP/SDK views through bounded field
 projections; malformed legacy locator values are omitted. Command-credential
 findings retain only fixed labels and argument positions.
 
+For URL-backed `webfetch` / `WebFetch` responses, sensitive findings and redaction
+events can additionally retain `blocked.source_url`. This is a sanitized **request
+URL**, not a file path or a verified redirect destination. HTTP(S) locators are
+bounded to 4096 characters; userinfo, query strings, and fragments are removed.
+Ambiguous/malformed URLs, credential-like paths, detected secrets/PII (including
+percent-encoded paths), and unavailable validation rules cause the URL to be
+omitted. URL validation is offline and independent of scanner exclusions. No new
+configuration is required. Pre/post-tool correlation caches only the safe locator.
+
+The fixed `source_context: "tool_output"` label identifies the coordinate space,
+including when no safe URL is available. **Response** line/column labels in the
+Console and CLI refer to the exact scanned response, which may be converted
+HTML/Markdown—not the original page, Gist, or raw file. History/SDK columns remain
+zero-based (end offsets exclusive for the built-in scanner/redactor); REST/MCP
+and human views use one-based columns. A zero-valued internal column is valid.
+The URL survives Console details and safe copies, CLI, REST, MCP, SDK, and support
+projections without changing existing file-path fields or processing-source
+semantics. Older records and responses without URL metadata remain supported.
+
 The existing top-level JSONL fields remain unchanged for standard violation
 types; sensitive findings use the minimal record described below. Consumers that
 read older entries can treat a missing `policy_decision` field as a legacy

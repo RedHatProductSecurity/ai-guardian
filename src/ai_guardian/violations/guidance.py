@@ -73,6 +73,7 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         )
     if vtype == "sensitive_finding":
         from ai_guardian.violations.command_context import (
+            sanitize_source_url,
             sensitive_source_context_label,
         )
 
@@ -82,6 +83,12 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
             detail = (
                 "A sanitized file path and any available position are retained "
                 "below to help locate the finding."
+            )
+        elif sanitize_source_url(blocked.get("source_url")):
+            detail = (
+                "A sanitized request URL and any available response position are "
+                "retained below. Positions refer to the scanned tool response, "
+                "not the original remote document."
             )
         else:
             source_label = sensitive_source_context_label(blocked.get("source_context"))

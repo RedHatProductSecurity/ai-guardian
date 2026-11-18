@@ -770,6 +770,20 @@ def run_content_pipeline(
                 },
                 "ignore_files_matched": ignore_files_matched,
             }
+            if str(tool_name).casefold() == "webfetch":
+                pretool_context["file_path"] = None
+                from ai_guardian.violations.command_context import sanitize_source_url
+
+                normalized = (
+                    getattr(ctx, "normalized", None) if ctx is not None else None
+                )
+                if normalized is None:
+                    normalized = adapter.normalize_input(hook_data or {})
+                source_url = sanitize_source_url(
+                    (normalized.tool_input or {}).get("url")
+                )
+                if source_url:
+                    pretool_context["source_url"] = source_url
             context_mgr.save_pretool_context(hook_tool_use_id, pretool_context)
             logger.info(
                 f"PreToolUse: saved context for " f"tool_use_id={hook_tool_use_id}"
