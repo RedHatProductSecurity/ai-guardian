@@ -193,7 +193,7 @@ def _make_mirror_record(
     if remote_id:
         mirror["source_violation_id"] = remote_id
 
-    entry = {
+    entry: dict = {
         "id": mirror_id,
         "timestamp": _safe_timestamp(record.get("timestamp")),
         "violation_type": violation_type,
@@ -224,6 +224,29 @@ def _make_mirror_record(
     line = record.get("line")
     if isinstance(line, int) and not isinstance(line, bool) and line >= 0:
         entry["line"] = line
+    from ai_guardian.violations.command_context import (
+        normalize_sensitive_source_context,
+        sanitize_source_url,
+    )
+
+    source_url = sanitize_source_url(record.get("source_url"))
+    source_context = normalize_sensitive_source_context(record.get("source_context"))
+    if source_url:
+        entry["blocked"]["source_url"] = source_url
+    if source_url or source_context == "tool_output":
+        entry["blocked"]["source_context"] = "tool_output"
+        for source_key, target_key in (
+            ("line", "line_number"),
+            ("end_line", "end_line"),
+            ("start_column", "start_column"),
+            ("end_column", "end_column"),
+        ):
+            coordinate = record.get(source_key)
+            if type(coordinate) is int and 1 <= coordinate <= 2**31:
+                # REST summaries use one-based columns; nested history uses offsets.
+                entry["blocked"][target_key] = coordinate - (
+                    1 if "column" in source_key else 0
+                )
     return entry, event_key
 
 

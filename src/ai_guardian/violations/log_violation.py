@@ -47,6 +47,8 @@ class ScanContext:
     allowlist_context: Optional[Dict[str, Any]] = None
     # Raw command is invocation-only and is never included in serialized context.
     origin_command: Optional[str] = None
+    source_url: Optional[str] = None
+    source_context: Optional[str] = None
 
     @classmethod
     def from_hook_dicts(
@@ -78,6 +80,8 @@ class ScanContext:
             ),
             policy_version=ctx.get("policy_version", hctx.get("policy_version")),
             latency_ms=ctx.get("latency_ms", hctx.get("latency_ms")),
+            source_url=ctx.get("source_url", hctx.get("source_url")),
+            source_context=ctx.get("source_context", hctx.get("source_context")),
             allowlist_content=ctx.get(
                 "_allowlist_content", hctx.get("_allowlist_content")
             ),
@@ -166,7 +170,9 @@ def log_violation(
                 normalize_sensitive_source_context,
             )
 
-            safe_source_context = normalize_sensitive_source_context(source)
+            safe_source_context = normalize_sensitive_source_context(
+                context.source_context or source
+            )
             if safe_source_context is None:
                 safe_source_context = normalize_sensitive_source_context(
                     context.hook_event
@@ -197,6 +203,11 @@ def log_violation(
                     else overrides.get("end_column")
                 ),
                 source_context=safe_source_context,
+                **(
+                    {"source_url": context.source_url}
+                    if context.source_url is not None
+                    else {}
+                ),
             )
             return
 
@@ -206,6 +217,10 @@ def log_violation(
             "http_request_credential_detected",
         }
         blocked = result.to_blocked_dict(source=source)
+        if context.source_url and not private_candidate:
+            blocked["source_url"] = context.source_url
+        if context.source_context and not private_candidate:
+            blocked["source_context"] = context.source_context
         if blocked_overrides and not private_candidate:
             blocked.update(blocked_overrides)
 

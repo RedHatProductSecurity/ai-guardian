@@ -171,7 +171,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
                         if key == "start_column" and isinstance(val, int):
                             display = str(val + 1)
                         if (
-                            vtype == "sensitive_finding"
+                            vtype in {"sensitive_finding", "secret_redaction"}
                             and key == "end_column"
                             and isinstance(val, int)
                         ):

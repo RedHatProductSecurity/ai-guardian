@@ -718,7 +718,9 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         Sensitive records use the consolidated ``sensitive_finding`` category.
         The legacy filters ``secret_detected``, ``image_secret_detected``, and
         ``pii_detected`` remain aliases for that category. The persisted record
-        may include a sanitized file path and source position, but omits the
+        may include a sanitized file path or HTTP(S) ``source_url`` and source
+        position. URL positions refer to the scanned tool response, not the
+        original remote document; columns are one-based. History omits the
         original subtype, matched values, snippets, and detector details; these
         filters may return any sensitive finding.
         """
@@ -806,6 +808,11 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                         )
                 if ctx.get("source") and not is_sensitive:
                     entry["source"] = ctx["source"]
+                from ai_guardian.violations.command_context import sanitize_source_url
+
+                source_url = sanitize_source_url(blocked.get("source_url"))
+                if source_url:
+                    entry["source_url"] = source_url
                 if (
                     type(blocked.get("line_number")) is int
                     and 0 < blocked["line_number"] <= 2**31 - 1
@@ -826,7 +833,7 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                     and 0 <= blocked["end_column"] <= 2**31 - 1
                 ):
                     entry["end_column"] = blocked["end_column"] + 1
-                if is_sensitive and blocked.get("source_context"):
+                if blocked.get("source_context"):
                     from ai_guardian.violations.command_context import (
                         sensitive_source_context_label,
                     )

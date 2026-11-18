@@ -5,7 +5,35 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-17 (UTC)
+> Last updated: 2026-11-18 (UTC)
+
+## Issue #2779 privacy-safe WebFetch locations — 2026-11-18
+
+- Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2779`, existing
+  branch `2779`. Sensitive findings and companion redaction records now carry a
+  separately validated request `source_url`, never a synthetic output filename.
+  Both PreToolUse cache paths store only the safe locator; fetched responses do
+  not reuse a clean-input shortcut or unrelated file exclusions/annotations.
+- URL validation is bounded and offline, strips userinfo/query/fragment data,
+  checks original and decoded paths, and omits unsafe/ambiguous locators or
+  incomplete secret/PII checks. Missing metadata retains fixed Tool output
+  context, without exposing sensitive matches, snippets, or detector subtypes.
+- Preserved response coordinates through history, Console details/copy, CLI,
+  REST/MCP, SDK, mirrored history, and support projections. Internal/SDK columns
+  remain zero-based; REST/MCP and human views use one-based columns. Labels and
+  guidance distinguish the scanned response from the original remote document.
+  Local-file handling and older records remain supported.
+- **Validation:** all 1,315 directly related unit/UX tests pass, including the
+  complete affected UX contracts. Full Ruff, Black (Python 3.10 target),
+  error-only Pylint, package Mypy (343 files), and diff checks pass. Focused branch
+  coverage is 94% for the source-metadata helper, 77% across the measured helper,
+  logging, and redactor modules. No live-agent/container/integration run; existing
+  runtime smoke matrices remain applicable, with no new runtime support claimed.
+- Posted the completed checklist at
+  https://github.com/RedHatProductSecurity/ai-guardian/issues/2779#issuecomment-6967626919,
+  added the `done` label, and saved a DAF note. **Next:** user review and external
+  `daf complete`. Changes remain uncommitted; no push or PR was created. Existing
+  unrelated modifications in this STATUS file were preserved.
 
 ## Issue #2764 MCP version tool in agent CLI smoke — 2026-11-17
 
@@ -42,8 +70,12 @@ budget_tokens: 1000
   Doctor tests began; its proxy tests had passed earlier in the run. Tightened
   the synthetic path tests to replace only the proxy module's `sys` binding, not
   process-wide `sys.executable`. The proxy and Doctor unit files pass together
-  under pytest 9.2.0 (**201 tests**). **Next:** publish this test-isolation fix
-  and verify the fresh Python 3.10 Windows job.
+  under pytest 9.2.0 (**201 tests**).
+- Published test-isolation fix `db563336` and preserved the remote `main` merge
+  `830aeb1b`; PR head is `62a2fbbb`. Tests run `44180069173` passed the full
+  Python matrix, including Windows 3.10, 3.13, and 3.14. All current PR checks
+  pass (the scanner-version health job is an expected skip). **Next:** normal PR
+  review/merge; no #2764 Windows CI failure remains.
 ## Issue #2759 sanitized context for locationless violations — 2026-11-17
 
 - Managed DAF `open` session `RedHatProductSecurity-ai-guardian-2759` on the

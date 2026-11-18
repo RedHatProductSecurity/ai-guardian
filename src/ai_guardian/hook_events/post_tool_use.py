@@ -206,6 +206,28 @@ def _sanitize_source_command(command: str) -> Optional[str]:
     return sanitize_origin_command(command)
 
 
+def _redaction_coordinates(redaction: dict, content: str) -> dict:
+    """Keep original-response coordinates, with zero-based, exclusive-end columns."""
+    coordinates = {"line_number": redaction.get("line_number")}
+    start = redaction.get("position")
+    length = redaction.get("original_length")
+    if (
+        type(start) is int
+        and type(length) is int
+        and start >= 0
+        and length > 0
+        and start + length <= len(content)
+    ):
+        end = start + length
+        coordinates.update(
+            line_number=content.count("\n", 0, start) + 1,
+            start_column=start - (content.rfind("\n", 0, start) + 1),
+            end_line=content.count("\n", 0, end) + 1,
+            end_column=end - (content.rfind("\n", 0, end) + 1),
+        )
+    return coordinates
+
+
 # ---------------------------------------------------------------------------
 # Conditional imports
 # ---------------------------------------------------------------------------
@@ -377,6 +399,27 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 if pretool_file:
                     logger.info(f"PostToolUse: inherited file_path={pretool_file}")
 
+    # Resolve remote locators separately from local files and scan labels.
+    from ai_guardian.violations.command_context import sanitize_source_url
+
+    current_tool = str(normalized.tool_name or tool_name).casefold()
+    is_url_output = current_tool == "webfetch"
+    cached_url = None
+    if pretool_ctx and str(pretool_ctx.get("tool_name", "")).casefold() == "webfetch":
+        cached_url = pretool_ctx.get("source_url")
+        if current_tool == "unknown":
+            is_url_output = True
+    source_url = (
+        sanitize_source_url(
+            tool_input.get("url") if "url" in tool_input else cached_url
+        )
+        if is_url_output
+        else None
+    )
+    if is_url_output:
+        _scan_ctx.source_url = source_url
+        _scan_ctx.source_context = "tool_output"
+
     logger.info(f"Scanning {tool_identifier} output for secrets...")
 
     # Apply annotation suppression for file-reading tools (Issue #481)
@@ -387,7 +430,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
     post_all_suppressed: set[int] = set()
     post_secret_suppressed: set[int] = set()
     original_tool_output = tool_output
-    if HAS_ANNOTATIONS and pretool_ctx and pretool_ctx.get("file_path") and tool_output:
+    if (
+        HAS_ANNOTATIONS
+        and not is_url_output
+        and pretool_ctx
+        and pretool_ctx.get("file_path")
+        and tool_output
+    ):
         post_annotations_config, _ = _loaders._load_annotations_config()
         if post_annotations_config and is_feature_enabled(
             post_annotations_config.get("enabled"), now, default=True
@@ -438,8 +487,10 @@ def handle_post_tool_use(ctx=None, **kwargs):
         secret_config.get("allowlist_patterns", []) if secret_config else []
     )
 
-    # Cross-hook optimization: skip secret scan if PreToolUse already scanned clean (#366)
-    pretool_scan = pretool_ctx.get("scan_results", {}) if pretool_ctx else {}
+    # Cross-hook optimization (#366): a clean URL input says nothing about its response.
+    pretool_scan = (
+        pretool_ctx.get("scan_results", {}) if pretool_ctx and not is_url_output else {}
+    )
     skip_secret_scan = pretool_scan.get("secrets_scanned") and not pretool_scan.get(
         "secrets_found"
     )
@@ -449,7 +500,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
         )
 
     # Cross-hook optimization: respect ignore_files from PreToolUse (#366)
-    if pretool_ctx and pretool_ctx.get("ignore_files_matched"):
+    if not is_url_output and pretool_ctx and pretool_ctx.get("ignore_files_matched"):
         logger.info(
             "PostToolUse: skipping scans (file matched ignore_files in PreToolUse)"
         )
@@ -460,10 +511,15 @@ def handle_post_tool_use(ctx=None, **kwargs):
         "hook_event": HookEvent.POST_TOOL_USE,
         "tool_name": tool_identifier,
         "source": "scanner",
+        "source_context": "tool_output",
     }
     file_path_for_ctx = tool_input.get("file_path") or tool_input.get("path")
     if not file_path_for_ctx and pretool_ctx:
         file_path_for_ctx = pretool_ctx.get("file_path")
+    if is_url_output:
+        file_path_for_ctx = None
+        if source_url:
+            post_secret_ctx["source_url"] = source_url
     if file_path_for_ctx:
         post_secret_ctx["file_path"] = file_path_for_ctx
     if hook_tool_use_id:
@@ -599,14 +655,19 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     )
 
                 # Log to violation logger
-                first_line = redactions[0].get("line_number") if redactions else None
+                coordinates = _redaction_coordinates(redactions[0], tool_output)
+                first_line = coordinates.get("line_number")
                 blocked_info = {
                     "tool": tool_identifier,
                     "file_path": file_path_for_ctx,
-                    "line_number": first_line,
+                    **coordinates,
                     "redaction_count": len(redactions),
                     "redacted_types": [r["type"] for r in redactions],
                 }
+                if is_url_output:
+                    blocked_info["source_context"] = "tool_output"
+                    if source_url:
+                        blocked_info["source_url"] = source_url
                 if source_command:
                     blocked_info["source_command"] = source_command
                 snippet = _extract_context_snippet(redacted_text, first_line)
@@ -772,10 +833,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
     pii_file_path = tool_input.get("file_path") or tool_input.get("path")
     if not pii_file_path and pretool_ctx:
         pii_file_path = pretool_ctx.get("file_path")
+    if is_url_output:
+        pii_file_path = None
 
     # Cross-hook optimization: skip PII scan if PreToolUse skipped via ignore_files (#366)
     pii_skip_from_pretool = (
-        pretool_ctx
+        not is_url_output
+        and pretool_ctx
         and pretool_ctx.get("scan_results", {}).get("pii_skipped_reason")
         == "ignore_files match"
     )
@@ -807,7 +871,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 return result
 
             if has_pii and pii_redactions:
-                if not pii_file_path:
+                if not pii_file_path and not is_url_output:
                     pii_file_path = _extract_file_path_from_pii_warning(pii_warning)
                 pii_snippet_text = redacted_text if redacted_text else tool_output
                 post_pii_config, _ = _loaders._load_pii_config()
@@ -1042,7 +1106,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
             post_pi_skip = pretool_scan.get(
                 "prompt_injection_scanned"
             ) and not pretool_scan.get("prompt_injection_found")
-            if pretool_ctx and pretool_ctx.get("ignore_files_matched"):
+            if (
+                not is_url_output
+                and pretool_ctx
+                and pretool_ctx.get("ignore_files_matched")
+            ):
                 post_pi_skip = True
 
             if post_pi_skip:
@@ -1196,7 +1264,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
             post_cp_skip = pretool_scan.get(
                 "context_poisoning_scanned"
             ) and not pretool_scan.get("context_poisoning_found")
-            if pretool_ctx and pretool_ctx.get("ignore_files_matched"):
+            if (
+                not is_url_output
+                and pretool_ctx
+                and pretool_ctx.get("ignore_files_matched")
+            ):
                 post_cp_skip = True
 
             if post_cp_skip:

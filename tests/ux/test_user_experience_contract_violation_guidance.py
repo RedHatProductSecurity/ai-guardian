@@ -139,6 +139,31 @@ def test_sensitive_history_guidance_reports_a_safe_location_without_subtype():
     assert snippet == ""
 
 
+def test_fetched_history_guidance_distinguishes_response_from_remote_document():
+    """USER EXPERIENCE: URL-backed finding → URL and response-position explanation.
+
+    Review a fetched finding in history: the request locator is a sanitized URL,
+    not a local file, and line/column coordinates describe the scanned response.
+    Private URL components must not be reconstructed for the user or agent.
+    """
+    instructions, snippet = get_resolution_instructions(
+        {
+            "violation_type": "sensitive_finding",
+            "blocked": {
+                "source_url": "https://example.test/docs/page",
+                "source_context": "tool_output",
+            },
+        }
+    )
+    assert instructions == (
+        "A secret or personal-data finding was recorded. A sanitized request URL "
+        "and any available response position are retained below. Positions refer "
+        "to the scanned tool response, not the original remote document. "
+        "Matched values and snippets are not retained."
+    )
+    assert snippet == ""
+
+
 def test_legacy_sensitive_cli_history_shows_generic_safe_location(capsys, monkeypatch):
     """USER EXPERIENCE: CLI history → generic category and safe location only."""
     from argparse import Namespace

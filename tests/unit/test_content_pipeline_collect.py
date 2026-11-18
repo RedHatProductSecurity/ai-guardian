@@ -98,6 +98,38 @@ def _run_pipeline(scan_results, pipeline_side_effect, **overrides):
         return run_content_pipeline(**kwargs)
 
 
+@pytest.mark.parametrize("tool_name", ["webfetch", "WebFetch"])
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        (
+            "https://example.test/docs?key=private-query#private-fragment",
+            "https://example.test/docs",
+        ),
+        ("https://example.test/password/private-value", None),
+        (None, None),
+    ],
+)
+def test_pretool_cache_retains_only_safe_url_metadata(tool_name, url, expected):
+    from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
+
+    manager = MagicMock()
+    _run_pipeline(
+        [],
+        None,
+        tool_name=tool_name,
+        tool_identifier=tool_name,
+        file_path=None,
+        context_mgr=manager,
+        adapter=OpenCodeAdapter(),
+        hook_data={"tool_use": {"name": tool_name, "input": {"url": url}}},
+    )
+    cached = manager.save_pretool_context.call_args.args[1]
+    assert cached.get("source_url") == expected
+    assert cached["file_path"] is None
+    assert "private-" not in str(cached)
+
+
 class TestCollectPromptInjection:
     """PI branch: sets _pretool_pi_detected, respects Cursor log gate."""
 

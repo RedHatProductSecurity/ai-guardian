@@ -34,7 +34,9 @@ class TestSensitiveFindingLocationOutput:
     def test_falls_back_to_safe_source_label_without_fabricating_path(self):
         assert _sensitive_finding_location_lines(
             {"source_context": "tool_output", "line_number": 5}
-        ) == ["  Source: Tool output (line 5); precise location was not retained"]
+        ) == [
+            "  Source: Tool output (response line 5); precise location was not retained"
+        ]
 
     def test_rejects_malformed_location_values(self):
         assert _sensitive_finding_location_lines(

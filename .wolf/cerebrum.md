@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-11-17
+> Last updated: 2026-11-18
 
 ## User Preferences
 
@@ -334,6 +334,16 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+
+- **2026-11-18 — Fetched-output locators (#2779):** Non-file PreToolUse tools
+  save correlation state directly in `hook_processing.py`, separately from the
+  shared `content_pipeline.py` cache. Updating only the shared path misses real
+  WebFetch correlation. Keep URL locators separate from filenames/processing
+  labels, validate them offline without user exclusions, and do not treat a clean
+  URL input or unrelated file metadata as proof that its response is clean.
+  Redactor offsets describe the original scanned response; history/SDK columns
+  are zero-based, REST/MCP columns one-based, and mirrored records must convert
+  back before later human-facing projections. Preserve column zero explicitly.
 
 - **2026-11-17 — Synthetic executable paths in tests (#2764):** `proxy.sys` is
   normally the process-wide `sys` module. To test Windows executable strings on

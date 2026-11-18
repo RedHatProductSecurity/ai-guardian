@@ -157,6 +157,7 @@ def diagnostic_safe_violation(violation: Dict) -> Dict:
 
         from ai_guardian.violations.command_context import (
             sanitize_sensitive_file_path,
+            sanitize_source_url,
             sensitive_source_context_label,
         )
 
@@ -204,6 +205,10 @@ def diagnostic_safe_violation(violation: Dict) -> Dict:
         raw_blocked = violation.get("blocked")
         raw_blocked = raw_blocked if isinstance(raw_blocked, dict) else {}
         safe_blocked: Dict[str, Any] = {}
+        for raw, target in ((violation, result), (raw_blocked, safe_blocked)):
+            source_url = sanitize_source_url(raw.get("source_url"))
+            if source_url:
+                target["source_url"] = source_url
         file_path = raw_blocked.get("file_path")
         if legacy_sensitive_type:
             file_path = sanitize_sensitive_file_path(file_path)
@@ -235,6 +240,12 @@ def diagnostic_safe_violation(violation: Dict) -> Dict:
             result["mirror"] = mirror
         return result
 
+    from ai_guardian.violations.command_context import sanitize_source_url_metadata
+
+    violation = sanitize_source_url_metadata(violation)
+    for key in ("blocked", "context"):
+        if isinstance(violation.get(key), dict):
+            violation[key] = sanitize_source_url_metadata(violation[key])
     blocked = violation.get("blocked")
     if not isinstance(blocked, dict) or "input_diagnostics" not in blocked:
         return violation
