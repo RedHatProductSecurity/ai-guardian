@@ -197,6 +197,121 @@ def _format_violation_outcome_badges(violation):
     ]
 
 
+def _humanize_violation_detail_key(key):
+    """Turn persisted snake-case keys into readable labels."""
+    abbreviations = {
+        "api": "API",
+        "id": "ID",
+        "ip": "IP",
+        "mcp": "MCP",
+        "pii": "PII",
+        "ssrf": "SSRF",
+        "url": "URL",
+    }
+    words = str(key).replace("_", " ").split()
+    return " ".join(
+        abbreviations.get(word.lower(), word[0].upper() + word[1:]) for word in words
+    )
+
+
+def _format_violation_detail_scalar(value):
+    """Render JSON scalar values on one readable terminal line."""
+    if isinstance(value, str):
+        return (
+            value.replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+        )
+    return str(value)
+
+
+def _format_violation_detail_value(value, indent=0):
+    """Format nested JSON values as indented, labeled terminal text."""
+    padding = " " * indent
+    if isinstance(value, dict):
+        fields = [(key, item) for key, item in value.items() if item is not None]
+        if not fields:
+            return [f"{padding}(none)"]
+        lines = []
+        for key, item in fields:
+            lines.extend(_format_violation_detail_field(key, item, indent))
+        return lines
+
+    if isinstance(value, list):
+        if not value:
+            return [f"{padding}(none)"]
+        lines = []
+        for item in value:
+            if isinstance(item, (dict, list)):
+                lines.append(f"{padding}-")
+                lines.extend(_format_violation_detail_value(item, indent + 2))
+            else:
+                lines.append(f"{padding}- {_format_violation_detail_scalar(item)}")
+        return lines
+
+    return [f"{padding}{_format_violation_detail_scalar(value)}"]
+
+
+def _format_violation_detail_field(key, value, indent=0):
+    """Format one labeled field, recursively indenting mappings and lists."""
+    padding = " " * indent
+    label = _humanize_violation_detail_key(key)
+    if isinstance(value, (dict, list)):
+        if not value or (
+            isinstance(value, dict) and not any(v is not None for v in value.values())
+        ):
+            return [f"{padding}{label}: (none)"]
+        return [f"{padding}{label}:"] + _format_violation_detail_value(
+            value, indent + 2
+        )
+    return [f"{padding}{label}: {_format_violation_detail_scalar(value)}"]
+
+
+def _format_violation_detail(violation):
+    """Render one violation record as labeled human-readable terminal text."""
+    violation_id = violation.get("id") or violation.get("violation_id") or "Unknown"
+    lines = [
+        "Violation Details",
+        f"Violation ID: {_format_violation_detail_scalar(violation_id)}",
+    ]
+
+    for key, label in (
+        ("timestamp", "Timestamp"),
+        ("violation_type", "Type"),
+        ("severity", "Severity"),
+    ):
+        value = violation.get(key)
+        if value is None:
+            continue
+        if key == "violation_type":
+            value = _humanize_violation_detail_key(value)
+        elif key == "severity" and isinstance(value, str):
+            value = _humanize_violation_detail_key(value)
+        lines.append(f"{label}: {_format_violation_detail_scalar(value)}")
+
+    resolved = violation.get("resolved")
+    if isinstance(resolved, bool):
+        lines.append(f"Status: {'Resolved' if resolved else 'Unresolved'}")
+    elif resolved is not None:
+        lines.append(f"Status: {_format_violation_detail_scalar(resolved)}")
+
+    summary_fields = {
+        "id",
+        "violation_id",
+        "timestamp",
+        "violation_type",
+        "severity",
+        "resolved",
+    }
+    for key, value in violation.items():
+        if key in summary_fields or value is None:
+            continue
+        lines.extend(_format_violation_detail_field(key, value))
+
+    return "\n".join(lines)
+
+
 def _handle_violations_command(args):
     """
     Handle the violations subcommand.
@@ -265,8 +380,7 @@ def _handle_violations_command(args):
         if json_output:
             print(serialized)
         else:
-            print(f"Violation ID: {json.dumps(violation_id)}")
-            print(serialized)
+            print(_format_violation_detail(violation))
         return 0
 
     # Display violations

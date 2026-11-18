@@ -564,8 +564,10 @@ ai-guardian violations --type ssrf_blocked --limit 5
 # Emit the filtered list as JSON, without other stdout text
 ai-guardian violations --type ssrf_blocked --limit 5 --json
 
-# Display one complete record by the ID shown in the list
+# Display one violation by ID as labeled, human-readable details
 ai-guardian violations viol_example123
+
+# Emit the same detail as machine-readable JSON for scripts
 ai-guardian violations viol_example123 --json
 
 # Export persisted records to a JSON file or clear the log
@@ -573,12 +575,12 @@ ai-guardian violations --export violations.json
 ai-guardian violations --clear
 ```
 
-List mode supports `--type` and `--limit`; JSON detail mode emits one record,
-while JSON list mode emits an array (including `[]` when there are no matches).
-ID lookup includes resolved records. Detailed and JSON output uses persisted
-record fields, so handle it with the same care as an exported violation log.
-Sensitive findings remain minimized in persisted records and do not include
-matched values or snippets.
+List mode supports `--type` and `--limit`. ID lookup includes resolved records
+and defaults to labeled text with nested fields indented; `--json` emits only the
+record as valid JSON. JSON list mode emits an array (including `[]` when there
+are no matches). Both detail formats use persisted record fields, so handle them
+with the same care as an exported violation log. Sensitive findings remain
+minimized in persisted records and do not include matched values or snippets.
 
 ---
 

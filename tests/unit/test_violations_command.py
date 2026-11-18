@@ -182,7 +182,9 @@ class TestViolationsLookupAndJson:
         )
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
-    def test_detail_text_displays_full_record(self, mock_logger_cls, capsys):
+    def test_detail_text_displays_labeled_fields_and_nested_details(
+        self, mock_logger_cls, capsys
+    ):
         record = self._record()
         record["resolved"] = True
         mock_logger = MagicMock()
@@ -194,12 +196,48 @@ class TestViolationsLookupAndJson:
 
         output = capsys.readouterr()
         assert result == 0
-        assert output.out.startswith(f'Violation ID: "{record["id"]}"\n')
-        assert json.loads(output.out.split("\n", 1)[1]) == record
+        assert output.out.splitlines() == [
+            "Violation Details",
+            f'Violation ID: {record["id"]}',
+            f'Timestamp: {record["timestamp"]}',
+            "Type: SSRF Blocked",
+            "Severity: High",
+            "Status: Resolved",
+            "Blocked:",
+            "  Reason: synthetic test",
+        ]
         assert output.err == ""
         mock_logger.get_recent_violations.assert_called_once_with(
             limit=10_000, resolved=None
         )
+
+    @patch("ai_guardian.violations.logger.ViolationLogger")
+    def test_detail_text_handles_missing_fields_and_unfamiliar_types(
+        self, mock_logger_cls, capsys
+    ):
+        record = {
+            "id": "viol_future_123",
+            "violation_type": "future_detector_type",
+            "blocked": {"evidence": [{"source_name": "fixture", "line_number": 7}]},
+        }
+        mock_logger = MagicMock()
+        mock_logger.get_recent_violations.return_value = [record]
+        mock_logger_cls.return_value = mock_logger
+
+        result = _handle_violations_command(self._make_args(violation_id=record["id"]))
+
+        output = capsys.readouterr()
+        assert result == 0
+        assert "Violation ID: viol_future_123" in output.out
+        assert "Type: Future Detector Type" in output.out
+        assert (
+            "Blocked:\n  Evidence:\n    -\n      Source Name: fixture\n      Line Number: 7"
+            in output.out
+        )
+        assert "Timestamp:" not in output.out
+        assert "Severity:" not in output.out
+        assert "Status:" not in output.out
+        assert output.err == ""
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_detail_json_emits_only_the_record(self, mock_logger_cls, capsys):
