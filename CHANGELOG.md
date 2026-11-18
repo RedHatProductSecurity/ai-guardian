@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Web Console port environment override (#2787):** Allow
+  `AI_GUARDIAN_CONSOLE_PORT` to override `console.web.port` for `console` and
+  `tui`, while retaining explicit `--port` precedence and automatic assignment.
 - **Tray integration status indicators (#2771):** Show detected CLI/IDE status
   through enabled/disabled setup entries, show verified AI Guardian hook/MCP
   health separately, and disable setup when installation is not detected.

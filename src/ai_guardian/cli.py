@@ -657,7 +657,8 @@ def main():
             type=int,
             default=None,
             help=(
-                "Port for web console (overrides console.web.port; default: "
+                "Port for web console (overrides AI_GUARDIAN_CONSOLE_PORT and "
+                "console.web.port; default: "
                 "configured value or auto-assign, only used with --web)"
             ),
         )
@@ -685,7 +686,8 @@ def main():
             type=int,
             default=None,
             help=(
-                "Port for web console (overrides console.web.port; default: "
+                "Port for web console (overrides AI_GUARDIAN_CONSOLE_PORT and "
+                "console.web.port; default: "
                 "configured value or auto-assign, only used with --web)"
             ),
         )
@@ -2052,6 +2054,20 @@ def main():
                     web_config = {}
 
                 port = getattr(args, "port", None)
+                if port is None:
+                    env_port = os.environ.get("AI_GUARDIAN_CONSOLE_PORT")
+                    if env_port is not None:
+                        try:
+                            parsed_env_port = int(env_port)
+                            if not 0 <= parsed_env_port <= 65535:
+                                raise ValueError
+                            port = parsed_env_port
+                        except ValueError:
+                            logger.warning(
+                                "Invalid AI_GUARDIAN_CONSOLE_PORT; expected an "
+                                "integer from 0 to 65535, using configured port "
+                                "or automatic assignment"
+                            )
                 if port is None:
                     port = web_config.get("port", 0)
                 host = web_config.get("host", "127.0.0.1")

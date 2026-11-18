@@ -131,7 +131,7 @@ upstream references. That guide is the source of truth for this summary.
 | Compliance audit logging | [Audit Logging][audit] |
 | Support bundles | [Support][support] |
 | Uninstall and orphan recovery | [Uninstall Guide][uninstall] |
-| Interactive console | [Console Guide][console] |
+| Interactive console and configurable listener port | [Console Guide][console] |
 | Scanner management | [Scanner Installation][scanners] |
 | Built-in TOML pattern engine | [TOML Patterns][toml] |
 | Secret liveness validation | [Configuration Guide][configuration] |
