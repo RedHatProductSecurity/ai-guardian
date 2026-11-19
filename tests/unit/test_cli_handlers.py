@@ -1088,7 +1088,69 @@ class TestTrayRestartCommand:
         mock_stop.assert_called_once()
         mock_start.assert_called_once()
         mock_sleep.assert_not_called()
+        assert args.background is True
         assert result == 0
+
+    def test_restart_handoff_waits_for_old_process_to_exit(self):
+        from ai_guardian.cli_handlers import _wait_for_pid_exit
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.is_pid_alive", side_effect=[True, True, False]
+            ) as is_pid_alive,
+            mock.patch("time.sleep") as sleep,
+        ):
+            _wait_for_pid_exit(12345)
+
+        assert is_pid_alive.call_args_list == [
+            mock.call(12345),
+            mock.call(12345),
+            mock.call(12345),
+        ]
+        assert sleep.call_count == 2
+
+    def test_tray_start_waits_before_launching(self):
+        from ai_guardian.cli_handlers import _handle_tray_start
+
+        args = mock.MagicMock()
+        args.background = True
+        args.no_discover = False
+        args.wait_for_pid = 12345
+        events = []
+
+        with (
+            mock.patch(
+                "ai_guardian.cli_handlers._wait_for_pid_exit",
+                side_effect=lambda pid: events.append(("wait", pid)),
+            ),
+            mock.patch("ai_guardian.daemon.path_env.ensure_scanner_path"),
+            mock.patch(
+                "ai_guardian.daemon.get_executable_command",
+                return_value=["ai-guardian"],
+            ),
+            mock.patch("subprocess.Popen") as mock_popen,
+        ):
+            mock_popen.side_effect = lambda *args, **kwargs: events.append(("spawn",))
+            result = _handle_tray_start(args)
+
+        assert result == 0
+        assert events == [("wait", 12345), ("spawn",)]
+
+    def test_wait_for_pid_option_is_accepted_by_cli_parser(self):
+        from ai_guardian import cli
+
+        with (
+            mock.patch(
+                "sys.argv",
+                ["ai-guardian", "tray", "start", "--wait-for-pid", "12345"],
+            ),
+            mock.patch(
+                "ai_guardian.cli._handle_tray_command", return_value=0
+            ) as handle,
+        ):
+            assert cli.main() == 0
+
+        assert handle.call_args.args[0].wait_for_pid == 12345
 
 
 class TestPromptAskProjectPath:
