@@ -962,3 +962,59 @@ class TestDiscoverFilesSkipHidden:
         names = [f.name for f in files]
         assert "app.py" in names
         assert "readme.txt" not in names
+
+
+class TestFileScannerPerScannerIgnore:
+    def test_ssrf_ignore_files_skip_file_content(self):
+        scanner = FileScanner(config={"ssrf_protection": {"ignore_files": ["src/**"]}})
+        scanner.ssrf_protector = mock.Mock()
+
+        scanner._check_ssrf("src/ignored.py", "curl http://127.0.0.1")
+
+        scanner.ssrf_protector.check.assert_not_called()
+
+    def test_code_scanning_ignore_files_skip_inspection(self):
+        scanner = FileScanner(config={"code_scanning": {"ignore_files": ["src/**"]}})
+        scanner._code_scanner = mock.Mock()
+
+        scanner._check_code_security("src/ignored.py", "eval('1 + 1')")
+
+        scanner._code_scanner.scan.assert_not_called()
+
+    def test_offensive_language_ignore_files_skip_file_content(self):
+        scanner = FileScanner(
+            config={
+                "scan_offensive": {
+                    "enabled": True,
+                    "ignore_files": ["src/**"],
+                }
+            }
+        )
+
+        with mock.patch(
+            "ai_guardian.scanners.file_scanner._OffensiveLangScanner"
+        ) as scanner_cls:
+            scanner._check_offensive_language("src/ignored.py", "offensive text")
+
+        scanner_cls.assert_not_called()
+
+    def test_finding_filter_receives_only_new_file_findings(self, tmp_path):
+        for name in ("a.py", "b.py"):
+            (tmp_path / name).write_text("placeholder")
+
+        scanner = FileScanner(config={})
+        seen_batches = []
+
+        def fake_scan_file(file_path, _base_path):
+            scanner.findings.append(
+                {"rule_id": "TEST-001", "file_path": file_path.name}
+            )
+
+        def finding_filter(findings):
+            seen_batches.append([finding["file_path"] for finding in findings])
+            return findings
+
+        with mock.patch.object(scanner, "_scan_file", side_effect=fake_scan_file):
+            scanner.scan_directory(str(tmp_path), finding_filter=finding_filter)
+
+        assert seen_batches == [["a.py"], ["b.py"]]

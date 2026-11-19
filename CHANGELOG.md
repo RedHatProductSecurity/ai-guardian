@@ -78,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **`init-project --scan` scanner coverage (#2807):** Preserve findings unless a
+  generated recommendation can represent their suppression; count unique files
+  during progressive filtering, route AST code findings, and apply generated
+  code/SSRF ignore paths. Avoid allowlist patterns from secret-rule labels or
+  exfiltration categories, keep password-likelihood opt-in, and surface
+  annotation skip counts.
 - **Lifecycle environment assignment false positives (#2801):** Stop matching
   assignments inside leading-underscore names and ignore single-segment paths
   and numeric metadata values, while retaining detection for credential fields.

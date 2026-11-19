@@ -1,11 +1,15 @@
 """Tests for scan_analyzer module."""
 
 import pytest
+from unittest.mock import patch
 
 from ai_guardian.scan_analyzer import (
     DirectoryAnalysis,
     FindingCluster,
+    ProgressiveSuppressor,
     ScanAnalysisResult,
+    _build_discovery_config,
+    _scanner_for_rule_id,
     build_recommendations,
     cluster_findings,
     analyze_directories,
@@ -24,6 +28,43 @@ def _make_finding(rule_id, file_path, **details_kwargs):
         "snippet": "test",
         "details": details_kwargs,
     }
+
+
+class TestDiscoveryConfig:
+    def test_enables_file_scanners_without_mutating_loaded_config(self):
+        from ai_guardian.config.loaders import _SCANNER_MERGE_SECTIONS
+
+        loaded = {
+            "secret_scanning": {
+                "enabled": False,
+                "allowlist_patterns": ["existing"],
+                "ignore_files": ["existing/**"],
+            },
+            "password_likelihood": {"enabled": True, "action": "ask"},
+        }
+
+        with patch(
+            "ai_guardian.config.loaders.load_scanner_config", return_value=loaded
+        ):
+            discovery = _build_discovery_config("/tmp/project")
+
+        assert discovery["secret_scanning"] == {"enabled": True}
+        assert discovery["password_likelihood"] == {
+            "enabled": True,
+            "action": "ask",
+        }
+        assert loaded["secret_scanning"]["enabled"] is False
+        assert "password_likelihood" not in _SCANNER_MERGE_SECTIONS
+
+    def test_does_not_enable_password_likelihood_by_default(self):
+        with patch(
+            "ai_guardian.config.loaders.load_scanner_config",
+            return_value={"secret_scanning": {"enabled": False}},
+        ):
+            discovery = _build_discovery_config("/tmp/project")
+
+        assert discovery["secret_scanning"]["enabled"] is True
+        assert "password_likelihood" not in discovery
 
 
 class TestFingerprintFinding:
@@ -186,19 +227,13 @@ class TestAnalyzeDirectories:
 
 class TestBuildRecommendations:
     def test_threshold_filters(self):
-        findings = [
-            _make_finding("SECRET-001", f"f{i}.py", secret_type="generic-api-key")
-            for i in range(15)
-        ]
+        findings = [_make_finding("B108", f"f{i}.py") for i in range(15)]
         result = build_recommendations(findings, threshold=10)
         assert len(result.high_frequency_clusters) == 1
         assert result.suppressed_count == 15
 
     def test_below_threshold_not_suppressed(self):
-        findings = [
-            _make_finding("SECRET-001", f"f{i}.py", secret_type="generic-api-key")
-            for i in range(5)
-        ]
+        findings = [_make_finding("B108", f"f{i}.py") for i in range(5)]
         result = build_recommendations(findings, threshold=10)
         assert len(result.high_frequency_clusters) == 0
         assert result.suppressed_count == 0
@@ -207,7 +242,7 @@ class TestBuildRecommendations:
         findings = [
             _make_finding(
                 "SSRF-001",
-                f"f{i}.py",
+                f"tests/f{i}.py",
                 url="http://localhost:8080",
                 reason="blocked domain 'localhost'",
             )
@@ -216,6 +251,27 @@ class TestBuildRecommendations:
         result = build_recommendations(findings, threshold=5)
         assert len(result.high_frequency_clusters) == 1
         assert result.recommended_config["ssrf_protection"]["allow_localhost"] is True
+        assert result.recommended_ignore_paths == {"ssrf_protection": ["tests/**"]}
+
+    def test_non_local_ssrf_is_not_auto_suppressed(self):
+        findings = [
+            _make_finding(
+                "SSRF-001",
+                f"src/f{i}.py",
+                url="https://example.invalid/path",
+                reason="blocked domain example.invalid",
+            )
+            for i in range(5)
+        ]
+        suppressor = ProgressiveSuppressor(threshold=2)
+        kept = suppressor(findings)
+        result = build_recommendations(kept, threshold=2, suppressor=suppressor)
+
+        assert len(kept) == len(findings)
+        assert suppressor.suppressed_count == 0
+        assert result.suppressed_count == 0
+        assert result.recommended_config == {}
+        assert result.recommended_ignore_paths == {}
 
     def test_never_suppress_canary(self):
         findings = [_make_finding("canary_detected", f"f{i}.py") for i in range(20)]
@@ -228,9 +284,9 @@ class TestBuildRecommendations:
             for i in range(12)
         ]
         result = build_recommendations(findings, threshold=10)
-        config = result.recommended_config
-        assert "secret_scanning" in config
-        assert "generic\\-api\\-key" in config["secret_scanning"]["allowlist_patterns"]
+        assert result.high_frequency_clusters == []
+        assert "secret_scanning" not in result.recommended_config
+        assert result.suppressed_count == 0
 
     def test_config_generation_pi(self):
         findings = [
@@ -249,20 +305,22 @@ class TestBuildRecommendations:
 
     def test_directory_ignore_recommendation(self):
         findings = [
-            _make_finding("SECRET-001", f"tests/t{i}.py", secret_type="key")
+            _make_finding("CONFIG-001", f"tests/t{i}.json", pattern="unsafe config")
             for i in range(12)
         ]
         result = build_recommendations(findings, threshold=10)
         assert any(d.directory == "tests" for d in result.directories_to_ignore)
-        assert "secret_scanning" in result.recommended_ignore_paths
-        assert "tests/**" in result.recommended_ignore_paths["secret_scanning"]
+        assert "config_file_scanning" in result.recommended_ignore_paths
+        assert "tests/**" in result.recommended_ignore_paths["config_file_scanning"]
 
     def test_mixed_dir_not_ignored(self):
-        findings = [
-            _make_finding("SECRET-001", f"src/f{i}.py", secret_type="key")
-            for i in range(12)
-        ] + [
-            _make_finding("SSRF-001", "src/util.py", url="http://evil"),
+        findings = [_make_finding("B108", f"src/f{i}.py") for i in range(12)] + [
+            _make_finding(
+                "SSRF-001",
+                "src/util.py",
+                url="https://example.invalid/path",
+                reason="blocked domain example.invalid",
+            ),
         ]
         result = build_recommendations(findings, threshold=10)
         ignored_dirs = [d.directory for d in result.directories_to_ignore]
@@ -321,9 +379,9 @@ class TestBuildRecommendations:
             for i in range(10)
         ]
         result = build_recommendations(findings, threshold=10)
-        config = result.recommended_config
-        assert "exfil_detection" in config
-        assert "base64_encoding" in config["exfil_detection"]["allowlist_patterns"]
+        assert result.high_frequency_clusters == []
+        assert "exfil_detection" not in result.recommended_config
+        assert result.suppressed_count == 0
 
     def test_offensive_language_excluded_until_scanner_supports_allowlist(self):
         findings = [
@@ -340,6 +398,92 @@ class TestBuildRecommendations:
         config = result.recommended_config
         assert "code_scanning" in config
         assert {"test_id": "B108"} in config["code_scanning"]["allowlist"]
+        assert result.recommended_ignore_paths == {"code_scanning": ["src/**"]}
+
+    def test_ast_code_scanner_rule_routes_to_config_and_annotations(self):
+        assert _scanner_for_rule_id("AST001") == "code_scanning"
+        findings = [_make_finding("AST001", f"src/mod{i}.py") for i in range(10)]
+
+        result = build_recommendations(findings, threshold=10)
+
+        assert {"test_id": "AST001"} in result.recommended_config["code_scanning"][
+            "allowlist"
+        ]
+
+    def test_password_likelihood_is_never_auto_suppressed_or_routed(self):
+        findings = [_make_finding("PASSWORD-001", f"src/file{i}.py") for i in range(5)]
+        suppressor = ProgressiveSuppressor(threshold=2)
+
+        kept = suppressor(findings)
+        result = build_recommendations(kept, threshold=2, suppressor=suppressor)
+
+        assert _scanner_for_rule_id("PASSWORD-001") is None
+        assert kept == findings
+        assert suppressor.suppressed_count == 0
+        assert result.suppressed_count == 0
+        assert result.recommended_config == {}
+        assert result.recommended_ignore_paths == {}
+
+    def test_progressive_threshold_counts_unique_files_and_keeps_paths(self):
+        suppressor = ProgressiveSuppressor(threshold=2)
+        first_file = _make_finding("B108", "tests/a.py")
+        same_file = _make_finding("B108", "tests/a.py")
+        second_file = _make_finding("B108", "tests/b.py")
+
+        first_batch = suppressor([first_file, same_file])
+        second_batch = suppressor([second_file])
+        result = build_recommendations(
+            first_batch + second_batch, threshold=2, suppressor=suppressor
+        )
+
+        assert first_batch == [first_file, same_file]
+        assert second_batch == []
+        assert suppressor.suppressed_count == 1
+        assert result.total_findings == 3
+        assert result.suppressed_count == 3
+        assert result.high_frequency_clusters[0].file_count == 2
+        assert result.high_frequency_clusters[0].total_count == 3
+        assert result.recommended_ignore_paths == {"code_scanning": ["tests/**"]}
+
+    def test_progressive_filter_preserves_secret_and_exfil_findings(self):
+        findings = [
+            _make_finding("SECRET-001", f"tests/secret{i}.py", secret_type="key")
+            for i in range(3)
+        ] + [
+            _make_finding(
+                "EXFIL-DETECTION-001",
+                f"tests/exfil{i}.sh",
+                category="base64_encoding",
+            )
+            for i in range(3)
+        ]
+        suppressor = ProgressiveSuppressor(threshold=2)
+
+        kept = suppressor(findings)
+        result = build_recommendations(kept, threshold=2, suppressor=suppressor)
+
+        assert kept == findings
+        assert suppressor.suppressed_count == 0
+        assert result.suppressed_count == 0
+        assert result.recommended_config == {}
+
+    def test_progressive_threshold_preserves_unsupported_findings(self):
+        findings = [
+            _make_finding("PII-001", f"data/file{i}.csv", pii_type="email")
+            for i in range(3)
+        ] + [
+            _make_finding("profanity-word", f"docs/file{i}.md", category="profanity")
+            for i in range(3)
+        ]
+        suppressor = ProgressiveSuppressor(threshold=2)
+
+        kept = suppressor(findings)
+        result = build_recommendations(kept, threshold=2, suppressor=suppressor)
+
+        assert kept == findings
+        assert suppressor.suppressed_count == 0
+        assert result.suppressed_count == 0
+        assert result.high_frequency_clusters == []
 
     def test_pii_still_excluded(self):
         findings = [
@@ -351,10 +495,7 @@ class TestBuildRecommendations:
         assert "scan_pii" not in result.recommended_config
 
     def test_multiple_scanner_types(self):
-        findings = [
-            _make_finding("SECRET-001", f"f{i}.py", secret_type="key")
-            for i in range(11)
-        ] + [
+        findings = [_make_finding("B108", f"f{i}.py") for i in range(11)] + [
             _make_finding(
                 "PROMPT-INJECTION-001",
                 f"g{i}.py",
@@ -364,5 +505,5 @@ class TestBuildRecommendations:
         ]
         result = build_recommendations(findings, threshold=10)
         assert len(result.high_frequency_clusters) == 2
-        assert "secret_scanning" in result.recommended_config
+        assert "code_scanning" in result.recommended_config
         assert "prompt_injection" in result.recommended_config

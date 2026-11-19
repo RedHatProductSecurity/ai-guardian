@@ -145,6 +145,7 @@ except ImportError:
     HAS_ANNOTATIONS = False
 
 from ai_guardian.scanners.code_inspection import CodeInspectionManager
+from ai_guardian.utils.path_matching import matches_ignore_files
 
 logger = logging.getLogger(__name__)
 
@@ -298,8 +299,8 @@ class FileScanner:
             progress_callback: Optional callable(file_path, index, total)
             cancel_event: Optional threading.Event — set to stop scan early
             skip_hidden: Skip directories starting with '.' (default True)
-            finding_filter: Optional callable(findings_list) -> filtered_list,
-                called after each file's scan with the cumulative findings.
+            finding_filter: Optional callable(new_findings) -> filtered_list,
+                called after each file's scan with only that file's findings.
                 Can remove findings in-place for progressive suppression.
 
         Returns:
@@ -346,7 +347,9 @@ class FileScanner:
                 else:
                     self._scan_file(file_path, scan_path)
                 if finding_filter:
-                    self.findings = finding_filter(self.findings)
+                    new_findings = self.findings[findings_before:]
+                    filtered_findings = finding_filter(new_findings)
+                    self.findings = self.findings[:findings_before] + filtered_findings
                     skip = getattr(finding_filter, "skip_rules", None)
                     if skip is not None:
                         self._skip_rules = skip
@@ -780,6 +783,16 @@ class FileScanner:
             if self.verbose:
                 logger.error(f"Error scanning {file_path}: {e}")
 
+    def _scanner_ignores_file(self, scanner_type: str, file_path: str) -> bool:
+        """Check scanner-specific file ignores for a project-relative path."""
+        section = self.config.get(scanner_type)
+        if not isinstance(section, dict):
+            return False
+        patterns = section.get("ignore_files", [])
+        if not isinstance(patterns, list):
+            return False
+        return matches_ignore_files(file_path, patterns)
+
     def _scan_image_file(self, file_path: Path, base_path: Path) -> None:
         """Scan an image file via OCR and run security checkers on extracted text."""
         try:
@@ -903,7 +916,9 @@ class FileScanner:
 
     def _check_ssrf(self, file_path: str, content: str) -> None:
         """Check for SSRF patterns in file content."""
-        if self.ssrf_protector is None:
+        if self.ssrf_protector is None or self._scanner_ignores_file(
+            "ssrf_protection", file_path
+        ):
             return
         try:
             # Check content as if it were a Bash command
@@ -1188,7 +1203,9 @@ class FileScanner:
     def _check_code_security(self, file_path: str, content: str) -> None:
         """Check Python code for security issues using configured inspectors."""
         try:
-            if self._code_scanner is None:
+            if self._code_scanner is None or self._scanner_ignores_file(
+                "code_scanning", file_path
+            ):
                 return
             inspection = self._code_scanner.scan(content, file_path=file_path)
             code_findings = inspection.findings
@@ -1250,6 +1267,11 @@ class FileScanner:
 
                 ol_config, _ = _load_offensive_language_config()
             if not ol_config or not ol_config.get("enabled", False):
+                return
+            ignore_files = ol_config.get("ignore_files", [])
+            if isinstance(ignore_files, list) and matches_ignore_files(
+                file_path, ignore_files
+            ):
                 return
             scanner = _OffensiveLangScanner(ol_config)
             findings = scanner.scan(content, file_path=file_path)
