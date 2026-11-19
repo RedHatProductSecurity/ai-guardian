@@ -1326,12 +1326,33 @@ class Doctor:
                     all_configured = False
                 continue
 
-            configured, detail = setup.check_hooks_for_ide(ide_type)
             mcp_verification = None
             mcp_status = None
             mcp_integration = get_ide_integration(ide_type)
+            if ide_type == "kilo":
+                # Kilo's plugin and MCP entry live in different locations.
+                # Use combined verification so Doctor can report both paths
+                # without treating the MCP config file as a hooks file.
+                mcp_verification = setup.verify_ide_setup(ide_type)
+                configured = mcp_verification.get("hooks_healthy") is True
+                events = mcp_verification.get("events", {})
+                if not isinstance(events, dict):
+                    events = {}
+                if configured:
+                    detail = f"{ide_name}: configured"
+                elif events and all(status == "missing" for status in events.values()):
+                    detail = f"{ide_name}: not configured"
+                else:
+                    attention = self._hook_verification_detail(mcp_verification)
+                    detail = (
+                        f"{ide_name}: needs attention "
+                        f"({attention or 'configuration unreadable'})"
+                    )
+                mcp_status = mcp_verification.get("mcp_status")
+            else:
+                configured, detail = setup.check_hooks_for_ide(ide_type)
             if (
-                ide_type not in ("codex", "cursor")
+                ide_type not in ("codex", "cursor", "kilo")
                 and mcp_integration is not None
                 and mcp_integration.supports_mcp
             ):
@@ -1405,7 +1426,10 @@ class Doctor:
                         all_configured = False
                 else:
                     message = (
-                        self._hook_detail_without_name(detail, ide_name) + mcp_detail
+                        self._kilo_hook_summary(setup, mcp_verification)
+                        if ide_type == "kilo"
+                        else self._hook_detail_without_name(detail, ide_name)
+                        + mcp_detail
                     )
                     results.append(f"{ide_name}: {message}")
                     integration_results.append(
@@ -1428,7 +1452,11 @@ class Doctor:
                         all_configured = False
                 any_configured = True
             else:
-                message = self._hook_detail_without_name(detail, ide_name) + mcp_detail
+                message = (
+                    self._kilo_hook_summary(setup, mcp_verification)
+                    if ide_type == "kilo"
+                    else self._hook_detail_without_name(detail, ide_name) + mcp_detail
+                )
                 item_status = (
                     CheckStatus.WARN
                     if "needs attention" in detail
@@ -1574,6 +1602,54 @@ class Doctor:
     def _hook_detail_without_name(detail: str, ide_name: str) -> str:
         prefix = f"{ide_name}: "
         return detail[len(prefix) :] if detail.startswith(prefix) else detail
+
+    @staticmethod
+    def _kilo_hook_summary(setup, verification: Optional[Dict[str, Any]]) -> str:
+        """Describe Kilo's plugin artifact separately from MCP and callbacks."""
+        if not isinstance(verification, dict):
+            verification = {}
+        manifest = setup.expected_hook_manifest("kilo")
+        events = verification.get("events", {})
+        if not isinstance(events, dict):
+            events = {}
+        plugin_count = sum(events.get(event) == "healthy" for event in manifest)
+        total = len(manifest)
+
+        scope = verification.get("scope") or "user"
+        if scope == "auto":
+            scope = "user"
+        plugin_path = verification.get("config_path")
+        mcp_status = verification.get("mcp_status", "unknown")
+        mcp_config_path = verification.get("mcp_config_path")
+
+        parts = [
+            f"{plugin_count}/{total} plugin artifacts configured "
+            "(not callback coverage)"
+        ]
+        if plugin_path:
+            parts.append(f"plugin directory ({scope} scope): {plugin_path}")
+        parts.append(
+            "Kilo auto-discovers plugins; hook entries are not stored in "
+            "JSON/JSONC config"
+        )
+        mcp_part = f"MCP: {mcp_status}; separate mcp entry"
+        if mcp_config_path:
+            mcp_part += f" in {mcp_config_path}"
+        else:
+            mcp_part += " in Kilo JSON/JSONC config"
+        parts.append(mcp_part)
+        parts.append(
+            "expected callbacks: tool.execute.before and tool.execute.after "
+            "(coverage not verified)"
+        )
+        parts.append(
+            "native activation, enforcement, and result delivery remain unverified"
+        )
+
+        attention = Doctor._hook_verification_detail(verification)
+        if attention:
+            parts.append(f"attention: {attention}")
+        return "; ".join(parts)
 
     @staticmethod
     def _hook_verification_detail(verification: Dict[str, Any]) -> Optional[str]:

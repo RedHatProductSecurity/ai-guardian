@@ -98,6 +98,12 @@ supports a relocated user home. With no variables set, defaults below apply.
 | Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
 | Crush | `CRUSH_GLOBAL_CONFIG` for the global MCP file; `CRUSH_GLOBAL_DATA` is not used for setup | Explicit global MCP file only | Hook and default `.crush.json` setup remain project-local |
 
+Kilo setup and tray health count the auto-discovered plugin as one managed
+artifact, not as callback coverage. The generated plugin declares
+`tool.execute.before` and `tool.execute.after`; the Kilo JSON/JSONC config stores
+MCP registration separately under `mcp`, not hook entries. Native plugin
+activation, enforcement, and result delivery remain unverified.
+
 These names follow the upstream contracts for [Claude](https://code.claude.com/docs/en/env-vars),
 [Codex](https://github.com/openai/codex/blob/main/codex-rs/config/src/loader/mod.rs),
 [Cursor](https://prod.cursor.com/docs/cli/reference/configuration),

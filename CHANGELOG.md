@@ -127,6 +127,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retrying with the same explicit source UUID after the prior source was deleted.
 
 ### Changed
+- **Kilo setup and health messaging:** Label the count as a managed plugin
+  artifact rather than hook or callback coverage, show the effective plugin
+  location, and explain the separate MCP entry in Kilo's JSON/JSONC config while
+  retaining the native activation, enforcement, and result-delivery caveat.
 - **NotebookLM refresh recovery:** Allow an explicitly identified exact-title
   `generated_text` source to be replaced using its full source UUID, and accept a
   new file source reported as `generated_text` only when bound to its saved upload

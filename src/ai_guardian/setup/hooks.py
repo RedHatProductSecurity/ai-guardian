@@ -3225,7 +3225,12 @@ class IDESetup:
                 detected = f" {version}" if version else " (CLI version unavailable)"
                 message += f"  Use OpenCode {generation}{detected} plugin contract\n"
             elif ide_type == "kilo":
-                message += "  Kilo auto-discovers local plugin files; no config entry is added\n"
+                message += (
+                    "  Kilo auto-discovers plugin files; no plugin entry is added to "
+                    "its JSON/JSONC config\n"
+                    "  MCP registration is managed separately under `mcp` in that "
+                    "config\n"
+                )
             message += f"  Create: {plugin_file}\n"
             message += f"  Create: {bridge_file}\n"
             if ide_type == "opencode" and legacy_bridge_file.is_file():
@@ -3309,8 +3314,14 @@ class IDESetup:
                 )
         elif ide_type == "kilo":
             message += (
-                "  Kilo local plugin discovery is configured; native activation "
-                "and result delivery remain unverified\n"
+                "  Managed artifact: one auto-discovered plugin; its generated "
+                "source declares `tool.execute.before` and `tool.execute.after` "
+                "callbacks\n"
+                "  Kilo auto-discovers plugins from this directory; no plugin entry "
+                "is written to its JSON/JSONC config. MCP registration is managed "
+                "separately under `mcp` in that config\n"
+                "  Native plugin activation and enforcement, and result delivery, "
+                "remain unverified\n"
             )
         message += f"\n  {gitleaks_message}\n"
 
@@ -3753,7 +3764,7 @@ class IDESetup:
                     config_path, dry_run=dry_run, enable_mcp=enable_mcp
                 )
 
-            # Plugin-file IDEs (OpenCode): drop a single .ts file in plugins dir
+            # Plugin-file IDEs (OpenCode, Kilo): drop one .ts file in plugin dir
             if ide_config.get("plugin_file"):
                 return self._setup_plugin_file(
                     ide_type, ide_config, config_path, dry_run
