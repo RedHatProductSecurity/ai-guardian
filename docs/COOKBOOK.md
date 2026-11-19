@@ -314,8 +314,8 @@ AI Guardian provides several ways to suppress false-positive secret findings. Ch
 | One specific finding by fingerprint hash | `.gitleaksignore` | Per-project, Gitleaks only |
 | All findings in a file or directory | `ignore_files` in `ai-guardian.json` | All scanners |
 | A known-safe value pattern (e.g., test keys) | `allowlist_patterns` in `ai-guardian.json` | All scanners |
-| A single line in source code | `ai-guardian:allow` inline annotation | All scanners |
-| A block of lines in source code | `ai-guardian:begin-allow` / `end-allow` | All scanners |
+| A single line in source code | `ai-guardian:allow` inline annotation | All file-content scanners |
+| A block of lines in source code | `ai-guardian:begin-allow` / `end-allow` | All file-content scanners |
 | All test fixtures across scanners | `.aiguardignore.toml` | All scanners |
 | Gitleaks-specific path or regex rules | `.gitleaks.toml` `[allowlist]` | Gitleaks only |
 
@@ -432,8 +432,12 @@ API_KEY = "pk_test_example123456789012"  # gitleaks:allow
 
 | Built-in alias | Suppresses | Notes |
 |----------------|-----------|-------|
-| `ai-guardian:allow` | Secrets + PII | Broadest suppression |
+| `ai-guardian:allow` | All file-content scanner findings | Broadest suppression |
 | `gitleaks:allow` | Secrets only | PII still scanned |
+
+Scanner-qualified markers (such as `ai-guardian:allow prompt_injection`) limit
+the exception to the named scanner types. User prompts are still scanned even
+if they contain annotation text.
 
 These are the only aliases that work by default. To use other keywords (e.g., `notsecret`, `nosec`), you must configure them first — see below.
 
@@ -463,10 +467,10 @@ The built-in aliases (`ai-guardian:allow`, `gitleaks:allow`) may not match your 
 
 | Config key | What it adds | Suppresses | Built-in default |
 |-----------|-------------|-----------|-----------------|
-| `inline_allow` | Custom aliases | Secrets + PII | `[]` (built-in: `ai-guardian:allow`) |
+| `inline_allow` | Custom aliases | All file-content scanners | `[]` (built-in: `ai-guardian:allow`) |
 | `inline_allow_secrets` | Custom aliases | Secrets only | `["gitleaks:allow"]` |
-| `block_begin` | Custom block-start markers | Secrets + PII | `[]` (built-in: `ai-guardian:begin-allow`) |
-| `block_end` | Custom block-end markers | Secrets + PII | `[]` (built-in: `ai-guardian:end-allow`) |
+| `block_begin` | Custom block-start markers | All file-content scanners | `[]` (built-in: `ai-guardian:begin-allow`) |
+| `block_end` | Custom block-end markers | All file-content scanners | `[]` (built-in: `ai-guardian:end-allow`) |
 
 User config **extends** defaults — adding `"nosec"` does not remove `ai-guardian:allow`. Both work side by side.
 
@@ -912,7 +916,10 @@ Add an inline comment to the line in your source file:
 API_KEY = "pk_test_example123456789012"  # ai-guardian:allow
 ```
 
-The `ai-guardian:allow` marker suppresses both secret and PII scanning for that line. The `gitleaks:allow` marker suppresses secrets only (not PII).
+The unqualified `ai-guardian:allow` marker suppresses every file-content scanner
+for that line. Scanner-qualified annotations, such as
+`ai-guardian:allow prompt_injection`, suppress only the listed scanner types.
+`gitleaks:allow` continues to suppress secrets only (not PII).
 
 ### How do I suppress multiple lines?
 
@@ -925,7 +932,9 @@ TEST_DATA = {
 # ai-guardian:end-allow
 ```
 
-Block annotations suppress all lines between the begin and end markers.
+Unqualified block annotations suppress all file-content scanners between the
+begin and end markers. A scanner-qualified begin marker limits suppression to
+the listed scanner types, for example `# ai-guardian:begin-allow code_scanning`.
 
 ### How do I add custom suppression keywords?
 
@@ -957,7 +966,9 @@ Disabling annotations means no inline suppressions are allowed — all detection
 
 ### What can annotations suppress?
 
-Annotations suppress **secrets and PII only**. Prompt injection, jailbreak, and config file exfiltration are **always scanned** regardless of annotations.
+Annotations can suppress any finding produced from file content. An annotation
+inside a user-submitted prompt does not suppress prompt scanning; source
+annotations are honored only for file scans and file-read content.
 
 ---
 

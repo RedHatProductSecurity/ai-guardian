@@ -122,7 +122,11 @@ FEATURE_GROUPS = [
                 "Secret Redaction",
                 "Redact secrets from tool outputs",
             ),
-            ("annotations", "Annotations", "Inline suppression for secrets and PII"),
+            (
+                "annotations",
+                "Annotations",
+                "Inline suppression for file-content scanner findings",
+            ),
         ],
     ),
     (

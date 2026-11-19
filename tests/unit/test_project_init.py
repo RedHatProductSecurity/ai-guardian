@@ -20,6 +20,7 @@ from ai_guardian.project_init import (
     _format_evidence,
     _print_exclude_patterns,
     _print_result,
+    _print_annotation_summary,
     _print_json,
     _language_fp_cache,
     get_language_allowlist_patterns,
@@ -795,7 +796,7 @@ class TestAutoDetectionIntegration:
 class TestScanMode:
     """Tests for ProjectInitializer with --scan mode."""
 
-    def _make_findings(self, count=15, rule_id="SECRET-001", dir_prefix="src"):
+    def _make_findings(self, count=15, rule_id="B108", dir_prefix="src"):
         return [
             {
                 "rule_id": rule_id,
@@ -833,7 +834,7 @@ class TestScanMode:
         config_path = tmp_path / ".ai-guardian" / "ai-guardian.json"
         assert config_path.is_file()
         config = json.loads(config_path.read_text())
-        assert "secret_scanning" in config
+        assert "code_scanning" in config
 
     def test_run_scan_dry_run(self, tmp_path):
         (tmp_path / "app.py").write_text("x = 1")
@@ -983,6 +984,37 @@ class TestPrintWithScanAnalysis:
 
         output = json.loads(capsys.readouterr().out)
         assert "scan_analysis" not in output
+
+    def test_annotation_summary_reports_skipped_unrouted_findings(
+        self, capsys, tmp_path
+    ):
+        from ai_guardian.code_annotator import AnnotationResult
+
+        result = InitResult(project_dir=tmp_path)
+        result.annotation_result = AnnotationResult(
+            skipped_never_suppress=1,
+            skipped_no_scanner=2,
+            skipped_no_location=1,
+        )
+
+        _print_annotation_summary(result)
+
+        output = capsys.readouterr().out
+        assert "No source annotations to insert." in output
+        assert "Skipped (never suppressible): 1" in output
+        assert "Skipped (unsupported scanner): 2" in output
+        assert "Skipped (no line number): 1" in output
+
+    def test_print_json_includes_missing_scanner_count(self, capsys, tmp_path):
+        from ai_guardian.code_annotator import AnnotationResult
+
+        result = InitResult(project_dir=tmp_path)
+        result.annotation_result = AnnotationResult(skipped_no_scanner=2)
+
+        _print_json(result)
+
+        output = json.loads(capsys.readouterr().out)
+        assert output["annotations"]["skipped_no_scanner"] == 2
 
     def test_print_result_shows_excludes(self, capsys, tmp_path):
         result = InitResult(project_dir=tmp_path)

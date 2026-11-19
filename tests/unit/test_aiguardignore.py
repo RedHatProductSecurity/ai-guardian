@@ -53,6 +53,18 @@ SAMPLE_TOML = textwrap.dedent("""\
                 "examples/*.json",
             ]
 
+    [code_scanning]
+        [code_scanning.allowlist]
+            paths = [
+                "tests/code/**",
+            ]
+
+    [ssrf_protection]
+        [ssrf_protection.allowlist]
+            paths = [
+                "tests/urls/**",
+            ]
+
     [context_poisoning]
         [context_poisoning.allowlist]
             paths = [
@@ -69,6 +81,12 @@ SAMPLE_TOML = textwrap.dedent("""\
         [image_scanning.allowlist]
             paths = [
                 "tests/fixtures/images/**",
+            ]
+
+    [offensive_language]
+        [offensive_language.allowlist]
+            paths = [
+                "docs/language/**",
             ]
 """)
 
@@ -122,9 +140,12 @@ class TestLoadAiguardignore:
         assert config.scanner_paths["scan_pii"] == ["tests/unit/test_pii_detection.py"]
         assert config.scanner_paths["prompt_injection"] == ["docs/security-patterns.md"]
         assert config.scanner_paths["config_file_scanning"] == ["examples/*.json"]
+        assert config.scanner_paths["code_scanning"] == ["tests/code/**"]
+        assert config.scanner_paths["ssrf_protection"] == ["tests/urls/**"]
         assert config.scanner_paths["context_poisoning"] == ["docs/instructions.md"]
         assert config.scanner_paths["supply_chain"] == ["scripts/hooks/**"]
         assert config.scanner_paths["image_scanning"] == ["tests/fixtures/images/**"]
+        assert config.scanner_paths["offensive_language"] == ["docs/language/**"]
 
     def test_global_only(self, tmp_path):
         toml_file = tmp_path / ".aiguardignore.toml"
@@ -278,12 +299,15 @@ class TestGetIgnorePaths:
             pii = get_ignore_paths("scan_pii")
             pi = get_ignore_paths("prompt_injection")
             config = get_ignore_paths("config_file_scanning")
+            code = get_ignore_paths("code_scanning")
+            ssrf = get_ignore_paths("ssrf_protection")
             cp = get_ignore_paths("context_poisoning")
             sc = get_ignore_paths("supply_chain")
             img = get_ignore_paths("image_scanning")
+            offensive = get_ignore_paths("offensive_language")
 
         # All should include global paths
-        for paths in [secret, pii, pi, config, cp, sc, img]:
+        for paths in [secret, pii, pi, config, code, ssrf, cp, sc, img, offensive]:
             assert "tests/fixtures/**" in paths
             assert "tests/unit/test_ai_guardian.py" in paths
 
@@ -292,9 +316,12 @@ class TestGetIgnorePaths:
         assert "tests/unit/test_pii_detection.py" in pii
         assert "docs/security-patterns.md" in pi
         assert "examples/*.json" in config
+        assert "tests/code/**" in code
+        assert "tests/urls/**" in ssrf
         assert "docs/instructions.md" in cp
         assert "scripts/hooks/**" in sc
         assert "tests/fixtures/images/**" in img
+        assert "docs/language/**" in offensive
 
         # No cross-contamination
         assert "tests/unit/test_pii_detection.py" not in secret
@@ -357,6 +384,34 @@ class TestMergeAiguardignore:
             result = _merge_aiguardignore(None, "secret_scanning")
 
         assert result == {"ignore_files": ["tests/fixtures/**"]}
+
+    def test_merge_generated_scanner_types_and_offensive_alias(self, tmp_path):
+        toml_file = tmp_path / ".aiguardignore.toml"
+        toml_file.write_text(textwrap.dedent("""\
+                [ssrf_protection.allowlist]
+                paths = ["tests/urls/**"]
+
+                [code_scanning.allowlist]
+                paths = ["tests/code/**"]
+
+                [offensive_language.allowlist]
+                paths = ["docs/language/**"]
+                """))
+
+        with patch(
+            "ai_guardian.aiguardignore.find_project_root", return_value=tmp_path
+        ):
+            from ai_guardian.config.loaders import _merge_aiguardignore
+
+            ssrf = _merge_aiguardignore({}, "ssrf_protection", project_root=tmp_path)
+            code = _merge_aiguardignore({}, "code_scanning", project_root=tmp_path)
+            offensive = _merge_aiguardignore(
+                {}, "scan_offensive", project_root=tmp_path
+            )
+
+        assert ssrf == {"ignore_files": ["tests/urls/**"]}
+        assert code == {"ignore_files": ["tests/code/**"]}
+        assert offensive == {"ignore_files": ["docs/language/**"]}
 
     def test_no_aiguardignore_file(self, tmp_path):
         from ai_guardian import _merge_aiguardignore

@@ -746,7 +746,7 @@ class TestFileScannerScanFiles:
 
 
 class TestFileScannerAnnotationSuppression:
-    """Tests for annotation-based suppression in FileScanner (#1237)."""
+    """Tests for annotation-based suppression across FileScanner detectors."""
 
     @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
     @mock.patch("ai_guardian.scanners.file_scanner._load_annotations_config")
@@ -774,9 +774,9 @@ class TestFileScannerAnnotationSuppression:
         scanned_content = call_args[0][0]
         scanned_lines = scanned_content.splitlines()
         assert scanned_lines[0] == "clean_line"
-        assert scanned_lines[1] == ""
-        assert scanned_lines[2] == ""
-        assert scanned_lines[3] == ""
+        assert scanned_lines[1].strip() == ""
+        assert scanned_lines[2].strip() == ""
+        assert scanned_lines[3].strip() == ""
         assert scanned_lines[4] == "another_clean_line"
 
     @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
@@ -834,9 +834,92 @@ class TestFileScannerAnnotationSuppression:
         assert 'ssn = "123-45-6789"' not in pii_content
         assert "clean_line" in pii_content
 
+    def test_unqualified_annotation_suppresses_all_file_scanners(self, tmp_path):
+        content = 'value = "example"  # ai-guardian:allow\nnext_sensitive_line\nclean'
+        test_file = tmp_path / "sample.py"
+        test_file.write_text(content)
+
+        scanner = FileScanner(config={})
+        scanner.ssrf_protector = object()
+        scanner.unicode_detector = object()
+        scanner._code_scanner = object()
+        scanner._is_config_file = mock.Mock(return_value=True)
+        method_names = (
+            "_check_config_threats",
+            "_check_ssrf",
+            "_check_unicode_attacks",
+            "_check_secrets",
+            "_check_password_likelihood",
+            "_check_pii",
+            "_check_prompt_injection",
+            "_check_supply_chain",
+            "_check_offensive_language",
+            "_check_canary_detection",
+            "_check_code_security",
+        )
+        for method_name in method_names:
+            setattr(scanner, method_name, mock.Mock())
+
+        with (
+            mock.patch(
+                "ai_guardian.scanners.file_scanner._load_annotations_config",
+                return_value=({"enabled": True}, None),
+            ),
+            mock.patch("ai_guardian.scanners.file_scanner.HAS_CONFIG_SCANNER", True),
+            mock.patch("ai_guardian.scanners.file_scanner.HAS_SECRET_SCANNER", True),
+            mock.patch("ai_guardian.scanners.file_scanner.HAS_PII_SCANNER", True),
+            mock.patch("ai_guardian.scanners.file_scanner.HAS_PROMPT_INJECTION", True),
+            mock.patch("ai_guardian.scanners.file_scanner.HAS_SUPPLY_CHAIN", True),
+            mock.patch(
+                "ai_guardian.scanners.file_scanner.HAS_OFFENSIVE_LANGUAGE", True
+            ),
+            mock.patch("ai_guardian.scanners.file_scanner.HAS_CANARY_DETECTION", True),
+        ):
+            scanner._scan_file(test_file, tmp_path)
+
+        for method_name in method_names:
+            scanned_content = getattr(scanner, method_name).call_args.args[1]
+            assert [line.strip() for line in scanned_content.splitlines()] == [
+                "",
+                "",
+                "clean",
+            ], method_name
+
+    def test_scanner_qualified_annotation_suppresses_only_matching_scanner(
+        self, tmp_path
+    ):
+        content = (
+            'value = "example"  # ai-guardian:allow prompt_injection\n'
+            "next_sensitive_line"
+        )
+        test_file = tmp_path / "sample.py"
+        test_file.write_text(content)
+
+        scanner = FileScanner(config={})
+        scanner._check_prompt_injection = mock.Mock()
+        scanner._check_secrets = mock.Mock()
+        with (
+            mock.patch(
+                "ai_guardian.scanners.file_scanner._load_annotations_config",
+                return_value=({"enabled": True}, None),
+            ),
+            mock.patch("ai_guardian.scanners.file_scanner.HAS_PROMPT_INJECTION", True),
+            mock.patch("ai_guardian.scanners.file_scanner.HAS_SECRET_SCANNER", True),
+            mock.patch("ai_guardian.scanners.file_scanner.check_secrets"),
+        ):
+            scanner._scan_file(test_file, tmp_path)
+
+        assert [
+            line.strip()
+            for line in scanner._check_prompt_injection.call_args.args[1].splitlines()
+        ] == ["", ""]
+        assert scanner._check_secrets.call_args.args[1] == content
+
     @mock.patch("ai_guardian.scanners.file_scanner._load_annotations_config")
-    def test_prompt_injection_uses_original_content(self, mock_ann_config, tmp_path):
-        """Prompt injection scanner should use ORIGINAL content (not suppressed)."""
+    def test_prompt_injection_uses_annotation_suppressed_content(
+        self, mock_ann_config, tmp_path
+    ):
+        """Prompt injection findings honor source annotations."""
         mock_ann_config.return_value = ({"enabled": True}, None)
 
         content = (
@@ -848,18 +931,16 @@ class TestFileScannerAnnotationSuppression:
         test_file.write_text(content)
 
         with mock.patch(
-            "ai_guardian.scanners.file_scanner.PromptInjectionDetector"
-        ) as mock_detector_cls:
+            "ai_guardian.scanners.file_scanner.get_cached_detector"
+        ) as mock_get_detector:
             mock_detector = mock.MagicMock()
             mock_detector.detect.return_value = (False, None, False)
-            mock_detector_cls.return_value = mock_detector
-
+            mock_get_detector.return_value = mock_detector
             scanner = FileScanner(config={"prompt_injection": {"enabled": True}})
             scanner.scan_directory(str(tmp_path))
 
-            if mock_detector.detect.called:
-                pi_content = mock_detector.detect.call_args[0][0]
-                assert "ignore previous instructions" in pi_content
+            pi_content = mock_detector.detect.call_args[0][0]
+            assert "ignore previous instructions" not in pi_content
 
 
 class TestDiscoverFilesSkipHidden:
@@ -962,3 +1043,59 @@ class TestDiscoverFilesSkipHidden:
         names = [f.name for f in files]
         assert "app.py" in names
         assert "readme.txt" not in names
+
+
+class TestFileScannerPerScannerIgnore:
+    def test_ssrf_ignore_files_skip_file_content(self):
+        scanner = FileScanner(config={"ssrf_protection": {"ignore_files": ["src/**"]}})
+        scanner.ssrf_protector = mock.Mock()
+
+        scanner._check_ssrf("src/ignored.py", "curl http://127.0.0.1")
+
+        scanner.ssrf_protector.check.assert_not_called()
+
+    def test_code_scanning_ignore_files_skip_inspection(self):
+        scanner = FileScanner(config={"code_scanning": {"ignore_files": ["src/**"]}})
+        scanner._code_scanner = mock.Mock()
+
+        scanner._check_code_security("src/ignored.py", "eval('1 + 1')")
+
+        scanner._code_scanner.scan.assert_not_called()
+
+    def test_offensive_language_ignore_files_skip_file_content(self):
+        scanner = FileScanner(
+            config={
+                "scan_offensive": {
+                    "enabled": True,
+                    "ignore_files": ["src/**"],
+                }
+            }
+        )
+
+        with mock.patch(
+            "ai_guardian.scanners.file_scanner._OffensiveLangScanner"
+        ) as scanner_cls:
+            scanner._check_offensive_language("src/ignored.py", "offensive text")
+
+        scanner_cls.assert_not_called()
+
+    def test_finding_filter_receives_only_new_file_findings(self, tmp_path):
+        for name in ("a.py", "b.py"):
+            (tmp_path / name).write_text("placeholder")
+
+        scanner = FileScanner(config={})
+        seen_batches = []
+
+        def fake_scan_file(file_path, _base_path):
+            scanner.findings.append(
+                {"rule_id": "TEST-001", "file_path": file_path.name}
+            )
+
+        def finding_filter(findings):
+            seen_batches.append([finding["file_path"] for finding in findings])
+            return findings
+
+        with mock.patch.object(scanner, "_scan_file", side_effect=fake_scan_file):
+            scanner.scan_directory(str(tmp_path), finding_filter=finding_filter)
+
+        assert seen_batches == [["a.py"], ["b.py"]]

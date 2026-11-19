@@ -53,6 +53,15 @@ class TestPageImports:
 
         assert callable(create_annotations_page)
 
+    def test_annotations_page_explains_file_scanner_scope(self):
+        import inspect
+
+        from ai_guardian.web.pages.annotations import create_annotations_page
+
+        page_source = inspect.getsource(create_annotations_page)
+        assert "all file-content scanner" in page_source
+        assert "do not suppress user-submitted prompt scanning" in page_source
+
 
 class TestRouteSidebarConsistency:
 

@@ -1959,14 +1959,14 @@
     },
     "annotations": {
       "type": "object",
-      "description": "Inline annotation suppression for secrets and PII on specific lines (NEW in v1.8.0, Issue #481). Hardcoded markers: ai-guardian:allow (inline, secrets+PII), ai-guardian:begin-allow / ai-guardian:end-allow (block, secrets+PII). Configurable aliases for secrets-only suppression (gitleaks:allow, notsecret). Prompt injection, jailbreak, and config exfiltration are always scanned and cannot be suppressed. Only applies to file content scanning (PreToolUse/beforeReadFile). Unmatched begin-allow without end-allow is ignored (fail-safe).",
+      "description": "Inline annotation suppression for file-content scanner findings. Unqualified ai-guardian:allow and ai-guardian:begin-allow / ai-guardian:end-allow markers suppress all file-content scanners; scanner-qualified markers suppress only the named scanner types. Configurable aliases can suppress all file findings (inline_allow) or secrets only (inline_allow_secrets, including gitleaks:allow). Applies to file scans and file-read content, not submitted prompts or unrelated tool output. Unmatched begin-allow without end-allow is ignored.",
       "properties": {
         "enabled": {
           "$ref": "#/definitions/time_based_enabled"
         },
         "inline_allow": {
           "type": "array",
-          "description": "Additional inline aliases that suppress secrets and PII (extends hardcoded ai-guardian:allow). User config extends defaults.",
+          "description": "Additional inline aliases that suppress all file-content scanner findings (extends hardcoded ai-guardian:allow). User config extends defaults.",
           "items": {
             "type": "string"
           },
