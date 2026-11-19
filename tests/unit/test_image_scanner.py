@@ -180,6 +180,22 @@ class TestImageDetector(TestCase):
 class TestOCREngine(TestCase):
     """Test OCR engine with mocked RapidOCR output."""
 
+    def test_rapidocr_log_level_tracks_verbose_mode(self):
+        for verbose, expected_level in ((False, "WARNING"), (True, "INFO")):
+            with self.subTest(verbose=verbose):
+                with (
+                    patch("ai_guardian.scanners.image_scanner.HAS_RAPIDOCR", True),
+                    patch(
+                        "ai_guardian.scanners.image_scanner.RapidOCR"
+                    ) as mock_rapidocr,
+                ):
+                    ocr = OCREngine(verbose=verbose)
+                    ocr._get_engine()
+
+                mock_rapidocr.assert_called_once_with(
+                    params={"Global.log_level": expected_level}
+                )
+
     @patch("ai_guardian.scanners.image_scanner.HAS_RAPIDOCR", True)
     @pytest.mark.skipif(
         sys.platform == "win32",
@@ -390,6 +406,16 @@ class TestBoxPointsToBbox(TestCase):
 
 class TestScanImage(TestCase):
     """Test the scan_image orchestrator function."""
+
+    @patch("ai_guardian.scanners.image_scanner.OCREngine")
+    def test_scan_image_passes_verbose_to_ocr_engine(self, mock_engine_cls):
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.extract_text.return_value = OCRResult(text="", elapsed_ms=1)
+
+        scan_image(_create_test_image(), {"max_image_size_mb": 10}, verbose=True)
+
+        mock_engine_cls.assert_called_once_with({"max_image_size_mb": 10}, verbose=True)
 
     @pytest.mark.skipif(
         sys.platform == "win32",

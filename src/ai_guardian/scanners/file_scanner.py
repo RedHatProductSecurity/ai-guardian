@@ -820,7 +820,7 @@ class FileScanner:
                 print(f"Scanning image: {relative_path}")
 
             try:
-                result = scan_image(image_data, img_config)
+                result = scan_image(image_data, img_config, verbose=self.verbose)
             except Exception as e:
                 logger.warning(f"Image scanning error for {relative_path}: {e}")
                 return
