@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Scanner-scoped source annotations:** Apply inline and block annotations to
+  all file-content scanner findings, with qualified markers limiting suppression
+  to named scanners. PostToolUse file excerpts inherit source annotations only
+  when uniquely matched to complete lines; prompts and unrelated non-file input
+  remain scanned.
 - **Base64 text inspection (#2802):** Safely decode bounded standard and
   URL-safe Base64 text candidates and inspect decoded text with enabled prompt
   injection, context poisoning, secret, and PII detectors. Map findings to the

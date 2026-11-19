@@ -44,6 +44,7 @@ from ai_guardian.scanners.post_scan_filters import (
     PostScanContext,
     apply_post_scan_pipeline,
 )
+from ai_guardian.annotations import apply_suppressions, read_annotation_source
 
 logger = logging.getLogger(__name__)
 
@@ -408,7 +409,7 @@ except ImportError:
 
 
 try:
-    from ai_guardian.annotations import process_annotations
+    from ai_guardian.annotations import process_annotations_by_scanner
 
     HAS_ANNOTATIONS = True
 except ImportError:
@@ -513,43 +514,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
         origin_command=source_command,
     )
 
-    # Independent of credential-engine selection, annotation/project exclusions,
-    # and cross-hook clean-input shortcuts: tool results are different content.
-    from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
-
-    heuristic_notice = None
-    password_result = run_password_likelihood_scan(tool_output)
-    if password_result is not None:
-        password_decision = apply_post_scan_pipeline(
-            get_default_registry().get(ScannerName.PASSWORD_LIKELIHOOD),
-            password_result,
-            PostScanContext(
-                handle_ask_mode_auto=_handle_ask_mode_auto,
-                log_ask_decision=_log_ask_decision,
-                format_ask_info_message=_format_ask_info_message,
-                hook_event=hook_event,
-                hook_session_id=hook_session_id,
-                hook_tool_use_id=hook_tool_use_id,
-                tool_name=tool_name,
-                origin_command=source_command,
-                ide_type_value=agent_type,
-                violation_logger=violation_logger,
-                latency_timer=_latency_timer,
-                invocation_allowed_findings=_invocation_allowed,
-                non_blocking_findings_enabled=non_blocking_findings_enabled,
-            ),
-        )
-        if password_decision.should_block:
-            _advance_transcript_position(hook_data)
-            return _format_response(
-                adapter,
-                has_secrets=True,
-                hook_event=hook_event,
-                error_message=password_result.error_message,
-                violation_type=ViolationType.HEURISTIC_CANDIDATE,
-            )
-        heuristic_notice = "\n\n".join(password_decision.warnings) or None
-
     # Load PreToolUse context for cross-hook correlation (#366)
     pretool_ctx = None
     if context_mgr and hook_tool_use_id:
@@ -588,12 +552,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
     logger.info(f"Scanning {tool_identifier} output for secrets...")
 
     # Apply annotation suppression for file-reading tools (Issue #481)
-    # If PreToolUse was a file read, annotations in the output should be honored
-    # to prevent blocking/redaction of suppressed lines
-    post_annotations_config = None
-    post_secret_content = None
-    post_all_suppressed: set[int] = set()
-    post_secret_suppressed: set[int] = set()
+    # If PreToolUse was a file read, preserve per-scanner annotation scope.
+    post_annotation_contents: Dict[str, str] = {}
+    post_suppressed_lines: Dict[str, set[int]] = {}
     original_tool_output = tool_output
     if (
         HAS_ANNOTATIONS
@@ -606,21 +567,87 @@ def handle_post_tool_use(ctx=None, **kwargs):
         if post_annotations_config and is_feature_enabled(
             post_annotations_config.get("enabled"), now, default=True
         ):
-            post_all_content, post_secret_content_sup, post_ann_info, _ = (
-                process_annotations(
-                    tool_output,
-                    file_path=pretool_ctx.get("file_path"),
-                    config=post_annotations_config,
-                )
+            post_annotation_contents, post_ann_info, _ = process_annotations_by_scanner(
+                tool_output,
+                (
+                    "password_likelihood",
+                    "secret_scanning",
+                    "scan_pii",
+                    "prompt_injection",
+                    "context_poisoning",
+                    "offensive_language",
+                ),
+                file_path=pretool_ctx.get("file_path"),
+                config=post_annotations_config,
+                source_content=read_annotation_source(pretool_ctx.get("file_path")),
             )
             if post_ann_info:
-                tool_output = post_all_content
-                post_secret_content = post_secret_content_sup
+                original_lines = original_tool_output.splitlines()
+                for scanner_type, filtered_content in post_annotation_contents.items():
+                    filtered_lines = filtered_content.splitlines()
+                    post_suppressed_lines[scanner_type] = {
+                        index
+                        for index, original_line in enumerate(original_lines)
+                        if index < len(filtered_lines)
+                        and original_line != filtered_lines[index]
+                        and not filtered_lines[index].strip()
+                    }
                 total_suppressed = sum(len(s.get("lines", [])) for s in post_ann_info)
                 logger.info(
                     f"PostToolUse: annotation suppression applied "
                     f"({total_suppressed} line(s) suppressed)"
                 )
+
+    def _post_content_for(scanner_type: str) -> str:
+        return post_annotation_contents.get(scanner_type, original_tool_output)
+
+    post_secret_content = _post_content_for("secret_scanning")
+    post_pii_content = _post_content_for("scan_pii")
+    post_secret_suppressed = post_suppressed_lines.get("secret_scanning", set())
+    post_pii_suppressed = post_suppressed_lines.get("scan_pii", set())
+    post_sensitive_suppressed = post_secret_suppressed | post_pii_suppressed
+    post_sensitive_content = apply_suppressions(
+        original_tool_output, post_sensitive_suppressed, preserve_offsets=True
+    )
+
+    # File annotations also apply to password-likelihood findings. User prompts
+    # and non-file tool outputs have no annotation overrides.
+    from ai_guardian.scanners.password_likelihood import run_password_likelihood_scan
+
+    heuristic_notice = None
+    password_result = run_password_likelihood_scan(
+        _post_content_for("password_likelihood")
+    )
+    if password_result is not None:
+        password_decision = apply_post_scan_pipeline(
+            get_default_registry().get(ScannerName.PASSWORD_LIKELIHOOD),
+            password_result,
+            PostScanContext(
+                handle_ask_mode_auto=_handle_ask_mode_auto,
+                log_ask_decision=_log_ask_decision,
+                format_ask_info_message=_format_ask_info_message,
+                hook_event=hook_event,
+                hook_session_id=hook_session_id,
+                hook_tool_use_id=hook_tool_use_id,
+                tool_name=tool_name,
+                origin_command=source_command,
+                ide_type_value=agent_type,
+                violation_logger=violation_logger,
+                latency_timer=_latency_timer,
+                invocation_allowed_findings=_invocation_allowed,
+                non_blocking_findings_enabled=non_blocking_findings_enabled,
+            ),
+        )
+        if password_decision.should_block:
+            _advance_transcript_position(hook_data)
+            return _format_response(
+                adapter,
+                has_secrets=True,
+                hook_event=hook_event,
+                error_message=password_result.error_message,
+                violation_type=ViolationType.HEURISTIC_CANDIDATE,
+            )
+        heuristic_notice = "\n\n".join(password_decision.warnings) or None
 
     # Load secret scanning config for ignore lists
     secret_config, config_error = _loaders._load_secret_scanning_config()
@@ -829,7 +856,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 )
                 redactor = SecretRedactor(redaction_config, pii_config=pii_cfg)
                 with _latency_timer.check("secret_redaction"):
-                    result = redactor.redact(tool_output)
+                    result = redactor.redact(post_sensitive_content)
 
                 redacted_text = result["redacted_text"]
                 redactions = result["redactions"]
@@ -856,11 +883,10 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     )
 
                 # Restore original content on annotation-suppressed lines
-                if post_all_suppressed or post_secret_suppressed:
-                    all_post_suppressed = post_all_suppressed | post_secret_suppressed
+                if post_sensitive_suppressed:
                     redacted_lines = redacted_text.splitlines()
                     original_lines = original_tool_output.splitlines()
-                    for idx in all_post_suppressed:
+                    for idx in post_sensitive_suppressed:
                         if 0 <= idx < len(redacted_lines) and idx < len(original_lines):
                             redacted_lines[idx] = original_lines[idx]
                     redacted_text = "\n".join(redacted_lines)
@@ -1016,7 +1042,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
             ) and _supports_safe_post_output_replacement(agent_type, tool_name):
                 try:
                     sanitized = _sanitize_non_blocking_secret_output(
-                        tool_output,
+                        post_sensitive_content,
                         post_secret_result,
                         redaction_config,
                         _latency_timer,
@@ -1030,6 +1056,15 @@ def handle_post_tool_use(ctx=None, **kwargs):
 
                 if sanitized is not None:
                     redacted_text, detected_values = sanitized
+                    if post_sensitive_suppressed:
+                        redacted_lines = redacted_text.splitlines()
+                        original_lines = original_tool_output.splitlines()
+                        for index in post_sensitive_suppressed:
+                            if index < len(redacted_lines) and index < len(
+                                original_lines
+                            ):
+                                redacted_lines[index] = original_lines[index]
+                        redacted_text = "\n".join(redacted_lines)
                     if len(redacted_text) > _MAX_REDACTED_CONTEXT_BYTES:
                         original_length = len(redacted_text)
                         redacted_text = (
@@ -1105,7 +1140,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
     if not pii_skip_from_pretool:
         logger.info("Scanning tool output for PII...")
         post_pii_result = run_pii_scan(
-            tool_output,
+            post_pii_content,
             file_path=pii_file_path,
             tool_identifier=tool_identifier,
             latency_timer=_latency_timer,
@@ -1113,7 +1148,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
         decoded_pii_results = [
             scan_result
             for scan_result in _scan_decoded_post_tool_content(
-                tool_output,
+                post_pii_content,
                 ScannerName.PII,
                 file_path=pii_file_path,
                 tool_identifier=tool_identifier,
@@ -1123,7 +1158,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
         ]
         if decoded_pii_results:
             redacted_base64_output = _redact_encoded_source_spans(
-                tool_output,
+                post_pii_content,
                 decoded_pii_results,
                 existing_result=(
                     post_pii_result
@@ -1216,10 +1251,10 @@ def handle_post_tool_use(ctx=None, **kwargs):
 
                 # Build multi-finding list from PII redactions
                 pii_matched_text = _extract_pii_matched_text(
-                    pii_redactions, tool_output
+                    pii_redactions, post_pii_content
                 )
                 pii_findings = _pii_redactions_to_findings(
-                    pii_redactions, tool_output, pii_warning
+                    pii_redactions, post_pii_content, pii_warning
                 )
 
                 # Check ask action mode before standard routing
@@ -1266,7 +1301,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             ide_type=agent_type,
                             invocation_allowed_findings=_invocation_allowed,
                             finding_fingerprints=_compute_pii_transcript_fingerprints(
-                                pii_redactions, tool_output
+                                pii_redactions, post_pii_content
                             ),
                         )
                     else:
@@ -1318,10 +1353,10 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     return result
                 elif pii_action == "redact":
                     # Restore original content on annotation-suppressed lines
-                    if post_all_suppressed:
+                    if post_pii_suppressed:
                         pii_redacted_lines = redacted_text.splitlines()
                         pii_original_lines = original_tool_output.splitlines()
-                        for idx in post_all_suppressed:
+                        for idx in post_pii_suppressed:
                             if 0 <= idx < len(pii_redacted_lines) and idx < len(
                                 pii_original_lines
                             ):
@@ -1441,8 +1476,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     post_pi_file = pretool_ctx.get("file_path")
 
                 post_pi_config = ptu_overlaid_configs.get(ScannerName.PROMPT_INJECTION)
+                post_pi_content = _post_content_for("prompt_injection")
                 post_pi_result = run_prompt_injection_scan(
-                    tool_output,
+                    post_pi_content,
                     config=post_pi_config,
                     file_path=post_pi_file,
                     tool_name=tool_identifier,
@@ -1450,7 +1486,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 )
                 if post_pi_result is None or not post_pi_result.detected:
                     decoded_pi_results = _scan_decoded_post_tool_content(
-                        tool_output,
+                        post_pi_content,
                         ScannerName.PROMPT_INJECTION,
                         scanner_config=post_pi_config,
                         file_path=post_pi_file,
@@ -1615,15 +1651,16 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 if not post_cp_file and pretool_ctx:
                     post_cp_file = pretool_ctx.get("file_path")
 
+                post_cp_content = _post_content_for("context_poisoning")
                 post_cp_result = run_context_poisoning_scan(
-                    tool_output,
+                    post_cp_content,
                     file_path=post_cp_file,
                     tool_identifier=tool_identifier,
                     latency_timer=_latency_timer,
                 )
                 if post_cp_result is None or not post_cp_result.detected:
                     decoded_cp_results = _scan_decoded_post_tool_content(
-                        tool_output,
+                        post_cp_content,
                         ScannerName.CONTEXT_POISONING,
                         file_path=post_cp_file,
                         tool_identifier=tool_identifier,
@@ -1748,7 +1785,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
     # Check for offensive language in PostToolUse output
     try:
         post_ol_result = run_offensive_language_scan(
-            tool_output,
+            _post_content_for("offensive_language"),
             file_path=post_cp_file if "post_cp_file" in dir() else None,
             tool_identifier=(tool_identifier if "tool_identifier" in dir() else None),
             latency_timer=_latency_timer,

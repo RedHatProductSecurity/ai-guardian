@@ -98,7 +98,7 @@ def scan_content(
     are eligible, filtered by available inputs (*file_path*, etc.).
 
     *content_overrides* maps ``ScannerName`` → alternative text for that
-    scanner (e.g., annotation-suppressed content for secrets/PII).
+    scanner (e.g., scanner-scoped annotation-suppressed file content).
 
     *scanner_kwargs* maps ``ScannerName`` → dict of extra keyword arguments
     for that scanner (e.g., ``context``, ``ignore_files`` for secrets).
@@ -131,7 +131,40 @@ def scan_content(
     )
 
     results: List[ScanResult] = []
-    overrides = content_overrides or {}
+    overrides = dict(content_overrides or {})
+
+    # SDK/file-scan callers share the same source annotation behavior as hooks.
+    # User prompts and content without a verified file path remain unfiltered.
+    if source_type == "file_content" and file_path and hook_event is None:
+        from ai_guardian.annotations import (
+            canonical_scanner_type,
+            process_annotations_by_scanner,
+        )
+        from ai_guardian.config.utils import is_feature_enabled
+
+        if isinstance(config, dict) and isinstance(config.get("annotations"), dict):
+            annotation_config = config["annotations"]
+        else:
+            annotation_config, annotation_error = _loaders._load_annotations_config()
+            if annotation_error:
+                logger.warning("Could not load annotation configuration")
+
+        if isinstance(annotation_config, dict) and is_feature_enabled(
+            annotation_config.get("enabled"), default=True
+        ):
+            content_by_scanner, _, _ = process_annotations_by_scanner(
+                text,
+                (entry.name.value for entry in pipeline),
+                file_path=file_path,
+                config=annotation_config,
+            )
+            for entry in pipeline:
+                annotation_type = canonical_scanner_type(entry.name.value)
+                if annotation_type in content_by_scanner:
+                    overrides.setdefault(
+                        entry.name, content_by_scanner[annotation_type]
+                    )
+
     extra_kwargs = dict(scanner_kwargs) if scanner_kwargs else {}
     decoded_candidates = (
         list(iter_decoded_base64_text(text))

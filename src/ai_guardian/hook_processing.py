@@ -366,7 +366,7 @@ except ImportError:
     HAS_SCANNER_ENGINE = False
 
 try:
-    from ai_guardian.annotations import process_annotations
+    from ai_guardian.annotations import process_annotations_by_scanner
 
     HAS_ANNOTATIONS = True
 except ImportError:
@@ -2642,6 +2642,9 @@ def _process_hook_data(hook_data, daemon_state=None):
         content_to_scan = None
         filename = "unknown"
         file_path = None
+        annotation_content_overrides = None
+        secret_content_to_scan = None
+        pii_content_to_scan = None
 
         # Build registry + PostScanContext early so command-based scanners
         # (BASH_EXFIL, EXFIL_DETECTION) can use apply_post_scan_pipeline().
@@ -3084,12 +3087,13 @@ def _process_hook_data(hook_data, daemon_state=None):
                 else:
                     logger.info(f"Scanning file '{filename}' for secrets...")
 
-                # Apply annotation-based suppression (Issue #481)
-                # Only for file content (PreToolUse/beforeReadFile), never for prompts or PostToolUse
+                # Apply scanner-scoped annotations to source file content only;
+                # user prompts are intentionally passed through unchanged.
                 secret_content_to_scan = None
                 pii_content_to_scan = None
+                annotation_content_overrides = None
                 annotations_config = None
-                if HAS_ANNOTATIONS and content_to_scan:
+                if HAS_ANNOTATIONS and content_to_scan and file_path:
                     annotations_config, ann_config_error = _load_annotations_config()
                     if ann_config_error:
                         warning_messages.append(ann_config_error)
@@ -3097,23 +3101,35 @@ def _process_hook_data(hook_data, daemon_state=None):
                     if annotations_config and is_feature_enabled(
                         annotations_config.get("enabled"), now, default=True
                     ):
+                        scanner_annotation_types = {
+                            ScannerName.PROMPT_INJECTION: "prompt_injection",
+                            ScannerName.CONTEXT_POISONING: "context_poisoning",
+                            ScannerName.SUPPLY_CHAIN: "supply_chain",
+                            ScannerName.OFFENSIVE_LANGUAGE: "offensive_language",
+                            ScannerName.CANARY_DETECTION: "canary_detection",
+                            ScannerName.CONFIG_FILE: "config_file_scanning",
+                            ScannerName.SECRET: "secret_scanning",
+                            ScannerName.PASSWORD_LIKELIHOOD: "password_likelihood",
+                            ScannerName.PII: "scan_pii",
+                            ScannerName.CODE_SECURITY: "code_scanning",
+                        }
                         (
-                            content_all_sup,
-                            content_secret_sup,
+                            content_by_scanner,
                             ann_suppressions,
                             ann_warnings,
-                        ) = process_annotations(
+                        ) = process_annotations_by_scanner(
                             content_to_scan,
+                            scanner_annotation_types.values(),
                             file_path=file_path,
                             config=annotations_config,
                         )
+                        annotation_content_overrides = {
+                            scanner_name: content_by_scanner[annotation_type]
+                            for scanner_name, annotation_type in scanner_annotation_types.items()
+                            if annotation_type in content_by_scanner
+                        }
 
                         if ann_suppressions:
-                            # content_to_scan stays ORIGINAL for prompt injection, jailbreak, config exfil
-                            # Suppressed content only used for secrets and PII scanners
-                            pii_content_to_scan = content_all_sup
-                            secret_content_to_scan = content_secret_sup
-
                             # Log suppressions for audit trail
                             if violation_logger:
                                 try:
@@ -3427,6 +3443,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             logger.info("Scanning user prompt for secrets...")
             secret_content_to_scan = None  # No annotation processing for prompts
             pii_content_to_scan = None
+            annotation_content_overrides = None
             annotations_config = None
 
         # Run shared content scanning pipeline (PI, CP, SC, OL, CD, CF, SECRET, PII, transcript)
@@ -3435,6 +3452,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             content_to_scan=content_to_scan,
             filename=filename,
             file_path=file_path,
+            annotation_content_overrides=annotation_content_overrides,
             secret_content_to_scan=secret_content_to_scan,
             pii_content_to_scan=pii_content_to_scan,
             tool_identifier=tool_identifier,

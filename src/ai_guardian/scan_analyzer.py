@@ -262,8 +262,9 @@ _SCANNER_TO_CONFIG_SECTION = {
     "offensive_language": "scan_offensive",
 }
 
-# PASSWORD-001 remains global-only and intentionally bypasses project and
-# annotation exclusions. Keep it visible in init-project as well.
+# These finding types are not automatically routed to generated project config
+# or init-project annotations. Explicit source annotations are still honored by
+# file scanners for their matching file-content findings.
 NEVER_SUPPRESS = frozenset({"UNICODE-001", "canary_detected", "PASSWORD-001"})
 
 MAX_SAMPLE_FILES = 5
