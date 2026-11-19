@@ -136,7 +136,7 @@ except ImportError:
     HAS_OFFENSIVE_LANGUAGE = False
 
 try:
-    from ai_guardian.annotations import process_annotations
+    from ai_guardian.annotations import process_annotations_by_scanner
     from ai_guardian.config.loaders import _load_annotations_config
     from ai_guardian.config.utils import is_feature_enabled
 
@@ -148,6 +148,21 @@ from ai_guardian.scanners.code_inspection import CodeInspectionManager
 from ai_guardian.utils.path_matching import matches_ignore_files
 
 logger = logging.getLogger(__name__)
+
+_FILE_ANNOTATION_SCANNER_TYPES = (
+    "config_file_scanning",
+    "ssrf_protection",
+    "unicode_detection",
+    "secret_scanning",
+    "password_likelihood",
+    "scan_pii",
+    "prompt_injection",
+    "supply_chain",
+    "offensive_language",
+    "canary_detection",
+    "code_scanning",
+    "exfil_detection",
+)
 
 
 def _get_line_snippet(
@@ -716,58 +731,73 @@ class FileScanner:
             if self.verbose:
                 print(f"Scanning: {relative_path}")
 
-            # Apply annotation-based suppression for secrets/PII (#1237)
-            secret_content = content
-            pii_content = content
+            # Apply source annotations per scanner so scanner-qualified markers
+            # suppress only their named finding types.
+            content_by_scanner: Dict[str, str] = {}
             if HAS_ANNOTATIONS:
                 ann_config, _ = _load_annotations_config()
                 if ann_config and is_feature_enabled(
                     ann_config.get("enabled"), default=True
                 ):
-                    content_all_sup, content_secret_sup, ann_info, _ = (
-                        process_annotations(
-                            content, file_path=str(file_path), config=ann_config
-                        )
+                    content_by_scanner, _, _ = process_annotations_by_scanner(
+                        content,
+                        _FILE_ANNOTATION_SCANNER_TYPES,
+                        file_path=str(file_path),
+                        config=ann_config,
                     )
-                    if ann_info:
-                        pii_content = content_all_sup
-                        secret_content = content_secret_sup
+
+            def _content_for(scanner_type: str) -> str:
+                return content_by_scanner.get(scanner_type, content)
 
             _skip = self._skip_rules
 
             if self._is_config_file(file_path) and HAS_CONFIG_SCANNER:
                 if "CONFIG-001" not in _skip:
-                    self._check_config_threats(relative_path, content)
+                    self._check_config_threats(
+                        relative_path, _content_for("config_file_scanning")
+                    )
 
             if self.ssrf_protector and "SSRF-001" not in _skip:
-                self._check_ssrf(relative_path, content)
+                self._check_ssrf(relative_path, _content_for("ssrf_protection"))
 
             if self.unicode_detector and "UNICODE-001" not in _skip:
-                self._check_unicode_attacks(relative_path, content)
+                self._check_unicode_attacks(
+                    relative_path, _content_for("unicode_detection")
+                )
 
             if HAS_SECRET_SCANNER and "SECRET-001" not in _skip:
-                self._check_secrets(relative_path, secret_content, str(file_path))
+                self._check_secrets(
+                    relative_path, _content_for("secret_scanning"), str(file_path)
+                )
 
             if "PASSWORD-001" not in _skip:
-                self._check_password_likelihood(relative_path, content)
+                self._check_password_likelihood(
+                    relative_path, _content_for("password_likelihood")
+                )
 
             if HAS_PII_SCANNER and "PII-001" not in _skip:
-                self._check_pii(relative_path, pii_content)
+                self._check_pii(relative_path, _content_for("scan_pii"))
 
             if HAS_PROMPT_INJECTION and "PROMPT-INJECTION-001" not in _skip:
-                self._check_prompt_injection(relative_path, content)
+                self._check_prompt_injection(
+                    relative_path, _content_for("prompt_injection")
+                )
 
             if HAS_SUPPLY_CHAIN and "SUPPLY-CHAIN-001" not in _skip:
-                self._check_supply_chain(str(file_path), content)
+                self._check_supply_chain(str(file_path), _content_for("supply_chain"))
 
             if HAS_OFFENSIVE_LANGUAGE:
-                self._check_offensive_language(relative_path, content)
+                self._check_offensive_language(
+                    relative_path, _content_for("offensive_language")
+                )
 
             if HAS_CANARY_DETECTION and "CANARY-001" not in _skip:
-                self._check_canary_detection(relative_path, content)
+                self._check_canary_detection(
+                    relative_path, _content_for("canary_detection")
+                )
 
             if self._code_scanner and file_path.suffix == ".py":
-                self._check_code_security(relative_path, content)
+                self._check_code_security(relative_path, _content_for("code_scanning"))
 
             if HAS_EXFIL_DETECTION and file_path.suffix in {
                 ".sh",
@@ -777,7 +807,9 @@ class FileScanner:
                 ".fish",
             }:
                 if "EXFIL-DETECTION-001" not in _skip:
-                    self._check_exfil_detection(relative_path, content)
+                    self._check_exfil_detection(
+                        relative_path, _content_for("exfil_detection")
+                    )
 
         except Exception as e:
             if self.verbose:
@@ -1365,6 +1397,18 @@ class FileScanner:
                 with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
                 if content.strip():
+                    if HAS_ANNOTATIONS:
+                        ann_config, _ = _load_annotations_config()
+                        if ann_config and is_feature_enabled(
+                            ann_config.get("enabled"), default=True
+                        ):
+                            annotated_content, _, _ = process_annotations_by_scanner(
+                                content,
+                                ("supply_chain",),
+                                file_path=fpath,
+                                config=ann_config,
+                            )
+                            content = annotated_content.get("supply_chain", content)
                     findings_before = len(self.findings)
                     self._check_supply_chain(fpath, content)
                     self._record_finding_path(Path(fpath), Path.cwd(), findings_before)

@@ -408,10 +408,11 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "enabled": True,
         },
         # ai-guardian:begin-allow
-        "_comment_annotations": "Inline annotation suppression for secrets and PII (NEW in v1.8.0, Issue #481). "
-        "Hardcoded: ai-guardian:allow (inline), ai-guardian:begin-allow/end-allow (block). "
-        "Configurable aliases: inline_allow (secrets+PII), inline_allow_secrets (secrets only). "
-        "Prompt injection, jailbreak, config exfil always scanned. "
+        "_comment_annotations": "Inline annotation suppression for file-content scanner findings. "
+        "Unqualified ai-guardian:allow and ai-guardian:begin-allow/end-allow apply to all file scanners; "
+        "scanner-qualified markers apply only to listed scanner types. "
+        "Configurable aliases: inline_allow (all file scanners), inline_allow_secrets (secrets only). "
+        "Submitted prompts and unrelated tool output do not honor file annotations. "
         "Set enabled to false for strict compliance environments.",
         # ai-guardian:end-allow
         "annotations": {

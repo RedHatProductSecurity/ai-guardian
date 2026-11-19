@@ -225,6 +225,7 @@ def run_content_pipeline(
     log_only_count,
     _registry,
     _post_scan_ctx,
+    annotation_content_overrides=None,
     # Legacy individual params (used when ctx is None)
     hook_event=None,
     adapter=None,
@@ -278,8 +279,8 @@ def run_content_pipeline(
     _post_scan_ctx.allowlist_content = content_to_scan
     _post_scan_ctx.allowlist_file_path = file_path
 
-    # Build content overrides for per-scanner text (annotation suppressions)
-    content_overrides = {}
+    # Build content overrides for per-scanner text (annotation suppressions).
+    content_overrides = dict(annotation_content_overrides or {})
     if secret_content_to_scan is not None:
         content_overrides[ScannerName.SECRET] = secret_content_to_scan
     if pii_content_to_scan is not None:
