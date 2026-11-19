@@ -78,6 +78,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Read the Docs release verification (#2809):** Verify that the exact release
+  page and `/stable/` serve the new tag, while `/latest/` serves `main`; require
+  Read the Docs version metadata to confirm both aliases target the intended refs.
+  Point the README's release link directly at `v1.22.0` and have the release
+  synchronizer update it for future versions; keep `latest` documented separately.
 - **Lifecycle environment assignment false positives (#2801):** Stop matching
   assignments inside leading-underscore names and ignore single-segment paths
   and numeric metadata values, while retaining detection for credential fields.

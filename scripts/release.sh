@@ -519,8 +519,25 @@ section "Phase 7: Wait and Verify"
 
 DOCS_URL="https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
 DOCS_VERSION_URL_PREFIX="$DOCS_URL"
+STABLE_DOCS_URL="https://ai-guardian.readthedocs.io/en/stable/"
+LATEST_DOCS_URL="https://ai-guardian.readthedocs.io/en/latest/"
+RTD_VERSION_API_BASE="https://readthedocs.org/api/v3/projects/ai-guardian/versions"
+DOCS_VERSION_AVAILABLE=false
 DOCS_AVAILABLE=false
 DOCS_VERIFICATION_STATUS="not checked (dry-run)"
+
+read_docs_http_result() {
+    local response
+    response=$(curl --silent --location --max-time 10 \
+        --output /dev/null --write-out '%{http_code} %{url_effective}' \
+        "$1" 2>/dev/null || true)
+    HTTP_STATUS="${response%% *}"
+    HTTP_EFFECTIVE_URL=""
+    if [[ "$response" == *" "* ]]; then
+        HTTP_EFFECTIVE_URL="${response#* }"
+    fi
+    [[ -n "$HTTP_STATUS" ]] || HTTP_STATUS="000"
+}
 
 if $DRY_RUN; then
     echo "[dry-run] gh run watch (publish workflow)"
@@ -528,6 +545,7 @@ if $DRY_RUN; then
     echo "[dry-run] pip install --dry-run ai-guardian==${NEW_VERSION}"
     echo "[dry-run] python3 ${CONTAINER_VERIFIER} ${NORMAL_CONTAINER_IMAGE} ${OPENSHELL_CONTAINER_IMAGE}"
     echo "[dry-run] Verify ${DOCS_URL}"
+    echo "[dry-run] Verify ${STABLE_DOCS_URL} targets ${TAG_NAME} and ${LATEST_DOCS_URL} tracks main"
 else
     info "Waiting for publish workflow..."
     sleep 10
@@ -559,27 +577,76 @@ else
     info "Waiting for versioned documentation..."
     DOCS_HTTP_STATUS="000"
     DOCS_EFFECTIVE_URL=""
+    STABLE_DOCS_HTTP_STATUS="000"
+    STABLE_DOCS_EFFECTIVE_URL=""
+    LATEST_DOCS_HTTP_STATUS="000"
+    LATEST_DOCS_EFFECTIVE_URL=""
+    RTD_STABLE_VERSION=""
+    RTD_LATEST_VERSION=""
+    RTD_STABLE_REF=""
+    RTD_LATEST_IDENTIFIER=""
+    RTD_STABLE_TARGETS_RELEASE=false
+    RTD_LATEST_TARGETS_MAIN=false
+    STABLE_DOCS_AVAILABLE=false
+    LATEST_DOCS_AVAILABLE=false
     for _attempt in {1..18}; do
-        DOCS_RESPONSE=$(curl --silent --location --max-time 10 \
-            --output /dev/null --write-out '%{http_code} %{url_effective}' \
-            "$DOCS_URL" 2>/dev/null || true)
-        DOCS_HTTP_STATUS="${DOCS_RESPONSE%% *}"
-        DOCS_EFFECTIVE_URL=""
-        if [[ "$DOCS_RESPONSE" == *" "* ]]; then
-            DOCS_EFFECTIVE_URL="${DOCS_RESPONSE#* }"
-        fi
-        [[ -n "$DOCS_HTTP_STATUS" ]] || DOCS_HTTP_STATUS="000"
-
+        read_docs_http_result "$DOCS_URL"
+        DOCS_HTTP_STATUS="$HTTP_STATUS"
+        DOCS_EFFECTIVE_URL="$HTTP_EFFECTIVE_URL"
         if [[ "$DOCS_HTTP_STATUS" =~ ^2[0-9]{2}$ ]] && \
             [[ "$DOCS_EFFECTIVE_URL" == "${DOCS_VERSION_URL_PREFIX}"* ]]; then
-            DOCS_AVAILABLE=true
+            DOCS_VERSION_AVAILABLE=true
             break
         fi
         sleep 10
     done
+
+    if $DOCS_VERSION_AVAILABLE; then
+        read_docs_http_result "$STABLE_DOCS_URL"
+        STABLE_DOCS_HTTP_STATUS="$HTTP_STATUS"
+        STABLE_DOCS_EFFECTIVE_URL="$HTTP_EFFECTIVE_URL"
+        read_docs_http_result "$LATEST_DOCS_URL"
+        LATEST_DOCS_HTTP_STATUS="$HTTP_STATUS"
+        LATEST_DOCS_EFFECTIVE_URL="$HTTP_EFFECTIVE_URL"
+
+        RTD_STABLE_VERSION=$(curl --silent --show-error --fail --location \
+            --max-time 10 "${RTD_VERSION_API_BASE}/stable/" 2>/dev/null || true)
+        RTD_LATEST_VERSION=$(curl --silent --show-error --fail --location \
+            --max-time 10 "${RTD_VERSION_API_BASE}/latest/" 2>/dev/null || true)
+        RTD_STABLE_REF=$(jq -r '.ref // empty' <<< "$RTD_STABLE_VERSION" 2>/dev/null || true)
+        RTD_LATEST_IDENTIFIER=$(jq -r '.identifier // empty' <<< "$RTD_LATEST_VERSION" 2>/dev/null || true)
+
+        if jq -e --arg tag "$TAG_NAME" \
+            '.active == true and .built == true and .type == "tag" and .ref == $tag' \
+            <<< "$RTD_STABLE_VERSION" >/dev/null 2>&1; then
+            RTD_STABLE_TARGETS_RELEASE=true
+        fi
+        if jq -e \
+            '.active == true and .built == true and .type == "branch" and .identifier == "main"' \
+            <<< "$RTD_LATEST_VERSION" >/dev/null 2>&1; then
+            RTD_LATEST_TARGETS_MAIN=true
+        fi
+
+        if [[ "$STABLE_DOCS_HTTP_STATUS" =~ ^2[0-9]{2}$ ]] && \
+            { [[ "$STABLE_DOCS_EFFECTIVE_URL" == "${STABLE_DOCS_URL}"* ]] || \
+                [[ "$STABLE_DOCS_EFFECTIVE_URL" == "${DOCS_VERSION_URL_PREFIX}"* ]]; }; then
+            STABLE_DOCS_AVAILABLE=true
+        fi
+        if [[ "$LATEST_DOCS_HTTP_STATUS" =~ ^2[0-9]{2}$ ]] && \
+            { [[ "$LATEST_DOCS_EFFECTIVE_URL" == "${LATEST_DOCS_URL}"* ]] || \
+                [[ "$LATEST_DOCS_EFFECTIVE_URL" == "https://ai-guardian.readthedocs.io/en/main/"* ]]; }; then
+            LATEST_DOCS_AVAILABLE=true
+        fi
+        if $STABLE_DOCS_AVAILABLE && $LATEST_DOCS_AVAILABLE && \
+            $RTD_STABLE_TARGETS_RELEASE && $RTD_LATEST_TARGETS_MAIN; then
+            DOCS_AVAILABLE=true
+        fi
+    fi
+
     if $DOCS_AVAILABLE; then
-        DOCS_VERIFICATION_STATUS="verified (HTTP ${DOCS_HTTP_STATUS}; release version served)"
+        DOCS_VERIFICATION_STATUS="verified (release ${TAG_NAME}; stable targets ${RTD_STABLE_REF}; latest tracks ${RTD_LATEST_IDENTIFIER})"
         info "Read the Docs: ${DOCS_URL} available (HTTP ${DOCS_HTTP_STATUS})"
+        info "Read the Docs stable alias targets ${RTD_STABLE_REF}; latest tracks ${RTD_LATEST_IDENTIFIER}"
     else
         if [[ "$DOCS_HTTP_STATUS" == "404" ]] || \
             { [[ "$DOCS_HTTP_STATUS" =~ ^2[0-9]{2}$ ]] && \
@@ -592,9 +659,22 @@ else
             fi
             warn "Check Read the Docs → Versions and the ${TAG_NAME} build. Ensure Admin → Automation Rules matches SemVer versions / Tag / Activate version; activate ${TAG_NAME} if needed, then verify the release URL. Do not rerun scripts/release.sh."
         else
-            DOCS_VERIFICATION_STATUS="failed (unavailable; HTTP ${DOCS_HTTP_STATUS})"
-            warn "Read the Docs did not make ${TAG_NAME} available after retries (HTTP ${DOCS_HTTP_STATUS}): ${DOCS_URL}"
-            warn "Inspect the ${TAG_NAME} build in Read the Docs → Versions and confirm Admin → Automation Rules is SemVer versions / Tag / Activate version. Do not rerun scripts/release.sh."
+            DOCS_VERIFICATION_STATUS="failed (release HTTP ${DOCS_HTTP_STATUS}; stable HTTP ${STABLE_DOCS_HTTP_STATUS}; latest HTTP ${LATEST_DOCS_HTTP_STATUS})"
+            if [[ "$DOCS_HTTP_STATUS" != "000" ]] && \
+                [[ ! "$DOCS_HTTP_STATUS" =~ ^2[0-9]{2}$ ]]; then
+                warn "Read the Docs did not make ${TAG_NAME} available after retries (HTTP ${DOCS_HTTP_STATUS}): ${DOCS_URL}"
+            fi
+            if $DOCS_VERSION_AVAILABLE; then
+                if ! $STABLE_DOCS_AVAILABLE || ! $RTD_STABLE_TARGETS_RELEASE; then
+                    warn "Read the Docs stable documentation did not resolve to the active, built ${TAG_NAME} version (HTTP ${STABLE_DOCS_HTTP_STATUS}; API ref ${RTD_STABLE_REF:-unknown})."
+                fi
+                if ! $LATEST_DOCS_AVAILABLE || ! $RTD_LATEST_TARGETS_MAIN; then
+                    warn "Read the Docs latest documentation did not resolve to the active, built main branch (HTTP ${LATEST_DOCS_HTTP_STATUS}; API identifier ${RTD_LATEST_IDENTIFIER:-unknown})."
+                fi
+                warn "Inspect Read the Docs → Versions and confirm Admin → Automation Rules is SemVer versions / Tag / Activate version. Verify that stable targets ${TAG_NAME} and latest targets main. Do not rerun scripts/release.sh."
+            else
+                warn "Inspect the ${TAG_NAME} build in Read the Docs → Versions and confirm Admin → Automation Rules is SemVer versions / Tag / Activate version. Do not rerun scripts/release.sh."
+            fi
         fi
     fi
 fi

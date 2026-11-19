@@ -10,6 +10,11 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SYNC_SCRIPT = REPO_ROOT / "scripts" / "sync_release_versions.py"
 ACTIVE_REFERENCES = {
+    "readme-release-docs": (
+        "README.md",
+        "[Full documentation site (latest release: v1.0.0)]("
+        "https://ai-guardian.readthedocs.io/en/v1.0.0/)",
+    ),
     "normal-default": (
         "container/Dockerfile",
         "AI_GUARDIAN_VERSION=1.0.0",
@@ -56,6 +61,10 @@ def _create_release_reference_repo(tmp_path: Path) -> None:
         "\n".join(
             [
                 "# AI Guardian",
+                "[Full documentation site (latest release: v1.0.0)]("
+                "https://ai-guardian.readthedocs.io/en/v1.0.0/)",
+                "[Latest documentation (tracks `main`)]("
+                "https://ai-guardian.readthedocs.io/en/latest/)",
                 "[Documentation](docs/README.md)",
                 "[Containers](container/README.md)",
                 "",
@@ -132,7 +141,12 @@ def test_sync_updates_active_references_without_rewriting_generated_history(tmp_
 
     assert result.returncode == 0, result.stderr
     assert "Updated release references to 1.1.0" in result.stdout
-    assert landing_page_path.read_bytes() == landing_page_before
+    assert landing_page_path.read_text(encoding="utf-8") == landing_page_before.decode(
+        "utf-8"
+    ).replace("1.0.0", "1.1.0")
+    assert "https://ai-guardian.readthedocs.io/en/latest/" in (
+        landing_page_path.read_text(encoding="utf-8")
+    )
     assert "ai_guardian-1.0.0.dev0-py3-none-any.whl" in (
         tmp_path / "container" / "Dockerfile"
     ).read_text(encoding="utf-8")

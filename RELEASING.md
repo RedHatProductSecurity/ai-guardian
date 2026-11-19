@@ -477,9 +477,9 @@ This is a one-time **project dashboard** setting. Neither `.readthedocs.yaml` no
 2. Version type: **Tag**
 3. Action: **Activate version**
 
-The GitHub integration then builds each `vX.Y.Z` tag automatically. Activated versions appear in the Read the Docs version selector. Read the Docs maps the greatest stable semantic version to `/en/stable/`, while `/en/latest/` continues to track `main`.
+The GitHub integration then builds each `vX.Y.Z` tag automatically. Activated versions appear in the Read the Docs version selector. Read the Docs maps the greatest stable PEP 440-compatible tag to `/en/stable/`, while `/en/latest/` continues to track `main`. Avoid timestamp-shaped non-release tags that parse as a PEP 440 version greater than `vX.Y.Z`; they can unexpectedly become the stable target.
 
-After setting the rule, check **Read the Docs → Versions** and confirm a released `vX.Y.Z` is active and its build succeeds. If a tag was missed, activate that version there and inspect its build. The release script checks that the exact `/en/vX.Y.Z/` URL returns a successful response **without redirecting to another version**; it cannot create or activate the dashboard rule.
+After setting the rule, check **Read the Docs → Versions** and confirm a released `vX.Y.Z` is active and its build succeeds. Confirm the stable version's `ref` is that tag and the latest version's `identifier` is `main` (the public API endpoints are `/api/v3/projects/ai-guardian/versions/stable/` and `/api/v3/projects/ai-guardian/versions/latest/`). If a tag was missed, activate that version there and inspect its build. The release script verifies that the exact `/en/vX.Y.Z/` URL serves that release without redirecting to another version, `/en/stable/` serves the same release and the stable API `ref` matches its tag, and `/en/latest/` serves the main branch and the latest API `identifier` is `main`. It cannot create or activate the dashboard rule.
 
 ## Table of Contents
 
@@ -571,11 +571,13 @@ scripts/release.sh --execute major       # Create a major version release
 
 The `/release` skill is also available for AI-assisted releases via Claude Code.
 
-The automated script also runs `scripts/sync_release_versions.py` so the
+The automated script also runs `scripts/sync_release_versions.py` so the root
+README's **latest release** documentation link points to `/en/vX.Y.Z/` and the
 normal and OpenShell container defaults and pinned examples in
-`container/README.md` move to the new stable version together. The link-only root
-README and historical generated NotebookLM export are not active version sources.
-The script fails if a required active reference is missing. The lightweight
+`container/README.md` move to the new stable version together. Keep the separate
+**latest** link pointed at `/en/latest/`; it tracks `main`. The generated
+NotebookLM export is historical output and is not an active version source. The
+script fails if a required active reference is missing. The lightweight
 **Release References** workflow checks the real repository on pull requests and
 pushes to `main` and release branches, including documentation-only changes;
 container publishing repeats the same guard before preparing either image:
@@ -745,9 +747,11 @@ section. Preserve a fresh `## [Unreleased]` section and update comparison links:
 ```
 
 **Before committing or tagging**, change the release-branch README installer
-URLs from `main` to the exact production tag. Synchronize active stable
-references with `python3 scripts/sync_release_versions.py --stable-version 1.0.0`.
-After all source documentation and references are final, regenerate
+URLs from `main` to the exact production tag. Synchronize the README's
+latest-release documentation link and active stable container references with
+`python3 scripts/sync_release_versions.py --stable-version 1.0.0`; its separate
+`/en/latest/` link continues to track `main`. After all source documentation
+and references are final, regenerate
 `docs/notebooklm-export.md` using the
 [release export recipe](AGENTS.md#generating-combined-documentation-for-llm-upload).
 Do not rewrite historical changelog entries or historical examples.
@@ -841,9 +845,12 @@ After pushing the tag:
    check SHA-256 values and agreement between Python and middleware versions.
 8. Record both container manifests/digests and runtime AI Guardian versions.
 9. Verify the exact versioned documentation at `https://ai-guardian.readthedocs.io/en/v<version>/`,
-   `/en/stable/` at that release, and `/en/latest/` at `main`.
+   `/en/stable/` at that release, and `/en/latest/` at `main`. Confirm the Read the Docs
+   version API reports the stable `ref` as `v<version>` and the latest `identifier`
+   as `main`; an HTTP success alone does not prove either alias points to the intended
+   source version.
 
-If release verification reports that the version is inactive, redirected, or unavailable, inspect **Read the Docs → Versions** and the tag's build. Correct the automation rule under **Admin → Automation Rules** or activate the missed version, then verify all three URLs. The script completes its post-release merge-back before returning a failure for unresolved documentation verification; the tag and published artifacts are not rolled back. **Do not rerun the full release script** just to repair Read the Docs.
+If release verification reports that a version is inactive, redirected, unavailable, or an alias points at the wrong source, inspect **Read the Docs → Versions** and the tag's build. Correct the automation rule under **Admin → Automation Rules** or activate the missed version, then verify all three URLs and the stable/latest API targets. The script completes its post-release merge-back before returning a failure for unresolved documentation verification; the tag and published artifacts are not rolled back. **Do not rerun the full release script** just to repair Read the Docs.
 
 If a workflow fails, stop and inspect the matching run before deciding recovery.
 Do not delete/repoint a published production tag or replace an uploaded PyPI
@@ -899,7 +906,8 @@ git merge release-1.0 --no-ff -m "Merge release-1.0 into main"
 ```
 
 Update both Python version files, synchronize Rust, restore README installer
-URLs to `main`, and retain the new stable container references:
+URLs to `main`, and retain the exact release documentation link and new stable
+container references:
 ```bash
 python3 .claude/skills/release/release_helper.py update-version 1.1.0-dev
 python3 scripts/sync_rust_middleware_version.py --version 1.1.0-dev
@@ -1159,7 +1167,7 @@ Use this checklist for each release:
 - [ ] Update both Python version files and synchronize Cargo.toml/Cargo.lock
 - [ ] Preserve fresh Unreleased section, dated release notes, and correct comparison links
 - [ ] Pin README installer URLs to the production tag before tagging
-- [ ] Synchronize stable container references (`python scripts/sync_release_versions.py --stable-version X.Y.Z`)
+- [ ] Synchronize the README latest-release docs link and stable container references (`python scripts/sync_release_versions.py --stable-version X.Y.Z`)
 - [ ] Regenerate docs/notebooklm-export.md after source docs/references are final
 - [ ] Push release branch
 - [ ] Successful Release Readiness evidence includes every required job for the intended source
@@ -1173,13 +1181,13 @@ Use this checklist for each release:
 - [ ] Announcements Discussion for the exact release confirmed; its URL is recorded in the summary (retry announcement only if needed)
 - [ ] Python/middleware versions agree; non-Python archives are not PyPI distributions
 - [ ] Both separate Quay repositories have versioned manifests/digests and runtime-version evidence
-- [ ] Exact versioned Read the Docs site works; stable points to it and latest remains main
+- [ ] README latest-release link and exact versioned Read the Docs site work; latest remains main
 - [ ] Optional NotebookLM refresh status reviewed (updated/skipped/failed); recover only that step, never publication
 
 ### Post-Release
 - [ ] Merge release branch back to `main`
 - [ ] Bump both Python files and Rust to the next development version (`X.Y+1.0-dev`)
-- [ ] Restore README installer URLs to main and retain new stable container references
+- [ ] Restore README installer URLs to main; retain the exact release docs link and new stable container references
 - [ ] Rust/stable-reference checks pass and the new Unreleased section is usable
 - [ ] Attach source/tag, CI/manual evidence, registry URLs, checksums/digests, docs, and deferrals to the issue
 - [ ] Close the release issue only after all deliverables are independently verified
