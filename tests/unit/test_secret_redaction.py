@@ -91,6 +91,14 @@ class TestSecretRedactor:
         assert "AWS_SECRET_KEY=" in result["redacted_text"]
         assert len(result["redactions"]) >= 1  # May match multiple patterns
 
+    def test_env_var_redaction_preserves_preceding_separator(self):
+        redactor = SecretRedactor()
+        text = "trace: RUNTIME_HINT=Ab9Cd8Ef7Gh6Ij5Kl4Mn3Op2"
+
+        result = redactor.redact(text)
+
+        assert "trace: RUNTIME_HINT=[HIDDEN]" in result["redacted_text"]
+
     def test_json_field_redaction(self):
         """Test JSON field redaction preserves structure."""
         redactor = SecretRedactor()

@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Lifecycle environment assignment false positives (#2801):** Stop matching
+  assignments inside leading-underscore names and ignore single-segment paths
+  and numeric metadata values, while retaining detection for credential fields.
 - **Quiet image scans (#2800):** Suppress RapidOCR INFO initialization output by
   default while retaining warnings/errors; `--verbose` shows OCR diagnostics.
 - **Scan findings history guidance (#2798):** Explain in CLI output and help that
