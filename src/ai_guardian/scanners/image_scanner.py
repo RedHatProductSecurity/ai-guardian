@@ -173,9 +173,10 @@ class ImageDetector:
 class OCREngine:
     """Extracts text from images using RapidOCR."""
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: Optional[dict] = None, *, verbose: bool = False):
         self._engine = None
         self._config = config or {}
+        self._verbose = verbose
 
     def _get_engine(self):
         if self._engine is None:
@@ -183,7 +184,9 @@ class OCREngine:
                 raise ImportError(
                     "rapidocr and onnxruntime are required for image scanning"
                 )
-            self._engine = RapidOCR()
+            self._engine = RapidOCR(
+                params={"Global.log_level": "INFO" if self._verbose else "WARNING"}
+            )
         return self._engine
 
     def extract_text(self, image_data: bytes) -> OCRResult:
@@ -348,7 +351,9 @@ class FaceDetector:
             return []
 
 
-def scan_image(image_data: bytes, config: dict) -> ImageScanResult:
+def scan_image(
+    image_data: bytes, config: dict, *, verbose: bool = False
+) -> ImageScanResult:
     """
     Scan an image for text (via OCR), QR codes, and faces.
 
@@ -359,6 +364,7 @@ def scan_image(image_data: bytes, config: dict) -> ImageScanResult:
     Args:
         image_data: Raw image bytes
         config: image_scanning config dict
+        verbose: Include RapidOCR informational diagnostics.
 
     Returns:
         ImageScanResult with extracted text and detected regions
@@ -377,7 +383,7 @@ def scan_image(image_data: bytes, config: dict) -> ImageScanResult:
 
     # OCR text extraction
     try:
-        ocr = OCREngine(config)
+        ocr = OCREngine(config, verbose=verbose)
         ocr_result = ocr.extract_text(image_data)
         result.extracted_text = ocr_result.text
         result.text_regions = ocr_result.regions
