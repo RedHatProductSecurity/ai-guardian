@@ -332,8 +332,14 @@ def format_pr_body(result: AnnotationResult) -> str:
 
     if result.skipped_annotated:
         lines.append(f"- Skipped (already annotated): {result.skipped_annotated}")
+    if result.skipped_never_suppress:
+        lines.append(f"- Skipped (never suppressible): {result.skipped_never_suppress}")
     if result.skipped_unsupported:
         lines.append(f"- Skipped (unsupported file type): {result.skipped_unsupported}")
+    if result.skipped_no_location:
+        lines.append(f"- Skipped (no line number): {result.skipped_no_location}")
+    if result.skipped_no_scanner:
+        lines.append(f"- Skipped (unsupported scanner): {result.skipped_no_scanner}")
 
     lines.append("")
     lines.append("### Annotated files")

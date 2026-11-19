@@ -435,6 +435,8 @@ class TestAiguardignoreSchema:
             "scan_pii": {"allowlist": {"paths": ["b.py"]}},
             "prompt_injection": {"allowlist": {"paths": ["c.md"]}},
             "config_file_scanning": {"allowlist": {"paths": ["d.json"]}},
+            "code_scanning": {"allowlist": {"paths": ["src/code/**"]}},
+            "ssrf_protection": {"allowlist": {"paths": ["src/urls/**"]}},
             "context_poisoning": {"allowlist": {"paths": ["e.md"]}},
             "supply_chain": {"allowlist": {"paths": ["f.sh"]}},
             "image_scanning": {"allowlist": {"paths": ["g.png"]}},
@@ -469,6 +471,28 @@ class TestAiguardignoreSchema:
 
         schema_scanners = {k for k in schema["properties"] if k != "allowlist"}
         assert schema_scanners == SCANNER_TYPES
+
+    def test_project_init_writes_code_and_ssrf_ignore_paths(self, tmp_path):
+        if tomllib is None:
+            pytest.skip("tomli not installed")
+        from ai_guardian.project_init import ProjectInitializer
+
+        path, created = ProjectInitializer(tmp_path).write_aiguardignore(
+            {
+                "code_scanning": ["src/code/**"],
+                "ssrf_protection": ["src/urls/**"],
+            }
+        )
+
+        assert created
+        with open(path, "rb") as file:
+            data = tomllib.load(file)
+        assert data["code_scanning"]["allowlist"]["paths"] == ["src/code/**"]
+        assert data["ssrf_protection"]["allowlist"]["paths"] == ["src/urls/**"]
+
+    test_project_init_writes_code_and_ssrf_ignore_paths = needs_toml_w(
+        test_project_init_writes_code_and_ssrf_ignore_paths
+    )
 
 
 # ---------------------------------------------------------------------------

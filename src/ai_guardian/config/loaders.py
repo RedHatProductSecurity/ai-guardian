@@ -41,7 +41,10 @@ def _merge_aiguardignore(scanner_config, scanner_type, project_root=None):
     """Merge .aiguardignore.toml paths into a scanner config dict's ignore_files."""
     if not HAS_AIGUARDIGNORE:
         return scanner_config
-    extra = _aiguardignore_cfg.get_ignore_paths(scanner_type, project_root=project_root)
+    ignore_type = (
+        "offensive_language" if scanner_type == "scan_offensive" else scanner_type
+    )
+    extra = _aiguardignore_cfg.get_ignore_paths(ignore_type, project_root=project_root)
     if not extra:
         return scanner_config
     if scanner_config is None:
@@ -794,6 +797,8 @@ def _load_security_instructions_config():
     return _load_config_section("security_instructions")
 
 
+# password_likelihood is deliberately excluded: it is global-only, default-off,
+# and must be enabled by an explicit human opt-in rather than project discovery.
 _SCANNER_MERGE_SECTIONS = (
     "prompt_injection",
     "config_file_scanning",

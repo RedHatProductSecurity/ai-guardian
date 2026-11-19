@@ -429,8 +429,6 @@ class ProjectInitializer:
             analysis = self.analyze_scan(
                 findings, threshold=threshold, suppressor=self._last_suppressor
             )
-            if self._last_suppressor:
-                analysis.suppressed_count += self._last_suppressor.suppressed_count
             result.scan_analysis = analysis
             scan_config = analysis.recommended_config
             merged = self.merge_configs(language_config, scan_config)
@@ -707,6 +705,7 @@ def _print_json(result: InitResult) -> None:
             "skipped_annotated": ann.skipped_annotated,
             "skipped_never_suppress": ann.skipped_never_suppress,
             "skipped_no_location": ann.skipped_no_location,
+            "skipped_no_scanner": ann.skipped_no_scanner,
             "files": [
                 {
                     "file_path": p.file_path,
@@ -764,26 +763,29 @@ def _print_annotation_summary(result: "InitResult") -> None:
     print("=" * 40)
 
     if ann.total_annotations == 0:
-        print("No annotations needed — all findings handled by config suppression.")
-        return
+        print("No source annotations to insert.")
+    else:
+        print(f"Files to annotate: {ann.total_files}")
+        print(f"Annotations to insert: {ann.total_annotations}")
 
-    print(f"Files to annotate: {ann.total_files}")
-    print(f"Annotations to insert: {ann.total_annotations}")
-
-    for plan in ann.plans:
-        count = len(plan.annotations)
-        scanner_types = set()
-        for a in plan.annotations:
-            scanner_types.update(a.scanner_types)
-        types_str = ", ".join(sorted(scanner_types))
-        print(f"  - {plan.file_path} ({count} annotations: {types_str})")
+        for plan in ann.plans:
+            count = len(plan.annotations)
+            scanner_types = set()
+            for a in plan.annotations:
+                scanner_types.update(a.scanner_types)
+            types_str = ", ".join(sorted(scanner_types))
+            print(f"  - {plan.file_path} ({count} annotations: {types_str})")
 
     if ann.skipped_annotated:
         print(f"Skipped (already annotated): {ann.skipped_annotated}")
+    if ann.skipped_never_suppress:
+        print(f"Skipped (never suppressible): {ann.skipped_never_suppress}")
     if ann.skipped_unsupported:
         print(f"Skipped (unsupported file type): {ann.skipped_unsupported}")
     if ann.skipped_no_location:
         print(f"Skipped (no line number): {ann.skipped_no_location}")
+    if ann.skipped_no_scanner:
+        print(f"Skipped (unsupported scanner): {ann.skipped_no_scanner}")
 
 
 def _run_annotate_workflow(
