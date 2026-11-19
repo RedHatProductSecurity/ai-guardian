@@ -73,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Quiet image scans (#2800):** Suppress RapidOCR INFO initialization output by
+  default while retaining warnings/errors; `--verbose` shows OCR diagnostics.
 - **Scan findings history guidance (#2798):** Explain in CLI output and help that
   hook findings are logged as events while standalone scans are report-only by
   default; document the explicit `--log-violations` opt-in without exposing details.
