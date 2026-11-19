@@ -1210,6 +1210,24 @@ ai-guardian scan --diff owner/repo!45            # GitLab MR (fetches via glab)
 ai-guardian scan --diff --staged                 # Scan git staged changes only
 ```
 
+### Why don't scan findings appear in the Violations history?
+
+The Console's **Violations** history is an event log, not a complete list of every
+scan result. Hook findings are logged as hooks handle them (when violation logging
+is enabled). A standalone `ai-guardian scan` reports finding counts and relative
+file paths in the terminal, but its findings are not added to that history by
+default. To include standalone scan findings, run it with `--log-violations`:
+
+```bash
+ai-guardian scan . --log-violations
+```
+
+The option adds findings to the same history used by hooks. Without it, the scan
+count can be higher than the number of Violations entries because the scan results
+remain report-only. The option does not print detailed finding content; use
+`--json-output` or `--sarif-output` for detailed reports, and handle those report
+files as sensitive.
+
 ### How do I get line numbers in scan output?
 
 Default terminal output reports finding counts and relative file paths; it does

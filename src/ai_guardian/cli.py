@@ -825,7 +825,7 @@ def main():
         scan_parser.add_argument(
             "--log-violations",
             action="store_true",
-            help="Write findings to violations.jsonl (same log used by hooks)",
+            help="Opt in to adding scan findings to the shared Violations history",
         )
 
         # Show-config subcommand (NEW in v1.5.0, DEPRECATED in v1.13.0)

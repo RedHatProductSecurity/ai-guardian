@@ -3,13 +3,17 @@
 The default terminal view reports finding counts and relative file paths without
 echoing source-derived messages, positions, or snippets. Users may request a JSON
 or SARIF report explicitly; those reports can contain source-derived details and
-should be handled as sensitive files.
+should be handled as sensitive files. Violations history records hook findings
+when logging is enabled; standalone scan findings are added only when the user
+explicitly passes ``--log-violations``.
 
 Manual verification:
 1. Scan a file containing a synthetic sensitive marker.
 2. Confirm the default terminal output reports the finding count and relative path,
-   but not its message, line/column, or source snippet.
+   explains the distinction between hook history and standalone scan results, and
+   does not show its message, line/column, or source snippet.
 3. Use an explicit JSON/SARIF output path only when detailed results are needed.
+4. Pass ``--log-violations`` when scan findings should be added to Violations history.
 """
 
 from contextlib import redirect_stdout
@@ -48,6 +52,7 @@ def test_default_scan_output_omits_finding_details_and_source_content():
         sarif_output=None,
         json_output=None,
         exit_code=False,
+        log_violations=False,
     )
     output = StringIO()
 
@@ -69,6 +74,10 @@ def test_default_scan_output_omits_finding_details_and_source_content():
     assert "File: src/settings.py" in text
     assert "details are withheld" in text.lower()
     assert "--json-output" in text
+    assert (
+        "violations history records hook findings when logging is enabled; "
+        "standalone scan findings are included only with --log-violations"
+    ) in text.lower()
     assert private_marker not in text
     assert "Sensitive finding detail" not in text
     assert "SECRET-001" not in text
