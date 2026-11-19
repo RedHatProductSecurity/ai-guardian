@@ -141,9 +141,9 @@ def test_sync_updates_active_references_without_rewriting_generated_history(tmp_
 
     assert result.returncode == 0, result.stderr
     assert "Updated release references to 1.1.0" in result.stdout
-    assert landing_page_path.read_text(encoding="utf-8") == landing_page_before.decode(
-        "utf-8"
-    ).replace("1.0.0", "1.1.0")
+    assert landing_page_path.read_bytes() == landing_page_before.replace(
+        b"1.0.0", b"1.1.0"
+    )
     assert "https://ai-guardian.readthedocs.io/en/latest/" in (
         landing_page_path.read_text(encoding="utf-8")
     )
