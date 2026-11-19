@@ -407,18 +407,14 @@ MIIEpAIBAAKCAQEA1234567890abcdefghijklmno
         # Should have some redaction
         assert len(result["redacted_text"]) < len(text)
 
-    def test_base64_secret_redaction(self):
-        """Test base64 encoded secret redaction with context."""
+    def test_base64_like_value_is_not_redacted_by_context_or_length(self):
+        """Base64 appearance alone is not evidence that a value is a secret."""
         redactor = SecretRedactor()
-        # Base64 patterns now require context keywords or be very long (100+ chars)
         text = "token: dGhpc2lzYWxvbmdzdHJpbmd0aGF0bG9va3NsaWtlYWJhc2U2NGVuY29kZWRzZWNyZXQ="
         result = redactor.redact(text)
 
-        # Long base64 strings with context should be redacted
-        assert (
-            "dGhpc2...ZXQ=" in result["redacted_text"]
-            or "token:" in result["redacted_text"]
-        )
+        assert result["redacted_text"] == text
+        assert result["redactions"] == []
 
 
 class TestSecretRedactionIntegration:

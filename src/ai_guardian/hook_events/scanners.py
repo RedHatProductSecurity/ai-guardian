@@ -147,6 +147,7 @@ def run_prompt_injection_scan(
     tool_name=None,
     source_type="file_content",
     latency_timer=None,
+    suppress_sensitive_logging=False,
     **_kwargs,
 ):
     """Run prompt injection scan on content.
@@ -177,13 +178,18 @@ def run_prompt_injection_scan(
     if not config or not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 
-    detector = get_cached_detector(config)
+    detector = (
+        PromptInjectionDetector(config)
+        if suppress_sensitive_logging
+        else get_cached_detector(config)
+    )
     with (latency_timer or _NULL_TIMER).check("prompt_injection"):
         should_block, error_msg, detected = detector.detect(
             content,
             file_path=file_path,
             tool_name=tool_name,
             source_type=source_type,
+            suppress_sensitive_logging=suppress_sensitive_logging,
         )
 
     result = ScanResult.from_prompt_injection(
@@ -212,6 +218,7 @@ def run_context_poisoning_scan(
     tool_name=None,
     tool_identifier=None,
     latency_timer=None,
+    suppress_sensitive_logging=False,
     **_kwargs,
 ):
     """Run context poisoning scan on content.
@@ -248,7 +255,9 @@ def run_context_poisoning_scan(
 
     detector = ContextPoisoningDetector(config)
     with (latency_timer or _NULL_TIMER).check("context_poisoning"):
-        should_block, error_msg, detected = detector.detect(content)
+        should_block, error_msg, detected = detector.detect(
+            content, suppress_sensitive_logging=suppress_sensitive_logging
+        )
 
     result = ScanResult.from_context_poisoning(
         should_block=should_block,
@@ -765,6 +774,7 @@ def run_pii_scan(
     tool_name=None,
     tool_identifier=None,
     latency_timer=None,
+    suppress_sensitive_logging=False,
     **_kwargs,
 ):
     """Run PII scan on content.
@@ -799,7 +809,10 @@ def run_pii_scan(
 
     with (latency_timer or _NULL_TIMER).check("pii_detection"):
         has_pii, redacted_text, redactions, warning = _scan_for_pii(
-            content, config, file_path=file_path
+            content,
+            config,
+            file_path=file_path,
+            suppress_sensitive_logging=suppress_sensitive_logging,
         )
 
     result = ScanResult.from_pii_scan(

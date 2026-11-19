@@ -81,6 +81,9 @@ MAGIC_BYTES = {
 _BASE64_IMAGE_RE = re.compile(
     r"data:image/[a-zA-Z0-9+.-]+;base64,([A-Za-z0-9+/=]+)",
 )
+_BASE64_IMAGE_SPAN_RE = re.compile(
+    r"data:image/[a-zA-Z0-9+.-]+;base64,([^\s\"'<>)]*)",
+)
 
 
 @dataclass
@@ -148,6 +151,12 @@ class ImageDetector:
     @staticmethod
     def is_base64_image(text: str) -> bool:
         return bool(_BASE64_IMAGE_RE.search(text))
+
+    @staticmethod
+    def base64_image_payload_spans(text: str):
+        """Yield payload spans reserved for the existing image/OCR path."""
+        for match in _BASE64_IMAGE_SPAN_RE.finditer(text):
+            yield match.span(1)
 
     @staticmethod
     def strip_base64_images(text: str) -> str:

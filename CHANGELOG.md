@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Base64 text inspection (#2802):** Safely decode bounded standard and
+  URL-safe Base64 text candidates and inspect decoded text with enabled prompt
+  injection, context poisoning, secret, and PII detectors. Map findings to the
+  encoded source and withhold decoded values; image data URIs remain on the
+  existing OCR path.
 - **Kilo Code CLI integration:** Add a Kilo-identified V1 plugin bridge, user and
   project setup, native `mcp` configuration, protected-config inventory, and
   installer detection, plus automatic scanning for documented Kilo skill roots.

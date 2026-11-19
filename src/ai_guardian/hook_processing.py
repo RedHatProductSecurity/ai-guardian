@@ -1547,7 +1547,9 @@ def extract_file_content_from_tool(hook_data, hook_context=None):
         return None, "unknown_file", None, False, None, None
 
 
-def _scan_for_pii(text, pii_config, file_path=None):
+def _scan_for_pii(
+    text, pii_config, file_path=None, *, suppress_sensitive_logging=False
+):
     """
     Scan text for PII using SecretRedactor with PII patterns.
 
@@ -1613,15 +1615,29 @@ def _scan_for_pii(text, pii_config, file_path=None):
             return True, result["redacted_text"], redactions, warning
         return False, text, [], None
     except Exception as e:
-        logger.warning(f"PII scan error: {e}")
+        if suppress_sensitive_logging:
+            logger.warning("PII scan failed for decoded Base64 text; details withheld")
+        else:
+            logger.warning(f"PII scan error: {e}")
         on_error = _get_on_scan_error_action()
         if on_error == ActionMode.BLOCK:
-            logger.error(f"PII scan failed (fail-closed, on_scan_error=block): {e}")
+            if suppress_sensitive_logging:
+                logger.error(
+                    "PII scan failed for decoded Base64 text "
+                    "(fail-closed, on_scan_error=block); details withheld"
+                )
+            else:
+                logger.error(f"PII scan failed (fail-closed, on_scan_error=block): {e}")
             return (
                 True,
                 text,
                 [],
-                f"PII scan failed (blocked by on_scan_error=block): {e}",
+                (
+                    "PII scan failed for decoded Base64 text "
+                    "(blocked by on_scan_error=block); details withheld"
+                    if suppress_sensitive_logging
+                    else f"PII scan failed (blocked by on_scan_error=block): {e}"
+                ),
             )
         return False, text, [], None
 

@@ -28,6 +28,18 @@ AI Guardian provides comprehensive secret scanning to prevent sensitive informat
 - `secret_scanning` = "Should I scan?" (always blocks secrets when found)
 - `pattern_server` = "What secrets should I look for?"
 
+### Encoded Text
+
+The shared content pipeline checks standard and URL-safe Base64 text candidates
+(at least 12 encoded characters and 8 decoded bytes) with enabled
+prompt-injection, context-poisoning, secret, and PII scanners. Limits are 16
+candidates per source, 64 KiB encoded per candidate, 256 KiB decoded in total,
+and one decode layer. A Base64-looking value is not a secret solely because it
+is long or appears beside a credential label; a finding requires a detector to
+match the decoded text. Malformed, binary, and oversized candidates are skipped,
+image data URIs remain on the OCR path, and decoded values are withheld from
+findings and diagnostics.
+
 ---
 
 ## Zero-Install Scanning

@@ -6,6 +6,7 @@ per-scanner action modes.  See issue #1927 (original), #1932 (registry migration
 """
 
 import logging
+from dataclasses import replace
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import ai_guardian.config.loaders as _loaders
@@ -17,6 +18,10 @@ from ai_guardian.hook_events.scanners import (
 )
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.scanners.scanner_registry import ScannerName
+from ai_guardian.scanners.base64_text import (
+    DecodedBase64Text,
+    iter_decoded_base64_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,28 @@ _CONTENT_SCANNER_NAMES = frozenset(
     }
 )
 
+_BASE64_TEXT_SCANNER_NAMES = frozenset(
+    {
+        ScannerName.PROMPT_INJECTION,
+        ScannerName.CONTEXT_POISONING,
+        ScannerName.SECRET,
+        ScannerName.PII,
+    }
+)
+
+_BASE64_DETECTION_MESSAGES = {
+    ScannerName.PROMPT_INJECTION: (
+        "Prompt injection detected in decoded Base64 text; content withheld."
+    ),
+    ScannerName.CONTEXT_POISONING: (
+        "Context poisoning detected in decoded Base64 text; content withheld."
+    ),
+    ScannerName.SECRET: "Secret detected in decoded Base64 text; value withheld.",
+    ScannerName.PII: "PII detected in decoded Base64 text; value withheld.",
+}
+
+_BASE64_SCAN_ERROR = "Decoded Base64 text scan failed; details withheld."
+
 
 def scan_content(
     text: Optional[str],
@@ -54,6 +81,7 @@ def scan_content(
     scanner_kwargs: Optional[Dict[ScannerName, Dict[str, Any]]] = None,
     registry: Optional[Any] = None,
     scanner_names: Optional[Set[ScannerName]] = None,
+    decoded_only: bool = False,
 ) -> List[ScanResult]:
     """Run all enabled content scanners on *text*.
 
@@ -78,6 +106,10 @@ def scan_content(
     *scanner_names* restricts the content pipeline to selected registry entries.
     It is used by daemon-backed middleware ownership routing.
 
+    *decoded_only* skips scanning the original source and inspects only bounded
+    Base64 text candidates. This is used when a caller already scanned the
+    original source through a specialized hook path.
+
     Returns only ``ScanResult`` objects where a detection occurred, plus
     any error results (``extra["scan_error"]`` set) so callers can apply
     fail-closed logic.  Each scanner is wrapped in try/except for
@@ -101,6 +133,12 @@ def scan_content(
     results: List[ScanResult] = []
     overrides = content_overrides or {}
     extra_kwargs = dict(scanner_kwargs) if scanner_kwargs else {}
+    decoded_candidates = (
+        list(iter_decoded_base64_text(text))
+        if any(entry.name in _BASE64_TEXT_SCANNER_NAMES for entry in pipeline)
+        else []
+    )
+    scanner_invocations = {}
 
     # Build source_command context for secret scanning (SDK path)
     if source_command and filename.startswith("tool_result:"):
@@ -133,18 +171,27 @@ def scan_content(
             else:
                 merged_kwargs = {}
 
-            result = entry.run_fn(
+            scanner_invocations[scanner_name] = (
+                entry,
+                scanner_config,
+                dict(merged_kwargs),
                 scan_text,
-                config=scanner_config,
-                file_path=file_path,
-                filename=filename,
-                tool_name=tool_name,
-                tool_identifier=tool_identifier,
-                source_type=source_type,
-                hook_event=hook_event,
-                latency_timer=latency_timer,
-                **merged_kwargs,
             )
+
+            result = None
+            if not decoded_only:
+                result = entry.run_fn(
+                    scan_text,
+                    config=scanner_config,
+                    file_path=file_path,
+                    filename=filename,
+                    tool_name=tool_name,
+                    tool_identifier=tool_identifier,
+                    source_type=source_type,
+                    hook_event=hook_event,
+                    latency_timer=latency_timer,
+                    **merged_kwargs,
+                )
             if result is not None and scanner_name == ScannerName.PASSWORD_LIKELIHOOD:
                 from ai_guardian.scanners.password_likelihood import (
                     exclude_credential_overlaps,
@@ -179,7 +226,274 @@ def scan_content(
             )
             results.append(error_result)
 
+    if decoded_candidates:
+        results.extend(
+            _scan_decoded_base64_candidates(
+                decoded_candidates,
+                text,
+                scanner_invocations,
+                filename=filename,
+                source_type=source_type,
+                file_path=file_path,
+                tool_name=tool_name,
+                tool_identifier=tool_identifier,
+                hook_event=hook_event,
+                latency_timer=latency_timer,
+            )
+        )
+
     return results
+
+
+def _scan_decoded_base64_candidates(
+    candidates: List[DecodedBase64Text],
+    source: str,
+    scanner_invocations: Dict,
+    *,
+    filename: str,
+    source_type: str,
+    file_path: Optional[str],
+    tool_name: Optional[str],
+    tool_identifier: Optional[str],
+    hook_event: Optional[str],
+    latency_timer: Optional[Any],
+) -> List[ScanResult]:
+    """Run only the applicable content detectors over decoded text candidates."""
+    results = []
+    secret_state = None
+    if ScannerName.SECRET in scanner_invocations:
+        from ai_guardian.scanners import secret_scanning
+
+        state_names = (
+            "_last_secret_matched_text",
+            "_last_secret_line_number",
+            "_last_secret_start_column",
+            "_last_secret_findings",
+        )
+        secret_state = (
+            secret_scanning,
+            {name: getattr(secret_scanning, name) for name in state_names},
+        )
+    try:
+        for candidate in candidates:
+            for scanner_name in scanner_invocations:
+                if scanner_name not in _BASE64_TEXT_SCANNER_NAMES:
+                    continue
+                invocation = scanner_invocations.get(scanner_name)
+                if invocation is None:
+                    continue
+                entry, scanner_config, merged_kwargs, scan_text = invocation
+                if (
+                    not isinstance(scan_text, str)
+                    or scan_text[candidate.start : candidate.end] != candidate.encoded
+                ):
+                    # Annotation/content overrides can suppress a source span.
+                    continue
+
+                decoded_kwargs = dict(merged_kwargs)
+                if scanner_name == ScannerName.SECRET:
+                    secret_context = dict(decoded_kwargs.get("secret_context") or {})
+                    secret_context["_allowlist_content"] = candidate.text
+                    secret_context["_defer_secret_violation_logging"] = True
+                    secret_context["_suppress_secret_violation_logging"] = True
+                    secret_context["_suppress_ast_scan"] = True
+                    decoded_kwargs["secret_context"] = secret_context
+                else:
+                    decoded_kwargs["suppress_sensitive_logging"] = True
+
+                try:
+                    result = entry.run_fn(
+                        candidate.text,
+                        config=scanner_config,
+                        file_path=file_path,
+                        filename=filename,
+                        tool_name=tool_name,
+                        tool_identifier=tool_identifier,
+                        source_type=source_type,
+                        hook_event=hook_event,
+                        latency_timer=latency_timer,
+                        **decoded_kwargs,
+                    )
+                except Exception:
+                    logger.warning(
+                        "%s scan failed for decoded Base64 text; details withheld",
+                        scanner_name.value,
+                    )
+                    result = ScanResult(
+                        detected=False,
+                        violation_type=entry.violation_type.value,
+                        error_message=_BASE64_SCAN_ERROR,
+                        extra={"scan_error": "decoded_base64_scan_failed"},
+                    )
+
+                if result is None:
+                    continue
+                safe_result = _sanitize_decoded_scan_result(
+                    result,
+                    candidate,
+                    source,
+                    scanner_name,
+                    file_path=file_path,
+                )
+                if safe_result is not None:
+                    safe_result.extra.setdefault("scanner_name", scanner_name.value)
+                    results.append(safe_result)
+    finally:
+        if secret_state is not None:
+            secret_scanning, saved_state = secret_state
+            for name, value in saved_state.items():
+                setattr(secret_scanning, name, value)
+    return results
+
+
+def _sanitize_decoded_scan_result(
+    result: ScanResult,
+    candidate: DecodedBase64Text,
+    source: str,
+    scanner_name: ScannerName,
+    *,
+    file_path: Optional[str],
+) -> Optional[ScanResult]:
+    """Keep only safe category/action/location data from a decoded scan result."""
+    original_extra = result.extra if isinstance(result.extra, dict) else {}
+    if original_extra.get("skipped"):
+        return None
+
+    has_scan_error = bool(original_extra.get("scan_error"))
+    pii_incomplete = (
+        scanner_name == ScannerName.PII
+        and result.detected
+        and not result.redactions
+        and bool(result.error_message)
+    )
+    has_error = (
+        has_scan_error
+        or pii_incomplete
+        or (not result.detected and bool(result.error_message))
+    )
+    if not result.detected and not has_error:
+        return None
+
+    def _mapped_location(
+        line_number: Optional[int], column: Optional[int]
+    ) -> Tuple[int, int]:
+        decoded_offset = candidate.decoded_offset(line_number, column)
+        return candidate.source_location(source, decoded_offset)
+
+    def _detection_message(
+        line_number: Optional[int], start_column: Optional[int]
+    ) -> str:
+        message = _BASE64_DETECTION_MESSAGES[scanner_name]
+        if scanner_name == ScannerName.PII and redactions:
+            pii_types: Set[str] = set()
+            for redaction in redactions:
+                pii_type = redaction.get("type")
+                if isinstance(pii_type, str) and pii_type != "unknown":
+                    pii_types.add(pii_type)
+            types = sorted(pii_types)
+            if types:
+                message = (
+                    f"PII ({', '.join(types)}) detected in decoded Base64 text; "
+                    "value withheld."
+                )
+        if type(line_number) is int and type(start_column) is int:
+            description, _, privacy_note = message.partition("; ")
+            message = (
+                f"{description} at line {line_number}, column {start_column + 1}; "
+                f"{privacy_note}"
+            )
+        return message
+
+    redactions: Optional[List[Dict[str, Any]]]
+    line_number: Optional[int] = None
+    start_column: Optional[int] = None
+    if scanner_name == ScannerName.PII and result.redactions:
+        safe_redactions: List[Dict[str, Any]] = []
+        for redaction in result.redactions:
+            position = redaction.get("position")
+            if (
+                isinstance(position, int)
+                and not isinstance(position, bool)
+                and 0 <= position <= len(candidate.text)
+            ):
+                decoded_offset = position
+            else:
+                column_value = redaction.get("column")
+                column_offset = (
+                    column_value - 1
+                    if isinstance(column_value, int)
+                    and not isinstance(column_value, bool)
+                    else None
+                )
+                decoded_offset = candidate.decoded_offset(
+                    redaction.get("line_number"),
+                    column_offset,
+                )
+            line_number, column = candidate.source_location(source, decoded_offset)
+            pii_type = redaction.get("type")
+            if not isinstance(pii_type, str) or not pii_type:
+                pii_type = "unknown"
+            safe_redactions.append(
+                {
+                    "type": pii_type,
+                    "line_number": line_number,
+                    "column": column + 1,
+                    # Do not retain or reconstruct the decoded value.
+                    "position": -1,
+                    "original_length": 0,
+                }
+            )
+        redactions = safe_redactions
+    else:
+        redactions = None
+
+    if redactions:
+        line_number = redactions[0]["line_number"]
+        start_column = redactions[0]["column"] - 1
+    else:
+        line_number, start_column = _mapped_location(
+            result.line_number, result.start_column
+        )
+
+    end_line: Optional[int] = None
+    end_column: Optional[int] = None
+    if result.end_line is not None or result.end_column is not None:
+        end_line, end_column = _mapped_location(
+            result.end_line or result.line_number,
+            result.end_column,
+        )
+
+    action = original_extra.get("action")
+    safe_extra: Dict[str, Any] = {"base64_decoded": True}
+    safe_extra["base64_source_start"] = candidate.start
+    safe_extra["base64_source_end"] = candidate.end
+    if isinstance(action, str):
+        safe_extra["action"] = action
+    if has_scan_error:
+        safe_extra["scan_error"] = "decoded_base64_scan_failed"
+
+    safe_result = replace(
+        result,
+        error_message=(
+            _BASE64_SCAN_ERROR
+            if has_error
+            else _detection_message(line_number, start_column)
+        ),
+        matched_text="",
+        matched_pattern="",
+        rule_id="",
+        file_path=result.file_path or file_path,
+        line_number=line_number,
+        end_line=end_line,
+        start_column=start_column,
+        end_column=end_column,
+        attack_type="",
+        findings=None,
+        redacted_content=None,
+        redactions=redactions,
+        extra=safe_extra,
+    )
+    return safe_result
 
 
 def scan_file(

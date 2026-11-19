@@ -473,6 +473,14 @@ Each layer provides defense if previous layers are bypassed.
 
 ### Encoding/Obfuscation
 
+Text-only standard and URL-safe Base64 candidates (at least 12 encoded
+characters and 8 decoded bytes) are decoded once and checked by enabled
+prompt-injection, context-poisoning, secret, and PII scanners. Limits are 16
+candidates per source, 64 KiB encoded per candidate, and 256 KiB decoded in
+total. Findings point to the encoded source; decoded content is withheld from
+diagnostics. Malformed, binary, and oversized candidates are skipped. Image
+data URIs remain on the separate OCR path.
+
 ❌ **Won't work:**
 ```
 "1gn0r3 pr3v10us 1nstructi0ns"  (leet speak)

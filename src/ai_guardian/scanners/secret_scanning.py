@@ -296,7 +296,10 @@ def _log_secret_detection_violation(
     if not HAS_VIOLATION_LOGGER:
         return
 
-    if isinstance(context, dict) and context.get("_defer_secret_violation_logging"):
+    if isinstance(context, dict) and (
+        context.get("_defer_secret_violation_logging")
+        or context.get("_suppress_secret_violation_logging")
+    ):
         return
 
     from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
@@ -381,6 +384,12 @@ def _log_finding_violation(
     violation_logger=None,
 ):
     """Route a scanner finding to the correct violation type based on category."""
+    if isinstance(context, dict) and (
+        context.get("_defer_secret_violation_logging")
+        or context.get("_suppress_secret_violation_logging")
+    ):
+        return
+
     details = secret_details or {}
     category = details.get("category")
 
@@ -977,7 +986,7 @@ def check_secrets(
                     return False, None
 
         # AST-aware scanning: for code files, extract only comments and strings
-        if HAS_AST_SCANNER and file_path:
+        if HAS_AST_SCANNER and file_path and not context.get("_suppress_ast_scan"):
             extracted = extract_scannable_content(content, file_path)
             if extracted is not None:
                 content = extracted
