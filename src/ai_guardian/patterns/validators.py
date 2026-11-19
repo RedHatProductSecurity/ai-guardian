@@ -174,9 +174,9 @@ def aadhaar_check(number_str: str) -> bool:
     return True
 
 
-def _is_file_path(value: str) -> bool:
+def _is_file_path(value: str, *, allow_single_segment_absolute: bool = False) -> bool:
     """Check if a value looks like a filesystem path."""
-    if value.startswith("/") and "/" in value[1:]:
+    if value.startswith("/") and ("/" in value[1:] or allow_single_segment_absolute):
         return _has_path_like_segments(value.split("/"))
     if (
         len(value) >= 3
@@ -228,20 +228,31 @@ def _is_container_image(value: str) -> bool:
 
 
 _ALL_CAPS_UNDERSCORES_RE = re.compile(r"^[A-Z0-9]+(?:_[A-Z0-9]+)+$")
+_ENV_SECRET_NAME_RE = re.compile(
+    r"(?:^|_)(?:(?:API|ACCESS|PRIVATE|CLIENT|DB|DATABASE)_?)?"
+    r"(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|AUTH(?:ORIZATION)?)(?:_|$)",
+    re.IGNORECASE,
+)
+_ENV_NAME_AT_END_RE = re.compile(r"([A-Z][A-Z0-9_]*)\s*$")
 
 
 def env_not_false_positive(matched_text: str) -> bool:
     """Return False (skip) if the env var value is a filesystem path,
     starts with underscore (Python identifier), looks like a placeholder,
     an ALL_CAPS_IDENTIFIER (programming constant), or is a container
-    image reference.
+    image reference. Numeric values are skipped unless the variable name
+    identifies a credential field.
     """
     eq_pos = matched_text.find("=")
     if eq_pos < 0:
         return True
+    name_match = _ENV_NAME_AT_END_RE.search(matched_text[:eq_pos])
+    variable_name = name_match.group(1) if name_match else ""
     value = matched_text[eq_pos + 1 :].strip().strip("'\"")
     if not value:
         return True
+    if value.isdecimal() and not _ENV_SECRET_NAME_RE.search(variable_name):
+        return False
     if value.startswith("_"):
         return False
     if _is_placeholder(value):
@@ -250,7 +261,7 @@ def env_not_false_positive(matched_text: str) -> bool:
         return False
     if _is_container_image(value):
         return False
-    return not _is_file_path(value)
+    return not _is_file_path(value, allow_single_segment_absolute=True)
 
 
 def password_not_false_positive(matched_text: str) -> bool:

@@ -76,8 +76,14 @@ class TestEnvNotFilePath:
     def test_empty_value_passes(self):
         assert env_not_false_positive("KEY=") is True
 
-    def test_short_single_segment_path_passes(self):
-        assert env_not_false_positive("KEY=/verylongsinglesegment") is True
+    def test_single_segment_absolute_path_skipped(self):
+        assert env_not_false_positive("LIFECYCLE_DIR=/service-lifecycle") is False
+
+    def test_long_numeric_metadata_skipped(self):
+        assert env_not_false_positive("INIT_START_NS=1234567890123456789") is False
+
+    def test_numeric_secret_value_detected(self):
+        assert env_not_false_positive("AWS_SECRET_KEY=1234567890123456789") is True
 
     def test_underscore_value_skipped(self):
         """Issue #912: Python identifier starting with _ should not be flagged."""

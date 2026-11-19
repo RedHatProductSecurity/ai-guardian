@@ -833,6 +833,23 @@ class PostToolUseEnvVarDetectionTests(TestCase):
             result.detected
         ), "env-variable pattern must detect JIRA_API_TOKEN in env output"
 
+    def test_run_secret_scan_allows_lifecycle_metadata_assignments(self):
+        """USER EXPERIENCE: lifecycle paths and timestamps pass through cleanly."""
+        content = (
+            "++ _LIFECYCLE_DIR=/service-lifecycle\n"
+            "++ _INIT_START_NS=1234567890123456789"
+        )
+
+        result = _run_secret_scan(
+            content,
+            filename="Bash_output",
+            config={"enabled": True, "engines": ["toml-patterns"]},
+            secret_context={"hook_event": "PostToolUse"},
+            tool_name="Bash",
+        )
+
+        assert result is None or not result.detected
+
 
 class TestStandaloneNugetSonarCredentials:
     """USER EXPERIENCE: standalone publishing/analysis tokens remain protected (#2558).

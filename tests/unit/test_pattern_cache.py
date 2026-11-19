@@ -230,7 +230,8 @@ class TestEnvVariablePathFiltering:
 [[rules]]
 id = "env-variable"
 match_type = "regex"
-regex = '''([A-Z][A-Z0-9_]+)\\s*=\\s*(["']?)([A-Za-z0-9\\-_+/=]{16,})\\2'''
+regex = '''(?:^|[^A-Za-z0-9_\\r\\n])([A-Z][A-Z0-9_]+)\\s*=\\s*(["']?)([A-Za-z0-9\\-_+/=]{16,})\\2'''
+flags = "m"
 redaction_strategy = "env_assignment"
 description = "Environment Variable"
 validation = "env_not_false_positive"
@@ -258,6 +259,24 @@ validation = "env_not_false_positive"
         cache.load(env_var_toml)
         findings = cache.scan("ENV APP_DIR=/opt/app-root/src/config")
         assert len(findings) == 0
+
+    def test_single_segment_absolute_path_not_flagged(self, env_var_toml):
+        cache = PatternCache()
+        cache.load(env_var_toml)
+        findings = cache.scan("LIFECYCLE_DIR=/service-lifecycle")
+        assert len(findings) == 0
+
+    def test_numeric_metadata_not_flagged(self, env_var_toml):
+        cache = PatternCache()
+        cache.load(env_var_toml)
+        findings = cache.scan("INIT_START_NS=1234567890123456789")
+        assert len(findings) == 0
+
+    def test_numeric_secret_assignment_still_detected(self, env_var_toml):
+        cache = PatternCache()
+        cache.load(env_var_toml)
+        findings = cache.scan("AWS_SECRET_KEY=1234567890123456789")
+        assert any(f.rule_id == "env-variable" for f in findings)
 
     def test_exported_path_not_flagged(self, env_var_toml):
         cache = PatternCache()

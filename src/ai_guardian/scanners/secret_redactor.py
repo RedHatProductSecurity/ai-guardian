@@ -506,13 +506,14 @@ class SecretRedactor:
                  -> AWS_SECRET_KEY=[HIDDEN]
         """
         var_name = match.group(1)
+        prefix = match.group(0)[: match.start(1) - match.start(0)]
         # Check if there's a quote group
         if match.lastindex is not None and match.lastindex >= 3:
             # Has quote marks
             quote = match.group(2) if match.group(2) else ""
-            redacted = f"{var_name}={quote}[HIDDEN]{quote}"
+            redacted = f"{prefix}{var_name}={quote}[HIDDEN]{quote}"
         else:
-            redacted = f"{var_name}=[HIDDEN]"
+            redacted = f"{prefix}{var_name}=[HIDDEN]"
 
         return (redacted, {"method": "env_var", "var_name": var_name})
 

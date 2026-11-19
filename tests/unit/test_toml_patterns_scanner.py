@@ -114,6 +114,34 @@ class TestTomlPatternsScanner:
         scanner = TomlPatternsScanner()
         assert scanner.scan("") == []
 
+    def test_lifecycle_environment_assignments_are_not_reported(self):
+        scanner = TomlPatternsScanner()
+        content = (
+            "++ _LIFECYCLE_DIR=/service-lifecycle\n"
+            "++ _INIT_START_NS=1234567890123456789"
+        )
+
+        findings = scanner.scan(content)
+
+        assert not any(
+            finding.rule_id in {"env-variable", "exported-env-variable"}
+            for finding in findings
+        )
+
+    def test_numeric_metadata_assignment_is_not_reported(self):
+        scanner = TomlPatternsScanner()
+
+        findings = scanner.scan("INIT_START_NS=1234567890123456789")
+
+        assert not any(finding.rule_id == "env-variable" for finding in findings)
+
+    def test_secret_valued_environment_assignment_remains_detected(self):
+        scanner = TomlPatternsScanner()
+
+        findings = scanner.scan("AWS_SECRET_KEY=Ab9Cd8Ef7Gh6Ij5Kl4Mn3Op2")
+
+        assert any(finding.rule_id == "env-variable" for finding in findings)
+
     def test_has_rules_loaded(self):
         scanner = TomlPatternsScanner()
         assert scanner._cache.rule_count > 0
