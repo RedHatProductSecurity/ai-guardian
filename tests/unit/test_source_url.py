@@ -346,7 +346,7 @@ def test_file_exclusion_from_cached_input_cannot_suppress_url_response(fetched_h
 
 def test_url_response_does_not_inherit_cached_file_annotations(fetched_history):
     with patch(
-        "ai_guardian.hook_events.post_tool_use.process_annotations"
+        "ai_guardian.hook_events.post_tool_use.process_annotations_by_scanner"
     ) as annotations:
         records = fetched_history(
             tool_input={"url": SOURCE_URL},
