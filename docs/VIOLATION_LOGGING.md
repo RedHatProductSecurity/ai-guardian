@@ -258,11 +258,17 @@ without a fabricated location.
 
 Ask-mode history does not store the matched input or scanner error text; it keeps
 a fixed description and available source position. CLI scan history stores the
-rule ID and source position, but not the finding message or snippet. The original
-Ask inputs and complete CLI findings remain available to their in-memory callers
-and command output, respectively. Generic records also persist only recognized
-violation/severity labels; unknown labels are normalized rather than copied
-verbatim.
+rule ID and source position, but not the finding message or snippet. Hook findings
+are recorded through the hook violation-logging path when logging is enabled.
+Standalone `ai-guardian scan` findings are not added to this event history by
+default; pass `--log-violations` to opt in. This means the history is not a
+complete inventory of standalone scan results. The default terminal output shows
+counts and relative file paths, not complete finding details. Explicit JSON or
+SARIF reports may contain source-derived content and should be handled as sensitive
+files. Original Ask inputs and complete CLI findings remain available to their
+in-memory callers.
+Generic records also persist only recognized violation/severity labels; unknown
+labels are normalized rather than copied verbatim.
 
 ### Example Log Entry (Directory Blocked)
 

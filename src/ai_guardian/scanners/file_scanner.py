@@ -1590,6 +1590,10 @@ def scan_command(args) -> int:
                 "Use --json-output or --sarif-output for a detailed report; "
                 "treat report files as sensitive.\n"
             )
+            print(
+                "Violations history records hook findings when logging is enabled; "
+                "standalone scan findings are included only with --log-violations.\n"
+            )
             for relative_path in getattr(scanner, "_finding_paths", []):
                 print(f"   File: {relative_path}")
         else:

@@ -89,6 +89,48 @@ class TestLogViolationsFlagScan:
             scan_command(args)
             mock_log.assert_not_called()
 
+    def test_scan_findings_are_logged_when_flag_is_set(self, tmp_path):
+        """--log-violations sends scan findings to the shared history logger."""
+        from ai_guardian.scanners.file_scanner import scan_command
+
+        findings = [{"rule_id": "SECRET-001", "file_path": "settings.py"}]
+        args = SimpleNamespace(
+            path=str(tmp_path),
+            text=None,
+            config=None,
+            verbose=False,
+            sarif_output=None,
+            json_output=None,
+            exit_code=False,
+            log_violations=True,
+            include=None,
+            exclude=None,
+            config_only=False,
+            agent_configs=False,
+            diff=False,
+            staged=False,
+            pr=None,
+            mr=None,
+            stdin_diff=False,
+            changed_lines_only=False,
+            base=None,
+        )
+
+        with (
+            patch("ai_guardian.config.loaders.load_scanner_config", return_value={}),
+            patch("ai_guardian.scanners.file_scanner.FileScanner") as scanner_class,
+            patch("ai_guardian.scanners.file_scanner._log_scan_findings") as mock_log,
+        ):
+            scanner = scanner_class.return_value
+            scanner._code_scanner_unavailable = None
+            scanner._code_scan_skipped_count = 0
+            scanner._finding_paths = ["settings.py"]
+            scanner.scan_directory.return_value = findings
+
+            scan_command(args)
+
+        mock_log.assert_called_once_with(findings, args)
+
     def test_violation_type_mapping(self):
         """rule_id prefixes map to correct violation types."""
         from ai_guardian.scanners.file_scanner import _violation_type_from_rule_id

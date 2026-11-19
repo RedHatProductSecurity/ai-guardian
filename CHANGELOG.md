@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Scan findings history guidance (#2798):** Explain in CLI output and help that
+  hook findings are logged as events while standalone scans are report-only by
+  default; document the explicit `--log-violations` opt-in without exposing details.
 - **Tray restart handoff (#2797):** Keep the tray lock until its icon loop exits
   and make menu-triggered replacements wait for the old process to terminate,
   preventing overlapping tray instances and duplicate daemon startup activity.
