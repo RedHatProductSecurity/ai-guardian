@@ -3,9 +3,11 @@
 from unittest.mock import patch
 
 from ai_guardian.annotations import (
+    find_source_excerpt_line_offset,
     get_suppressed_lines,
     apply_suppressions,
     process_annotations,
+    process_annotations_by_scanner,
 )
 
 
@@ -272,6 +274,57 @@ class TestGetSuppressedLines:
         assert 1 in secret_sup
         assert 2 not in secret_sup
 
+    def test_scanner_qualified_inline_annotation_only_suppresses_named_scanner(self):
+        content = 'value = "example"  # ai-guardian:allow prompt_injection\nnext'
+
+        prompt_lines, _, _, _ = get_suppressed_lines(
+            content, scanner_type="prompt_injection"
+        )
+        secret_lines, _, _, _ = get_suppressed_lines(
+            content, scanner_type="secret_scanning"
+        )
+        all_lines, _, _, _ = get_suppressed_lines(content)
+
+        assert prompt_lines == {0, 1}
+        assert secret_lines == set()
+        assert all_lines == set()
+
+    def test_scanner_qualified_block_annotation_only_suppresses_named_scanner(self):
+        content = (
+            "# ai-guardian:begin-allow code_scanning\n"
+            "value = unsafe_call()\n"
+            "# ai-guardian:end-allow\n"
+            "clean"
+        )
+
+        code_lines, _, _, _ = get_suppressed_lines(
+            content, scanner_type="code_scanning"
+        )
+        secret_lines, _, _, _ = get_suppressed_lines(
+            content, scanner_type="secret_scanning"
+        )
+
+        assert code_lines == {0, 1, 2}
+        assert secret_lines == set()
+
+    def test_multiple_scanner_qualified_markers_merge_on_one_line(self):
+        content = (
+            'value = "example"  # ai-guardian:allow secret_scanning  '
+            "# ai-guardian:allow prompt_injection"
+        )
+
+        prompt_lines, _, _, _ = get_suppressed_lines(
+            content, scanner_type="prompt_injection"
+        )
+        secret_lines, _, _, _ = get_suppressed_lines(
+            content, scanner_type="secret_scanning"
+        )
+        pii_lines, _, _, _ = get_suppressed_lines(content, scanner_type="scan_pii")
+
+        assert prompt_lines == {0}
+        assert secret_lines == {0}
+        assert pii_lines == set()
+
     def test_inline_html_multiline(self):
         """HTML annotation suppresses current and next line."""
         content = (
@@ -326,6 +379,14 @@ class TestApplySuppressions:
         content = "a\nb\nc"
         result = apply_suppressions(content, {0, 1, 2})
         assert result == "\n\n"
+
+    def test_preserves_character_offsets_when_requested(self):
+        content = "first line\nannotated source\nlast line\n"
+        result = apply_suppressions(content, {1}, preserve_offsets=True)
+
+        assert len(result) == len(content)
+        assert result.splitlines()[1].strip() == ""
+        assert result.endswith("\n")
 
 
 class TestProcessAnnotations:
@@ -423,6 +484,80 @@ class TestProcessAnnotations:
         _, _, _, warnings = process_annotations(content)
         assert len(warnings) == 1
         assert "line 1" in warnings[0]
+
+    def test_process_annotations_by_scanner_preserves_scope(self):
+        content = (
+            'token = "example"  # ai-guardian:allow secret_scanning\n'
+            'ssn = "123-45-6789"  # gitleaks:allow\n'
+            "clean"
+        )
+
+        content_by_scanner, info, warnings = process_annotations_by_scanner(
+            content,
+            ("secret_scanning", "scan_pii", "prompt_injection"),
+            file_path="sample.py",
+        )
+
+        secret_lines = content_by_scanner["secret_scanning"].splitlines()
+        assert [line.strip() for line in secret_lines] == ["", "", "clean"]
+        assert content_by_scanner["scan_pii"].splitlines() == [
+            'token = "example"  # ai-guardian:allow secret_scanning',
+            'ssn = "123-45-6789"  # gitleaks:allow',
+            "clean",
+        ]
+        assert content_by_scanner["prompt_injection"] == content_by_scanner["scan_pii"]
+        assert all(item["file_path"] == "sample.py" for item in info)
+        assert warnings == []
+
+    def test_partial_source_excerpt_inherits_enclosing_block_annotation(self):
+        source_content = (
+            "before\n"
+            "# ai-guardian:begin-allow prompt_injection\n"
+            "dangerous instruction\n"
+            "continued instruction\n"
+            "# ai-guardian:end-allow\n"
+            "after"
+        )
+        excerpt = "dangerous instruction\ncontinued instruction"
+
+        content_by_scanner, info, warnings = process_annotations_by_scanner(
+            excerpt,
+            ("prompt_injection", "secret_scanning"),
+            file_path="sample.txt",
+            source_content=source_content,
+        )
+
+        assert all(
+            not line.strip()
+            for line in content_by_scanner["prompt_injection"].splitlines()
+        )
+        assert content_by_scanner["secret_scanning"] == excerpt
+        assert info == [
+            {
+                "type": "block",
+                "lines": [3, 4],
+                "annotation_line": 2,
+                "file_path": "sample.txt",
+            }
+        ]
+        assert warnings == []
+
+    def test_partial_excerpt_mapping_rejects_ambiguous_or_partial_lines(self):
+        repeated_source = (
+            "# ai-guardian:begin-allow\nsecret\n# ai-guardian:end-allow\nsecret"
+        )
+        assert find_source_excerpt_line_offset(repeated_source, "secret") is None
+
+        partial_source = "prefix secret suffix"
+        assert find_source_excerpt_line_offset(partial_source, "secret") is None
+
+        content_by_scanner, info, _ = process_annotations_by_scanner(
+            "secret",
+            ("prompt_injection",),
+            source_content=repeated_source,
+        )
+        assert content_by_scanner["prompt_injection"] == "secret"
+        assert info == []
 
 
 class TestAnnotationsIntegration:

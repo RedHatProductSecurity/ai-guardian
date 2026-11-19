@@ -41,6 +41,13 @@ Setup detects supported IDEs and guides hook setup. Open your IDE to start using
 AI Guardian. For optional desktop controls, run `ai-guardian tray start -b`; open
 the browser console with `ai-guardian console`.
 
+To scan an existing project and add inline suppression annotations, run this
+from its root:
+
+```bash
+ai-guardian init-project --scan --annotate
+```
+
 > **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read,
 > Write, Edit) are allowed and scanned by hooks. See [Tool Policy][policy]
 > for the security posture and configuration.

@@ -636,7 +636,7 @@ When secret scanning flags a value that is not a real secret, you have several o
 | `ignore_files` | Entire files or directories | All scanners |
 | `.aiguardignore.toml` | Project-level file ignores (shared via VCS) | All scanners |
 | `.gitleaks.toml` `[allowlist]` | Gitleaks-specific path/regex rules | Gitleaks only |
-| Inline annotations | Single lines in source code | All scanners |
+| Inline annotations | Single lines in source code | All file-content scanners |
 
 ### .gitleaksignore
 
@@ -704,7 +704,7 @@ API_KEY = "pk_test_example123456789012"  # ai-guardian:allow
 
 | Alias | Suppresses |
 |-------|-----------|
-| `ai-guardian:allow` | Secrets + PII |
+| `ai-guardian:allow` | All file-content scanner findings |
 | `gitleaks:allow` | Secrets only |
 
 These are the only aliases available by default. To use other keywords (e.g., `notsecret`, `nosec`), configure them in `ai-guardian.json`:
@@ -718,12 +718,17 @@ These are the only aliases available by default. To use other keywords (e.g., `n
 }
 ```
 
-- `inline_allow` — adds custom aliases suppressing secrets + PII (extends built-in `ai-guardian:allow`)
+- `inline_allow` — adds custom aliases suppressing all file-content scanner findings (extends built-in `ai-guardian:allow`)
 - `inline_allow_secrets` — adds custom aliases suppressing secrets only (extends built-in `gitleaks:allow`)
 
 Custom aliases are additive — built-in aliases always remain active.
 
 Block annotations use `ai-guardian:begin-allow` / `ai-guardian:end-allow` (also configurable via `block_begin` / `block_end`):
+
+Scanner-qualified annotations (for example, `ai-guardian:allow secret_scanning`)
+limit suppression to the named scanner types. An unqualified marker suppresses
+all file-content scanners. User prompts and non-file tool output do not honor
+source annotations.
 
 ```python
 # ai-guardian:begin-allow

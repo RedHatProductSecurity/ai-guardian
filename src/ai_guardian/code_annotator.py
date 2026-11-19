@@ -134,26 +134,32 @@ def _plan_file_annotations(
         logger.warning("Cannot read %s — skipping annotations", file_path)
         return None
 
-    suppressed, _, _, _ = get_suppressed_lines(content)
-
     prefix = get_comment_prefix(file_path)
     if prefix is None:
         return None
 
     by_line: Dict[int, Set[str]] = defaultdict(set)
+    suppressed_by_scanner: Dict[str, Set[int]] = {}
     for finding in findings:
         line_number = finding.get("line_number")
         if not line_number:
             continue
 
         line_idx = line_number - 1
-        if line_idx in suppressed:
+        scanner_type = _scanner_for_rule_id(finding.get("rule_id", ""))
+        if not scanner_type:
+            result.skipped_no_scanner += 1
+            continue
+
+        if scanner_type not in suppressed_by_scanner:
+            suppressed_by_scanner[scanner_type] = get_suppressed_lines(
+                content, scanner_type=scanner_type
+            )[0]
+        if line_idx in suppressed_by_scanner[scanner_type]:
             result.skipped_annotated += 1
             continue
 
-        scanner_type = _scanner_for_rule_id(finding.get("rule_id", ""))
-        if scanner_type:
-            by_line[line_number].add(scanner_type)
+        by_line[line_number].add(scanner_type)
 
     if not by_line:
         return None
@@ -332,8 +338,14 @@ def format_pr_body(result: AnnotationResult) -> str:
 
     if result.skipped_annotated:
         lines.append(f"- Skipped (already annotated): {result.skipped_annotated}")
+    if result.skipped_never_suppress:
+        lines.append(f"- Skipped (never suppressible): {result.skipped_never_suppress}")
     if result.skipped_unsupported:
         lines.append(f"- Skipped (unsupported file type): {result.skipped_unsupported}")
+    if result.skipped_no_location:
+        lines.append(f"- Skipped (no line number): {result.skipped_no_location}")
+    if result.skipped_no_scanner:
+        lines.append(f"- Skipped (unsupported scanner): {result.skipped_no_scanner}")
 
     lines.append("")
     lines.append("### Annotated files")

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Scanner-scoped source annotations:** Apply inline and block annotations to
+  all file-content scanner findings, with qualified markers limiting suppression
+  to named scanners. PostToolUse file excerpts inherit source annotations only
+  when uniquely matched to complete lines; prompts and unrelated non-file input
+  remain scanned.
 - **Base64 text inspection (#2802):** Safely decode bounded standard and
   URL-safe Base64 text candidates and inspect decoded text with enabled prompt
   injection, context poisoning, secret, and PII detectors. Map findings to the
@@ -83,6 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Read the Docs version metadata to confirm both aliases target the intended refs.
   Point the README's release link directly at `v1.22.0` and have the release
   synchronizer update it for future versions; keep `latest` documented separately.
+- **`init-project --scan` scanner coverage (#2807):** Preserve findings unless a
+  generated recommendation can represent their suppression; count unique files
+  during progressive filtering, route AST code findings, and apply generated
+  code/SSRF ignore paths. Avoid allowlist patterns from secret-rule labels or
+  exfiltration categories, keep password-likelihood opt-in, and surface
+  annotation skip counts.
 - **Lifecycle environment assignment false positives (#2801):** Stop matching
   assignments inside leading-underscore names and ignore single-segment paths
   and numeric metadata values, while retaining detection for credential fields.

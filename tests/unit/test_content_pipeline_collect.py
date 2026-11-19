@@ -98,6 +98,51 @@ def _run_pipeline(scan_results, pipeline_side_effect, **overrides):
         return run_content_pipeline(**kwargs)
 
 
+def test_annotation_overrides_are_forwarded_per_scanner():
+    overrides = {
+        ScannerName.PROMPT_INJECTION: "filtered prompt text",
+        ScannerName.SECRET: "filtered secret text",
+        ScannerName.PII: "filtered pii text",
+    }
+
+    with (
+        patch(
+            "ai_guardian.config.loaders._load_secret_scanning_config",
+            return_value=({"enabled": True}, None),
+        ),
+        patch("ai_guardian.scanners.pipeline.scan_content", return_value=[]) as scan,
+        patch("ai_guardian.hook_events.content_pipeline.apply_post_scan_pipeline"),
+    ):
+        run_content_pipeline(
+            content_to_scan="original source text",
+            filename="sample.py",
+            file_path="/tmp/sample.py",
+            secret_content_to_scan=None,
+            pii_content_to_scan=None,
+            tool_identifier="Read",
+            tool_name="Read",
+            warning_messages=[],
+            log_only_count=0,
+            _registry=get_default_registry(),
+            _post_scan_ctx=_make_post_scan_ctx(),
+            annotation_content_overrides=overrides,
+            hook_event=HookEvent.PRE_TOOL_USE,
+            adapter=_make_adapter(),
+            ide_type=IDEType.CLAUDE_CODE,
+            now=None,
+            hook_session_id="s1",
+            hook_tool_use_id="t1",
+            context_mgr=None,
+            _latency_timer=MagicMock(),
+            security_message=None,
+            _invocation_allowed=set(),
+            hook_data={},
+        )
+
+    assert scan.call_args.args[0] == "original source text"
+    assert scan.call_args.kwargs["content_overrides"] == overrides
+
+
 @pytest.mark.parametrize("tool_name", ["webfetch", "WebFetch"])
 @pytest.mark.parametrize(
     "url,expected",

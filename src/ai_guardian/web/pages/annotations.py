@@ -240,7 +240,7 @@ def create_annotations_page(service, daemon_name: str):
 
                 _render_toggle(
                     "Annotations",
-                    "Allow inline and block annotations to suppress secret and PII detections.",
+                    "Allow source annotations to suppress file-content findings; scanner-qualified markers limit which scanners are suppressed.",
                     is_temp,
                     until_dt,
                     reason,
@@ -268,13 +268,13 @@ def create_annotations_page(service, daemon_name: str):
                                 "Block: # ai-guardian:begin-allow ... # ai-guardian:end-allow"
                             ).classes("text-xs").style("font-family: monospace")
                     ui.label(
-                        "Note: Prompt injection, jailbreak, and config exfiltration "
-                        "detections cannot be suppressed via annotations."
+                        "Source annotations can suppress all file-content scanner "
+                        "findings. They do not suppress user-submitted prompt scanning."
                     ).classes("text-xs text-amber-8 mt-2 ml-4")
 
                 _render_alias_list(
-                    "Inline Allow Aliases (secrets + PII)",
-                    "Additional comment markers that act as inline allow annotations.",
+                    "Inline Allow Aliases (all file scanners)",
+                    "Additional comment markers that suppress all file-content scanner findings.",
                     "annotations",
                     "inline_allow",
                     refresh,

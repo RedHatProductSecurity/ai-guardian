@@ -136,7 +136,7 @@ except ImportError:
     HAS_OFFENSIVE_LANGUAGE = False
 
 try:
-    from ai_guardian.annotations import process_annotations
+    from ai_guardian.annotations import process_annotations_by_scanner
     from ai_guardian.config.loaders import _load_annotations_config
     from ai_guardian.config.utils import is_feature_enabled
 
@@ -145,8 +145,24 @@ except ImportError:
     HAS_ANNOTATIONS = False
 
 from ai_guardian.scanners.code_inspection import CodeInspectionManager
+from ai_guardian.utils.path_matching import matches_ignore_files
 
 logger = logging.getLogger(__name__)
+
+_FILE_ANNOTATION_SCANNER_TYPES = (
+    "config_file_scanning",
+    "ssrf_protection",
+    "unicode_detection",
+    "secret_scanning",
+    "password_likelihood",
+    "scan_pii",
+    "prompt_injection",
+    "supply_chain",
+    "offensive_language",
+    "canary_detection",
+    "code_scanning",
+    "exfil_detection",
+)
 
 
 def _get_line_snippet(
@@ -298,8 +314,8 @@ class FileScanner:
             progress_callback: Optional callable(file_path, index, total)
             cancel_event: Optional threading.Event — set to stop scan early
             skip_hidden: Skip directories starting with '.' (default True)
-            finding_filter: Optional callable(findings_list) -> filtered_list,
-                called after each file's scan with the cumulative findings.
+            finding_filter: Optional callable(new_findings) -> filtered_list,
+                called after each file's scan with only that file's findings.
                 Can remove findings in-place for progressive suppression.
 
         Returns:
@@ -346,7 +362,9 @@ class FileScanner:
                 else:
                     self._scan_file(file_path, scan_path)
                 if finding_filter:
-                    self.findings = finding_filter(self.findings)
+                    new_findings = self.findings[findings_before:]
+                    filtered_findings = finding_filter(new_findings)
+                    self.findings = self.findings[:findings_before] + filtered_findings
                     skip = getattr(finding_filter, "skip_rules", None)
                     if skip is not None:
                         self._skip_rules = skip
@@ -713,58 +731,73 @@ class FileScanner:
             if self.verbose:
                 print(f"Scanning: {relative_path}")
 
-            # Apply annotation-based suppression for secrets/PII (#1237)
-            secret_content = content
-            pii_content = content
+            # Apply source annotations per scanner so scanner-qualified markers
+            # suppress only their named finding types.
+            content_by_scanner: Dict[str, str] = {}
             if HAS_ANNOTATIONS:
                 ann_config, _ = _load_annotations_config()
                 if ann_config and is_feature_enabled(
                     ann_config.get("enabled"), default=True
                 ):
-                    content_all_sup, content_secret_sup, ann_info, _ = (
-                        process_annotations(
-                            content, file_path=str(file_path), config=ann_config
-                        )
+                    content_by_scanner, _, _ = process_annotations_by_scanner(
+                        content,
+                        _FILE_ANNOTATION_SCANNER_TYPES,
+                        file_path=str(file_path),
+                        config=ann_config,
                     )
-                    if ann_info:
-                        pii_content = content_all_sup
-                        secret_content = content_secret_sup
+
+            def _content_for(scanner_type: str) -> str:
+                return content_by_scanner.get(scanner_type, content)
 
             _skip = self._skip_rules
 
             if self._is_config_file(file_path) and HAS_CONFIG_SCANNER:
                 if "CONFIG-001" not in _skip:
-                    self._check_config_threats(relative_path, content)
+                    self._check_config_threats(
+                        relative_path, _content_for("config_file_scanning")
+                    )
 
             if self.ssrf_protector and "SSRF-001" not in _skip:
-                self._check_ssrf(relative_path, content)
+                self._check_ssrf(relative_path, _content_for("ssrf_protection"))
 
             if self.unicode_detector and "UNICODE-001" not in _skip:
-                self._check_unicode_attacks(relative_path, content)
+                self._check_unicode_attacks(
+                    relative_path, _content_for("unicode_detection")
+                )
 
             if HAS_SECRET_SCANNER and "SECRET-001" not in _skip:
-                self._check_secrets(relative_path, secret_content, str(file_path))
+                self._check_secrets(
+                    relative_path, _content_for("secret_scanning"), str(file_path)
+                )
 
             if "PASSWORD-001" not in _skip:
-                self._check_password_likelihood(relative_path, content)
+                self._check_password_likelihood(
+                    relative_path, _content_for("password_likelihood")
+                )
 
             if HAS_PII_SCANNER and "PII-001" not in _skip:
-                self._check_pii(relative_path, pii_content)
+                self._check_pii(relative_path, _content_for("scan_pii"))
 
             if HAS_PROMPT_INJECTION and "PROMPT-INJECTION-001" not in _skip:
-                self._check_prompt_injection(relative_path, content)
+                self._check_prompt_injection(
+                    relative_path, _content_for("prompt_injection")
+                )
 
             if HAS_SUPPLY_CHAIN and "SUPPLY-CHAIN-001" not in _skip:
-                self._check_supply_chain(str(file_path), content)
+                self._check_supply_chain(str(file_path), _content_for("supply_chain"))
 
             if HAS_OFFENSIVE_LANGUAGE:
-                self._check_offensive_language(relative_path, content)
+                self._check_offensive_language(
+                    relative_path, _content_for("offensive_language")
+                )
 
             if HAS_CANARY_DETECTION and "CANARY-001" not in _skip:
-                self._check_canary_detection(relative_path, content)
+                self._check_canary_detection(
+                    relative_path, _content_for("canary_detection")
+                )
 
             if self._code_scanner and file_path.suffix == ".py":
-                self._check_code_security(relative_path, content)
+                self._check_code_security(relative_path, _content_for("code_scanning"))
 
             if HAS_EXFIL_DETECTION and file_path.suffix in {
                 ".sh",
@@ -774,11 +807,23 @@ class FileScanner:
                 ".fish",
             }:
                 if "EXFIL-DETECTION-001" not in _skip:
-                    self._check_exfil_detection(relative_path, content)
+                    self._check_exfil_detection(
+                        relative_path, _content_for("exfil_detection")
+                    )
 
         except Exception as e:
             if self.verbose:
                 logger.error(f"Error scanning {file_path}: {e}")
+
+    def _scanner_ignores_file(self, scanner_type: str, file_path: str) -> bool:
+        """Check scanner-specific file ignores for a project-relative path."""
+        section = self.config.get(scanner_type)
+        if not isinstance(section, dict):
+            return False
+        patterns = section.get("ignore_files", [])
+        if not isinstance(patterns, list):
+            return False
+        return matches_ignore_files(file_path, patterns)
 
     def _scan_image_file(self, file_path: Path, base_path: Path) -> None:
         """Scan an image file via OCR and run security checkers on extracted text."""
@@ -903,7 +948,9 @@ class FileScanner:
 
     def _check_ssrf(self, file_path: str, content: str) -> None:
         """Check for SSRF patterns in file content."""
-        if self.ssrf_protector is None:
+        if self.ssrf_protector is None or self._scanner_ignores_file(
+            "ssrf_protection", file_path
+        ):
             return
         try:
             # Check content as if it were a Bash command
@@ -1188,7 +1235,9 @@ class FileScanner:
     def _check_code_security(self, file_path: str, content: str) -> None:
         """Check Python code for security issues using configured inspectors."""
         try:
-            if self._code_scanner is None:
+            if self._code_scanner is None or self._scanner_ignores_file(
+                "code_scanning", file_path
+            ):
                 return
             inspection = self._code_scanner.scan(content, file_path=file_path)
             code_findings = inspection.findings
@@ -1250,6 +1299,11 @@ class FileScanner:
 
                 ol_config, _ = _load_offensive_language_config()
             if not ol_config or not ol_config.get("enabled", False):
+                return
+            ignore_files = ol_config.get("ignore_files", [])
+            if isinstance(ignore_files, list) and matches_ignore_files(
+                file_path, ignore_files
+            ):
                 return
             scanner = _OffensiveLangScanner(ol_config)
             findings = scanner.scan(content, file_path=file_path)
@@ -1343,6 +1397,18 @@ class FileScanner:
                 with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
                 if content.strip():
+                    if HAS_ANNOTATIONS:
+                        ann_config, _ = _load_annotations_config()
+                        if ann_config and is_feature_enabled(
+                            ann_config.get("enabled"), default=True
+                        ):
+                            annotated_content, _, _ = process_annotations_by_scanner(
+                                content,
+                                ("supply_chain",),
+                                file_path=fpath,
+                                config=ann_config,
+                            )
+                            content = annotated_content.get("supply_chain", content)
                     findings_before = len(self.findings)
                     self._check_supply_chain(fpath, content)
                     self._record_finding_path(Path(fpath), Path.cwd(), findings_before)

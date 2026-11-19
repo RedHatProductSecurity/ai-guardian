@@ -45,17 +45,19 @@ class ScanPipelineResult:
 
 
 class ProgressiveSuppressor:
-    """Tracks finding fingerprints and suppresses once threshold is hit.
+    """Suppress findings only when their generated config can represent it.
 
-    Also computes ``skip_rules`` — rule_ids where every observed sub_type
-    has been suppressed, so the scanner can skip those checks entirely.
+    Counts unique files to match the analyzer's threshold, and tracks samples
+    for config builders that need source paths. Rule checks are not skipped:
+    a later file may introduce a new subtype that must remain visible.
     """
 
     def __init__(self, threshold: int):
         self._threshold = threshold
         self._counts: Dict[Tuple[str, str], int] = defaultdict(int)
         self._suppressed: Set[Tuple[str, str]] = set()
-        self._seen_by_rule: Dict[str, Set[str]] = defaultdict(set)
+        self._file_paths: Dict[Tuple[str, str], List[str]] = defaultdict(list)
+        self._file_path_sets: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
         self.suppressed_count = 0
         self.skip_rules: frozenset = frozenset()
 
@@ -64,29 +66,29 @@ class ProgressiveSuppressor:
         for f in findings:
             fp = fingerprint_finding(f)
             rule_id, sub_type = fp
-            if rule_id in NEVER_SUPPRESS:
+            file_path = f.get("file_path") or ""
+            if not _can_generate_config(
+                rule_id, sub_type, [file_path] if file_path else []
+            ):
                 kept.append(f)
                 continue
-            self._seen_by_rule[rule_id].add(sub_type)
+
+            self._counts[fp] += 1
+            if file_path and file_path not in self._file_path_sets[fp]:
+                self._file_path_sets[fp].add(file_path)
+                if len(self._file_paths[fp]) < MAX_SAMPLE_FILES:
+                    self._file_paths[fp].append(file_path)
+
             if fp in self._suppressed:
                 self.suppressed_count += 1
                 continue
-            self._counts[fp] += 1
-            if self._counts[fp] >= self._threshold:
+
+            if len(self._file_path_sets[fp]) >= self._threshold:
                 self._suppressed.add(fp)
                 self.suppressed_count += 1
                 continue
             kept.append(f)
-        self._update_skip_rules()
         return kept
-
-    def _update_skip_rules(self) -> None:
-        """Recompute which rule_ids can be skipped entirely."""
-        skippable = set()
-        for rule_id, sub_types in self._seen_by_rule.items():
-            if all((rule_id, st) in self._suppressed for st in sub_types):
-                skippable.add(rule_id)
-        self.skip_rules = frozenset(skippable)
 
 
 _SUPPRESSION_KEYS = frozenset(
@@ -179,15 +181,14 @@ def run_scan_pipeline(
     analysis = initializer.analyze_scan(
         findings, threshold=threshold, suppressor=suppressor
     )
-    if suppressor:
-        analysis.suppressed_count += suppressor.suppressed_count
     merged_config = initializer.merge_configs(
         language_config, analysis.recommended_config
     )
 
     return ScanPipelineResult(
         language_names=[lang.definition.name for lang in languages],
-        findings_count=len(findings),
+        findings_count=len(findings)
+        + (suppressor.suppressed_count if suppressor else 0),
         analysis=analysis,
         merged_config=merged_config,
         project_dir=str(project_dir),
@@ -249,11 +250,11 @@ def merge_and_write_config(config_path: Path, new_config: Dict) -> None:
             f.write("\n")
 
 
-_BANDIT_RULE_ID = re.compile(r"^B\d+")
+_CODE_SCANNING_RULE_ID = re.compile(r"^(?:B\d+|AST\d+)$")
 _OFFENSIVE_LANGUAGE_PREFIXES = re.compile(r"^(profanity|slur|inclusive)-")
 
 _RULE_ID_PATTERNS: List[Tuple["re.Pattern[str]", str]] = [
-    (_BANDIT_RULE_ID, "code_scanning"),
+    (_CODE_SCANNING_RULE_ID, "code_scanning"),
     (_OFFENSIVE_LANGUAGE_PREFIXES, "offensive_language"),
 ]
 
@@ -261,7 +262,10 @@ _SCANNER_TO_CONFIG_SECTION = {
     "offensive_language": "scan_offensive",
 }
 
-NEVER_SUPPRESS = frozenset({"UNICODE-001", "canary_detected"})
+# These finding types are not automatically routed to generated project config
+# or init-project annotations. Explicit source annotations are still honored by
+# file scanners for their matching file-content findings.
+NEVER_SUPPRESS = frozenset({"UNICODE-001", "canary_detected", "PASSWORD-001"})
 
 MAX_SAMPLE_FILES = 5
 
@@ -385,12 +389,18 @@ def cluster_findings(findings: List[Dict[str, Any]]) -> List[FindingCluster]:
 def analyze_directories(
     findings: List[Dict[str, Any]],
     high_freq_fingerprints: Set[Tuple[str, str]],
+    additional_fingerprints: Optional[List[Tuple[Tuple[str, str], str]]] = None,
 ) -> List[DirectoryAnalysis]:
     """Analyze first-level directories for ignore recommendations."""
     dir_stats: Dict[str, Dict] = defaultdict(lambda: {"total": 0, "high_freq": 0})
 
-    for finding in findings:
-        file_path = finding.get("file_path") or ""
+    entries = [
+        (fingerprint_finding(finding), finding.get("file_path") or "")
+        for finding in findings
+    ]
+    entries.extend(additional_fingerprints or [])
+
+    for fp, file_path in entries:
         if not file_path:
             continue
 
@@ -401,7 +411,6 @@ def analyze_directories(
         if not top_dir:
             continue
 
-        fp = fingerprint_finding(finding)
         stats = dir_stats[top_dir]
         stats["total"] += 1
         if fp in high_freq_fingerprints:
@@ -436,12 +445,41 @@ def _scanner_for_rule_id(rule_id: str) -> Optional[str]:
     return None
 
 
-def _can_generate_config(rule_id: str) -> bool:
-    """Check if a rule_id's scanner supports config generation."""
+def _can_generate_config(
+    rule_id: str,
+    sub_type: str = "",
+    sample_files: Optional[List[str]] = None,
+) -> bool:
+    """Check whether a finding can be represented by a safe config builder."""
     if rule_id in NEVER_SUPPRESS:
         return False
     scanner = _scanner_for_rule_id(rule_id)
-    return scanner is not None and scanner in _SCANNER_CONFIG_SPEC
+    if scanner is None or scanner not in _SCANNER_CONFIG_SPEC:
+        return False
+
+    # Secret rule IDs and exfiltration categories describe detector metadata,
+    # not source text. Neither can safely become an allowlist regex.
+    if scanner in {"secret_scanning", "exfil_detection"}:
+        return False
+
+    if scanner == "prompt_injection":
+        if not sub_type:
+            return False
+
+    if scanner == "ssrf_protection":
+        reason = str(sub_type).lower()
+        if not any(marker in reason for marker in {"localhost", "127.0.0.1", "::1"}):
+            return False
+
+    if scanner in {"supply_chain", "config_file_scanning"}:
+        if not any(
+            str(PurePosixPath(file_path).parent) != "."
+            for file_path in sample_files or []
+            if file_path
+        ):
+            return False
+
+    return True
 
 
 # --- Config builders ---
@@ -512,9 +550,7 @@ def _build_ssrf_config(
 _BuilderFn = Callable[[Dict[str, Any], str, List[FindingCluster]], None]
 
 _SCANNER_CONFIG_SPEC: Dict[str, Tuple[str, _BuilderFn]] = {
-    "secret_scanning": ("allowlist_patterns", _build_escaped_patterns),
     "prompt_injection": ("allowlist_patterns", _build_escaped_patterns),
-    "exfil_detection": ("allowlist_patterns", _build_escaped_patterns),
     "supply_chain": ("allowlist_paths", _build_dir_globs),
     "config_file_scanning": ("ignore_files", _build_dir_globs),
     "code_scanning": ("allowlist", _build_rule_allowlist),
@@ -539,30 +575,44 @@ def build_recommendations(
     """
     clusters = cluster_findings(findings)
 
+    cluster_by_fp = {(c.rule_id, c.sub_type): c for c in clusters}
+    if suppressor:
+        for fp in suppressor._suppressed:
+            rule_id, sub_type = fp
+            sample_files = suppressor._file_paths.get(fp, [])
+            if not _can_generate_config(rule_id, sub_type, sample_files):
+                continue
+            cluster = cluster_by_fp.get(fp)
+            if cluster is None:
+                cluster = FindingCluster(rule_id=rule_id, sub_type=sub_type)
+                clusters.append(cluster)
+                cluster_by_fp[fp] = cluster
+            cluster.file_count = len(suppressor._file_path_sets[fp])
+            cluster.total_count = suppressor._counts[fp]
+            cluster.sample_files = list(sample_files)
+
     high_freq = [
         c
         for c in clusters
-        if c.file_count >= threshold and _can_generate_config(c.rule_id)
+        if c.file_count >= threshold
+        and _can_generate_config(c.rule_id, c.sub_type, c.sample_files)
     ]
-
-    if suppressor:
-        existing_fps = {(c.rule_id, c.sub_type) for c in clusters}
-        for fp, count in suppressor._counts.items():
-            if count >= threshold and fp not in existing_fps:
-                rule_id, sub_type = fp
-                if _can_generate_config(rule_id):
-                    cluster = FindingCluster(
-                        rule_id=rule_id,
-                        sub_type=sub_type,
-                        file_count=count,
-                        total_count=count + suppressor.suppressed_count,
-                    )
-                    clusters.append(cluster)
-                    high_freq.append(cluster)
 
     high_freq_fps: Set[Tuple[str, str]] = {(c.rule_id, c.sub_type) for c in high_freq}
 
-    dir_analyses = analyze_directories(findings, high_freq_fps)
+    additional_fingerprints: List[Tuple[Tuple[str, str], str]] = []
+    if suppressor:
+        existing_pairs = {
+            (fingerprint_finding(f), f.get("file_path") or "") for f in findings
+        }
+        for fp in suppressor._suppressed:
+            for file_path in suppressor._file_path_sets.get(fp, set()):
+                if (fp, file_path) not in existing_pairs:
+                    additional_fingerprints.append((fp, file_path))
+
+    dir_analyses = analyze_directories(
+        findings, high_freq_fps, additional_fingerprints=additional_fingerprints
+    )
     dirs_to_ignore = [d for d in dir_analyses if d.all_high_frequency]
 
     dir_scanner_map: Dict[str, Set[str]] = defaultdict(set)
@@ -574,21 +624,30 @@ def build_recommendations(
             if scanner:
                 dir_scanner_map[parts[0]].add(scanner)
 
-    config = _build_config(high_freq)
+    for (rule_id, _sub_type), file_path in additional_fingerprints:
+        parts = PurePosixPath(file_path).parts
+        if parts and len(parts) > 1:
+            scanner = _scanner_for_rule_id(rule_id)
+            if scanner:
+                dir_scanner_map[parts[0]].add(scanner)
 
-    ssrf_clusters = [c for c in clusters if c.rule_id == "SSRF-001"]
-    if ssrf_clusters:
-        ssrf_section = config.setdefault("ssrf_protection", {})
-        _build_ssrf_config(ssrf_section, "allow_localhost", ssrf_clusters)
+    config = _build_config(high_freq)
 
     ignore_paths = _build_ignore_paths(dirs_to_ignore, dir_scanner_map)
 
     suppressed = sum(c.total_count for c in high_freq)
 
     all_files = {f.get("file_path") for f in findings if f.get("file_path")}
+    if suppressor:
+        all_files.update(
+            file_path
+            for paths in suppressor._file_path_sets.values()
+            for file_path in paths
+        )
 
     return ScanAnalysisResult(
-        total_findings=len(findings),
+        total_findings=len(findings)
+        + (suppressor.suppressed_count if suppressor else 0),
         total_files_scanned=len(all_files),
         clusters=clusters,
         high_frequency_clusters=high_freq,

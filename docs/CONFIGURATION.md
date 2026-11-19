@@ -821,6 +821,15 @@ ai-guardian init-project --scan --threshold 3    # Only suppress patterns seen 3
 
 Lower thresholds produce more permissive configs; higher thresholds are more conservative.
 
+Discovery enables the file scanners configured for project scans while removing
+existing pattern suppressions. It does not turn on `password_likelihood`: that
+global-only heuristic remains disabled unless explicitly opted in. Automatic
+config suppression is limited to findings with a safe representable rule; PII,
+secret-rule labels, exfiltration categories, offensive-language, non-local SSRF,
+Unicode-attack, and canary findings remain visible rather than being turned into
+unsupported allowlist patterns. Scanner-specific directory recommendations are
+written to `.aiguardignore.toml` only for supported scanner types.
+
 ### Language Overlay System
 
 AI Guardian auto-detects your project's primary language (Python, Go, JavaScript, etc.) and injects language-specific false positive suppressions. For example, Go projects automatically suppress common Go test patterns, and Python projects suppress Django/Flask placeholder patterns.

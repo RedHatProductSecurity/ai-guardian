@@ -99,6 +99,48 @@ class TestPlanAnnotations:
         assert result.total_annotations == 0
         assert result.skipped_never_suppress == 1
 
+    def test_global_only_password_finding_is_not_annotated(self, tmp_path):
+        from ai_guardian.code_annotator import plan_annotations
+
+        f = tmp_path / "test.py"
+        f.write_text("password = value\n")
+        finding = self._make_finding(
+            file_path=str(f), line_number=1, rule_id="PASSWORD-001"
+        )
+
+        result = plan_annotations([finding], set())
+
+        assert result.total_annotations == 0
+        assert result.skipped_never_suppress == 1
+
+    def test_ast_code_scanning_finding_uses_scanner_qualified_annotation(
+        self, tmp_path
+    ):
+        from ai_guardian.code_annotator import plan_annotations
+
+        f = tmp_path / "test.py"
+        f.write_text("eval(source)\n")
+        finding = self._make_finding(file_path=str(f), line_number=1, rule_id="AST001")
+
+        result = plan_annotations([finding], set())
+
+        assert result.total_annotations == 1
+        assert "ai-guardian:allow code_scanning" in result.plans[0].modified_content
+
+    def test_unknown_rule_reports_missing_scanner_route(self, tmp_path):
+        from ai_guardian.code_annotator import plan_annotations
+
+        f = tmp_path / "test.py"
+        f.write_text("value = 1\n")
+        finding = self._make_finding(
+            file_path=str(f), line_number=1, rule_id="UNMAPPED-001"
+        )
+
+        result = plan_annotations([finding], set())
+
+        assert result.total_annotations == 0
+        assert result.skipped_no_scanner == 1
+
     def test_high_freq_fingerprint_skipped(self, tmp_path):
         from ai_guardian.code_annotator import plan_annotations
 
@@ -294,3 +336,18 @@ class TestFormatPrBody:
         assert "src/app.py" in body
         assert "secret_scanning" in body
         assert "1 annotation" in body
+
+    def test_body_reports_skipped_findings(self):
+        from ai_guardian.code_annotator import AnnotationResult, format_pr_body
+
+        result = AnnotationResult(
+            skipped_never_suppress=1,
+            skipped_no_location=2,
+            skipped_no_scanner=3,
+        )
+
+        body = format_pr_body(result)
+
+        assert "Skipped (never suppressible): 1" in body
+        assert "Skipped (no line number): 2" in body
+        assert "Skipped (unsupported scanner): 3" in body
