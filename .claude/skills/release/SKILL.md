@@ -142,18 +142,21 @@ The detected configuration is saved to `.release-config.json` and can be edited 
 
 ### AI Guardian release references
 
-AI Guardian keeps a stable container fallback on `main` even though the
-package version on `main` is a `-dev` version. The package-aware helper cannot
-infer that separate stable value, so the canonical release script also runs:
+AI Guardian keeps a latest-release documentation link and stable container
+fallbacks on `main` even though the package version on `main` is a `-dev`
+version. The package-aware helper cannot infer that separate stable value, so
+the canonical release script also runs:
 
 ```bash
 python scripts/sync_release_versions.py --stable-version X.Y.Z
 ```
 
-This updates the active stable references in the normal and OpenShell
-Dockerfiles, the root and container READMEs, and the generated documentation
-export. It fails when an expected reference is missing. CI runs the matching
-check automatically:
+This updates the root README's latest-release link to `/en/vX.Y.Z/`, plus the
+normal and OpenShell Dockerfiles and stable examples in `container/README.md`.
+The separate README `/en/latest/` link continues to track `main`. The generated
+NotebookLM export is refreshed separately after source references are final.
+The synchronizer fails when an expected active reference is missing. CI runs
+the matching check automatically:
 
 ```bash
 python scripts/sync_release_versions.py --check
@@ -748,7 +751,7 @@ unexpected or broader conflict stops for maintainer review.
 9. **Update version files**: Edit all detected package version files atomically
 10. **Update CHANGELOG**: Move Unreleased to version section with date
 11. **Update install URLs**: Replace `main` with release tag in README.md install commands (**before tagging** — PyPI uses the tag snapshot as package README)
-12. **Synchronize release references**: Run `python scripts/sync_release_versions.py --stable-version X.Y.Z`
+12. **Synchronize release references**: Run `python scripts/sync_release_versions.py --stable-version X.Y.Z` to update the README's release documentation link and stable container references
 13. **Create commits**: Use proper commit message format
 14. **TestPyPI verification**: Create test tag, verify README renders correctly on TestPyPI (recommended, may skip for hotfixes)
 15. **Create production tag**: After TestPyPI verification passes

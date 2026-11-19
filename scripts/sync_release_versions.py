@@ -2,10 +2,10 @@
 """Synchronize AI Guardian's active stable-release references.
 
 The package version is intentionally a development version on ``main``, while
-the container defaults and pinned examples must continue to point at the most
-recent stable release. The generic release helper updates package metadata;
-this project-specific companion updates the remaining active references and
-can verify them in CI.
+the README's release documentation link and the container defaults/pinned
+examples must point at the most recent stable release. The generic release
+helper updates package metadata; this project-specific companion updates the
+remaining active references and can verify them in CI.
 """
 
 import argparse
@@ -58,12 +58,22 @@ def _release_reference_rules(
 
     The generated NotebookLM export is intentionally excluded: it contains
     historical version references and is regenerated from these source files
-    during the release process. The root README is a link-only landing page;
-    pinned container examples live in container/README.md instead.
+    during the release process. The root README's current-release documentation
+    link is active; pinned container examples live in container/README.md.
     """
     replacement = r"\g<1>" + stable_version
     replacement_with_suffix = r"\g<1>" + stable_version + r"\g<2>"
     return [
+        (
+            "README.md",
+            [
+                (
+                    rf"(Full documentation site \(latest release: v){STABLE_VERSION_PATTERN}(\)\]\(https://ai-guardian\.readthedocs\.io/en/v){STABLE_VERSION_PATTERN}(/\))",
+                    r"\g<1>" + stable_version + r"\g<2>" + stable_version + r"\g<3>",
+                    "README latest-release documentation link",
+                )
+            ],
+        ),
         (
             "container/Dockerfile",
             [

@@ -12,8 +12,8 @@
 
 ## Documentation and Q&A
 
-- [Full documentation site (latest stable release)](https://ai-guardian.readthedocs.io/en/stable/) — searchable,
-  versioned guides.
+- [Full documentation site (latest release: v1.22.0)](https://ai-guardian.readthedocs.io/en/v1.22.0/) —
+  searchable, versioned guides.
 - [Latest documentation (tracks `main`)](https://ai-guardian.readthedocs.io/en/latest/) — guides for upcoming
   development changes.
 - [Source documentation index][docs-index] — browse the documentation in this repository.
