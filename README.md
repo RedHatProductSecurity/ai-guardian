@@ -115,6 +115,7 @@ upstream references. That guide is the source of truth for this summary.
 | PII detection | [Secret Scanning][secrets] |
 | Prompt injection detection | [Prompt Injection][prompt] |
 | Context poisoning detection | [Context Poisoning][context] |
+| Decoded Base64 text inspection | [Secret Scanning][secrets] · [Prompt Injection][prompt] · [Context Poisoning][context] |
 | Image scanning | [Image Scanning][images] |
 | Unicode attack detection | [Unicode Attacks][unicode] |
 | SSRF protection | [SSRF Protection][ssrf] |

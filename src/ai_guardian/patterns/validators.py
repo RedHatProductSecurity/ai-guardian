@@ -627,12 +627,13 @@ _BASE64_CONTEXT_PREFIX_RE = re.compile(
 
 
 def base64_not_file_path(matched_text: str) -> bool:
-    """Return False (skip) if the base64 'secret' part is actually a file path."""
-    m = _BASE64_CONTEXT_PREFIX_RE.match(matched_text)
-    if m:
-        value = matched_text[m.end() :]
-    else:
-        value = matched_text
+    """Return False (skip) if a Base64-like value is actually a file path.
+
+    Kept for compatibility with custom TOML rules; bundled Base64-only rules
+    were removed in favor of decoding and scanning plausible text candidates.
+    """
+    match = _BASE64_CONTEXT_PREFIX_RE.match(matched_text)
+    value = matched_text[match.end() :] if match else matched_text
     value = value.strip().strip("'\"")
     if not value:
         return True

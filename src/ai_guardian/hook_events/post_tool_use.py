@@ -48,6 +48,144 @@ from ai_guardian.scanners.post_scan_filters import (
 logger = logging.getLogger(__name__)
 
 
+def _scan_decoded_post_tool_content(
+    content,
+    scanner_name,
+    *,
+    scanner_config=None,
+    file_path=None,
+    tool_identifier=None,
+    latency_timer=None,
+    scanner_kwargs=None,
+):
+    """Scan only decoded Base64 candidates for one PostToolUse scanner."""
+    from ai_guardian.scanners.pipeline import scan_content
+
+    entry = get_default_registry().get(scanner_name)
+    config = (
+        {entry.config_section: scanner_config}
+        if entry and entry.config_section and scanner_config is not None
+        else None
+    )
+    return scan_content(
+        content,
+        config=config,
+        filename=f"{tool_identifier}_output" if tool_identifier else "tool_output",
+        source_type="file_content",
+        file_path=file_path,
+        tool_name=tool_identifier,
+        tool_identifier=tool_identifier,
+        hook_event=HookEvent.POST_TOOL_USE,
+        latency_timer=latency_timer,
+        scanner_kwargs=scanner_kwargs,
+        scanner_names={scanner_name},
+        decoded_only=True,
+    )
+
+
+def _redact_encoded_source_spans(content, scan_results, existing_result=None):
+    """Redact decoded candidates plus any existing PII spans in source content."""
+    replacement_spans = []
+    existing_redacted = None
+    if existing_result is not None:
+        if existing_result.extra.get("scan_error") or not existing_result.redactions:
+            return None
+        existing_redacted = existing_result.redacted_content
+        if not isinstance(existing_redacted, str):
+            return None
+
+        existing_redactions = sorted(
+            existing_result.redactions or [], key=lambda item: item.get("position", -1)
+        )
+        source_cursor = 0
+        redacted_cursor = 0
+        for redaction in existing_redactions:
+            start = redaction.get("position")
+            original_length = redaction.get("original_length")
+            redacted_length = redaction.get("redacted_length")
+            if (
+                type(start) is not int
+                or type(original_length) is not int
+                or type(redacted_length) is not int
+                or start < source_cursor
+                or original_length <= 0
+                or redacted_length < 0
+                or start + original_length > len(content)
+            ):
+                return None
+            unchanged_length = start - source_cursor
+            replacement_start = redacted_cursor + unchanged_length
+            replacement_end = replacement_start + redacted_length
+            if replacement_end > len(existing_redacted):
+                return None
+            replacement_spans.append(
+                (
+                    start,
+                    start + original_length,
+                    existing_redacted[replacement_start:replacement_end],
+                    "pii",
+                )
+            )
+            source_cursor = start + original_length
+            redacted_cursor = replacement_end
+
+        expected_parts: list[str] = []
+        expected_source_cursor = 0
+        for start, end, replacement, _kind in replacement_spans:
+            expected_parts.extend((content[expected_source_cursor:start], replacement))
+            expected_source_cursor = end
+        expected_parts.append(content[expected_source_cursor:])
+        if "".join(expected_parts) != existing_redacted:
+            return None
+
+    for scan_result in scan_results:
+        extra = scan_result.extra if isinstance(scan_result.extra, dict) else {}
+        candidate_start = extra.get("base64_source_start")
+        candidate_end = extra.get("base64_source_end")
+        if type(candidate_start) is not int or type(candidate_end) is not int:
+            return None
+        if (
+            candidate_start < 0
+            or candidate_end <= candidate_start
+            or candidate_end > len(content)
+        ):
+            return None
+        replacement_spans.append(
+            (candidate_start, candidate_end, "***REDACTED***", "base64")
+        )
+
+    if not replacement_spans:
+        return None
+
+    base64_spans = [span for span in replacement_spans if span[3] == "base64"]
+    pii_spans = [span for span in replacement_spans if span[3] == "pii"]
+    kept_pii_spans = []
+    for pii_span in pii_spans:
+        pii_start, pii_end, _, _ = pii_span
+        contained_by_encoded_span = False
+        for base64_start, base64_end, _, _ in base64_spans:
+            if pii_start < base64_end and base64_start < pii_end:
+                if base64_start <= pii_start and pii_end <= base64_end:
+                    contained_by_encoded_span = True
+                    break
+                return None
+        if not contained_by_encoded_span:
+            kept_pii_spans.append(pii_span)
+
+    replacement_spans = kept_pii_spans + base64_spans
+
+    replacement_spans.sort(key=lambda span: (span[0], span[1]))
+    parts: list[str] = []
+    source_cursor = 0
+    for start, end, replacement, _kind in replacement_spans:
+        if start < source_cursor:
+            return None
+        parts.extend((content[source_cursor:start], replacement))
+        source_cursor = end
+    parts.append(content[source_cursor:])
+    return "".join(parts)
+
+
 def _agent_type_value(adapter, ide_type):
     """Return stable agent attribution without changing response semantics."""
     value = getattr(adapter, "agent_type", None)
@@ -586,6 +724,50 @@ def handle_post_tool_use(ctx=None, **kwargs):
             latency_timer=_latency_timer,
             defer_violation_logging=True,
         )
+        decoded_secret_results = _scan_decoded_post_tool_content(
+            post_scan_content,
+            ScannerName.SECRET,
+            scanner_config=secret_config,
+            file_path=file_path_for_ctx,
+            tool_identifier=tool_identifier,
+            latency_timer=_latency_timer,
+            scanner_kwargs={
+                ScannerName.SECRET: {
+                    "secret_context": post_secret_ctx,
+                    "ignore_files": ignore_files,
+                    "ignore_tools": ignore_tools,
+                    "allowlist_patterns": secret_allowlist,
+                    "defer_violation_logging": True,
+                }
+            },
+        )
+        decoded_secret_result = next(
+            (
+                scan_result
+                for scan_result in decoded_secret_results
+                if scan_result.detected
+            ),
+            None,
+        )
+        if decoded_secret_result is not None:
+            logger.warning("Secret detected in decoded Base64 tool output; blocking")
+            _log_post_tool_sensitive_outcome(
+                decoded_secret_result,
+                _scan_ctx,
+                violation_logger,
+                "block",
+                "not_redacted",
+            )
+            result = _format_response(
+                adapter,
+                has_secrets=True,
+                error_message=decoded_secret_result.error_message,
+                hook_event=hook_event,
+                violation_type=ViolationType.SECRET_DETECTED,
+            )
+            _advance_transcript_position(hook_data)
+            return result
+
         has_secrets = post_secret_result.detected if post_secret_result else False
         error_message = post_secret_result.error_message if post_secret_result else None
 
@@ -928,6 +1110,60 @@ def handle_post_tool_use(ctx=None, **kwargs):
             tool_identifier=tool_identifier,
             latency_timer=_latency_timer,
         )
+        decoded_pii_results = [
+            scan_result
+            for scan_result in _scan_decoded_post_tool_content(
+                tool_output,
+                ScannerName.PII,
+                file_path=pii_file_path,
+                tool_identifier=tool_identifier,
+                latency_timer=_latency_timer,
+            )
+            if scan_result.detected
+        ]
+        if decoded_pii_results:
+            redacted_base64_output = _redact_encoded_source_spans(
+                tool_output,
+                decoded_pii_results,
+                existing_result=(
+                    post_pii_result
+                    if post_pii_result is not None and post_pii_result.detected
+                    else None
+                ),
+            )
+            if redacted_base64_output is None:
+                decoded_pii_result = decoded_pii_results[0]
+                _log_post_tool_sensitive_outcome(
+                    decoded_pii_result,
+                    _scan_ctx,
+                    violation_logger,
+                    "block",
+                    "not_redacted",
+                )
+                _advance_transcript_position(hook_data)
+                return _format_response(
+                    adapter,
+                    has_secrets=True,
+                    error_message=decoded_pii_result.error_message,
+                    hook_event=hook_event,
+                    violation_type=ViolationType.PII_DETECTED,
+                )
+
+            first_decoded_pii = decoded_pii_results[0]
+            merged_redactions = [
+                redaction
+                for scan_result in decoded_pii_results
+                for redaction in (scan_result.redactions or [])
+            ]
+            post_pii_result = replace(
+                first_decoded_pii,
+                redacted_content=redacted_base64_output,
+                redactions=merged_redactions,
+                extra={
+                    **first_decoded_pii.extra,
+                    "base64_candidate_count": len(decoded_pii_results),
+                },
+            )
 
         if post_pii_result is not None and not post_pii_result.extra.get("skipped"):
             has_pii = post_pii_result.detected
@@ -1212,6 +1448,23 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     tool_name=tool_identifier,
                     latency_timer=_latency_timer,
                 )
+                if post_pi_result is None or not post_pi_result.detected:
+                    decoded_pi_results = _scan_decoded_post_tool_content(
+                        tool_output,
+                        ScannerName.PROMPT_INJECTION,
+                        scanner_config=post_pi_config,
+                        file_path=post_pi_file,
+                        tool_identifier=tool_identifier,
+                        latency_timer=_latency_timer,
+                    )
+                    post_pi_result = next(
+                        (
+                            scan_result
+                            for scan_result in decoded_pi_results
+                            if scan_result.detected
+                        ),
+                        post_pi_result,
+                    )
 
                 if post_pi_result is not None:
                     post_pi_detected = post_pi_result.detected
@@ -1368,6 +1621,22 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     tool_identifier=tool_identifier,
                     latency_timer=_latency_timer,
                 )
+                if post_cp_result is None or not post_cp_result.detected:
+                    decoded_cp_results = _scan_decoded_post_tool_content(
+                        tool_output,
+                        ScannerName.CONTEXT_POISONING,
+                        file_path=post_cp_file,
+                        tool_identifier=tool_identifier,
+                        latency_timer=_latency_timer,
+                    )
+                    post_cp_result = next(
+                        (
+                            scan_result
+                            for scan_result in decoded_cp_results
+                            if scan_result.detected
+                        ),
+                        post_cp_result,
+                    )
 
                 if post_cp_result is not None:
                     post_cp_detected = post_cp_result.detected

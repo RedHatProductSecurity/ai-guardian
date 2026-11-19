@@ -165,7 +165,9 @@ class ContextPoisoningDetector:
             return 0.45, 0.70
         return 0.60, 0.85
 
-    def detect(self, content: str) -> Tuple[bool, Optional[str], bool]:
+    def detect(
+        self, content: str, *, suppress_sensitive_logging: bool = False
+    ) -> Tuple[bool, Optional[str], bool]:
         """
         Detect context poisoning in user prompt.
 
@@ -196,7 +198,13 @@ class ContextPoisoningDetector:
         try:
             return self._run_detection(content)
         except Exception:
-            logger.exception("Context poisoning detection error")
+            if suppress_sensitive_logging:
+                logger.error(
+                    "Context poisoning detection failed for decoded Base64 text; "
+                    "details withheld"
+                )
+            else:
+                logger.exception("Context poisoning detection error")
             return False, None, False
 
     @staticmethod
