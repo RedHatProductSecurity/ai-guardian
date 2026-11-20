@@ -1091,23 +1091,42 @@ class TestTrayRestartCommand:
         assert args.background is True
         assert result == 0
 
-    def test_restart_handoff_waits_for_old_process_to_exit(self):
-        from ai_guardian.cli_handlers import _wait_for_pid_exit
+    def test_restart_handoff_waits_for_tray_lock_release(self, tmp_path):
+        from ai_guardian.cli_handlers import _wait_for_tray_lock_release
+
+        lock_path = tmp_path / "tray.lock"
+        lock_path.write_text("12345")
 
         with (
             mock.patch(
-                "ai_guardian.daemon.is_pid_alive", side_effect=[True, True, False]
-            ) as is_pid_alive,
+                "ai_guardian.tray.app._get_tray_lock_path", return_value=lock_path
+            ),
+            mock.patch("ai_guardian.daemon.is_pid_active", return_value=True),
+            mock.patch(
+                "time.sleep", side_effect=lambda _seconds: lock_path.unlink()
+            ) as sleep,
+        ):
+            _wait_for_tray_lock_release(12345)
+
+        sleep.assert_called_once_with(0.1)
+        assert not lock_path.exists()
+
+    def test_restart_handoff_does_not_wait_for_inactive_lock_owner(self, tmp_path):
+        from ai_guardian.cli_handlers import _wait_for_tray_lock_release
+
+        lock_path = tmp_path / "tray.lock"
+        lock_path.write_text("12345")
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.app._get_tray_lock_path", return_value=lock_path
+            ),
+            mock.patch("ai_guardian.daemon.is_pid_active", return_value=False),
             mock.patch("time.sleep") as sleep,
         ):
-            _wait_for_pid_exit(12345)
+            _wait_for_tray_lock_release(12345)
 
-        assert is_pid_alive.call_args_list == [
-            mock.call(12345),
-            mock.call(12345),
-            mock.call(12345),
-        ]
-        assert sleep.call_count == 2
+        sleep.assert_not_called()
 
     def test_tray_start_waits_before_launching(self):
         from ai_guardian.cli_handlers import _handle_tray_start
@@ -1115,12 +1134,12 @@ class TestTrayRestartCommand:
         args = mock.MagicMock()
         args.background = True
         args.no_discover = False
-        args.wait_for_pid = 12345
+        args.wait_for_tray_lock_release = 12345
         events = []
 
         with (
             mock.patch(
-                "ai_guardian.cli_handlers._wait_for_pid_exit",
+                "ai_guardian.cli_handlers._wait_for_tray_lock_release",
                 side_effect=lambda pid: events.append(("wait", pid)),
             ),
             mock.patch("ai_guardian.daemon.path_env.ensure_scanner_path"),
@@ -1136,13 +1155,19 @@ class TestTrayRestartCommand:
         assert result == 0
         assert events == [("wait", 12345), ("spawn",)]
 
-    def test_wait_for_pid_option_is_accepted_by_cli_parser(self):
+    def test_wait_for_tray_lock_option_is_accepted_by_cli_parser(self):
         from ai_guardian import cli
 
         with (
             mock.patch(
                 "sys.argv",
-                ["ai-guardian", "tray", "start", "--wait-for-pid", "12345"],
+                [
+                    "ai-guardian",
+                    "tray",
+                    "start",
+                    "--wait-for-tray-lock-release",
+                    "12345",
+                ],
             ),
             mock.patch(
                 "ai_guardian.cli._handle_tray_command", return_value=0
@@ -1150,7 +1175,7 @@ class TestTrayRestartCommand:
         ):
             assert cli.main() == 0
 
-        assert handle.call_args.args[0].wait_for_pid == 12345
+        assert handle.call_args.args[0].wait_for_tray_lock_release == 12345
 
 
 class TestPromptAskProjectPath:

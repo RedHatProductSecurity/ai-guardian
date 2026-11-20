@@ -110,9 +110,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scan findings history guidance (#2798):** Explain in CLI output and help that
   hook findings are logged as events while standalone scans are report-only by
   default; document the explicit `--log-violations` opt-in without exposing details.
-- **Tray restart handoff (#2797):** Keep the tray lock until its icon loop exits
-  and make menu-triggered replacements wait for the old process to terminate,
-  preventing overlapping tray instances and duplicate daemon startup activity.
+- **Tray restart handoff (#2797, #2815):** Keep the tray lock until its icon loop
+  exits and start a replacement as soon as that lock is released, rather than
+  waiting for unrelated process cleanup; the lock still prevents overlapping tray
+  instances.
 - **Kilo orphan recovery:** Include the generated Kilo plugin, shared bridge, and
   owned MCP registration in the selected user or explicit project cleanup scope.
 - **Web Console configuration (#2782):** Apply `console.web.host` and

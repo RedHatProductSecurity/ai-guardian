@@ -191,7 +191,7 @@ class TestTrayRestartHandoff:
             "ai-guardian",
             "tray",
             "start",
-            "--wait-for-pid",
+            "--wait-for-tray-lock-release",
             "4321",
         ]
 
@@ -3215,7 +3215,7 @@ class TestIsTrayRunningReturnsPid:
         lock.write_text("999999999")
         with (
             mock.patch("ai_guardian.tray.app._get_tray_lock_path", return_value=lock),
-            mock.patch("ai_guardian.daemon.is_pid_alive", return_value=False),
+            mock.patch("ai_guardian.daemon.is_pid_active", return_value=False),
         ):
             assert _is_tray_running() is False
             assert not lock.exists()
