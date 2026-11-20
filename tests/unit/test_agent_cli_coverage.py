@@ -88,6 +88,19 @@ def test_ledger_matches_actual_release_readiness_invocations_and_versions(runner
         if step.get("name", "").startswith("Build Kilo")
     )
     assert f"@kilocode/cli@{runner.KILO_VERSION}" in kilo_image["run"]
+    kilo_dockerfile = kilo_image["run"].split("<<'EOF'\n", 1)[1].split("\nEOF", 1)[0]
+    assert (
+        "mkdir -p /sandbox/.local/state/kilo /sandbox/.local/share/kilo/state"
+        in kilo_dockerfile
+    )
+    assert (
+        "chown -R sandbox:sandbox /sandbox/.local/state/kilo /sandbox/.local/share/kilo"
+        in kilo_dockerfile
+    )
+    assert kilo_dockerfile.index("chown -R sandbox:sandbox") < kilo_dockerfile.index(
+        "USER sandbox"
+    )
+    assert "RUN kilo --version" in kilo_dockerfile
     parity = workflow["jobs"]["multi-agent-setup"]["steps"]
     assert any(
         "tests/unit/test_agent_cli_coverage.py" in step.get("run", "")
