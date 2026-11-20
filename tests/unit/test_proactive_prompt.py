@@ -1597,6 +1597,35 @@ def test_codex_setup_result_reports_managed_hook_count():
     assert CODEX_COVERAGE_NOTE in notify.call_args.args[1]
 
 
+def test_kilo_setup_result_reports_plugin_artifact_not_callback_coverage(tmp_path):
+    verification = {
+        "healthy": True,
+        "events": {"plugin": "healthy"},
+        "obsolete": [],
+        "scope": "user",
+        "config_path": str(tmp_path / "plugin"),
+        "mcp_config_path": str(tmp_path / "kilo.json"),
+        "mcp_installed": True,
+    }
+
+    with patch("ai_guardian.tray.plugins.send_notification") as notify:
+        TrayHealthMonitor._notify_ide_setup_result(
+            [{"ide": "kilo", "success": True, "verification": verification}]
+        )
+
+    message = notify.call_args.args[1]
+    assert "1/1 plugin artifacts configured (not callback coverage)" in message
+    assert "Plugin directory (user scope)" in message
+    assert "MCP registration is separate" in message
+    assert "`chat.message` (prompt scanning)" in message
+    assert "complete callback coverage is not verified" in message
+    assert (
+        "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+        "post-tool redaction manually confirmed; pre-tool enforcement, "
+        "post-tool fixed-refusal delivery and broader results remain unverified"
+    ) in message
+
+
 def test_setup_result_uses_final_verification_health_over_setup_return():
     verification = {
         "healthy": True,

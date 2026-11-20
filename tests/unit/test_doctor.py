@@ -740,6 +740,63 @@ class TestCheckHooks:
         )
         assert opencode["status"] == CheckStatus.WARN.value
 
+    def test_kilo_health_summary_separates_plugin_artifact_and_mcp(
+        self, _isolate_config_dir, tmp_path
+    ):
+        plugin_dir = tmp_path / "kilo" / "plugin"
+        plugin_dir.mkdir(parents=True)
+        mcp_config = tmp_path / "kilo" / "kilo.json"
+        verification = {
+            "healthy": True,
+            "hooks_healthy": True,
+            "events": {"plugin": "healthy"},
+            "obsolete": [],
+            "diagnostics": [],
+            "scope": "auto",
+            "config_path": str(plugin_dir),
+            "mcp_status": "healthy",
+            "mcp_installed": True,
+            "mcp_config_path": str(mcp_config),
+        }
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["kilo"],
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.get_config_path",
+                return_value=str(plugin_dir),
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.verify_ide_setup",
+                return_value=verification,
+            ),
+            mock.patch.object(
+                Doctor,
+                "_detect_cli_runtime",
+                return_value={"executable": "kilo", "version": "7.8.27"},
+            ),
+        ):
+            result = Doctor().check_hooks()
+
+        assert result.status == CheckStatus.PASS
+        assert "1/1 plugin artifacts configured (not callback coverage)" in (
+            result.message
+        )
+        assert f"plugin directory (user scope): {plugin_dir}" in result.message
+        assert f"MCP: healthy; separate mcp entry in {mcp_config}" in result.message
+        assert "hook entries are not stored in JSON/JSONC config" in result.message
+        assert "chat.message (prompt scanning)" in result.message
+        assert "complete callback coverage not verified" in result.message
+        assert (
+            "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+            "post-tool redaction manually confirmed; pre-tool enforcement, "
+            "post-tool fixed-refusal delivery and broader results remain unverified"
+            in result.message
+        )
+        assert "CLI: kilo 7.8.27" in result.message
+
     def test_opencode_healthy_setup_is_reported_configured(
         self, _isolate_config_dir, tmp_path, monkeypatch
     ):

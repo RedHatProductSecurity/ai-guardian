@@ -21,9 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kilo Code CLI integration:** Add a Kilo-identified V1 plugin bridge, user and
   project setup, native `mcp` configuration, protected-config inventory, and
   installer detection, plus automatic scanning for documented Kilo skill roots.
-  Source-reviewed against Kilo CLI 7.8.27; native execution, enforcement, and
-  result delivery remain unqualified, with safe post-output replacement
-  unsupported.
+  Connect the documented `chat.message` callback to prompt scanning and safe
+  prompt-part replacement. Implement `tool.execute.after` rewriting with verified
+  sanitized output or a fixed refusal for blocked/invalid results. Source-reviewed
+  against Kilo CLI 7.8.27; user-reported native tests confirmed a blocked
+  synthetic prompt was replaced with a refusal and Bash post-tool output was
+  sanitized. The required full OpenCode-applicable matrix passed for Kilo 7.8.27
+  on 2026-11-20 in [Release Readiness run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315)
+  on `ubuntu-26.04`; all 14 applicable cases and correlated MCP-version evidence
+  passed. Smoke image manifest: `sha256:c890fa25bbba6d71c53955a245e7233c5524c0db474f471720ccbe302dcfdf86`.
+  Prompt replacement is not model-turn cancellation, and product container/OpenShell
+  runtime qualification remains separate.
 - **Violation outcome metadata (#2781):** Persist the effective action and
   redaction status in violation JSONL records; display validated outcomes as
   rounded badges in the Web Console (including the `tui` alias) and bracketed
@@ -127,6 +135,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retrying with the same explicit source UUID after the prior source was deleted.
 
 ### Changed
+- **Kilo setup and health messaging:** Label the count as a managed plugin
+  artifact rather than hook or callback coverage, show the effective plugin
+  location, and distinguish `chat.message` prompt scanning and tool callbacks
+  from the separate MCP entry in Kilo's JSON/JSONC config. Retain the native
+  activation, enforcement, prompt-refusal, and result-delivery caveat.
 - **MCP server lifecycle documentation (#2812):** Clarify stdio process ownership,
   shutdown and reconnect triggers, daemon independence, and the effect of removing
   a registration while a host may still have an active connection.

@@ -260,6 +260,90 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
     assert "runtime load not verified" in structured_opencode["message"]
 
 
+def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
+    """
+    USER EXPERIENCE: Kilo health row -> distinguish the plugin from MCP/config.
+
+    Scenario:
+    1. Doctor verifies one Kilo plugin artifact and the separate MCP entry.
+    2. The user reads the integration summary with the Kilo CLI version.
+
+    Expected User Experience:
+    - The 1/1 count identifies a plugin artifact, not callback coverage.
+    - The plugin directory and separate MCP config path are shown.
+    - Native synthetic prompt-to-refusal replacement and Bash post-tool redaction have been manually confirmed.
+    - Pre-tool enforcement, post-tool fixed-refusal delivery, and broader results remain unverified.
+    """
+    plugin_dir = tmp_path / "kilo" / "plugin"
+    plugin_dir.mkdir(parents=True)
+    mcp_config = tmp_path / "kilo" / "kilo.json"
+    verification = {
+        "healthy": True,
+        "hooks_healthy": True,
+        "events": {"plugin": "healthy"},
+        "obsolete": [],
+        "diagnostics": [],
+        "scope": "auto",
+        "config_path": str(plugin_dir),
+        "mcp_status": "healthy",
+        "mcp_installed": True,
+        "mcp_config_path": str(mcp_config),
+    }
+
+    with (
+        patch(
+            "ai_guardian.setup.IDESetup.list_detected_ides",
+            return_value=["kilo"],
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.get_config_path",
+            return_value=str(plugin_dir),
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.verify_ide_setup",
+            return_value=verification,
+        ),
+        patch.object(
+            Doctor,
+            "_detect_cli_runtime",
+            return_value={"executable": "kilo", "version": "7.8.27"},
+        ),
+    ):
+        result = Doctor().check_hooks()
+
+    assert result.status == CheckStatus.PASS
+    message = result.message
+    assert "1/1 plugin artifacts configured (not callback coverage)" in message
+    assert f"plugin directory (user scope): {plugin_dir}" in message
+    assert "hook entries are not stored in JSON/JSONC config" in message
+    assert f"MCP: healthy; separate mcp entry in {mcp_config}" in message
+    assert "chat.message (prompt scanning)" in message
+    assert "tool.execute.before" in message
+    assert "tool.execute.after" in message
+    assert "complete callback coverage not verified" in message
+    assert (
+        "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+        "post-tool redaction manually confirmed; pre-tool enforcement, "
+        "post-tool fixed-refusal delivery and broader results remain unverified"
+        in message
+    )
+    assert "CLI: kilo 7.8.27" in message
+
+    report = DoctorReport(checks=[result])
+    human = format_human(report)
+    assert "1/1 plugin artifacts configured (not callback coverage)" in human
+    assert str(plugin_dir) in human
+    assert (
+        "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+        "post-tool redaction manually confirmed; pre-tool enforcement, "
+        "post-tool fixed-refusal delivery and broader results remain unverified"
+        in human
+    )
+    structured = json.loads(format_json(report))["checks"][0]["integrations"]
+    kilo = next(item for item in structured if item["ide"] == "kilo")
+    assert kilo["message"] in message
+
+
 @pytest.mark.parametrize(
     ("version", "expected_advisory"),
     [
@@ -1881,6 +1965,132 @@ def test_setup_result_uses_final_verification_health():
     message = notify.call_args.args[1]
     assert "[PASS] Claude Code: 1/1 hooks configured" in message
     assert "setup failed" not in message
+
+
+@pytest.mark.parametrize("scope", ["user", "project"])
+def test_kilo_setup_result_distinguishes_plugin_artifact_and_callbacks(scope, tmp_path):
+    """
+    USER EXPERIENCE: Kilo setup -> report plugin artifact, location, and MCP separately.
+
+    Scenario:
+    1. Kilo setup verifies its auto-discovered plugin artifact.
+    2. The tray formats the final setup result for user or project scope.
+
+    Expected User Experience:
+    - The 1/1 count is clearly a plugin-artifact count, not callback coverage.
+    - The plugin location and separate Kilo MCP JSON/JSONC config are identified.
+    - Native synthetic prompt-to-refusal replacement and Bash post-tool redaction have been manually confirmed.
+    - Pre-tool enforcement, post-tool fixed-refusal delivery, and broader results remain unverified.
+    """
+    plugin_dir = tmp_path / (".kilo/plugin" if scope == "project" else "user/plugin")
+    mcp_config = tmp_path / ("kilo.json" if scope == "project" else "user/kilo.json")
+    verification = {
+        "healthy": True,
+        "events": {"plugin": "healthy"},
+        "obsolete": [],
+        "scope": scope,
+        "config_path": str(plugin_dir),
+        "mcp_config_path": str(mcp_config),
+        "mcp_installed": True,
+    }
+
+    with patch("ai_guardian.tray.plugins.send_notification") as notify:
+        TrayHealthMonitor._notify_ide_setup_result(
+            [{"ide": "kilo", "success": True, "verification": verification}]
+        )
+
+    message = notify.call_args.args[1]
+    assert (
+        "[PASS] Kilo Code: 1/1 plugin artifacts configured (not callback coverage)"
+        in message
+    )
+    assert f"Plugin directory ({scope} scope): {plugin_dir}" in message
+    assert (
+        "MCP registration is separate, under `mcp` in the Kilo JSON/JSONC config"
+        in message
+    )
+    assert str(mcp_config) in message
+    assert "`chat.message` (prompt scanning)" in message
+    assert "`tool.execute.before`" in message
+    assert "`tool.execute.after`" in message
+    assert "complete callback coverage is not verified" in message
+    assert (
+        "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+        "post-tool redaction manually confirmed; pre-tool enforcement, "
+        "post-tool fixed-refusal delivery and broader results remain unverified"
+    ) in message
+
+
+def test_kilo_setup_output_explains_plugin_artifact_and_separate_mcp(tmp_path, capsys):
+    """
+    USER EXPERIENCE: Kilo setup -> install a plugin, not JSON hook entries.
+
+    Scenario:
+    1. User selects project-scoped Kilo setup.
+    2. Setup writes the auto-discovered plugin and separately registers MCP.
+
+    Expected User Experience:
+    - Output names the one managed plugin and its lifecycle callbacks.
+    - It explains that plugin discovery does not add hook entries to Kilo config.
+    - It identifies the separate MCP `mcp` entry and preserves the runtime caveat.
+    """
+    from ai_guardian.setup import _setup_single_ide
+
+    project_dir = tmp_path / "kilo-project"
+    project_dir.mkdir()
+    setup = IDESetup()
+
+    with (
+        patch.object(
+            setup, "verify_gitleaks_installed", return_value=(True, "Gitleaks ready")
+        ),
+        patch(
+            "ai_guardian.setup.hooks._resolve_binary_path",
+            return_value="/usr/bin/ai-guardian",
+        ),
+        patch(
+            "ai_guardian.setup.mcp._resolve_binary_path",
+            return_value="/usr/bin/ai-guardian",
+        ),
+        patch("ai_guardian.setup.mcp._register_mcp_identity"),
+    ):
+        success = _setup_single_ide(
+            setup,
+            "kilo",
+            dry_run=False,
+            force=False,
+            no_mcp=None,
+            rules=None,
+            scope="project",
+            project_dir=str(project_dir),
+        )
+
+    output = capsys.readouterr().out
+    plugin_file = project_dir / ".kilo/plugin/ai-guardian.ts"
+    mcp_config = project_dir / "kilo.json"
+    assert success is True
+    assert plugin_file.is_file()
+    assert f"Successfully configured Kilo Code plugin at {plugin_file}" in output
+    assert "Managed artifact: one auto-discovered plugin" in output
+    assert "`chat.message` for prompt scanning" in output
+    assert "`tool.execute.before`" in output
+    assert "`tool.execute.after`" in output
+    assert "no plugin entry is written to its JSON/JSONC config" in output
+    assert "MCP registration is managed separately under `mcp`" in output
+    assert f"MCP: Added ai-guardian MCP server to {mcp_config}" in output
+    assert (
+        "synthetic prompt-to-refusal replacement and Bash post-tool redaction "
+        "manually confirmed" in output
+    )
+    assert "pre-tool enforcement" in output
+    assert "remain unverified" in output
+
+    config = json.loads(mcp_config.read_text(encoding="utf-8"))
+    assert "hooks" not in config
+    assert config["mcp"]["ai-guardian"]["command"] == [
+        "/usr/bin/ai-guardian",
+        "mcp-server",
+    ]
 
 
 def test_codex_setup_reports_only_managed_hook_count():

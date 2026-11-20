@@ -44,12 +44,21 @@ MOCK_ANTHROPIC_BASE_URL = f"http://127.0.0.1:{MOCK_PORT}"
 MOCK_KEY = "ai-guardian-local-smoke-only"
 GROK_VERSION = "1.0.63"
 GOOSE_VERSION = "1.59.0"
-RUNNABLE_CLI_NAMES = ("claude", "codex", "gemini", "opencode", "pi", "grok", "goose")
+KILO_VERSION = "7.8.27"
+RUNNABLE_CLI_NAMES = (
+    "claude",
+    "codex",
+    "gemini",
+    "opencode",
+    "kilo",
+    "pi",
+    "grok",
+    "goose",
+)
 BLOCKED_SMOKE_CLIS = {
     "copilot": "consent_and_hook_qualification",
     "antigravity": "consent_and_versioned_installation",
     "kiro": "no_documented_local_provider",
-    "kilo": "native_plugin_qualification",
     "openclaw": "native_plugin_qualification",
     "crush": "license_review_required",
 }
@@ -57,10 +66,18 @@ PARTIAL_SMOKE_CLIS = frozenset({"grok", "goose"})
 MCP_VERSION_CASES = frozenset({"mcp_version"})
 # Keep this explicit: adding a runnable CLI must not silently claim MCP support.
 # Goose's isolated smoke setup deliberately uses --no-mcp.
-MCP_VERSION_SMOKE_CLIS = ("claude", "codex", "gemini", "opencode", "pi", "grok")
+MCP_VERSION_SMOKE_CLIS = (
+    "claude",
+    "codex",
+    "gemini",
+    "opencode",
+    "kilo",
+    "pi",
+    "grok",
+)
 # These clients keep MCP results inside local stdio rather than forwarding them
 # in a provider continuation. Grok's `use_tool` result remains local as well.
-MCP_EVIDENCE_PROXY_SMOKE_CLIS = frozenset({"gemini", "grok", "opencode", "pi"})
+MCP_EVIDENCE_PROXY_SMOKE_CLIS = frozenset({"gemini", "grok", "opencode", "kilo", "pi"})
 # Goose is host-only in the product registry. Its smoke uses a supplied,
 # disposable test image, not the supported sandbox create/entrypoint path.
 PRE_TOOL_SMOKE_CASE_NAMES = frozenset(
@@ -138,7 +155,7 @@ CASES = (
         "Use the native Write tool to create the requested local diagnostic.",
         "http_request_credential_detected",
         True,
-        ("claude", "opencode"),
+        ("claude", "opencode", "kilo"),
     ),
     SmokeCase(
         "http_request_credential_clean",
@@ -146,7 +163,7 @@ CASES = (
         "Use the native Write tool to create the requested local diagnostic.",
         None,
         True,
-        ("claude", "opencode"),
+        ("claude", "opencode", "kilo"),
     ),
     SmokeCase(
         "http_request_credential_js",
@@ -154,7 +171,7 @@ CASES = (
         "Use the native Write tool to create the requested local diagnostic.",
         "http_request_credential_detected",
         True,
-        ("claude", "opencode"),
+        ("claude", "opencode", "kilo"),
     ),
     SmokeCase(
         "http_request_credential_ts_clean",
@@ -162,7 +179,7 @@ CASES = (
         "Use the native Write tool to create the requested local diagnostic.",
         None,
         True,
-        ("claude", "opencode"),
+        ("claude", "opencode", "kilo"),
     ),
     SmokeCase(
         "clean_tool",
@@ -235,9 +252,11 @@ if cli == 'codex':
           '[model_providers.ai_guardian_smoke]\nname = "AI Guardian local mock"\n'
           f'base_url = "{url}"\nwire_api = "responses"\nenv_key = "OPENAI_API_KEY"\n')
     (home/f'{agent}.config.toml').write_text(text, encoding='utf-8')
-elif cli == 'opencode':
-    d=Path.home()/'.config'/'opencode'; d.mkdir(parents=True, exist_ok=True)
-    path=d/'opencode.json'; cfg={}
+elif cli in ('opencode', 'kilo'):
+    config_dir = '.config/opencode' if cli == 'opencode' else '.config/kilo'
+    config_name = 'opencode.json' if cli == 'opencode' else 'kilo.json'
+    d=Path.home()/config_dir; d.mkdir(parents=True, exist_ok=True)
+    path=d/config_name; cfg={}
     if path.is_file():
         try: cfg=json.loads(path.read_text(encoding='utf-8'))
         except (OSError, json.JSONDecodeError): cfg={}
@@ -783,6 +802,19 @@ def build_agent_command(
             # the disposable home contains exactly the generated smoke hooks.
             # It does not persist Codex hook trust state.
             "--dangerously-bypass-hook-trust",
+            prompt,
+        ]
+    if cli_name == "kilo":
+        return [
+            "kilo",
+            "run",
+            "--agent",
+            agent,
+            "--auto",
+            "--format",
+            "json",
+            "--model",
+            f"ai_guardian_smoke/{MOCK_MODEL}",
             prompt,
         ]
     if cli_name == "opencode":
@@ -2477,6 +2509,28 @@ def _run_case(
         )
     if case.name == "command_credential" and tool_deltas.get("executed", 0) != 0:
         return fail("command credential probe executed despite pre-tool denial")
+    if cli == "kilo" and is_tool_case:
+        native_name = "write" if case.name in HTTP_REQUEST_CREDENTIAL_CASES else "bash"
+        native_field = (
+            f"native_file_write_tool_name_{native_name}"
+            if native_name == "write"
+            else f"native_tool_name_{native_name}"
+        )
+        if tool_deltas.get(native_field, 0) < 1:
+            return fail(
+                "the expected native Kilo tool was not confirmed by the local mock"
+            )
+        if tool_deltas.get("correlated_tool_results", 0) < 1:
+            return fail("the issued Kilo tool result did not reach the local mock")
+        if request_delta < 2:
+            return fail("Kilo did not continue after the native tool result")
+        if invocation.returncode != 0:
+            return fail("Kilo did not complete the native tool-result turn cleanly")
+        if (
+            case.name in {"ssrf", "config_exfil"}
+            and tool_deltas.get("executed", 0) != 0
+        ):
+            return fail("the blocked Kilo pre-tool probe executed")
     if cli in PARTIAL_SMOKE_CLIS and is_tool_case:
         native_name = "shell" if cli == "goose" else "run_terminal_command"
         if tool_deltas.get(f"native_tool_name_{native_name}", 0) < 1:
@@ -2548,6 +2602,16 @@ def _run_case(
             return fail("CLI did not reach the local mock provider")
         if not case.expects_provider and request_delta != 0:
             return fail("blocked prompt reached the local mock provider")
+        if cli == "kilo" and case.name in {"prompt_injection", "secret", "pii"}:
+            refusal_delta = new_requests.get(
+                "kilo_prompt_refusal", 0
+            ) - old_requests.get("kilo_prompt_refusal", 0)
+            if refusal_delta < 1:
+                return fail(
+                    "the fixed Kilo prompt refusal did not reach the local mock"
+                )
+            if invocation.returncode != 0:
+                return fail("Kilo did not complete the prompt-refusal turn cleanly")
     else:
         if invocation.returncode != 0:
             if (
@@ -2628,6 +2692,36 @@ def _agent_error_category(invocation: subprocess.CompletedProcess) -> str:
         )
     ):
         return "transport"
+    return "unclassified"
+
+
+def _kilo_setup_failure_category(result: subprocess.CompletedProcess) -> str:
+    """Classify Kilo setup failures with fixed labels, never raw CLI output."""
+    output = "\n".join(
+        value for value in (result.stdout, result.stderr) if isinstance(value, str)
+    ).casefold()
+    if not output.strip():
+        return "no_diagnostic"
+    if "already configured" in output or "use --force to overwrite" in output:
+        return "managed_artifact_conflict"
+    if any(
+        marker in output
+        for marker in ("permission denied", "eacces", "read-only file system")
+    ):
+        return "filesystem_permission"
+    if any(
+        marker in output
+        for marker in ("invalid json", "invalid jsonc", "schema", "failed to parse")
+    ):
+        return "configuration_validation"
+    if "mcp" in output and any(
+        marker in output for marker in ("error", "failed", "stopped", "unable")
+    ):
+        return "mcp_setup"
+    if "ai-guardian binary not found in path" in output:
+        return "guardian_binary_missing"
+    if "error setting up ide hooks" in output:
+        return "setup_exception"
     return "unclassified"
 
 
@@ -2859,6 +2953,8 @@ def build_agent_environment(cli: str, *, opencode_v2: bool = False) -> List[str]
             # OpenCode V2 requires Basic auth for its server API. Keep one
             # synthetic password shared by the isolated service and clients.
             env.append(f"OPENCODE_SERVER_PASSWORD={MOCK_KEY}")
+    if cli == "kilo":
+        env.append("KILO_CONFIG_DIR=/sandbox/.config/kilo")
     if cli == "pi":
         env.append("PI_CODING_AGENT_DIR=/sandbox/.pi/agent")
     if cli == "claude":
@@ -2975,6 +3071,22 @@ def _verify_grok_version(engine: str, name: str, timeout: int) -> bool:
     return True
 
 
+def _verify_kilo_version(engine: str, name: str, timeout: int) -> bool:
+    """Fail closed unless the isolated image contains the reviewed Kilo CLI."""
+    result = _exec(engine, name, ["kilo", "--version"], timeout)
+    versions = re.findall(
+        r"(?<![0-9A-Za-z])\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?(?![0-9A-Za-z])",
+        "\n".join((result.stdout, result.stderr)),
+    )
+    if result.returncode != 0 or versions != [KILO_VERSION]:
+        print(
+            f"FAIL Kilo: the smoke image must contain audited Kilo {KILO_VERSION}; "
+            "no image was rebuilt."
+        )
+        return False
+    return True
+
+
 def build_goose_smoke_command(engine: str, image: str, name: str) -> List[str]:
     """No host mounts, inherited credentials, published ports, or external network."""
     command = [
@@ -2997,6 +3109,36 @@ def build_goose_smoke_command(engine: str, image: str, name: str) -> List[str]:
         "XDG_CONFIG_HOME=/sandbox/.config",
         "GOOSE_PATH_ROOT=/sandbox/goose-smoke",
         f"AI_GUARDIAN_STATE_DIR={STATE_DIR}",
+        "AI_GUARDIAN_CONFIG_DIR=/sandbox/.config/ai-guardian",
+        "AI_GUARDIAN_HEADLESS=true",
+    ):
+        command.extend(["--env", value])
+    return [*command, image, "infinity"]
+
+
+def build_kilo_smoke_command(engine: str, image: str, name: str) -> List[str]:
+    """Create a disposable Kilo CLI test container without product runtime claims."""
+    command = [
+        engine,
+        "run",
+        "--detach",
+        "--pull=never",
+        "--name",
+        name,
+        "--network=none",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--user",
+        "1000:1000",
+        "--entrypoint",
+        "sleep",
+    ]
+    for value in (
+        "HOME=/sandbox",
+        "XDG_CONFIG_HOME=/sandbox/.config",
+        "KILO_CONFIG_DIR=/sandbox/.config/kilo",
+        "KILO_TELEMETRY_LEVEL=off",
+        "AI_GUARDIAN_STATE_DIR=" + STATE_DIR,
         "AI_GUARDIAN_CONFIG_DIR=/sandbox/.config/ai-guardian",
         "AI_GUARDIAN_HEADLESS=true",
     ):
@@ -3091,6 +3233,110 @@ def _run_goose_smoke(args: argparse.Namespace) -> int:
                 )
 
 
+def _run_kilo_smoke(args: argparse.Namespace) -> int:
+    """Run Kilo's complete native CLI matrix in its own isolated test image."""
+    name = f"ag-cli-kilo-smoke-{uuid.uuid4().hex[:8]}"
+    created = False
+    try:
+        result = _run(
+            build_kilo_smoke_command(args.container_engine, args.image, name),
+            args.timeout,
+        )
+        if result.returncode != 0:
+            print("FAIL Kilo: could not create the isolated smoke container")
+            return 1
+        created = True
+        if not _verify_kilo_version(args.container_engine, name, args.timeout):
+            return 1
+
+        workspace = _exec(
+            args.container_engine,
+            name,
+            [
+                "python3",
+                "-c",
+                "from pathlib import Path; "
+                "repo=Path('/sandbox/repo'); repo.mkdir(parents=True, exist_ok=True); "
+                "(repo/'README.md').write_text('Disposable Kilo CLI smoke workspace.\\n', encoding='utf-8'); "
+                "witness=Path('/sandbox/repo/.agent-cli-smoke-results'); "
+                "witness.mkdir(mode=0o700, parents=True, exist_ok=True); "
+                "witness.chmod(0o700)",
+            ],
+            args.timeout,
+        )
+        if workspace.returncode != 0:
+            print("FAIL Kilo: unable to prepare the isolated CLI workspace")
+            return 1
+
+        with tempfile.TemporaryDirectory(
+            prefix="ai-guardian-kilo-smoke-", dir=_temp_parent()
+        ) as directory:
+            config_dir = Path(directory)
+            write_smoke_config(config_dir)
+            if not _write_file(
+                args.container_engine,
+                name,
+                "/sandbox/.config/ai-guardian/ai-guardian.json",
+                (config_dir / "ai-guardian.json").read_bytes(),
+                args.timeout,
+            ):
+                print("FAIL Kilo: unable to stage the isolated smoke configuration")
+                return 1
+
+        setup = _exec(
+            args.container_engine,
+            name,
+            ["ai-guardian", "setup", "--ide", "kilo", "--yes"],
+            args.timeout,
+            env=("KILO_CONFIG_DIR=/sandbox/.config/kilo",),
+        )
+        if setup.returncode != 0:
+            category = _kilo_setup_failure_category(setup)
+            print(
+                "FAIL Kilo: managed plugin and MCP setup failed "
+                f"(exit code {setup.returncode}; diagnostic category: {category})"
+            )
+            return 1
+        if not _configure_agent(
+            args.container_engine, name, "kilo", args.agent, args.timeout
+        ):
+            return 1
+        if not _start_mock(args.container_engine, name, args.timeout):
+            return 1
+
+        passed = True
+        for case in smoke_cases("kilo"):
+            passed = (
+                _run_case(
+                    args.container_engine,
+                    name,
+                    "kilo",
+                    args.agent,
+                    case,
+                    args.timeout,
+                )
+                and passed
+            )
+        _progress("Kilo full native CLI matrix " + ("passed." if passed else "failed."))
+        return 0 if passed else 1
+    except (OSError, subprocess.TimeoutExpired):
+        print("FAIL Kilo: smoke execution failed or timed out")
+        return 1
+    finally:
+        if created:
+            try:
+                removed = _run(
+                    [args.container_engine, "rm", "--force", name], args.timeout
+                )
+                cleanup_failed = removed.returncode != 0
+            except (OSError, subprocess.TimeoutExpired):
+                cleanup_failed = True
+            if cleanup_failed:
+                print(
+                    f"WARNING: unable to remove this run's Kilo smoke container: {name}"
+                )
+
+
 def _delete_sandbox(
     guardian: Sequence[str], engine: str, name: str, env: Dict[str, str], timeout: int
 ) -> None:
@@ -3146,7 +3392,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--image",
-        help="Existing image built from the current wheel (required for Goose's smoke-only image)",
+        help=(
+            "Existing image built from the current wheel (required for Goose and "
+            "Kilo smoke-only images)"
+        ),
     )
     parser.add_argument(
         "--wheel", type=Path, help="Wheel for a temporary current-source image"
@@ -3251,6 +3500,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error(
             "Goose requires --image with the current wheel and Goose 1.59.0; --keep and --wheel are not supported"
         )
+    if args.cli_name == "kilo" and (not args.image or args.keep or args.wheel):
+        parser.error(
+            "Kilo requires --image with the current wheel and Kilo "
+            f"{KILO_VERSION}; --keep and --wheel are not supported"
+        )
     try:
         _validate_agent(args.cli_name, args.agent)
         guardian = _split_command(args.ai_guardian_command)
@@ -3265,6 +3519,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.cli_name == "goose":
         return _run_goose_smoke(args)
+    if args.cli_name == "kilo":
+        return _run_kilo_smoke(args)
 
     root = Path(tempfile.mkdtemp(prefix="ai-guardian-agent-cli-", dir=_temp_parent()))
     home = root / "empty-home"

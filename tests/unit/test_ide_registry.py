@@ -17,7 +17,11 @@ from ai_guardian.hook_adapters import (
     detect_adapter,
 )
 from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
+from ai_guardian.hook_adapters.kilo import KiloAdapter
 from ai_guardian.hook_adapters.base import NormalizedHookInput
+from ai_guardian.hook_events.post_tool_use import (
+    _supports_safe_post_output_replacement,
+)
 from ai_guardian.ide_registry import (
     ALL_IDE_TYPES,
     SUPPORTED_CLI_IDE_TYPES,
@@ -79,7 +83,31 @@ def test_safe_post_output_replacement_is_limited_to_verified_integrations():
         if integration.safe_post_output_replacement
     }
 
-    assert safe_integrations == {"claude", "cursor", "aiderdesk", "opencode", "pi"}
+    assert safe_integrations == {
+        "claude",
+        "cursor",
+        "aiderdesk",
+        "opencode",
+        "kilo",
+        "pi",
+    }
+
+
+def test_kilo_post_tool_replacement_uses_native_string_output_shape():
+    response = KiloAdapter().format_response(
+        has_secrets=False,
+        hook_event=HookEvent.POST_TOOL_USE,
+        warning_message="Synthetic finding",
+        modified_output="sanitized output",
+        tool_name="Bash",
+    )
+
+    payload = json.loads(response["output"])
+    hook_output = payload["hookSpecificOutput"]
+    assert hook_output["updatedToolOutput"] == "sanitized output"
+    assert isinstance(hook_output["updatedToolOutput"], str)
+    integration = next(item for item in SUPPORTED_IDE_REGISTRY if item.key == "kilo")
+    assert integration.safe_post_output_replacement is True
 
 
 def test_safe_prompt_replacement_is_limited_to_verified_integrations():
@@ -89,7 +117,7 @@ def test_safe_prompt_replacement_is_limited_to_verified_integrations():
         if integration.safe_prompt_replacement
     }
 
-    assert safe_integrations == {"opencode"}
+    assert safe_integrations == {"opencode", "kilo"}
 
 
 def test_cli_capable_integrations_have_executable_and_identity_metadata():
@@ -174,14 +202,20 @@ def test_gemini_registry_marks_aftertool_refusal_as_nontransforming():
     assert "not safe output replacement" in integration.platform_contract
 
 
-def test_kilo_registry_separates_transform_support_from_safe_replacement():
+def test_kilo_registry_records_verified_post_output_replacement():
     integration = next(item for item in SUPPORTED_IDE_REGISTRY if item.key == "kilo")
 
     assert integration.post_output_transform is True
-    assert integration.safe_post_output_replacement is False
-    assert integration.safe_prompt_replacement is False
+    assert integration.safe_post_output_replacement is True
+    assert integration.safe_prompt_replacement is True
     assert "7.8.27" in integration.platform_contract
+    assert "prompt-to-refusal replacement" in integration.platform_contract
     assert "qualification pending" in integration.platform_contract
+
+
+def test_kilo_safe_post_output_replacement_is_limited_to_verified_bash_path():
+    assert _supports_safe_post_output_replacement("kilo", "Bash") is True
+    assert _supports_safe_post_output_replacement("kilo", "read") is False
 
 
 def test_kilo_plugin_payload_keeps_kilo_identity_and_normalizes_v1_file_input(

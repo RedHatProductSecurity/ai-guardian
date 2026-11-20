@@ -838,10 +838,17 @@ class TrayHealthMonitor:
             counts[status] += 1
 
             name = TrayHealthMonitor._ide_display_name(ide_type)
-            if total:
+            if ide_type == "kilo" and total:
+                detail = (
+                    f"{configured}/{total} plugin artifacts configured "
+                    "(not callback coverage)"
+                )
+            elif total:
                 detail = f"{configured}/{total} hooks configured"
             elif verification is None:
                 detail = "verification unavailable"
+            elif ide_type == "kilo":
+                detail = "no plugin artifact reported"
             else:
                 detail = "no hooks reported"
             if status == "WARN":
@@ -850,15 +857,41 @@ class TrayHealthMonitor:
                     f"{TrayHealthMonitor._verification_attention(verification)})"
                 )
             if isinstance(verification, dict):
-                installation_scope = verification.get("installation_scope")
-                effective_scope = verification.get("effective_scope")
-                if installation_scope:
-                    scope_detail = installation_scope
-                    if effective_scope and effective_scope != installation_scope:
-                        scope_detail += f"; effective: {effective_scope}"
-                    detail += f"; scope: {scope_detail}"
-                elif effective_scope and effective_scope != "none":
-                    detail += f"; scope: {effective_scope}"
+                if ide_type == "kilo":
+                    plugin_scope = verification.get("installation_scope") or (
+                        verification.get("scope") or "user"
+                    )
+                    if plugin_scope == "auto":
+                        plugin_scope = "user"
+                    plugin_path = verification.get("config_path")
+                    if plugin_path:
+                        detail += (
+                            f"\n  Plugin directory ({plugin_scope} scope): "
+                            f"{plugin_path}"
+                        )
+                    mcp_config_path = verification.get("mcp_config_path")
+                    mcp_location = f": {mcp_config_path}" if mcp_config_path else ""
+                    detail += (
+                        "\n  MCP registration is separate, under `mcp` in the "
+                        f"Kilo JSON/JSONC config{mcp_location}"
+                        "\n  Declared callbacks: `chat.message` (prompt scanning), "
+                        "`tool.execute.before`, and `tool.execute.after`; complete "
+                        "callback coverage is not verified"
+                        "\n  Kilo 7.8.27 native synthetic prompt-to-refusal "
+                        "replacement and Bash post-tool redaction manually "
+                        "confirmed; pre-tool enforcement, post-tool fixed-refusal "
+                        "delivery and broader results remain unverified"
+                    )
+                else:
+                    installation_scope = verification.get("installation_scope")
+                    effective_scope = verification.get("effective_scope")
+                    if installation_scope:
+                        scope_detail = installation_scope
+                        if effective_scope and effective_scope != installation_scope:
+                            scope_detail += f"; effective: {effective_scope}"
+                        detail += f"; scope: {scope_detail}"
+                    elif effective_scope and effective_scope != "none":
+                        detail += f"; scope: {effective_scope}"
             if ide_type == "codex":
                 detail += f"; {CODEX_COVERAGE_NOTE}"
             lines.append(f"[{status}] {name}: {detail}")

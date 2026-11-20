@@ -278,6 +278,103 @@ def test_opencode_prompt_secret_is_redacted_and_diagnostic_remains_visible(
     assert secret_value not in json.dumps(payload)
 
 
+def test_kilo_chat_message_secret_is_redacted_before_prompt_submission(
+    isolated_hook_config, monkeypatch
+):
+    """USER EXPERIENCE: Kilo's chat.message submits only sanitized prompt text."""
+    monkeypatch.setattr(
+        "ai_guardian.hook_processing.is_non_blocking_findings_enabled",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "ai_guardian.config.loaders._load_secret_scanning_config",
+        lambda: ({"enabled": True}, None),
+    )
+    secret_value = "SYNTHETIC_SECRET_MARKER_2755"
+    diagnostic = "Synthetic secret-scanner diagnostic"
+    monkeypatch.setattr(
+        "ai_guardian.scanners.pipeline.scan_content",
+        lambda *args, **kwargs: [
+            ScanResult(
+                detected=True,
+                violation_type=ViolationType.SECRET_DETECTED,
+                should_block=True,
+                error_message=diagnostic,
+                matched_text=secret_value,
+                extra={"action": "block", "scanner_name": "secret"},
+            )
+        ],
+    )
+    submitted_prompt = f"Please inspect this synthetic value: {secret_value}"
+    hook = {
+        "hook_event_name": "UserPromptSubmit",
+        "hook_source": "kilo",
+        "kilo_plugin_api": "v1",
+        "prompt": submitted_prompt,
+        "session_id": "synthetic-kilo-session",
+        "cwd": "/tmp",
+    }
+
+    result = process_hook_data(hook)
+    payload = json.loads(result["output"])
+
+    assert result.get("_blocked") is not True
+    assert payload.get("updatedPrompt") == (
+        "Please inspect this synthetic value: [REDACTED]"
+    )
+    assert diagnostic in payload.get("systemMessage", "")
+    assert "non-blocking findings option" in payload.get("systemMessage", "")
+    assert submitted_prompt not in json.dumps(payload)
+    assert secret_value not in json.dumps(payload)
+
+
+def test_kilo_chat_message_secret_is_blocked_before_prompt_submission(
+    isolated_hook_config, monkeypatch
+):
+    """USER EXPERIENCE: Kilo's default prompt path blocks detected secrets."""
+    monkeypatch.setattr(
+        "ai_guardian.hook_processing.is_non_blocking_findings_enabled",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "ai_guardian.config.loaders._load_secret_scanning_config",
+        lambda: ({"enabled": True}, None),
+    )
+    secret_value = "SYNTHETIC_SECRET_MARKER_2756"
+    diagnostic = "Synthetic secret-scanner diagnostic"
+    monkeypatch.setattr(
+        "ai_guardian.scanners.pipeline.scan_content",
+        lambda *args, **kwargs: [
+            ScanResult(
+                detected=True,
+                violation_type=ViolationType.SECRET_DETECTED,
+                should_block=True,
+                error_message=diagnostic,
+                matched_text=secret_value,
+                extra={"action": "block", "scanner_name": "secret"},
+            )
+        ],
+    )
+    submitted_prompt = f"Please inspect this synthetic value: {secret_value}"
+    hook = {
+        "hook_event_name": "UserPromptSubmit",
+        "hook_source": "kilo",
+        "kilo_plugin_api": "v1",
+        "prompt": submitted_prompt,
+        "session_id": "synthetic-kilo-session",
+        "cwd": "/tmp",
+    }
+
+    result = process_hook_data(hook)
+    payload = json.loads(result["output"])
+
+    assert result.get("_blocked") is True
+    assert payload.get("decision") == "block"
+    assert diagnostic in payload.get("systemMessage", "")
+    assert submitted_prompt not in json.dumps(payload)
+    assert secret_value not in json.dumps(payload)
+
+
 def test_opencode_prompt_pii_is_redacted_when_trusted_session_is_enabled(
     isolated_hook_config, monkeypatch
 ):

@@ -279,11 +279,11 @@ def _patch_json_config(path: Path, cli: str, proxy_path: str) -> bool:
     if cli in {"claude", "gemini"}:
         servers = config.get("mcpServers")
         entry = servers.get("ai-guardian") if isinstance(servers, dict) else None
-    elif cli == "opencode":
+    elif cli in {"opencode", "kilo"}:
         mcp = config.get("mcp")
         opencode_v2_servers = mcp.get("servers") if isinstance(mcp, dict) else None
         if isinstance(mcp, dict):
-            servers = opencode_v2_servers
+            servers = opencode_v2_servers if cli == "opencode" else None
             entry = (
                 servers.get("ai-guardian")
                 if isinstance(servers, dict)
@@ -294,7 +294,7 @@ def _patch_json_config(path: Path, cli: str, proxy_path: str) -> bool:
 
     server_command = entry.get("command")
     server_args = entry.get("args", [])
-    if cli == "opencode":
+    if cli in {"opencode", "kilo"}:
         if not isinstance(server_command, list) or not server_command:
             raise ValueError("AI Guardian MCP command is not a string list")
         version_command = server_command[0]
@@ -323,7 +323,7 @@ def _patch_json_config(path: Path, cli: str, proxy_path: str) -> bool:
         entry,
         proxy_path,
         expected_version,
-        command_array=(cli == "opencode"),
+        command_array=(cli in {"opencode", "kilo"}),
     )
     if wrapped_changed or config_changed:
         path.write_text(json.dumps(config), encoding="utf-8")
@@ -498,9 +498,11 @@ def _install_proxy(cli: str, home: Path, pi_agent_dir: Optional[Path]) -> int:
             changed = _patch_json_config(
                 home / ".gemini" / "settings.json", cli, proxy_path
             )
-        elif cli == "opencode":
+        elif cli in {"opencode", "kilo"}:
+            config_root = ".config/opencode" if cli == "opencode" else ".config/kilo"
+            config_name = "opencode.json" if cli == "opencode" else "kilo.json"
             changed = _patch_json_config(
-                home / ".config" / "opencode" / "opencode.json", cli, proxy_path
+                home / config_root / config_name, cli, proxy_path
             )
         elif cli in {"codex", "grok"}:
             config_path = (
@@ -538,7 +540,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("install", choices=("install",))
     parser.add_argument(
         "--cli",
-        choices=("claude", "codex", "gemini", "opencode", "pi", "grok"),
+        choices=("claude", "codex", "gemini", "opencode", "kilo", "pi", "grok"),
         required=True,
     )
     parser.add_argument("--home", type=Path, default=Path.home())

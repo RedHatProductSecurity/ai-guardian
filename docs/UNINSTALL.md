@@ -165,8 +165,9 @@ entrypoint is still registered.
 ## Missing-runtime lifecycle matrix
 
 Existing rows reflect source/setup contracts and isolated recovery tests as of
-**2026-10-24**; Kilo's row reflects the source/setup review and recovery coverage
-added **2026-11-18**. This is **not live host qualification**. `U` means the host's exact UI/exit/continuation
+**2026-10-24**; Kilo's row also records its source/setup review and recovery
+coverage from **2026-11-18** and full-matrix smoke evidence from **2026-11-20**.
+This is **not live host qualification**. `U` means the host's exact UI/exit/continuation
 behavior has **not been experimentally verified** for any of these three cases:
 missing pinned executable, missing interpreter, missing launcher/module. All three
 prevent the unavailable application from returning its normal decision. A surviving
@@ -196,7 +197,7 @@ retry/continuation unverified. `—`: no managed surface for that stage.
 | OpenClaw (`openclaw`) | L/U | L/U | L/U | L/U | M/U if configured | Plugin discovery and child-process failure are separate boundaries |
 | OpenCode V1/V2 (`opencode`) | L/U | L/U | L/U | L/U | M/U if configured | V1 explicit registration and V2 auto-discovery; V2 MCP uses `mcp.servers` |
 | Pi (`pi`) | L/U | L/U | L/U | L/U | L/U | Managed extension owns hooks and registers MCP through Pi's native extension API; no separate MCP settings file |
-| Kilo Code CLI (`kilo`) | — | — | L/U | L/U | M/U | V1 tool callbacks; native tool enforcement, CLI execution, and result delivery remain unqualified |
+| Kilo Code CLI (`kilo`) | — | — | L/U | L/U | M/U | Required full OpenCode-applicable CLI smoke passed for Kilo 7.8.27 in Release Readiness run 44684917315; missing-runtime lifecycle outcomes and product container/OpenShell qualification remain unverified |
 | Augment (`augment`) | — | — | H/U | — | M/U if configured | Pre/post-tool hook integration |
 | Crush (`crush`) | — | — | H/U | — | M/U | Partial managed event coverage, not universal enforcement |
 | Junie (`junie`) | — | — | — | — | M/U | MCP-only, static guidelines do not invoke a runtime |

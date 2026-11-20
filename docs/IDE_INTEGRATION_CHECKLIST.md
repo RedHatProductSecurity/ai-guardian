@@ -309,9 +309,14 @@ set per public IDE key so aliases cannot hide a missing setup or documentation
 path.
 
 For `kilo`, OpenCode-compatible payload normalization must still preserve Kilo's
-own adapter identity and `KILO_CONFIG_DIR` root. Keep native Kilo CLI execution
-and result-delivery qualification separate from generated-plugin and MCP setup
-contracts; do not infer prompt interception or safe result replacement.
+own adapter identity and `KILO_CONFIG_DIR` root. The generated V1 plugin uses
+`chat.message` to submit user text to the prompt pipeline and mutate message
+parts with the resulting refusal or verified redaction. User-reported Kilo 7.8.27
+native tests confirmed a blocked synthetic prompt was replaced with a fixed
+refusal and Bash PostToolUse output was redacted. Prompt replacement does not
+establish that Kilo cancels the model turn. Keep pre-tool enforcement, post-tool
+fixed-refusal delivery, and broader result qualification separate from those
+tested paths; do not infer complete runtime enforcement.
 
 For CLI-capable integrations, the evidence must identify the integration's
 actual executable and configuration roots. The Grok Build reference case uses
