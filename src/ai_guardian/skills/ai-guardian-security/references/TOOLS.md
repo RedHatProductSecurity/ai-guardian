@@ -50,6 +50,10 @@ omit the original subtype, so these aliases can return any sensitive finding;
 the canonical filter also includes type-specific sensitive records from older
 history.
 
+MCP responses for sensitive findings omit file paths, URLs, and line/column
+locators, including for legacy records and alias filters. Other violation types
+may include safe location metadata; do not infer locations that are absent.
+
 ## Support Bundle
 
 | Tool | Parameters | Returns | When to Use |

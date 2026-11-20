@@ -91,6 +91,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Sensitive MCP violation privacy (#2816):** Omit file paths, URLs, and
+  line/column locators from `get_violations` responses for consolidated and
+  legacy sensitive findings, without changing human-facing history views.
 - **Read the Docs release verification (#2809):** Verify that the exact release
   page and `/stable/` serve the new tag, while `/latest/` serves `main`; require
   Read the Docs version metadata to confirm both aliases target the intended refs.

@@ -729,17 +729,17 @@ class MCPBlockReasonUXTest(TestCase):
 
     def test_violations_provide_actual_block_reason(self):
         """
-        USER EXPERIENCE: sensitive findings expose only a safe locator
+        USER EXPERIENCE: sensitive findings expose no locator through MCP
 
         Sensitive history does not preserve the scanner subtype, source content,
-        matched values, or per-finding detector details. A sanitized file path and
-        source coordinates may be exposed when they were safely retained.
+        matched values, per-finding detector details, or location metadata in the
+        MCP response.
 
         Expected:
         ✅ Violation type is "sensitive_finding"
         ✅ Severity remains available
         ❌ No original subtype, finding ID, matched value, or snippet is exposed
-        ✅ Missing safe location remains unavailable rather than fabricated
+        ✅ File, URL, line, and column locator fields are omitted
         """
         from unittest.mock import MagicMock, patch
         from ai_guardian.mcp.server import create_server
@@ -763,8 +763,9 @@ class MCPBlockReasonUXTest(TestCase):
             violation = result["violations"][0]
             assert violation["type"] == "sensitive_finding"
             assert violation["severity"] == "critical"
-            assert not violation["file"]
+            assert "file" not in violation
             assert "line" not in violation
+            assert "source_url" not in violation
             assert "id" not in violation
             assert "policy_decision" not in violation
 
@@ -820,15 +821,16 @@ class MCPBlockReasonUXTest(TestCase):
             assert violation["severity"] == "critical"
             assert "private-event-id" not in str(violation)
             assert "id" not in violation
+            assert "file" not in violation
             assert "line" not in violation
+            assert "source_url" not in violation
 
-    def test_sensitive_history_returns_safe_location_without_finding_content(self):
+    def test_sensitive_history_omits_all_locations_without_finding_content(self):
         """
-        USER EXPERIENCE: safe sensitive locator → MCP reports file and coordinates.
+        USER EXPERIENCE: sensitive locator → MCP returns no path, URL, or coordinates.
 
-        The generic category and severity remain available, but matched values,
-        snippets, original subtypes, IDs, context, and detector metadata stay out
-        of the agent-facing response.
+        Top-level, nested, and mirrored locators are withheld along with matched
+        values, snippets, original subtypes, IDs, context, and detector metadata.
         """
         from unittest.mock import MagicMock, patch
 
@@ -842,15 +844,28 @@ class MCPBlockReasonUXTest(TestCase):
                     "timestamp": "2026-05-13T10:00:00Z",
                     "violation_type": "sensitive_finding",
                     "severity": "high",
+                    "file": "/workspace/top-level.csv",
+                    "line": 12,
+                    "end_line": 13,
+                    "start_column": 0,
+                    "end_column": 8,
+                    "source_url": "https://example.test/private-page",
                     "blocked": {
                         "file_path": "/workspace/src/data.csv",
                         "line_number": 12,
+                        "end_line": 13,
                         "start_column": 0,
                         "end_column": 8,
+                        "source_url": "https://example.test/private-page",
                         "matched_text": private_marker,
                         "secret_type": "synthetic-secret-kind",
                     },
                     "context": {"source": private_marker},
+                    "mirror": {
+                        "file_path": "/workspace/mirror.csv",
+                        "line": 12,
+                        "source_url": "https://example.test/private-page",
+                    },
                     "policy_decision": {"reason": private_marker},
                 }
             ]
@@ -862,16 +877,25 @@ class MCPBlockReasonUXTest(TestCase):
         violation = result["violations"][0]
         assert violation["type"] == "sensitive_finding"
         assert violation["tool"] == ""
-        assert violation["file"] == "/workspace/src/data.csv"
-        assert violation["line"] == 12
-        assert violation["start_column"] == 1
-        assert violation["end_column"] == 9
+        for locator in (
+            "file",
+            "file_path",
+            "line",
+            "line_number",
+            "end_line",
+            "start_column",
+            "end_column",
+            "source_url",
+            "url",
+        ):
+            assert locator not in violation
         assert private_marker not in str(violation)
+        assert "example.test" not in str(violation)
         assert "secret_type" not in violation
         assert "policy_decision" not in violation
 
-    def test_legacy_sensitive_history_is_projected_to_generic_safe_location(self):
-        """Legacy subtype records retain only safe locator fields in MCP output."""
+    def test_legacy_sensitive_history_omits_locations(self):
+        """Legacy subtype records do not expose locators through MCP."""
         from unittest.mock import MagicMock, patch
 
         from ai_guardian.mcp.server import create_server
@@ -904,8 +928,8 @@ class MCPBlockReasonUXTest(TestCase):
 
         violation = result["violations"][0]
         assert violation["type"] == "sensitive_finding"
-        assert violation["file"] == "/workspace/legacy.txt"
-        assert violation["line"] == 4
+        assert "file" not in violation
+        assert "line" not in violation
         assert private_marker not in str(violation)
         assert "secret_type" not in violation
 

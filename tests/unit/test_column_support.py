@@ -505,9 +505,11 @@ class TestAskViolationInfoColumn(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_MCP, "MCP SDK requires Python >= 3.10")
 class TestMcpViolationsColumnExposure(unittest.TestCase):
-    """MCP get_violations exposes start_column/end_column as 1-based."""
+    """MCP exposes non-sensitive locations and withholds sensitive locators."""
 
-    def _make_violation(self, start_col=None, end_col=None):
+    def _make_violation(
+        self, start_col=None, end_col=None, violation_type="prompt_injection"
+    ):
         blocked = {
             "file_path": "test.py",
             "line_number": 10,
@@ -518,7 +520,7 @@ class TestMcpViolationsColumnExposure(unittest.TestCase):
             blocked["end_column"] = end_col
         return {
             "timestamp": "2026-01-01T00:00:00",
-            "violation_type": "secret_detected",
+            "violation_type": violation_type,
             "severity": "high",
             "blocked": blocked,
             "context": {"tool_name": "Write"},
@@ -536,6 +538,8 @@ class TestMcpViolationsColumnExposure(unittest.TestCase):
             entry = result["violations"][0]
             self.assertEqual(entry["start_column"], 5)
             self.assertEqual(entry["end_column"], 11)
+            self.assertEqual(entry["file"], "test.py")
+            self.assertEqual(entry["line"], 10)
 
     def test_column_absent_when_none(self):
         from unittest.mock import patch
@@ -549,6 +553,29 @@ class TestMcpViolationsColumnExposure(unittest.TestCase):
             entry = result["violations"][0]
             self.assertNotIn("start_column", entry)
             self.assertNotIn("end_column", entry)
+
+    def test_sensitive_locations_are_omitted(self):
+        from unittest.mock import patch
+
+        violation = self._make_violation(
+            start_col=4, end_col=10, violation_type="secret_detected"
+        )
+        with patch("ai_guardian.violations.logger.ViolationLogger") as MockVL:
+            MockVL.return_value.get_recent_violations.return_value = [violation]
+            result = create_server()._tool_manager._tools["get_violations"].fn()
+
+        entry = result["violations"][0]
+        for locator in (
+            "file",
+            "file_path",
+            "source_url",
+            "line",
+            "line_number",
+            "end_line",
+            "start_column",
+            "end_column",
+        ):
+            self.assertNotIn(locator, entry)
 
 
 @unittest.skipUnless(_HAS_NICEGUI, "NiceGUI requires Python >= 3.10")

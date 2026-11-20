@@ -717,12 +717,12 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
         ``config_file_exfil``.
         Sensitive records use the consolidated ``sensitive_finding`` category.
         The legacy filters ``secret_detected``, ``image_secret_detected``, and
-        ``pii_detected`` remain aliases for that category. The persisted record
-        may include a sanitized file path or HTTP(S) ``source_url`` and source
-        position. URL positions refer to the scanned tool response, not the
-        original remote document; columns are one-based. History omits the
-        original subtype, matched values, snippets, and detector details; these
-        filters may return any sensitive finding.
+        ``pii_detected`` remain aliases for that category. Sensitive findings
+        omit file paths, URLs, and line/column positions from MCP responses,
+        including locations stored by legacy records. Other violation types may
+        include safe location metadata. History omits the original subtype,
+        matched values, snippets, and detector details; these filters may return
+        any sensitive finding.
         """
         try:
             from ai_guardian.violations.logger import ViolationLogger
@@ -749,7 +749,7 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                 blocked = v.get("blocked", {})
                 if not isinstance(blocked, dict):
                     blocked = {}
-                vtype = v.get("violation_type", "")
+                vtype = v.get("violation_type") or v.get("type", "")
                 is_sensitive = vtype in {
                     "sensitive_finding",
                     "secret_detected",
@@ -773,31 +773,16 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                             or blocked.get("tool_name", "")
                         )
                     ),
-                    "file": (
-                        blocked.get("file_path", "")
-                        if is_sensitive
-                        else blocked.get("file_path", "") or ctx.get("file_path", "")
-                    ),
                     "action": "blocked" if v.get("blocked") else "logged",
                     "suggestion": _SAFE_SUGGESTIONS.get(
                         display_type,
                         "Review the security policy for this violation type",
                     ),
                 }
-                if is_sensitive:
-                    file_path = entry["file"]
-                    if vtype != "sensitive_finding":
-                        from ai_guardian.violations.command_context import (
-                            sanitize_sensitive_file_path,
-                        )
-
-                        file_path = sanitize_sensitive_file_path(file_path)
-                    if not (
-                        isinstance(file_path, str)
-                        and 0 < len(file_path) <= 4096
-                        and file_path.isprintable()
-                    ):
-                        entry["file"] = ""
+                if not is_sensitive:
+                    entry["file"] = blocked.get("file_path", "") or ctx.get(
+                        "file_path", ""
+                    )
                 diagnostics = None if is_sensitive else violation_input_diagnostics(v)
                 if diagnostics is not None:
                     entry["input_diagnostics"] = diagnostics
@@ -811,31 +796,34 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
                         )
                 if ctx.get("source") and not is_sensitive:
                     entry["source"] = ctx["source"]
-                from ai_guardian.violations.command_context import sanitize_source_url
+                if not is_sensitive:
+                    from ai_guardian.violations.command_context import (
+                        sanitize_source_url,
+                    )
 
-                source_url = sanitize_source_url(blocked.get("source_url"))
-                if source_url:
-                    entry["source_url"] = source_url
-                if (
-                    type(blocked.get("line_number")) is int
-                    and 0 < blocked["line_number"] <= 2**31 - 1
-                ):
-                    entry["line"] = blocked["line_number"]
-                if (
-                    type(blocked.get("end_line")) is int
-                    and 0 < blocked["end_line"] <= 2**31 - 1
-                ):
-                    entry["end_line"] = blocked["end_line"]
-                if (
-                    type(blocked.get("start_column")) is int
-                    and 0 <= blocked["start_column"] <= 2**31 - 1
-                ):
-                    entry["start_column"] = blocked["start_column"] + 1
-                if (
-                    type(blocked.get("end_column")) is int
-                    and 0 <= blocked["end_column"] <= 2**31 - 1
-                ):
-                    entry["end_column"] = blocked["end_column"] + 1
+                    source_url = sanitize_source_url(blocked.get("source_url"))
+                    if source_url:
+                        entry["source_url"] = source_url
+                    if (
+                        type(blocked.get("line_number")) is int
+                        and 0 < blocked["line_number"] <= 2**31 - 1
+                    ):
+                        entry["line"] = blocked["line_number"]
+                    if (
+                        type(blocked.get("end_line")) is int
+                        and 0 < blocked["end_line"] <= 2**31 - 1
+                    ):
+                        entry["end_line"] = blocked["end_line"]
+                    if (
+                        type(blocked.get("start_column")) is int
+                        and 0 <= blocked["start_column"] <= 2**31 - 1
+                    ):
+                        entry["start_column"] = blocked["start_column"] + 1
+                    if (
+                        type(blocked.get("end_column")) is int
+                        and 0 <= blocked["end_column"] <= 2**31 - 1
+                    ):
+                        entry["end_column"] = blocked["end_column"] + 1
                 if blocked.get("source_context"):
                     from ai_guardian.violations.command_context import (
                         sensitive_source_context_label,
