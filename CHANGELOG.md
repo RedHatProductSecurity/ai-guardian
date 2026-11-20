@@ -26,10 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sanitized output or a fixed refusal for blocked/invalid results. Source-reviewed
   against Kilo CLI 7.8.27; user-reported native tests confirmed a blocked
   synthetic prompt was replaced with a refusal and Bash post-tool output was
-  sanitized. Pre-tool enforcement, post-tool fixed-refusal, and other
-  result-delivery paths remain unqualified. Add a required Release Readiness lane
-  for the full OpenCode-applicable Kilo CLI matrix using a separate, network-none
-  smoke image; runtime qualification remains pending a passing CI run.
+  sanitized. The required full OpenCode-applicable matrix passed for Kilo 7.8.27
+  on 2026-11-20 in [Release Readiness run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315)
+  on `ubuntu-26.04`; all 14 applicable cases and correlated MCP-version evidence
+  passed. Smoke image manifest: `sha256:c890fa25bbba6d71c53955a245e7233c5524c0db474f471720ccbe302dcfdf86`.
+  Prompt replacement is not model-turn cancellation, and product container/OpenShell
+  runtime qualification remains separate.
 - **Violation outcome metadata (#2781):** Persist the effective action and
   redaction status in violation JSONL records; display validated outcomes as
   rounded badges in the Web Console (including the `tui` alias) and bracketed
