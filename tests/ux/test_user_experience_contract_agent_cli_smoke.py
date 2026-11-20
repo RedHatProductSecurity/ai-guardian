@@ -83,10 +83,12 @@ Manual qualification on Linux/macOS Podman:
     stays local must also produce the smoke-only stdio witness. Preserve the
     provider-issued-call count separately so the witness cannot erase whether the
     mock issued a tool call. Assistant text alone is never evidence.
-    If a CLI times out or exits nonzero after the matched
-    MCP response, only this capability can pass, and that process outcome is
-    reported. Goose's `--no-mcp` lane reports this capability as UNSUPPORTED,
-    never PASS.
+     If a CLI times out or exits nonzero after the matched
+     MCP response, only this capability can pass, and that process outcome is
+     reported. Goose's `--no-mcp` lane reports this capability as UNSUPPORTED,
+     never PASS.
+ 21. Kilo setup failures report only the exit code and a fixed diagnostic category.
+     Raw setup stdout/stderr and paths must remain absent from the Actions log.
 """
 
 import importlib.util

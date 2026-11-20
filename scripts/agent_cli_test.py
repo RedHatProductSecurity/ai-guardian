@@ -2695,6 +2695,36 @@ def _agent_error_category(invocation: subprocess.CompletedProcess) -> str:
     return "unclassified"
 
 
+def _kilo_setup_failure_category(result: subprocess.CompletedProcess) -> str:
+    """Classify Kilo setup failures with fixed labels, never raw CLI output."""
+    output = "\n".join(
+        value for value in (result.stdout, result.stderr) if isinstance(value, str)
+    ).casefold()
+    if not output.strip():
+        return "no_diagnostic"
+    if "already configured" in output or "use --force to overwrite" in output:
+        return "managed_artifact_conflict"
+    if any(
+        marker in output
+        for marker in ("permission denied", "eacces", "read-only file system")
+    ):
+        return "filesystem_permission"
+    if any(
+        marker in output
+        for marker in ("invalid json", "invalid jsonc", "schema", "failed to parse")
+    ):
+        return "configuration_validation"
+    if "mcp" in output and any(
+        marker in output for marker in ("error", "failed", "stopped", "unable")
+    ):
+        return "mcp_setup"
+    if "ai-guardian binary not found in path" in output:
+        return "guardian_binary_missing"
+    if "error setting up ide hooks" in output:
+        return "setup_exception"
+    return "unclassified"
+
+
 def _codex_safe_error_category(message: object) -> str:
     """Classify Codex error text with fixed labels; never return its content."""
     if not isinstance(message, str):
@@ -3261,7 +3291,11 @@ def _run_kilo_smoke(args: argparse.Namespace) -> int:
             env=("KILO_CONFIG_DIR=/sandbox/.config/kilo",),
         )
         if setup.returncode != 0:
-            print("FAIL Kilo: managed plugin and MCP setup failed")
+            category = _kilo_setup_failure_category(setup)
+            print(
+                "FAIL Kilo: managed plugin and MCP setup failed "
+                f"(exit code {setup.returncode}; diagnostic category: {category})"
+            )
             return 1
         if not _configure_agent(
             args.container_engine, name, "kilo", args.agent, args.timeout

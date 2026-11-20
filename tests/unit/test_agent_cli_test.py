@@ -420,6 +420,68 @@ def test_kilo_smoke_runs_the_full_case_matrix_and_cleans_up(monkeypatch, capsys)
 
 
 @pytest.mark.parametrize(
+    "diagnostic,expected",
+    [
+        ("", "no_diagnostic"),
+        (
+            "Kilo Code hooks already configured. Use --force to overwrite.",
+            "managed_artifact_conflict",
+        ),
+        (
+            "Permission denied writing a private path",
+            "filesystem_permission",
+        ),
+        ("Invalid JSON schema in a private path", "configuration_validation"),
+        ("MCP setup stopped after a private error", "mcp_setup"),
+        ("private unclassified diagnostic", "unclassified"),
+    ],
+)
+def test_kilo_setup_failure_diagnostic_uses_only_fixed_categories(diagnostic, expected):
+    runner = _load(RUNNER_PATH, "agent_cli_kilo_setup_diagnostic")
+    result = subprocess.CompletedProcess([], 1, diagnostic, "")
+
+    category = runner._kilo_setup_failure_category(result)
+
+    assert category == expected
+    if diagnostic:
+        assert diagnostic not in category
+
+
+def test_kilo_setup_failure_reports_category_without_raw_diagnostic(
+    monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_kilo_setup_failure")
+    private_diagnostic = "Permission denied for PRIVATE_SYNTHETIC_SETUP_DETAIL"
+
+    def execute(_engine, _name, command, *_args, **_kwargs):
+        if command == ["kilo", "--version"]:
+            return subprocess.CompletedProcess(command, 0, "7.8.27", "")
+        if command[:2] == ["python3", "-c"]:
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command[:3] == ["ai-guardian", "setup", "--ide"]:
+            return subprocess.CompletedProcess(command, 1, private_diagnostic, "")
+        raise AssertionError("unexpected Kilo setup command")
+
+    monkeypatch.setattr(
+        runner,
+        "_run",
+        lambda command, *_args, **_kwargs: subprocess.CompletedProcess(
+            command, 0, "", ""
+        ),
+    )
+    monkeypatch.setattr(runner, "_exec", execute)
+    monkeypatch.setattr(runner, "_write_file", lambda *_args: True)
+    args = runner.argparse.Namespace(
+        container_engine="docker", image="kilo-smoke:local", timeout=2, agent="build"
+    )
+
+    assert runner._run_kilo_smoke(args) == 1
+    output = capsys.readouterr().out
+    assert "diagnostic category: filesystem_permission" in output
+    assert private_diagnostic not in output
+
+
+@pytest.mark.parametrize(
     "case_name,missing",
     [
         ("command_credential", "none"),
