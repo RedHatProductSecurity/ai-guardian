@@ -55,14 +55,14 @@ def _is_tray_running():
 
     Returns the PID (int) of the running tray if found, otherwise False.
     """
-    from ai_guardian.daemon import is_pid_alive
+    from ai_guardian.daemon import is_pid_active
 
     lock_path = _get_tray_lock_path()
     if not lock_path.exists():
         return False
     try:
         pid = int(lock_path.read_text().strip())
-        if is_pid_alive(pid):
+        if is_pid_active(pid):
             return pid
         lock_path.unlink(missing_ok=True)
         return False
@@ -77,7 +77,7 @@ def _write_tray_lock():
     Uses O_CREAT|O_EXCL for atomic creation to prevent concurrent tray
     starts from racing past the _is_tray_running() check.
     """
-    from ai_guardian.daemon import is_pid_alive
+    from ai_guardian.daemon import is_pid_active
 
     lock_path = _get_tray_lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,7 +88,7 @@ def _write_tray_lock():
     except FileExistsError:
         try:
             old_pid = int(lock_path.read_text().strip())
-            if is_pid_alive(old_pid):
+            if is_pid_active(old_pid):
                 raise RuntimeError(f"Tray already starting (pid {old_pid})")
         except (ValueError, OSError):
             pass  # intentionally silent — stale lock cleanup
@@ -2005,7 +2005,7 @@ class DaemonTray:
         import subprocess
 
         cmd = tray_plugins.resolve_cli_cmd("tray", "start")
-        cmd.extend(["--wait-for-pid", str(os.getpid())])
+        cmd.extend(["--wait-for-tray-lock-release", str(os.getpid())])
         logger.debug("Restarting tray with command: %s", cmd)
         self.stop()
         self._stop()

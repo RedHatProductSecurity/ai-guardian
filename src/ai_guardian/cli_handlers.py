@@ -1217,10 +1217,12 @@ def _handle_tray_start(args):
     """Start the standalone multi-daemon tray client."""
     import subprocess
 
-    wait_for_pid = getattr(args, "wait_for_pid", None)
-    if isinstance(wait_for_pid, int) and not isinstance(wait_for_pid, bool):
-        if wait_for_pid > 0:
-            _wait_for_pid_exit(wait_for_pid)
+    wait_for_tray_lock_release = getattr(args, "wait_for_tray_lock_release", None)
+    if isinstance(wait_for_tray_lock_release, int) and not isinstance(
+        wait_for_tray_lock_release, bool
+    ):
+        if wait_for_tray_lock_release > 0:
+            _wait_for_tray_lock_release(wait_for_tray_lock_release)
 
     from ai_guardian.daemon.path_env import ensure_scanner_path
 
@@ -1342,13 +1344,21 @@ def _handle_tray_start(args):
     return 0
 
 
-def _wait_for_pid_exit(pid):
-    """Wait for a previous tray process to exit before starting its replacement."""
+def _wait_for_tray_lock_release(pid):
+    """Wait until the previous tray releases its single-instance lock."""
     import time
 
-    from ai_guardian.daemon import is_pid_alive
+    from ai_guardian.daemon import is_pid_active
+    from ai_guardian.tray.app import _get_tray_lock_path
 
-    while is_pid_alive(pid):
+    lock_path = _get_tray_lock_path()
+    while True:
+        try:
+            lock_pid = int(lock_path.read_text().strip())
+        except (FileNotFoundError, ValueError):
+            return
+        if lock_pid != pid or not is_pid_active(pid):
+            return
         time.sleep(0.1)
 
 

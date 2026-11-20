@@ -1577,7 +1577,7 @@ def main():
             help="Disable auto-discovery (manual targets only)",
         )
         tray_start_parser.add_argument(
-            "--wait-for-pid",
+            "--wait-for-tray-lock-release",
             type=int,
             default=None,
             help=argparse.SUPPRESS,
