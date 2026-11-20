@@ -69,10 +69,11 @@ def test_kilo_protected_config_write_is_denied_before_the_tool_runs(tmp_path):
     Expected User Experience:
     - The protected config is not modified by the tool.
     - The model sees a fixed denial notice, not a successful write result.
-    - Prompt interception is not claimed; this plugin registers no prompt hook.
+    - Prompt scanning is provided by a separate `chat.message` callback.
 
-    Native CLI qualification remains pending; this is a hook-pipeline and
-    generated-plugin contract, not evidence that Kilo loads or enforces it.
+    Native pre-tool enforcement qualification remains pending; this is a
+    hook-pipeline and generated-plugin contract, not evidence that Kilo enforces
+    this protected-write denial.
     """
     project_config = tmp_path / ".kilo" / "kilo.json"
     project_config.parent.mkdir(parents=True)
@@ -88,37 +89,39 @@ def test_kilo_protected_config_write_is_denied_before_the_tool_runs(tmp_path):
     assert "if (result.blocked) throw new Error(PRE_TOOL_REFUSAL_NOTICE);" in (
         _KILO_PLUGIN_TS
     )
+    assert "async 'chat.message'(input, output)" in _KILO_PLUGIN_TS
     assert project_config.read_bytes() == original
 
 
-def test_kilo_after_tool_notice_does_not_claim_result_withholding_or_replacement():
+def test_kilo_after_tool_replaces_sensitive_output_or_uses_fixed_refusal():
     """
-    USER EXPERIENCE: Kilo post-tool finding -> fixed refusal, no sanitized copy.
+    USER EXPERIENCE: Kilo post-tool finding -> sanitized result or fixed refusal.
 
-    Kilo's v7.8.27 source exposes ``tool.execute.after`` after execution, but
-    native result-delivery behavior has not been qualified. The generated
-    plugin therefore throws a fixed notice whenever AI Guardian blocks or
-    returns transformed output; it never assigns a sanitized copy to Kilo's
-    result object and does not claim the result was withheld. Tool side effects
-    have already occurred.
+    A user-reported Kilo 7.8.27 native Bash test with a synthetic secret
+    returned sanitized output. Broader native result delivery remains
+    unqualified. The generated plugin assigns a verified sanitized string to
+    Kilo's mutable output, or assigns a fixed refusal when the bridge blocks or
+    returns an invalid replacement. It clears the original title and metadata
+    with either rewrite. Tool side effects have already occurred.
     """
     after_hook = _KILO_PLUGIN_TS.split("async 'tool.execute.after'", maxsplit=1)[1]
     expected_notice = (
-        "AI Guardian flagged a tool result after execution. The tool ran. Native "
-        "Kilo result handling is unverified; do not infer that the result was "
-        "safely replaced or repeat it. Tell the user it was flagged and wait for "
-        "a new instruction."
+        "AI Guardian blocked this tool result after execution. The tool ran, and "
+        "its result was replaced with a fixed refusal. Do not infer that the tool’s "
+        "side effects were undone. Tell the user it was flagged and wait for a new "
+        "instruction."
     )
 
     assert expected_notice in _KILO_PLUGIN_TS
-    assert "if (result.blocked || result.updatedOutput !== undefined)" in after_hook
-    assert "throw new Error(POST_TOOL_REFUSAL_NOTICE);" in after_hook
-    assert "output.output =" not in after_hook
-    assert "withheld from the model" not in expected_notice
-    assert "unverified" in expected_notice
-    assert "updatedOutput" not in _KILO_PLUGIN_TS.split(
+    assert "if (result.blocked) {" in after_hook
+    assert "output.output = POST_TOOL_REFUSAL_NOTICE;" in after_hook
+    assert "typeof result.updatedOutput === 'string'" in after_hook
+    assert "output.output = result.updatedOutput;" in after_hook
+    assert "output.title = 'AI Guardian sanitized tool result';" in after_hook
+    assert "output.metadata = {};" in after_hook
+    assert "throw new Error(POST_TOOL_REFUSAL_NOTICE);" not in after_hook
+    prompt_hook = _KILO_PLUGIN_TS.split("async 'chat.message'", maxsplit=1)[1].split(
         "async 'tool.execute.after'", maxsplit=1
-    )[1].split("export default", maxsplit=1)[0].replace(
-        "result.updatedOutput !== undefined", ""
-    )
-    assert "chat.message" not in _KILO_PLUGIN_TS
+    )[0]
+    assert "hook_event_name: 'UserPromptSubmit'" in prompt_hook
+    assert "output.parts.splice(0, output.parts.length" in prompt_hook

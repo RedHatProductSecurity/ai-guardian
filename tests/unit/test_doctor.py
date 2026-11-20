@@ -787,9 +787,12 @@ class TestCheckHooks:
         assert f"plugin directory (user scope): {plugin_dir}" in result.message
         assert f"MCP: healthy; separate mcp entry in {mcp_config}" in result.message
         assert "hook entries are not stored in JSON/JSONC config" in result.message
-        assert "coverage not verified" in result.message
+        assert "chat.message (prompt scanning)" in result.message
+        assert "complete callback coverage not verified" in result.message
         assert (
-            "native activation, enforcement, and result delivery remain unverified"
+            "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+            "post-tool redaction manually confirmed; pre-tool enforcement, "
+            "post-tool fixed-refusal delivery and broader results remain unverified"
             in result.message
         )
         assert "CLI: kilo 7.8.27" in result.message

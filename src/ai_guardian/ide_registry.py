@@ -29,7 +29,8 @@ class IDEIntegration:
 
     ``safe_post_output_replacement`` is stricter than the presence of a
     PostToolUse event or response field: it is true only when the host applies
-    a sanitized replacement to the model-visible result.
+    a sanitized replacement to a verified model-visible result path. The
+    post-tool capability check may further restrict supported tools.
 
     ``safe_prompt_replacement`` is true only when the host lets the integration
     replace the submitted prompt before it reaches the model.
@@ -355,13 +356,17 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "none",
         project_scope=True,
         post_output_transform=True,
-        safe_post_output_replacement=False,
+        # Kilo 7.8.27's native Bash post-tool redaction was manually confirmed.
+        safe_post_output_replacement=True,
         platform_contract=(
-            "Kilo CLI 7.8.27 plugin callback/discovery source reviewed; native "
-            "execution and refusal delivery qualification pending"
+            "Kilo CLI 7.8.27 plugin discovery, chat.message, and tool-result "
+            "mutation source reviewed; native synthetic prompt-to-refusal "
+            "replacement and Bash post-tool redaction confirmed, pre-tool "
+            "enforcement and broader result-delivery qualification pending"
         ),
         cli_capable=True,
         cli_executables=("kilo", "kilocode"),
+        safe_prompt_replacement=True,
     ),
     IDEIntegration(
         "pi",

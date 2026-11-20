@@ -61,12 +61,17 @@ Manual qualification on Linux/macOS Podman:
     values must be allowed and reach PostToolUse. The witness records only file
     existence; counters contain fixed tool-name labels and never retain source
      or synthetic values.
-19. --coverage lists all twelve supported host CLI keys without running anything.
-    Excluded clients exit nonzero with an audit/blocker link before installation.
-    Grok/Goose announce pre-tool-only coverage; prompt denial and sensitive-output
-    containment remain NOT QUALIFIED. Require native issued-result correlation,
-    denied-command non-execution, and clean execution/continuation, not offers or
-    passive hook observations alone. Grok's version must match the reviewed pin.
+19. --coverage lists all thirteen supported host CLI keys without running anything.
+     Excluded clients exit nonzero with an audit/blocker link before installation.
+     Grok/Goose announce pre-tool-only coverage; prompt denial and sensitive-output
+     containment remain NOT QUALIFIED. Require native issued-result correlation,
+     denied-command non-execution, and clean execution/continuation, not offers or
+     passive hook observations alone. Grok's version must match the reviewed pin.
+     Kilo runs the complete OpenCode-applicable matrix in its own network-none,
+     smoke-only image; it is not product-container qualification. A blocked Kilo
+     prompt may reach the provider only as the fixed refusal, never as the original
+     marked content. Native Bash/Write identity, callback evidence, correlated
+     results, raw-output absence, and clean exits remain required.
 20. Full smoke lanes and Grok call the configured AI Guardian `get_version` MCP
     tool. The OpenCode V2 smoke sets `codemode: false` on that server to qualify
     its direct native MCP tool rather than Code Mode's `execute` interpreter.
@@ -465,6 +470,53 @@ def stub_tool_case(
     return case
 
 
+@pytest.mark.parametrize(
+    ("provider_requests", "expected_pass", "expected_message"),
+    (
+        ({"kilo_prompt_refusal": 1}, True, "PASS prompt_injection"),
+        (
+            {},
+            False,
+            "FAIL prompt_injection: the fixed Kilo prompt refusal did not reach the local mock",
+        ),
+        (
+            {"prompt_injection": 1, "kilo_prompt_refusal": 1},
+            False,
+            "FAIL prompt_injection: blocked prompt reached the local mock provider",
+        ),
+    ),
+)
+def test_kilo_prompt_smoke_requires_refusal_delivery_without_original_prompt(
+    runner, monkeypatch, capsys, provider_requests, expected_pass, expected_message
+):
+    """USER EXPERIENCE: Kilo may continue only with the fixed refusal replacement.
+
+    The original marked input must not reach the provider. Since Kilo replaces the
+    message instead of cancelling the model turn, the provider must see evidence
+    of the fixed refusal for this case. This is not turn-cancellation qualification.
+    """
+    case = next(case for case in runner.CASES if case.name == "prompt_injection")
+    violations = iter(({}, {case.expected_violation: 1}))
+    requests = iter(({}, provider_requests))
+    hooks = iter(({}, {"prompt": 1}))
+    monkeypatch.setattr(runner, "_violation_counts", lambda *a, **kw: next(violations))
+    monkeypatch.setattr(runner, "_provider_stats", lambda *a, **kw: next(requests))
+    monkeypatch.setattr(runner, "_hook_counts", lambda *a, **kw: next(hooks))
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *a, **kw: subprocess.CompletedProcess([], 0, "PRIVATE_OUTPUT", ""),
+    )
+
+    assert (
+        runner._run_case("docker", "smoke", "kilo", "build", case, 30) is expected_pass
+    )
+    output = capsys.readouterr().out
+    assert expected_message in output
+    assert case.prompt not in output
+    assert "PRIVATE_OUTPUT" not in output
+
+
 @pytest.mark.parametrize("native_name", ("bash", "shell"))
 def test_opencode_smoke_uses_native_execution_not_an_advisory_mcp_check(native_name):
     """USER EXPERIENCE: catalog order cannot replace the real tool-hook path.
@@ -836,6 +888,7 @@ def test_all_cli_inventory_never_looks_like_a_security_pass(
     assert "no client was run. This is NOT security qualification." in output
     assert "grok: runner=pre-tool-only" in output
     assert "goose: runner=pre-tool-only" in output
+    assert "kilo: runner=full" in output
     assert "openclaw: runner=blocked" in output
     assert "PASS" not in output
 

@@ -128,7 +128,9 @@ NATIVE_COMMAND_TOOL_NAMES = (
 )
 CASE_MARKER = re.compile(r"AGENT_CLI_SMOKE_CASE: ([a-z0-9_]+)")
 RESULT_MARKER = re.compile(r"AGENT_CLI_SMOKE_TOOL_RESULT: ([a-z0-9_]+)")
+PROMPT_REFUSAL_MARKER = "AI Guardian blocked the previous prompt."
 REQUEST_COUNTS: Counter = Counter()
+PROMPT_REFUSAL_REQUESTS = 0
 COMMAND_TOOL_REQUEST_COUNTS: Counter = Counter()
 TOOL_OFFER_COUNTS: Counter = Counter()
 COMMAND_TOOL_NAME_COUNTS: Dict[str, Counter] = {}
@@ -365,7 +367,11 @@ def _observe_request(payload: Dict[str, Any]) -> None:
     Inspect all message roles and token-count requests as well: a client must not
     avoid the delivery check by wrapping raw output outside a tool-result field.
     """
+    global PROMPT_REFUSAL_REQUESTS
     serialized = json.dumps(payload)
+    if PROMPT_REFUSAL_MARKER in serialized:
+        with COUNTS_LOCK:
+            PROMPT_REFUSAL_REQUESTS += 1
     raw_cases = {
         case
         for case in OUTPUT_CASES - {"clean_tool"}
@@ -800,8 +806,11 @@ def _record_request(case: str, payload: Dict[str, Any]) -> Tuple[int, int]:
 def _stats() -> Dict[str, Dict[str, int]]:
     """Return aggregate-only request and tool availability counters."""
     with COUNTS_LOCK:
+        requests = dict(REQUEST_COUNTS)
+        if PROMPT_REFUSAL_REQUESTS:
+            requests["kilo_prompt_refusal"] = PROMPT_REFUSAL_REQUESTS
         return {
-            "requests": dict(REQUEST_COUNTS),
+            "requests": requests,
             "command_tool_requests": dict(COMMAND_TOOL_REQUEST_COUNTS),
             "file_write_tool_requests": dict(FILE_WRITE_TOOL_REQUEST_COUNTS),
             "tool_offers": dict(TOOL_OFFER_COUNTS),

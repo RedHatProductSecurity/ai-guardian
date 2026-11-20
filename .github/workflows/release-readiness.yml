@@ -899,6 +899,40 @@ jobs:
             --image ai-guardian-goose-smoke --container-engine docker \
             --ai-guardian-command ai-guardian
 
+  kilo-cli-smoke:
+    name: Kilo Code CLI Smoke (full matrix; smoke-only image)
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare current wheel and support image
+        uses: ./.github/actions/prepare-cli-smoke
+        with:
+          image: ai-guardian-readiness
+
+      - name: Build Kilo Code smoke-only image (MIT)
+        run: |
+          mkdir -p "$RUNNER_TEMP/kilo-smoke"
+          cat > "$RUNNER_TEMP/kilo-smoke/Dockerfile" <<'EOF'
+          FROM ai-guardian-readiness
+          USER root
+          RUN npm install --global --prefix /opt/kilo "@kilocode/cli@7.8.27" \
+              && chmod -R a+rX /opt/kilo
+          ENV PATH="/opt/kilo/bin:${PATH}"
+          USER sandbox
+          RUN kilo --version
+          EOF
+          docker build -t ai-guardian-kilo-smoke "$RUNNER_TEMP/kilo-smoke"
+
+      - name: Kilo Code full CLI matrix (local mock; no product-runtime claim)
+        id: kilo_smoke
+        run: |
+          scripts/agent-cli-test --cli-name kilo --agent build \
+            --image ai-guardian-kilo-smoke --container-engine docker \
+            --ai-guardian-command ai-guardian
+
   opencode-v1-cli-smoke:
     name: OpenCode V1 CLI Smoke
     runs-on: ubuntu-26.04

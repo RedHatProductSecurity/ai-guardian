@@ -271,7 +271,8 @@ def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
     Expected User Experience:
     - The 1/1 count identifies a plugin artifact, not callback coverage.
     - The plugin directory and separate MCP config path are shown.
-    - Native plugin activation, enforcement, and result delivery remain unverified.
+    - Native synthetic prompt-to-refusal replacement and Bash post-tool redaction have been manually confirmed.
+    - Pre-tool enforcement, post-tool fixed-refusal delivery, and broader results remain unverified.
     """
     plugin_dir = tmp_path / "kilo" / "plugin"
     plugin_dir.mkdir(parents=True)
@@ -316,14 +317,16 @@ def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
     assert f"plugin directory (user scope): {plugin_dir}" in message
     assert "hook entries are not stored in JSON/JSONC config" in message
     assert f"MCP: healthy; separate mcp entry in {mcp_config}" in message
+    assert "chat.message (prompt scanning)" in message
     assert "tool.execute.before" in message
     assert "tool.execute.after" in message
-    assert "coverage not verified" in message
+    assert "complete callback coverage not verified" in message
     assert (
-        "native activation, enforcement, and result delivery remain unverified"
+        "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+        "post-tool redaction manually confirmed; pre-tool enforcement, "
+        "post-tool fixed-refusal delivery and broader results remain unverified"
         in message
     )
-    assert "native activation and enforcement are verified" not in message.lower()
     assert "CLI: kilo 7.8.27" in message
 
     report = DoctorReport(checks=[result])
@@ -331,7 +334,10 @@ def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
     assert "1/1 plugin artifacts configured (not callback coverage)" in human
     assert str(plugin_dir) in human
     assert (
-        "native activation, enforcement, and result delivery remain unverified" in human
+        "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+        "post-tool redaction manually confirmed; pre-tool enforcement, "
+        "post-tool fixed-refusal delivery and broader results remain unverified"
+        in human
     )
     structured = json.loads(format_json(report))["checks"][0]["integrations"]
     kilo = next(item for item in structured if item["ide"] == "kilo")
@@ -1973,7 +1979,8 @@ def test_kilo_setup_result_distinguishes_plugin_artifact_and_callbacks(scope, tm
     Expected User Experience:
     - The 1/1 count is clearly a plugin-artifact count, not callback coverage.
     - The plugin location and separate Kilo MCP JSON/JSONC config are identified.
-    - Native plugin activation, enforcement, and result delivery remain unverified.
+    - Native synthetic prompt-to-refusal replacement and Bash post-tool redaction have been manually confirmed.
+    - Pre-tool enforcement, post-tool fixed-refusal delivery, and broader results remain unverified.
     """
     plugin_dir = tmp_path / (".kilo/plugin" if scope == "project" else "user/plugin")
     mcp_config = tmp_path / ("kilo.json" if scope == "project" else "user/kilo.json")
@@ -2003,14 +2010,15 @@ def test_kilo_setup_result_distinguishes_plugin_artifact_and_callbacks(scope, tm
         in message
     )
     assert str(mcp_config) in message
+    assert "`chat.message` (prompt scanning)" in message
     assert "`tool.execute.before`" in message
     assert "`tool.execute.after`" in message
-    assert "callback coverage is not verified" in message
+    assert "complete callback coverage is not verified" in message
     assert (
-        "Native plugin activation, enforcement, and result delivery remain "
-        "unverified"
+        "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+        "post-tool redaction manually confirmed; pre-tool enforcement, "
+        "post-tool fixed-refusal delivery and broader results remain unverified"
     ) in message
-    assert "native activation and enforcement are verified" not in message.lower()
 
 
 def test_kilo_setup_output_explains_plugin_artifact_and_separate_mcp(tmp_path, capsys):
@@ -2064,12 +2072,17 @@ def test_kilo_setup_output_explains_plugin_artifact_and_separate_mcp(tmp_path, c
     assert plugin_file.is_file()
     assert f"Successfully configured Kilo Code plugin at {plugin_file}" in output
     assert "Managed artifact: one auto-discovered plugin" in output
+    assert "`chat.message` for prompt scanning" in output
     assert "`tool.execute.before`" in output
     assert "`tool.execute.after`" in output
     assert "no plugin entry is written to its JSON/JSONC config" in output
     assert "MCP registration is managed separately under `mcp`" in output
     assert f"MCP: Added ai-guardian MCP server to {mcp_config}" in output
-    assert "Native plugin activation and enforcement" in output
+    assert (
+        "synthetic prompt-to-refusal replacement and Bash post-tool redaction "
+        "manually confirmed" in output
+    )
+    assert "pre-tool enforcement" in output
     assert "remain unverified" in output
 
     config = json.loads(mcp_config.read_text(encoding="utf-8"))

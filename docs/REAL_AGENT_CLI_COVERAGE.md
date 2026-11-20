@@ -1,8 +1,8 @@
 # Real-agent CLI coverage ledger
 
-Reviewed **2026-11-18** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
-This inventory includes **Goose** and **Kilo Code CLI**, even though Goose
-already had a smoke-only lane and Kilo now has a generated host integration.
+Reviewed **2026-11-19** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
+This inventory includes **Goose** and **Kilo Code CLI**. Kilo now has a required
+full-matrix smoke-only lane alongside Goose's separate pre-tool lane.
 The machine-readable ledger is [`scripts/agent_cli_coverage.json`](../scripts/agent_cli_coverage.json).
 `tests/unit/test_agent_cli_coverage.py` compares every `SUPPORTED_CLI_IDE_TYPES`
 entry with the runner, actual Release Readiness invocations, and this audit.
@@ -28,7 +28,7 @@ scripts/agent-cli-test --coverage
 | `copilot` | Blocked: consent and native-hook qualification | Local BYOK exists; obtain terms approval and qualify the installed pre-tool surface |
 | `antigravity` | Blocked: consent and versioned installation | Local Gemini override exists; qualify the exact artifact, trust and installed adapter behavior |
 | `kiro` | Blocked: no documented local-provider path | Headless authentication requires the Kiro service; do not substitute a live-provider test |
-| `kilo` | Blocked: native plugin qualification | Plugin setup and callback contracts are covered; native CLI activation, enforcement and result delivery remain unqualified |
+| `kilo` | **Full applicable case profile**; separate required smoke-only image | Kilo 7.8.27 runs the same applicable matrix as OpenCode, including prompt replacement, native Bash/Write, pre/post-tool, and MCP evidence. CI execution is pending; this does not qualify the product container/OpenShell runtime |
 | `openclaw` | Blocked: native plugin qualification | Local provider exists; prove embedded CLI callback activation and fix unsupported claims separately |
 | `crush` | Blocked: license review | FSL-1.1-MIT is not a current MIT grant; no new smoke dependency is installed |
 
@@ -43,8 +43,9 @@ native execution evidence or change the qualification limits below.
 
 **Full** describes the runner's applicable case profile, not a successful execution,
 all hooks available upstream, every platform, or runtime certification. The base
-profile has ten cases, including command-credential denial; Claude/OpenCode also
-have four native Write HTTP-credential cases. A blocked selection exits nonzero
+profile has ten enforcement/allow cases, including command-credential denial;
+Claude/OpenCode/Kilo also have four native Write HTTP-credential cases. The
+correlated MCP version check is an additional capability case. A blocked selection exits nonzero
 before building, installing, copying credentials, or invoking an agent. It is not
 a green skip. Existing full clients keep all their assertions and applicable cases.
 
@@ -175,22 +176,44 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
   `tool.execute.before` before execution and `tool.execute.after` before
   returning the result; thrown plugin callbacks reject that path in source.
   Kilo's plugin loader auto-discovers local files under config roots
-  ([loader][kilo-plugin-config]). The generated plugin registers no prompt hook.
-  These source contracts do not qualify native activation or enforcement.
+  ([loader][kilo-plugin-config]). The documented and tagged plugin API exposes
+  `chat.message` with mutable `parts` ([plugin docs][kilo-plugin-docs],
+  [v7.8.27 API types][kilo-plugin-api]). The generated plugin routes text parts
+  through AI Guardian's prompt scanners and replaces blocked or redacted input
+  parts before returning. A user-reported native retest after daemon resume
+  confirmed a blocked synthetic prompt was replaced with a fixed refusal. Secret
+  scanning always blocks; the separate `secret_redaction: warn` setting applies
+  to output redaction, not this prompt path. The callback replaces message parts
+  rather than cancelling the model turn.
 - **Post-tool behavior:** AI Guardian scans/transforms the result in its shared
-  bridge, but the generated plugin does not assign a sanitized copy to Kilo's
-  result. It throws a fixed caution on a block or transform; safe post-output
-  replacement is unsupported, and native result delivery remains unqualified.
-- **Blocker:** `native_plugin_qualification` — exact-version CLI loading,
-  fail-closed pre-tool enforcement, and post-tool delivery have not been run.
-  Kilo remains excluded from container/OpenShell runtime selectors until that
-  qualification is complete.
-- **Next action / priority:** **P1** — run an isolated Kilo 7.8.27 native CLI
-  qualification with synthetic block/allow and post-tool cases, recording hook
-  activation, tool execution/non-execution, result delivery and clean exits before
-  changing this blocker. Do not claim prompt interception or sanitized replacement.
-- **Native execution in this change:** not run; reviewed version **7.8.27** is not
-  a tested native version.
+  bridge. The generated plugin assigns a verified sanitized string to Kilo's
+  mutable `output.output`, or substitutes a fixed refusal when the bridge blocks
+  or returns an invalid replacement; it also clears the original title/metadata.
+  A user-reported Kilo 7.8.27 Bash test confirmed sanitized output delivery.
+  The registry permits safe post-output replacement for Kilo Bash results only;
+  fixed-refusal and other native result paths remain unqualified.
+- **Smoke lane:** The required `kilo-cli-smoke` Release Readiness job installs the
+  pinned CLI in a separate disposable image and runs the full OpenCode-applicable
+  case matrix over `kilo run --auto` with a loopback-only mock provider. It requires
+  prompt and finding evidence, proof that only the fixed prompt refusal (not the
+  original marked prompt) reaches the provider, native Bash/Write identity, denied
+  tool non-execution, correlated tool results, sensitive-output absence, clean
+  execution, and the exact installed AI Guardian MCP version. The container has no
+  external network and does not use product sandbox creation.
+- **Qualification boundary:** The runner and required CI lane are implemented, but
+  native execution remains unqualified until that entire job passes on the exact
+  pinned version. Kilo remains excluded from product container/OpenShell selectors;
+  the smoke-only image is not runtime support. Prompt replacement is not request
+  cancellation.
+- **Next action / priority:** **P1** — require a passing `kilo-cli-smoke` result and
+  record its run, image digest, and exact CLI version before claiming the matrix is
+  qualified. Do not treat setup, plugin discovery, one passing case, or prior
+  user-reported prompt/Bash results as a full-lane pass.
+- **Native execution in this change:** not run; no new tested native version.
+- **Earlier native evidence:** user-reported Kilo 7.8.27 prompt retest after
+  daemon resume replaced a blocked synthetic secret prompt with a refusal; the
+  Bash `cat` test sanitized synthetic secret output. Raw fixture contents were
+  not shared. Kilo turn cancellation was not tested or claimed.
 
 ## openclaw
 
@@ -327,6 +350,8 @@ booleans and fixed categories, never prompts, credentials or CLI/model/tool bodi
 [kiro-headless]: https://kiro.dev/docs/cli/headless/
 [kilo-package]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/package.json
 [kilo-mcp]: https://kilo.ai/docs/automate/mcp/using-in-cli
+[kilo-plugin-docs]: https://kilo.ai/docs/automate/extending/plugins
+[kilo-plugin-api]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/plugin/src/index.ts
 [kilo-mcp-source]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/cli/cmd/mcp.ts
 [kilo-tools]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/session/tools.ts
 [kilo-plugin-config]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/config/plugin.ts

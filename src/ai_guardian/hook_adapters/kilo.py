@@ -5,7 +5,7 @@ shapes. Keep Kilo's identity marker and attribution separate while reusing the
 verified native-input normalization and Claude-compatible hook response.
 """
 
-from typing import ClassVar, Dict, List
+from typing import ClassVar, Dict, List, Optional
 
 from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
 
@@ -31,3 +31,8 @@ class KiloAdapter(OpenCodeAdapter):
         return bool(
             hook_data.get("kilo_plugin_api") or hook_data.get("hook_source") == "kilo"
         )
+
+    @staticmethod
+    def _wrap_tool_output(tool_name: Optional[str], text: str) -> str:
+        """Return Kilo's string-shaped ``tool.execute.after`` replacement."""
+        return text

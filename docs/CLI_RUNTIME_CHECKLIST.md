@@ -62,6 +62,17 @@ and a clean tool/result round-trip using a loopback mock. Prompt denial, Stop
 withholding, redaction, and transcripts/sessions are tested exclusions. See
 [Goose support](GOOSE.md).
 
+### Current Kilo boundary
+
+Kilo Code CLI 7.8.27 is tested in a separate Release Readiness image that installs
+the pinned MIT package. Its required lane runs the same applicable prompt,
+pre-tool, native Write, post-tool, clean/allow, and MCP cases as OpenCode against a
+loopback mock with container networking disabled. The full matrix must pass its
+provider-boundary, hook, native-tool, execution/non-execution, correlated-result,
+and clean-exit evidence gates. This smoke-only image bypasses product sandbox
+creation intentionally: it does not add Kilo to the normal container or OpenShell
+selectors, and a passing host-CLI matrix alone does not qualify either runtime.
+
 ## 1. Scope, support, and legal classification
 
 - [ ] Choose a stable CLI key and display name. Keep the key consistent across

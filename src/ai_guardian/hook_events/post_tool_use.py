@@ -344,6 +344,9 @@ def _supports_safe_post_output_replacement(agent_type: str, tool_name: str) -> b
     if integration.key == "claude" and normalized_tool == "bash":
         # Claude Code currently ignores updatedToolOutput for Bash results.
         return False
+    if integration.key == "kilo" and normalized_tool != "bash":
+        # Native Kilo result replacement has only been confirmed for Bash.
+        return False
     if integration.key == "cursor" and not normalized_tool.startswith("mcp__"):
         # Cursor documents replacement only for local MCP tool results.
         return False

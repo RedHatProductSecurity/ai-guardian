@@ -196,7 +196,7 @@ retry/continuation unverified. `—`: no managed surface for that stage.
 | OpenClaw (`openclaw`) | L/U | L/U | L/U | L/U | M/U if configured | Plugin discovery and child-process failure are separate boundaries |
 | OpenCode V1/V2 (`opencode`) | L/U | L/U | L/U | L/U | M/U if configured | V1 explicit registration and V2 auto-discovery; V2 MCP uses `mcp.servers` |
 | Pi (`pi`) | L/U | L/U | L/U | L/U | L/U | Managed extension owns hooks and registers MCP through Pi's native extension API; no separate MCP settings file |
-| Kilo Code CLI (`kilo`) | — | — | L/U | L/U | M/U | V1 tool callbacks; native tool enforcement, CLI execution, and result delivery remain unqualified |
+| Kilo Code CLI (`kilo`) | — | — | L/U | L/U | M/U | V1 prompt/tool callbacks; prompt-to-refusal replacement and Bash redaction are user-reported; a required full OpenCode-applicable CLI smoke is implemented but pending CI, and product container/OpenShell qualification remains separate |
 | Augment (`augment`) | — | — | H/U | — | M/U if configured | Pre/post-tool hook integration |
 | Crush (`crush`) | — | — | H/U | — | M/U | Partial managed event coverage, not universal enforcement |
 | Junie (`junie`) | — | — | — | — | M/U | MCP-only, static guidelines do not invoke a runtime |

@@ -90,7 +90,7 @@ cloud jobs.
 | OpenClaw Gateway plugin | Observe only | Gate | Observe only | Prompt-event return values are ignored; the loaded plugin does not replace post-tool results. |
 | OpenCode V1 (1.x) | Replace with a fixed refusal | Gate | Conditional transformation | An explicit replacement can be applied; a post-hook block is not a verified safe-redaction guarantee. |
 | OpenCode V2 (2.x) | Replace with a fixed refusal | Gate | Replace/withhold | Requires V2 plugin discovery and artifacts; V1 plugin code does not run in V2. |
-| Kilo Code CLI | Not installed | Unverified | Transform/inspect; no verified safe replacement | Kilo 7.8.27 plugin setup is implemented, but native CLI execution and result delivery remain unqualified. |
+| Kilo Code CLI | Prompt-to-refusal replacement reported; native turn cancellation not claimed | Full native pre-tool matrix pending CI | Bash redaction reported; full result matrix pending CI | A required smoke lane runs the full OpenCode-applicable case matrix on Kilo 7.8.27; CI qualification and product container/OpenShell support are not yet claimed. |
 | Pi extension | Gate | Gate | Replace or mark as error | Requires a loaded extension; commands handled before the input event are outside its prompt gate. |
 | Augment / Auggie local hooks | Not installed | Gate for selected tools | Feedback only; no replacement | Installed matchers do not cover every tool. |
 | Crush | Not installed | Gate | Not installed | AI Guardian installs only the pre-tool stage. |
@@ -152,7 +152,7 @@ upstream references. That guide is the source of truth for this summary.
 | Security instructions | [Configuration Guide][configuration] |
 | Multi-agent support and transcript scanning | [Agent Support][agent-support] |
 | Agent CLI maturity advisories | [Agent Support][agent-support] |
-| Kilo Code host CLI integration (native runtime qualification pending) | [Agent Support][agent-support] |
+| Kilo Code host CLI integration (prompt/Bash replacement verified; broader qualification pending) | [Agent Support][agent-support] |
 | OpenCode support | [OpenCode][opencode] |
 | Pi and Crush support | [Agent Support][agent-support] |
 | Goose host CLI pre-tool enforcement | [Goose Support][goose] |

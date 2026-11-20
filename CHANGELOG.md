@@ -21,9 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kilo Code CLI integration:** Add a Kilo-identified V1 plugin bridge, user and
   project setup, native `mcp` configuration, protected-config inventory, and
   installer detection, plus automatic scanning for documented Kilo skill roots.
-  Source-reviewed against Kilo CLI 7.8.27; native execution, enforcement, and
-  result delivery remain unqualified, with safe post-output replacement
-  unsupported.
+  Connect the documented `chat.message` callback to prompt scanning and safe
+  prompt-part replacement. Implement `tool.execute.after` rewriting with verified
+  sanitized output or a fixed refusal for blocked/invalid results. Source-reviewed
+  against Kilo CLI 7.8.27; user-reported native tests confirmed a blocked
+  synthetic prompt was replaced with a refusal and Bash post-tool output was
+  sanitized. Pre-tool enforcement, post-tool fixed-refusal, and other
+  result-delivery paths remain unqualified. Add a required Release Readiness lane
+  for the full OpenCode-applicable Kilo CLI matrix using a separate, network-none
+  smoke image; runtime qualification remains pending a passing CI run.
 - **Violation outcome metadata (#2781):** Persist the effective action and
   redaction status in violation JSONL records; display validated outcomes as
   rounded badges in the Web Console (including the `tui` alias) and bracketed
@@ -129,8 +135,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Kilo setup and health messaging:** Label the count as a managed plugin
   artifact rather than hook or callback coverage, show the effective plugin
-  location, and explain the separate MCP entry in Kilo's JSON/JSONC config while
-  retaining the native activation, enforcement, and result-delivery caveat.
+  location, and distinguish `chat.message` prompt scanning and tool callbacks
+  from the separate MCP entry in Kilo's JSON/JSONC config. Retain the native
+  activation, enforcement, prompt-refusal, and result-delivery caveat.
 - **NotebookLM refresh recovery:** Allow an explicitly identified exact-title
   `generated_text` source to be replaced using its full source UUID, and accept a
   new file source reported as `generated_text` only when bound to its saved upload

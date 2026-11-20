@@ -26,6 +26,7 @@ SPEC.loader.exec_module(proxy)
         ("gemini", ("mcpServers", "ai-guardian")),
         ("opencode", ("mcp", "ai-guardian")),
         ("opencode", ("mcp", "servers", "ai-guardian")),
+        ("kilo", ("mcp", "ai-guardian")),
     ),
 )
 def test_json_config_wraps_only_the_ai_guardian_stdio_command(
@@ -36,10 +37,10 @@ def test_json_config_wraps_only_the_ai_guardian_stdio_command(
     entry = {
         "command": (
             ["/opt/ai-guardian", "mcp-server"]
-            if cli == "opencode"
+            if cli in {"opencode", "kilo"}
             else "/opt/ai-guardian"
         ),
-        "args": [] if cli == "opencode" else ["mcp-server"],
+        "args": [] if cli in {"opencode", "kilo"} else ["mcp-server"],
         "preserved": "value",
     }
     config = {}
@@ -66,7 +67,7 @@ def test_json_config_wraps_only_the_ai_guardian_stdio_command(
         "/opt/ai-guardian",
     ]
     expected.append("mcp-server")
-    if cli == "opencode":
+    if cli in {"opencode", "kilo"}:
         assert wrapped["command"] == expected
         assert "args" not in wrapped
     else:
@@ -86,6 +87,40 @@ def test_json_config_wraps_only_the_ai_guardian_stdio_command(
     else:
         assert "codemode" not in wrapped
     assert updated["unrelated"] == {"preserve": True}
+
+
+def test_kilo_proxy_installer_uses_its_isolated_json_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(proxy, "_installed_version", lambda _command: __version__)
+    config_path = tmp_path / ".config" / "kilo" / "kilo.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "mcp": {
+                    "ai-guardian": {
+                        "type": "local",
+                        "command": ["/opt/ai-guardian", "mcp-server"],
+                        "enabled": True,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert proxy._install_proxy("kilo", tmp_path, None) == 0
+    wrapped = json.loads(config_path.read_text(encoding="utf-8"))["mcp"]["ai-guardian"]
+    assert wrapped["command"] == [
+        sys.executable,
+        str(SCRIPT_PATH.resolve()),
+        "proxy",
+        "--expected-version",
+        __version__,
+        "--",
+        "/opt/ai-guardian",
+        "mcp-server",
+    ]
+    assert wrapped["enabled"] is True
 
 
 @pytest.mark.parametrize("cli", ("codex", "grok"))

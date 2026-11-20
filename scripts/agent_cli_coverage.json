@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "reviewed_on": "2026-11-13",
+  "reviewed_on": "2026-11-19",
   "tracking_issue": "RedHatProductSecurity/ai-guardian#2673",
   "clients": {
     "claude": {
@@ -53,10 +53,10 @@
       "audit": "kiro"
     },
     "kilo": {
-      "runner": "blocked",
-      "ci_steps": [],
+      "runner": "full",
+      "ci_steps": ["kilo_smoke"],
       "reviewed_versions": ["7.8.27"],
-      "blocker": "native_plugin_qualification",
+      "blocker": null,
       "audit": "kilo"
     },
     "openclaw": {

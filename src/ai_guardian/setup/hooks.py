@@ -3228,8 +3228,11 @@ class IDESetup:
                 message += (
                     "  Kilo auto-discovers plugin files; no plugin entry is added to "
                     "its JSON/JSONC config\n"
+                    "  Generated source declares `chat.message` for prompt scanning "
+                    "and `tool.execute.before`/`tool.execute.after` callbacks\n"
                     "  MCP registration is managed separately under `mcp` in that "
                     "config\n"
+                    "  Native plugin activation and enforcement remain unverified\n"
                 )
             message += f"  Create: {plugin_file}\n"
             message += f"  Create: {bridge_file}\n"
@@ -3315,13 +3318,15 @@ class IDESetup:
         elif ide_type == "kilo":
             message += (
                 "  Managed artifact: one auto-discovered plugin; its generated "
-                "source declares `tool.execute.before` and `tool.execute.after` "
-                "callbacks\n"
+                "source declares `chat.message` for prompt scanning plus "
+                "`tool.execute.before` and `tool.execute.after` callbacks\n"
                 "  Kilo auto-discovers plugins from this directory; no plugin entry "
                 "is written to its JSON/JSONC config. MCP registration is managed "
                 "separately under `mcp` in that config\n"
-                "  Native plugin activation and enforcement, and result delivery, "
-                "remain unverified\n"
+                "  Kilo 7.8.27 native synthetic prompt-to-refusal replacement and "
+                "Bash post-tool redaction manually confirmed; pre-tool enforcement, "
+                "post-tool fixed-refusal delivery and broader results remain "
+                "unverified\n"
             )
         message += f"\n  {gitleaks_message}\n"
 

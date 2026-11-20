@@ -164,21 +164,33 @@ def test_setup_and_health_check_include_shared_bridge(tmp_path, ide_type):
         )
 
 
-def test_kilo_plugin_uses_v1_callbacks_and_refuses_unqualified_result_changes():
+def test_kilo_plugin_uses_v1_callbacks_and_rewrites_post_tool_results():
     assert "import type { Plugin } from '@kilocode/plugin';" in _KILO_PLUGIN_TS
+    assert "async 'chat.message'(input, output)" in _KILO_PLUGIN_TS
     assert "async 'tool.execute.before'" in _KILO_PLUGIN_TS
     assert "async 'tool.execute.after'" in _KILO_PLUGIN_TS
     assert "hook_source: 'kilo'" in _KILO_PLUGIN_TS
     assert "kilo_plugin_api: 'v1'" in _KILO_PLUGIN_TS
+    prompt_hook = _KILO_PLUGIN_TS.split("async 'chat.message'", maxsplit=1)[1].split(
+        "async 'tool.execute.after'", maxsplit=1
+    )[0]
+    assert "hook_event_name: 'UserPromptSubmit'" in prompt_hook
+    assert "prompt," in prompt_hook
+    assert "result.updatedPrompt" in prompt_hook
+    assert "output.parts.splice(0, output.parts.length" in prompt_hook
+    assert "PROMPT_REFUSAL_NOTICE" in prompt_hook
     assert "if (result.blocked) throw new Error(PRE_TOOL_REFUSAL_NOTICE);" in (
         _KILO_PLUGIN_TS
     )
-    assert (
-        "if (result.blocked || result.updatedOutput !== undefined) {" in _KILO_PLUGIN_TS
-    )
-    assert "throw new Error(POST_TOOL_REFUSAL_NOTICE);" in _KILO_PLUGIN_TS
-    assert "output.output = result.updatedOutput" not in _KILO_PLUGIN_TS
-    assert "chat.message" not in _KILO_PLUGIN_TS
+    after_hook = _KILO_PLUGIN_TS.split("async 'tool.execute.after'", maxsplit=1)[
+        1
+    ].split("export default", maxsplit=1)[0]
+    assert "if (result.blocked) {" in after_hook
+    assert "output.output = POST_TOOL_REFUSAL_NOTICE;" in after_hook
+    assert "typeof result.updatedOutput === 'string'" in after_hook
+    assert "output.output = result.updatedOutput;" in after_hook
+    assert "output.metadata = {};" in after_hook
+    assert "throw new Error(POST_TOOL_REFUSAL_NOTICE);" not in after_hook
 
 
 def test_existing_opencode_is_upgraded_without_first_run_setup(tmp_path):

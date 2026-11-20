@@ -84,7 +84,7 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
         "http_request_credential_ts_clean",
     ):
         case = next(case for case in runner.CASES if case.name == case_name)
-        assert case.cli_names == ("claude", "opencode")
+        assert case.cli_names == ("claude", "opencode", "kilo")
     assert [case.expects_provider for case in runner.CASES] == [
         False,
         False,
@@ -109,6 +109,7 @@ def test_agent_cli_matrix_covers_core_violation_and_allow_paths():
         "codex",
         "gemini",
         "opencode",
+        "kilo",
         "pi",
         "grok",
     )
@@ -153,6 +154,42 @@ def test_goose_smoke_uses_only_enforceable_cases_and_a_network_none_test_image()
     env = runner.build_agent_environment("goose")
     assert f"OPENAI_BASE_URL={runner.MOCK_URL}" in env
     assert f"OPENAI_API_KEY={runner.MOCK_KEY}" in env
+
+
+def test_kilo_uses_opencode_full_matrix_and_isolated_smoke_image():
+    runner = _load(RUNNER_PATH, "agent_cli_kilo_profile")
+    assert runner.smoke_cases("kilo") == runner.smoke_cases("opencode")
+    assert len(runner.smoke_cases("kilo")) == len(runner.CASES)
+    command = runner.build_kilo_smoke_command(
+        "docker", "kilo-smoke:local", "owned-test"
+    )
+    assert command[:2] == ["docker", "run"]
+    assert "--network=none" in command
+    assert "--cap-drop=ALL" in command
+    assert "--security-opt=no-new-privileges" in command
+    assert command[command.index("--user") + 1] == "1000:1000"
+    assert command[-2:] == ["kilo-smoke:local", "infinity"]
+    assert not set(command).intersection(
+        {"--volume", "--publish", "--privileged", "sandbox"}
+    )
+    assert "KILO_CONFIG_DIR=/sandbox/.config/kilo" in command
+    assert "KILO_TELEMETRY_LEVEL=off" in command
+    assert runner.build_agent_environment("kilo") == [
+        f"AI_GUARDIAN_MCP_EVIDENCE_FILE={runner.STATE_DIR}/mcp_version_rpc.jsonl",
+        "KILO_CONFIG_DIR=/sandbox/.config/kilo",
+    ]
+    assert runner.build_agent_command("kilo", "build", "hello") == [
+        "kilo",
+        "run",
+        "--agent",
+        "build",
+        "--auto",
+        "--format",
+        "json",
+        "--model",
+        f"ai_guardian_smoke/{runner.MOCK_MODEL}",
+        "hello",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -305,6 +342,81 @@ def test_goose_smoke_runs_only_the_pre_tool_subset_and_always_cleans_up(
     assert "PASS mcp_version" not in output
     assert commands[-1][:3] == ["docker", "rm", "--force"]
     assert commands[-1][-1] == commands[0][commands[0].index("--name") + 1]
+
+
+@pytest.mark.parametrize("version_output", ("7.8.27", "Kilo Code CLI 7.8.27"))
+def test_kilo_version_preflight_accepts_only_the_reviewed_release(
+    version_output, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_kilo_version_match")
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args: subprocess.CompletedProcess(args, 0, version_output, ""),
+    )
+    assert runner._verify_kilo_version("docker", "owned", 2)
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    ("version_output", "exit_code"),
+    (("7.8.26", 0), ("7.8.27-beta.1", 0), ("7.8.27", 1)),
+)
+def test_kilo_version_preflight_fails_closed_on_unreviewed_images(
+    version_output, exit_code, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_kilo_version_mismatch")
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *args: subprocess.CompletedProcess(args, exit_code, version_output, ""),
+    )
+    assert not runner._verify_kilo_version("docker", "owned", 2)
+    assert capsys.readouterr().out.strip() == (
+        "FAIL Kilo: the smoke image must contain audited Kilo 7.8.27; no image was rebuilt."
+    )
+
+
+def test_kilo_smoke_runs_the_full_case_matrix_and_cleans_up(monkeypatch, capsys):
+    runner = _load(RUNNER_PATH, "agent_cli_kilo_flow")
+    commands = []
+    exec_calls = []
+    cases = []
+
+    def run(command, *args, **kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    def execute(engine, name, command, *args, **kwargs):
+        exec_calls.append((command, kwargs.get("env", ())))
+        return subprocess.CompletedProcess(command, 0, "Kilo Code CLI 7.8.27", "")
+
+    monkeypatch.setattr(runner, "_run", run)
+    monkeypatch.setattr(runner, "_exec", execute)
+    monkeypatch.setattr(runner, "_write_file", lambda *args: True)
+    monkeypatch.setattr(runner, "_configure_agent", lambda *args: True)
+    monkeypatch.setattr(runner, "_start_mock", lambda *args: True)
+    monkeypatch.setattr(
+        runner,
+        "_run_case",
+        lambda *args, **kwargs: cases.append(args[4].name) or True,
+    )
+
+    args = runner.argparse.Namespace(
+        container_engine="docker", image="kilo-smoke:local", timeout=2, agent="build"
+    )
+    assert runner._run_kilo_smoke(args) == 0
+    assert cases == [case.name for case in runner.smoke_cases("opencode")]
+    setup = next(
+        call for call in exec_calls if call[0][:3] == ["ai-guardian", "setup", "--ide"]
+    )
+    assert setup[0] == ["ai-guardian", "setup", "--ide", "kilo", "--yes"]
+    assert setup[1] == ("KILO_CONFIG_DIR=/sandbox/.config/kilo",)
+    workspace = next(call for call in exec_calls if call[0][:2] == ["python3", "-c"])
+    assert "/sandbox/repo/.agent-cli-smoke-results" in workspace[0][2]
+    assert commands[-1][:3] == ["docker", "rm", "--force"]
+    assert commands[-1][-1] == commands[0][commands[0].index("--name") + 1]
+    assert "Kilo full native CLI matrix passed." in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -1817,7 +1929,8 @@ def test_configure_agent_installs_the_mcp_evidence_proxy(monkeypatch):
     )
 
     assert runner._configure_agent("podman", "sandbox", "pi", "openai", 5)
-    assert configured == ["pi"]
+    assert runner._configure_agent("podman", "sandbox", "kilo", "build", 5)
+    assert configured == ["pi", "kilo"]
 
 
 def test_mock_provider_configuration_is_written_to_each_clients_native_config(
@@ -1827,6 +1940,7 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
     cases = (
         ("codex", "smoke", Path(".codex/smoke.config.toml")),
         ("opencode", "build", Path(".config/opencode/opencode.json")),
+        ("kilo", "build", Path(".config/kilo/kilo.json")),
         ("pi", "openai", Path(".pi/agent/models.json")),
         ("gemini", "default", Path(".gemini/settings.json")),
         ("claude", "default", Path(".claude/settings.json")),
@@ -1855,6 +1969,23 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
             (codex_home / "hooks.json").write_text(hooks_config, encoding="utf-8")
         if cli_name == "pi":
             environment["PI_CODING_AGENT_DIR"] = str(home / ".pi/agent")
+        if cli_name == "kilo":
+            config_path = home / expected_path
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "mcp": {
+                            "ai-guardian": {
+                                "type": "local",
+                                "command": ["/opt/ai-guardian", "mcp-server"],
+                                "enabled": True,
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
         if cli_name == "gemini":
             config_path = home / expected_path
             config_path.parent.mkdir(parents=True)
@@ -1964,6 +2095,19 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
             else:
                 assert runner.MOCK_URL in json.dumps(config)
                 assert runner.MOCK_KEY in json.dumps(config)
+                if cli_name == "kilo":
+                    assert config["model"] == f"ai_guardian_smoke/{runner.MOCK_MODEL}"
+                    assert (
+                        config["provider"]["ai_guardian_smoke"]["models"][
+                            runner.MOCK_MODEL
+                        ]["tool_call"]
+                        is True
+                    )
+                    assert config["mcp"]["ai-guardian"] == {
+                        "type": "local",
+                        "command": ["/opt/ai-guardian", "mcp-server"],
+                        "enabled": True,
+                    }
 
 
 @pytest.mark.parametrize("install_claude_code", (False, True))
@@ -2973,6 +3117,28 @@ def test_gemini_mock_supports_count_tokens_and_streaming_endpoints():
         thread.join(timeout=5)
 
 
+def test_mock_provider_records_kilo_fixed_prompt_refusal_without_content():
+    mock = _load(MOCK_PATH, "agent_cli_kilo_prompt_refusal_evidence")
+    plugin_template = (
+        ROOT / "src/ai_guardian/setup/templates/kilo-plugin-v1.ts"
+    ).read_text(encoding="utf-8")
+    assert mock.PROMPT_REFUSAL_MARKER in plugin_template
+    prompt = {
+        "messages": [
+            {
+                "role": "user",
+                "content": mock.PROMPT_REFUSAL_MARKER + " Do not answer this request.",
+            }
+        ]
+    }
+
+    mock._observe_request(prompt)
+    stats = mock._stats()
+
+    assert stats["requests"] == {"kilo_prompt_refusal": 1}
+    assert mock.PROMPT_REFUSAL_MARKER not in json.dumps(stats)
+
+
 def test_claude_mock_returns_messages_api_tool_calls_and_sse_events():
     mock = _load(MOCK_PATH, "agent_cli_anthropic_mock")
     runner = _load(RUNNER_PATH, "agent_cli_anthropic_endpoint")
@@ -3051,6 +3217,7 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
         "gemini-cli-smoke": "Gemini CLI Smoke",
         "grok-cli-smoke": "Grok CLI Smoke (pre-tool only)",
         "goose-cli-smoke": "Goose CLI Smoke (pre-tool only)",
+        "kilo-cli-smoke": "Kilo Code CLI Smoke (full matrix; smoke-only image)",
         "opencode-v1-cli-smoke": "OpenCode V1 CLI Smoke",
         "opencode-v2-cli-smoke": "OpenCode V2 CLI Smoke",
         "pi-cli-smoke": "Pi CLI Smoke",
@@ -3596,6 +3763,118 @@ def test_mcp_version_smoke_prompt_asks_for_the_server_result():
     assert case.prompt.endswith(
         "using ai-guardian mcp tell me what is ai-guardian version"
     )
+
+
+@pytest.mark.parametrize(
+    ("provider_requests", "expected_pass", "expected_reason"),
+    (
+        ({"kilo_prompt_refusal": 1}, True, None),
+        ({}, False, "the fixed Kilo prompt refusal did not reach the local mock"),
+        (
+            {"prompt_injection": 1, "kilo_prompt_refusal": 1},
+            False,
+            "blocked prompt reached the local mock provider",
+        ),
+    ),
+)
+def test_kilo_prompt_refusal_requires_replacement_without_original_prompt(
+    provider_requests, expected_pass, expected_reason, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_kilo_prompt_refusal_case")
+    case = next(case for case in runner.CASES if case.name == "prompt_injection")
+    violation_reads = iter(({}, {case.expected_violation: 1}))
+    monkeypatch.setattr(
+        runner, "_violation_counts", lambda *_a, **_k: next(violation_reads)
+    )
+    request_reads = iter(({}, provider_requests))
+    hook_reads = iter(({}, {"prompt": 1}))
+    monkeypatch.setattr(
+        runner, "_provider_stats", lambda *_a, **_k: next(request_reads)
+    )
+    monkeypatch.setattr(runner, "_hook_counts", lambda *_a, **_k: next(hook_reads))
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "private", ""),
+    )
+
+    assert (
+        runner._run_case("docker", "owned", "kilo", "build", case, 30) is expected_pass
+    )
+    output = capsys.readouterr().out
+    if expected_reason:
+        assert f"FAIL prompt_injection: {expected_reason}" in output
+        assert "PASS prompt_injection" not in output
+    else:
+        assert "PASS prompt_injection" in output
+    assert case.prompt not in output
+    assert "private" not in output
+
+
+@pytest.mark.parametrize(
+    ("missing", "expected_reason"),
+    (
+        ("native", "the expected native Kilo tool was not confirmed by the local mock"),
+        ("result", "the issued Kilo tool result did not reach the local mock"),
+        ("continuation", "Kilo did not continue after the native tool result"),
+        ("exit", "Kilo did not complete the native tool-result turn cleanly"),
+    ),
+)
+def test_kilo_tool_result_cases_require_native_execution_evidence(
+    missing, expected_reason, monkeypatch, capsys
+):
+    runner = _load(RUNNER_PATH, "agent_cli_kilo_tool_evidence")
+    case = next(case for case in runner.CASES if case.name == "tool_output_secret")
+    monkeypatch.setattr(
+        runner,
+        "_violation_counts",
+        lambda *_a, **_k: {case.expected_violation: 1},
+    )
+    requests = iter(
+        (
+            {},
+            {"tool_output_secret": 1 if missing == "continuation" else 2},
+        )
+    )
+    hooks = iter(
+        (
+            {},
+            {
+                "prompt": 1,
+                "pretooluse": 1,
+                "posttooluse": 1,
+            },
+        )
+    )
+    tool_reads = iter(
+        (
+            {},
+            {
+                "executed": 1,
+                "tool_offers": 1,
+                "raw_tool_output_requests": 0,
+                "native_tool_name_bash": int(missing != "native"),
+                "correlated_tool_results": int(missing != "result"),
+            },
+        )
+    )
+    monkeypatch.setattr(runner, "_provider_stats", lambda *_a, **_k: next(requests))
+    monkeypatch.setattr(runner, "_hook_counts", lambda *_a, **_k: next(hooks))
+    monkeypatch.setattr(runner, "_tool_evidence", lambda *_a, **_k: next(tool_reads))
+    monkeypatch.setattr(
+        runner,
+        "_exec",
+        lambda *_a, **_k: subprocess.CompletedProcess(
+            [], 1 if missing == "exit" else 0, "private", ""
+        ),
+    )
+
+    assert not runner._run_case("docker", "owned", "kilo", "build", case, 30)
+    output = capsys.readouterr().out
+    assert f"FAIL tool_output_secret: {expected_reason}" in output
+    assert "PASS tool_output_secret" not in output
+    assert case.prompt not in output
+    assert "private" not in output
 
 
 @pytest.mark.parametrize(

@@ -58,7 +58,7 @@ upstream distinction.
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | **Complete** |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | **Complete** |
 | OpenCode V1/V2 | `--ide opencode` | Version-aware plugin | N/A | **Host contracts complete; normal-image V1 supported; OpenShell V1 Vertex path implemented, live qualification manual** |
-| Kilo Code CLI | `--ide kilo` | V1 plugin callbacks | `~/.config/kilo/kilo.json` (`mcp`) | **Host setup contract reviewed for 7.8.27; native execution, enforcement, result delivery, and sandbox runtime unqualified** |
+| Kilo Code CLI | `--ide kilo` | V1 `chat.message` and tool callbacks | `~/.config/kilo/kilo.json` (`mcp`) | **Required full OpenCode-applicable Release Readiness matrix implemented; CI result pending. Product container/OpenShell runtime remains unqualified** |
 | Pi | `--ide pi` | Managed extension (hooks + native MCP registration; eight callbacks) | Pi extension API (`registerMcpServer`; Pi 0.99.0+) | **Complete** |
 | Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
@@ -98,11 +98,26 @@ supports a relocated user home. With no variables set, defaults below apply.
 | Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
 | Crush | `CRUSH_GLOBAL_CONFIG` for the global MCP file; `CRUSH_GLOBAL_DATA` is not used for setup | Explicit global MCP file only | Hook and default `.crush.json` setup remain project-local |
 
+Prompt, pre-tool, and post-tool events use the shared scanner and policy pipeline;
+CLI adapters translate its outcome into the host's native callback contract
+rather than choosing a separate policy. Secret findings always block. Native
+hook limitations can still affect whether an outcome can be enforced or shown,
+so qualification is recorded per host and event.
+
 Kilo setup and tray health count the auto-discovered plugin as one managed
-artifact, not as callback coverage. The generated plugin declares
-`tool.execute.before` and `tool.execute.after`; the Kilo JSON/JSONC config stores
-MCP registration separately under `mcp`, not hook entries. Native plugin
-activation, enforcement, and result delivery remain unverified.
+artifact, not as callback coverage. The generated plugin declares `chat.message`
+for prompt scanning and `tool.execute.before` / `tool.execute.after` for tool
+processing. Kilo auto-discovers local plugin files in its `plugin/` directory;
+the separate `kilo plugin` command installs npm packages and adds config entries.
+The Kilo JSON/JSONC config stores MCP registration under `mcp`, not hook entries.
+User-reported Kilo 7.8.27 native tests confirmed a blocked synthetic prompt was
+replaced with a fixed refusal and Bash post-tool output was redacted. This is
+prompt replacement, not evidence that Kilo cancels the model turn. Pre-tool
+enforcement, post-tool fixed-refusal delivery, and broader result paths remain
+unqualified until the required full-matrix `kilo-cli-smoke` Release Readiness job
+passes. That job uses a disposable, external-network-disabled image and the same
+applicable cases as OpenCode; it does not qualify the product container or
+OpenShell runtime.
 
 These names follow the upstream contracts for [Claude](https://code.claude.com/docs/en/env-vars),
 [Codex](https://github.com/openai/codex/blob/main/codex-rs/config/src/loader/mod.rs),
@@ -154,7 +169,7 @@ bridge contracts because their host SDKs are not repository dependencies.
 | `aiderdesk` | Extension bridge/package registration and shared TypeScript process/response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
 | `openclaw` | Plugin bridge/package registration, rules setup, and shared TypeScript process/response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
 | `opencode` | Version-aware V1/V2 plugin bridge, SQLite/session setup, and shared TypeScript process/response boundary | OpenCode SQLite with V1 fallback and V2 runtime path discovery; browser session adapter | Generated plugin/registration E2E boundary; V1/V2 config-key reconciliation |
-| `kilo` | Kilo-identity adapter and V1 plugin bridge; native MCP config shape and separate Kilo roots | No local transcript/session adapter | Generated plugin/MCP setup and project-scope E2E; Kilo 7.8.27 native CLI execution and result delivery are not qualified |
+| `kilo` | Kilo-identity adapter and V1 plugin bridge with prompt and tool callbacks; native MCP config shape and separate Kilo roots | No local transcript/session adapter | Generated plugin/MCP setup and project-scope E2E; required full OpenCode-applicable native CLI matrix is implemented, with CI execution pending; no product container/OpenShell qualification |
 | `pi` | Dedicated adapter, managed extension/native MCP registration, and Claude-compatible response boundary | Pi JSONL; browser session adapter | Generated extension/registration E2E boundary; project/user trust and native MCP registration diagnostics |
 | `augment` | Dedicated adapter/tool-name mapping and Pre/Post command-hook setup | No local transcript; server-side storage documented | Isolated Pre/Post matrix; local-hook and no-local-transcript limitation |
 | `crush` | Dedicated adapter and PreToolUse-only setup/response contract | No transcript/session adapter; upstream surface is partial | Isolated PreToolUse matrix; Windows generated-hook structure and partial-surface limitation |
@@ -188,7 +203,7 @@ blocking, observation, context injection, and output transformation.
 | Kiro | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Augment Code | N/A | N/A | Yes | Yes | N/A | N/A | N/A |
 | OpenCode V1/V2 | N/A | Yes (chat.message / prompt) | Yes | Yes | N/A | N/A | Yes (V1 session.end; V2 session.deleted) |
-| Kilo Code CLI | N/A | Not installed | Yes (`tool.execute.before`) | Yes (`tool.execute.after`) | N/A | N/A | N/A |
+| Kilo Code CLI | N/A | `chat.message` (synthetic block-to-refusal replacement reported; does not cancel the model turn; full CI smoke pending) | Yes (`tool.execute.before`; full CI smoke pending) | Yes (`tool.execute.after`; Bash redaction reported; full CI smoke pending) | N/A | N/A | N/A |
 | Pi | Yes (`session_start`) | Yes (`input`) | Yes (`tool_call`, `user_bash`) | Yes (`tool_result`) | N/A | N/A | Yes (`session_shutdown`) |
 | Antigravity CLI | N/A | Yes (PreInvocation) | Yes | Yes (no output) | N/A | N/A | N/A |
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
@@ -214,7 +229,7 @@ of truth for host/version limitations and failure behavior.
 | Profile | Integrations |
 |---|---|
 | **Prompt control and pre-tool gate** | Claude Code; Cursor desktop/local CLI; Codex CLI and desktop Codex mode; Windsurf; Gemini CLI; Kiro IDE; AiderDesk; OpenCode V1/V2; Pi. OpenCode replaces the submitted draft with a fixed refusal rather than returning a native prompt denial. |
-| **Pre-tool gate; prompt gate absent, advisory, conditional, or unverified** | Copilot command hooks; Grok Build; Antigravity CLI; Cline; Cursor Cloud Agent; Kiro CLI; OpenClaw; ZooCode; Augment; Crush; Kilo Code CLI (native execution unqualified). Copilot's command prompt-hook output is ignored; Antigravity injects advice but does not terminate the model request. |
+| **Pre-tool gate; prompt gate absent, advisory, conditional, or unverified** | Copilot command hooks; Grok Build; Antigravity CLI; Cline; Cursor Cloud Agent; Kiro CLI; OpenClaw; ZooCode; Augment; Crush; Kilo Code CLI (prompt replacement and Bash redaction are user-reported; the required full native matrix is pending CI). Copilot's command prompt-hook output is ignored; Antigravity injects advice but does not terminate the model request. |
 | **MCP-only advisory checks** | Junie. MCP availability does not itself enforce a check; the agent must call and follow it. |
 
 Post-tool result handling is a separate capability. Claude Code supports
@@ -225,9 +240,18 @@ sanitized copy of that result. Gemini can withhold a sensitive result using a
 fixed refusal. AiderDesk, OpenCode, and Pi have host-side result transformation
 paths; OpenCode V1 block behavior is not counted as a verified redaction
 guarantee. Other paths are observation/context-only, not installed, or
-unverified as detailed below. Kilo's V1 plugin callback can inspect and transform
-the tool output in the shared bridge, but the generated plugin does not assign a
-sanitized copy to Kilo's result; native result delivery remains unqualified.
+unverified as detailed below. Kilo's generated V1 plugin declares `chat.message`
+for prompt scanning and mutates the documented message parts with a fixed refusal
+or verified sanitized prompt. Its `tool.execute.after` callback assigns verified
+sanitized text to `output.output`, or substitutes a fixed refusal for a blocked or
+invalid replacement, and clears the original title and metadata. User-reported
+Kilo 7.8.27 native tests confirmed a blocked synthetic prompt was replaced with a
+fixed refusal and Bash output was redacted, so the registry recognizes safe prompt
+replacement and safe post-output replacement for Kilo Bash results only. This
+does not mean Kilo cancels the model turn. Pre-tool enforcement, post-tool
+fixed-refusal delivery, and broader native tool-result paths remain unqualified
+until the full OpenCode-applicable Release Readiness smoke passes. The Kilo lane
+is currently implemented but has not yet produced a native CI result.
 
 ### Per-integration behavior matrix
 
@@ -265,7 +289,7 @@ a guarantee that every installed version behaves identically.
 | `openclaw` | OpenClaw Gateway plugin | **Observe only**: AI Guardian scans `message_received`, but that event ignores returned handler values, so `cancel` is not a prompt gate. | **Gate** through `before_tool_call`. | **Observe only**: `after_tool_call` is an observe hook and the plugin discards the scan result. | Plugin calls the shared process bridge synchronously with JSON; 30s timeout. Explicit exit 1/2 findings block pre-tool calls; other bridge failures fail open. Requires the plugin to be loaded by the Gateway. [Hook reference](https://docs.openclaw.ai/plugins/hooks/reference); [AI Guardian setup](#ide-specific-home-and-configuration-paths). |
 | `opencode` | OpenCode V1 (`opencode-ai` 1.x) | **Replace** blocked prompts with a fixed refusal; with the trusted non-blocking option, replace a verified sensitive finding with sanitized text and a warning toast. Not a native prompt-cancel result. | **Gate** by throwing from `tool.execute.before`. | **Conditional transformation**: the V1 callback applies an explicit returned replacement; a blocked post-hook throws, which is not counted as a verified safe-redaction guarantee. | Plugin invokes shared JSON process bridge; 30s timeout. OpenCode bridge failures and missing workspace identity fail closed. Requires V1 plugin registration and its adjacent bridge. Tool side effects precede post-tool handling. [OpenCode guide](OPENCODE.md); [plugin hooks](https://opencode.ai/docs/plugins/). |
 | `opencode` | OpenCode V2 (`@opencode/cli` 2.x) | **Replace** blocked prompts with a fixed refusal; with the trusted non-blocking option, replace a verified sensitive finding with sanitized text and a visible transcript notice. Clears attachments/mentions in either replacement path. | **Gate** by throwing from `execute.before`. | **Replace/withhold** the completed model-visible result; V2 updates the owned result before reporting a block. | Plugin invokes shared JSON process bridge; 30s timeout. Missing workspace identity and bridge failures fail closed. Requires V2 plugin discovery and V2 artifacts; V1 plugin code does not run in V2. [OpenCode guide](OPENCODE.md); [migration guide](https://opencode.ai/docs/build/plugins/migrate-v1/). |
-| `kilo` | Kilo Code CLI 7.8.27, V1 `@kilocode/plugin` | **Not installed**: the generated plugin registers no prompt callback. | **Unverified gate**: Kilo's `tool.execute.before` callback precedes execution and supports throwing, but native CLI activation/refusal delivery has not been qualified. | **Transform/inspect supported; safe replacement unsupported**: the generated plugin never assigns `updatedOutput` to Kilo's result. A fixed after-tool notice is thrown on a block or transform, but native result delivery is unqualified. | Plugin invokes the shared JSON bridge with a 30s timeout; missing workspace identity and bridge failures fail closed. Plugin files are auto-discovered from Kilo config directories. MCP uses the documented `mcp` object in `kilo.json`/`kilo.jsonc`; setup follows `kilo mcp add`, not OpenCode's environment/config roots. No native Kilo CLI run was performed. [MCP CLI docs](https://kilo.ai/docs/automate/mcp/using-in-cli); [v7.8.27 MCP resolver](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/cli/cmd/mcp.ts); [v7.8.27 tool callbacks](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/session/tools.ts); [v7.8.27 plugin trigger](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/plugin/index.ts). |
+| `kilo` | Kilo Code CLI 7.8.27, V1 `@kilocode/plugin` | **Prompt block-to-refusal replacement reported; native cancellation not claimed**: the generated `chat.message` callback submits text to the prompt scanner, replaces blocked prompts with a fixed refusal, and applies verified redaction to mutable message parts. A user-reported native retest after daemon resume confirmed a synthetic secret prompt was replaced under secret scanning's blocking behavior. Kilo may continue the model turn with the refusal; the original prompt text is replaced. | **Native gate pending full CI smoke**: Kilo's `tool.execute.before` callback precedes execution and supports throwing; the required smoke checks native denials, allowed calls, returned results, and clean exits. | **Bash replacement reported; full CI smoke pending**: `tool.execute.after` assigns verified sanitized text to `output.output`, or substitutes a fixed refusal on block/invalid replacement; it clears the original title/metadata. A user-reported Kilo 7.8.27 Bash test confirmed sanitized output delivery. The required smoke also covers native Write and output cases; no result-path qualification is claimed until it passes. | Plugin invokes the shared JSON bridge with a 30s timeout; missing workspace identity and bridge failures fail closed. Plugin files are auto-discovered from Kilo config directories. MCP uses the documented `mcp` object in `kilo.json`/`kilo.jsonc`; setup follows `kilo mcp add`, not OpenCode's environment/config roots. A separate full-matrix Release Readiness lane is implemented, but its native CI execution remains pending. [MCP CLI docs](https://kilo.ai/docs/automate/mcp/using-in-cli); [plugin hooks](https://kilo.ai/docs/automate/extending/plugins); [v7.8.27 plugin API types](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/plugin/src/index.ts); [v7.8.27 MCP resolver](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/cli/cmd/mcp.ts); [v7.8.27 tool callbacks](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/session/tools.ts); [v7.8.27 plugin trigger](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/plugin/src/index.ts). |
 | `pi` | Pi extension in user or project scope | **Gate** through `input` returning `action: handled`; extension commands handled earlier are outside this event. | **Gate** through `tool_call` and the native `user_bash` callback. | **Replace or mark as error** through `tool_result`; assistant output is also checked at `message_end`. | Extension invokes `ai-guardian` synchronously with JSON and a 30s timeout. Explicit exit 1/2 findings block; other child-process failures/timeouts fail open. Requires the extension to be loaded and the executable available. [Extensions reference](https://pi.dev/docs/latest/extensions). |
 | `augment` | Augment/Auggie local command hooks | **Not installed as a gate**: upstream `PromptSubmit` is asynchronous and cannot block or change the prompt. | **Gate** on explicit deny for the installed matcher set. | **Feedback only**; post hooks cannot deny or replace results. | Synchronous command hooks use JSON stdin/stdout; AI Guardian sets a 5s timeout. Only exit 2 or a deny blocks; crashes/timeouts fail open. Installed matchers cover selected process, edit, save, view, and remove-files tools, not every possible tool. [Hooks reference](https://docs.augmentcode.com/cli/hooks). |
 | `crush` | Current AI Guardian project hook installs only `PreToolUse` | **Not installed**. | **Gate** using the Claude-compatible deny response or exit 2. | **Not installed** by AI Guardian. | Command receives JSON on stdin; AI Guardian configures a 30s timeout. Only an explicit deny is relied on; other process-failure behavior is not qualified here. This describes AI Guardian's installed surface, not every hook available in newer Crush releases. [Crush hooks](https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md). |

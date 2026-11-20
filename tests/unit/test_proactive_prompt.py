@@ -1617,10 +1617,12 @@ def test_kilo_setup_result_reports_plugin_artifact_not_callback_coverage(tmp_pat
     assert "1/1 plugin artifacts configured (not callback coverage)" in message
     assert "Plugin directory (user scope)" in message
     assert "MCP registration is separate" in message
-    assert "callback coverage is not verified" in message
+    assert "`chat.message` (prompt scanning)" in message
+    assert "complete callback coverage is not verified" in message
     assert (
-        "Native plugin activation, enforcement, and result delivery remain "
-        "unverified"
+        "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+        "post-tool redaction manually confirmed; pre-tool enforcement, "
+        "post-tool fixed-refusal delivery and broader results remain unverified"
     ) in message
 
 

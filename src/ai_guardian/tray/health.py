@@ -874,10 +874,13 @@ class TrayHealthMonitor:
                     detail += (
                         "\n  MCP registration is separate, under `mcp` in the "
                         f"Kilo JSON/JSONC config{mcp_location}"
-                        "\n  Expected plugin callbacks: `tool.execute.before` and "
-                        "`tool.execute.after`; callback coverage is not verified"
-                        "\n  Native plugin activation, enforcement, and result "
-                        "delivery remain unverified"
+                        "\n  Declared callbacks: `chat.message` (prompt scanning), "
+                        "`tool.execute.before`, and `tool.execute.after`; complete "
+                        "callback coverage is not verified"
+                        "\n  Kilo 7.8.27 native synthetic prompt-to-refusal "
+                        "replacement and Bash post-tool redaction manually "
+                        "confirmed; pre-tool enforcement, post-tool fixed-refusal "
+                        "delivery and broader results remain unverified"
                     )
                 else:
                     installation_scope = verification.get("installation_scope")

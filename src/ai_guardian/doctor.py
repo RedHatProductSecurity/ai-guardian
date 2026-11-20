@@ -1639,11 +1639,14 @@ class Doctor:
             mcp_part += " in Kilo JSON/JSONC config"
         parts.append(mcp_part)
         parts.append(
-            "expected callbacks: tool.execute.before and tool.execute.after "
-            "(coverage not verified)"
+            "declared callbacks: chat.message (prompt scanning), "
+            "tool.execute.before, and tool.execute.after "
+            "(complete callback coverage not verified)"
         )
         parts.append(
-            "native activation, enforcement, and result delivery remain unverified"
+            "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
+            "post-tool redaction manually confirmed; pre-tool enforcement, "
+            "post-tool fixed-refusal delivery and broader results remain unverified"
         )
 
         attention = Doctor._hook_verification_detail(verification)
