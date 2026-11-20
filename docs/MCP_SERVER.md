@@ -113,13 +113,70 @@ For a manual Cursor registration, add the following to `~/.cursor/mcp.json`:
 | Windsurf | `~/.windsurf/mcp.json` |
 | Pi | Managed extension API (`registerMcpServer`; Pi 0.99.0+) |
 
+## Process lifecycle
+
+The local AI Guardian MCP server is a foreground stdio process, not a daemon
+service. For config-based registrations, the agent host launches the configured
+command and owns its connection and child process. Pi's managed extension
+registers the same local command through Pi's native MCP API, so Pi owns that
+connection as well.
+
+`ai-guardian mcp-server` runs the MCP SDK's stdio loop for one connection. It
+has no idle-shutdown timer and is not started or supervised by the AI Guardian
+daemon. The server exits when its stdio connection closes and the run loop
+returns; it then revokes its process-bound identity attestation. The host decides
+when to open, reuse, close, or restart that connection. Consequently, ending one
+chat or agent session is **not** a reliable shutdown trigger: a host may retain
+the connection for other sessions, or may create a new one per session. Fully
+quitting the host normally closes its stdio connections, but exact cleanup and
+reconnect behavior is host-specific.
+
+Stopping or restarting the AI Guardian daemon does not stop or restart the MCP
+process. Pausing the daemon also leaves the process running; global and
+applicable directory pauses are read by MCP action-gating checks and can make
+those checks return `paused`. See [Proactive Level](#proactive-level). Hooks
+remain the enforcement layer.
+
+`setup --no-mcp` removes the locally managed host registration, or disables
+registration in Pi's generated extension. It changes future launches; it does
+not signal or terminate a process that the host has already started. Use the
+host's MCP reload/reconnect control, or restart the host, so it reads the
+updated registration and closes any old connection. Once that connection is
+closed, the server process exits. Cursor Cloud MCP is configured separately in
+Cursor's dashboard/team settings or API; local project setup and `--no-mcp` do
+not change that external registration.
+
+### Verify or recover a connection
+
+- Check the host's MCP status and logs. In Pi, use `/mcp` inside the active
+  session; `pi mcp list` does not load extensions. `ai-guardian doctor` checks
+  registration health without starting the server, so it does not prove that a
+  live connection exists.
+- If the host reports a disconnect, use its MCP reconnect/restart control if
+  available, otherwise restart the host. If registration is missing or
+  disabled, rerun `ai-guardian setup --ide <host>` and reload/restart the host.
+- A process visible while its host connection is active is expected. If one
+  remains after fully quitting the host, check the OS process manager for its
+  parent host and any other active host sessions before treating it as an
+  orphan. Avoid terminating a process still owned by a running host.
+
+For a manual lifecycle check, connect from a supported host and confirm the
+server/tools appear in its MCP status (Pi: `/mcp`). End only the current chat
+while leaving the host open and observe whether that host reuses the connection;
+then fully quit and relaunch the host and verify disconnect/reconnect. While
+connected, stop, restart, or pause the AI Guardian daemon and confirm the MCP
+process itself stays up (a pause may change action-check results). Finally,
+run `setup --no-mcp`, reload/restart the host, and confirm the registration is
+absent; an already-running process should exit only after the host closes its
+existing stdio connection.
+
 ## Enable / Disable
 
 The MCP server is controlled by the integration setup. Install/disable via:
 
 ```bash
 ai-guardian setup --ide claude             # Install (default)
-ai-guardian setup --ide claude --no-mcp   # Uninstall
+ai-guardian setup --ide claude --no-mcp   # Remove the managed registration
 ai-guardian setup --ide pi --no-mcp       # Keep Pi hooks, omit MCP registration
 ```
 

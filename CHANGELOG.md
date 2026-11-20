@@ -127,6 +127,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retrying with the same explicit source UUID after the prior source was deleted.
 
 ### Changed
+- **MCP server lifecycle documentation (#2812):** Clarify stdio process ownership,
+  shutdown and reconnect triggers, daemon independence, and the effect of removing
+  a registration while a host may still have an active connection.
 - **NotebookLM refresh recovery:** Allow an explicitly identified exact-title
   `generated_text` source to be replaced using its full source UUID, and accept a
   new file source reported as `generated_text` only when bound to its saved upload
