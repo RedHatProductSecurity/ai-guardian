@@ -920,8 +920,9 @@ jobs:
           USER root
           RUN npm install --global --prefix /opt/kilo "@kilocode/cli@7.8.27" \
               && chmod -R a+rX /opt/kilo
-          RUN mkdir -p /sandbox/.local/state/kilo /sandbox/.local/share/kilo/state \
-              && chown -R sandbox:sandbox /sandbox/.local/state/kilo /sandbox/.local/share/kilo
+          # npm runs as root with HOME=/sandbox; hand off Kilo's config and state.
+          RUN mkdir -p /sandbox/.config/kilo /sandbox/.local/state/kilo /sandbox/.local/share/kilo/state \
+              && chown -R sandbox:sandbox /sandbox/.config/kilo /sandbox/.local/state/kilo /sandbox/.local/share/kilo
           ENV PATH="/opt/kilo/bin:${PATH}"
           USER sandbox
           RUN kilo --version
