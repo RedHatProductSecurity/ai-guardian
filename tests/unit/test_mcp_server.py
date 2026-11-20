@@ -909,8 +909,7 @@ class TestGetViolations:
         assert "image_secret_detected" in tool.description
         assert "pii_detected" in tool.description
         assert "original subtype" in tool.description
-        assert "source_url" in tool.description
-        assert "scanned tool response" in tool.description
+        assert "omit file paths, URLs, and line/column positions" in tool.description
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_returns_filtered_violations(self, mock_vl_cls):
@@ -943,8 +942,98 @@ class TestGetViolations:
         assert "context" not in v
         assert "blocked" not in v
         assert v["tool"] == ""
-        assert v["file"] == ""
+        assert "file" not in v
         assert "policy_decision" not in v
+
+    @patch("ai_guardian.violations.logger.ViolationLogger")
+    def test_sensitive_findings_omit_locators_from_all_record_shapes(self, mock_vl_cls):
+        """Sensitive locations are withheld regardless of storage shape or alias."""
+        locator_fields = {
+            "file",
+            "file_path",
+            "line",
+            "line_number",
+            "end_line",
+            "start_column",
+            "end_column",
+            "source_url",
+            "url",
+            "request_url",
+        }
+        locators = {
+            "file": "/private/top-level.txt",
+            "file_path": "/private/top-level.txt",
+            "line": 1,
+            "line_number": 2,
+            "end_line": 3,
+            "start_column": 4,
+            "end_column": 5,
+            "source_url": "https://example.test/private-page",
+            "url": "https://example.test/private-page",
+            "request_url": "https://example.test/private-page",
+        }
+        violation_types = (
+            "sensitive_finding",
+            "secret_detected",
+            "image_secret_detected",
+            "pii_detected",
+        )
+        records = []
+        for violation_type in violation_types:
+            record = {
+                "timestamp": "2026-07-27T10:00:00Z",
+                "violation_type": violation_type,
+                "severity": "critical",
+                "blocked": {
+                    **locators,
+                    "source_context": "tool_output",
+                    "mirror": {"blocked": dict(locators)},
+                },
+                "context": dict(locators),
+                "mirror": {"blocked": dict(locators)},
+                **locators,
+            }
+            if violation_type == "pii_detected":
+                record.pop("violation_type")
+                record["type"] = violation_type
+            records.append(record)
+
+        mock_vl_cls.return_value.get_recent_violations.return_value = records
+        result = create_server()._tool_manager._tools["get_violations"].fn()
+
+        assert result["count"] == len(violation_types)
+
+        def assert_no_locator_fields(value):
+            if isinstance(value, dict):
+                assert not locator_fields.intersection(value)
+                for nested in value.values():
+                    assert_no_locator_fields(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    assert_no_locator_fields(nested)
+
+        for violation in result["violations"]:
+            assert violation["type"] == "sensitive_finding"
+            assert violation["tool"] == ""
+            assert_no_locator_fields(violation)
+
+    @patch("ai_guardian.violations.logger.ViolationLogger")
+    def test_locationless_sensitive_record_stays_generic(self, mock_vl_cls):
+        mock_vl_cls.return_value.get_recent_violations.return_value = [
+            {
+                "timestamp": "2026-07-27T10:00:00Z",
+                "violation_type": "sensitive_finding",
+                "severity": "high",
+            }
+        ]
+
+        result = create_server()._tool_manager._tools["get_violations"].fn()
+        violation = result["violations"][0]
+
+        assert violation["type"] == "sensitive_finding"
+        assert violation["severity"] == "high"
+        assert "file" not in violation
+        assert "line" not in violation
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_filters_annotation_suppressed(self, mock_vl_cls):
@@ -1100,7 +1189,7 @@ class TestGetViolations:
         v = result["violations"][0]
         assert v["type"] == "sensitive_finding"
         assert v["tool"] == ""
-        assert v["file"] == ""
+        assert "file" not in v
         assert "source" not in v
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
@@ -1152,7 +1241,7 @@ class TestGetViolations:
         tool = server._tool_manager._tools["get_violations"]
         result = tool.fn()
         assert result["violations"][0]["type"] == "sensitive_finding"
-        assert result["violations"][0]["file"] == ""
+        assert "file" not in result["violations"][0]
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_prompt_injection_file_content_includes_location(self, mock_vl_cls):
@@ -1976,6 +2065,7 @@ class TestServerCreation:
         instructions = _load_skill_instructions()
         assert "get_violations" in instructions
         assert "get_version" in instructions
+        assert "Sensitive findings intentionally omit file paths" in instructions
         assert "Do NOT" in instructions
 
     def test_skill_instructions_no_bypass_content(self):

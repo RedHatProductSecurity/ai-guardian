@@ -478,7 +478,7 @@ def url_record(request):
     return record
 
 
-def test_mcp_projection_preserves_safe_url_and_response_columns(url_record):
+def test_mcp_projection_omits_sensitive_locations_only(url_record):
     pytest.importorskip("mcp")
     from ai_guardian.mcp.server import create_server
 
@@ -486,12 +486,25 @@ def test_mcp_projection_preserves_safe_url_and_response_columns(url_record):
         logger_class.return_value.get_recent_violations.return_value = [url_record]
         result = create_server()._tool_manager._tools["get_violations"].fn()
     record = result["violations"][0]
-    assert record["source_url"] == SOURCE_URL
     assert record["source_context"] == "Tool output"
-    assert record["file"] == ""
-    assert record["line"] == 2
-    assert record["start_column"] == 1
-    assert record["end_column"] == 9
+    if url_record["violation_type"] == "secret_redaction":
+        assert record["source_url"] == SOURCE_URL
+        assert record["line"] == 2
+        assert record["start_column"] == 1
+        assert record["end_column"] == 9
+    else:
+        for key in (
+            "file",
+            "file_path",
+            "source_url",
+            "url",
+            "line",
+            "line_number",
+            "end_line",
+            "start_column",
+            "end_column",
+        ):
+            assert key not in record
     assert PRIVATE_VALUE not in json.dumps(record)
     assert "private-" not in json.dumps(record)
 

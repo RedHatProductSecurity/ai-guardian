@@ -75,7 +75,7 @@ When a hook blocks a tool call (Read, Write, Bash, etc.) and you need to explain
 
 1. **Get the actual reason**: Call `get_violations(limit=1)` to retrieve the real block reason from the violation log
 2. **Report the real reason**: Tell the user the actual violation type — secret detected, PII found, prompt injection, SSRF, directory protected, etc.
-3. **Do NOT guess**: The hook error message alone may be generic. Always query `get_violations()` for the specific violation type, file path, and line number.
+3. **Do NOT guess**: The hook error message alone may be generic. Query `get_violations()` for the actual violation type. Sensitive findings intentionally omit file paths, URLs, and line/column positions from MCP responses; do not infer or seek those locations.
 4. **Accept the block**: The block is the security policy working as intended. Do not attempt to work around it.
 
 ## Do NOT
@@ -96,7 +96,7 @@ Security config can change at any time (via Console, tray, CLI, or file edit). W
 
 | User asks | Call |
 |-----------|------|
-| "Why was that blocked?" | `get_violations(violation_type=..., limit=10)` — always show file path and line number when present (see below) |
+| "Why was that blocked?" | `get_violations(violation_type=..., limit=10)` — show available non-sensitive locations; sensitive findings intentionally omit locators (see below) |
 | "What's my security config?" | `get_config()` |
 | "What version of AI Guardian is installed?" | `get_version()` |
 | "Is my setup working?" | `doctor()` — see below |
@@ -109,16 +109,16 @@ Security config can change at any time (via Console, tray, CLI, or file edit). W
 
 Sensitive history records are reported as `sensitive_finding` and intentionally
 do not retain whether the finding was a secret, PII, or image-secret finding.
-Report that consolidated category; do not infer a more specific subtype. A
-sanitized file path or `source_url` and source position, or a fixed source-context
-label when no safe locator is available, may be present. Matched values, snippets, and detector
-details are never retained.
+Report that consolidated category; do not infer a more specific subtype. MCP
+responses omit file paths, URLs, and line/column positions for sensitive findings,
+including legacy records and alias filters. A fixed source-context label may be
+present. Matched values, snippets, and detector details are never retained.
 
-When showing violations to the user, always include the file path and line number when the response contains them. This helps the user locate exactly where the issue was detected.
+When showing a non-sensitive violation, include its file path and line number when the response contains them. Sensitive-finding responses intentionally have no location metadata.
 
 - If the violation has `file` and `line` fields, show them as `file:line` (e.g., `src/config.py:42`)
 - If only `file` is present, show the file path alone
-- For `source_url`, show the sanitized request URL as a URL, not a file path. Label
+- For a non-sensitive `source_url`, show the sanitized request URL as a URL, not a file path. Label
   positions as **response** line/column (one-based in MCP); they locate the scanned
   tool response, not the original remote page. Never reconstruct removed URL data.
 - Only omit location details when the user asks for a summary or aggregate view (e.g., "how many violations this week?" — use `get_metrics` instead)

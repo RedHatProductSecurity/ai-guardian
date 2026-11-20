@@ -258,7 +258,7 @@ also be returned. An MCP startup failure reports `startup_failure` or
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `get_violations` | `violation_type?`, `limit?` | violation list with file:line, policy decision, optional safe input diagnostics/correlation | Recent security violations |
+| `get_violations` | `violation_type?`, `limit?` | violation list; non-sensitive entries may include locations, policy decisions, and optional safe input diagnostics/correlation | Recent security violations |
 | `get_version` | — | installed AI Guardian package version | Check package/runtime version |
 | `get_config` | `project_dir?` | feature enabled/disabled map | Current security posture |
 | `get_scanner_status` | — | installed scanners + versions | Scanner inventory |
@@ -270,13 +270,14 @@ also be returned. An MCP startup failure reports `startup_failure` or
 Use `sensitive_finding` to query the consolidated, privacy-safe sensitive
 category. The legacy filters `secret_detected`, `image_secret_detected`, and
 `pii_detected` remain supported and match consolidated records; a current record
-does not retain which sensitive subtype produced it. When safely available, the
-response includes the sanitized file path and source line/column; otherwise it
-may include a fixed source-context label. Matched values, snippets, detector
-metadata, and sensitive context are never returned. Legacy records are projected
-to the same generic category and safe locator fields, and locationless records
-remain locationless. The canonical filter also includes type-specific sensitive
-records from older history.
+does not retain which sensitive subtype produced it. MCP responses omit all
+sensitive-finding location fields, including file paths, URLs, and line/column
+coordinates, even when present in legacy or mirrored history. The same rule
+applies to the canonical filter and all legacy aliases; locationless records
+remain locationless. A fixed source-context label may be included, but matched
+values, snippets, detector metadata, and sensitive context are never returned.
+Non-sensitive violation types may still include safe location metadata. The
+canonical filter also includes type-specific sensitive records from older history.
 
 Tool-permission entries can include `input_diagnostics` with fixed validation
 subreasons and schema-recognized argument names/types, never payload values or
@@ -313,7 +314,7 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 | `check_path` | allowed/denied for operation | Which rule matched, full rules list |
 | `check_command` | allowed/blocked + reason category | Which pattern matched, the deny list |
 | `get_config` | Feature on/off, action mode | Allowlist patterns, regex, rule details |
-| `get_violations` | Type, timestamp, file:line, action, normalized policy decision, vetted input diagnostics/correlation | Matched pattern internals, raw input/content, arbitrary stored reasons |
+| `get_violations` | Type, timestamp, action; non-sensitive locations, normalized policy decisions, vetted input diagnostics/correlation | Sensitive-finding locations, matched pattern internals, raw input/content, arbitrary stored reasons |
 | `get_patterns_list` | Category names and counts | Regex patterns |
 
 ### Self-protection
