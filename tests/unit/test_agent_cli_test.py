@@ -2107,6 +2107,8 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
             assert 'wire_api = "responses"' in config
             assert 'approval_policy = "never"' in config
             assert 'sandbox_mode = "workspace-write"' in config
+            assert "[mcp_servers.ai-guardian]" in config
+            assert 'args = ["mcp-server"]' in config
             assert "[profiles." not in config
             assert runner.MOCK_KEY not in config
             # Native profile overlays must preserve the base MCP/hook setup.

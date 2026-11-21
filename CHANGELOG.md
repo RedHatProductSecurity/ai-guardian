@@ -101,7 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `on_scan_error`, custom regexes reject backtracking-dangerous shapes, POSIX
   assignment-prefixed HTTP commands are scanned, and MIME-wrapped Base64 is
   decoded with source-safe redaction. Codex smoke failures now block Release
-  Readiness; the integration performance guard allows normal hosted-runner
+  Readiness; the Codex smoke profile preserves its MCP server and native command
+  argument shape; the integration performance guard allows normal hosted-runner
   scheduling variance; current-candidate Kilo qualification remains pending a
   matching-SHA CI run.
 - **Sensitive MCP violation privacy (#2816):** Omit file paths, URLs, and
