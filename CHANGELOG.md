@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Read the Docs release lifecycle:** Require an RTD API token before release
+  mutations, wait for the exact tag commit's build, activate and unhide the
+  version after success, and set the project default only after the release docs
+  are available. Keep `/latest/` tracking `main`.
+
 ## [1.23.0] - 2026-11-21
 
 ### Added
