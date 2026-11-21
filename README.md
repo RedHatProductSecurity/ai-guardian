@@ -1,7 +1,7 @@
 # AI Guardian
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.23.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
 </p>
 
 > Security controls for AI coding agents: hooks scan prompts and tool activity, enforce permissions, and detect sensitive data.
@@ -12,7 +12,7 @@
 
 ## Documentation and Q&A
 
-- [Full documentation site (latest release: v1.22.0)](https://ai-guardian.readthedocs.io/en/v1.22.0/) —
+- [Full documentation site (latest release: v1.23.0)](https://ai-guardian.readthedocs.io/en/v1.23.0/) —
   searchable, versioned guides.
 - [Latest documentation (tracks `main`)](https://ai-guardian.readthedocs.io/en/latest/) — guides for upcoming
   development changes.

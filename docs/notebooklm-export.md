@@ -8,7 +8,7 @@ Auto-generated combined export of all project documentation.
 # AI Guardian
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.22.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.23.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
 </p>
 
 > Security controls for AI coding agents: hooks scan prompts and tool activity, enforce permissions, and detect sensitive data.
@@ -19,8 +19,8 @@ Auto-generated combined export of all project documentation.
 
 ## Documentation and Q&A
 
-- [Full documentation site (latest stable release)](https://ai-guardian.readthedocs.io/en/stable/) — searchable,
-  versioned guides.
+- [Full documentation site (latest release: v1.23.0)](https://ai-guardian.readthedocs.io/en/v1.23.0/) —
+  searchable, versioned guides.
 - [Latest documentation (tracks `main`)](https://ai-guardian.readthedocs.io/en/latest/) — guides for upcoming
   development changes.
 - [Source documentation index][docs-index] — browse the documentation in this repository.
@@ -47,6 +47,13 @@ ai-guardian daemon start -b
 Setup detects supported IDEs and guides hook setup. Open your IDE to start using
 AI Guardian. For optional desktop controls, run `ai-guardian tray start -b`; open
 the browser console with `ai-guardian console`.
+
+To scan an existing project and add inline suppression annotations, run this
+from its root:
+
+```bash
+ai-guardian init-project --scan --annotate
+```
 
 > **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read,
 > Write, Edit) are allowed and scanned by hooks. See [Tool Policy][policy]
@@ -90,6 +97,7 @@ cloud jobs.
 | OpenClaw Gateway plugin | Observe only | Gate | Observe only | Prompt-event return values are ignored; the loaded plugin does not replace post-tool results. |
 | OpenCode V1 (1.x) | Replace with a fixed refusal | Gate | Conditional transformation | An explicit replacement can be applied; a post-hook block is not a verified safe-redaction guarantee. |
 | OpenCode V2 (2.x) | Replace with a fixed refusal | Gate | Replace/withhold | Requires V2 plugin discovery and artifacts; V1 plugin code does not run in V2. |
+| Kilo Code CLI | Prompt-to-refusal replacement verified; native turn cancellation not claimed | Historical full native pre-tool matrix passed for 7.8.27; current-candidate CI requalification pending | Bash/Write output cases passed in the historical run | The historical OpenCode-applicable smoke is not evidence for the current candidate; product container/OpenShell support remains unqualified. |
 | Pi extension | Gate | Gate | Replace or mark as error | Requires a loaded extension; commands handled before the input event are outside its prompt gate. |
 | Augment / Auggie local hooks | Not installed | Gate for selected tools | Feedback only; no replacement | Installed matchers do not cover every tool. |
 | Crush | Not installed | Gate | Not installed | AI Guardian installs only the pre-tool stage. |
@@ -121,6 +129,7 @@ upstream references. That guide is the source of truth for this summary.
 | PII detection | [Secret Scanning][secrets] |
 | Prompt injection detection | [Prompt Injection][prompt] |
 | Context poisoning detection | [Context Poisoning][context] |
+| Decoded Base64 text inspection | [Secret Scanning][secrets] · [Prompt Injection][prompt] · [Context Poisoning][context] |
 | Image scanning | [Image Scanning][images] |
 | Unicode attack detection | [Unicode Attacks][unicode] |
 | SSRF protection | [SSRF Protection][ssrf] |
@@ -130,13 +139,15 @@ upstream references. That guide is the source of truth for this summary.
 | Directory blocking | [Directory Rules][directories] |
 | Tool, MCP, and Skill permissions | [Tool Policy][policy] |
 | MCP security advisor and scanning | [MCP Server][mcp] |
+| MCP package version query | [MCP Server][mcp] |
 | Supply-chain scanning | [Configuration Guide][configuration] |
 | Sanitize command and secret redaction | [Secret Redaction][redaction] |
 | Violation logging | [Violation Logging][violations] |
+| Trusted developer-session non-blocking findings | [Configuration Guide][configuration] |
 | Compliance audit logging | [Audit Logging][audit] |
 | Support bundles | [Support][support] |
 | Uninstall and orphan recovery | [Uninstall Guide][uninstall] |
-| Interactive console | [Console Guide][console] |
+| Interactive console and configurable listener port | [Console Guide][console] |
 | Scanner management | [Scanner Installation][scanners] |
 | Built-in TOML pattern engine | [TOML Patterns][toml] |
 | Secret liveness validation | [Configuration Guide][configuration] |
@@ -148,6 +159,7 @@ upstream references. That guide is the source of truth for this summary.
 | Security instructions | [Configuration Guide][configuration] |
 | Multi-agent support and transcript scanning | [Agent Support][agent-support] |
 | Agent CLI maturity advisories | [Agent Support][agent-support] |
+| Kilo Code host CLI integration (full CLI matrix verified; product runtime unqualified) | [Agent Support][agent-support] |
 | OpenCode support | [OpenCode][opencode] |
 | Pi and Crush support | [Agent Support][agent-support] |
 | Goose host CLI pre-tool enforcement | [Goose Support][goose] |
@@ -157,6 +169,7 @@ upstream references. That guide is the source of truth for this summary.
 | OpenShell supervisor middleware | [OpenShell Middleware][openshell] |
 | Kubernetes deployment | [Kubernetes Guide][kubernetes] |
 | Multi-daemon tray | [Multi-Daemon Tray][tray] |
+| Tray CLI and setup health indicators | [Multi-Daemon Tray][tray] |
 | Desktop shortcut and autostart | [Multi-Daemon Tray][tray] |
 | Tray plugins and event-driven updates | [Multi-Daemon Tray][tray] |
 | Hook latency metrics | [Hooks][hooks] |
@@ -170,6 +183,7 @@ upstream references. That guide is the source of truth for this summary.
 | LeakTK listen mode | [Scanner Installation][scanners] |
 | Scan-and-configure workflow | [Console Guide][console] |
 | Security SDK and REST API | [SDK Guide][sdk] |
+| Per-invocation daemon REST listener overrides | [Configuration Guide][configuration] |
 
 ## License and Contributions
 
@@ -331,12 +345,12 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/redhatproductsecurity/ai-guardian:1.22.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.23.0
 ```
 
 Tag conventions:
 - `:latest` — tracks main branch (updated on every merge)
-- `:<version>` — pinned stable release (e.g. `1.22.0`)
+- `:<version>` — pinned stable release (e.g. `1.23.0`)
 
 ## Build Locally
 
@@ -345,10 +359,10 @@ Tag conventions:
 podman build -t ai-guardian container/
 
 # Specific version
-podman build --build-arg AI_GUARDIAN_VERSION=1.22.0 -t ai-guardian container/
+podman build --build-arg AI_GUARDIAN_VERSION=1.23.0 -t ai-guardian container/
 
 # Local wheel (copy the wheel into container/vendor/ first)
-WHEEL_PATH=dist/ai_guardian-1.22.0-py3-none-any.whl
+WHEEL_PATH=dist/ai_guardian-1.23.0-py3-none-any.whl
 WHEEL_NAME="$(basename "$WHEEL_PATH")"
 cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
 podman build --build-arg "AI_GUARDIAN_VERSION=$WHEEL_NAME" \
@@ -1520,11 +1534,11 @@ Access from the host: `http://localhost:63152`
 
 | Arg | Default | Description |
 |-----|---------|-------------|
-| `AI_GUARDIAN_VERSION` | `1.22.0` | PyPI version or `.whl` filename |
+| `AI_GUARDIAN_VERSION` | `1.23.0` | PyPI version or `.whl` filename |
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
 | `OPENCODE_VERSION` | `1.19.0` | OpenCode V1 version for both support images |
-| `PI_VERSION` | `0.86.0` | Pi coding agent version for the normal image |
+| `PI_VERSION` | `0.99.0` | Pi coding agent version for the normal image (native MCP registration support) |
 
 The dedicated OpenShell image also records its qualification inputs as OCI
 labels: the report schema version, AI Guardian build value, pinned NVIDIA base
@@ -1641,7 +1655,8 @@ upstream distinction.
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | **Complete** |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | **Complete** |
 | OpenCode V1/V2 | `--ide opencode` | Version-aware plugin | N/A | **Host contracts complete; normal-image V1 supported; OpenShell V1 Vertex path implemented, live qualification manual** |
-| Pi | `--ide pi` | Managed extension (hooks + MCP tool bridge; eight callbacks) | Managed extension (`@modelcontextprotocol/sdk` pinned) | **Complete** |
+| Kilo Code CLI | `--ide kilo` | V1 `chat.message` and tool callbacks | `~/.config/kilo/kilo.json` (`mcp`) | **Historical OpenCode-applicable Release Readiness matrix passed for Kilo 7.8.27; current-candidate requalification is pending; product container/OpenShell runtime remains unqualified** |
+| Pi | `--ide pi` | Managed extension (hooks + native MCP registration; eight callbacks) | Pi extension API (`registerMcpServer`; Pi 0.99.0+) | **Complete** |
 | Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
@@ -1653,11 +1668,11 @@ For removal and package-first recovery, see [Uninstall and orphan recovery](UNIN
 including the explicitly unverified per-host missing-runtime lifecycle matrix.
 
 AI Guardian resolves user-level setup, MCP registration, verification, audit,
-and supported session paths from the same environment-variable rules. An
-explicit complete-file variable has priority over a home-directory variable;
-the first variable listed for an integration wins. A project-scoped operation
-always remains project-local, even when the IDE also supports a relocated user
-home. With no variables set, the existing defaults below are unchanged.
+and supported session paths from the host-specific environment-variable rules.
+Where a file override selects that integration surface, it takes priority over
+a home-directory variable; the first variable listed for an integration wins.
+A project-scoped operation always remains project-local, even when the IDE also
+supports a relocated user home. With no variables set, defaults below apply.
 
 | Integration | User-home or file variables | Relocated user-level targets | Project/local behavior |
 |---|---|---|---|
@@ -1674,10 +1689,34 @@ home. With no variables set, the existing defaults below are unchanged.
 | AiderDesk | `AIDER_DESK_DIR`, then `AIDER_DESK_HOME_DIR` | Extension: `<dir>/extensions/ai-guardian`; MCP: `<dir>/settings.json` | Project transcript history remains `.aider.chat.history.md` |
 | OpenClaw | `OPENCLAW_STATE_DIR`, then `OPENCLAW_HOME`; `OPENCLAW_CONFIG_PATH` is an explicit MCP file | Plugin: `<state>/plugins/ai-guardian`; MCP: the exact `OPENCLAW_CONFIG_PATH`, otherwise `<state>/settings.json` | Explicit config-file selection does not redirect plugin state |
 | OpenCode V1/V2 | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory); V2 may also use `OPENCODE_DB` | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins`; shared bridge: `<config-dir>/ai-guardian`; V2 local discovery: `.opencode/plugins/` | Project-local config remains project-local; V2 database discovery uses `opencode debug paths db` when available |
-| Pi | `PI_CODING_AGENT_DIR` for the agent home; `PI_CODING_AGENT_SESSION_DIR` for sessions | Managed extension: `<dir>/extensions/ai-guardian/index.ts` plus `package.json`; sessions: `<session-dir>/*.jsonl` | Project extension remains under `<project>/.pi/extensions/ai-guardian`; MCP is bridged through the managed extension |
+| Kilo Code CLI | `KILO_CONFIG_DIR` (directory); `KILO_CONFIG` is a separate config overlay and does not select the MCP writer target | MCP: `<config-dir>/kilo.json` (existing `kilo.jsonc`/OpenCode-compatible files take native precedence); plugin: `<config-dir>/plugin`; default config root: `~/.config/kilo`, with legacy discovery roots `~/.kilocode` and `~/.kilo`; skills: `~/.kilo/skills` (legacy `~/.kilocode/skills`; also `~/.agents/skills`) | Plugin: `.kilo/plugin` (or `.kilocode/plugin` when that existing location is selected); skills: `.kilo/skills` (legacy `.kilocode/skills`; also `.agents/skills`); MCP follows `kilo mcp add` precedence and stays project-local |
+| Pi | `PI_CODING_AGENT_DIR` for the agent home; `PI_CODING_AGENT_SESSION_DIR` for sessions | Managed extension: `<dir>/extensions/ai-guardian/index.ts` plus `package.json`; sessions: `<session-dir>/*.jsonl` | Project extension remains under `<project>/.pi/extensions/ai-guardian`; native MCP registration is supplied by the extension |
 | Windsurf | No documented home relocation variable; `WINDSURF_TRANSCRIPTS_DIR` is transcript-only | Existing defaults remain unchanged | Project hooks/settings retain their existing scope |
 | Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
 | Crush | `CRUSH_GLOBAL_CONFIG` for the global MCP file; `CRUSH_GLOBAL_DATA` is not used for setup | Explicit global MCP file only | Hook and default `.crush.json` setup remain project-local |
+
+Prompt, pre-tool, and post-tool events use the shared scanner and policy pipeline;
+CLI adapters translate its outcome into the host's native callback contract
+rather than choosing a separate policy. Secret findings always block. Native
+hook limitations can still affect whether an outcome can be enforced or shown,
+so qualification is recorded per host and event.
+
+Kilo setup and tray health count the auto-discovered plugin as one managed
+artifact, not as callback coverage. The generated plugin declares `chat.message`
+for prompt scanning and `tool.execute.before` / `tool.execute.after` for tool
+processing. Kilo auto-discovers local plugin files in its `plugin/` directory;
+the separate `kilo plugin` command installs npm packages and adds config entries.
+The Kilo JSON/JSONC config stores MCP registration under `mcp`, not hook entries.
+User-reported Kilo 7.8.27 native tests confirmed a blocked synthetic prompt was
+replaced with a fixed refusal and Bash post-tool output was redacted. Historical
+full-matrix evidence for the `kilo-cli-smoke` Release Readiness job passed all
+OpenCode-applicable cases and correlated MCP-version evidence on 2026-11-20
+([run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315),
+commit `ea8b8eb5ca09126c0866372a0dd2da487a67db5e`). That run does not match the
+current candidate; exact-SHA requalification is pending. Prompt replacement is not
+evidence that Kilo cancels the model turn. The job uses a disposable,
+external-network-disabled image; it does not qualify the product container or
+OpenShell runtime.
 
 These names follow the upstream contracts for [Claude](https://code.claude.com/docs/en/env-vars),
 [Codex](https://github.com/openai/codex/blob/main/codex-rs/config/src/loader/mod.rs),
@@ -1688,7 +1727,9 @@ These names follow the upstream contracts for [Claude](https://code.claude.com/d
 [Junie](https://junie.jetbrains.com/docs/environment-variables.html),
 [Cline](https://github.com/cline/cline/blob/main/docs/cli/cli-reference.mdx),
 [OpenClaw](https://github.com/openclaw/openclaw/blob/main/docs/help/environment.md),
-[OpenCode](https://dev.opencode.ai/docs/config), and
+[OpenCode](https://dev.opencode.ai/docs/config),
+[Kilo Code CLI](https://kilo.ai/docs/automate/mcp/using-in-cli), and
+[Kilo skills](https://kilo.ai/docs/customize/skills),
 [Pi](https://github.com/earendil-works/pi). The
 [AiderDesk release notes](https://github.com/hotovo/aider-desk/releases) and
 [Crush repository](https://github.com/charmbracelet/crush) document their
@@ -1698,8 +1739,8 @@ relocation variable deliberately keep their existing defaults.
 ## Coverage-to-test matrix
 
 For actual CLI invocation coverage, see the separate [real-agent CLI coverage
-ledger](REAL_AGENT_CLI_COVERAGE.md). It includes all twelve canonical host CLIs
-(including Goose), partial pre-tool lanes, explicit blockers and CI drift tests.
+ledger](REAL_AGENT_CLI_COVERAGE.md). It includes all thirteen canonical host CLIs
+(including Goose and Kilo), partial pre-tool lanes, explicit blockers and CI drift tests.
 This matrix's adapter/generated-bridge evidence does not establish native CLI
 execution, output containment or product-runtime qualification.
 
@@ -1727,7 +1768,8 @@ bridge contracts because their host SDKs are not repository dependencies.
 | `aiderdesk` | Extension bridge/package registration and shared TypeScript process/response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
 | `openclaw` | Plugin bridge/package registration, rules setup, and shared TypeScript process/response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
 | `opencode` | Version-aware V1/V2 plugin bridge, SQLite/session setup, and shared TypeScript process/response boundary | OpenCode SQLite with V1 fallback and V2 runtime path discovery; browser session adapter | Generated plugin/registration E2E boundary; V1/V2 config-key reconciliation |
-| `pi` | Dedicated adapter, managed extension/MCP bridge, and Claude-compatible response boundary | Pi JSONL; browser session adapter | Generated extension/registration E2E boundary; project/user trust and pinned SDK dependency diagnostics |
+| `kilo` | Kilo-identity adapter and V1 plugin bridge with prompt and tool callbacks; native MCP config shape and separate Kilo roots | No local transcript/session adapter | Generated plugin/MCP setup and project-scope E2E; historical full OpenCode-applicable native CLI matrix passed for 7.8.27 in Release Readiness run 44684917315, with current-candidate requalification pending; no product container/OpenShell qualification |
+| `pi` | Dedicated adapter, managed extension/native MCP registration, and Claude-compatible response boundary | Pi JSONL; browser session adapter | Generated extension/registration E2E boundary; project/user trust and native MCP registration diagnostics |
 | `augment` | Dedicated adapter/tool-name mapping and Pre/Post command-hook setup | No local transcript; server-side storage documented | Isolated Pre/Post matrix; local-hook and no-local-transcript limitation |
 | `crush` | Dedicated adapter and PreToolUse-only setup/response contract | No transcript/session adapter; upstream surface is partial | Isolated PreToolUse matrix; Windows generated-hook structure and partial-surface limitation |
 | `junie` | MCP/rules setup and explicit no-hook adapter placeholder | No transcript/session adapter | Isolated MCP-only registration/health boundary; advisory, non-enforcing behavior |
@@ -1760,6 +1802,7 @@ blocking, observation, context injection, and output transformation.
 | Kiro | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Augment Code | N/A | N/A | Yes | Yes | N/A | N/A | N/A |
 | OpenCode V1/V2 | N/A | Yes (chat.message / prompt) | Yes | Yes | N/A | N/A | Yes (V1 session.end; V2 session.deleted) |
+| Kilo Code CLI | N/A | `chat.message` (7.8.27 smoke verified fixed-refusal replacement; does not cancel the model turn) | Yes (`tool.execute.before`; native denial/allow cases passed in the 7.8.27 smoke) | Yes (`tool.execute.after`; Bash/Write and secret/PII output cases passed in the 7.8.27 smoke) | N/A | N/A | N/A |
 | Pi | Yes (`session_start`) | Yes (`input`) | Yes (`tool_call`, `user_bash`) | Yes (`tool_result`) | N/A | N/A | Yes (`session_shutdown`) |
 | Antigravity CLI | N/A | Yes (PreInvocation) | Yes | Yes (no output) | N/A | N/A | N/A |
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
@@ -1785,7 +1828,7 @@ of truth for host/version limitations and failure behavior.
 | Profile | Integrations |
 |---|---|
 | **Prompt control and pre-tool gate** | Claude Code; Cursor desktop/local CLI; Codex CLI and desktop Codex mode; Windsurf; Gemini CLI; Kiro IDE; AiderDesk; OpenCode V1/V2; Pi. OpenCode replaces the submitted draft with a fixed refusal rather than returning a native prompt denial. |
-| **Pre-tool gate; prompt gate absent, advisory, conditional, or unverified** | Copilot command hooks; Grok Build; Antigravity CLI; Cline; Cursor Cloud Agent; Kiro CLI; OpenClaw; ZooCode; Augment; Crush. Copilot's command prompt-hook output is ignored; Antigravity injects advice but does not terminate the model request. |
+| **Pre-tool gate; prompt gate absent, advisory, conditional, or unverified** | Copilot command hooks; Grok Build; Antigravity CLI; Cline; Cursor Cloud Agent; Kiro CLI; OpenClaw; ZooCode; Augment; Crush; Kilo Code CLI (historical full-matrix pre-tool cases passed; current-candidate requalification is pending; prompt replacement does not cancel the model turn). Copilot's command prompt-hook output is ignored; Antigravity injects advice but does not terminate the model request. |
 | **MCP-only advisory checks** | Junie. MCP availability does not itself enforce a check; the agent must call and follow it. |
 
 Post-tool result handling is a separate capability. Claude Code supports
@@ -1796,7 +1839,19 @@ sanitized copy of that result. Gemini can withhold a sensitive result using a
 fixed refusal. AiderDesk, OpenCode, and Pi have host-side result transformation
 paths; OpenCode V1 block behavior is not counted as a verified redaction
 guarantee. Other paths are observation/context-only, not installed, or
-unverified as detailed below.
+unverified as detailed below. Kilo's generated V1 plugin declares `chat.message`
+for prompt scanning and mutates the documented message parts with a fixed refusal
+or verified sanitized prompt. Its `tool.execute.after` callback assigns verified
+sanitized text to `output.output`, or substitutes a fixed refusal for a blocked or
+invalid replacement, and clears the original title and metadata. Historical
+OpenCode-applicable Kilo 7.8.27 Release Readiness evidence passed on 2026-11-20
+([run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315),
+commit `ea8b8eb5ca09126c0866372a0dd2da487a67db5e`); its prompt, native pre-tool,
+Bash/Write result, output-safety, clean execution, and correlated MCP-version
+cases passed. Exact-SHA requalification for the current candidate is pending.
+This does not mean Kilo cancels the model turn. These historical results qualify
+only the tested CLI and smoke image, not the current candidate or product
+container/OpenShell runtime behavior.
 
 ### Per-integration behavior matrix
 
@@ -1832,8 +1887,9 @@ a guarantee that every installed version behaves identically.
 | `kiro` | Kiro CLI (including documented CLI hook surfaces) | **Observe/advice only**: CLI Prompt Submit hooks cannot block, even though the trigger exists. | **Gate** on explicit exit 2. | **Advice/context only**; no safe output replacement. | Command JSON on stdin; default timeout is 60s. CLI Prompt Submit nonzero exits are warnings; Pre Tool Use exit 2 blocks. Standalone hook files and exact event availability vary by CLI generation; verify the installed version. [Hook actions](https://kiro.dev/docs/hooks/actions/); [hook triggers](https://kiro.dev/docs/hooks/types/). |
 | `aiderdesk` | AiderDesk extension v0.55.0+ with the AI Guardian extension enabled | **Gate** via `onPromptStarted` returning `{ blocked: true }`. | **Conditional gate** through `onToolApproval`/`onToolCalled`; host execution paths can differ in which callbacks fire. | **Replace output** through `onToolFinished` where that callback runs; tool side effects have already occurred. | Extension callback invokes the shared process bridge synchronously; bridge timeout is 30s. Explicit exit 1/2 findings block; spawn errors/timeouts fail open. Requires the extension and `ai-guardian` executable in the extension environment. [Extension events](https://aiderdesk.dev/docs/extensions/events); [AI Guardian setup](AIDERDESK.md). |
 | `openclaw` | OpenClaw Gateway plugin | **Observe only**: AI Guardian scans `message_received`, but that event ignores returned handler values, so `cancel` is not a prompt gate. | **Gate** through `before_tool_call`. | **Observe only**: `after_tool_call` is an observe hook and the plugin discards the scan result. | Plugin calls the shared process bridge synchronously with JSON; 30s timeout. Explicit exit 1/2 findings block pre-tool calls; other bridge failures fail open. Requires the plugin to be loaded by the Gateway. [Hook reference](https://docs.openclaw.ai/plugins/hooks/reference); [AI Guardian setup](#ide-specific-home-and-configuration-paths). |
-| `opencode` | OpenCode V1 (`opencode-ai` 1.x) | **Replace** submitted prompt parts with a fixed refusal before model submission; not a native prompt-cancel result. | **Gate** by throwing from `tool.execute.before`. | **Conditional transformation**: the V1 callback applies an explicit returned replacement; a blocked post-hook throws, which is not counted as a verified safe-redaction guarantee. | Plugin invokes shared JSON process bridge; 30s timeout. OpenCode bridge failures and missing workspace identity fail closed. Requires V1 plugin registration and its adjacent bridge. Tool side effects precede post-tool handling. [OpenCode guide](OPENCODE.md); [plugin hooks](https://opencode.ai/docs/plugins/). |
-| `opencode` | OpenCode V2 (`@opencode/cli` 2.x) | **Replace** prompt draft with a fixed refusal and clear attachments/mentions; not a native prompt denial. | **Gate** by throwing from `execute.before`. | **Replace/withhold** the completed model-visible result; V2 updates the owned result before reporting a block. | Plugin invokes shared JSON process bridge; 30s timeout. Missing workspace identity and bridge failures fail closed. Requires V2 plugin discovery and V2 artifacts; V1 plugin code does not run in V2. [OpenCode guide](OPENCODE.md); [migration guide](https://opencode.ai/docs/build/plugins/migrate-v1/). |
+| `opencode` | OpenCode V1 (`opencode-ai` 1.x) | **Replace** blocked prompts with a fixed refusal; with the trusted non-blocking option, replace a verified sensitive finding with sanitized text and a warning toast. Not a native prompt-cancel result. | **Gate** by throwing from `tool.execute.before`. | **Conditional transformation**: the V1 callback applies an explicit returned replacement; a blocked post-hook throws, which is not counted as a verified safe-redaction guarantee. | Plugin invokes shared JSON process bridge; 30s timeout. OpenCode bridge failures and missing workspace identity fail closed. Requires V1 plugin registration and its adjacent bridge. Tool side effects precede post-tool handling. [OpenCode guide](OPENCODE.md); [plugin hooks](https://opencode.ai/docs/plugins/). |
+| `opencode` | OpenCode V2 (`@opencode/cli` 2.x) | **Replace** blocked prompts with a fixed refusal; with the trusted non-blocking option, replace a verified sensitive finding with sanitized text and a visible transcript notice. Clears attachments/mentions in either replacement path. | **Gate** by throwing from `execute.before`. | **Replace/withhold** the completed model-visible result; V2 updates the owned result before reporting a block. | Plugin invokes shared JSON process bridge; 30s timeout. Missing workspace identity and bridge failures fail closed. Requires V2 plugin discovery and V2 artifacts; V1 plugin code does not run in V2. [OpenCode guide](OPENCODE.md); [migration guide](https://opencode.ai/docs/build/plugins/migrate-v1/). |
+| `kilo` | Kilo Code CLI 7.8.27, V1 `@kilocode/plugin` | **Prompt replacement verified; native cancellation not claimed**: `chat.message` replaces a blocked prompt with a fixed refusal. The historical matrix passed prompt-injection and secret cases, with secret findings blocked and only the refusal reaching the mock provider; Kilo may continue the model turn with that replacement. | **Native gate verified for historical tested cases**: the historical matrix passed native pre-tool denial/no-execution and allowed-call cases, with correlated results and clean exits. | **Replacement verified for historical tested cases**: Bash/Write identity, sensitive-output absence, and clean-tool cases passed. `tool.execute.after` assigns verified sanitized text to `output.output` or substitutes a fixed refusal on block/invalid replacement, clearing the original title/metadata. | Plugin uses the shared JSON bridge with a 30s timeout; missing workspace identity and bridge failures fail closed. Plugin files are auto-discovered from Kilo config directories. MCP uses the documented `mcp` object in `kilo.json`/`kilo.jsonc`; setup follows `kilo mcp add`, not OpenCode's environment/config roots. Historical full-matrix evidence: [Release Readiness run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315), Kilo 7.8.27; exact-SHA requalification for the current candidate is pending. Product container/OpenShell runtime remains unqualified. [MCP CLI docs](https://kilo.ai/docs/automate/mcp/using-in-cli); [plugin hooks](https://kilo.ai/docs/automate/extending/plugins); [v7.8.27 plugin API types](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/plugin/src/index.ts); [v7.8.27 MCP resolver](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/cli/cmd/mcp.ts); [v7.8.27 tool callbacks](https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/session/tools.ts). |
 | `pi` | Pi extension in user or project scope | **Gate** through `input` returning `action: handled`; extension commands handled earlier are outside this event. | **Gate** through `tool_call` and the native `user_bash` callback. | **Replace or mark as error** through `tool_result`; assistant output is also checked at `message_end`. | Extension invokes `ai-guardian` synchronously with JSON and a 30s timeout. Explicit exit 1/2 findings block; other child-process failures/timeouts fail open. Requires the extension to be loaded and the executable available. [Extensions reference](https://pi.dev/docs/latest/extensions). |
 | `augment` | Augment/Auggie local command hooks | **Not installed as a gate**: upstream `PromptSubmit` is asynchronous and cannot block or change the prompt. | **Gate** on explicit deny for the installed matcher set. | **Feedback only**; post hooks cannot deny or replace results. | Synchronous command hooks use JSON stdin/stdout; AI Guardian sets a 5s timeout. Only exit 2 or a deny blocks; crashes/timeouts fail open. Installed matchers cover selected process, edit, save, view, and remove-files tools, not every possible tool. [Hooks reference](https://docs.augmentcode.com/cli/hooks). |
 | `crush` | Current AI Guardian project hook installs only `PreToolUse` | **Not installed**. | **Gate** using the Claude-compatible deny response or exit 2. | **Not installed** by AI Guardian. | Command receives JSON on stdin; AI Guardian configures a 30s timeout. Only an explicit deny is relied on; other process-failure behavior is not qualified here. This describes AI Guardian's installed surface, not every hook available in newer Crush releases. [Crush hooks](https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md). |
@@ -2219,12 +2275,13 @@ named matcher, and the flat handler list documented upstream were all observed n
 
 ### Pi - managed TypeScript extension
 
-Pi uses a generated `ai-guardian/index.ts` extension rather than a native MCP
-configuration file or a Python GuardedAgent loop. The extension is installed
-with its pinned dependency manifest globally at
+Pi uses a generated `ai-guardian/index.ts` extension rather than a Python
+GuardedAgent loop. The extension is installed globally at
 `~/.pi/agent/extensions/ai-guardian/` (or under `$PI_CODING_AGENT_DIR`) or
 project-locally at `<project>/.pi/extensions/ai-guardian/`. Pi automatically
 discovers extensions in those locations and `/reload` reloads an updated extension.
+The native `registerMcpServer()` integration requires Pi 0.99.0 or newer; setup
+does not write or modify Pi's `mcp.json`.
 
 Pi extensions execute with the host process's permissions. Project-local
 extensions are loaded only after Pi's project-trust decision, so project setup
@@ -2233,14 +2290,15 @@ provider-request, tool-call, tool-result, user-bash, session, and assistant-outp
 checks to the existing `ai-guardian` CLI and preserves unrelated extensions.
 The global generated extension is version-stamped and refreshed by the daemon
 after an AI Guardian upgrade; project-local extensions remain explicit project
-setup targets. The extension launches the resolved local `ai-guardian mcp-server`
-executable, discovers its tools with `listTools()`, and registers them under the
-`mcp__ai-guardian__*` namespace. Setup installs the pinned MIT-licensed MCP SDK
-with `npm install --ignore-scripts --no-audit --no-fund` when npm is available and
-registers the existing signed identity manifest; server startup still performs
-the existing nonce attestation, and a failed attestation registers no MCP tools.
-If npm is unavailable or the install fails, setup leaves the extension in place
-and reports the retry command.
+setup targets. On session start, the extension registers the resolved local
+`ai-guardian mcp-server` with Pi's native MCP support using direct tool exposure.
+The server appears in the in-session `/mcp` list, where Pi reports connection and
+tool-call failures. Setup registers the existing signed identity manifest;
+server startup still performs the nonce attestation, and a failed attestation
+exposes no usable MCP tools. Pi's `pi mcp list` shell command does not load
+extensions, so it does not show this registration. Older Pi versions retain hook
+protection and receive a safe notice that native MCP registration requires Pi
+0.99.0 or newer.
 
 Pi can advertise its session transcript path before creating the file. AI Guardian
 records byte zero for this expected initial absence without creating a fabricated
@@ -2255,8 +2313,7 @@ names are not rewritten.
 This is agent-level protection for activity routed through a user-controlled Pi
 process. It does not enforce policy on activity outside that process; OpenShell
 or another outer runtime boundary is required for that enforcement. Pi setup
-never creates a fabricated native MCP configuration or launches an arbitrary
-MCP package.
+does not modify Pi's native MCP configuration or launch an arbitrary MCP package.
 
 ### OpenCode, AiderDesk, and OpenClaw - shared TypeScript process bridge
 
@@ -3218,12 +3275,12 @@ Suppress false positives on specific lines without disabling scanning for entire
 ## Quick Reference
 
 ```python
-secret = "test_key"          # ai-guardian:allow       <- suppresses secrets + PII
+secret = "test_key"          # ai-guardian:allow       <- suppresses file findings
 api_key = "AKIA..."          # gitleaks:allow          <- suppresses secrets only
 
 # ai-guardian:begin-allow
-multi_line_secret = "..."    # <- suppressed (secrets + PII)
-ssn = "123-45-6789"          # <- suppressed (secrets + PII)
+multi_line_secret = "..."    # <- suppressed by all file scanners
+ssn = "123-45-6789"          # <- suppressed by all file scanners
 # ai-guardian:end-allow
 ```
 
@@ -3257,11 +3314,33 @@ Both the begin/end marker lines and all lines between them are suppressed.
 
 | Marker | Suppresses | Configurable? |
 |---|---|---|
-| `ai-guardian:allow` | Secrets + PII | No (hardcoded) |
-| `ai-guardian:begin-allow` / `end-allow` | Secrets + PII in block | No (hardcoded) |
+| `ai-guardian:allow` | All findings from file-content scanners | No (hardcoded) |
+| `ai-guardian:begin-allow` / `end-allow` | All file-content findings in the block | No (hardcoded) |
+| `ai-guardian:allow <scanner-types>` | Only the listed scanner types | Generated by `init-project --scan --annotate` or written manually |
 | `gitleaks:allow` | Secrets only | Yes (default alias) |
 
-`gitleaks:allow` does **not** suppress PII. Add custom aliases (e.g., `notsecret`) via `inline_allow_secrets` config.
+`gitleaks:allow` does **not** suppress PII or other scanners. Add custom aliases (e.g., `notsecret`) via `inline_allow_secrets` config.
+
+### Scanner-qualified annotations
+
+Generated annotations can name one or more scanner types so a false-positive
+exception for one detector does not hide findings from other detectors on the
+same line:
+
+```python
+payload = "..."  # ai-guardian:allow prompt_injection,context_poisoning
+
+# ai-guardian:begin-allow code_scanning
+example_call()
+# ai-guardian:end-allow
+```
+
+Recognized scanner types include `secret_scanning`, `scan_pii`,
+`prompt_injection`, `context_poisoning`, `ssrf_protection`,
+`config_file_scanning`, `code_scanning`, `supply_chain`, `exfil_detection`,
+`offensive_language`, `canary_detection`, `password_likelihood`, and
+`unicode_detection`. An unqualified `ai-guardian:allow` or block marker applies
+to all file-content scanners. Multiple qualified markers on one line combine.
 
 ## Configuration
 
@@ -3280,7 +3359,7 @@ Both the begin/end marker lines and all lines between them are suppressed.
 | Field | Purpose | Default |
 |---|---|---|
 | `enabled` | Enable/disable all annotation processing | `true` |
-| `inline_allow` | Custom aliases that suppress ALL violations | `[]` |
+| `inline_allow` | Custom aliases that suppress all file-content findings | `[]` |
 | `inline_allow_secrets` | Custom aliases that suppress secrets only | `["gitleaks:allow"]` |
 | `block_begin` | Custom block-begin aliases | `[]` |
 | `block_end` | Custom block-end aliases | `[]` |
@@ -3297,7 +3376,8 @@ User config **extends** defaults. Adding `"nosec"` to `inline_allow` doesn't rem
 }
 ```
 
-Now `# nosec` and `# noinspection` suppress secrets + PII alongside the built-in `# ai-guardian:allow`.
+Now `# nosec` and `# noinspection` suppress all file-content scanner findings
+alongside the built-in `# ai-guardian:allow`.
 
 ### Example: add custom secrets-only alias
 
@@ -3325,39 +3405,53 @@ All annotations are ignored and every line is scanned.
 
 ## What Gets Suppressed
 
-Annotations suppress **secrets and PII** detection, including both blocking and redaction:
+Annotations suppress findings from file-content scanners, including secrets,
+PII, prompt injection, context poisoning, config-file exfiltration, SSRF,
+Unicode, password-likelihood, code security, supply chain, offensive language,
+canary, and file-based exfiltration detection. Suppressed findings are neither
+blocked nor redacted:
 
-- **PreToolUse** (before file read): suppressed lines are not scanned for secrets/PII, so the read is allowed
-- **PostToolUse** (after file read): secrets and PII on suppressed lines are not redacted -- original content passes through unchanged
+- **PreToolUse** (before file read): file annotations are applied to the matching scanner types.
+- **PostToolUse** (after file read): matching scanners ignore suppressed lines, and sensitive text on those lines passes through unchanged.
 
-Prompt injection, jailbreak, and config exfiltration detection **cannot be suppressed by annotations**. This is by design -- a malicious file could insert annotations next to injection patterns to bypass protection.
+If a file-reading tool returns only an excerpt, PostToolUse checks whether that
+text uniquely matches complete lines in the local source file. When it does,
+annotations outside the excerpt (including enclosing block markers) are applied
+to the matching lines. If the source is unavailable, too large, or the excerpt
+cannot be matched unambiguously, only annotations present in the returned text
+are used; scanning is not suppressed based on a guessed location.
 
-| Annotation | Secrets | PII | Prompt Injection | Jailbreak | Config Exfil |
-|---|---|---|---|---|---|
-| `ai-guardian:allow` / block | Suppressed | Suppressed | **Always scanned** | **Always scanned** | **Always scanned** |
-| `gitleaks:allow` | Suppressed | **Scanned** | **Always scanned** | **Always scanned** | **Always scanned** |
+User-submitted prompts, command arguments, URLs, and other non-file inputs do
+not honor source annotations. In particular, placing `ai-guardian:allow` in a
+submitted prompt does not disable prompt scanning.
+
+| Annotation | Secrets | PII | Prompt Injection | Other file scanners |
+|---|---|---|---|---|
+| Unqualified `ai-guardian:allow` / block | Suppressed | Suppressed | Suppressed | Suppressed |
+| `ai-guardian:allow prompt_injection` | Scanned | Scanned | Suppressed | Scanned |
+| `gitleaks:allow` | Suppressed | Scanned | Scanned | Scanned |
 
 ## Security Notes
 
-- Annotations only affect **secrets and PII** -- never prompt injection, jailbreak, or config exfiltration
-- Review annotations in code reviews -- treat them like `// NOSONAR` or `# nosec`
-- Use `annotations.enabled: false` in strict compliance environments
+- Annotations can intentionally suppress security findings in file content. Review them in code review and protect annotation edits like other security-sensitive changes.
+- Use scanner-qualified annotations for the narrowest source exception.
+- Use `annotations.enabled: false` in strict compliance environments.
 - Monitor `annotation_suppressed` entries in violation logs
 
 ## Safety
 
 - **Unmatched `begin-allow`** (no `end-allow`) is **ignored entirely** -- nothing is suppressed. A warning is logged.
 - **Unmatched `end-allow`** is silently ignored.
-- **File content only** -- annotations in user prompts, tool output, and transcripts are never honored.
-- **Audit trail** -- every suppression is logged via ViolationLogger (`annotation_suppressed` type).
+- **File content only** -- annotations apply when scanning a file or a tool result verified as file content. User prompts, unrelated tool output, and transcripts are not annotation-filtered.
+- **Audit trail** -- hook-based suppressions are logged via ViolationLogger (`annotation_suppressed` type).
 
 ## How It Differs from Other Mechanisms
 
 | Mechanism | Scope | Applies to |
 |---|---|---|
-| `ignore_files` | Entire file | Secrets, PII |
-| `allowlist_patterns` | Regex match on value | Secrets, PII |
-| `ai-guardian:allow` | Single line or block | Secrets, PII |
+| `ignore_files` | Entire file | Configured file scanners |
+| `allowlist_patterns` | Regex match on value | Secrets and PII |
+| `ai-guardian:allow` | Single line or block | All file-content scanners |
 | `gitleaks:allow` | Single line | Secrets only |
 
 ## Multi-line Strings
@@ -3635,6 +3729,17 @@ credentials, or product sandbox creation; it must prove native pre-tool denial
 and a clean tool/result round-trip using a loopback mock. Prompt denial, Stop
 withholding, redaction, and transcripts/sessions are tested exclusions. See
 [Goose support](GOOSE.md).
+
+### Current Kilo boundary
+
+Kilo Code CLI 7.8.27 is tested in a separate Release Readiness image that installs
+the pinned MIT package. Its required lane runs the same applicable prompt,
+pre-tool, native Write, post-tool, clean/allow, and MCP cases as OpenCode against a
+loopback mock with container networking disabled. The full matrix must pass its
+provider-boundary, hook, native-tool, execution/non-execution, correlated-result,
+and clean-exit evidence gates. This smoke-only image bypasses product sandbox
+creation intentionally: it does not add Kilo to the normal container or OpenShell
+selectors, and a passing host-CLI matrix alone does not qualify either runtime.
 
 ## 1. Scope, support, and legal classification
 
@@ -3940,12 +4045,12 @@ Docker/Podman/SELinux/AppArmor setup. Check the workflow result for each configu
 CLI smoke before claiming readiness. Claude Code remains conditional on the
 repository's explicit terms-of-service consent variable.
 
-The Codex CLI smoke step currently has a temporary `continue-on-error` allowance
-so this unresolved runtime issue does not block the release process. A failure is
-reported in the workflow warning and job summary, but remains an unqualified Codex
-result—not a passing smoke. Other CLI and OpenShell failures remain blocking. Remove
-the exception only after Codex executes the native tool and passes the existing
-execution, output-containment, and clean-exit checks.
+The Codex CLI smoke step has a temporary, explicitly reported `continue-on-error`
+allowance. A failure remains an unqualified Codex result—not a passing smoke or
+qualification—and is recorded in the workflow warning and job summary. Other CLI
+and OpenShell jobs remain independent and blocking. Remove the exception only after
+Codex executes the native tool and passes the existing execution, output-containment,
+and clean-exit checks.
 
 ## Safe response
 
@@ -4070,6 +4175,13 @@ certificate/key/listener changes require an explicit daemon restart. Invalid TLS
 prevents REST startup rather than selecting HTTP. Existing local IPC remains
 independent of this listener.
 
+For a one-time listener override, pass `--host HOST` and/or `--port PORT` to
+`ai-guardian daemon start` or `ai-guardian daemon restart`. Values resolve
+independently in this order: command-line option, `AI_GUARDIAN_REST_HOST` /
+`AI_GUARDIAN_REST_PORT`, `daemon.rest_host` / `daemon.rest_port`, then the
+default (port `63152`; host remains container-aware). CLI options do not modify
+the saved daemon configuration.
+
 Manual targets store equivalent client-only `tls` trust in `tray-targets.json`.
 Remote hook/SDK clients accept `AI_GUARDIAN_DAEMON_CA_FILE`,
 `AI_GUARDIAN_DAEMON_SERVER_NAME`, and `AI_GUARDIAN_DAEMON_CERT_SHA256` alongside
@@ -4150,16 +4262,43 @@ read-only commands. For AI Guardian development only, set
 daemon captures this value at startup; a missing or malformed value denies
 access.
 
+This CLI-access setting does not change scanner enforcement. The separate,
+default-off `developer_session.non_blocking_findings` option allows successful
+findings whose configured action is `block` to appear as advisory diagnostics
+instead. Scanning and violation logging continue, and the user sees the finding
+diagnostic. Non-sensitive findings also include an explicit note that the
+trusted developer-session option allowed the operation. The option is effective
+only when `developer_session.enabled` is also `true`.
+
+Sensitive findings are only relaxed when the host contract can replace the
+model-visible content with a sanitized version. For supported PostToolUse
+secret and PII results, AI Guardian redacts the output and preserves the
+scanner's existing diagnostic message. OpenCode V1/V2 can also replace the
+submitted prompt with verified redacted text and show the scanner diagnostic.
+If redaction or host replacement cannot be verified, the finding remains
+blocking. Replacement is tool-specific: Claude Code Bash output and Cursor
+non-MCP results are not treated as replaceable. Prompt/tool-input findings on
+hosts without verified prompt replacement remain blocking even when this option
+is enabled. See the [agent support matrix](AGENT_SUPPORT.md) for host-specific
+limits.
+
+Configured `warn`, `log-only`, and `ask` actions are unchanged. Scanner and hook
+failures are not findings and are never relaxed by this option;
+`on_scan_error: block` remains fail-closed. Enabling non-blocking findings can
+allow content that a finding would otherwise have withheld, so use it only in a
+trusted development session.
+
 This is a global-only session setting, not a project permission. It is not read
 from project configuration, SDK overlays, hook payloads, or AI Guardian
-command-line arguments.
-The opt-in is limited to the CLI boundary and does not disable protected-file,
-hook, cache, MCP identity, or other immutable protections.
+command-line arguments. The non-blocking-findings option has the same protected
+global-only scope. CLI access remains limited to its existing boundary; the
+findings option does not disable protected-file, hook, cache, MCP identity, or
+other immutable protections.
 
 The Web Console exposes this setting under **Configuration & CLI
-Protection** in Global Settings. It is displayed but not editable while the
-project configuration scope is selected. Restart the daemon/session after
-changing it.
+Protection** in Global Settings. Both developer-session options are displayed
+but not editable while the project configuration scope is selected. Restart the
+daemon/session after changing either option.
 
 ### Host CLI Self-Protection
 
@@ -4755,6 +4894,15 @@ ai-guardian init-project --scan --threshold 3    # Only suppress patterns seen 3
 
 Lower thresholds produce more permissive configs; higher thresholds are more conservative.
 
+Discovery enables the file scanners configured for project scans while removing
+existing pattern suppressions. It does not turn on `password_likelihood`: that
+global-only heuristic remains disabled unless explicitly opted in. Automatic
+config suppression is limited to findings with a safe representable rule; PII,
+secret-rule labels, exfiltration categories, offensive-language, non-local SSRF,
+Unicode-attack, and canary findings remain visible rather than being turned into
+unsupported allowlist patterns. Scanner-specific directory recommendations are
+written to `.aiguardignore.toml` only for supported scanner types.
+
 ### Language Overlay System
 
 AI Guardian auto-detects your project's primary language (Python, Go, JavaScript, etc.) and injects language-specific false positive suppressions. For example, Go projects automatically suppress common Go test patterns, and Python projects suppress Django/Flask placeholder patterns.
@@ -4834,6 +4982,9 @@ ai-guardian console --web
 
 # Use a specific port
 ai-guardian console --web --port 8080
+
+# Override the configured port with an environment variable
+AI_GUARDIAN_CONSOLE_PORT=8080 ai-guardian console
 ```
 
 The console binds to `127.0.0.1` by default. Keep the host restricted to a
@@ -4897,7 +5048,24 @@ one run on **Sessions**.
 ```
 
 - `port`: Web-console port. `0` selects an available port.
-- `host`: Bind address. `127.0.0.1` is the secure local default.
+- `host`: Bind address. `127.0.0.1` is the secure local default. Use
+  `0.0.0.0` only when access through another interface is intended (for example,
+  through a published container port); it listens on all IPv4 interfaces, so
+  restrict network access appropriately.
+
+`ai-guardian console` uses these settings when the corresponding command-line
+option is omitted. The Web Console port precedence is:
+
+1. An explicit `--port` argument
+2. `AI_GUARDIAN_CONSOLE_PORT`
+3. `console.web.port`
+4. An automatically assigned port (`0`)
+
+The environment variable must be an integer from `0` through `65535`; `0`
+selects an available port. An invalid value is ignored with a warning, and the
+configured port or automatic assignment is used instead. The environment
+variable only controls the port; the bind host remains controlled by
+`console.web.host` (default `127.0.0.1`).
 
 The preferred dialog setting supports `auto`, `tkinter`, `nicegui`, and
 `headless`. Existing persisted `textual` values are treated as `nicegui` for
@@ -5261,8 +5429,8 @@ AI Guardian provides several ways to suppress false-positive secret findings. Ch
 | One specific finding by fingerprint hash | `.gitleaksignore` | Per-project, Gitleaks only |
 | All findings in a file or directory | `ignore_files` in `ai-guardian.json` | All scanners |
 | A known-safe value pattern (e.g., test keys) | `allowlist_patterns` in `ai-guardian.json` | All scanners |
-| A single line in source code | `ai-guardian:allow` inline annotation | All scanners |
-| A block of lines in source code | `ai-guardian:begin-allow` / `end-allow` | All scanners |
+| A single line in source code | `ai-guardian:allow` inline annotation | All file-content scanners |
+| A block of lines in source code | `ai-guardian:begin-allow` / `end-allow` | All file-content scanners |
 | All test fixtures across scanners | `.aiguardignore.toml` | All scanners |
 | Gitleaks-specific path or regex rules | `.gitleaks.toml` `[allowlist]` | Gitleaks only |
 
@@ -5379,8 +5547,12 @@ API_KEY = "pk_test_example123456789012"  # gitleaks:allow
 
 | Built-in alias | Suppresses | Notes |
 |----------------|-----------|-------|
-| `ai-guardian:allow` | Secrets + PII | Broadest suppression |
+| `ai-guardian:allow` | All file-content scanner findings | Broadest suppression |
 | `gitleaks:allow` | Secrets only | PII still scanned |
+
+Scanner-qualified markers (such as `ai-guardian:allow prompt_injection`) limit
+the exception to the named scanner types. User prompts are still scanned even
+if they contain annotation text.
 
 These are the only aliases that work by default. To use other keywords (e.g., `notsecret`, `nosec`), you must configure them first — see below.
 
@@ -5410,10 +5582,10 @@ The built-in aliases (`ai-guardian:allow`, `gitleaks:allow`) may not match your 
 
 | Config key | What it adds | Suppresses | Built-in default |
 |-----------|-------------|-----------|-----------------|
-| `inline_allow` | Custom aliases | Secrets + PII | `[]` (built-in: `ai-guardian:allow`) |
+| `inline_allow` | Custom aliases | All file-content scanners | `[]` (built-in: `ai-guardian:allow`) |
 | `inline_allow_secrets` | Custom aliases | Secrets only | `["gitleaks:allow"]` |
-| `block_begin` | Custom block-start markers | Secrets + PII | `[]` (built-in: `ai-guardian:begin-allow`) |
-| `block_end` | Custom block-end markers | Secrets + PII | `[]` (built-in: `ai-guardian:end-allow`) |
+| `block_begin` | Custom block-start markers | All file-content scanners | `[]` (built-in: `ai-guardian:begin-allow`) |
+| `block_end` | Custom block-end markers | All file-content scanners | `[]` (built-in: `ai-guardian:end-allow`) |
 
 User config **extends** defaults — adding `"nosec"` does not remove `ai-guardian:allow`. Both work side by side.
 
@@ -5859,7 +6031,10 @@ Add an inline comment to the line in your source file:
 API_KEY = "pk_test_example123456789012"  # ai-guardian:allow
 ```
 
-The `ai-guardian:allow` marker suppresses both secret and PII scanning for that line. The `gitleaks:allow` marker suppresses secrets only (not PII).
+The unqualified `ai-guardian:allow` marker suppresses every file-content scanner
+for that line. Scanner-qualified annotations, such as
+`ai-guardian:allow prompt_injection`, suppress only the listed scanner types.
+`gitleaks:allow` continues to suppress secrets only (not PII).
 
 ### How do I suppress multiple lines?
 
@@ -5872,7 +6047,9 @@ TEST_DATA = {
 # ai-guardian:end-allow
 ```
 
-Block annotations suppress all lines between the begin and end markers.
+Unqualified block annotations suppress all file-content scanners between the
+begin and end markers. A scanner-qualified begin marker limits suppression to
+the listed scanner types, for example `# ai-guardian:begin-allow code_scanning`.
 
 ### How do I add custom suppression keywords?
 
@@ -5904,7 +6081,9 @@ Disabling annotations means no inline suppressions are allowed — all detection
 
 ### What can annotations suppress?
 
-Annotations suppress **secrets and PII only**. Prompt injection, jailbreak, and config file exfiltration are **always scanned** regardless of annotations.
+Annotations can suppress any finding produced from file content. An annotation
+inside a user-submitted prompt does not suppress prompt scanning; source
+annotations are honored only for file scans and file-read content.
 
 ---
 
@@ -6156,6 +6335,24 @@ ai-guardian scan --diff owner/repo!45            # GitLab MR (fetches via glab)
 ```bash
 ai-guardian scan --diff --staged                 # Scan git staged changes only
 ```
+
+### Why don't scan findings appear in the Violations history?
+
+The Console's **Violations** history is an event log, not a complete list of every
+scan result. Hook findings are logged as hooks handle them (when violation logging
+is enabled). A standalone `ai-guardian scan` reports finding counts and relative
+file paths in the terminal, but its findings are not added to that history by
+default. To include standalone scan findings, run it with `--log-violations`:
+
+```bash
+ai-guardian scan . --log-violations
+```
+
+The option adds findings to the same history used by hooks. Without it, the scan
+count can be higher than the number of Violations entries because the scan results
+remain report-only. The option does not print detailed finding content; use
+`--json-output` or `--sarif-output` for detailed reports, and handle those report
+files as sensitive.
 
 ### How do I get line numbers in scan output?
 
@@ -6994,6 +7191,7 @@ Options:
 | `check_command` | Check if a command would be blocked |
 | `check_mcp_trust` | Check if an MCP server is trusted |
 | `sanitize_text` | Redact secrets and PII from text |
+| `get_version` | Get the installed AI Guardian package version |
 | `get_config` | Get current security posture |
 | `get_violations` | Get recent security violations |
 | `get_metrics` | Get violation statistics |
@@ -9241,6 +9439,16 @@ health, and explicit “no hook enforcement” assertions. For a shared adapter
 set per public IDE key so aliases cannot hide a missing setup or documentation
 path.
 
+For `kilo`, OpenCode-compatible payload normalization must still preserve Kilo's
+own adapter identity and `KILO_CONFIG_DIR` root. The generated V1 plugin uses
+`chat.message` to submit user text to the prompt pipeline and mutate message
+parts with the resulting refusal or verified redaction. User-reported Kilo 7.8.27
+native tests confirmed a blocked synthetic prompt was replaced with a fixed
+refusal and Bash PostToolUse output was redacted. Prompt replacement does not
+establish that Kilo cancels the model turn. Keep pre-tool enforcement, post-tool
+fixed-refusal delivery, and broader result qualification separate from those
+tested paths; do not infer complete runtime enforcement.
+
 For CLI-capable integrations, the evidence must identify the integration's
 actual executable and configuration roots. The Grok Build reference case uses
 `grok`, the relocated `GROK_HOME` root, and project `.grok/` artifacts; its
@@ -10441,17 +10649,19 @@ The tray exposes the same operation as **Cursor Cloud (project setup)...**;
 it does not modify the project's `.cursor/mcp.json`. Without `--project`, setup
 remains user/desktop-scoped.
 
-Pi has no native MCP configuration file. Pi setup creates the managed extension
-at `~/.pi/agent/extensions/ai-guardian/` (or the project
-`.pi/extensions/ai-guardian/`) with a pinned
-`@modelcontextprotocol/sdk` dependency. Setup installs that dependency in the
-managed directory with `npm install --ignore-scripts --no-audit --no-fund` when
-Node.js/npm is available. If installation fails, setup leaves the hook bridge in
-place and reports the retry command; `--no-mcp` installs the hook-only variant
-without the bridge. The extension launches the resolved local `ai-guardian
-mcp-server`, verifies the server identity before registering tools, and preserves
-the existing signed identity/nonce attestation. A failed attestation exposes no
-MCP tools.
+Pi supports MCP servers through its extension API. Setup creates the managed
+extension at `~/.pi/agent/extensions/ai-guardian/` (or the project
+`.pi/extensions/ai-guardian/`), which registers the resolved local
+`ai-guardian mcp-server` with Pi's native MCP support. The server then appears
+in the in-session `/mcp` list with Pi's connection and tool diagnostics. This
+requires Pi 0.99.0 or newer; older Pi versions keep hook protection and show an
+upgrade notice instead of claiming MCP registration. The extension preserves
+AI Guardian's signed identity/nonce attestation, and a failed attestation
+exposes no usable MCP tools. No extension-local MCP SDK or npm install is needed.
+`--no-mcp` installs the hook-only variant.
+
+Pi's shell command `pi mcp list` does not load extensions; use `/mcp` inside the
+active Pi session to inspect AI Guardian's extension-registered server.
 
 ### Manual setup
 
@@ -10462,8 +10672,8 @@ refresh a valid identity record, so setup does not need to be rerun.
 `ai-guardian doctor` and IDE setup health checks report the local MCP
 registration state for supported clients without starting the server. A
 `healthy` registration means the client config contains an enabled
-`ai-guardian` entry, or (for Pi) the managed extension, pinned SDK, and identity
-registration are present; `missing`, `disabled`, and `invalid` states identify
+`ai-guardian` entry, or (for Pi) the managed extension and identity registration
+are present; `missing`, `disabled`, and `invalid` states identify
 configuration problems separately from runtime identity failures.
 
 Add to `~/.claude.json` (or `~/.claude/settings.json`):
@@ -10513,15 +10723,73 @@ For a manual Cursor registration, add the following to `~/.cursor/mcp.json`:
 | Claude Code | `~/.claude/settings.json` or `~/.claude.json` → `mcpServers` |
 | Cursor desktop / CLI | `~/.cursor/mcp.json` (`type: "stdio"`) |
 | Windsurf | `~/.windsurf/mcp.json` |
+| Pi | Managed extension API (`registerMcpServer`; Pi 0.99.0+) |
+
+## Process lifecycle
+
+The local AI Guardian MCP server is a foreground stdio process, not a daemon
+service. For config-based registrations, the agent host launches the configured
+command and owns its connection and child process. Pi's managed extension
+registers the same local command through Pi's native MCP API, so Pi owns that
+connection as well.
+
+`ai-guardian mcp-server` runs the MCP SDK's stdio loop for one connection. It
+has no idle-shutdown timer and is not started or supervised by the AI Guardian
+daemon. The server exits when its stdio connection closes and the run loop
+returns; it then revokes its process-bound identity attestation. The host decides
+when to open, reuse, close, or restart that connection. Consequently, ending one
+chat or agent session is **not** a reliable shutdown trigger: a host may retain
+the connection for other sessions, or may create a new one per session. Fully
+quitting the host normally closes its stdio connections, but exact cleanup and
+reconnect behavior is host-specific.
+
+Stopping or restarting the AI Guardian daemon does not stop or restart the MCP
+process. Pausing the daemon also leaves the process running; global and
+applicable directory pauses are read by MCP action-gating checks and can make
+those checks return `paused`. See [Proactive Level](#proactive-level). Hooks
+remain the enforcement layer.
+
+`setup --no-mcp` removes the locally managed host registration, or disables
+registration in Pi's generated extension. It changes future launches; it does
+not signal or terminate a process that the host has already started. Use the
+host's MCP reload/reconnect control, or restart the host, so it reads the
+updated registration and closes any old connection. Once that connection is
+closed, the server process exits. Cursor Cloud MCP is configured separately in
+Cursor's dashboard/team settings or API; local project setup and `--no-mcp` do
+not change that external registration.
+
+### Verify or recover a connection
+
+- Check the host's MCP status and logs. In Pi, use `/mcp` inside the active
+  session; `pi mcp list` does not load extensions. `ai-guardian doctor` checks
+  registration health without starting the server, so it does not prove that a
+  live connection exists.
+- If the host reports a disconnect, use its MCP reconnect/restart control if
+  available, otherwise restart the host. If registration is missing or
+  disabled, rerun `ai-guardian setup --ide <host>` and reload/restart the host.
+- A process visible while its host connection is active is expected. If one
+  remains after fully quitting the host, check the OS process manager for its
+  parent host and any other active host sessions before treating it as an
+  orphan. Avoid terminating a process still owned by a running host.
+
+For a manual lifecycle check, connect from a supported host and confirm the
+server/tools appear in its MCP status (Pi: `/mcp`). End only the current chat
+while leaving the host open and observe whether that host reuses the connection;
+then fully quit and relaunch the host and verify disconnect/reconnect. While
+connected, stop, restart, or pause the AI Guardian daemon and confirm the MCP
+process itself stays up (a pause may change action-check results). Finally,
+run `setup --no-mcp`, reload/restart the host, and confirm the registration is
+absent; an already-running process should exit only after the host closes its
+existing stdio connection.
 
 ## Enable / Disable
 
-The MCP server is controlled by IDE config. Install/uninstall via:
+The MCP server is controlled by the integration setup. Install/disable via:
 
 ```bash
 ai-guardian setup --ide claude             # Install (default)
-ai-guardian setup --ide claude --no-mcp   # Uninstall
-ai-guardian setup --ide pi --no-mcp       # Keep Pi hooks, omit MCP bridge
+ai-guardian setup --ide claude --no-mcp   # Remove the managed registration
+ai-guardian setup --ide pi --no-mcp       # Keep Pi hooks, omit MCP registration
 ```
 
 ## Proactive Level
@@ -10602,7 +10870,8 @@ also be returned. An MCP startup failure reports `startup_failure` or
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `get_violations` | `violation_type?`, `limit?` | violation list with file:line, policy decision, optional safe input diagnostics/correlation | Recent security violations |
+| `get_violations` | `violation_type?`, `limit?` | violation list; non-sensitive entries may include locations, policy decisions, and optional safe input diagnostics/correlation | Recent security violations |
+| `get_version` | — | installed AI Guardian package version | Check package/runtime version |
 | `get_config` | `project_dir?` | feature enabled/disabled map | Current security posture |
 | `get_scanner_status` | — | installed scanners + versions | Scanner inventory |
 | `get_scanner_supported` | — | all available scanners | What can be installed |
@@ -10613,8 +10882,14 @@ also be returned. An MCP startup failure reports `startup_failure` or
 Use `sensitive_finding` to query the consolidated, privacy-safe sensitive
 category. The legacy filters `secret_detected`, `image_secret_detected`, and
 `pii_detected` remain supported and match consolidated records; a current record
-does not retain which sensitive subtype produced it. The canonical filter also
-includes type-specific sensitive records from older history.
+does not retain which sensitive subtype produced it. MCP responses omit all
+sensitive-finding location fields, including file paths, URLs, and line/column
+coordinates, even when present in legacy or mirrored history. The same rule
+applies to the canonical filter and all legacy aliases; locationless records
+remain locationless. A fixed source-context label may be included, but matched
+values, snippets, detector metadata, and sensitive context are never returned.
+Non-sensitive violation types may still include safe location metadata. The
+canonical filter also includes type-specific sensitive records from older history.
 
 Tool-permission entries can include `input_diagnostics` with fixed validation
 subreasons and schema-recognized argument names/types, never payload values or
@@ -10651,7 +10926,7 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 | `check_path` | allowed/denied for operation | Which rule matched, full rules list |
 | `check_command` | allowed/blocked + reason category | Which pattern matched, the deny list |
 | `get_config` | Feature on/off, action mode | Allowlist patterns, regex, rule details |
-| `get_violations` | Type, timestamp, file:line, action, normalized policy decision, vetted input diagnostics/correlation | Matched pattern internals, raw input/content, arbitrary stored reasons |
+| `get_violations` | Type, timestamp, action; non-sensitive locations, normalized policy decisions, vetted input diagnostics/correlation | Sensitive-finding locations, matched pattern internals, raw input/content, arbitrary stored reasons |
 | `get_patterns_list` | Category names and counts | Regex patterns |
 
 ### Self-protection
@@ -11588,6 +11863,17 @@ About
 The MCP Proactive submenu includes `low`, `medium`, `high`, and `paused`.
 Daemon pauses temporarily use the `paused` effective state without changing the
 saved proactive level; hooks continue enforcing security.
+
+The global **IDE/CLI Setup...** submenu enables setup entries only when the
+integration is detected; undetected or unavailable checks leave the entry
+disabled. CLI availability is checked against the current `PATH` when the menu
+opens, with cached IDE/config evidence as a fallback for integrations such as
+OpenCode and Pi. IDE-only detection uses available IDE/config artifacts, so an
+installed IDE without those artifacts may remain disabled until it can be
+detected. A configured integration adds **(Cfg ✓)** only after required hooks
+and applicable MCP registration are verified healthy. Hook/MCP verification
+and IDE discovery continue in the background; opening the submenu does not run
+those checks. The submenu legend explains the state.
 
 **About** shows **Author: Dominique Vernier ([ITDoVe](https://github.com/itdove))**,
 without displaying the full profile URL, alongside the existing
@@ -14321,9 +14607,10 @@ scanner payloads are not copied into these attributes.
 
 The same decision metadata is embedded in standard `violations.jsonl` entries,
 returned by the daemon REST violation and check endpoints, and exposed in SARIF
-result properties. Sensitive finding history uses a minimal record and omits the
-per-finding policy decision. Existing fields and OTEL span names remain
-compatible with older consumers.
+result properties. Sensitive finding history may retain a verified source path
+and position, but omits matched content, detector details, and the per-finding
+policy decision. Existing fields and OTEL span names remain compatible with
+older consumers.
 
 ## What Gets Exported
 
@@ -14646,23 +14933,31 @@ V2 are both installed under different executable names, the version resolved as
 | V1 | `opencode-ai` 1.x | `@opencode-ai/plugin` import | `plugin` | `tool.execute.before`, `chat.message`, `tool.execute.after`, `session.end` |
 | V2 | `@opencode/cli` 2.x | Local auto-discovery; direct `{ id, setup }` export | None for this local plugin | `ctx.session.hook("prompt")`, `ctx.tool.hook("execute.before")`, `ctx.tool.hook("execute.after")`, session events |
 
+The plugin is a generated copy. After upgrading AI Guardian or changing its
+managed plugin, run `ai-guardian setup --ide opencode` and reload OpenCode;
+restarting only the daemon does not update or reload the host plugin.
+
 The V1 plugin replaces every blocked prompt part with one fixed synthetic
 refusal notice, retaining only the required part/session/message identifiers.
 This avoids an empty turn, removes original text and attachments before model
-submission, and lets a safe follow-up remain in the same session. V1 cannot skip
-the assistant turn, so OpenCode may process the fixed notice and produce a brief
-response; the toast explains the substitution.
+submission, and lets a safe follow-up remain in the same session. When trusted-
+session non-blocking findings are enabled and verified redaction succeeds, it
+instead submits only the sanitized prompt and shows the scanner diagnostic in a
+warning toast. Both paths discard attachments and other original parts before
+model submission. V1 cannot skip the assistant turn, so OpenCode may process the
+fixed notice on the blocking path and produce a brief response.
 
 The issue reporter confirmed the affected generation is V2 (2.x); the exact patch
 version and OS are still unknown. In the previous V2 handler, a block added a
 synthetic notice and threw from prompt admission. V2's admission hook has no typed
 denial result, so this failed-admission path is consistent with the reported
 first-prompt session switch, but still needs live-host confirmation. The generated
-V2 plugin now replaces the mutable prompt draft with the fixed refusal notice,
-clears file attachments, agent mentions, and skills, and lets the safe input be
-admitted into the requested session. The original prompt data is not persisted or
-sent to the model. V2 may run the model on the fixed notice and produce a generic
-response; it no longer adds a duplicate synthetic entry or rejects admission.
+V2 plugin now replaces the mutable prompt draft with the fixed refusal notice on
+a block. When trusted-session non-blocking findings are enabled and verified
+redaction succeeds, it admits only the sanitized prompt and records a visible,
+safe diagnostic notice. Both paths clear file attachments, agent mentions, and
+skills. The original sensitive prompt data is not sent to the model. V2 may run
+the model on the fixed notice on the blocking path; it no longer rejects admission.
 
 The V2 plugin deliberately omits the documented `@opencode/plugin` import.
 OpenCode V2 server builds have been reported to fail resolving that scoped
@@ -14716,11 +15011,12 @@ synthetic transcript notice is available as context on the next model turn.
 
 When the V2 prompt hook blocks a prompt, it replaces the prompt draft with a
 fixed AI Guardian refusal notice and clears file attachments, agent mentions,
-and selected skills. This avoids a failed admission and keeps the safe turn in
-the requested session; the original prompt and detection details are not admitted.
-V2 does not expose a typed prompt-denial result, so the model may run on the fixed
-notice and produce a generic response. The notice is the admitted user input, not
-a separate synthetic transcript entry.
+and selected skills. When the trusted non-blocking option is enabled, a
+successful secret/PII finding may instead use verified sanitized prompt text;
+the diagnostic is recorded as a separate safe synthetic notice. Both paths avoid
+failed admission. V2 does not expose a typed prompt-denial result, so the model
+may run on the fixed refusal notice on the blocking path. The notice is the
+admitted user input, not a separate synthetic transcript entry.
 
 The shared bridge remains outside the direct plugin discovery directory:
 
@@ -17911,8 +18207,10 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 
 # Real-agent CLI coverage ledger
 
-Reviewed **2026-11-13** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
-This inventory includes **Goose**, even though it already had a smoke-only lane.
+Reviewed **2026-11-20** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
+This inventory includes **Goose** and **Kilo Code CLI**. Kilo's required
+full-matrix smoke-only lane passed historically alongside Goose's separate
+pre-tool lane; exact-SHA requalification for the current candidate is pending.
 The machine-readable ledger is [`scripts/agent_cli_coverage.json`](../scripts/agent_cli_coverage.json).
 `tests/unit/test_agent_cli_coverage.py` compares every `SUPPORTED_CLI_IDE_TYPES`
 entry with the runner, actual Release Readiness invocations, and this audit.
@@ -17929,7 +18227,7 @@ scripts/agent-cli-test --coverage
 | CLI key | Runner / CI lane | Scope or actionable exclusion |
 | --- | --- | --- |
 | `claude` | Full applicable case profile; consent-gated | Explicit maintainer ToS consent before installation; strict-derived sanitization, not unmodified strict output blocking |
-| `codex` | Full applicable case profile; failure currently tolerated in CI | Native execution remains unqualified when the lane fails; the release exception is not a pass |
+| `codex` | Full applicable case profile; failure temporarily tolerated in CI | Native execution remains unqualified when the lane fails; the exception is not a pass |
 | `gemini` | Full applicable case profile | Native refusal of sensitive results, **not** sanitized delivery |
 | `opencode` | Separate V1/V2 lanes | V2 smoke image is not a published product-runtime qualification |
 | `pi` | Full applicable case profile | Native extension, issued tool/result and execution evidence required |
@@ -17938,6 +18236,7 @@ scripts/agent-cli-test --coverage
 | `copilot` | Blocked: consent and native-hook qualification | Local BYOK exists; obtain terms approval and qualify the installed pre-tool surface |
 | `antigravity` | Blocked: consent and versioned installation | Local Gemini override exists; qualify the exact artifact, trust and installed adapter behavior |
 | `kiro` | Blocked: no documented local-provider path | Headless authentication requires the Kiro service; do not substitute a live-provider test |
+| `kilo` | **Historical full applicable case profile passed**; separate required smoke-only image | Kilo 7.8.27 passed all 14 applicable matrix cases plus correlated MCP-version evidence in historical [Release Readiness run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315); exact-SHA requalification for the current candidate is pending. This does not qualify the product container/OpenShell runtime |
 | `openclaw` | Blocked: native plugin qualification | Local provider exists; prove embedded CLI callback activation and fix unsupported claims separately |
 | `crush` | Blocked: license review | FSL-1.1-MIT is not a current MIT grant; no new smoke dependency is installed |
 
@@ -17946,14 +18245,16 @@ OpenCode V1/V2 jobs and an independent **OpenShell Image Validation** job. The
 shared local `.github/actions/prepare-cli-smoke` action prepares the current wheel
 and optional support image on each runner; no job depends on another CLI's build,
 version check or smoke result. A V2 failure therefore cannot skip Goose.
-Claude's job is explicitly consent-gated, and Codex's failed smoke outcome remains
-visible despite the temporary release exception. These job boundaries do not add
-native execution evidence or change the qualification limits below.
+Claude's job is explicitly consent-gated, and a failed Codex smoke outcome remains
+visible through the warning and job summary despite the temporary exception. These
+job boundaries do not add native execution evidence or change the qualification
+limits below.
 
 **Full** describes the runner's applicable case profile, not a successful execution,
 all hooks available upstream, every platform, or runtime certification. The base
-profile has ten cases, including command-credential denial; Claude/OpenCode also
-have four native Write HTTP-credential cases. A blocked selection exits nonzero
+profile has ten enforcement/allow cases, including command-credential denial;
+Claude/OpenCode/Kilo also have four native Write HTTP-credential cases. The
+correlated MCP version check is an additional capability case. A blocked selection exits nonzero
 before building, installing, copying credentials, or invoking an agent. It is not
 a green skip. Existing full clients keep all their assertions and applicable cases.
 
@@ -17968,11 +18269,11 @@ active; a leak cannot become the next case's baseline. The inert SSRF/config
 commands print strings and write only a fixed execution witness, without reading
 credentials or contacting those destinations.
 
-All seven records below distinguish **reviewed upstream versions** from **tested
-native versions**. No new native executions were run locally in this change:
-project policy reserves real containers/integration scenarios for CI. Add the CI
-run/commit, image digest, exact CLI version and platform to the issue before
-claiming a runtime result. Unit tests and generated setup files are not that proof.
+All eight records below distinguish **reviewed upstream versions** from **tested
+native versions**. No new native executions were run locally in this documentation
+update; project policy reserves real containers/integration scenarios for CI. The
+Kilo CI run, commit, image digest, exact CLI version and platform are recorded
+below. Unit tests and generated setup files alone are not runtime proof.
 
 ## copilot
 
@@ -17997,9 +18298,12 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
 
 ## grok
 
-- **Reviewed version / installation:** `@xai-official/grok` **1.0.41**, already
-  pinned in the normal image by `GROK_VERSION`; npm declares **Apache-2.0**.
-  Registry archive integrity was verified during static review; no binary ran.
+- **Reviewed version / installation:** `@xai-official/grok` **1.0.63**, pinned in
+  the normal image; npm metadata reports **Apache-2.0**. Version 1.0.63 fixes
+  custom Chat Completions models failing with connected MCP servers ([official
+  changelog][grok-mcp-fix]).
+  Registry metadata was checked, and the smoke image installs this exact pinned
+  version through npm; it is required for the credential-free MCP smoke.
   [Package metadata][grok-package] and [CLI documentation][grok-settings].
 - **Unattended / local protocol:** `grok --no-auto-update -p ... --model ag-smoke
   --output-format json`. A private `[model.ag-smoke]` in user `config.toml` sets
@@ -18012,8 +18316,10 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
   `run_terminal_command` is required, not an advisory MCP checker. Global managed
   hooks are used; project hooks require separate upstream trust, which the runner
   does not grant. [Hook contract][grok-hooks], [headless flags][grok-headless].
-- **Next action / priority:** **P1** — run the new five-case CI subset against the
-  audited version. Version drift fails without rebuilding a supplied image.
+- **Next action / priority:** **P1** — run the five-case CI subset and the separate
+  `get_version` MCP check against the exact audited version. The MCP check requires
+  a model-facing tool offer, issued call, correlated server result and exact
+  installed version. Version drift fails without rebuilding a supplied image.
   Record aggregate native evidence; leave prompt/output containment unqualified.
   No OpenShell or additional host-platform support is added.
 - **Native execution in this change:** not run; no new tested native version.
@@ -18061,6 +18367,71 @@ claiming a runtime result. Unit tests and generated setup files are not that pro
   upstream and audit V3 hook installation; preserve the exclusion until both exist.
   No service call, login or vendor installer is run by this ledger check.
 - **Native execution in this change:** not run; no new tested native version.
+
+## kilo
+
+- **Reviewed version / installation:** Kilo CLI **7.8.27** from the versioned
+  [`@kilocode/cli` package metadata][kilo-package]. It publishes both `kilo` and
+  `kilocode` executable names and is MIT-licensed. This is source/API review,
+  not a local CLI execution.
+- **Configuration and MCP:** The tagged [CLI MCP documentation][kilo-mcp] uses
+  `~/.config/kilo/kilo.json` with an `mcp` object; project paths include
+  `./kilo.json` and `./.kilo/kilo.json`. The tagged [`kilo mcp add` resolver]
+  writes to Kilo's config directory and uses a direct local `command` array.
+  `KILO_CONFIG_DIR` is independent of OpenCode's config variables; the separate
+  `KILO_CONFIG` overlay does not redirect the MCP writer target.
+- **Installed plugin boundary:** The generated V1 plugin uses
+  `@kilocode/plugin`. Tagged [tool execution source][kilo-tools] triggers
+  `tool.execute.before` before execution and `tool.execute.after` before
+  returning the result; thrown plugin callbacks reject that path in source.
+  Kilo's plugin loader auto-discovers local files under config roots
+  ([loader][kilo-plugin-config]). The documented and tagged plugin API exposes
+  `chat.message` with mutable `parts` ([plugin docs][kilo-plugin-docs],
+  [v7.8.27 API types][kilo-plugin-api]). The generated plugin routes text parts
+  through AI Guardian's prompt scanners and replaces blocked or redacted input
+  parts before returning. A user-reported native retest after daemon resume
+  confirmed a blocked synthetic prompt was replaced with a fixed refusal. Secret
+  scanning always blocks; the separate `secret_redaction: warn` setting applies
+  to output redaction, not this prompt path. The callback replaces message parts
+  rather than cancelling the model turn.
+- **Post-tool behavior:** AI Guardian scans/transforms the result in its shared
+  bridge. The generated plugin assigns a verified sanitized string to Kilo's
+  mutable `output.output`, or substitutes a fixed refusal when the bridge blocks
+  or returns an invalid replacement; it also clears the original title/metadata.
+  A user-reported Kilo 7.8.27 Bash test confirmed sanitized output delivery.
+  The registry permits safe post-output replacement for Kilo Bash results only;
+  fixed-refusal and other native result paths remain unqualified.
+- **Smoke lane:** The required `kilo-cli-smoke` Release Readiness job installs the
+  pinned CLI in a separate disposable image and runs the full OpenCode-applicable
+  case matrix over `kilo run --auto` with a loopback-only mock provider. It requires
+  prompt and finding evidence, proof that only the fixed prompt refusal (not the
+  original marked prompt) reaches the provider, native Bash/Write identity, denied
+  tool non-execution, correlated tool results, sensitive-output absence, clean
+  execution, and the exact installed AI Guardian MCP version. The container has no
+  external network and does not use product sandbox creation.
+- **Historical qualification evidence:** The full matrix passed on **2026-11-20** in
+  [Release Readiness run 44684917315, Kilo job](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315/job/136116840310),
+  commit `ea8b8eb5ca09126c0866372a0dd2da487a67db5e`, platform `ubuntu-26.04`,
+  exact Kilo CLI **7.8.27**. All 14 applicable cases passed, including secret
+  findings blocked, prompt replacement, native Bash/Write cases, pre-tool denial
+  and allow behavior, post-tool secret/PII handling, clean execution, and the
+  additional correlated MCP-version check. Smoke image manifest:
+  `sha256:c890fa25bbba6d71c53955a245e7233c5524c0db474f471720ccbe302dcfdf86`.
+  This run predates the current candidate; exact-SHA requalification is pending
+  and this historical result must not be used as current-candidate evidence.
+- **Qualification boundary:** This qualifies only the pinned Kilo CLI and the
+  tested full-matrix behavior in the isolated smoke image. Kilo remains excluded
+  from product container/OpenShell selectors; the smoke-only image is not runtime
+  support. Prompt replacement is not request cancellation.
+- **Next action / priority:** **P2** — qualify product container/OpenShell runtime
+  behavior independently before making any product-runtime support claim.
+- **Native execution in this change:** not run locally; only the historical CI
+  run above verified Kilo CLI **7.8.27**. A matching-SHA run for this candidate
+  remains pending.
+- **Earlier native evidence:** user-reported Kilo 7.8.27 prompt retest after
+  daemon resume replaced a blocked synthetic secret prompt with a refusal; the
+  Bash `cat` test sanitized synthetic secret output. Raw fixture contents were
+  not shared. Kilo turn cancellation was not tested or claimed.
 
 ## openclaw
 
@@ -18143,8 +18514,31 @@ native hook-scope, execution, clean-result and process-wide raw-delivery checks.
 See [release smoke instructions](../RELEASING.md#real-agent-hook-smoke-test).
 Historical Linux strict-derived local-mock evidence for Gemini **0.67.0** and
 Pi **0.86.0** is recorded in #2662/#2670; it is not a new run of this change.
-Gemini containment is native refusal. The tolerated Codex CI failure stays failed
-and unqualified. Claude requires its separate explicit installation consent.
+Gemini containment is native refusal. A failed Codex CI smoke stays failed and
+unqualified despite the temporary readiness exception. Claude requires its
+separate explicit installation consent.
+
+## MCP version smoke
+
+The credential-free CLI smoke separately calls AI Guardian's native
+`get_version` MCP tool for Claude, Codex, Gemini, OpenCode, Pi, and Grok. It
+requires an issued call, a correlated tool result, and the exact installed
+package version at the local mock provider; a final-answer claim alone is not
+evidence. This capability check does not expand Grok's pre-tool-only security
+qualification. Its headless invocation allows only this exact read-only MCP tool,
+not global always-approve. OpenCode V2 normally routes MCP through Code Mode, but
+this smoke sets `codemode: false` for this server and invokes the individual MCP
+tool rather than qualifying Code Mode's `execute` interpreter. Grok follows its
+native `search_tool` → `use_tool` flow; dispatch is allowed only after a correlated
+search result identifies the exact qualified `ai-guardian__get_version` tool
+and its schema. The mock-issued provider call is counted separately from the
+client's actual MCP RPC. Grok keeps the `use_tool` result local, so its smoke
+uses the stdio witness to correlate the call and exact installed version.
+Clients that keep MCP results local must produce that witness; clients that
+forward correlated tool results use provider evidence. Goose intentionally uses
+`--no-mcp`, so its runner reports the MCP version check as **UNSUPPORTED**, never
+as a pass. Other clients without a credential-free smoke lane remain explicitly
+blocked in the coverage ledger.
 
 ## Runtime and diagnostics boundaries
 
@@ -18161,7 +18555,8 @@ booleans and fixed categories, never prompts, credentials or CLI/model/tool bodi
 
 [copilot-license]: https://github.com/github/copilot-cli/blob/main/LICENSE.md
 [copilot-byok]: https://docs.github.com/copilot/how-tos/copilot-cli/customize-copilot/add-llm-models
-[grok-package]: https://registry.npmjs.org/@xai-official/grok/1.0.41
+[grok-package]: https://registry.npmjs.org/@xai-official/grok/1.0.63
+[grok-mcp-fix]: https://x.ai/cli/changelogs/1.0.63.external.md
 [grok-settings]: https://docs.x.ai/build/settings
 [grok-hooks]: https://docs.x.ai/build/features/hooks
 [grok-headless]: https://docs.x.ai/build/cli/headless-scripting
@@ -18172,6 +18567,13 @@ booleans and fixed categories, never prompts, credentials or CLI/model/tool bodi
 [kiro-changelog]: https://kiro.dev/changelog/cli/
 [kiro-license]: https://kiro.dev/license/
 [kiro-headless]: https://kiro.dev/docs/cli/headless/
+[kilo-package]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/package.json
+[kilo-mcp]: https://kilo.ai/docs/automate/mcp/using-in-cli
+[kilo-plugin-docs]: https://kilo.ai/docs/automate/extending/plugins
+[kilo-plugin-api]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/plugin/src/index.ts
+[kilo-mcp-source]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/cli/cmd/mcp.ts
+[kilo-tools]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/session/tools.ts
+[kilo-plugin-config]: https://github.com/Kilo-Org/kilocode/blob/v7.8.27/packages/opencode/src/config/plugin.ts
 [openclaw-license]: https://github.com/openclaw/openclaw/blob/v2026.11.3/LICENSE
 [openclaw-agent]: https://github.com/openclaw/openclaw/blob/v2026.11.3/docs/cli/agent.md
 [openclaw-providers]: https://github.com/openclaw/openclaw/blob/v2026.11.3/docs/concepts/model-providers.md
@@ -21097,7 +21499,10 @@ Returns a dict:
 
 Returns recent hook-triggered violation records as a list. Results are sanitized
 before returning and include `violation_type`, `message`, `tool_name`,
-`tool_use_id`, `session_id`, `timestamp`, and `severity`.
+`tool_use_id`, `session_id`, `timestamp`, and `severity`. Sensitive findings may
+also include a verified `file_path`, `line_number`, and source columns when
+available, or a fixed `source_context` label; matched values and snippets are
+excluded.
 
 Use `sensitive_finding` to filter the consolidated, privacy-safe sensitive
 category. For compatibility, `secret_detected`, `image_secret_detected`, and
@@ -22798,7 +23203,8 @@ interface from agent shell execution. This boundary:
 - Runs independently of the configurable permissions rules, including when ordinary tool permissions are disabled.
 - Defaults to deny. A developer may explicitly set `developer_session.enabled` to `true` in the protected global configuration before starting the trusted development runtime. Missing, malformed, project-level, overlay, or later agent-supplied values remain denied.
 - The setting is captured when the daemon starts; if a daemon is already running, start the development session with a newly started daemon so a normal-session setting cannot be upgraded in place.
-- The opt-in affects only agent-originated AI Guardian CLI execution. Protected files, hooks, caches, MCP identity checks, and other immutable protections remain enforced.
+- `developer_session.enabled` still affects only agent-originated AI Guardian CLI execution. A separate default-off `developer_session.non_blocking_findings` option can relax successful scanner findings with `action=block` into visible advisories, but only when the trusted developer-session flag is also enabled. Detection and violation logging remain active. Sensitive findings are relaxed only when a verified host replacement receives sanitized content: supported PostToolUse output contracts and OpenCode V1/V2 prompt replacement. Prompt/tool-input findings without replacement support and unsupported PostToolUse results remain blocking.
+- `warn`, `log-only`, and `ask` actions are unchanged, and scanner/hook failures remain governed by `on_scan_error`; `on_scan_error: block` still blocks. Protected files, hooks, caches, MCP identity checks, tool-policy rules, and other immutable protections remain enforced.
 
 The boundary only applies to agent-originated tool calls. Installed IDE hook
 processes, the verified read-only `mcp__ai-guardian__*` advisor namespace, and a
@@ -22806,9 +23212,9 @@ human running the CLI directly in a terminal remain functional. The denial is
 reported with a safe self-protection reason and does not expose matching rules
 or permission configuration guidance.
 
-The developer-session marker is a global-only configuration setting, not a
-project permission, hook payload field, SDK overlay, or AI Guardian command-line
-option. The normal generated configuration leaves the secure default unchanged.
+Both developer-session settings are global-only configuration, not project
+permissions, hook payload fields, SDK overlays, or AI Guardian command-line
+options. The normal generated configuration leaves both opt-ins disabled.
 
 ### Agent-Originated Host CLI Boundary
 
@@ -24567,6 +24973,14 @@ Each layer provides defense if previous layers are bypassed.
 
 ### Encoding/Obfuscation
 
+Text-only standard and URL-safe Base64 candidates (at least 12 encoded
+characters and 8 decoded bytes) are decoded once and checked by enabled
+prompt-injection, context-poisoning, secret, and PII scanners. Limits are 16
+candidates per source, 64 KiB encoded per candidate, and 256 KiB decoded in
+total. Findings point to the encoded source; decoded content is withheld from
+diagnostics. Malformed, binary, and oversized candidates are skipped. Image
+data URIs remain on the separate OCR path.
+
 ❌ **Won't work:**
 ```
 "1gn0r3 pr3v10us 1nstructi0ns"  (leet speak)
@@ -25619,6 +26033,18 @@ AI Guardian provides comprehensive secret scanning to prevent sensitive informat
 - `secret_scanning` = "Should I scan?" (always blocks secrets when found)
 - `pattern_server` = "What secrets should I look for?"
 
+### Encoded Text
+
+The shared content pipeline checks standard and URL-safe Base64 text candidates
+(at least 12 encoded characters and 8 decoded bytes) with enabled
+prompt-injection, context-poisoning, secret, and PII scanners. Limits are 16
+candidates per source, 64 KiB encoded per candidate, 256 KiB decoded in total,
+and one decode layer. A Base64-looking value is not a secret solely because it
+is long or appears beside a credential label; a finding requires a detector to
+match the decoded text. Malformed, binary, and oversized candidates are skipped,
+image data URIs remain on the OCR path, and decoded values are withheld from
+findings and diagnostics.
+
 ---
 
 ## Zero-Install Scanning
@@ -26215,7 +26641,7 @@ When secret scanning flags a value that is not a real secret, you have several o
 | `ignore_files` | Entire files or directories | All scanners |
 | `.aiguardignore.toml` | Project-level file ignores (shared via VCS) | All scanners |
 | `.gitleaks.toml` `[allowlist]` | Gitleaks-specific path/regex rules | Gitleaks only |
-| Inline annotations | Single lines in source code | All scanners |
+| Inline annotations | Single lines in source code | All file-content scanners |
 
 ### .gitleaksignore
 
@@ -26283,7 +26709,7 @@ API_KEY = "pk_test_example123456789012"  # ai-guardian:allow
 
 | Alias | Suppresses |
 |-------|-----------|
-| `ai-guardian:allow` | Secrets + PII |
+| `ai-guardian:allow` | All file-content scanner findings |
 | `gitleaks:allow` | Secrets only |
 
 These are the only aliases available by default. To use other keywords (e.g., `notsecret`, `nosec`), configure them in `ai-guardian.json`:
@@ -26297,12 +26723,17 @@ These are the only aliases available by default. To use other keywords (e.g., `n
 }
 ```
 
-- `inline_allow` — adds custom aliases suppressing secrets + PII (extends built-in `ai-guardian:allow`)
+- `inline_allow` — adds custom aliases suppressing all file-content scanner findings (extends built-in `ai-guardian:allow`)
 - `inline_allow_secrets` — adds custom aliases suppressing secrets only (extends built-in `gitleaks:allow`)
 
 Custom aliases are additive — built-in aliases always remain active.
 
 Block annotations use `ai-guardian:begin-allow` / `ai-guardian:end-allow` (also configurable via `block_begin` / `block_end`):
+
+Scanner-qualified annotations (for example, `ai-guardian:allow secret_scanning`)
+limit suppression to the named scanner types. An unqualified marker suppresses
+all file-content scanners. User prompts and non-file tool output do not honor
+source annotations.
 
 ```python
 # ai-guardian:begin-allow
@@ -29967,7 +30398,9 @@ ordinary permission rules:
 
 - The AI Guardian CLI guard denies launches of `ai-guardian` by default. Its
   trusted developer-session opt-in is global-only and does not disable other
-  immutable protections.
+  immutable protections. A separate, default-off developer-session option may
+  relax successful block-action scanner findings; it does not change tool-policy
+  denials or scanner-error handling.
 - The host CLI guard denies launches of the active supported agent CLI when
   `self_protection.block_host_agent_cli` is enabled. It resolves the executable
   from the active adapter/session identity and the canonical integration
@@ -31677,6 +32110,7 @@ Run separately for other deliberately selected historical homes.
 | Codex legacy | Selected home's `codex.json`, plus historical home-level `codex.json`, only when an owned registration exists |
 | OpenCode V1/V2 | Selected JSON/JSONC, legacy `mcp.ai-guardian`, V2 `mcp.servers.ai-guardian`, owned absolute/file-URI V1 plugin registrations; current plugin/shared bridge and old discovery-directory bridge |
 | Pi | Current managed `ai-guardian/index.ts` and matching `package.json`, and owned legacy flat `ai-guardian.ts`, in user or explicitly selected project scope |
+| Kilo Code CLI | Generated `plugin/ai-guardian.ts` and shared bridge in the selected Kilo root; owned `mcp.ai-guardian` in the selected Kilo JSON/JSONC config, including explicit project scope |
 | Goose | Owned hook actions and MCP entry under the selected `.agents/plugins/ai-guardian-goose/`, plus its matching generated `plugin.json`; honors absolute `GOOSE_PATH_ROOT`; unrelated plugin content/settings/hints retained |
 | AiderDesk/OpenClaw | Generated `index.ts`, matching package manifest and shared bridge in the selected extension/plugin home |
 | Cline/ZooCode/Kiro project scripts | Only known event filenames and Windows script variants with the exact generated single-command shape; never their shared hook directories |
@@ -31726,8 +32160,10 @@ entrypoint is still registered.
 
 ## Missing-runtime lifecycle matrix
 
-Evidence as of **2026-10-24**: source/setup contracts and isolated recovery tests,
-**not live host qualification**. `U` means the host's exact UI/exit/continuation
+Existing rows reflect source/setup contracts and isolated recovery tests as of
+**2026-10-24**; Kilo's row also records its source/setup review and recovery
+coverage from **2026-11-18** and full-matrix smoke evidence from **2026-11-20**.
+This is **not live host qualification**. `U` means the host's exact UI/exit/continuation
 behavior has **not been experimentally verified** for any of these three cases:
 missing pinned executable, missing interpreter, missing launcher/module. All three
 prevent the unavailable application from returning its normal decision. A surviving
@@ -31756,7 +32192,8 @@ retry/continuation unverified. `—`: no managed surface for that stage.
 | AiderDesk (`aiderdesk`) | L/U | L/U | L/U | L/U | M/U if configured | TypeScript entrypoint delegates to shared child-process bridge |
 | OpenClaw (`openclaw`) | L/U | L/U | L/U | L/U | M/U if configured | Plugin discovery and child-process failure are separate boundaries |
 | OpenCode V1/V2 (`opencode`) | L/U | L/U | L/U | L/U | M/U if configured | V1 explicit registration and V2 auto-discovery; V2 MCP uses `mcp.servers` |
-| Pi (`pi`) | L/U | L/U | L/U | L/U | L/U | Managed extension owns both hooks and MCP tool bridge; no native MCP file |
+| Pi (`pi`) | L/U | L/U | L/U | L/U | L/U | Managed extension owns hooks and registers MCP through Pi's native extension API; no separate MCP settings file |
+| Kilo Code CLI (`kilo`) | — | — | L/U | L/U | M/U | Historical full OpenCode-applicable CLI smoke passed for Kilo 7.8.27 in Release Readiness run 44684917315; current-candidate requalification, missing-runtime lifecycle outcomes and product container/OpenShell qualification remain unverified |
 | Augment (`augment`) | — | — | H/U | — | M/U if configured | Pre/post-tool hook integration |
 | Crush (`crush`) | — | — | H/U | — | M/U | Partial managed event coverage, not universal enforcement |
 | Junie (`junie`) | — | — | — | — | M/U | MCP-only, static guidelines do not invoke a runtime |
@@ -31812,11 +32249,11 @@ Every time AI Guardian blocks something, it creates a log entry:
 
 | Violation Type | What Triggered It | Log Details |
 |----------------|-------------------|-------------|
-| **Tool Permission** | Blocked command execution | Command, tool name, policy rule |
+| **Tool Permission** | Blocked command execution | Tool name and policy rule; a bounded, sanitized source command only when no usable file path is available |
 | **Directory Blocking** | Restricted path access | File path, requested operation |
-| **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, ID, and timestamp only; no per-finding details |
+| **Secret / PII Finding** | Secret or personal data detected | Generic category, severity, effective action, redaction status, ID, timestamp, and an optional verified file path/position or fixed source-context label; no matched values, snippets, detector details, or original subtype |
 | **Command Credential** | Literal credential in a supported command argument, or incomplete command analysis | Fixed option/classification labels and argument positions only; no argument values or full command |
-| **Secret Redaction** | Secret masked in output | Secret type, masking strategy |
+| **Secret Redaction** | Secret masked in output | Effective action, redaction status, secret type, masking strategy, and an optional sanitized command fallback when no usable file path is available |
 | **Prompt Injection** | Malicious prompt detected | Pattern matched, confidence score |
 | **SSRF Protection** | Dangerous network request | URL, reason (private IP, metadata, etc.) |
 | **Config File Threat** | Exfiltration in config file | Pattern, file, line/column number |
@@ -31874,11 +32311,67 @@ and scanner payloads are excluded by default. The correlation ID uses an
 explicit run ID when available, then the session ID or tool-use ID, so related
 checks can be grouped without copying agent content.
 
+New violation records also include two fixed-vocabulary top-level outcome fields:
+
+| Field | Values | Meaning |
+|-------|--------|---------|
+| `action_taken` | `block`, `warn`, `log`, `allow`, `unknown` | Effective disposition after applicable policy and user decisions. `unknown` is used when the final disposition cannot be established. |
+| `redaction_status` | `redacted`, `not_redacted`, `not_applicable`, `unknown` | Whether a sensitive value was replaced before the relevant content was passed on. |
+
+These fields describe the completed hook outcome, not just the scanner's
+configured mode. A PostToolUse finding that is successfully sanitized records
+`action_taken: "allow"` and `redaction_status: "redacted"`; a blocked output
+records `block` and `not_redacted`. Ask-mode approvals and non-blocking policy
+overrides are reflected in the effective action. Sensitive records retain only
+these validated labels alongside their existing minimal safe locators. The
+Web Console list and Details views show non-interactive rounded badges; the
+legacy `ai-guardian tui` command opens the same Console. The terminal
+`ai-guardian violations` listing shows bracketed labels, with color only when
+stdout is an interactive terminal. JSON/Markdown copies show the same outcome
+metadata. Legacy records without these fields remain readable and do not display
+invented outcomes.
+
+For detailed command-originated violations without a usable source file path,
+history may include the optional `blocked.source_command` fallback. It is
+normalized and capped at 500 characters, and is included only when secret and
+PII checks verify the full command as safe. Detected sensitive values, scanner
+errors, and commands too large to verify cause the command to be omitted. A usable
+file path takes precedence; any available line/column data remains unchanged.
+Sensitive secret/PII findings may retain a bounded printable file path and
+validated line/column coordinates when the path passes the bundled secret and
+PII checks. If no safe file path is available, history may retain a fixed source
+context label such as `tool_output`; it never stores the scanned content, matched
+value, snippet, detector subtype, or arbitrary scanner metadata. Source columns
+are stored as zero-based offsets and displayed as one-based columns. Paths and
+positions are exposed by Console/CLI/MCP/SDK views through bounded field
+projections; malformed legacy locator values are omitted. Command-credential
+findings retain only fixed labels and argument positions.
+
+For URL-backed `webfetch` / `WebFetch` responses, sensitive findings and redaction
+events can additionally retain `blocked.source_url`. This is a sanitized **request
+URL**, not a file path or a verified redirect destination. HTTP(S) locators are
+bounded to 4096 characters; userinfo, query strings, and fragments are removed.
+Ambiguous/malformed URLs, credential-like paths, detected secrets/PII (including
+percent-encoded paths), and unavailable validation rules cause the URL to be
+omitted. URL validation is offline and independent of scanner exclusions. No new
+configuration is required. Pre/post-tool correlation caches only the safe locator.
+
+The fixed `source_context: "tool_output"` label identifies the coordinate space,
+including when no safe URL is available. **Response** line/column labels in the
+Console and CLI refer to the exact scanned response, which may be converted
+HTML/Markdown—not the original page, Gist, or raw file. History/SDK columns remain
+zero-based (end offsets exclusive for the built-in scanner/redactor); REST/MCP
+and human views use one-based columns. A zero-valued internal column is valid.
+The URL survives Console details and safe copies, CLI, REST, MCP, SDK, and support
+projections without changing existing file-path fields or processing-source
+semantics. Older records and responses without URL metadata remain supported.
+
 The existing top-level JSONL fields remain unchanged for standard violation
-types; sensitive findings use the minimal record described below. Consumers that
-read older entries can treat a missing `policy_decision` field as a legacy
-record. Current REST, SDK, SARIF, and OTEL adapters preserve their existing
-shapes and add the normalized record or its safe fields.
+types, with the additive `action_taken` and `redaction_status` fields; sensitive
+findings retain their minimal record plus these safe outcomes. Consumers that
+read older entries can treat missing policy/outcome fields as legacy metadata.
+Current REST, SDK, MCP, mirror, support-bundle, and Console projections preserve
+their existing shapes and expose only validated outcome labels.
 
 ### Tool Input Diagnostics
 
@@ -31936,8 +32429,8 @@ Immutable input failures remain blocked and do not gain override actions.
   "violation_type": "tool_permission",
   "severity": "warning",
   "blocked": {
-    "tool": "Bash",
-    "command": "rm -rf /tmp/*",
+    "tool_name": "Bash",
+    "source_command": "rm -rf /tmp/*",
     "reason": "Destructive command pattern"
   },
   "context": {
@@ -31965,27 +32458,42 @@ Immutable input failures remain blocked and do not gain override actions.
   "timestamp": "2026-11-02T08:35:42Z",
   "violation_type": "sensitive_finding",
   "severity": "high",
+  "blocked": {
+    "file_path": "src/config.py",
+    "line_number": 42,
+    "start_column": 3,
+    "end_column": 19
+  },
   "resolved": false,
   "resolved_at": null,
   "resolved_action": null
 }
 ```
 
-For `secret_detected`, `image_secret_detected`, and `pii_detected`, JSONL keeps
-only the generic category, ID, timestamp, severity, and resolution state. It does
-not retain source paths/positions, matched values, detector metadata, context,
-suggestions, policy-decision details, or allowlist snippets. The original finding
-remains available to the in-memory caller; the persistent history does not
-distinguish which sensitive type was detected. Aggregate secret counts remain
-available separately.
+For `secret_detected`, `image_secret_detected`, and `pii_detected`, JSONL always
+uses the generic category, ID, timestamp, severity, and resolution state. It may
+also retain a verified file path and source position, or a fixed source-context
+label when an exact file location is unavailable. It never retains matched
+values, snippets, detector metadata, arbitrary context, suggestions,
+policy-decision details, or allowlist snippets. The original finding remains
+available to the in-memory caller; persistent history does not distinguish
+which sensitive type was detected. Aggregate secret counts remain available
+separately. Older records without location fields remain readable and display
+without a fabricated location.
 
 Ask-mode history does not store the matched input or scanner error text; it keeps
 a fixed description and available source position. CLI scan history stores the
-rule ID and source position, but not the finding message or snippet. The original
-Ask inputs and complete CLI findings remain available to their in-memory callers
-and command output, respectively. Generic records also persist only recognized
-violation/severity labels; unknown labels are normalized rather than copied
-verbatim.
+rule ID and source position, but not the finding message or snippet. Hook findings
+are recorded through the hook violation-logging path when logging is enabled.
+Standalone `ai-guardian scan` findings are not added to this event history by
+default; pass `--log-violations` to opt in. This means the history is not a
+complete inventory of standalone scan results. The default terminal output shows
+counts and relative file paths, not complete finding details. Explicit JSON or
+SARIF reports may contain source-derived content and should be handled as sensitive
+files. Original Ask inputs and complete CLI findings remain available to their
+in-memory callers.
+Generic records also persist only recognized violation/severity labels; unknown
+labels are normalized rather than copied verbatim.
 
 ### Example Log Entry (Directory Blocked)
 
@@ -32278,15 +32786,32 @@ cat ~/.local/state/ai-guardian/violations.jsonl | \
 ### AI Guardian CLI
 
 ```bash
-# List recent violations
-ai-guardian violations list
+# List recent unresolved violations; each row includes its ID
+ai-guardian violations
 
-# Show violations by type
-ai-guardian violations list --type ssrf_protection
+# Filter the list and limit the number of records
+ai-guardian violations --type ssrf_blocked --limit 5
 
-# Export violations for date range
-ai-guardian violations export --since 2024-04-01 --format csv
+# Emit the filtered list as JSON, without other stdout text
+ai-guardian violations --type ssrf_blocked --limit 5 --json
+
+# Display one violation by ID as labeled, human-readable details
+ai-guardian violations viol_example123
+
+# Emit the same detail as machine-readable JSON for scripts
+ai-guardian violations viol_example123 --json
+
+# Export persisted records to a JSON file or clear the log
+ai-guardian violations --export violations.json
+ai-guardian violations --clear
 ```
+
+List mode supports `--type` and `--limit`. ID lookup includes resolved records
+and defaults to labeled text with nested fields indented; `--json` emits only the
+record as valid JSON. JSON list mode emits an array (including `[]` when there
+are no matches). Both detail formats use persisted record fields, so handle them
+with the same care as an exported violation log. Sensitive findings remain
+minimized in persisted records and do not include matched values or snippets.
 
 ---
 
@@ -32492,9 +33017,10 @@ Violation logging is **extremely efficient**:
   "self_protection": {
     "block_host_agent_cli": true
   },
-  "_comment31": "Agent-originated AI Guardian CLI execution is denied by default. Enable developer_session.enabled only in this protected global config before starting a trusted development session; project configs, SDK overlays, hook payloads, and command arguments cannot enable it.",
+  "_comment31": "Trusted developer-session options are global-only. developer_session.enabled only allows agent-originated AI Guardian CLI execution. non_blocking_findings is a separate, default-off opt-in that allows successful action=block findings as advisory diagnostics only when enabled is also true; sensitive content is relaxed only when a verified host replacement delivers sanitized content (including OpenCode prompts). Scan and hook errors still follow on_scan_error, including block.",
   "developer_session": {
-    "enabled": false
+    "enabled": false,
+    "non_blocking_findings": false
   },
   "_comment32": "Protect supported CLI/IDE configuration, hooks, MCP registrations, plugins, extensions, and project/workspace artifacts from agent-originated mutations. Missing or invalid values remain enabled; disable only as an explicit global user choice.",
   "agent_config_protection": {
@@ -33079,14 +33605,14 @@ Violation logging is **extremely efficient**:
 
   "annotations": {
     "_comment": "Inline annotation suppression (NEW in v1.8.0, Issue #481)",
-    "_comment2": "Hardcoded markers (always active): ai-guardian:allow (inline), ai-guardian:begin-allow / ai-guardian:end-allow (block)",
-    "_comment3": "Annotations suppress secrets and PII only. Prompt injection, jailbreak, config exfil are ALWAYS scanned.",
-    "_comment4": "Add 'ai-guardian:allow' anywhere on a line to suppress secrets + PII for that line",
-    "_comment5": "Use 'ai-guardian:begin-allow' / 'ai-guardian:end-allow' for block suppression of multiple lines",
+    "_comment2": "Hardcoded markers: ai-guardian:allow (inline), ai-guardian:begin-allow / ai-guardian:end-allow (block)",
+    "_comment3": "Unqualified markers suppress all file-content scanners; scanner-qualified markers suppress only listed scanner types.",
+    "_comment4": "Add 'ai-guardian:allow' anywhere on a line to suppress all file-scanner findings for that line",
+    "_comment5": "Use 'ai-guardian:begin-allow' / 'ai-guardian:end-allow' for block suppression; add scanner types after begin-allow to limit scope",
     "_comment5b": "gitleaks:allow suppresses secrets only (not PII). Add 'notsecret' or other aliases to inline_allow_secrets.",
     "_comment6": "User config extends defaults — add custom aliases without losing built-in ones",
     "_comment7": "Set enabled to false for strict compliance environments that require no suppressions",
-    "_comment8": "Only applies to file content scanning (PreToolUse/beforeReadFile), not prompts or tool output",
+    "_comment8": "Applies to file scans and file-read content, not user prompts or unrelated tool output",
     "enabled": true,
     "inline_allow": [],
     "inline_allow_secrets": ["gitleaks:allow"],
@@ -33877,12 +34403,17 @@ Violation logging is **extremely efficient**:
   "properties": {
     "developer_session": {
       "type": "object",
-      "description": "Global-only developer-session access. Agent-originated AI Guardian CLI execution is denied by default. Enable this only in the protected global configuration before starting a trusted development session; project configs, SDK overlays, hook payloads, and command arguments cannot enable it.",
+      "description": "Global-only trusted developer-session options. Agent-originated AI Guardian CLI execution is denied by default. non_blocking_findings is a separate opt-in and is effective only when enabled is true. Project configs, SDK overlays, hook payloads, and command arguments cannot enable either option.",
       "properties": {
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Allow agent-originated AI Guardian CLI execution for this trusted developer session. Default: false."
+          "description": "Allow agent-originated AI Guardian CLI execution for this trusted developer session. This does not change detection enforcement. Default: false."
+        },
+        "non_blocking_findings": {
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled is also true, allow successful findings configured with action=block as advisory diagnostics when a verified host/tool contract can safely replace sensitive content. Supported PostToolUse secret and PII output is redacted and the scanner diagnostic remains visible. Sensitive prompt findings may be relaxed only where the host safely replaces the submitted prompt with verified redacted text (currently OpenCode V1/V2); prompt/tool-input findings without replacement support remain blocking. If sanitization or replacement cannot be verified, it blocks. Scanning and violation logging continue; warn, log-only, and ask actions are unchanged. Scanner and hook errors continue to follow on_scan_error, including fail-closed blocking. Protected global configuration only. Default: false."
         }
       },
       "additionalProperties": false
@@ -35823,14 +36354,14 @@ Violation logging is **extremely efficient**:
     },
     "annotations": {
       "type": "object",
-      "description": "Inline annotation suppression for secrets and PII on specific lines (NEW in v1.8.0, Issue #481). Hardcoded markers: ai-guardian:allow (inline, secrets+PII), ai-guardian:begin-allow / ai-guardian:end-allow (block, secrets+PII). Configurable aliases for secrets-only suppression (gitleaks:allow, notsecret). Prompt injection, jailbreak, and config exfiltration are always scanned and cannot be suppressed. Only applies to file content scanning (PreToolUse/beforeReadFile). Unmatched begin-allow without end-allow is ignored (fail-safe).",
+      "description": "Inline annotation suppression for file-content scanner findings. Unqualified ai-guardian:allow and ai-guardian:begin-allow / ai-guardian:end-allow markers suppress all file-content scanners; scanner-qualified markers suppress only the named scanner types. Configurable aliases can suppress all file findings (inline_allow) or secrets only (inline_allow_secrets, including gitleaks:allow). Applies to file scans and file-read content, not submitted prompts or unrelated tool output. Unmatched begin-allow without end-allow is ignored.",
       "properties": {
         "enabled": {
           "$ref": "#/definitions/time_based_enabled"
         },
         "inline_allow": {
           "type": "array",
-          "description": "Additional inline aliases that suppress secrets and PII (extends hardcoded ai-guardian:allow). User config extends defaults.",
+          "description": "Additional inline aliases that suppress all file-content scanner findings (extends hardcoded ai-guardian:allow). User config extends defaults.",
           "items": {
             "type": "string"
           },
@@ -37435,6 +37966,8 @@ Violation logging is **extremely efficient**:
     "scan_pii": { "$ref": "#/$defs/scanner_section" },
     "prompt_injection": { "$ref": "#/$defs/scanner_section" },
     "config_file_scanning": { "$ref": "#/$defs/scanner_section" },
+    "code_scanning": { "$ref": "#/$defs/scanner_section" },
+    "ssrf_protection": { "$ref": "#/$defs/scanner_section" },
     "context_poisoning": { "$ref": "#/$defs/scanner_section" },
     "supply_chain": { "$ref": "#/$defs/scanner_section" },
     "image_scanning": { "$ref": "#/$defs/scanner_section" },
@@ -37940,6 +38473,167 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-11-21
+
+### Added
+- **Scanner-scoped source annotations:** Apply inline and block annotations to
+  all file-content scanner findings, with qualified markers limiting suppression
+  to named scanners. PostToolUse file excerpts inherit source annotations only
+  when uniquely matched to complete lines; prompts and unrelated non-file input
+  remain scanned.
+- **Base64 text inspection (#2802):** Safely decode bounded standard and
+  URL-safe Base64 text candidates and inspect decoded text with enabled prompt
+  injection, context poisoning, secret, and PII detectors. Map findings to the
+  encoded source and withhold decoded values; image data URIs remain on the
+  existing OCR path.
+- **Kilo Code CLI integration:** Add a Kilo-identified V1 plugin bridge, user and
+  project setup, native `mcp` configuration, protected-config inventory, and
+  installer detection, plus automatic scanning for documented Kilo skill roots.
+  Connect the documented `chat.message` callback to prompt scanning and safe
+  prompt-part replacement. Implement `tool.execute.after` rewriting with verified
+  sanitized output or a fixed refusal for blocked/invalid results. Source-reviewed
+  against Kilo CLI 7.8.27; user-reported native tests confirmed a blocked
+  synthetic prompt was replaced with a refusal and Bash post-tool output was
+  sanitized. A historical full OpenCode-applicable matrix passed for Kilo 7.8.27
+  on 2026-11-20 in [Release Readiness run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315)
+  for commit `ea8b8eb5ca09126c0866372a0dd2da487a67db5e` on `ubuntu-26.04`; all 14
+  applicable cases and correlated MCP-version evidence passed. Smoke image manifest:
+  `sha256:c890fa25bbba6d71c53955a245e7233c5524c0db474f471720ccbe302dcfdf86`.
+  This historical run predates the current candidate, so exact-SHA requalification
+  is pending and this result must not be used as current-candidate evidence.
+  Prompt replacement is not model-turn cancellation, and product container/OpenShell
+  runtime qualification remains separate.
+- **Violation outcome metadata (#2781):** Persist the effective action and
+  redaction status in violation JSONL records; display validated outcomes as
+  rounded badges in the Web Console (including the `tui` alias) and bracketed
+  labels in terminal history, with matching safe copies for sensitive findings.
+- **Violation ID lookup and JSON output (#2790):** Show IDs in recent CLI
+  violation listings and support full-record lookup by ID, with clean JSON output
+  for list and detail views.
+- **Human-readable violation details (#2793):** Render ID lookups as labeled,
+  indented terminal details by default while preserving machine-readable JSON with
+  `--json`.
+- **Web Console port environment override (#2787):** Allow
+  `AI_GUARDIAN_CONSOLE_PORT` to override `console.web.port` for `console` and
+  `tui`, while retaining explicit `--port` precedence and automatic assignment.
+- **Daemon listener CLI options (#2785):** Add `--host` and `--port` to
+  `daemon start` and `daemon restart`, with CLI > environment > daemon config
+  precedence and the existing defaults when omitted.
+- **Tray integration status indicators (#2771):** Show detected CLI/IDE status
+  through enabled/disabled setup entries, show verified AI Guardian hook/MCP
+  health separately, and disable setup when installation is not detected.
+- **MCP version query and CLI smoke coverage (#2764):** Expose the installed
+  AI Guardian package version through `get_version` and verify a native agent
+  CLI calls the configured MCP tool and receives a correlated MCP result
+  containing the exact installed version in the isolated local-mock smoke. Grok's
+  native `search_tool`/`use_tool` continuation is tested with correlated discovery
+  evidence with a smoke-only allow for the exact read-only MCP tool. OpenCode V2
+  normally routes MCP through Code Mode, but this smoke sets `codemode: false` to
+  qualify direct native tool result transport. The smoke-only stdio witness covers
+  clients that keep the MCP result local; provider-continuation
+  clients use correlated call/result counters. Grok is pinned to 1.0.63 for custom
+  Chat Completions MCP support; its local `use_tool` result is checked by the stdio
+  witness. OpenCode V2 uses a persistent smoke server and waits for a correlated
+  `tools/list` response containing `get_version` before starting smoke sessions. A
+  timeout/nonzero exit after
+  complete MCP evidence qualifies only this capability, not the rest of that
+  CLI's smoke cases.
+- **Actionable sensitive-finding locations (#2776):** Preserve verified file paths
+  and bounded line/column coordinates for secret, image-secret, and PII history
+  without retaining matched values, snippets, or detector subtype. Console, CLI,
+  MCP, and SDK views expose only the safe locator fields and tolerate legacy
+  locationless records.
+- **Sanitized locationless violation context (#2759):** Add an optional bounded
+  `source_command` fallback to detailed command-originated history only when no
+  usable file path exists and secret/PII checks verify it safe. Keep source
+  locations preferred and sensitive findings minimal.
+- **Pi setup and native MCP registration (#2762):** Detect an installed Pi CLI
+  before its AI Guardian extension exists and register AI Guardian through Pi's
+  native extension API so it appears in `/mcp` (Pi 0.99.0+).
+- **Trusted developer-session non-blocking findings (#2755):** Add a separate,
+  default-off global opt-in to surface successful block-action findings as
+  advisory diagnostics while preserving scanning, violation logging, and
+  fail-closed `on_scan_error: block` behavior. Supported PostToolUse secret and
+  PII output is redacted and keeps the scanner diagnostic; sensitive findings
+  remain blocking where host/tool protocols cannot safely replace content.
+- **Cypress Cloud record key detection (#2750):** Detect GUID values assigned to
+  `CYPRESS_RECORD_KEY` without matching generic UUIDs or project IDs.
+- **Serval API client secret detection (#2749):** Detect public API and worker
+  secrets using the documented `svl_secret_` type tags and exact suffix length.
+
+### Fixed
+- **Agent integration hardening (#2820):** Serialize Windows OpenCode/Kilo MCP
+  commands as argv, detect binary-only Pi/Kilo installations, report Kilo plugin
+  runtime activation as unverified, and reject symlinked project-scoped Kilo writes.
+  Exact trusted Kilo MCP tool names are allowlisted, decoded scanner errors honor
+  `on_scan_error`, custom regexes reject backtracking-dangerous shapes, POSIX
+  assignment-prefixed HTTP commands are scanned, and MIME-wrapped Base64 is
+  decoded with source-safe redaction. Codex smoke failures remain explicitly
+  unqualified and temporarily tolerated with a warning/summary; the Codex smoke
+  profile preserves its MCP server and native command argument shape; the
+  integration performance guard allows normal hosted-runner scheduling variance;
+  current-candidate Kilo qualification remains pending a matching-SHA CI run.
+- **Sensitive MCP violation privacy (#2816):** Omit file paths, URLs, and
+  line/column locators from `get_violations` responses for consolidated and
+  legacy sensitive findings, without changing human-facing history views.
+- **Read the Docs release verification (#2809):** Verify that the exact release
+  page and `/stable/` serve the new tag, while `/latest/` serves `main`; require
+  Read the Docs version metadata to confirm both aliases target the intended refs.
+  Point the README's release link directly at `v1.22.0` and have the release
+  synchronizer update it for future versions; keep `latest` documented separately.
+- **`init-project --scan` scanner coverage (#2807):** Preserve findings unless a
+  generated recommendation can represent their suppression; count unique files
+  during progressive filtering, route AST code findings, and apply generated
+  code/SSRF ignore paths. Avoid allowlist patterns from secret-rule labels or
+  exfiltration categories, keep password-likelihood opt-in, and surface
+  annotation skip counts.
+- **Lifecycle environment assignment false positives (#2801):** Stop matching
+  assignments inside leading-underscore names and ignore single-segment paths
+  and numeric metadata values, while retaining detection for credential fields.
+- **Quiet image scans (#2800):** Suppress RapidOCR INFO initialization output by
+  default while retaining warnings/errors; `--verbose` shows OCR diagnostics.
+- **Scan findings history guidance (#2798):** Explain in CLI output and help that
+  hook findings are logged as events while standalone scans are report-only by
+  default; document the explicit `--log-violations` opt-in without exposing details.
+- **Tray restart handoff (#2797, #2815):** Keep the tray lock until its icon loop
+  exits and start a replacement as soon as that lock is released, rather than
+  waiting for unrelated process cleanup; the lock still prevents overlapping tray
+  instances.
+- **Kilo orphan recovery:** Include the generated Kilo plugin, shared bridge, and
+  owned MCP registration in the selected user or explicit project cleanup scope.
+- **Web Console configuration (#2782):** Apply `console.web.host` and
+  `console.web.port` when launching from the CLI, while preserving defaults and
+  explicit `--port` precedence.
+- **WebFetch violation locations (#2779):** Preserve a privacy-validated request
+  URL for sensitive findings and redaction events instead of a synthetic output
+  filename. Retain response coordinates across history, Console/copy, CLI, REST,
+  MCP, and SDK views, with safe URL correlation and locationless fallbacks.
+- **Locationless violation command privacy (#2759):** Omit command-origin
+  context unless every expected bundled PII matcher compiled successfully, so
+  missing or invalid PII rules cannot make an unchecked command appear verified.
+- **IDE setup scanner availability (#2760):** Report when the built-in
+  `toml-patterns` engine keeps secret scanning available without Gitleaks, and
+  warn that scanning will not run only when no configured engine is available.
+- **Tray menu survives daemon rediscovery (#2756):** Keep daemon-bound plugin
+  entries available when discovery replaces a target object without changing its
+  identity, so Maintenance remains visible after a daemon restart.
+- **NotebookLM completed replacement retry:** Reuse the completed journal when
+  retrying with the same explicit source UUID after the prior source was deleted.
+
+### Changed
+- **Kilo setup and health messaging:** Label the count as a managed plugin
+  artifact rather than hook or callback coverage, show the effective plugin
+  location, and distinguish `chat.message` prompt scanning and tool callbacks
+  from the separate MCP entry in Kilo's JSON/JSONC config. Retain the native
+  activation, enforcement, prompt-refusal, and result-delivery caveat.
+- **MCP server lifecycle documentation (#2812):** Clarify stdio process ownership,
+  shutdown and reconnect triggers, daemon independence, and the effect of removing
+  a registration while a host may still have an active connection.
+- **NotebookLM refresh recovery:** Allow an explicitly identified exact-title
+  `generated_text` source to be replaced using its full source UUID, and accept a
+  new file source reported as `generated_text` only when bound to its saved upload
+  receipt. Upload/processing verification still precedes deletion.
+
 ## [1.22.0] - 2026-11-14
 
 ### Added
@@ -38087,14 +38781,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Patch release branch safety:** Require patch releases to use the matching,
   remote-synchronized stable branch; reject main, mismatched release branches, and
   divergent local histories before CI or release changes.
-
-## [1.21.1] - 2026-11-10
-
-### Fixed
-- **Release test matrix reliability (#2700):** Measure redaction performance with
-  repeated samples and initialize isolated recovery state before exposing test-home
-  overrides, while checking for unexpected state files. Pin no-runtime OpenCode
-  recovery coverage to a deterministic configuration generation.
 
 
 *(Earlier versions omitted — see CHANGELOG.md for full history)*
