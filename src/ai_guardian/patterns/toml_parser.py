@@ -16,7 +16,7 @@ import sys
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -222,7 +222,7 @@ def _compile_glob(raw: dict) -> str:
     return pattern
 
 
-_COMPILERS = {
+_COMPILERS: Dict[str, Callable[..., Any]] = {
     "regex": _compile_regex,
     "literal": _compile_literal,
     "cidr": _compile_cidr,
