@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-11-21
+
 ### Added
 - **Scanner-scoped source annotations:** Apply inline and block annotations to
   all file-content scanner findings, with qualified markers limiting suppression
@@ -5175,7 +5177,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.22.0...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.23.0...HEAD
+[1.23.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.23.0
 [1.22.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.22.0
 [1.21.1]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.21.1
 [1.21.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.21.0
