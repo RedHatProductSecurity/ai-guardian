@@ -2,7 +2,8 @@
 
 Reviewed **2026-11-20** for [#2673](https://github.com/RedHatProductSecurity/ai-guardian/issues/2673).
 This inventory includes **Goose** and **Kilo Code CLI**. Kilo's required
-full-matrix smoke-only lane has passed alongside Goose's separate pre-tool lane.
+full-matrix smoke-only lane passed historically alongside Goose's separate
+pre-tool lane; exact-SHA requalification for the current candidate is pending.
 The machine-readable ledger is [`scripts/agent_cli_coverage.json`](../scripts/agent_cli_coverage.json).
 `tests/unit/test_agent_cli_coverage.py` compares every `SUPPORTED_CLI_IDE_TYPES`
 entry with the runner, actual Release Readiness invocations, and this audit.
@@ -19,7 +20,7 @@ scripts/agent-cli-test --coverage
 | CLI key | Runner / CI lane | Scope or actionable exclusion |
 | --- | --- | --- |
 | `claude` | Full applicable case profile; consent-gated | Explicit maintainer ToS consent before installation; strict-derived sanitization, not unmodified strict output blocking |
-| `codex` | Full applicable case profile; failure currently tolerated in CI | Native execution remains unqualified when the lane fails; the release exception is not a pass |
+| `codex` | Full applicable case profile; required CI gate | Native execution remains unqualified when the lane fails, and the readiness workflow fails |
 | `gemini` | Full applicable case profile | Native refusal of sensitive results, **not** sanitized delivery |
 | `opencode` | Separate V1/V2 lanes | V2 smoke image is not a published product-runtime qualification |
 | `pi` | Full applicable case profile | Native extension, issued tool/result and execution evidence required |
@@ -28,7 +29,7 @@ scripts/agent-cli-test --coverage
 | `copilot` | Blocked: consent and native-hook qualification | Local BYOK exists; obtain terms approval and qualify the installed pre-tool surface |
 | `antigravity` | Blocked: consent and versioned installation | Local Gemini override exists; qualify the exact artifact, trust and installed adapter behavior |
 | `kiro` | Blocked: no documented local-provider path | Headless authentication requires the Kiro service; do not substitute a live-provider test |
-| `kilo` | **Full applicable case profile passed**; separate required smoke-only image | Kilo 7.8.27 passed all 14 applicable matrix cases plus correlated MCP-version evidence in [Release Readiness run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315). This does not qualify the product container/OpenShell runtime |
+| `kilo` | **Historical full applicable case profile passed**; separate required smoke-only image | Kilo 7.8.27 passed all 14 applicable matrix cases plus correlated MCP-version evidence in historical [Release Readiness run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315); exact-SHA requalification for the current candidate is pending. This does not qualify the product container/OpenShell runtime |
 | `openclaw` | Blocked: native plugin qualification | Local provider exists; prove embedded CLI callback activation and fix unsupported claims separately |
 | `crush` | Blocked: license review | FSL-1.1-MIT is not a current MIT grant; no new smoke dependency is installed |
 
@@ -37,9 +38,9 @@ OpenCode V1/V2 jobs and an independent **OpenShell Image Validation** job. The
 shared local `.github/actions/prepare-cli-smoke` action prepares the current wheel
 and optional support image on each runner; no job depends on another CLI's build,
 version check or smoke result. A V2 failure therefore cannot skip Goose.
-Claude's job is explicitly consent-gated, and Codex's failed smoke outcome remains
-visible despite the temporary release exception. These job boundaries do not add
-native execution evidence or change the qualification limits below.
+Claude's job is explicitly consent-gated, and a failed Codex smoke outcome remains
+visible and fails readiness. These job boundaries do not add native execution
+evidence or change the qualification limits below.
 
 **Full** describes the runner's applicable case profile, not a successful execution,
 all hooks available upstream, every platform, or runtime certification. The base
@@ -200,7 +201,7 @@ below. Unit tests and generated setup files alone are not runtime proof.
   tool non-execution, correlated tool results, sensitive-output absence, clean
   execution, and the exact installed AI Guardian MCP version. The container has no
   external network and does not use product sandbox creation.
-- **Qualification evidence:** The full matrix passed on **2026-11-20** in
+- **Historical qualification evidence:** The full matrix passed on **2026-11-20** in
   [Release Readiness run 44684917315, Kilo job](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315/job/136116840310),
   commit `ea8b8eb5ca09126c0866372a0dd2da487a67db5e`, platform `ubuntu-26.04`,
   exact Kilo CLI **7.8.27**. All 14 applicable cases passed, including secret
@@ -208,14 +209,17 @@ below. Unit tests and generated setup files alone are not runtime proof.
   and allow behavior, post-tool secret/PII handling, clean execution, and the
   additional correlated MCP-version check. Smoke image manifest:
   `sha256:c890fa25bbba6d71c53955a245e7233c5524c0db474f471720ccbe302dcfdf86`.
+  This run predates the current candidate; exact-SHA requalification is pending
+  and this historical result must not be used as current-candidate evidence.
 - **Qualification boundary:** This qualifies only the pinned Kilo CLI and the
   tested full-matrix behavior in the isolated smoke image. Kilo remains excluded
   from product container/OpenShell selectors; the smoke-only image is not runtime
   support. Prompt replacement is not request cancellation.
 - **Next action / priority:** **P2** — qualify product container/OpenShell runtime
   behavior independently before making any product-runtime support claim.
-- **Native execution in this change:** not run locally; CI verified Kilo CLI
-  **7.8.27** as recorded above.
+- **Native execution in this change:** not run locally; only the historical CI
+  run above verified Kilo CLI **7.8.27**. A matching-SHA run for this candidate
+  remains pending.
 - **Earlier native evidence:** user-reported Kilo 7.8.27 prompt retest after
   daemon resume replaced a blocked synthetic secret prompt with a refusal; the
   Bash `cat` test sanitized synthetic secret output. Raw fixture contents were
@@ -302,8 +306,9 @@ native hook-scope, execution, clean-result and process-wide raw-delivery checks.
 See [release smoke instructions](../RELEASING.md#real-agent-hook-smoke-test).
 Historical Linux strict-derived local-mock evidence for Gemini **0.67.0** and
 Pi **0.86.0** is recorded in #2662/#2670; it is not a new run of this change.
-Gemini containment is native refusal. The tolerated Codex CI failure stays failed
-and unqualified. Claude requires its separate explicit installation consent.
+Gemini containment is native refusal. A failed Codex CI smoke stays failed and
+unqualified, and blocks readiness. Claude requires its separate explicit
+installation consent.
 
 ## MCP version smoke
 

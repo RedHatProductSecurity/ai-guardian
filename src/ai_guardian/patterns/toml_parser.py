@@ -13,6 +13,7 @@ import ipaddress
 import logging
 import re
 import sys
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
@@ -78,11 +79,80 @@ def validate_re2_compatible(pattern: str) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
+def validate_regex_safety(pattern: str) -> Tuple[bool, Optional[str]]:
+    """Reject regex structures that can trigger catastrophic backtracking.
+
+    Python's ``re`` engine is backtracking-based, while TOML rules may come from
+    user or pattern-server configuration. Reject nested repetitions and repeated
+    alternations before a rule can reach the scanner. The check is deliberately
+    conservative: a false negative could turn untrusted content into a CPU
+    denial-of-service, while a false positive only disables one custom rule.
+    """
+    if len(pattern) > 4096:
+        return False, "regex exceeds the maximum supported length"
+
+    try:
+        from re import _parser as regex_parser  # type: ignore[attr-defined]
+    except ImportError:  # pragma: no cover - compatibility with older Python
+        import sre_parse as regex_parser
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            parsed = regex_parser.parse(pattern, 0)
+    except (re.error, TypeError, ValueError):
+        # Syntax errors are reported by the normal compiler with a more useful
+        # position; this helper only decides whether valid syntax is safe.
+        return True, None
+
+    repeat_names = {"MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT"}
+    max_repeat = getattr(regex_parser, "MAXREPEAT", 2**32 - 1)
+
+    def has_branch(tokens: Any) -> bool:
+        for operation, argument in tokens:
+            name = getattr(operation, "name", str(operation))
+            if name == "BRANCH":
+                return True
+            if name == "SUBPATTERN" and has_branch(argument[-1]):
+                return True
+            if name in repeat_names and has_branch(argument[-1]):
+                return True
+        return False
+
+    def has_unsafe_repeat(tokens: Any, inside_repeat: bool = False) -> bool:
+        for operation, argument in tokens:
+            name = getattr(operation, "name", str(operation))
+            if name in repeat_names:
+                _, maximum, body = argument
+                unbounded = maximum == max_repeat
+                if (inside_repeat and unbounded) or (unbounded and has_branch(body)):
+                    return True
+                if has_unsafe_repeat(body, inside_repeat=inside_repeat or unbounded):
+                    return True
+            elif name == "SUBPATTERN":
+                if has_unsafe_repeat(argument[-1], inside_repeat):
+                    return True
+            elif name == "BRANCH":
+                if any(
+                    has_unsafe_repeat(branch, inside_repeat) for branch in argument[1]
+                ):
+                    return True
+        return False
+
+    if has_unsafe_repeat(parsed):
+        return False, "regex contains nested or ambiguous repetition"
+    return True, None
+
+
 def _compile_regex(raw: dict) -> re.Pattern:
     """Compile a regex rule, validating RE2 compatibility."""
     pattern = raw.get("regex", "")
     if not pattern:
         raise ValueError(f"Rule {raw.get('id', '?')}: regex field is empty")
+
+    safe, safety_reason = validate_regex_safety(pattern)
+    if not safe:
+        raise ValueError(f"Unsafe regex: {safety_reason}")
 
     if raw.get("re2_compat", True):
         is_re2, reason = validate_re2_compatible(pattern)

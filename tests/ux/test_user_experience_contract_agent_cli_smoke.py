@@ -158,6 +158,22 @@ def test_readiness_has_independent_visible_jobs_for_every_runnable_cli(runner):
     assert "smoke_prerequisites" not in workflow_path.read_text(encoding="utf-8")
 
 
+def test_codex_smoke_failure_blocks_release_readiness(runner):
+    """USER EXPERIENCE: a failed Codex smoke is a failed readiness result."""
+    workflow = yaml.safe_load(
+        (runner.ROOT / ".github/workflows/release-readiness.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    job = workflow["jobs"]["codex-cli-smoke"]
+    assert job["name"] == "Codex CLI Smoke"
+    assert all(not step.get("continue-on-error", False) for step in job["steps"])
+    assert not any(
+        "temporarily tolerated" in step.get("name", "").casefold()
+        for step in job["steps"]
+    )
+
+
 @pytest.mark.parametrize(
     ("internal", "host", "authenticated", "expected", "message"),
     (

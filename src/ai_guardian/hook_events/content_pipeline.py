@@ -179,7 +179,13 @@ from ai_guardian.response_format import IDEType
 
 # Scanners that use fail-closed (on_scan_error=block) error handling
 _FAIL_CLOSED_SCANNERS = frozenset(
-    {ScannerName.PROMPT_INJECTION, ScannerName.CONFIG_FILE}
+    {
+        ScannerName.PROMPT_INJECTION,
+        ScannerName.CONFIG_FILE,
+        ScannerName.SECRET,
+        ScannerName.PII,
+        ScannerName.CONTEXT_POISONING,
+    }
 )
 
 # Derived from registry: violation_type string → ScannerName

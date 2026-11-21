@@ -37,12 +37,11 @@ Docker/Podman/SELinux/AppArmor setup. Check the workflow result for each configu
 CLI smoke before claiming readiness. Claude Code remains conditional on the
 repository's explicit terms-of-service consent variable.
 
-The Codex CLI smoke step currently has a temporary `continue-on-error` allowance
-so this unresolved runtime issue does not block the release process. A failure is
-reported in the workflow warning and job summary, but remains an unqualified Codex
-result—not a passing smoke. Other CLI and OpenShell failures remain blocking. Remove
-the exception only after Codex executes the native tool and passes the existing
-execution, output-containment, and clean-exit checks.
+The Codex CLI smoke step is a required Release Readiness gate. A failure remains an
+unqualified Codex result and blocks the workflow; it is not converted into a passing
+readiness result. Other CLI and OpenShell jobs remain independent, so one failed lane
+does not hide another. Keep the gate until Codex executes the native tool and passes
+the existing execution, output-containment, and clean-exit checks.
 
 ## Safe response
 

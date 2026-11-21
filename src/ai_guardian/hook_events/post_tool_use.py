@@ -84,6 +84,56 @@ def _scan_decoded_post_tool_content(
     )
 
 
+_DECODED_SCAN_ERROR_TYPES = {
+    ScannerName.SECRET: ViolationType.SECRET_DETECTED,
+    ScannerName.PII: ViolationType.PII_DETECTED,
+    ScannerName.PROMPT_INJECTION: ViolationType.PROMPT_INJECTION,
+    ScannerName.CONTEXT_POISONING: ViolationType.CONTEXT_POISONING,
+}
+
+
+def _first_decoded_scan_error(scan_results):
+    """Return a decoded-content error marker without exposing scanner details."""
+    return next(
+        (
+            result
+            for result in scan_results
+            if isinstance(result, ScanResult) and result.extra.get("scan_error")
+        ),
+        None,
+    )
+
+
+def _decoded_scan_error_message(scanner_name, _result):
+    """Build the fixed diagnostic used for decoded scanner failures."""
+    return f"{scanner_name.value} scan could not safely inspect decoded Base64 content"
+
+
+def _decoded_scan_error_response(
+    adapter, hook_data, hook_event, scanner_name, scan_results
+):
+    """Return a fail-closed response for a decoded scanner error when required."""
+    error_result = _first_decoded_scan_error(scan_results)
+    if error_result is None:
+        return None
+    if _loaders._get_on_scan_error_action() != ActionMode.BLOCK:
+        return None
+
+    message = _decoded_scan_error_message(scanner_name, error_result)
+    logger.error(
+        "%s check error for decoded Base64 content (fail-closed)",
+        scanner_name.value,
+    )
+    _advance_transcript_position(hook_data)
+    return _format_response(
+        adapter,
+        has_secrets=True,
+        error_message=message,
+        hook_event=hook_event,
+        violation_type=_DECODED_SCAN_ERROR_TYPES[scanner_name],
+    )
+
+
 def _redact_encoded_source_spans(content, scan_results, existing_result=None):
     """Redact decoded candidates plus any existing PII spans in source content."""
     replacement_spans = []
@@ -771,6 +821,16 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 }
             },
         )
+        decoded_secret_error = _first_decoded_scan_error(decoded_secret_results)
+        decoded_error_response = _decoded_scan_error_response(
+            adapter,
+            hook_data,
+            hook_event,
+            ScannerName.SECRET,
+            decoded_secret_results,
+        )
+        if decoded_error_response is not None:
+            return decoded_error_response
         decoded_secret_result = next(
             (
                 scan_result
@@ -799,7 +859,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
             return result
 
         has_secrets = post_secret_result.detected if post_secret_result else False
-        error_message = post_secret_result.error_message if post_secret_result else None
+        error_message = (
+            _decoded_scan_error_message(ScannerName.SECRET, decoded_secret_error)
+            if decoded_secret_error is not None
+            else post_secret_result.error_message if post_secret_result else None
+        )
 
     if not has_secrets and error_message:
         # Scanner not available - display warning but allow operation
@@ -1127,6 +1191,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
     warning_messages = [heuristic_notice] if heuristic_notice else []
 
     # PII scanning in PostToolUse (Issue #262)
+    decoded_pii_error_message = None
     pii_file_path = tool_input.get("file_path") or tool_input.get("path")
     if not pii_file_path and pretool_ctx:
         pii_file_path = pretool_ctx.get("file_path")
@@ -1148,15 +1213,30 @@ def handle_post_tool_use(ctx=None, **kwargs):
             tool_identifier=tool_identifier,
             latency_timer=_latency_timer,
         )
+        decoded_pii_scan_results = _scan_decoded_post_tool_content(
+            post_pii_content,
+            ScannerName.PII,
+            file_path=pii_file_path,
+            tool_identifier=tool_identifier,
+            latency_timer=_latency_timer,
+        )
+        decoded_pii_error = _first_decoded_scan_error(decoded_pii_scan_results)
+        decoded_error_response = _decoded_scan_error_response(
+            adapter,
+            hook_data,
+            hook_event,
+            ScannerName.PII,
+            decoded_pii_scan_results,
+        )
+        if decoded_error_response is not None:
+            return decoded_error_response
+        if decoded_pii_error is not None:
+            decoded_pii_error_message = _decoded_scan_error_message(
+                ScannerName.PII, decoded_pii_error
+            )
         decoded_pii_results = [
             scan_result
-            for scan_result in _scan_decoded_post_tool_content(
-                post_pii_content,
-                ScannerName.PII,
-                file_path=pii_file_path,
-                tool_identifier=tool_identifier,
-                latency_timer=_latency_timer,
-            )
+            for scan_result in decoded_pii_scan_results
             if scan_result.detected
         ]
         if decoded_pii_results:
@@ -1444,6 +1524,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
     post_warn_types: list = (
         [ViolationType.HEURISTIC_CANDIDATE] if heuristic_notice else []
     )
+    if decoded_pii_error_message:
+        post_warning_messages.append(decoded_pii_error_message)
+        post_warn_types.append(ViolationType.PII_DETECTED)
     post_pi_cp_filename = (
         f"{tool_identifier}_output" if tool_identifier else "tool_output"
     )
@@ -1488,7 +1571,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     latency_timer=_latency_timer,
                 )
                 if post_pi_result is None or not post_pi_result.detected:
-                    decoded_pi_results = _scan_decoded_post_tool_content(
+                    decoded_pi_scan_results = _scan_decoded_post_tool_content(
                         post_pi_content,
                         ScannerName.PROMPT_INJECTION,
                         scanner_config=post_pi_config,
@@ -1496,10 +1579,29 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         tool_identifier=tool_identifier,
                         latency_timer=_latency_timer,
                     )
+                    decoded_pi_error = _first_decoded_scan_error(
+                        decoded_pi_scan_results
+                    )
+                    decoded_error_response = _decoded_scan_error_response(
+                        adapter,
+                        hook_data,
+                        hook_event,
+                        ScannerName.PROMPT_INJECTION,
+                        decoded_pi_scan_results,
+                    )
+                    if decoded_error_response is not None:
+                        return decoded_error_response
+                    if decoded_pi_error is not None:
+                        post_warning_messages.append(
+                            _decoded_scan_error_message(
+                                ScannerName.PROMPT_INJECTION, decoded_pi_error
+                            )
+                        )
+                        post_warn_types.append(ViolationType.PROMPT_INJECTION)
                     post_pi_result = next(
                         (
                             scan_result
-                            for scan_result in decoded_pi_results
+                            for scan_result in decoded_pi_scan_results
                             if scan_result.detected
                         ),
                         post_pi_result,
@@ -1662,17 +1764,36 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     latency_timer=_latency_timer,
                 )
                 if post_cp_result is None or not post_cp_result.detected:
-                    decoded_cp_results = _scan_decoded_post_tool_content(
+                    decoded_cp_scan_results = _scan_decoded_post_tool_content(
                         post_cp_content,
                         ScannerName.CONTEXT_POISONING,
                         file_path=post_cp_file,
                         tool_identifier=tool_identifier,
                         latency_timer=_latency_timer,
                     )
+                    decoded_cp_error = _first_decoded_scan_error(
+                        decoded_cp_scan_results
+                    )
+                    decoded_error_response = _decoded_scan_error_response(
+                        adapter,
+                        hook_data,
+                        hook_event,
+                        ScannerName.CONTEXT_POISONING,
+                        decoded_cp_scan_results,
+                    )
+                    if decoded_error_response is not None:
+                        return decoded_error_response
+                    if decoded_cp_error is not None:
+                        post_warning_messages.append(
+                            _decoded_scan_error_message(
+                                ScannerName.CONTEXT_POISONING, decoded_cp_error
+                            )
+                        )
+                        post_warn_types.append(ViolationType.CONTEXT_POISONING)
                     post_cp_result = next(
                         (
                             scan_result
-                            for scan_result in decoded_cp_results
+                            for scan_result in decoded_cp_scan_results
                             if scan_result.detected
                         ),
                         post_cp_result,

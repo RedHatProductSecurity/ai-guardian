@@ -122,11 +122,20 @@ def validate_custom_secret_patterns(
                     f"regex is invalid{suffix}; correct the regex syntax"
                 )
             else:
-                from ai_guardian.patterns.toml_parser import validate_re2_compatible
+                from ai_guardian.patterns.toml_parser import (
+                    validate_re2_compatible,
+                    validate_regex_safety,
+                )
 
-                compatible, reason = validate_re2_compatible(regex)
-                if not compatible:
-                    rule_errors.append(f"regex uses unsupported syntax: {reason}")
+                safe, _safety_reason = validate_regex_safety(regex)
+                if not safe:
+                    rule_errors.append(
+                        "regex was rejected as unsafe; this rule cannot be used"
+                    )
+                else:
+                    compatible, reason = validate_re2_compatible(regex)
+                    if not compatible:
+                        rule_errors.append(f"regex uses unsupported syntax: {reason}")
 
         if rule_errors:
             errors.extend(

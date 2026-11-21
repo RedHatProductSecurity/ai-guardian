@@ -193,6 +193,14 @@ def test_kilo_plugin_uses_v1_callbacks_and_rewrites_post_tool_results():
     assert "throw new Error(POST_TOOL_REFUSAL_NOTICE);" not in after_hook
 
 
+def test_kilo_plugin_only_bypasses_exact_guardian_tool_names():
+    assert "const TRUSTED_GUARDIAN_TOOLS = new Set" in _KILO_PLUGIN_TS
+    assert "TRUSTED_GUARDIAN_TOOLS.has(toolName)" in _KILO_PLUGIN_TS
+    assert "startsWith('ai-guardian')" not in _KILO_PLUGIN_TS
+    assert "ai-guardian__check_path" in _KILO_PLUGIN_TS
+    assert "ai-guardian__check_path_extra" not in _KILO_PLUGIN_TS
+
+
 def test_existing_opencode_is_upgraded_without_first_run_setup(tmp_path):
     setup = IDESetup()
     install_root = tmp_path / "plugins"

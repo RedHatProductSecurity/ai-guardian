@@ -13,6 +13,7 @@ import pytest
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.tray.pause import PauseSnapshot
+from ai_guardian.tray.health import TrayHealthMonitor
 from tests.fixtures.tray_pause import pause_values
 from ai_guardian.tray.app import (
     DaemonTray,
@@ -57,6 +58,22 @@ from ai_guardian.tray.plugins import (
 def _no_real_web_console(monkeypatch):
     """Prevent tests from spawning real web console subprocesses."""
     monkeypatch.setattr(DaemonTray, "_start_web_console", lambda self: None)
+
+
+class TestKiloRuntimeHealth:
+    def test_unverified_runtime_is_not_reported_as_healthy(self):
+        verification = {
+            "ide": "kilo",
+            "healthy": True,
+            "plugin_runtime_status": "unverified",
+            "events": {"plugin": "healthy"},
+            "mcp_installed": True,
+        }
+
+        assert TrayHealthMonitor._verification_is_healthy(verification) is False
+        assert "plugin runtime activation (unverified)" in (
+            TrayHealthMonitor._verification_attention(verification)
+        )
 
 
 class TestCheckGiAvailable:

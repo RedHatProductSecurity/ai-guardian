@@ -10,6 +10,7 @@ from ai_guardian.patterns.toml_parser import (
     load_and_compile,
     load_toml_file,
     validate_re2_compatible,
+    validate_regex_safety,
 )
 
 
@@ -52,6 +53,21 @@ class TestValidateRE2Compatible:
     def test_named_group_is_allowed(self):
         ok, reason = validate_re2_compatible(r"(?P<name>[a-z]+)")
         assert ok is True
+
+
+class TestRegexSafety:
+    @pytest.mark.parametrize("pattern", [r"^(a+)+$", r"^(a|aa)+$"])
+    def test_rejects_backtracking_dos_shapes(self, pattern):
+        safe, reason = validate_regex_safety(pattern)
+
+        assert safe is False
+        assert "repetition" in reason
+
+    def test_compile_rule_rejects_backtracking_dos_shape(self):
+        raw = {"id": "unsafe", "match_type": "regex", "regex": r"^(a+)+$"}
+
+        with pytest.raises(ValueError, match="Unsafe regex"):
+            compile_rule(raw, "secret")
 
 
 class TestCompileRule:
