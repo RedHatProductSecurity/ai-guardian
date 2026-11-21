@@ -144,15 +144,16 @@ def validate_regex_safety(pattern: str) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-def _compile_regex(raw: dict) -> re.Pattern:
+def _compile_regex(raw: dict, *, enforce_regex_safety: bool = True) -> re.Pattern:
     """Compile a regex rule, validating RE2 compatibility."""
     pattern = raw.get("regex", "")
     if not pattern:
         raise ValueError(f"Rule {raw.get('id', '?')}: regex field is empty")
 
-    safe, safety_reason = validate_regex_safety(pattern)
-    if not safe:
-        raise ValueError(f"Unsafe regex: {safety_reason}")
+    if enforce_regex_safety:
+        safe, safety_reason = validate_regex_safety(pattern)
+        if not safe:
+            raise ValueError(f"Unsafe regex: {safety_reason}")
 
     if raw.get("re2_compat", True):
         is_re2, reason = validate_re2_compatible(pattern)
@@ -246,7 +247,9 @@ RESERVED_FIELDS = {
 }
 
 
-def compile_rule(raw: dict, category: str) -> CompiledRule:
+def compile_rule(
+    raw: dict, category: str, *, enforce_regex_safety: bool = True
+) -> CompiledRule:
     """Compile a raw TOML rule dict into a CompiledRule.
 
     Args:
@@ -266,7 +269,10 @@ def compile_rule(raw: dict, category: str) -> CompiledRule:
         raise ValueError(f"Rule {rule_id}: unsupported match_type '{match_type}'")
 
     compiler = _COMPILERS[match_type]
-    compiled = compiler(raw)
+    if match_type == "regex":
+        compiled = compiler(raw, enforce_regex_safety=enforce_regex_safety)
+    else:
+        compiled = compiler(raw)
 
     metadata = {k: v for k, v in raw.items() if k not in RESERVED_FIELDS}
 
@@ -324,9 +330,13 @@ def load_and_compile(path: Path, category: str) -> List[CompiledRule]:
     """
     raw_rules = load_toml_file(path)
     compiled = []
+    bundled_data_dir = Path(__file__).parent / "data"
+    enforce_regex_safety = path.resolve().parent != bundled_data_dir.resolve()
     for raw in raw_rules:
         try:
-            rule = compile_rule(raw, category)
+            rule = compile_rule(
+                raw, category, enforce_regex_safety=enforce_regex_safety
+            )
             compiled.append(rule)
         except ValueError as e:
             logger.warning(f"Skipping invalid rule in {path}: {e}")
