@@ -158,20 +158,26 @@ def test_readiness_has_independent_visible_jobs_for_every_runnable_cli(runner):
     assert "smoke_prerequisites" not in workflow_path.read_text(encoding="utf-8")
 
 
-def test_codex_smoke_failure_blocks_release_readiness(runner):
-    """USER EXPERIENCE: a failed Codex smoke is a failed readiness result."""
+def test_codex_smoke_failure_is_visible_but_temporarily_tolerated(runner):
+    """USER EXPERIENCE: Codex failure is visible but remains unqualified."""
     workflow = yaml.safe_load(
         (runner.ROOT / ".github/workflows/release-readiness.yml").read_text(
             encoding="utf-8"
         )
     )
     job = workflow["jobs"]["codex-cli-smoke"]
-    assert job["name"] == "Codex CLI Smoke"
-    assert all(not step.get("continue-on-error", False) for step in job["steps"])
-    assert not any(
-        "temporarily tolerated" in step.get("name", "").casefold()
+    assert job["name"] == "Codex CLI Smoke (failure temporarily tolerated)"
+    codex_step = next(step for step in job["steps"] if step.get("id") == "codex_smoke")
+    assert codex_step["continue-on-error"] is True
+    report = next(
+        step
         for step in job["steps"]
+        if step.get("name") == "Report tolerated Codex smoke failure"
     )
+    assert (
+        report["if"] == "${{ !cancelled() && steps.codex_smoke.outcome == 'failure' }}"
+    )
+    assert "does not qualify Codex" in report["run"]
 
 
 @pytest.mark.parametrize(

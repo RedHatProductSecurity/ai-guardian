@@ -20,7 +20,7 @@ scripts/agent-cli-test --coverage
 | CLI key | Runner / CI lane | Scope or actionable exclusion |
 | --- | --- | --- |
 | `claude` | Full applicable case profile; consent-gated | Explicit maintainer ToS consent before installation; strict-derived sanitization, not unmodified strict output blocking |
-| `codex` | Full applicable case profile; required CI gate | Native execution remains unqualified when the lane fails, and the readiness workflow fails |
+| `codex` | Full applicable case profile; failure temporarily tolerated in CI | Native execution remains unqualified when the lane fails; the exception is not a pass |
 | `gemini` | Full applicable case profile | Native refusal of sensitive results, **not** sanitized delivery |
 | `opencode` | Separate V1/V2 lanes | V2 smoke image is not a published product-runtime qualification |
 | `pi` | Full applicable case profile | Native extension, issued tool/result and execution evidence required |
@@ -39,8 +39,9 @@ shared local `.github/actions/prepare-cli-smoke` action prepares the current whe
 and optional support image on each runner; no job depends on another CLI's build,
 version check or smoke result. A V2 failure therefore cannot skip Goose.
 Claude's job is explicitly consent-gated, and a failed Codex smoke outcome remains
-visible and fails readiness. These job boundaries do not add native execution
-evidence or change the qualification limits below.
+visible through the warning and job summary despite the temporary exception. These
+job boundaries do not add native execution evidence or change the qualification
+limits below.
 
 **Full** describes the runner's applicable case profile, not a successful execution,
 all hooks available upstream, every platform, or runtime certification. The base
@@ -307,8 +308,8 @@ See [release smoke instructions](../RELEASING.md#real-agent-hook-smoke-test).
 Historical Linux strict-derived local-mock evidence for Gemini **0.67.0** and
 Pi **0.86.0** is recorded in #2662/#2670; it is not a new run of this change.
 Gemini containment is native refusal. A failed Codex CI smoke stays failed and
-unqualified, and blocks readiness. Claude requires its separate explicit
-installation consent.
+unqualified despite the temporary readiness exception. Claude requires its
+separate explicit installation consent.
 
 ## MCP version smoke
 

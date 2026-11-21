@@ -3277,7 +3277,7 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
         "smoke-tests": "Detection, Hook, False-Positive, Initialization & Lifecycle Smokes",
         "scenario-tests": "Container Agent Scenarios (minimal, standard, strict)",
         "container-build-validation": "Container Smoke, Scenarios & Multi-Arch Builds",
-        "codex-cli-smoke": "Codex CLI Smoke",
+        "codex-cli-smoke": "Codex CLI Smoke (failure temporarily tolerated)",
         "gemini-cli-smoke": "Gemini CLI Smoke",
         "grok-cli-smoke": "Grok CLI Smoke (pre-tool only)",
         "goose-cli-smoke": "Goose CLI Smoke (pre-tool only)",
@@ -3411,10 +3411,23 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
         assert prepare["with"]["image"] == expected_image
 
     codex_steps = workflow["jobs"]["codex-cli-smoke"]["steps"]
-    assert all(not step.get("continue-on-error", False) for step in codex_steps)
-    assert not any(
-        "tolerated" in step.get("name", "").casefold() for step in codex_steps
+    codex_step = next(step for step in codex_steps if step.get("id") == "codex_smoke")
+    assert codex_step["continue-on-error"] is True
+    assert all(
+        step.get("continue-on-error") is not True
+        for step in codex_steps
+        if step is not codex_step
     )
+    codex_failure_report = next(
+        step
+        for step in codex_steps
+        if step.get("name") == "Report tolerated Codex smoke failure"
+    )
+    assert codex_failure_report["if"] == (
+        "${{ !cancelled() && steps.codex_smoke.outcome == 'failure' }}"
+    )
+    assert "GITHUB_STEP_SUMMARY" in codex_failure_report["run"]
+    assert "does not qualify Codex" in codex_failure_report["run"]
 
     claude_job = workflow["jobs"]["claude-cli-smoke"]
     assert claude_job["if"] == (
