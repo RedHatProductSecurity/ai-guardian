@@ -11,10 +11,12 @@ import pytest
 from ai_guardian.hook_adapters.codex import CodexAdapter
 from ai_guardian.hook_adapters.copilot import CopilotAdapter
 from ai_guardian.ide_paths import (
+    ensure_project_path_no_symlink,
     get_ide_home,
     resolve_kilo_config_file,
     resolve_kilo_plugin_dir,
     resolve_opencode_config_layers,
+    write_project_text_no_symlink,
 )
 from ai_guardian.mcp.audit import MCPAuditor
 from ai_guardian.scanners.supply_chain import SupplyChainScanner
@@ -229,6 +231,40 @@ def test_kilo_project_paths_do_not_follow_user_config_overrides(monkeypatch, tmp
     assert get_mcp_config_path("kilo", scope="project", project_dir=str(project)) == (
         project / "kilo.json"
     )
+
+
+def test_project_path_guard_rejects_symlinked_kilo_ancestor(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (project / ".kilo").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="contains a symlink"):
+        write_project_text_no_symlink(
+            project / ".kilo" / "plugin" / "ai-guardian.ts",
+            "unsafe",
+            str(project),
+        )
+
+    assert not (outside / "plugin" / "ai-guardian.ts").exists()
+
+
+def test_project_path_guard_rejects_symlinked_leaf_without_following_it(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside.ts"
+    outside.write_text("original", encoding="utf-8")
+    target = project / ".kilo" / "plugin" / "ai-guardian.ts"
+    target.parent.mkdir(parents=True)
+    target.symlink_to(outside)
+
+    with pytest.raises(ValueError, match="contains a symlink"):
+        ensure_project_path_no_symlink(target, str(project))
+    with pytest.raises(ValueError, match="contains a symlink"):
+        write_project_text_no_symlink(target, "unsafe", str(project))
+
+    assert outside.read_text(encoding="utf-8") == "original"
 
 
 def test_opencode_config_layers_follow_documented_precedence(monkeypatch, tmp_path):
@@ -486,6 +522,7 @@ def test_installer_detection_uses_relocated_directories(tmp_path):
     env = dict(os.environ, HOME=str(home), CLAUDE_CONFIG_DIR="")
     env.update({name: str(path) for name, path in custom_dirs.items()})
     env["CRUSH_GLOBAL_CONFIG"] = str(crush_config)
+    env["PATH"] = "/usr/bin:/bin"
     result = subprocess.run(
         ["bash", "-c", detection_function + "\ndetect_installed_agents"],
         capture_output=True,
@@ -538,6 +575,7 @@ def test_installer_detection_uses_explicit_config_files(tmp_path):
             "OPENCLAW_CONFIG_PATH": str(openclaw_config),
         }
     )
+    env["PATH"] = "/usr/bin:/bin"
     result = subprocess.run(
         ["bash", "-c", detection_function + "\ndetect_installed_agents"],
         capture_output=True,

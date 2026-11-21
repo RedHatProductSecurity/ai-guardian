@@ -134,6 +134,7 @@ _CMD_WRAPPERS = frozenset({"cmd", "cmd.exe"})
 _SHELL_WRAPPERS = _POSIX_SHELL_WRAPPERS | _POWERSHELL_WRAPPERS | _CMD_WRAPPERS
 _MAX_WRAPPER_DEPTH = 4
 _VALID_ACTIONS = frozenset({"ask", "block", "warn", "log-only"})
+_POSIX_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 
 @dataclass(frozen=True)
@@ -379,6 +380,14 @@ def _command_name(token: _Token) -> str:
     return name
 
 
+def _strip_posix_assignment_prefix(tokens: list[_Token]) -> tuple[list[_Token], int]:
+    """Remove leading POSIX ``NAME=value`` words without expanding them."""
+    offset = 0
+    while offset < len(tokens) and _POSIX_ASSIGNMENT_RE.match(tokens[offset].value):
+        offset += 1
+    return tokens[offset:], offset
+
+
 def _shell_command_payload(
     tokens: list[_Token],
 ) -> Optional[tuple[_Token, bool]]:
@@ -410,6 +419,10 @@ def _family_for_segment(
     """Return a direct family, or whether a supported command is wrapped."""
     if not tokens:
         return None, False
+    if not powershell:
+        tokens, _ = _strip_posix_assignment_prefix(tokens)
+        if not tokens:
+            return None, False
     direct = _DIRECT_COMMANDS.get(_command_name(tokens[0]))
     if direct:
         return direct, False
@@ -1103,14 +1116,18 @@ def _analyze_command_credentials(
     recognized_command = False
 
     for command_index, tokens in enumerate(segments):
+        assignment_offset = 0
+        scan_tokens = tokens
+        if not powershell:
+            scan_tokens, assignment_offset = _strip_posix_assignment_prefix(tokens)
         family, wrapped = _family_for_segment(
-            tokens, powershell=powershell, wrapper_depth=wrapper_depth
+            scan_tokens, powershell=powershell, wrapper_depth=wrapper_depth
         )
         if family is None:
             continue
         recognized_command = True
         if wrapped:
-            payload = _shell_command_payload(tokens)
+            payload = _shell_command_payload(scan_tokens)
             if payload is not None and family != "unknown":
                 payload_token, payload_powershell = payload
                 nested_shell = shell
@@ -1147,19 +1164,30 @@ def _analyze_command_credentials(
             )
             incomplete = True
             continue
+        finding_start = len(findings)
         if family == "powershell-web":
             segment_incomplete = _scan_powershell_web(
-                tokens,
+                scan_tokens,
                 command_index=command_index,
                 findings=findings,
             )
         else:
             segment_incomplete = _scan_http_client(
-                tokens,
+                scan_tokens,
                 family=family,
                 command_index=command_index,
                 findings=findings,
             )
+        if assignment_offset:
+            for finding_index in range(finding_start, len(findings)):
+                finding = findings[finding_index]
+                findings[finding_index] = CommandCredentialFinding(
+                    command_index=finding.command_index,
+                    argument_index=finding.argument_index + assignment_offset,
+                    command_family=finding.command_family,
+                    option=finding.option,
+                    finding_class=finding.finding_class,
+                )
         if segment_incomplete or tokenizer_incomplete:
             findings.append(
                 CommandCredentialFinding(

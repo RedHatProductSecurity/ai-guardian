@@ -250,7 +250,9 @@ if cli == 'codex':
     text=(f'model = "{model}"\nmodel_provider = "ai_guardian_smoke"\n'
           'approval_policy = "never"\nsandbox_mode = "workspace-write"\n\n'
           '[model_providers.ai_guardian_smoke]\nname = "AI Guardian local mock"\n'
-          f'base_url = "{url}"\nwire_api = "responses"\nenv_key = "OPENAI_API_KEY"\n')
+          f'base_url = "{url}"\nwire_api = "responses"\nenv_key = "OPENAI_API_KEY"\n\n'
+          '[mcp_servers.ai-guardian]\ncommand = "ai-guardian"\n'
+          'args = ["mcp-server"]\n')
     (home/f'{agent}.config.toml').write_text(text, encoding='utf-8')
 elif cli in ('opencode', 'kilo'):
     config_dir = '.config/opencode' if cli == 'opencode' else '.config/kilo'

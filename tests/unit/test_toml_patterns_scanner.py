@@ -1,5 +1,7 @@
 """Tests for TomlPatternsScanner — Scanner SDK engine."""
 
+import pytest
+
 from ai_guardian.patterns.cache import PatternCache
 from ai_guardian.patterns.validators import shannon_entropy
 from ai_guardian.scanners.sdk import Scanner, Finding
@@ -198,6 +200,28 @@ class TestTomlPatternsScanner:
         assert "secret_scanning.additional_patterns" in caplog.text
         assert "broken-org-rule" not in caplog.text
         assert "regex is invalid" not in caplog.text
+
+    @pytest.mark.parametrize("regex", [r"^(a+)+$", r"^(a|aa)+$"])
+    def test_unsafe_custom_regex_is_skipped(self, regex, caplog):
+        scanner = TomlPatternsScanner()
+        initial_count = scanner._cache.rule_count
+
+        with caplog.at_level("WARNING"):
+            scanner.configure(
+                {
+                    "additional_patterns": [
+                        {
+                            "id": "unsafe-custom-rule",
+                            "match_type": "regex",
+                            "regex": regex,
+                        }
+                    ]
+                }
+            )
+
+        assert scanner._cache.rule_count == initial_count
+        assert "Invalid custom secret detection rules were skipped" in caplog.text
+        assert "unsafe-custom-rule" not in caplog.text
 
     def test_invalid_rule_structure_is_reported_and_skipped(self, caplog):
         scanner = TomlPatternsScanner()

@@ -205,7 +205,7 @@ detect_installed_agents() {
     fi
 
     local pi_agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
-    if [ -d "$pi_agent_dir" ]; then
+    if [ -d "$pi_agent_dir" ] || command -v pi >/dev/null 2>&1; then
         agents+=("pi")
     fi
 

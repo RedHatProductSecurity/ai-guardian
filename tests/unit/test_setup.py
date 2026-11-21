@@ -401,6 +401,18 @@ class TestIDESetup:
         ):
             assert setup.list_installed_ides() == ["pi"]
 
+    def test_list_installed_ides_detects_binary_only_kilo(self, monkeypatch):
+        """Kilo's CLI proves installation before its plugin is configured."""
+        setup = IDESetup()
+        monkeypatch.delenv("KILO_CONFIG_DIR", raising=False)
+        with mock.patch(
+            "ai_guardian.setup.hooks.shutil.which",
+            side_effect=lambda executable: (
+                "/usr/local/bin/kilo" if executable == "kilo" else None
+            ),
+        ):
+            assert "kilo" in setup.list_installed_ides()
+
     def test_list_installed_ides_detects_pi_agent_config_in_relocated_home(
         self, tmp_path, monkeypatch
     ):
@@ -6406,6 +6418,25 @@ class TestKiloMcpConfig:
         assert status["mcp_status"] == "healthy"
         assert status["mcp_config_path"] == str(config_path)
 
+    def test_project_setup_refuses_symlinked_kilo_config(self, tmp_path):
+        from ai_guardian.setup.hooks import IDESetup
+        from ai_guardian.setup.mcp import _install_mcp_config
+
+        project = tmp_path / "project"
+        project.mkdir()
+        outside = tmp_path / "outside.json"
+        outside.write_text('{"mcp": {"other": {}}}\n', encoding="utf-8")
+        (project / "kilo.json").symlink_to(outside)
+
+        _install_mcp_config(
+            IDESetup(),
+            "kilo",
+            scope="project",
+            project_dir=str(project),
+        )
+
+        assert json.loads(outside.read_text(encoding="utf-8")) == {"mcp": {"other": {}}}
+
     def test_invalid_mcp_container_stops_without_rewriting_kilo_config(
         self, tmp_path, monkeypatch, capsys
     ):
@@ -6424,6 +6455,50 @@ class TestKiloMcpConfig:
 
         assert "'mcp' must be an object/mapping" in capsys.readouterr().err
         assert config_path.read_bytes() == original
+
+    def test_windows_python_module_command_is_serialized_as_argv(self):
+        from ai_guardian.setup.mcp import _resolved_mcp_command
+
+        with mock.patch(
+            "ai_guardian.setup.mcp._resolve_binary_path",
+            return_value=r"C:\Python\pythonw.exe -m ai_guardian",
+        ):
+            assert _resolved_mcp_command() == [
+                r"C:\Python\pythonw.exe",
+                "-m",
+                "ai_guardian",
+                "mcp-server",
+            ]
+
+    def test_health_rejects_compound_windows_command(self, tmp_path, monkeypatch):
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        config_root = tmp_path / "kilo-config"
+        config_root.mkdir()
+        config_path = config_root / "kilo.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "mcp": {
+                        "ai-guardian": {
+                            "type": "local",
+                            "command": [
+                                r"C:\Python\pythonw.exe -m ai_guardian",
+                                "mcp-server",
+                            ],
+                            "enabled": True,
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("KILO_CONFIG_DIR", str(config_root))
+
+        status = verify_mcp_config("kilo")
+
+        assert status["mcp_status"] == "invalid"
+        assert "separate" in status["mcp_diagnostic"]
 
 
 class TestResolveBinaryPath:

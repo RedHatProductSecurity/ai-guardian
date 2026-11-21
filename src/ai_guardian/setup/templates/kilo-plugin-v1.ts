@@ -10,13 +10,37 @@ const PROMPT_REFUSAL_NOTICE =
   'AI Guardian blocked the previous prompt. Do not answer or continue that request. Ask the user to provide a new prompt without sensitive or blocked content.';
 const POST_TOOL_REFUSAL_NOTICE =
   'AI Guardian blocked this tool result after execution. The tool ran, and its result was replaced with a fixed refusal. Do not infer that the tool’s side effects were undone. Tell the user it was flagged and wait for a new instruction.';
+const TRUSTED_GUARDIAN_TOOLS = new Set([
+  'ai-guardian__check_path',
+  'ai-guardian__check_command',
+  'ai-guardian__check_mcp_trust',
+  'ai-guardian__sanitize_text',
+  'ai-guardian__sanitize_directory',
+  'ai-guardian__check_annotations',
+  'ai-guardian__get_violations',
+  'ai-guardian__get_version',
+  'ai-guardian__get_config',
+  'ai-guardian__get_scanner_status',
+  'ai-guardian__get_scanner_supported',
+  'ai-guardian__get_patterns_list',
+  'ai-guardian__get_metrics',
+  'ai-guardian__doctor',
+  'ai-guardian__prepare_support_bundle',
+  'ai-guardian__send_support_bundle',
+  'ai-guardian__scan_directory',
+  'ai-guardian__scan_directory_report',
+]);
+
+function isTrustedGuardianTool(toolName: unknown): boolean {
+  return typeof toolName === 'string' && TRUSTED_GUARDIAN_TOOLS.has(toolName);
+}
 
 const AiGuardian: Plugin = async (ctx) => {
   const cwd = ctx.directory || ctx.worktree;
 
   return {
     async 'tool.execute.before'(input, output) {
-      if (input.tool?.startsWith('ai-guardian')) return;
+      if (isTrustedGuardianTool(input.tool)) return;
       const result = guardian.run({
         hook_event_name: 'tool.execute.before',
         kilo_plugin_api: 'v1',
@@ -96,7 +120,7 @@ const AiGuardian: Plugin = async (ctx) => {
     },
 
     async 'tool.execute.after'(input, output) {
-      if (input.tool?.startsWith('ai-guardian')) return;
+      if (isTrustedGuardianTool(input.tool)) return;
       const result = guardian.run({
         hook_event_name: 'tool.execute.after',
         kilo_plugin_api: 'v1',

@@ -764,7 +764,7 @@ def _case_tool_arguments(
         return {}
     if case in FILE_WRITE_CASES:
         return _file_write_arguments(schema, case)
-    return _command_arguments(schema, TOOL_COMMANDS[case])
+    return _command_arguments(schema, TOOL_COMMANDS[case], tool_name)
 
 
 def _record_request(case: str, payload: Dict[str, Any]) -> Tuple[int, int]:
@@ -843,7 +843,9 @@ def _stats() -> Dict[str, Dict[str, int]]:
         }
 
 
-def _command_arguments(schema: Dict[str, Any], command: str) -> Dict[str, Any]:
+def _command_arguments(
+    schema: Dict[str, Any], command: str, tool_name: Optional[str] = None
+) -> Dict[str, Any]:
     properties = schema.get("properties", {})
     required = schema.get("required", [])
     key = next(
@@ -852,7 +854,11 @@ def _command_arguments(schema: Dict[str, Any], command: str) -> Dict[str, Any]:
     value: Any = command
     field = properties.get(key)
     field_type = field.get("type") if isinstance(field, dict) else None
-    if isinstance(field_type, str) and field_type.lower() == "array":
+    if (
+        tool_name != "exec_command"
+        and isinstance(field_type, str)
+        and field_type.lower() == "array"
+    ):
         value = ["bash", "-lc", command]
     arguments: Dict[str, Any] = {key: value}
     for name in required:

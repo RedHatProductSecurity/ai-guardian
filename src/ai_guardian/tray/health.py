@@ -458,7 +458,14 @@ class TrayHealthMonitor:
     @staticmethod
     def _verification_is_healthy(verification):
         """Return whether a verification result explicitly reports health."""
-        return isinstance(verification, dict) and verification.get("healthy") is True
+        return (
+            isinstance(verification, dict)
+            and verification.get("healthy") is True
+            and not (
+                verification.get("ide") == "kilo"
+                and verification.get("plugin_runtime_status") == "unverified"
+            )
+        )
 
     @staticmethod
     def _pi_mcp_attention(verification):
@@ -552,6 +559,12 @@ class TrayHealthMonitor:
         if isinstance(diagnostics, (list, tuple, set)):
             attention.extend(str(diagnostic) for diagnostic in diagnostics)
 
+        if (
+            verification.get("ide") == "kilo"
+            and verification.get("plugin_runtime_status") == "unverified"
+        ):
+            attention.append("plugin runtime activation (unverified)")
+
         pi_mcp_attention = TrayHealthMonitor._pi_mcp_attention(verification)
         if pi_mcp_attention:
             attention.append(pi_mcp_attention)
@@ -593,6 +606,7 @@ class TrayHealthMonitor:
             tuple(sorted(str(diagnostic) for diagnostic in diagnostics)),
             verification.get("hooks_healthy"),
             verification.get("mcp_installed"),
+            verification.get("plugin_runtime_status"),
             (
                 str(verification.get("mcp_status"))
                 if verification.get("mcp_status")

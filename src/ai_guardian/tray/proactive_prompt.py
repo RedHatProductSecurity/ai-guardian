@@ -384,7 +384,12 @@ def sync_ide_setup_state(
             ):
                 setup_status = "unknown"
             elif menu_verification["healthy"]:
-                setup_status = "configured"
+                setup_status = (
+                    "unknown"
+                    if ide_type == "kilo"
+                    and menu_verification.get("plugin_runtime_status") == "unverified"
+                    else "configured"
+                )
             else:
                 setup_status = "needs_setup"
         tray_status[ide_type] = {

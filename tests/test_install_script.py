@@ -249,6 +249,42 @@ class TestInstallScriptAgentDetection:
         assert result.returncode == 0
         assert result.stdout.strip() == "cursor"
 
+    def test_detects_pi_binary_without_agent_directory(self, tmp_path, script_content):
+        """A PATH-only Pi installation is detected in a clean home."""
+        home = tmp_path / "home"
+        home.mkdir()
+        isolated_path = tmp_path / "path"
+        isolated_path.mkdir()
+        isolated_path.joinpath("uname").symlink_to(shutil.which("uname"))
+        pi = isolated_path / "pi"
+        pi.write_text("#!/bin/sh\nexit 0\n")
+        pi.chmod(0o755)
+        env = dict(
+            os.environ,
+            HOME=str(home),
+            CLAUDE_CONFIG_DIR="",
+            PI_CODING_AGENT_DIR="",
+            KILO_CONFIG_DIR="",
+            KILO_CONFIG="",
+            XDG_CONFIG_HOME=str(tmp_path / "xdg"),
+            PATH=str(isolated_path),
+        )
+
+        result = subprocess.run(
+            [
+                shutil.which("bash"),
+                "-c",
+                self._detection_function(script_content) + "\ndetect_installed_agents",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=tmp_path,
+        )
+
+        assert result.returncode == 0
+        assert result.stdout.strip() == "pi"
+
     def test_detection_includes_setup_for_unconfigured_agents(self, script_content):
         assert "Detected installed IDEs, setting up hooks" in script_content
         assert "--install-scanner --force --yes" in script_content
@@ -460,6 +496,9 @@ class TestInstallPs1:
     def test_ps1_contains_detect_function(self):
         content = PS1_SCRIPT.read_text()
         assert "Detect-InstalledAgents" in content
+
+    def test_ps1_detects_pi_binary(self):
+        assert "Get-Command pi -ErrorAction SilentlyContinue" in PS1_SCRIPT.read_text()
 
     def test_ps1_detection_honors_ide_home_variables(self):
         content = PS1_SCRIPT.read_text()

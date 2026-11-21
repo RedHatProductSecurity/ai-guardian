@@ -90,7 +90,7 @@ cloud jobs.
 | OpenClaw Gateway plugin | Observe only | Gate | Observe only | Prompt-event return values are ignored; the loaded plugin does not replace post-tool results. |
 | OpenCode V1 (1.x) | Replace with a fixed refusal | Gate | Conditional transformation | An explicit replacement can be applied; a post-hook block is not a verified safe-redaction guarantee. |
 | OpenCode V2 (2.x) | Replace with a fixed refusal | Gate | Replace/withhold | Requires V2 plugin discovery and artifacts; V1 plugin code does not run in V2. |
-| Kilo Code CLI | Prompt-to-refusal replacement verified; native turn cancellation not claimed | Full native pre-tool matrix passed for 7.8.27 | Bash/Write output cases passed | The full OpenCode-applicable smoke passed in CI; product container/OpenShell support remains unqualified. |
+| Kilo Code CLI | Prompt-to-refusal replacement verified; native turn cancellation not claimed | Historical full native pre-tool matrix passed for 7.8.27; current-candidate CI requalification pending | Bash/Write output cases passed in the historical run | The historical OpenCode-applicable smoke is not evidence for the current candidate; product container/OpenShell support remains unqualified. |
 | Pi extension | Gate | Gate | Replace or mark as error | Requires a loaded extension; commands handled before the input event are outside its prompt gate. |
 | Augment / Auggie local hooks | Not installed | Gate for selected tools | Feedback only; no replacement | Installed matchers do not cover every tool. |
 | Crush | Not installed | Gate | Not installed | AI Guardian installs only the pre-tool stage. |

@@ -22,7 +22,11 @@ from ai_guardian.constants import (
 )
 from ai_guardian.cli_runtime import detect_cli_runtime, pre_1_0_cli_advisory
 from ai_guardian.ide_registry import get_ide_integration
-from ai_guardian.ide_paths import resolve_ide_config_path
+from ai_guardian.ide_paths import (
+    ensure_project_path_no_symlink,
+    resolve_ide_config_path,
+    write_project_text_no_symlink,
+)
 from ai_guardian.opencode_support import detect_opencode_runtime
 from ai_guardian.setup.utils import (
     _create_config_backup,
@@ -2257,6 +2261,16 @@ class IDESetup:
 
         config_path = Path(raw_path).expanduser()
 
+        integration = get_ide_integration(ide_type)
+        if (
+            ide_type == "kilo"
+            and integration is not None
+            and any(
+                shutil.which(executable) for executable in integration.cli_executables
+            )
+        ):
+            return True
+
         if ide_type == "goose":
             from ai_guardian.goose_support import goose_config_dir, goose_hook_path
 
@@ -3189,6 +3203,7 @@ class IDESetup:
         ide_config: Dict,
         plugins_dir: Path,
         dry_run: bool = False,
+        project_dir: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """Setup plugin-file based hooks (OpenCode).
 
@@ -3252,6 +3267,19 @@ class IDESetup:
                 message += reg_msg
             return True, message
 
+        if ide_type == "kilo" and project_dir:
+            try:
+                ensure_project_path_no_symlink(
+                    plugins_dir / "ai-guardian.ts", project_dir
+                )
+                ensure_project_path_no_symlink(
+                    plugins_dir
+                    / ide_config.get("bridge_file", "ai-guardian-bridge.ts"),
+                    project_dir,
+                )
+            except ValueError as exc:
+                return False, f"Refusing unsafe Kilo project path: {exc}"
+
         registration_error = (
             self._register_opencode_plugin(
                 plugin_file,
@@ -3265,23 +3293,21 @@ class IDESetup:
         if registration_error:
             return False, registration_error
 
-        plugins_dir.mkdir(parents=True, exist_ok=True)
-
         abs_path = _resolve_binary_path()
-        plugin_file.write_text(
-            _render_typescript_source(
-                _KILO_PLUGIN_TS
-                if ide_type == "kilo"
-                else (
-                    _OPENCODE_PLUGIN_V2_TS
-                    if generation == "v2"
-                    else _OPENCODE_PLUGIN_TS
-                )
-            ),
-            encoding="utf-8",
+        plugin_source = _render_typescript_source(
+            _KILO_PLUGIN_TS
+            if ide_type == "kilo"
+            else (_OPENCODE_PLUGIN_V2_TS if generation == "v2" else _OPENCODE_PLUGIN_TS)
         )
-        bridge_file.parent.mkdir(parents=True, exist_ok=True)
-        bridge_file.write_text(self._render_guardian_bridge(abs_path), encoding="utf-8")
+        bridge_source = self._render_guardian_bridge(abs_path)
+        if ide_type == "kilo" and project_dir:
+            write_project_text_no_symlink(plugin_file, plugin_source, project_dir)
+            write_project_text_no_symlink(bridge_file, bridge_source, project_dir)
+        else:
+            plugins_dir.mkdir(parents=True, exist_ok=True)
+            plugin_file.write_text(plugin_source, encoding="utf-8")
+            bridge_file.parent.mkdir(parents=True, exist_ok=True)
+            bridge_file.write_text(bridge_source, encoding="utf-8")
 
         registration_error = (
             self._register_opencode_plugin(
@@ -3671,7 +3697,7 @@ class IDESetup:
             if ide_type not in self.IDE_CONFIGS:
                 return False, f"Unknown IDE type: {ide_type}"
 
-            if ide_type in ("cursor", "pi", "goose"):
+            if ide_type in ("cursor", "pi", "goose", "kilo"):
                 if project_dir and scope == "user":
                     scope = "project"
                 if scope not in ("user", "project"):
@@ -3692,7 +3718,11 @@ class IDESetup:
                             f"{self.IDE_CONFIGS[ide_type]['name']} project directory does not exist or is not "
                             f"a directory: {project_path}",
                         )
-                    project_dir = str(project_path.resolve())
+                    project_dir = str(
+                        project_path.absolute()
+                        if ide_type == "kilo"
+                        else project_path.resolve()
+                    )
                 else:
                     project_dir = None
 
@@ -3716,6 +3746,19 @@ class IDESetup:
                 return False, f"Unknown IDE type: {ide_type}"
             config_path = Path(config_path_value).expanduser()
             ide_name = ide_config["name"]
+
+            if ide_type == "kilo" and scope == "project" and project_dir:
+                try:
+                    ensure_project_path_no_symlink(
+                        config_path / "ai-guardian.ts", project_dir
+                    )
+                    ensure_project_path_no_symlink(
+                        config_path
+                        / ide_config.get("bridge_file", "ai-guardian-bridge.ts"),
+                        project_dir,
+                    )
+                except ValueError as exc:
+                    return False, f"Refusing unsafe Kilo project path: {exc}"
 
             if ide_type == "goose":
                 from ai_guardian.setup.goose import setup_goose_hooks
@@ -3772,7 +3815,11 @@ class IDESetup:
             # Plugin-file IDEs (OpenCode, Kilo): drop one .ts file in plugin dir
             if ide_config.get("plugin_file"):
                 return self._setup_plugin_file(
-                    ide_type, ide_config, config_path, dry_run
+                    ide_type,
+                    ide_config,
+                    config_path,
+                    dry_run,
+                    project_dir=project_dir if scope == "project" else None,
                 )
 
             if ide_config.get("extension_file"):

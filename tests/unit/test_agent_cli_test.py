@@ -2107,6 +2107,8 @@ def test_mock_provider_configuration_is_written_to_each_clients_native_config(
             assert 'wire_api = "responses"' in config
             assert 'approval_policy = "never"' in config
             assert 'sandbox_mode = "workspace-write"' in config
+            assert "[mcp_servers.ai-guardian]" in config
+            assert 'args = ["mcp-server"]' in config
             assert "[profiles." not in config
             assert runner.MOCK_KEY not in config
             # Native profile overlays must preserve the base MCP/hook setup.
@@ -3408,17 +3410,17 @@ def test_release_readiness_runs_clients_against_the_current_wheel_image():
         )
         assert prepare["with"]["image"] == expected_image
 
-    steps = workflow["jobs"]["codex-cli-smoke"]["steps"]
-    codex_step = next(step for step in steps if step.get("id") == "codex_smoke")
+    codex_steps = workflow["jobs"]["codex-cli-smoke"]["steps"]
+    codex_step = next(step for step in codex_steps if step.get("id") == "codex_smoke")
     assert codex_step["continue-on-error"] is True
     assert all(
         step.get("continue-on-error") is not True
-        for step in steps
+        for step in codex_steps
         if step is not codex_step
     )
     codex_failure_report = next(
         step
-        for step in steps
+        for step in codex_steps
         if step.get("name") == "Report tolerated Codex smoke failure"
     )
     assert codex_failure_report["if"] == (

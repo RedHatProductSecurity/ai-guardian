@@ -10,6 +10,7 @@ and remain owned by the image/OCR scanner.
 import base64
 import binascii
 import re
+from heapq import merge
 import unicodedata
 from dataclasses import dataclass
 from typing import Iterator, Optional, Tuple
@@ -24,6 +25,13 @@ _BASE64_TOKEN_RE = re.compile(
     rf"([A-Za-z0-9+/_-]{{{MIN_ENCODED_CHARS},{MAX_ENCODED_CHARS}}}={{0,2}})"
     r"(?![A-Za-z0-9+/_=-])"
 )
+_BASE64_WRAPPED_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9+/_-])"
+    r"([A-Za-z0-9+/_-]{4,}(?:[ \t\r\n]+[A-Za-z0-9+/_-]{4,})+"
+    r"(?:[ \t\r\n]+[A-Za-z0-9+/_-]{1,3})?[ \t\r\n]*={0,2})"
+    r"(?![A-Za-z0-9+/_=-])"
+)
+_BASE64_WRAP_RE = re.compile(r"[ \t\r\n]+")
 
 
 @dataclass(frozen=True)
@@ -44,7 +52,15 @@ class DecodedBase64Text:
         byte_offset = len(self.text[:bounded_offset].encode("utf-8"))
         remainder_offsets = (0, 2, 3)
         encoded_offset = (byte_offset // 3) * 4 + remainder_offsets[byte_offset % 3]
-        return min(self.start + encoded_offset, self.end)
+        source_offset = 0
+        encoded_char_offset = 0
+        for source_offset, char in enumerate(self.encoded):
+            if char in " \t\r\n":
+                continue
+            if encoded_char_offset >= encoded_offset:
+                return min(self.start + source_offset, self.end)
+            encoded_char_offset += 1
+        return self.end
 
     def source_location(self, source: str, decoded_offset: int) -> Tuple[int, int]:
         """Return one-based line and zero-based column in the original source."""
@@ -73,20 +89,28 @@ class DecodedBase64Text:
 
 def _decode_candidate(encoded: str) -> Optional[Tuple[str, int]]:
     """Decode a canonical Base64 token when it contains text-like UTF-8."""
-    if len(encoded) > MAX_ENCODED_CHARS:
+    if any(
+        char
+        not in " \t\r\nABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/_-="
+        for char in encoded
+    ):
         return None
 
-    padding = len(encoded) - len(encoded.rstrip("="))
-    unpadded = encoded[:-padding] if padding else encoded
+    normalized = _BASE64_WRAP_RE.sub("", encoded)
+    if len(normalized) > MAX_ENCODED_CHARS:
+        return None
+
+    padding = len(normalized) - len(normalized.rstrip("="))
+    unpadded = normalized[:-padding] if padding else normalized
     if padding:
-        if len(encoded) % 4:
+        if len(normalized) % 4:
             return None
-        padded = encoded
+        padded = normalized
     else:
         remainder = len(unpadded) % 4
         if remainder == 1:
             return None
-        padded = encoded + ("=" * ((4 - remainder) % 4))
+        padded = normalized + ("=" * ((4 - remainder) % 4))
 
     # The exact decoded size is checked after decoding; reject obviously oversized
     # values first so no large temporary allocation is needed.
@@ -137,14 +161,26 @@ def iter_decoded_base64_text(source: str) -> Iterator[DecodedBase64Text]:
     image_spans = iter(ImageDetector.base64_image_payload_spans(source))
     image_span = next(image_spans, None)
     candidates_seen = 0
+    candidate_attempts = 0
     decoded_bytes_total = 0
 
-    for match in _BASE64_TOKEN_RE.finditer(source):
-        candidates_seen += 1
-        if candidates_seen > MAX_CANDIDATES:
+    matches = merge(
+        _BASE64_WRAPPED_TOKEN_RE.finditer(source),
+        _BASE64_TOKEN_RE.finditer(source),
+        key=lambda item: item.start(1),
+    )
+    accepted_spans: set[tuple[int, int]] = set()
+    accepted_end = -1
+    for match in matches:
+        start, end = match.span(1)
+        if start < accepted_end:
+            continue
+        if (start, end) in accepted_spans:
+            continue
+        candidate_attempts += 1
+        if candidate_attempts > MAX_CANDIDATES * 4:
             break
 
-        start, end = match.span(1)
         while image_span is not None and image_span[1] <= start:
             image_span = next(image_spans, None)
         if image_span is not None and start < image_span[1] and end > image_span[0]:
@@ -154,10 +190,15 @@ def iter_decoded_base64_text(source: str) -> Iterator[DecodedBase64Text]:
         decoded = _decode_candidate(encoded)
         if decoded is None:
             continue
+        candidates_seen += 1
+        if candidates_seen > MAX_CANDIDATES:
+            break
         decoded_text, decoded_size = decoded
         if decoded_bytes_total + decoded_size > MAX_TOTAL_DECODED_BYTES:
             break
 
+        accepted_spans.add((start, end))
+        accepted_end = end
         decoded_bytes_total += decoded_size
         yield DecodedBase64Text(
             text=decoded_text,
