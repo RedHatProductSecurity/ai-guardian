@@ -11,6 +11,13 @@ from unittest import TestCase
 from unittest.mock import Mock, patch
 
 import ai_guardian
+from ai_guardian.constants import ActionMode, HookEvent, ViolationType
+from ai_guardian.hook_events.post_tool_use import (
+    _decoded_scan_error_response,
+    _first_decoded_scan_error,
+)
+from ai_guardian.scanners.scanner_registry import ScannerName
+from ai_guardian.scanners.scan_result import ScanResult
 
 
 def _is_blocked(result):
@@ -88,6 +95,59 @@ class TestGetOnScanErrorAction(TestCase):
     def test_config_load_error_defaults_to_allow(self, mock_load):
         mock_load.return_value = (None, "Config error")
         self.assertEqual(ai_guardian._get_on_scan_error_action(), "allow")
+
+
+class TestDecodedPostToolScanErrors(TestCase):
+    """Decoded scanner failures must honor the global error policy."""
+
+    def _error_result(self, scanner_name):
+        return ScanResult(
+            detected=False,
+            violation_type=ViolationType.SECRET_DETECTED,
+            error_message="decoded scan failed safely",
+            extra={"scanner_name": scanner_name.value, "scan_error": True},
+        )
+
+    def test_error_marker_is_not_discarded_with_detected_only_filter(self):
+        marker = self._error_result(ScannerName.PII)
+
+        assert _first_decoded_scan_error([marker]) is marker
+
+    @patch("ai_guardian.hook_events.post_tool_use._format_response")
+    @patch("ai_guardian.config.loaders._get_on_scan_error_action")
+    def test_block_policy_returns_blocked_response(self, mock_action, mock_format):
+        mock_action.return_value = ActionMode.BLOCK
+        mock_format.return_value = {"blocked": True}
+        marker = self._error_result(ScannerName.CONTEXT_POISONING)
+
+        result = _decoded_scan_error_response(
+            Mock(),
+            {},
+            HookEvent.POST_TOOL_USE,
+            ScannerName.CONTEXT_POISONING,
+            [marker],
+        )
+
+        assert result == {"blocked": True}
+        assert mock_format.call_args.kwargs["violation_type"] == (
+            ViolationType.CONTEXT_POISONING
+        )
+
+    @patch("ai_guardian.config.loaders._get_on_scan_error_action")
+    def test_allow_policy_does_not_treat_error_as_detection(self, mock_action):
+        mock_action.return_value = "allow"
+        marker = self._error_result(ScannerName.PROMPT_INJECTION)
+
+        assert (
+            _decoded_scan_error_response(
+                Mock(),
+                {},
+                HookEvent.POST_TOOL_USE,
+                ScannerName.PROMPT_INJECTION,
+                [marker],
+            )
+            is None
+        )
 
 
 class TestOnScanErrorToolPolicy(TestCase):

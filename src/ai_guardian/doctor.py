@@ -1377,6 +1377,11 @@ class Doctor:
             if mcp_verification and mcp_verification.get("mcp_diagnostic"):
                 mcp_detail += f" ({mcp_verification['mcp_diagnostic']})"
             mcp_healthy = mcp_status in (None, "healthy", "external")
+            runtime_unverified = bool(
+                ide_type == "kilo"
+                and isinstance(mcp_verification, dict)
+                and mcp_verification.get("plugin_runtime_status") == "unverified"
+            )
 
             if configured:
                 if ide_type == "claude":
@@ -1439,7 +1444,7 @@ class Doctor:
                             "display_name": ide_name,
                             "status": (
                                 CheckStatus.PASS.value
-                                if mcp_healthy
+                                if mcp_healthy and not runtime_unverified
                                 else CheckStatus.WARN.value
                             ),
                             "message": message,
@@ -1448,7 +1453,7 @@ class Doctor:
                     )
                     if mcp_verification is not None:
                         integration_results[-1]["verification"] = mcp_verification
-                    if not mcp_healthy:
+                    if not mcp_healthy or runtime_unverified:
                         all_configured = False
                 any_configured = True
             else:
@@ -1648,6 +1653,8 @@ class Doctor:
             "post-tool redaction manually confirmed; pre-tool enforcement, "
             "post-tool fixed-refusal delivery and broader results remain unverified"
         )
+        if verification.get("plugin_runtime_status") == "unverified":
+            parts.append("plugin runtime activation remains unverified")
 
         attention = Doctor._hook_verification_detail(verification)
         if attention:

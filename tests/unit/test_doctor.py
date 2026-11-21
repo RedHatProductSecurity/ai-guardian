@@ -757,6 +757,7 @@ class TestCheckHooks:
             "mcp_status": "healthy",
             "mcp_installed": True,
             "mcp_config_path": str(mcp_config),
+            "plugin_runtime_status": "unverified",
         }
 
         with (
@@ -780,7 +781,7 @@ class TestCheckHooks:
         ):
             result = Doctor().check_hooks()
 
-        assert result.status == CheckStatus.PASS
+        assert result.status == CheckStatus.WARN
         assert "1/1 plugin artifacts configured (not callback coverage)" in (
             result.message
         )
@@ -789,6 +790,7 @@ class TestCheckHooks:
         assert "hook entries are not stored in JSON/JSONC config" in result.message
         assert "chat.message (prompt scanning)" in result.message
         assert "complete callback coverage not verified" in result.message
+        assert "plugin runtime activation remains unverified" in result.message
         assert (
             "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
             "post-tool redaction manually confirmed; pre-tool enforcement, "

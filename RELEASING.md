@@ -96,7 +96,8 @@ cleanup stay with that client; a failed CLI or image build cannot skip another
 client. The local `prepare-cli-smoke` action shares the current-wheel/image build
 recipe, not runners or cross-CLI prerequisites. **OpenShell Image Validation** is
 a separate job. Claude's entire job is visibly skipped without maintainer consent;
-Codex alone retains its explicitly reported, temporary smoke-failure exception.
+Codex retains an explicitly reported, temporary smoke-failure exception while the
+job stays independent from other CLI lanes.
 
 | Cases | Required evidence |
 | --- | --- |

@@ -279,7 +279,9 @@ def _assert_mcp_registration(
 
     assert isinstance(entry, dict), f"{ide_type}/mcp-config: entry missing"
     if ide_type == "opencode":
-        assert entry.get("command", [None, None])[1:] == ["mcp-server"]
+        command = entry.get("command", [])
+        assert command and command[-1] == "mcp-server"
+        assert not command[0].rstrip().endswith(" -m ai_guardian")
         if generation == "v2":
             assert "ai-guardian" not in mcp_config
             assert "enabled" not in entry
@@ -288,7 +290,9 @@ def _assert_mcp_registration(
     else:
         if ide_type == "kilo":
             assert entry.get("type") == "local"
-            assert entry.get("command", [None, None])[1:] == ["mcp-server"]
+            command = entry.get("command", [])
+            assert command and command[-1] == "mcp-server"
+            assert not command[0].rstrip().endswith(" -m ai_guardian")
             assert entry.get("enabled") is True
         else:
             assert entry.get("args") == ["mcp-server"]

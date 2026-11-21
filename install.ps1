@@ -227,7 +227,8 @@ function Detect-InstalledAgents {
     if (Test-Path $openclawDir -PathType Container) { $agents += "openclaw" }
 
     $piAgentDir = if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $HOME ".pi\agent" }
-    if (Test-Path $piAgentDir -PathType Container) { $agents += "pi" }
+    $piCommand = Get-Command pi -ErrorAction SilentlyContinue
+    if ((Test-Path $piAgentDir -PathType Container) -or $piCommand) { $agents += "pi" }
 
     return $agents
 }

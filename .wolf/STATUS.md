@@ -5,7 +5,23 @@ budget_tokens: 1000
 # STATUS - ai-guardian
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
-> Last updated: 2026-11-18 (UTC)
+> Last updated: 2026-11-21 (UTC)
+
+## Issue #2820 release-review hardening — 2026-11-21
+
+- On branch `2820`, fixed Windows OpenCode/Kilo MCP argv serialization, Pi and
+  binary-only Kilo discovery, Kilo runtime-health reporting, project-scoped Kilo
+  symlink-safe writes, exact Kilo MCP tool allowlisting, decoded scanner error
+  policy, custom-regex ReDoS shapes, POSIX assignment-prefixed command scans,
+  MIME-wrapped Base64 decoding, and the Codex Release Readiness gate.
+- Marked the prior Kilo run `44684917315` / `ea8b8eb5...` as historical across
+  the documentation. Exact-SHA qualification for the final candidate is still
+  pending; no CI claim was fabricated.
+- **Validation:** 371 scanner/pipeline tests, 1,317 setup/runtime unit tests,
+  and 552 installer/release/UX tests (one skipped) pass. Ruff, Black, error-only
+  Pylint, and diff checks pass. Full Mypy still reports 14 pre-existing errors
+  in untouched `skill_discovery.py` and `scanners/secret_validator.py`.
+- Changes remain uncommitted and unpublished per the managed DAF workflow.
 
 ## PR #2794 OpenWolf plugin/reframe follow-up — 2026-11-18
 

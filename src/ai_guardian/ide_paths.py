@@ -10,6 +10,7 @@ through these user-home resolvers.
 import os
 import platform
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -275,6 +276,51 @@ def resolve_kilo_plugin_dir(
         if (candidate / "ai-guardian.ts").is_file():
             return candidate
     return user_candidates[0]
+
+
+def ensure_project_path_no_symlink(path: Path, project_dir: str) -> Path:
+    """Validate a project-scoped path without following symlink components."""
+    project_root = Path(project_dir).expanduser().absolute()
+    candidate = Path(path).expanduser()
+    if not candidate.is_absolute():
+        candidate = project_root / candidate
+    candidate = candidate.absolute()
+
+    try:
+        relative = candidate.relative_to(project_root)
+    except ValueError as exc:
+        raise ValueError("project-scoped path escapes the selected project") from exc
+
+    if project_root.is_symlink():
+        raise ValueError("selected project directory is a symlink")
+
+    current = project_root
+    for component in relative.parts:
+        current /= component
+        if current.is_symlink():
+            raise ValueError(f"project-scoped path contains a symlink: {current}")
+    return candidate
+
+
+def write_project_text_no_symlink(path: Path, content: str, project_dir: str) -> None:
+    """Atomically write a project file without following symlink components."""
+    candidate = ensure_project_path_no_symlink(path, project_dir)
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    ensure_project_path_no_symlink(candidate, project_dir)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{candidate.name}.", dir=str(candidate.parent)
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(content)
+        ensure_project_path_no_symlink(candidate, project_dir)
+        os.replace(temporary_name, candidate)
+    except Exception:
+        try:
+            os.unlink(temporary_name)
+        except OSError:
+            pass
+        raise
 
 
 def resolve_opencode_config() -> Path:

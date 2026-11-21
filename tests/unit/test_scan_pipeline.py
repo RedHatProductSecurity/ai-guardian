@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ai_guardian.hook_events import post_tool_use
+from ai_guardian.hook_events.content_pipeline import _FAIL_CLOSED_SCANNERS
 from ai_guardian.hook_events.scanners import apply_language_overlays
 from ai_guardian.constants import ViolationType
 from ai_guardian.scanners.pipeline import (
@@ -69,6 +70,14 @@ class TestResolveScannerConfig:
         result = _resolve_scanner_config({}, "prompt_injection", loader)
         loader.assert_not_called()
         assert result is None
+
+
+def test_decoded_content_error_policy_covers_secret_pii_and_context_scanners():
+    assert {
+        ScannerName.SECRET,
+        ScannerName.PII,
+        ScannerName.CONTEXT_POISONING,
+    }.issubset(_FAIL_CLOSED_SCANNERS)
 
 
 # ---------------------------------------------------------------------------

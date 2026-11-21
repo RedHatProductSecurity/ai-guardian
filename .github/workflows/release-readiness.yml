@@ -796,10 +796,8 @@ jobs:
 
       - name: Codex CLI Smoke (local mock provider)
         id: codex_smoke
-        # Temporary release exception until Codex passes the native execution and
-        # output-evidence checks; do not interpret the allowed failure as a pass.
-        # Invocation-only hook trust still requires the runner's exact isolated
-        # AI Guardian hook-set verification; no persistent trust state is written.
+        # Codex remains an explicit, visible exception until native execution
+        # succeeds. A tolerated failure is never a qualification pass.
         continue-on-error: true
         run: |
           scripts/agent-cli-test --cli-name codex --agent smoke \

@@ -119,6 +119,23 @@ def test_http_credential_cases_use_native_file_write_and_value_free_clean_source
     assert "SYNTHETIC_HTTP_FLOW_SMOKE_2717" not in clean_arguments["content"]
 
 
+def test_codex_exec_command_keeps_string_command_shape_for_array_schema(provider):
+    schema = {
+        "type": "object",
+        "properties": {"cmd": {"type": "array"}},
+        "required": ["cmd"],
+    }
+    payload = command_catalog("responses", [("exec_command", schema)])
+
+    name, arguments = offered_command(
+        provider, "responses", payload, "clean_tool", (1, 1)
+    )
+
+    assert name == "exec_command"
+    assert isinstance(arguments["cmd"], str)
+    assert "ai_guardian_agent_cli_mock_provider.py" in arguments["cmd"]
+
+
 @pytest.mark.parametrize(
     ("protocol", "native_name", "argument", "field_type"),
     (

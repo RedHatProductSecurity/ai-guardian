@@ -26,10 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sanitized output or a fixed refusal for blocked/invalid results. Source-reviewed
   against Kilo CLI 7.8.27; user-reported native tests confirmed a blocked
   synthetic prompt was replaced with a refusal and Bash post-tool output was
-  sanitized. The required full OpenCode-applicable matrix passed for Kilo 7.8.27
+  sanitized. A historical full OpenCode-applicable matrix passed for Kilo 7.8.27
   on 2026-11-20 in [Release Readiness run 44684917315](https://github.com/RedHatProductSecurity/ai-guardian/actions/runs/44684917315)
-  on `ubuntu-26.04`; all 14 applicable cases and correlated MCP-version evidence
-  passed. Smoke image manifest: `sha256:c890fa25bbba6d71c53955a245e7233c5524c0db474f471720ccbe302dcfdf86`.
+  for commit `ea8b8eb5ca09126c0866372a0dd2da487a67db5e` on `ubuntu-26.04`; all 14
+  applicable cases and correlated MCP-version evidence passed. Smoke image manifest:
+  `sha256:c890fa25bbba6d71c53955a245e7233c5524c0db474f471720ccbe302dcfdf86`.
+  This historical run predates the current candidate, so exact-SHA requalification
+  is pending and this result must not be used as current-candidate evidence.
   Prompt replacement is not model-turn cancellation, and product container/OpenShell
   runtime qualification remains separate.
 - **Violation outcome metadata (#2781):** Persist the effective action and
@@ -91,6 +94,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secrets using the documented `svl_secret_` type tags and exact suffix length.
 
 ### Fixed
+- **Agent integration hardening (#2820):** Serialize Windows OpenCode/Kilo MCP
+  commands as argv, detect binary-only Pi/Kilo installations, report Kilo plugin
+  runtime activation as unverified, and reject symlinked project-scoped Kilo writes.
+  Exact trusted Kilo MCP tool names are allowlisted, decoded scanner errors honor
+  `on_scan_error`, custom regexes reject backtracking-dangerous shapes, POSIX
+  assignment-prefixed HTTP commands are scanned, and MIME-wrapped Base64 is
+  decoded with source-safe redaction. Codex smoke failures remain explicitly
+  unqualified and temporarily tolerated with a warning/summary; the Codex smoke
+  profile preserves its MCP server and native command argument shape; the
+  integration performance guard allows normal hosted-runner scheduling variance;
+  current-candidate Kilo qualification remains pending a matching-SHA CI run.
 - **Sensitive MCP violation privacy (#2816):** Omit file paths, URLs, and
   line/column locators from `get_violations` responses for consolidated and
   legacy sensitive findings, without changing human-facing history views.
@@ -361,10 +375,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prints a fixed explanation linking to `docs/CODEX_SANDBOX_RUNTIME.md`; the case
   remains failed and no sandbox requirement is relaxed.
 - **Release Readiness CLI reporting:** Give each configured CLI smoke its own
-  named step and continue to remaining clients after an individual smoke failure,
+  named job and continue to remaining clients after an individual smoke failure,
   while keeping prerequisites, cancellation, and Claude consent gates intact.
-  Temporarily allow only the unresolved Codex smoke step to fail without blocking
-  release readiness; report it as unqualified, and keep other failures blocking.
+  Codex smoke failures remain unqualified and temporarily tolerated with explicit
+  warning/summary reporting; no failure is converted into a qualification pass.
   Rename jobs to describe their test coverage.
 - **CLI smoke execution witness:** Prepare only the disposable witness directory
   as writable by the container user on POSIX hosts, so Docker UID mismatches do not

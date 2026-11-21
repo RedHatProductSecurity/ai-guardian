@@ -16,9 +16,11 @@ from ai_guardian import __version__
 from ai_guardian.opencode_support import detect_opencode_runtime
 
 from ai_guardian.ide_paths import (
+    ensure_project_path_no_symlink,
     resolve_ide_config_path,
     resolve_ide_mcp_path,
     resolve_opencode_config_layers,
+    write_project_text_no_symlink,
 )
 from ai_guardian.setup.utils import (
     _create_config_backup,
@@ -50,6 +52,20 @@ def _mcp_schema_error(
         f"Invalid {format_name} schema in {config_path}: "
         f"'{config_key}' must be an object/mapping"
     )
+
+
+def _local_command_diagnostic(command: Any) -> Optional[str]:
+    """Reject a Windows compound executable serialized as one argv element."""
+    if not isinstance(command, list) or not command:
+        return "local servers require a non-empty string command array"
+    if any(not isinstance(part, str) or not part.strip() for part in command):
+        return "local servers require a non-empty string command array"
+    if command[0].rstrip().endswith(" -m ai_guardian"):
+        return (
+            "local MCP command must separate the executable from '-m ai_guardian' "
+            "arguments"
+        )
+    return None
 
 
 def _load_mcp_config(
@@ -212,16 +228,13 @@ def _opencode_mcp_registration(
     server_type = entry.get("type")
     if server_type == "local":
         command = entry.get("command")
-        if (
-            not isinstance(command, list)
-            or not command
-            or any(not isinstance(part, str) or not part.strip() for part in command)
-        ):
+        command_diagnostic = _local_command_diagnostic(command)
+        if command_diagnostic:
             return (
                 None,
                 layout,
                 f"Invalid OpenCode {layout} MCP registration in {config_path}: "
-                "local servers require a non-empty string command array",
+                f"{command_diagnostic}",
             )
     elif server_type == "remote":
         url = entry.get("url")
@@ -657,6 +670,16 @@ def _pi_expected_binary() -> Tuple[str, List[str]]:
     return command, []
 
 
+def _resolved_mcp_command() -> List[str]:
+    """Return an argv-safe MCP command for local JSON configuration."""
+    binary = _resolve_binary_path()
+    suffix = " -m ai_guardian"
+    if binary.endswith(suffix):
+        binary = binary[: -len(suffix)]
+        return [binary, "-m", "ai_guardian", "mcp-server"]
+    return [binary, "mcp-server"]
+
+
 def verify_pi_mcp_extension(
     scope: str = "user", project_dir: Optional[str] = None
 ) -> Dict:
@@ -1075,6 +1098,12 @@ def verify_mcp_config(
         ]:
             base["mcp_status"] = "invalid"
             return base
+    if ide_type == "kilo":
+        command_diagnostic = _local_command_diagnostic(entry.get("command"))
+        if command_diagnostic:
+            base["mcp_status"] = "invalid"
+            base["mcp_diagnostic"] = command_diagnostic
+            return base
     disabled = entry.get("enabled") is False
     if disabled:
         base["mcp_status"] = "disabled"
@@ -1330,6 +1359,18 @@ def _install_mcp_config(
     if config_path is None:
         return
 
+    if ide_type == "kilo" and scope == "project":
+        if not project_dir:
+            logger.warning("Kilo project MCP setup requires a project directory")
+            return
+        project_root = project_dir
+        try:
+            ensure_project_path_no_symlink(config_path, project_root)
+        except ValueError as exc:
+            logger.warning("Kilo MCP setup stopped for unsafe project path: %s", exc)
+            print(f"  MCP setup stopped: {exc}", file=sys.stderr)
+            return
+
     if ide_type == "goose":
         from ai_guardian.setup.goose import validate_goose_mcp_target
 
@@ -1381,7 +1422,7 @@ def _install_mcp_config(
     if ide_type in {"opencode", "kilo"}:
         mcp_entry: Dict[str, Any] = {
             "type": "local",
-            "command": [abs_path, "mcp-server"],
+            "command": _resolved_mcp_command(),
         }
         if ide_type == "kilo" or generation == "v1":
             mcp_entry["enabled"] = True
@@ -1412,12 +1453,21 @@ def _install_mcp_config(
         _register_mcp_identity(abs_path)
         return
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
     if not _backup_before_write(setup, config_path, "MCP setup"):
         return
-    with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
+    serialized_config = json.dumps(config, indent=2) + "\n"
+    if ide_type == "kilo" and scope == "project":
+        try:
+            write_project_text_no_symlink(config_path, serialized_config, project_root)
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                "Unable to write Kilo project MCP config %s: %s", config_path, exc
+            )
+            return
+    else:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(serialized_config)
 
     print(f"  MCP: Added ai-guardian MCP server to {config_path}")
     _register_mcp_identity(abs_path)
@@ -1637,6 +1687,18 @@ def _remove_mcp_config(
     if config_path is None:
         return
 
+    if ide_type == "kilo" and scope == "project":
+        if not project_dir:
+            logger.warning("Kilo project MCP removal requires a project directory")
+            return
+        project_root = project_dir
+        try:
+            ensure_project_path_no_symlink(config_path, project_root)
+        except ValueError as exc:
+            logger.warning("Kilo MCP removal stopped for unsafe project path: %s", exc)
+            print(f"  MCP removal stopped: {exc}", file=sys.stderr)
+            return
+
     if ide_type == "goose":
         from ai_guardian.setup.goose import validate_goose_mcp_target
 
@@ -1679,9 +1741,12 @@ def _remove_mcp_config(
             return
         if not _backup_before_write(setup, config_path, "MCP removal"):
             return
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-            f.write("\n")
+        serialized_config = json.dumps(config, indent=2) + "\n"
+        if ide_type == "kilo" and scope == "project":
+            write_project_text_no_symlink(config_path, serialized_config, project_root)
+        else:
+            with open(config_path, "w", encoding="utf-8") as f:
+                f.write(serialized_config)
         print(f"  MCP: Removed ai-guardian MCP server from {config_path}")
         return
 

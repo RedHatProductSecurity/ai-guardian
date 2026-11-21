@@ -38,6 +38,30 @@ def test_curl_user_password_separate_attached_and_equals_forms():
         assert INLINE_LITERAL in _classes(command)
 
 
+def test_posix_assignment_prefix_does_not_hide_curl_credentials():
+    analysis = analyze_command_credentials(
+        "TOKEN=SYNTHETIC curl -u 'demo:FAKE_SAMPLE_PASSWORD_42' https://example.invalid"
+    )
+
+    assert any(item.finding_class == INLINE_LITERAL for item in analysis.findings)
+    user_finding = next(
+        item for item in analysis.findings if item.finding_class == INLINE_LITERAL
+    )
+    assert user_finding.command_family == "curl"
+    assert user_finding.argument_index == 3
+
+
+def test_posix_assignment_prefix_preserves_reference_classification():
+    analysis = analyze_command_credentials(
+        'TOKEN=$SECRET curl -H "Authorization: Bearer $TOKEN" https://example.invalid'
+    )
+
+    assert _classes(
+        'TOKEN=$SECRET curl -H "Authorization: Bearer $TOKEN" https://example.invalid'
+    ) == [CREDENTIAL_REFERENCE]
+    assert analysis.incomplete is False
+
+
 def test_curl_user_with_username_only_is_not_a_literal_credential():
     assert _classes("curl -u demo-user https://example.invalid") == [INTERACTIVE_AUTH]
 
