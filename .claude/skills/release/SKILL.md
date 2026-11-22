@@ -596,12 +596,14 @@ export from the release tag, never the current development working tree, and
 independently verifies production Release/PyPI publication. TestPyPI-only flows
 and preview must not mutate the production notebook.
 
-The optional external tool is MIT-licensed `notebooklm-mcp-cli` **0.16.2**. Check
-its branding/version and existing authentication non-interactively; missing or
-incompatible tooling and missing/expired auth are explicit skips. Never install,
-log in, open a browser, request credentials, switch profiles, or change other notebook
-settings automatically. Source commands pin the current checked profile; browser
-auth recovery is disabled in these child commands.
+The optional external tool is MIT-licensed `notebooklm-mcp-cli` with version
+`>=0.16.2,<2.0.0`. Check its branding/version and existing authentication
+non-interactively; older versions, 2.x, incompatible tooling, and missing/expired
+auth are explicit skips. Dry-run checks only local `nlm --version` and `nlm --help`,
+reporting CLI failures without checking authentication or contacting NotebookLM.
+Never install, log in, open a browser, request credentials, switch profiles, or
+change other notebook settings automatically. Source commands pin the current
+checked profile; browser auth recovery is disabled in these child commands.
 
 There is no in-place update for uploaded files. Match only the exact local-file/text
 source title `notebooklm-export.md`, upload once and confirm the new full UUID is

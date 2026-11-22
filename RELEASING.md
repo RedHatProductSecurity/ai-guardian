@@ -365,10 +365,11 @@ restrictions and native user-only upload/publication consent are unchanged.
 
 Phase 7c refreshes the export in the [AI Guardian notebook](https://notebook.google.com/notebook/9b78ebca-d327-4df7-8f2e-64e518f2ddcb)
 after production publication and before merge-back/the next development version.
-It requires the optional **`notebooklm-mcp-cli` 0.16.2** (`nlm`, MIT license) on
-`PATH` and an already authenticated current profile. Other versions/implementations
-are skipped until their interface is validated. This is an external maintainer
-tool, not an AI Guardian application dependency.
+It requires the optional MIT-licensed **`notebooklm-mcp-cli`** (`nlm`) on `PATH`,
+version `>=0.16.2,<2.0.0`, and an already authenticated current profile. This accepts
+minor and patch releases through 1.y.z while skipping older versions, 2.x, and
+unverified implementations. This is an external maintainer tool, not an AI Guardian
+application dependency.
 
 The helper checks CLI branding/version and runs only `nlm login --check`, with
 stdin closed and browser-based auth recovery disabled for its child commands.
@@ -443,9 +444,12 @@ the override only after confirming the exact source identity; never use it to
 remove an unrelated generated-text item.
 
 Neither command bumps versions, creates branches/tags, republishes packages, or
-rewrites release configuration. Preview does not invoke `nlm`, check authentication,
-contact GitHub/PyPI/NotebookLM, or write state. The release script's preview still
-runs its existing GitHub CI gates, but never contacts or mutates NotebookLM.
+rewrites release configuration. Preview runs only local `nlm --version` and
+`nlm --help` checks to report CLI availability/compatibility. It does not check
+authentication, contact GitHub/PyPI/NotebookLM, or write state. CLI failures appear
+in the dry-run status note; normal release runs separately report skipped or
+failed/unconfirmed refreshes. The release script's preview still runs its existing
+GitHub CI gates, but never contacts or mutates NotebookLM.
 
 The journal is `ai-guardian-notebooklm-refresh.json` under `git rev-parse --git-common-dir`,
 shared by this checkout's worktrees, with an OS lock released on process exit.

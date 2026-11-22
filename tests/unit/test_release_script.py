@@ -74,8 +74,8 @@ def test_readme_links_to_latest_release_and_latest_development_docs():
     """The README links to the current release and upcoming main docs."""
     readme = README.read_text(encoding="utf-8")
 
-    assert "Full documentation site (latest release: v1.22.0)" in readme
-    assert "https://ai-guardian.readthedocs.io/en/v1.22.0/" in readme
+    assert "Full documentation site (latest release: v1.23.0)" in readme
+    assert "https://ai-guardian.readthedocs.io/en/v1.23.0/" in readme
     assert "Latest documentation (tracks `main`)" in readme
     assert "https://ai-guardian.readthedocs.io/en/latest/" in readme
 
@@ -467,13 +467,21 @@ elif program == "python3":
             assert args[4] == "1.2.3"
             if "--dry-run" in args:
                 assert not (Path.cwd() / "docs/notebooklm-export.md").exists()
-                print("skipped (dry-run; would refresh notebooklm-export.md from v1.2.3)")
+                print(
+                    "skipped (dry-run; would refresh notebooklm-export.md from v1.2.3; "
+                    "nlm CLI check passed; authentication and notebook access not checked)"
+                )
             else:
                 assert (Path.cwd() / "docs/notebooklm-export.md").is_file()
                 outcome = os.environ.get("NOTEBOOKLM_TEST_OUTCOME", "updated")
                 if outcome == "failed":
                     print("NotebookLM failed/unconfirmed: export upload/processing timed out", file=sys.stderr)
                     sys.exit(1)
+                elif outcome == "cli-failed":
+                    print(
+                        "skipped (nlm unavailable/incompatible (CLI version check: "
+                        "CLI command failed (exit 1)))"
+                    )
                 elif outcome == "unexpected":
                     print("PRIVATE_PROVIDER_OUTPUT")
                 else:
@@ -1463,8 +1471,18 @@ def test_notebook_refresh_preview_is_offline(release_sandbox):
     assert refreshes[0][-3:] == ["refresh-notebooklm", "1.2.3", "--dry-run"]
     assert "would refresh notebooklm-export.md from v1.2.3" in result.stdout
     assert "NotebookLM: skipped (dry-run" in result.stdout.split("Release Summary")[1]
+    assert "nlm CLI check passed" in result.stdout.split("Release Summary")[1]
+    assert "authentication and notebook access not checked" in result.stdout
     assert not any(command[0] == "nlm" for command in commands)
     assert not _release_mutations(commands)
+
+
+def test_notebook_refresh_cli_failure_is_reported_in_release_summary(release_sandbox):
+    result, _ = release_sandbox("--execute", notebooklm_outcome="cli-failed")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "NotebookLM: skipped (nlm unavailable/incompatible" in result.stdout
+    assert "CLI command failed (exit 1)" in result.stdout
 
 
 def test_testpypi_only_release_does_not_reach_notebook_refresh(release_sandbox):

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **NotebookLM release refresh compatibility:** Accept `notebooklm-mcp-cli`
+  `>=0.16.2,<2.0.0` instead of requiring exactly 0.16.2, and report local CLI
+  failures during release dry-runs without checking authentication or contacting
+  NotebookLM.
+
 ## [1.23.0] - 2026-11-21
 
 ### Added
