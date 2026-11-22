@@ -22,9 +22,25 @@ logger = logging.getLogger(__name__)
 NOTEBOOK_ID = "9b78ebca-d327-4df7-8f2e-64e518f2ddcb"
 EXPORT_NAME = "notebooklm-export.md"
 STATE_NAME = "ai-guardian-notebooklm-refresh.json"
-SUPPORTED_VERSION = "0.16.2"
+MINIMUM_SUPPORTED_VERSION = (0, 16, 2)
+MAXIMUM_SUPPORTED_VERSION = (2, 0, 0)
 STABLE_VERSION = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
 PROFILE_NAME = r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}"
+
+
+def _is_supported_cli_version(output: str) -> bool:
+    """Accept stable CLI versions from the minimum baseline through major 1."""
+    versions = re.findall(r"^nlm version ([^\r\n]+)$", output, re.MULTILINE)
+    if len(versions) != 1:
+        return False
+    match = re.fullmatch(
+        r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", versions[0]
+    )
+    if match is None:
+        return False
+    parts = match.groups()
+    version = (int(parts[0]), int(parts[1]), int(parts[2]))
+    return MINIMUM_SUPPORTED_VERSION <= version < MAXIMUM_SUPPORTED_VERSION
 
 
 class RefreshError(RuntimeError):
@@ -177,21 +193,26 @@ class NotebookLMRefresher:
             )
         return result.stdout
 
-    def _prerequisites(self) -> str | None:
+    def _cli_problem(self) -> str | None:
         self.nlm = shutil.which("nlm") or ""
         if not self.nlm:
-            return "skipped (nlm not installed; optional refresh only)"
+            return "nlm not installed"
         try:
             version = self._command(["--version"], "CLI version check")
             help_text = self._command(["--help"], "CLI identity check")
-        except RefreshError:
-            return "skipped (nlm unavailable/incompatible; requires notebooklm-mcp-cli 0.16.2)"
+        except RefreshError as error:
+            return f"nlm unavailable/incompatible ({error})"
         if (
-            re.findall(r"^nlm version ([^\r\n]+)$", version, re.MULTILINE)
-            != [SUPPORTED_VERSION]
+            not _is_supported_cli_version(version)
             or "NotebookLM Tools - Unified CLI for Google NotebookLM" not in help_text
         ):
-            return "skipped (incompatible nlm; requires notebooklm-mcp-cli 0.16.2)"
+            return "incompatible nlm; requires notebooklm-mcp-cli >=0.16.2,<2.0.0"
+        return None
+
+    def _prerequisites(self) -> str | None:
+        cli_problem = self._cli_problem()
+        if cli_problem:
+            return f"skipped ({cli_problem})"
         try:
             authentication = self._command(["login", "--check"], "authentication check")
         except RefreshError as error:
@@ -439,6 +460,12 @@ class NotebookLMRefresher:
 
     def refresh(self, dry_run: bool = False) -> str:
         if dry_run:
+            cli_problem = self._cli_problem()
+            cli_status = (
+                f"nlm CLI check failed: {cli_problem}"
+                if cli_problem
+                else "nlm CLI check passed; authentication and notebook access not checked"
+            )
             source_override = (
                 f"; explicitly replace generated-text source {self.generated_text_source_id}"
                 if self.generated_text_source_id
@@ -446,7 +473,8 @@ class NotebookLMRefresher:
             )
             return (
                 f"skipped (dry-run; would refresh {EXPORT_NAME} from v{self.version} in notebook {NOTEBOOK_ID}; "
-                f"upload, verify processing, delete only the superseded export, then rename to {self.title}{source_override})"
+                f"upload, verify processing, delete only the superseded export, then rename to {self.title}; "
+                f"{cli_status}{source_override})"
             )
         skipped = self._prerequisites()
         if skipped:

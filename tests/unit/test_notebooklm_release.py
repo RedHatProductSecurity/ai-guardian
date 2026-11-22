@@ -190,6 +190,21 @@ def test_upload_wait_verify_then_delete_only_exact_old_source(notebook_io):
     ).exists(), "Read the tag; never regenerate the working export"
 
 
+def test_compatible_patch_release_refreshes_with_nlm_0166(notebook_io):
+    io = notebook_io
+    io.version = "nlm version 0.16.6\nYou are on the latest version.\n"
+
+    result = io.refresher.refresh()
+
+    assert result.startswith("updated")
+    assert [entry["id"] for entry in io.sources] == [OTHER_ID, NEW_ID]
+    assert [call[1:3] for call in mutations(io)] == [
+        ["source", "add"],
+        ["source", "delete"],
+    ]
+    io.verify.assert_called_once_with()
+
+
 def test_absent_export_created_once_and_retry_reuses_verified_source(notebook_io):
     io = notebook_io
     io.sources = [source(OTHER_ID, "notebooklm-export.md.bak")]
@@ -206,15 +221,53 @@ def test_successful_replacement_retry_does_not_upload_again(notebook_io):
     assert len(mutations(io)) == 2
 
 
-def test_preview_is_completely_offline_and_does_not_write_state(notebook_io):
+def test_preview_checks_only_local_cli_and_does_not_write_state(notebook_io):
     io = notebook_io
     before = sorted(io.common.iterdir())
     result = io.refresher.refresh(dry_run=True)
     assert "dry-run" in result and "would refresh" in result
+    assert "nlm CLI check passed" in result
+    assert "authentication and notebook access not checked" in result
     assert refresh_module.NOTEBOOK_ID in result
-    assert not io.calls
+    assert [call[1:] for call in io.calls] == [["--version"], ["--help"]]
     io.verify.assert_not_called()
     assert sorted(io.common.iterdir()) == before
+
+
+def test_preview_reports_local_nlm_failure_without_auth_or_state_changes(notebook_io):
+    io = notebook_io
+    io.failures["--version"] = "network connection failed"
+    before = sorted(io.common.iterdir())
+
+    result = io.refresher.refresh(dry_run=True)
+
+    assert "dry-run" in result
+    assert "nlm CLI check failed" in result
+    assert "network request failed" in result
+    assert [call[1:] for call in io.calls] == [["--version"]]
+    assert not any(call[1:3] == ["login", "--check"] for call in io.calls)
+    io.verify.assert_not_called()
+    assert sorted(io.common.iterdir()) == before
+
+
+def test_release_reports_local_nlm_failure_without_auth_or_mutation(notebook_io):
+    io = notebook_io
+    io.failures["--version"] = "network connection failed"
+
+    result = io.refresher.refresh()
+
+    assert "skipped" in result
+    assert "nlm unavailable/incompatible" in result
+    assert "network request failed" in result
+    assert not any(call[1:3] == ["login", "--check"] for call in io.calls)
+    assert not mutations(io)
+    io.verify.assert_not_called()
+
+
+@pytest.mark.parametrize("version", ["0.16.6", "0.17.0", "1.0.0", "1.99.999"])
+def test_supported_cli_version_range(version):
+    output = f"nlm version {version}\nYou are on the latest version.\n"
+    assert refresh_module._is_supported_cli_version(output)
 
 
 @pytest.mark.parametrize(
@@ -253,8 +306,10 @@ def test_missing_cli_skips_without_authentication_or_publication(
     ("field", "value"),
     [
         ("version", "nlm version 0.16.1"),
-        ("version", "nlm version 0.17.0"),
+        ("version", "nlm version 0.16.0"),
+        ("version", "nlm version 2.0.0"),
         ("version", "other program 0.16.2"),
+        ("version", "nlm version 1.2.3rc1"),
         ("help", "Unrelated executable named nlm"),
     ],
 )
@@ -784,7 +839,7 @@ def test_preview_describes_notebook_rename_without_contacting_service(notebook_i
     io = notebook_io
     assert "AI Guardian v1.2.3" in io.refresher.refresh(dry_run=True)
     assert io.title == "AI Guardian"
-    assert not io.calls
+    assert [call[1:] for call in io.calls] == [["--version"], ["--help"]]
 
 
 def test_preview_identifies_explicit_generated_text_source_without_io(notebook_io):
@@ -798,7 +853,7 @@ def test_preview_identifies_explicit_generated_text_source_without_io(notebook_i
     result = io.refresher.refresh(dry_run=True)
     assert GENERATED_TEXT_ID in result
     assert "explicitly replace generated-text source" in result
-    assert not io.calls
+    assert [call[1:] for call in io.calls] == [["--version"], ["--help"]]
     io.verify.assert_not_called()
 
 
