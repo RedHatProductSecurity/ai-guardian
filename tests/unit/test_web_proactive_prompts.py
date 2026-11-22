@@ -30,6 +30,7 @@ class TestProactivePromptPage:
             create_proactive_prompts_page
         )
         assert "Reset" in inspect.getsource(create_proactive_prompts_page)
+        assert "Runtime activation" in inspect.getsource(create_proactive_prompts_page)
 
     def test_route_in_sidebar(self):
         from ai_guardian.web.components.header import NAV_GROUPS
@@ -39,6 +40,56 @@ class TestProactivePromptPage:
 
 
 class TestProactivePromptStateViewer:
+    def test_detected_cli_rows_separate_configuration_and_runtime_activation(self):
+        from ai_guardian.web.pages.proactive_prompts import _current_ide_status_rows
+
+        reason = "No live hook invocation has been observed."
+        snapshot = {
+            "integrations": {
+                "kilo": {
+                    "name": "Kilo Code",
+                    "healthy": True,
+                    "events": {"plugin": "healthy"},
+                    "config_path": "/home/user/.config/kilo/plugin",
+                }
+            },
+            "tray_status": {
+                "kilo": {
+                    "cli": "installed",
+                    "ide_detected": True,
+                    "setup": "configured",
+                    "runtime_activation": {
+                        "status": "unverified",
+                        "reason": reason,
+                    },
+                },
+                "codex": {
+                    "cli": "installed",
+                    "ide_detected": False,
+                    "setup": "needs_setup",
+                    "runtime_activation": {
+                        "status": "unverified",
+                        "reason": reason,
+                    },
+                },
+                "cursor": {
+                    "cli": "not_applicable",
+                    "ide_detected": True,
+                    "setup": "configured",
+                },
+            },
+        }
+
+        rows = _current_ide_status_rows(snapshot)
+        by_ide = {row["ide"]: row for row in rows}
+
+        assert by_ide["kilo"]["configuration_status"] == "Configured"
+        assert by_ide["kilo"]["runtime_activation"] == "Unverified"
+        assert reason in by_ide["kilo"]["details"]
+        assert by_ide["codex"]["configuration_status"] == "Needs setup"
+        assert by_ide["codex"]["runtime_activation"] == "Unverified"
+        assert by_ide["cursor"]["runtime_activation"] == "Not applicable"
+
     def test_missing_file(self, tmp_path):
         from ai_guardian.web.pages.proactive_prompts import (
             _load_proactive_prompt_file,

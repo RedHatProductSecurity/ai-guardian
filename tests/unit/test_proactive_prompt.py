@@ -128,36 +128,108 @@ def test_sync_ide_setup_state_separates_cli_availability_and_setup_health(tmp_pa
         "cli": "installed",
         "ide_detected": True,
         "setup": "configured",
+        "runtime_activation": {
+            "status": "unverified",
+            "reason": (
+                "AI Guardian has no runtime signal confirming a live hook "
+                "invocation or plugin load. Unverified is not a configuration fault, "
+                "and CLI version checks are not proof."
+            ),
+        },
     }
     assert statuses["codex"] == {
         "cli": "installed",
         "ide_detected": False,
         "setup": "needs_setup",
+        "runtime_activation": {
+            "status": "unverified",
+            "reason": (
+                "AI Guardian has no runtime signal confirming a live hook "
+                "invocation or plugin load. Unverified is not a configuration fault, "
+                "and CLI version checks are not proof."
+            ),
+        },
     }
     assert statuses["cursor"] == {
         "cli": "not_applicable",
         "ide_detected": True,
         "setup": "unknown",
+        "runtime_activation": {
+            "status": "not_applicable",
+            "reason": "This integration does not expose a local CLI runtime.",
+        },
     }
     assert statuses["gemini"] == {
         "cli": "not_installed",
         "ide_detected": False,
         "setup": "not_detected",
+        "runtime_activation": {
+            "status": "not_detected",
+            "reason": "No installed CLI or integration was detected.",
+        },
     }
     assert statuses["antigravity"] == {
         "cli": "unknown",
         "ide_detected": False,
         "setup": "unknown",
+        "runtime_activation": {
+            "status": "unknown",
+            "reason": "CLI or integration detection did not complete.",
+        },
     }
     assert statuses["cline"] == {
         "cli": "not_applicable",
         "ide_detected": False,
         "setup": "not_detected",
+        "runtime_activation": {
+            "status": "not_applicable",
+            "reason": "This integration does not expose a local CLI runtime.",
+        },
     }
 
     # CLI-only detection is separate from the older installed-IDE prompt list.
     assert snapshot["installed"] == ["claude", "cursor"]
     assert snapshot["needs_setup"] == ["cursor"]
+
+
+def test_sync_ide_setup_state_accepts_healthy_kilo_with_unverified_runtime(tmp_path):
+    class FakeIDESetup:
+        IDE_CONFIGS = {"kilo": {"name": "Kilo Code"}}
+
+        def list_installed_ides(self):
+            return ["kilo"]
+
+        def verify_ide_setup(self, ide_type):
+            assert ide_type == "kilo"
+            return {
+                "ide": "kilo",
+                "healthy": True,
+                "plugin_runtime_status": "unverified",
+                "events": {"plugin": "healthy"},
+            }
+
+    def which(executable):
+        return "/usr/bin/kilo" if executable in {"kilo", "kilocode"} else None
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    with patch("ai_guardian.tray.proactive_prompt.shutil.which", side_effect=which):
+        snapshot = sync_ide_setup_state(state=state, setup=FakeIDESetup())
+
+    assert snapshot["tray_status"]["kilo"] == {
+        "cli": "installed",
+        "ide_detected": True,
+        "setup": "configured",
+        "runtime_activation": {
+            "status": "unverified",
+            "reason": (
+                "AI Guardian checks Kilo's auto-discovered plugin artifact and "
+                "declared callbacks, but cannot observe Kilo loading the plugin. "
+                "Unverified is an activation caveat, not a configuration fault."
+            ),
+        },
+    }
+    assert "kilo" in snapshot["configured"]
+    assert "kilo" not in snapshot["needs_setup"]
 
 
 def test_sync_ide_setup_state_keeps_cli_result_when_install_discovery_fails(tmp_path):
@@ -179,11 +251,23 @@ def test_sync_ide_setup_state_keeps_cli_result_when_install_discovery_fails(tmp_
         "cli": "installed",
         "ide_detected": None,
         "setup": "unknown",
+        "runtime_activation": {
+            "status": "unverified",
+            "reason": (
+                "AI Guardian has no runtime signal confirming a live hook "
+                "invocation or plugin load. Unverified is not a configuration fault, "
+                "and CLI version checks are not proof."
+            ),
+        },
     }
     assert snapshot["tray_status"]["cursor"] == {
         "cli": "not_applicable",
         "ide_detected": None,
         "setup": "unknown",
+        "runtime_activation": {
+            "status": "not_applicable",
+            "reason": "This integration does not expose a local CLI runtime.",
+        },
     }
 
 

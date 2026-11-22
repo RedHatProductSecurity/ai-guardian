@@ -32,6 +32,8 @@ from ai_guardian.cli_runtime import (
     detect_cli_runtime,
     parse_cli_version,
     pre_1_0_cli_advisory,
+    runtime_activation_info,
+    runtime_activation_label,
 )
 from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY, get_ide_integration
 
@@ -1188,6 +1190,7 @@ class Doctor:
         all_configured = True
         any_configured = False
         any_installed = False
+        kilo_needs_repair = False
 
         for integration in SUPPORTED_IDE_REGISTRY:
             ide_type = integration.key
@@ -1232,6 +1235,8 @@ class Doctor:
                     }
                 )
                 all_configured = False
+                if ide_type == "kilo":
+                    kilo_needs_repair = True
                 continue
 
             config_path = Path(raw_config_path).expanduser()
@@ -1377,11 +1382,8 @@ class Doctor:
             if mcp_verification and mcp_verification.get("mcp_diagnostic"):
                 mcp_detail += f" ({mcp_verification['mcp_diagnostic']})"
             mcp_healthy = mcp_status in (None, "healthy", "external")
-            runtime_unverified = bool(
-                ide_type == "kilo"
-                and isinstance(mcp_verification, dict)
-                and mcp_verification.get("plugin_runtime_status") == "unverified"
-            )
+            if ide_type == "kilo" and (not configured or not mcp_healthy):
+                kilo_needs_repair = True
 
             if configured:
                 if ide_type == "claude":
@@ -1444,7 +1446,7 @@ class Doctor:
                             "display_name": ide_name,
                             "status": (
                                 CheckStatus.PASS.value
-                                if mcp_healthy and not runtime_unverified
+                                if mcp_healthy
                                 else CheckStatus.WARN.value
                             ),
                             "message": message,
@@ -1453,7 +1455,7 @@ class Doctor:
                     )
                     if mcp_verification is not None:
                         integration_results[-1]["verification"] = mcp_verification
-                    if not mcp_healthy or runtime_unverified:
+                    if not mcp_healthy:
                         all_configured = False
                 any_configured = True
             else:
@@ -1484,6 +1486,22 @@ class Doctor:
                     any_configured = True
                 all_configured = False
 
+        for integration_result in integration_results:
+            integration_key = integration_result.get("ide")
+            if not isinstance(integration_key, str):
+                continue
+            runtime_integration = get_ide_integration(integration_key)
+            if runtime_integration is None:
+                continue
+            verification_result = integration_result.get("verification")
+            if not isinstance(verification_result, dict):
+                verification_result = None
+            integration_result["runtime_activation"] = runtime_activation_info(
+                runtime_integration,
+                verification_result,
+                detected=runtime_integration.key in detected,
+            )
+
         self._add_cli_runtime_info(integration_results, results)
         detail_str = "; ".join(results)
 
@@ -1507,7 +1525,11 @@ class Doctor:
                 name="hooks",
                 status=CheckStatus.WARN,
                 message=detail_str,
-                fix_hint="Run: ai-guardian setup",
+                fix_hint=(
+                    "Run: ai-guardian setup --ide kilo --force"
+                    if kilo_needs_repair
+                    else "Run: ai-guardian setup"
+                ),
                 integrations=integration_results,
             )
         else:
@@ -1515,7 +1537,11 @@ class Doctor:
                 name="hooks",
                 status=CheckStatus.FAIL,
                 message=detail_str,
-                fix_hint="Run: ai-guardian setup",
+                fix_hint=(
+                    "Run: ai-guardian setup --ide kilo --force"
+                    if kilo_needs_repair
+                    else "Run: ai-guardian setup"
+                ),
                 integrations=integration_results,
             )
 
@@ -1564,6 +1590,17 @@ class Doctor:
             cli_message = self._format_cli_runtime(runtime)
             if advisory:
                 cli_message += f"; WARNING: {advisory['message']}"
+            if integration.key == "kilo" and integration.validated_cli_version:
+                installed_version = runtime.get("version")
+                if (
+                    installed_version
+                    and installed_version != integration.validated_cli_version
+                ):
+                    cli_message += (
+                        "; revalidate callback behavior: installed Kilo CLI "
+                        f"{installed_version} differs from the validated version "
+                        f"{integration.validated_cli_version}"
+                    )
             message = result.get("message", "")
             result["message"] = f"{message}; {cli_message}" if message else cli_message
             results[index] = f"{result.get('display_name', result.get('name', ''))}: "
@@ -1648,14 +1685,21 @@ class Doctor:
             "tool.execute.before, and tool.execute.after "
             "(complete callback coverage not verified)"
         )
-        parts.append(
-            "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
-            "post-tool redaction manually confirmed; pre-tool enforcement, "
-            "post-tool fixed-refusal delivery and broader results remain unverified"
+        integration = get_ide_integration("kilo")
+        validated_version = (
+            integration.validated_cli_version if integration is not None else None
         )
-        if verification.get("plugin_runtime_status") == "unverified":
-            parts.append("plugin runtime activation remains unverified")
-
+        validation_baseline = (
+            f"Kilo {validated_version} native synthetic prompt-to-refusal replacement "
+            "and Bash post-tool redaction manually confirmed"
+            if validated_version
+            else "Native synthetic prompt-to-refusal replacement and Bash post-tool "
+            "redaction manually confirmed on a versioned validation baseline"
+        )
+        parts.append(
+            f"{validation_baseline}; pre-tool enforcement, post-tool fixed-refusal "
+            "delivery and broader results remain unverified"
+        )
         attention = Doctor._hook_verification_detail(verification)
         if attention:
             parts.append(f"attention: {attention}")
@@ -3096,6 +3140,18 @@ def format_human(report: DoctorReport) -> str:
                 if integration.get("detail"):
                     for detail_line in str(integration["detail"]).split("\n"):
                         lines.append(f"       {' ' * 28} {detail_line}")
+                activation = integration.get("runtime_activation")
+                if isinstance(activation, dict):
+                    activation_status = activation.get("status")
+                    if activation_status not in {None, "not_applicable"}:
+                        activation_reason = activation.get("reason")
+                        activation_line = (
+                            f"Runtime activation: "
+                            f"{runtime_activation_label(activation_status)}"
+                        )
+                        if activation_reason:
+                            activation_line += f" — {activation_reason}"
+                        lines.append(f"       {' ' * 28} {activation_line}")
                 if integration.get("fix_hint"):
                     prefix = "Fixed" if integration.get("fixed") else "Hint"
                     lines.append(

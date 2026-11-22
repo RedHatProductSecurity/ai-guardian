@@ -55,6 +55,9 @@ class IDEIntegration:
     cli_capable: bool = False
     cli_executables: Tuple[str, ...] = ()
     agent_type_aliases: Tuple[str, ...] = ()
+    validated_cli_version: Optional[str] = None
+    required_plugin_callbacks: Tuple[str, ...] = ()
+    runtime_verification_note: Optional[str] = None
 
     @property
     def managed_hook_events(self) -> Tuple[str, ...]:
@@ -356,17 +359,30 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "none",
         project_scope=True,
         post_output_transform=True,
-        # Kilo 7.8.27's native Bash post-tool redaction was manually confirmed.
+        # Native Kilo callback validation is version-scoped; keep its baseline
+        # alongside the integration metadata so health output can detect drift.
         safe_post_output_replacement=True,
         platform_contract=(
-            "Kilo CLI 7.8.27 plugin discovery, chat.message, and tool-result "
+            "Kilo CLI plugin discovery, chat.message, and tool-result "
             "mutation source reviewed; native synthetic prompt-to-refusal "
-            "replacement and Bash post-tool redaction confirmed, pre-tool "
-            "enforcement and broader result-delivery qualification pending"
+            "replacement and Bash post-tool redaction confirmed on the validated "
+            "CLI version; pre-tool enforcement and broader result-delivery "
+            "qualification pending"
         ),
         cli_capable=True,
         cli_executables=("kilo", "kilocode"),
         safe_prompt_replacement=True,
+        validated_cli_version="7.8.27",
+        required_plugin_callbacks=(
+            "chat.message",
+            "tool.execute.before",
+            "tool.execute.after",
+        ),
+        runtime_verification_note=(
+            "AI Guardian checks Kilo's auto-discovered plugin artifact and declared "
+            "callbacks, but cannot observe Kilo loading the plugin. Unverified is "
+            "an activation caveat, not a configuration fault."
+        ),
     ),
     IDEIntegration(
         "pi",

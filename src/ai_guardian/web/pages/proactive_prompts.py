@@ -4,6 +4,8 @@ import json
 
 from nicegui import run, ui
 
+from ai_guardian.cli_runtime import runtime_activation_info, runtime_activation_label
+from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
 from ai_guardian.tray.proactive_prompt import (
     IDE_SETUP_STATUS_KEY,
     ProactivePromptState,
@@ -60,6 +62,97 @@ def _reset_proactive_prompt_file(ide_type):
     return reset_ide_setup_state(ide_type)
 
 
+def _current_ide_status_rows(snapshot):
+    """Build separate configuration and runtime rows for detected integrations."""
+    integrations = snapshot.get("integrations", {})
+    tray_status = snapshot.get("tray_status", {})
+    if not isinstance(integrations, dict):
+        integrations = {}
+    if not isinstance(tray_status, dict):
+        tray_status = {}
+
+    rows = []
+    for integration in SUPPORTED_IDE_REGISTRY:
+        ide_type = integration.key
+        status = integrations.get(ide_type)
+        if not isinstance(status, dict):
+            status = {}
+        tray_entry = tray_status.get(ide_type)
+        if not isinstance(tray_entry, dict):
+            tray_entry = {}
+        detected = (
+            ide_type in integrations
+            or tray_entry.get("ide_detected") is True
+            or tray_entry.get("cli") == "installed"
+        )
+        if not detected:
+            continue
+
+        if status.get("healthy") is True:
+            configuration_status = (
+                "Configured (last verified)"
+                if status.get("verification_skipped")
+                else "Configured"
+            )
+        elif status.get("error"):
+            configuration_status = "Check failed"
+        elif status.get("excluded"):
+            configuration_status = (
+                "Excluded (last verified)"
+                if status.get("verification_skipped")
+                else "Excluded (needs setup)"
+            )
+        else:
+            configuration_status = {
+                "configured": "Configured",
+                "needs_setup": "Needs setup",
+                "unknown": "Check unavailable",
+                "not_detected": "Not detected",
+            }.get(tray_entry.get("setup"), "Needs setup")
+
+        activation = status.get("runtime_activation")
+        if not isinstance(activation, dict):
+            activation = tray_entry.get("runtime_activation")
+        if not isinstance(activation, dict):
+            activation = runtime_activation_info(integration, status, detected=detected)
+
+        details = []
+        events = status.get("events", {})
+        if isinstance(events, dict):
+            details.extend(
+                f"{event}: {event_status}"
+                for event, event_status in events.items()
+                if event_status != "healthy"
+            )
+        obsolete = status.get("obsolete", [])
+        if isinstance(obsolete, (list, tuple, set)):
+            details.extend(f"{event}: obsolete" for event in obsolete)
+        if status.get("error"):
+            details.append(str(status["error"]))
+        if status.get("verification_skipped"):
+            details.append(
+                "not rechecked: "
+                + str(status.get("verification_skip_reason", "automatic exclusion"))
+            )
+        activation_status = activation.get("status")
+        if activation_status in {"unverified", "failed", "unknown"}:
+            reason = activation.get("reason")
+            if isinstance(reason, str) and reason:
+                details.append(f"Runtime: {reason}")
+
+        rows.append(
+            {
+                "ide": ide_type,
+                "integration": status.get("name", integration.display_name),
+                "configuration_status": configuration_status,
+                "runtime_activation": runtime_activation_label(activation_status),
+                "details": ", ".join(details) or "—",
+                "config_path": status.get("config_path") or "—",
+            }
+        )
+    return rows
+
+
 def create_proactive_prompts_page(service, daemon_name: str):
     """Create the read-only proactive prompt state page."""
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/proactive-prompts")
@@ -99,61 +192,13 @@ def create_proactive_prompts_page(service, daemon_name: str):
                         ui.label(
                             f"Last synchronized: {snapshot.get('checked_at', 'unknown')}"
                         ).classes("text-xs text-grey-6")
-                        rows = []
-                        integrations = snapshot.get("integrations", {})
-                        if isinstance(integrations, dict):
-                            for ide_type, status in integrations.items():
-                                if not isinstance(status, dict):
-                                    continue
-                                if status.get("healthy") is True:
-                                    hook_status = (
-                                        "Configured (last verified)"
-                                        if status.get("verification_skipped")
-                                        else "Configured"
-                                    )
-                                elif status.get("error"):
-                                    hook_status = "Check failed"
-                                elif status.get("excluded"):
-                                    hook_status = (
-                                        "Excluded (last verified)"
-                                        if status.get("verification_skipped")
-                                        else "Excluded (needs setup)"
-                                    )
-                                else:
-                                    hook_status = "Needs setup"
-                                attention = []
-                                events = status.get("events", {})
-                                if isinstance(events, dict):
-                                    attention.extend(
-                                        f"{event}: {event_status}"
-                                        for event, event_status in events.items()
-                                        if event_status != "healthy"
-                                    )
-                                attention.extend(
-                                    f"{event}: obsolete"
-                                    for event in status.get("obsolete", [])
-                                )
-                                if status.get("error"):
-                                    attention.append(str(status["error"]))
-                                if status.get("verification_skipped"):
-                                    attention.append(
-                                        "not rechecked: "
-                                        + str(
-                                            status.get(
-                                                "verification_skip_reason",
-                                                "automatic exclusion",
-                                            )
-                                        )
-                                    )
-                                rows.append(
-                                    {
-                                        "ide": ide_type,
-                                        "integration": status.get("name", ide_type),
-                                        "status": hook_status,
-                                        "details": ", ".join(attention) or "—",
-                                        "config_path": status.get("config_path") or "—",
-                                    }
-                                )
+                        ui.label(
+                            "Configuration health and runtime activation are separate. "
+                            "Unverified is not a configuration fault; it means no "
+                            "runtime signal confirmed the host loaded or invoked AI "
+                            "Guardian. CLI version checks are not activation proof."
+                        ).classes("text-xs text-grey-6")
+                        rows = _current_ide_status_rows(snapshot)
                         if rows:
                             table = (
                                 ui.table(
@@ -171,9 +216,15 @@ def create_proactive_prompts_page(service, daemon_name: str):
                                             "align": "left",
                                         },
                                         {
-                                            "name": "status",
-                                            "label": "Hook status",
-                                            "field": "status",
+                                            "name": "configuration_status",
+                                            "label": "Configuration status",
+                                            "field": "configuration_status",
+                                            "align": "left",
+                                        },
+                                        {
+                                            "name": "runtime_activation",
+                                            "label": "Runtime activation",
+                                            "field": "runtime_activation",
                                             "align": "left",
                                         },
                                         {

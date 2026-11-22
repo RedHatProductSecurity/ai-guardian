@@ -497,6 +497,29 @@ class TestHealthCheckData:
         assert rows[1]["detail"] == "scope: user"
         assert _get_hook_integrations({"name": "hooks"}) == []
 
+    def test_runtime_activation_text_is_separate_from_hook_health(self):
+        from ai_guardian.web.pages.health_check import _runtime_activation_text
+
+        text = _runtime_activation_text(
+            {
+                "status": "pass",
+                "runtime_activation": {
+                    "status": "unverified",
+                    "reason": "CLI version does not prove plugin loading.",
+                },
+            }
+        )
+
+        assert text == (
+            "Runtime activation: Unverified — CLI version does not prove plugin loading."
+        )
+        assert (
+            _runtime_activation_text(
+                {"runtime_activation": {"status": "not_applicable"}}
+            )
+            == ""
+        )
+
 
 # ---------------------------------------------------------------------------
 # Config load/save

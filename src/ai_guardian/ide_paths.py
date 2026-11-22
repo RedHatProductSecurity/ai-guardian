@@ -202,7 +202,7 @@ def resolve_kilo_config_file(
 ) -> Path:
     """Resolve the Kilo JSON/JSONC config file used for native MCP registration.
 
-    Kilo 7.8.27 reads MCP entries from its regular ``mcp`` config section. Match
+    Kilo reads MCP entries from its regular ``mcp`` config section. Match
     the native ``kilo mcp`` resolver's file precedence and ``kilo.json`` fallback
     so setup updates the same layer. ``KILO_CONFIG`` selects a complete file;
     ``KILO_CONFIG_DIR`` selects Kilo's config root, independently of OpenCode.

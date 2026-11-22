@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Fully automated release script for AI Guardian.
-# No AI agent required — just gh CLI, python3, git, sed, curl, and git-cliff.
+# No AI agent required — just gh CLI, python3, git, sed, curl, jq, git-cliff,
+# and an RTD_API_TOKEN with write access to the Read the Docs project.
 #
 # Usage:
 #   scripts/release.sh minor                  # preview + required CI (default)
@@ -32,6 +33,8 @@ Options:
   --resume         Resume the saved, incomplete required-CI attempt only
   --skip-cursor    Skip Cursor hook verification
   -h, --help       Show this help message
+
+For --execute, export RTD_API_TOKEN with write access to the Read the Docs project.
 
 Release types:
   minor   Bump minor version   (X.Y.Z -> X.(Y+1).0)
@@ -108,6 +111,29 @@ run() {
     fi
 }
 
+RTD_API_ROOT="https://readthedocs.org/api/v3"
+RTD_PROJECT_SLUG="ai-guardian"
+RTD_CURL_AUTH_CONFIG=""
+
+rtd_api_get() {
+    curl --config - --silent --show-error --fail --location --max-time 10 \
+        "$1" <<< "$RTD_CURL_AUTH_CONFIG" 2>/dev/null || true
+}
+
+rtd_api_patch() {
+    curl --config - --silent --show-error --fail --location --max-time 10 \
+        --request PATCH \
+        --header "Content-Type: application/json" \
+        --data "$2" \
+        "$1" <<< "$RTD_CURL_AUTH_CONFIG" >/dev/null 2>&1
+}
+
+rtd_api_post() {
+    curl --config - --silent --show-error --fail --location --max-time 10 \
+        --request POST \
+        "$1" <<< "$RTD_CURL_AUTH_CONFIG" >/dev/null 2>&1
+}
+
 # macOS vs GNU sed in-place flag
 if sed --version >/dev/null 2>&1; then
     SED_INPLACE=(sed -i)
@@ -126,9 +152,25 @@ command -v python3 >/dev/null 2>&1   || die "python3 not found"
 command -v git >/dev/null 2>&1       || die "git not found"
 command -v sed >/dev/null 2>&1       || die "sed not found"
 command -v curl >/dev/null 2>&1      || die "curl not found"
+command -v jq >/dev/null 2>&1        || die "jq not found"
 command -v git-cliff >/dev/null 2>&1 || die "git-cliff not found (brew install git-cliff)"
 
 gh auth status >/dev/null 2>&1 || die "gh not authenticated (run: gh auth login)"
+
+if ! $DRY_RUN; then
+    [[ -n "${RTD_API_TOKEN:-}" ]] || die \
+        "RTD_API_TOKEN is required for --execute to activate and set the Read the Docs release default"
+    RTD_CURL_AUTH_CONFIG=$(printf '%s' "$RTD_API_TOKEN" | python3 -c \
+        'import json, sys; print("header = " + json.dumps("Authorization: Token " + sys.stdin.read()))')
+    RTD_PROJECT_ACCESS=$(rtd_api_get \
+        "${RTD_API_ROOT}/projects/?slug=${RTD_PROJECT_SLUG}")
+    if ! jq -e --arg project "$RTD_PROJECT_SLUG" \
+        'any(.results[]?; .slug == $project)' \
+        <<< "$RTD_PROJECT_ACCESS" >/dev/null 2>&1; then
+        die "RTD_API_TOKEN is invalid or does not have access to the ai-guardian Read the Docs project"
+    fi
+    unset RTD_API_TOKEN
+fi
 
 if [[ -n "$(git status --porcelain)" ]]; then
     die "Working tree is not clean. Commit or stash changes first."
@@ -521,10 +563,23 @@ DOCS_URL="https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
 DOCS_VERSION_URL_PREFIX="$DOCS_URL"
 STABLE_DOCS_URL="https://ai-guardian.readthedocs.io/en/stable/"
 LATEST_DOCS_URL="https://ai-guardian.readthedocs.io/en/latest/"
-RTD_VERSION_API_BASE="https://readthedocs.org/api/v3/projects/ai-guardian/versions"
+RTD_PROJECT_API_URL="${RTD_API_ROOT}/projects/${RTD_PROJECT_SLUG}/"
+RTD_VERSION_API_BASE="${RTD_PROJECT_API_URL}versions"
+RTD_RELEASE_VERSION_API_URL="${RTD_VERSION_API_BASE}/${TAG_NAME}/"
+RTD_RELEASE_BUILD_API_URL="${RTD_RELEASE_VERSION_API_URL}builds/"
 DOCS_VERSION_AVAILABLE=false
 DOCS_AVAILABLE=false
 DOCS_VERIFICATION_STATUS="not checked (dry-run)"
+RTD_RELEASE_SHA=""
+RTD_RELEASE_BUILD_ID=""
+RTD_RELEASE_BUILD_STATE=""
+RTD_RELEASE_READY=false
+RTD_RELEASE_MANAGEMENT_STATUS="not checked (dry-run)"
+RTD_DEFAULT_VERSION_SET=false
+RTD_DEFAULT_VERSION_STATUS="not set"
+if $DRY_RUN; then
+    RTD_DEFAULT_VERSION_STATUS="not set (dry-run)"
+fi
 
 read_docs_http_result() {
     local response
@@ -537,6 +592,184 @@ read_docs_http_result() {
         HTTP_EFFECTIVE_URL="${response#* }"
     fi
     [[ -n "$HTTP_STATUS" ]] || HTTP_STATUS="000"
+}
+
+rtd_latest_release_build() {
+    jq -c --arg commit "$RTD_RELEASE_SHA" \
+        '[.results[]? | select(.commit == $commit)] | sort_by(.id) | last // empty' \
+        <<< "$1" 2>/dev/null || true
+}
+
+wait_for_rtd_build_after() {
+    local minimum_id="$1"
+    local builds build build_id build_state build_success
+
+    for _attempt in {1..36}; do
+        builds=$(rtd_api_get "${RTD_RELEASE_BUILD_API_URL}?limit=20")
+        build=$(jq -c --arg commit "$RTD_RELEASE_SHA" \
+            --argjson minimum "$minimum_id" \
+            '[.results[]? | select(.commit == $commit) | select((.id | tonumber) > $minimum)] | sort_by(.id) | last // empty' \
+            <<< "$builds" 2>/dev/null || true)
+        if [[ -n "$build" && "$build" != "null" ]]; then
+            build_id=$(jq -r '.id // empty' <<< "$build" 2>/dev/null || true)
+            build_state=$(jq -r '.state.code // empty' <<< "$build" 2>/dev/null || true)
+            build_success=$(jq -r 'if .success == true then "true" else "false" end' \
+                <<< "$build" 2>/dev/null || true)
+            if [[ "$build_state" == "finished" && "$build_success" == "true" ]]; then
+                RTD_RELEASE_BUILD_ID="$build_id"
+                RTD_RELEASE_BUILD_STATE="finished successfully"
+                return 0
+            fi
+            if [[ "$build_state" == "finished" || "$build_state" == "cancelled" ]]; then
+                RTD_RELEASE_BUILD_ID="$build_id"
+                RTD_RELEASE_BUILD_STATE="${build_state} without success"
+                return 2
+            fi
+        fi
+        sleep 10
+    done
+
+    RTD_RELEASE_BUILD_STATE="timed out"
+    return 1
+}
+
+manage_rtd_release_version() {
+    local version_json=""
+    local builds_json=""
+    local build_json=""
+    local version_active="false"
+    local version_hidden="true"
+    local baseline_build_id="0"
+    local patch_payload=""
+
+    RTD_RELEASE_MANAGEMENT_STATUS="failed (release version/build not verified)"
+    RTD_RELEASE_SHA=$(git rev-parse --verify "${TAG_NAME}^{commit}" 2>/dev/null || true)
+    if [[ -z "$RTD_RELEASE_SHA" ]]; then
+        RTD_RELEASE_MANAGEMENT_STATUS="failed (local release tag commit unavailable)"
+        return 1
+    fi
+
+    for _attempt in {1..18}; do
+        version_json=$(rtd_api_get "$RTD_RELEASE_VERSION_API_URL")
+        if jq -e --arg commit "$RTD_RELEASE_SHA" \
+            '.type == "tag" and .identifier == $commit' \
+            <<< "$version_json" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 10
+    done
+    if ! jq -e --arg commit "$RTD_RELEASE_SHA" \
+        '.type == "tag" and .identifier == $commit' \
+        <<< "$version_json" >/dev/null 2>&1; then
+        RTD_RELEASE_MANAGEMENT_STATUS="failed (RTD version does not match the release tag)"
+        return 1
+    fi
+
+    builds_json=$(rtd_api_get "${RTD_RELEASE_BUILD_API_URL}?limit=20")
+    build_json=$(rtd_latest_release_build "$builds_json")
+    if [[ -z "$build_json" || "$build_json" == "null" ]]; then
+        info "No Read the Docs build exists for ${TAG_NAME}; requesting one"
+        if ! rtd_api_post "$RTD_RELEASE_BUILD_API_URL"; then
+            RTD_RELEASE_MANAGEMENT_STATUS="failed (could not trigger the RTD release build)"
+            return 1
+        fi
+        if ! wait_for_rtd_build_after "0"; then
+            RTD_RELEASE_MANAGEMENT_STATUS="failed (initial RTD build ${RTD_RELEASE_BUILD_STATE})"
+            return 1
+        fi
+    else
+        RTD_RELEASE_BUILD_ID=$(jq -r '.id // empty' <<< "$build_json" 2>/dev/null || true)
+        if jq -e '.state.code == "finished" and .success == true' \
+            <<< "$build_json" >/dev/null 2>&1; then
+            RTD_RELEASE_BUILD_STATE="finished successfully"
+        elif jq -e '.state.code == "finished" or .state.code == "cancelled"' \
+            <<< "$build_json" >/dev/null 2>&1; then
+            RTD_RELEASE_BUILD_STATE="failed"
+            RTD_RELEASE_MANAGEMENT_STATUS="failed (initial RTD build did not succeed)"
+            return 1
+        elif ! wait_for_rtd_build_after "0"; then
+            RTD_RELEASE_MANAGEMENT_STATUS="failed (initial RTD build ${RTD_RELEASE_BUILD_STATE})"
+            return 1
+        fi
+    fi
+    info "Read the Docs build for ${TAG_NAME} completed successfully"
+
+    version_json=$(rtd_api_get "$RTD_RELEASE_VERSION_API_URL")
+    version_active=$(jq -r 'if .active == true then "true" else "false" end' \
+        <<< "$version_json" 2>/dev/null || true)
+    version_hidden=$(jq -r 'if .hidden == true then "true" else "false" end' \
+        <<< "$version_json" 2>/dev/null || true)
+    if [[ "$version_active" != "true" || "$version_hidden" != "false" ]]; then
+        baseline_build_id="$RTD_RELEASE_BUILD_ID"
+        patch_payload=$(jq -nc '{active: true, hidden: false}')
+        if ! rtd_api_patch "$RTD_RELEASE_VERSION_API_URL" "$patch_payload"; then
+            RTD_RELEASE_MANAGEMENT_STATUS="failed (could not activate/unhide the RTD release version)"
+            return 1
+        fi
+        if [[ "$version_active" != "true" ]]; then
+            if ! wait_for_rtd_build_after "$baseline_build_id"; then
+                RTD_RELEASE_MANAGEMENT_STATUS="failed (activation-triggered RTD build ${RTD_RELEASE_BUILD_STATE})"
+                return 1
+            fi
+            info "Read the Docs activation build for ${TAG_NAME} completed successfully"
+        fi
+    fi
+
+    for _attempt in {1..18}; do
+        version_json=$(rtd_api_get "$RTD_RELEASE_VERSION_API_URL")
+        if jq -e --arg commit "$RTD_RELEASE_SHA" \
+            '.active == true and .hidden == false and .built == true and .type == "tag" and .identifier == $commit' \
+            <<< "$version_json" >/dev/null 2>&1; then
+            RTD_RELEASE_MANAGEMENT_STATUS="active, visible, and built (build ${RTD_RELEASE_BUILD_ID})"
+            return 0
+        fi
+        sleep 10
+    done
+
+    RTD_RELEASE_MANAGEMENT_STATUS="failed (RTD release is not active, visible, and built)"
+    return 1
+}
+
+set_rtd_default_version() {
+    local project_json=""
+    local current_default=""
+    local patch_payload=""
+
+    RTD_DEFAULT_VERSION_STATUS="failed (RTD project default could not be verified)"
+    project_json=$(rtd_api_get "$RTD_PROJECT_API_URL")
+    if ! jq -e --arg project "$RTD_PROJECT_SLUG" '.slug == $project' \
+        <<< "$project_json" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    current_default=$(jq -r '.default_version // empty' \
+        <<< "$project_json" 2>/dev/null || true)
+    if [[ "$current_default" == "$TAG_NAME" ]]; then
+        RTD_DEFAULT_VERSION_STATUS="already set to ${TAG_NAME}"
+        RTD_DEFAULT_VERSION_SET=true
+        return 0
+    fi
+
+    patch_payload=$(jq -nc --arg version "$TAG_NAME" '{default_version: $version}')
+    if ! rtd_api_patch "$RTD_PROJECT_API_URL" "$patch_payload"; then
+        RTD_DEFAULT_VERSION_STATUS="failed (could not update the RTD project default)"
+        return 1
+    fi
+
+    for _attempt in {1..18}; do
+        project_json=$(rtd_api_get "$RTD_PROJECT_API_URL")
+        current_default=$(jq -r '.default_version // empty' \
+            <<< "$project_json" 2>/dev/null || true)
+        if [[ "$current_default" == "$TAG_NAME" ]]; then
+            RTD_DEFAULT_VERSION_STATUS="set to ${TAG_NAME}"
+            RTD_DEFAULT_VERSION_SET=true
+            return 0
+        fi
+        sleep 10
+    done
+
+    RTD_DEFAULT_VERSION_STATUS="failed (RTD did not confirm ${TAG_NAME} as project default)"
+    return 1
 }
 
 if $DRY_RUN; then
@@ -574,7 +807,7 @@ else
         warn "One or more versioned container images remain unavailable; inspect the Build Container Image workflow before continuing"
     fi
 
-    info "Waiting for versioned documentation..."
+    info "Waiting for the Read the Docs release build, activation, and default..."
     DOCS_HTTP_STATUS="000"
     DOCS_EFFECTIVE_URL=""
     STABLE_DOCS_HTTP_STATUS="000"
@@ -589,6 +822,15 @@ else
     RTD_LATEST_TARGETS_MAIN=false
     STABLE_DOCS_AVAILABLE=false
     LATEST_DOCS_AVAILABLE=false
+
+    if manage_rtd_release_version; then
+        RTD_RELEASE_READY=true
+        info "Read the Docs release version: ${RTD_RELEASE_MANAGEMENT_STATUS}"
+    else
+        RTD_RELEASE_READY=false
+        warn "Read the Docs release activation/build is incomplete: ${RTD_RELEASE_MANAGEMENT_STATUS}"
+    fi
+
     for _attempt in {1..18}; do
         read_docs_http_result "$DOCS_URL"
         DOCS_HTTP_STATUS="$HTTP_STATUS"
@@ -600,6 +842,18 @@ else
         fi
         sleep 10
     done
+
+    if $DOCS_VERSION_AVAILABLE && $RTD_RELEASE_READY; then
+        if set_rtd_default_version; then
+            info "Read the Docs project default: ${RTD_DEFAULT_VERSION_STATUS}"
+        else
+            warn "Read the Docs project default was not confirmed: ${RTD_DEFAULT_VERSION_STATUS}"
+        fi
+    elif ! $RTD_RELEASE_READY; then
+        RTD_DEFAULT_VERSION_STATUS="not set (release version/build not verified)"
+    else
+        RTD_DEFAULT_VERSION_STATUS="not set (release URL unavailable)"
+    fi
 
     if $DOCS_VERSION_AVAILABLE; then
         read_docs_http_result "$STABLE_DOCS_URL"
@@ -637,17 +891,19 @@ else
                 [[ "$LATEST_DOCS_EFFECTIVE_URL" == "https://ai-guardian.readthedocs.io/en/main/"* ]]; }; then
             LATEST_DOCS_AVAILABLE=true
         fi
-        if $STABLE_DOCS_AVAILABLE && $LATEST_DOCS_AVAILABLE && \
+        if $RTD_RELEASE_READY && $RTD_DEFAULT_VERSION_SET && \
+            $STABLE_DOCS_AVAILABLE && $LATEST_DOCS_AVAILABLE && \
             $RTD_STABLE_TARGETS_RELEASE && $RTD_LATEST_TARGETS_MAIN; then
             DOCS_AVAILABLE=true
         fi
     fi
 
     if $DOCS_AVAILABLE; then
-        DOCS_VERIFICATION_STATUS="verified (release ${TAG_NAME}; stable targets ${RTD_STABLE_REF}; latest tracks ${RTD_LATEST_IDENTIFIER})"
+        DOCS_VERIFICATION_STATUS="verified (release ${TAG_NAME}; default ${TAG_NAME}; stable targets ${RTD_STABLE_REF}; latest tracks ${RTD_LATEST_IDENTIFIER})"
         info "Read the Docs: ${DOCS_URL} available (HTTP ${DOCS_HTTP_STATUS})"
-        info "Read the Docs stable alias targets ${RTD_STABLE_REF}; latest tracks ${RTD_LATEST_IDENTIFIER}"
+        info "Read the Docs default is ${TAG_NAME}; stable targets ${RTD_STABLE_REF}; latest tracks ${RTD_LATEST_IDENTIFIER}"
     else
+        DOCS_VERIFICATION_STATUS="failed (release ${TAG_NAME}; RTD ${RTD_RELEASE_MANAGEMENT_STATUS}; default ${RTD_DEFAULT_VERSION_STATUS}; release HTTP ${DOCS_HTTP_STATUS}; stable HTTP ${STABLE_DOCS_HTTP_STATUS}; latest HTTP ${LATEST_DOCS_HTTP_STATUS})"
         if [[ "$DOCS_HTTP_STATUS" == "404" ]] || \
             { [[ "$DOCS_HTTP_STATUS" =~ ^2[0-9]{2}$ ]] && \
                 [[ "$DOCS_EFFECTIVE_URL" != "${DOCS_VERSION_URL_PREFIX}"* ]]; }; then
@@ -676,7 +932,11 @@ else
                 warn "Inspect the ${TAG_NAME} build in Read the Docs → Versions and confirm Admin → Automation Rules is SemVer versions / Tag / Activate version. Do not rerun scripts/release.sh."
             fi
         fi
+        if $DOCS_VERSION_AVAILABLE && $RTD_RELEASE_READY && ! $RTD_DEFAULT_VERSION_SET; then
+            warn "Set the Read the Docs project's default version to ${TAG_NAME} after confirming the version is active and built; do not rerun scripts/release.sh."
+        fi
     fi
+    unset RTD_CURL_AUTH_CONFIG
 fi
 
 # --- Phase 7b: Announce only verified production publication -----------------
@@ -835,6 +1095,7 @@ echo "  NotebookLM: ${NOTEBOOKLM_STATUS}"
 echo "  Container: ${NORMAL_CONTAINER_IMAGE}"
 echo "  OpenShell: ${OPENSHELL_CONTAINER_IMAGE}"
 echo "  Docs: https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
+echo "  Docs default: ${RTD_DEFAULT_VERSION_STATUS}"
 echo "  Docs (stable): https://ai-guardian.readthedocs.io/en/stable/"
 echo "  Docs (latest): https://ai-guardian.readthedocs.io/en/latest/"
 echo "  Docs verification: ${DOCS_VERIFICATION_STATUS}"

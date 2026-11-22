@@ -776,12 +776,12 @@ class TestCheckHooks:
             mock.patch.object(
                 Doctor,
                 "_detect_cli_runtime",
-                return_value={"executable": "kilo", "version": "7.8.27"},
+                return_value={"executable": "kilo", "version": "7.8.32"},
             ),
         ):
             result = Doctor().check_hooks()
 
-        assert result.status == CheckStatus.WARN
+        assert result.status == CheckStatus.PASS
         assert "1/1 plugin artifacts configured (not callback coverage)" in (
             result.message
         )
@@ -790,14 +790,72 @@ class TestCheckHooks:
         assert "hook entries are not stored in JSON/JSONC config" in result.message
         assert "chat.message (prompt scanning)" in result.message
         assert "complete callback coverage not verified" in result.message
-        assert "plugin runtime activation remains unverified" in result.message
+        assert "plugin runtime activation remains unverified" not in result.message
         assert (
             "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
             "post-tool redaction manually confirmed; pre-tool enforcement, "
             "post-tool fixed-refusal delivery and broader results remain unverified"
             in result.message
         )
-        assert "CLI: kilo 7.8.27" in result.message
+        assert "CLI: kilo 7.8.32" in result.message
+        assert (
+            "revalidate callback behavior: installed Kilo CLI 7.8.32 differs from "
+            "the validated version 7.8.27"
+        ) in result.message
+        kilo = next(item for item in result.integrations if item["ide"] == "kilo")
+        assert kilo["status"] == CheckStatus.PASS.value
+        assert kilo["runtime_activation"] == {
+            "status": "unverified",
+            "reason": (
+                "AI Guardian checks Kilo's auto-discovered plugin artifact and "
+                "declared callbacks, but cannot observe Kilo loading the plugin. "
+                "Unverified is an activation caveat, not a configuration fault."
+            ),
+        }
+        human = format_human(DoctorReport(checks=[result]))
+        assert "Runtime activation: Unverified" in human
+        assert "cannot observe Kilo loading the plugin" in human
+        assert result.fix_hint is None
+
+    def test_kilo_mcp_fault_has_actionable_force_setup_hint(
+        self, _isolate_config_dir, tmp_path
+    ):
+        plugin_dir = tmp_path / "kilo" / "plugin"
+        plugin_dir.mkdir(parents=True)
+        verification = {
+            "healthy": False,
+            "hooks_healthy": True,
+            "events": {"plugin": "healthy"},
+            "obsolete": [],
+            "diagnostics": [],
+            "scope": "auto",
+            "config_path": str(plugin_dir),
+            "mcp_status": "missing",
+            "mcp_installed": False,
+            "plugin_runtime_status": "unverified",
+        }
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["kilo"],
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.get_config_path",
+                return_value=str(plugin_dir),
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.verify_ide_setup",
+                return_value=verification,
+            ),
+            mock.patch.object(Doctor, "_detect_cli_runtime", return_value=None),
+        ):
+            result = Doctor().check_hooks()
+
+        assert result.status == CheckStatus.WARN
+        assert result.fix_hint == "Run: ai-guardian setup --ide kilo --force"
+        kilo = next(item for item in result.integrations if item["ide"] == "kilo")
+        assert kilo["status"] == CheckStatus.WARN.value
 
     def test_opencode_healthy_setup_is_reported_configured(
         self, _isolate_config_dir, tmp_path, monkeypatch
@@ -861,6 +919,10 @@ class TestCheckHooks:
             item for item in result.integrations if item["ide"] == "opencode"
         )
         assert opencode["status"] == CheckStatus.PASS.value
+        assert opencode["runtime_activation"]["status"] == "unverified"
+        assert (
+            "version checks are not proof" in opencode["runtime_activation"]["reason"]
+        )
 
     def test_partial_hooks(self, _isolate_config_dir, tmp_path):
         claude_dir = tmp_path / ".claude"
