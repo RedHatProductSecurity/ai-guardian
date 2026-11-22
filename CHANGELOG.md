@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- Add a screenshot-based guide for installing AI Guardian in Claude Code on the web.
+
 ## [1.23.0] - 2026-11-21
 
 ### Added
