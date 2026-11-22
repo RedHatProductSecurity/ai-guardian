@@ -63,6 +63,9 @@ def test_release_script_help_and_docs_verification_contract():
     assert "--write-out '%{http_code} %{url_effective}'" in script
     assert "DOCS_VERSION_URL_PREFIX" in script
     assert "RTD_VERSION_API_BASE" in script
+    assert "RTD_API_TOKEN" in help_result.stdout
+    assert "default_version: $version" in script
+    assert "{active: true, hidden: false}" in script
     assert "DOCS_VERIFICATION_STATUS" in script
     assert "quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}" not in script
     assert "verify_container_images.py" in script
@@ -74,8 +77,8 @@ def test_readme_links_to_latest_release_and_latest_development_docs():
     """The README links to the current release and upcoming main docs."""
     readme = README.read_text(encoding="utf-8")
 
-    assert "Full documentation site (latest release: v1.22.0)" in readme
-    assert "https://ai-guardian.readthedocs.io/en/v1.22.0/" in readme
+    assert "Full documentation site (latest release: v1.23.0)" in readme
+    assert "https://ai-guardian.readthedocs.io/en/v1.23.0/" in readme
     assert "Latest documentation (tracks `main`)" in readme
     assert "https://ai-guardian.readthedocs.io/en/latest/" in readme
 
@@ -84,13 +87,15 @@ def test_release_docs_explain_dashboard_activation_and_recovery():
     """Maintainers can configure RTD once and recover a missed release version."""
     releasing = RELEASING_DOC.read_text(encoding="utf-8")
 
-    assert "Neither `.readthedocs.yaml` nor the release script manages" in releasing
+    assert (
+        "The release script does not manage Read the Docs automation rules" in releasing
+    )
     assert "Match: **SemVer versions**" in releasing
     assert "Version type: **Tag**" in releasing
-    assert "Action: **Activate version**" in releasing
-    assert (
-        "Activated versions appear in the Read the Docs version selector" in releasing
-    )
+    assert "Action: **Trigger build for version**" in releasing
+    assert "Match: **Custom** `^main$`" in releasing
+    assert "Do not use **Activate version** or **Set version as default**" in releasing
+    assert "Activated, non-hidden versions appear in the version selector" in releasing
     assert "Read the Docs → Versions" in releasing
     assert "stable version's `ref` is that tag" in releasing
     assert "latest version's `identifier` is `main`" in releasing
@@ -100,6 +105,9 @@ def test_release_docs_explain_dashboard_activation_and_recovery():
         in releasing
     )
     assert "Do not rerun the full release script" in releasing
+    assert "RTD_API_TOKEN" in releasing
+    assert "project's `default_version`" in releasing
+    assert "activation-triggered build" in releasing
 
 
 def test_release_script_synchronizes_stable_references_before_tagging():
@@ -275,6 +283,8 @@ if program == "git":
             print(os.environ.get("RELEASE_HEAD_SHA", "same-commit"))
         elif args[1] == "origin/main":
             print(os.environ.get("RELEASE_MAIN_SHA", "same-commit"))
+        elif args[1] == "--verify" and args[2].endswith("^{commit}"):
+            print("release-tag-sha")
         elif args[1] == "--verify" and args[2].startswith("origin/release-"):
             remote_sha = os.environ.get("RELEASE_REMOTE_BRANCH_SHA", "")
             if remote_sha:
@@ -421,7 +431,9 @@ elif program == "gh":
     else:
         raise AssertionError(args)
 elif program == "python3":
-    if Path(args[0]).name == "release_ci_gate.py":
+    if args[:1] == ["-c"]:
+        os.execv(sys.executable, [sys.executable, *args])
+    elif Path(args[0]).name == "release_ci_gate.py":
         os.execv(sys.executable, [sys.executable, *args, "--poll-attempts", "1"])
     elif Path(args[0]).name == "resolve_release_merge.py":
         conflicts = json.loads(os.environ["RELEASE_MERGE_CONFLICTS"])
@@ -484,7 +496,67 @@ elif program == "python3":
         raise AssertionError(args)
 elif program == "curl":
     url = next((argument for argument in reversed(args) if argument.startswith("https://")), "")
-    if url.endswith("/versions/stable/"):
+    request_method = next(
+        (args[index + 1] for index, value in enumerate(args[:-1]) if value == "--request"),
+        "GET",
+    )
+    config_input = sys.stdin.read() if "--config" in args else ""
+    if "--config" in args:
+        assert f"Authorization: Token {os.environ['RTD_EXPECTED_TOKEN']}" in config_input
+
+    def logged_commands():
+        return [
+            json.loads(line)
+            for line in Path(os.environ["RELEASE_TEST_LOG"]).read_text().splitlines()
+        ]
+
+    def has_rtd_request(method, suffix):
+        return any(
+            command[0] == "curl"
+            and method in command
+            and command[-1].endswith(suffix)
+            for command in logged_commands()
+        )
+
+    if url.endswith("/projects/?slug=ai-guardian"):
+        print(os.environ["RTD_TEST_PROJECTS_RESPONSE"])
+    elif url.endswith("/versions/v1.2.3/builds/?limit=20"):
+        builds = json.loads(os.environ["RTD_TEST_RELEASE_BUILDS_RESPONSE"])
+        if has_rtd_request("POST", "/versions/v1.2.3/builds/") and not builds["results"]:
+            builds["results"].append(
+                {
+                    "id": 100,
+                    "commit": "release-tag-sha",
+                    "state": {"code": "finished"},
+                    "success": True,
+                }
+            )
+        if has_rtd_request("PATCH", "/versions/v1.2.3/"):
+            builds["results"].append(
+                {
+                    "id": 101,
+                    "commit": "release-tag-sha",
+                    "state": {"code": "finished"},
+                    "success": True,
+                }
+            )
+        print(json.dumps(builds))
+    elif url.endswith("/versions/v1.2.3/") and request_method == "PATCH":
+        pass
+    elif url.endswith("/versions/v1.2.3/"):
+        version = json.loads(os.environ["RTD_TEST_RELEASE_VERSION_RESPONSE"])
+        if has_rtd_request("PATCH", "/versions/v1.2.3/"):
+            version["active"] = True
+            version["hidden"] = False
+        print(json.dumps(version))
+    elif url.endswith("/projects/ai-guardian/") and request_method == "PATCH":
+        pass
+    elif url.endswith("/projects/ai-guardian/"):
+        project = {"slug": "ai-guardian", "default_version": "latest"}
+        if has_rtd_request("PATCH", "/projects/ai-guardian/"):
+            project["default_version"] = "v1.2.3"
+        print(json.dumps(project))
+    elif url.endswith("/versions/stable/"):
         print(os.environ["RTD_TEST_STABLE_VERSION_RESPONSE"])
     elif url.endswith("/versions/latest/"):
         print(os.environ["RTD_TEST_LATEST_VERSION_RESPONSE"])
@@ -530,6 +602,16 @@ elif program not in ("curl", "git-cliff", "sleep"):
         latest_version_response=(
             '{"identifier":"main","active":true,"built":true,"type":"branch"}'
         ),
+        release_version_response=(
+            '{"active":false,"built":true,"hidden":false,'
+            '"identifier":"release-tag-sha","type":"tag"}'
+        ),
+        release_builds_response=(
+            '{"count":1,"results":[{"id":100,"commit":"release-tag-sha",'
+            '"state":{"code":"finished"},"success":true}]}'
+        ),
+        rtd_projects_response='{"results":[{"slug":"ai-guardian"}]}',
+        rtd_token="test-rtd-token",
         current_branch="main",
         head_sha="same-commit",
         main_sha="same-commit",
@@ -541,6 +623,49 @@ elif program not in ("curl", "git-cliff", "sleep"):
     ):
         if empty_changelog:
             (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n")
+        test_env = {
+            **os.environ,
+            "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
+            "RELEASE_TEST_LOG": str(log),
+            "ANNOUNCEMENT_TEST_OUTCOME": outcome,
+            "NOTEBOOKLM_TEST_OUTCOME": notebooklm_outcome,
+            "PIP_TEST_EXIT": str(pip_exit),
+            "RELEASE_CURRENT_BRANCH": current_branch,
+            "RELEASE_REPO_ROOT": str(tmp_path),
+            "RELEASE_CALCULATED_VERSION": calculated_version,
+            "RELEASE_HEAD_SHA": head_sha,
+            "RELEASE_MAIN_SHA": main_sha,
+            "RELEASE_REMOTE_BRANCH_SHA": remote_branch_sha,
+            "RELEASE_WORKFLOW_RUN_IDS": json.dumps(WORKFLOW_RUN_IDS),
+            "RELEASE_WORKFLOW_OUTCOMES": json.dumps(workflow_outcomes or {}),
+            "RELEASE_PREEXISTING_RUNS": json.dumps(
+                {workflow: ["90"] for workflow in REQUIRED_CI_WORKFLOWS}
+            ),
+            "RELEASE_MISSING_WORKFLOW": missing_workflow,
+            "RELEASE_DISPATCH_FAILURE": dispatch_failure,
+            "RELEASE_RUN_METADATA": json.dumps(run_metadata or {}),
+            "RELEASE_WORKFLOW_STATUSES": json.dumps(workflow_statuses or {}),
+            "RELEASE_DUPLICATE_WORKFLOW": duplicate_workflow,
+            "RELEASE_EMPTY_RUN_URL": str(empty_run_url).lower(),
+            "RELEASE_MERGE_CONFLICTS": json.dumps(list(merge_conflicts)),
+            "RELEASE_TEST_STATE_FILE": str(
+                tmp_path / ".git" / "ai-guardian-release-attempt.json"
+            ),
+            "RTD_EXPECTED_TOKEN": rtd_token or "",
+            "RTD_TEST_CURL_RESPONSE": docs_response,
+            "RTD_TEST_STABLE_DOCS_RESPONSE": stable_docs_response,
+            "RTD_TEST_LATEST_DOCS_RESPONSE": latest_docs_response,
+            "RTD_TEST_STABLE_VERSION_RESPONSE": stable_version_response,
+            "RTD_TEST_LATEST_VERSION_RESPONSE": latest_version_response,
+            "RTD_TEST_RELEASE_VERSION_RESPONSE": release_version_response,
+            "RTD_TEST_RELEASE_BUILDS_RESPONSE": release_builds_response,
+            "RTD_TEST_PROJECTS_RESPONSE": rtd_projects_response,
+        }
+        if rtd_token is None:
+            test_env.pop("RTD_API_TOKEN", None)
+        else:
+            test_env["RTD_API_TOKEN"] = rtd_token
+
         result = subprocess.run(
             ["bash", str(script), "--skip-cursor", *flags, release_type],
             input=answers,
@@ -548,40 +673,7 @@ elif program not in ("curl", "git-cliff", "sleep"):
             text=True,
             timeout=30,
             cwd=tmp_path,
-            env={
-                **os.environ,
-                "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
-                "RELEASE_TEST_LOG": str(log),
-                "ANNOUNCEMENT_TEST_OUTCOME": outcome,
-                "NOTEBOOKLM_TEST_OUTCOME": notebooklm_outcome,
-                "PIP_TEST_EXIT": str(pip_exit),
-                "RELEASE_CURRENT_BRANCH": current_branch,
-                "RELEASE_REPO_ROOT": str(tmp_path),
-                "RELEASE_CALCULATED_VERSION": calculated_version,
-                "RELEASE_HEAD_SHA": head_sha,
-                "RELEASE_MAIN_SHA": main_sha,
-                "RELEASE_REMOTE_BRANCH_SHA": remote_branch_sha,
-                "RELEASE_WORKFLOW_RUN_IDS": json.dumps(WORKFLOW_RUN_IDS),
-                "RELEASE_WORKFLOW_OUTCOMES": json.dumps(workflow_outcomes or {}),
-                "RELEASE_PREEXISTING_RUNS": json.dumps(
-                    {workflow: ["90"] for workflow in REQUIRED_CI_WORKFLOWS}
-                ),
-                "RELEASE_MISSING_WORKFLOW": missing_workflow,
-                "RELEASE_DISPATCH_FAILURE": dispatch_failure,
-                "RELEASE_RUN_METADATA": json.dumps(run_metadata or {}),
-                "RELEASE_WORKFLOW_STATUSES": json.dumps(workflow_statuses or {}),
-                "RELEASE_DUPLICATE_WORKFLOW": duplicate_workflow,
-                "RELEASE_EMPTY_RUN_URL": str(empty_run_url).lower(),
-                "RELEASE_MERGE_CONFLICTS": json.dumps(list(merge_conflicts)),
-                "RELEASE_TEST_STATE_FILE": str(
-                    tmp_path / ".git" / "ai-guardian-release-attempt.json"
-                ),
-                "RTD_TEST_CURL_RESPONSE": docs_response,
-                "RTD_TEST_STABLE_DOCS_RESPONSE": stable_docs_response,
-                "RTD_TEST_LATEST_DOCS_RESPONSE": latest_docs_response,
-                "RTD_TEST_STABLE_VERSION_RESPONSE": stable_version_response,
-                "RTD_TEST_LATEST_VERSION_RESPONSE": latest_version_response,
-            },
+            env=test_env,
         )
         commands = (
             [json.loads(line) for line in log.read_text().splitlines()]
@@ -1230,9 +1322,97 @@ def test_release_script_verifies_the_exact_versioned_docs_url(release_sandbox):
         in result.stdout
     )
     assert (
-        "Docs verification: verified (release v1.2.3; stable targets v1.2.3; "
+        "Docs verification: verified (release v1.2.3; default v1.2.3; stable targets v1.2.3; "
         "latest tracks main)" in result.stdout
     )
+
+
+def test_release_script_activates_after_build_and_sets_default(release_sandbox):
+    result, commands = release_sandbox("--execute")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    build_reads = [
+        index
+        for index, command in enumerate(commands)
+        if command[0] == "curl"
+        and command[-1].endswith("/versions/v1.2.3/builds/?limit=20")
+    ]
+    activate = next(
+        index
+        for index, command in enumerate(commands)
+        if command[0] == "curl"
+        and "PATCH" in command
+        and command[-1].endswith("/versions/v1.2.3/")
+    )
+    set_default = next(
+        index
+        for index, command in enumerate(commands)
+        if command[0] == "curl"
+        and "PATCH" in command
+        and command[-1].endswith("/projects/ai-guardian/")
+    )
+
+    assert build_reads[0] < activate < build_reads[-1] < set_default
+    assert '{"active":true,"hidden":false}' in commands[activate]
+    assert '{"default_version":"v1.2.3"}' in commands[set_default]
+    assert "Docs default: set to v1.2.3" in result.stdout
+    assert all(
+        "test-rtd-token" not in argument for command in commands for argument in command
+    )
+
+
+def test_release_script_triggers_a_missing_rtd_build_before_activation(release_sandbox):
+    result, commands = release_sandbox(
+        "--execute", release_builds_response='{"count":0,"results":[]}'
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    trigger = next(
+        index
+        for index, command in enumerate(commands)
+        if command[0] == "curl"
+        and "POST" in command
+        and command[-1].endswith("/versions/v1.2.3/builds/")
+    )
+    activate = next(
+        index
+        for index, command in enumerate(commands)
+        if command[0] == "curl"
+        and "PATCH" in command
+        and command[-1].endswith("/versions/v1.2.3/")
+    )
+    assert trigger < activate
+    assert "requesting one" in result.stdout
+
+
+def test_release_script_does_not_activate_or_set_default_after_failed_build(
+    release_sandbox,
+):
+    result, commands = release_sandbox(
+        "--execute",
+        release_builds_response=(
+            '{"count":1,"results":[{"id":100,"commit":"release-tag-sha",'
+            '"state":{"code":"finished"},"success":false}]}'
+        ),
+    )
+
+    assert result.returncode == 1
+    assert "initial RTD build did not succeed" in result.stdout
+    assert not any(
+        command[0] == "curl"
+        and "PATCH" in command
+        and command[-1].endswith(("/versions/v1.2.3/", "/projects/ai-guardian/"))
+        for command in commands
+    )
+
+
+def test_execute_requires_rtd_token_before_release_mutations(release_sandbox):
+    result, commands = release_sandbox("--execute", rtd_token=None)
+
+    assert result.returncode == 1
+    assert "RTD_API_TOKEN is required" in result.stderr
+    assert not _workflow_dispatches(commands)
+    assert not _release_mutations(commands)
 
 
 def test_release_script_requires_stable_alias_to_target_the_release(release_sandbox):
