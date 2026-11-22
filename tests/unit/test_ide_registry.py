@@ -208,7 +208,13 @@ def test_kilo_registry_records_verified_post_output_replacement():
     assert integration.post_output_transform is True
     assert integration.safe_post_output_replacement is True
     assert integration.safe_prompt_replacement is True
-    assert "7.8.27" in integration.platform_contract
+    assert integration.validated_cli_version == "7.8.27"
+    assert integration.required_plugin_callbacks == (
+        "chat.message",
+        "tool.execute.before",
+        "tool.execute.after",
+    )
+    assert "validated CLI version" in integration.platform_contract
     assert "prompt-to-refusal replacement" in integration.platform_contract
     assert "qualification pending" in integration.platform_contract
 

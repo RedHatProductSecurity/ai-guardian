@@ -1452,6 +1452,21 @@ class IDESetup:
             elif ide_type == "kilo":
                 result["plugin_generation"] = plugin_generation
                 result["plugin_runtime_status"] = "unverified"
+                integration = get_ide_integration("kilo")
+                required_callbacks = (
+                    integration.required_plugin_callbacks
+                    if integration is not None
+                    else ()
+                )
+                missing_callbacks = [
+                    callback
+                    for callback in required_callbacks
+                    if f"async '{callback}'" not in content
+                ]
+                if content and missing_callbacks:
+                    result["diagnostics"].append(
+                        "Kilo plugin callbacks missing: " + ", ".join(missing_callbacks)
+                    )
             if not bridge_file.is_file() or not self.check_hooks_configured(
                 path, ide_type
             ):
@@ -3342,6 +3357,17 @@ class IDESetup:
                     f"plugin directory: {legacy_bridge_file}\n"
                 )
         elif ide_type == "kilo":
+            integration = get_ide_integration("kilo")
+            validated_version = (
+                integration.validated_cli_version if integration is not None else None
+            )
+            validation_baseline = (
+                f"Kilo {validated_version} native synthetic prompt-to-refusal "
+                "replacement and Bash post-tool redaction manually confirmed"
+                if validated_version
+                else "Native synthetic prompt-to-refusal replacement and Bash "
+                "post-tool redaction manually confirmed on a versioned baseline"
+            )
             message += (
                 "  Managed artifact: one auto-discovered plugin; its generated "
                 "source declares `chat.message` for prompt scanning plus "
@@ -3349,8 +3375,7 @@ class IDESetup:
                 "  Kilo auto-discovers plugins from this directory; no plugin entry "
                 "is written to its JSON/JSONC config. MCP registration is managed "
                 "separately under `mcp` in that config\n"
-                "  Kilo 7.8.27 native synthetic prompt-to-refusal replacement and "
-                "Bash post-tool redaction manually confirmed; pre-tool enforcement, "
+                f"  {validation_baseline}; pre-tool enforcement, "
                 "post-tool fixed-refusal delivery and broader results remain "
                 "unverified\n"
             )

@@ -61,7 +61,7 @@ def _no_real_web_console(monkeypatch):
 
 
 class TestKiloRuntimeHealth:
-    def test_unverified_runtime_is_not_reported_as_healthy(self):
+    def test_unverified_runtime_is_a_coverage_caveat_not_a_health_fault(self):
         verification = {
             "ide": "kilo",
             "healthy": True,
@@ -70,9 +70,23 @@ class TestKiloRuntimeHealth:
             "mcp_installed": True,
         }
 
-        assert TrayHealthMonitor._verification_is_healthy(verification) is False
-        assert "plugin runtime activation (unverified)" in (
+        assert TrayHealthMonitor._verification_is_healthy(verification) is True
+        assert "plugin runtime activation (unverified)" not in (
             TrayHealthMonitor._verification_attention(verification)
+        )
+
+    def test_real_kilo_artifact_fault_remains_unhealthy(self):
+        verification = {
+            "ide": "kilo",
+            "healthy": False,
+            "plugin_runtime_status": "unverified",
+            "events": {"plugin": "changed"},
+            "mcp_installed": True,
+        }
+
+        assert TrayHealthMonitor._verification_is_healthy(verification) is False
+        assert "plugin (changed)" in TrayHealthMonitor._verification_attention(
+            verification
         )
 
 
@@ -1220,11 +1234,11 @@ class TestIDESetupMenu:
             if callable(label):
                 rendered[label(None)] = call
 
-        assert "  Claude Code (Cfg ✓)" in rendered
-        assert "  OpenAI Codex (CLI + Desktop)" in rendered
+        assert "  Claude Code (Cfg ✓) (Act ?)" in rendered
+        assert "  OpenAI Codex (CLI + Desktop) (Act ?)" in rendered
         assert "  Google Gemini CLI" in rendered
-        assert "  OpenCode" in rendered
-        assert "  Pi" in rendered
+        assert "  OpenCode (Act ?)" in rendered
+        assert "  Pi (Act ?)" in rendered
         assert "  Cursor IDE/CLI (Cfg ?)" in rendered
         assert "  GitHub Copilot (Cfg ?)" in rendered
         assert "  Cline" in rendered
@@ -1236,9 +1250,12 @@ class TestIDESetupMenu:
             ),
         ):
             assert rendered["  Google Gemini CLI"].kwargs["enabled"](None) is False
-            assert rendered["  Claude Code (Cfg ✓)"].kwargs["enabled"](None) is True
-            assert rendered["  OpenCode"].kwargs["enabled"](None) is True
-            assert rendered["  Pi"].kwargs["enabled"](None) is True
+            assert (
+                rendered["  Claude Code (Cfg ✓) (Act ?)"].kwargs["enabled"](None)
+                is True
+            )
+            assert rendered["  OpenCode (Act ?)"].kwargs["enabled"](None) is True
+            assert rendered["  Pi (Act ?)"].kwargs["enabled"](None) is True
             assert rendered["  Cursor IDE/CLI (Cfg ?)"].kwargs["enabled"](None) is True
             assert rendered["  GitHub Copilot (Cfg ?)"].kwargs["enabled"](None) is False
             assert rendered["  Cline"].kwargs["enabled"](None) is False
@@ -1251,6 +1268,14 @@ class TestIDESetupMenu:
         )
         assert (
             "(Cfg ✓) = hooks/MCP healthy · (Cfg ?) = check failed · no Cfg = not verified healthy"
+            in static_labels
+        )
+        assert (
+            "(Act ✓) = activation observed · (Act ?) = unverified/unknown · (Act !) = activation failed"
+            in static_labels
+        )
+        assert (
+            "Act ? is not a configuration fault; CLI version/config is not activation proof"
             in static_labels
         )
         assert "Check hooks/MCP installation..." in static_labels
