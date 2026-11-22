@@ -111,6 +111,7 @@ nav:
       - Multi-Daemon Tray: MULTI_DAEMON_TRAY.md
   - IDE Integrations:
       - IDE/Agent Integration Checklist: IDE_INTEGRATION_CHECKLIST.md
+      - Claude Code on the web: CLAUDE_CODE_WEB.md
       - OpenCode Support: OPENCODE.md
       - Goose Support: GOOSE.md
       - GitHub Copilot: GITHUB_COPILOT.md

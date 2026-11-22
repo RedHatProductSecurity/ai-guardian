@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `>=0.16.2,<2.0.0` instead of requiring exactly 0.16.2, and report local CLI
   failures during release dry-runs without checking authentication or contacting
   NotebookLM.
+### Documentation
+- Add a screenshot-based guide for installing AI Guardian in Claude Code on the web.
 ### Added
 - Separate CLI integration configuration health from runtime activation status in
   Doctor, the tray setup menu, and the Console; CLI version checks do not count as

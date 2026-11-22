@@ -107,6 +107,7 @@ upstream references. That guide is the source of truth for this summary.
 | Topic | Documentation |
 |-------|---------------|
 | Install and verify | [Getting started][getting-started] |
+| Claude Code on the web | [Hosted environment setup][claude-code-web] |
 | Configuration and security profiles | [Configuration Guide][configuration] |
 | IDE and agent integrations | [Agent Support][agent-support] |
 | Scanners | [Scanner Installation][scanners] |
@@ -193,6 +194,7 @@ For production use, install a stable release from PyPI. The `main` branch contai
 [getting-started]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/overview/01-what-is-ai-guardian-install-and-verify.md
 [configuration]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md
 [agent-support]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md
+[claude-code-web]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CLAUDE_CODE_WEB.md
 [goose]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GOOSE.md
 [scanners]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md
 [console]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md

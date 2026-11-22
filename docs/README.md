@@ -83,6 +83,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 |----------|-------------|
 | [IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) | Implementation, testing, documentation, and release checklist for integrations |
 | [Agent Support](AGENT_SUPPORT.md) | Multi-agent hook adapters — capability matrix, setup, and architecture, including Grok Build |
+| [Claude Code on the web](CLAUDE_CODE_WEB.md) | Install AI Guardian in a hosted Claude Code environment with an environment setup script |
 | [Real-agent CLI Coverage](REAL_AGENT_CLI_COVERAGE.md) | All-CLI smoke ledger, versioned capability/terms audits, partial lanes, and actionable blockers |
 | [Goose Support](GOOSE.md) | Host CLI plugin setup, enforcement/failure policy, and explicit runtime exclusions |
 | [OpenCode Support](OPENCODE.md) | Version-aware V1/V2 plugin, transcript, container, and validation reference |
