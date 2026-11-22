@@ -205,8 +205,8 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
     USER EXPERIENCE: OpenCode V2 -> doctor reports its version and load status.
 
     The Console renders the same structured integration message returned by the
-    local health endpoint, so human and JSON output must expose the CLI version
-    and clarify that configured V2 files are not proof of server activation.
+    local health endpoint, so the detected CLI version remains separate from
+    unverified runtime activation.
     """
     plugin_dir = tmp_path / "opencode" / "plugins"
     plugin_dir.mkdir(parents=True)
@@ -245,6 +245,8 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
     assert "CLI: opencode 2.0.22 (v2)" in result.message
     assert "runtime load not verified" in result.message
     opencode = next(item for item in result.integrations if item["ide"] == "opencode")
+    assert opencode["runtime_activation"]["status"] == "unverified"
+    assert "version checks are not proof" in opencode["runtime_activation"]["reason"]
     assert opencode["cli"] == {
         "executable": "opencode",
         "version": "2.0.22",
@@ -254,10 +256,12 @@ def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):
     report = DoctorReport(checks=[result])
     assert "CLI: opencode 2.0.22 (v2)" in format_human(report)
     assert "runtime load not verified" in format_human(report)
+    assert "Runtime activation: Unverified" in format_human(report)
     structured = json.loads(format_json(report))["checks"][0]["integrations"]
     structured_opencode = next(item for item in structured if item["ide"] == "opencode")
     assert structured_opencode["cli"]["version"] == "2.0.22"
     assert "runtime load not verified" in structured_opencode["message"]
+    assert structured_opencode["runtime_activation"]["status"] == "unverified"
 
 
 def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
@@ -273,6 +277,8 @@ def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
     - The plugin directory and separate MCP config path are shown.
     - Native synthetic prompt-to-refusal replacement and Bash post-tool redaction have been manually confirmed.
     - Pre-tool enforcement, post-tool fixed-refusal delivery, and broader results remain unverified.
+    - Runtime activation is shown as a separate UNVERIFIED status; healthy configuration remains PASS.
+    - A CLI version newer than the validation baseline gets an explicit revalidation note.
     """
     plugin_dir = tmp_path / "kilo" / "plugin"
     plugin_dir.mkdir(parents=True)
@@ -288,6 +294,7 @@ def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
         "mcp_status": "healthy",
         "mcp_installed": True,
         "mcp_config_path": str(mcp_config),
+        "plugin_runtime_status": "unverified",
     }
 
     with (
@@ -306,7 +313,7 @@ def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
         patch.object(
             Doctor,
             "_detect_cli_runtime",
-            return_value={"executable": "kilo", "version": "7.8.27"},
+            return_value={"executable": "kilo", "version": "7.8.32"},
         ),
     ):
         result = Doctor().check_hooks()
@@ -321,13 +328,18 @@ def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
     assert "tool.execute.before" in message
     assert "tool.execute.after" in message
     assert "complete callback coverage not verified" in message
+    assert "plugin runtime activation remains unverified" not in message
     assert (
         "Kilo 7.8.27 native synthetic prompt-to-refusal replacement and Bash "
         "post-tool redaction manually confirmed; pre-tool enforcement, "
         "post-tool fixed-refusal delivery and broader results remain unverified"
         in message
     )
-    assert "CLI: kilo 7.8.27" in message
+    assert "CLI: kilo 7.8.32" in message
+    assert (
+        "revalidate callback behavior: installed Kilo CLI 7.8.32 differs from "
+        "the validated version 7.8.27"
+    ) in message
 
     report = DoctorReport(checks=[result])
     human = format_human(report)
@@ -342,6 +354,11 @@ def test_doctor_kilo_row_explains_plugin_artifact_and_runtime_limits(tmp_path):
     structured = json.loads(format_json(report))["checks"][0]["integrations"]
     kilo = next(item for item in structured if item["ide"] == "kilo")
     assert kilo["message"] in message
+    assert kilo["runtime_activation"]["status"] == "unverified"
+    assert (
+        "cannot observe Kilo loading the plugin" in kilo["runtime_activation"]["reason"]
+    )
+    assert "Runtime activation: Unverified" in human
 
 
 @pytest.mark.parametrize(
@@ -924,7 +941,7 @@ def test_cursor_cloud_setup_requires_explicit_project_selection():
     )
 
 
-def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status():
+def test_setup_submenu_distinguishes_configuration_and_runtime_activation_status():
     """
     USER EXPERIENCE: Setup submenu -> see CLI availability and AI Guardian
     health independently without delaying menu opening.
@@ -936,11 +953,12 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
     3. A missing CLI disables only that CLI integration's setup entry.
 
     Expected User Experience:
-    - CLI availability and verified AI Guardian setup use separate indicators.
+    - CLI availability, configuration health, and runtime activation use separate indicators.
     - A configured indicator means required hooks and applicable MCP are healthy.
     - Only detected installations have enabled setup entries; a leading install
       checkmark is not used.
     - Configured entries add (Cfg ✓) only after verified hook/MCP health.
+    - Detected CLI integrations add (Act ?) when runtime activation is not observed.
     - Undetected or unknown installations are disabled; the legend explains why.
     - Opening the submenu checks CLI availability against the current PATH but
       does not run hook/MCP verification or IDE discovery.
@@ -974,6 +992,12 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
                     "ide_detected": False,
                     "setup": "not_detected",
                 },
+                "kilo": {
+                    "cli": "installed",
+                    "ide_detected": True,
+                    "setup": "configured",
+                    "runtime_activation": {"status": "verified"},
+                },
             }
         },
         _on_check_ide_setup=lambda *_: None,
@@ -998,11 +1022,12 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
     dynamic_rows = {
         call.args[0](None): call for call in calls if callable(call.args[0])
     }
-    assert "  Claude Code (Cfg ✓)" in dynamic_rows
-    assert "  OpenAI Codex (CLI + Desktop)" in dynamic_rows
+    assert "  Claude Code (Cfg ✓) (Act ?)" in dynamic_rows
+    assert "  OpenAI Codex (CLI + Desktop) (Act ?)" in dynamic_rows
     assert "  Google Gemini CLI" in dynamic_rows
-    assert "  OpenCode" in dynamic_rows
-    assert "  Pi" in dynamic_rows
+    assert "  OpenCode (Act ?)" in dynamic_rows
+    assert "  Pi (Act ?)" in dynamic_rows
+    assert "  Kilo Code (Cfg ✓) (Act ✓)" in dynamic_rows
     assert "  Cursor IDE/CLI (Cfg ?)" in dynamic_rows
     assert "  GitHub Copilot (Cfg ?)" in dynamic_rows
     assert "  Cline" in dynamic_rows
@@ -1014,9 +1039,12 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
         ),
     ):
         assert dynamic_rows["  Google Gemini CLI"].kwargs["enabled"](None) is False
-        assert dynamic_rows["  Claude Code (Cfg ✓)"].kwargs["enabled"](None) is True
-        assert dynamic_rows["  OpenCode"].kwargs["enabled"](None) is True
-        assert dynamic_rows["  Pi"].kwargs["enabled"](None) is True
+        assert (
+            dynamic_rows["  Claude Code (Cfg ✓) (Act ?)"].kwargs["enabled"](None)
+            is True
+        )
+        assert dynamic_rows["  OpenCode (Act ?)"].kwargs["enabled"](None) is True
+        assert dynamic_rows["  Pi (Act ?)"].kwargs["enabled"](None) is True
         assert dynamic_rows["  Cursor IDE/CLI (Cfg ?)"].kwargs["enabled"](None) is True
         assert dynamic_rows["  GitHub Copilot (Cfg ?)"].kwargs["enabled"](None) is False
         assert dynamic_rows["  Cline"].kwargs["enabled"](None) is False
@@ -1031,6 +1059,14 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
         "(Cfg ✓) = hooks/MCP healthy · (Cfg ?) = check failed · no Cfg = not verified healthy"
         in labels
     )
+    assert (
+        "(Act ✓) = activation observed · (Act ?) = unverified/unknown · (Act !) = activation failed"
+        in labels
+    )
+    assert (
+        "Act ? is not a configuration fault; CLI version/config is not activation proof"
+        in labels
+    )
     assert "Check hooks/MCP installation..." in labels
 
     # Replacing the cache updates the already-built item's next rendered label.
@@ -1042,8 +1078,43 @@ def test_setup_submenu_distinguishes_cli_and_verified_health_from_cached_status(
     health._ide_setup_snapshot = {
         "tray_status": {"claude": {"cli": "installed", "setup": "needs_setup"}}
     }
-    assert claude_label(None) == "  Claude Code"
+    assert claude_label(None) == "  Claude Code (Act ?)"
     health._refresh_ide_setup_state.assert_not_called()
+
+
+def test_proactive_prompts_console_shows_configuration_and_runtime_separately():
+    """USER EXPERIENCE: Console distinguishes setup health from live activation."""
+    pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
+    from ai_guardian.web.pages.proactive_prompts import _current_ide_status_rows
+
+    reason = (
+        "AI Guardian has no runtime signal confirming a live hook invocation "
+        "or plugin load. Unverified is not a configuration fault, and CLI version "
+        "checks are not proof."
+    )
+    rows = _current_ide_status_rows(
+        {
+            "integrations": {
+                "claude": {"name": "Claude Code", "healthy": True, "events": {}}
+            },
+            "tray_status": {
+                "claude": {
+                    "cli": "installed",
+                    "ide_detected": True,
+                    "setup": "configured",
+                    "runtime_activation": {
+                        "status": "unverified",
+                        "reason": reason,
+                    },
+                }
+            },
+        }
+    )
+
+    claude = next(row for row in rows if row["ide"] == "claude")
+    assert claude["configuration_status"] == "Configured"
+    assert claude["runtime_activation"] == "Unverified"
+    assert reason in claude["details"]
 
 
 def test_remote_only_tray_refreshes_local_setup_status_without_auto_prompting():
@@ -1985,6 +2056,7 @@ def test_kilo_setup_result_distinguishes_plugin_artifact_and_callbacks(scope, tm
     plugin_dir = tmp_path / (".kilo/plugin" if scope == "project" else "user/plugin")
     mcp_config = tmp_path / ("kilo.json" if scope == "project" else "user/kilo.json")
     verification = {
+        "ide": "kilo",
         "healthy": True,
         "events": {"plugin": "healthy"},
         "obsolete": [],
@@ -1992,6 +2064,7 @@ def test_kilo_setup_result_distinguishes_plugin_artifact_and_callbacks(scope, tm
         "config_path": str(plugin_dir),
         "mcp_config_path": str(mcp_config),
         "mcp_installed": True,
+        "plugin_runtime_status": "unverified",
     }
 
     with patch("ai_guardian.tray.plugins.send_notification") as notify:
@@ -2019,6 +2092,7 @@ def test_kilo_setup_result_distinguishes_plugin_artifact_and_callbacks(scope, tm
         "post-tool redaction manually confirmed; pre-tool enforcement, "
         "post-tool fixed-refusal delivery and broader results remain unverified"
     ) in message
+    assert "needs attention: plugin runtime activation (unverified)" not in message
 
 
 def test_kilo_setup_output_explains_plugin_artifact_and_separate_mcp(tmp_path, capsys):

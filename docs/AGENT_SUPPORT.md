@@ -27,6 +27,29 @@ misconfigured. If the CLI version is unavailable or cannot be parsed, AI Guardia
 does not classify it as pre-1.0. See [Troubleshooting](TROUBLESHOOTING.md#general-diagnostics)
 for doctor output details.
 
+## Configuration health and runtime activation
+
+Setup health and runtime activation are separate statuses in Doctor, the tray's
+IDE/CLI Setup menu, and the Console. Configuration health checks installed hook
+or plugin artifacts and applicable MCP registration. It does not prove that an
+already-running agent loaded those artifacts or invoked a callback.
+
+For a detected CLI, **Unverified** means AI Guardian has no host-provided runtime
+signal proving activation; it is not itself a configuration fault and does not
+mean the integration is necessarily inactive. **Verified** and **Failed** are
+reserved for explicit runtime evidence. **Not detected**, **Check unavailable**,
+and **Not applicable** distinguish missing integrations, unsuccessful detection,
+and integrations without a local CLI runtime. Version commands identify the CLI
+version only; their output does not prove plugin installation or activation.
+
+Kilo illustrates this limitation: its V1-style CLI auto-discovers plugins, and
+AI Guardian can inspect its plugin artifact, declared callbacks, and separate
+MCP entry, but has no signal that confirms a running Kilo process loaded the
+plugin. `kilo plugin --version` reports the CLI version; it does not report
+whether AI Guardian's plugin is installed or loaded. The same rule applies to
+every CLI integration: static setup verification and version detection never
+promote runtime activation to **Verified**.
+
 ### Codex and ChatGPT desktop scope
 
 `OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** in the

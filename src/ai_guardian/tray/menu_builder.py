@@ -3706,6 +3706,16 @@ class TrayMenuBuilder:
                 None,
                 enabled=False,
             ),
+            pystray.MenuItem(
+                "(Act ✓) = activation observed · (Act ?) = unverified/unknown · (Act !) = activation failed",
+                None,
+                enabled=False,
+            ),
+            pystray.MenuItem(
+                "Act ? is not a configuration fault; CLI version/config is not activation proof",
+                None,
+                enabled=False,
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Check hooks/MCP installation...",
@@ -3771,7 +3781,24 @@ class TrayMenuBuilder:
                 "configured": " (Cfg ✓)",
                 "unknown": " (Cfg ?)",
             }.get(setup_status, "")
-            return f"  {ide_label}{config_indicator}"
+            integration = get_ide_integration(ide_key)
+            activation = status.get("runtime_activation")
+            if not isinstance(activation, dict) and integration is not None:
+                if integration.cli_capable and (
+                    status.get("cli") == "installed"
+                    or status.get("ide_detected") is True
+                ):
+                    activation = {"status": "unverified"}
+            activation_status = (
+                activation.get("status") if isinstance(activation, dict) else None
+            )
+            activation_indicator = {
+                "verified": " (Act ✓)",
+                "unverified": " (Act ?)",
+                "unknown": " (Act ?)",
+                "failed": " (Act !)",
+            }.get(activation_status, "")
+            return f"  {ide_label}{config_indicator}{activation_indicator}"
 
         def _ide_setup_action_enabled(ide_key):
             """Enable setup only when the cached check detects the integration."""

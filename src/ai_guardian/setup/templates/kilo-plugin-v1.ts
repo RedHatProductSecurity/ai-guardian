@@ -134,9 +134,9 @@ const AiGuardian: Plugin = async (ctx) => {
         plugin_cwd: cwd,
         workspace_source: cwd ? 'session' : 'unknown',
       });
-      // Native Kilo 7.8.27 Bash result rewriting was manually confirmed; keep
-      // broader result paths qualified separately. Never leave a known-sensitive
-      // original alongside the rewrite.
+      // Native Bash result rewriting was manually confirmed on the validation
+      // baseline; keep broader result paths qualified separately. Never leave a
+      // known-sensitive original alongside the rewrite.
       if (result.blocked) {
         output.output = POST_TOOL_REFUSAL_NOTICE;
         output.title = 'AI Guardian blocked tool result';

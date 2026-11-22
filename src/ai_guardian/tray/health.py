@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
+from ai_guardian.ide_registry import get_ide_integration
 from ai_guardian.tray import notifications as tray_notifications
 from ai_guardian.tray import plugins as tray_plugins
 
@@ -458,14 +459,7 @@ class TrayHealthMonitor:
     @staticmethod
     def _verification_is_healthy(verification):
         """Return whether a verification result explicitly reports health."""
-        return (
-            isinstance(verification, dict)
-            and verification.get("healthy") is True
-            and not (
-                verification.get("ide") == "kilo"
-                and verification.get("plugin_runtime_status") == "unverified"
-            )
-        )
+        return isinstance(verification, dict) and verification.get("healthy") is True
 
     @staticmethod
     def _pi_mcp_attention(verification):
@@ -558,12 +552,6 @@ class TrayHealthMonitor:
         diagnostics = verification.get("diagnostics", [])
         if isinstance(diagnostics, (list, tuple, set)):
             attention.extend(str(diagnostic) for diagnostic in diagnostics)
-
-        if (
-            verification.get("ide") == "kilo"
-            and verification.get("plugin_runtime_status") == "unverified"
-        ):
-            attention.append("plugin runtime activation (unverified)")
 
         pi_mcp_attention = TrayHealthMonitor._pi_mcp_attention(verification)
         if pi_mcp_attention:
@@ -885,15 +873,27 @@ class TrayHealthMonitor:
                         )
                     mcp_config_path = verification.get("mcp_config_path")
                     mcp_location = f": {mcp_config_path}" if mcp_config_path else ""
+                    integration = get_ide_integration("kilo")
+                    validated_version = (
+                        integration.validated_cli_version
+                        if integration is not None
+                        else None
+                    )
+                    validation_baseline = (
+                        f"Kilo {validated_version} native synthetic prompt-to-refusal "
+                        "replacement and Bash post-tool redaction manually confirmed"
+                        if validated_version
+                        else "Native synthetic prompt-to-refusal replacement and Bash "
+                        "post-tool redaction manually confirmed on a versioned baseline"
+                    )
                     detail += (
                         "\n  MCP registration is separate, under `mcp` in the "
                         f"Kilo JSON/JSONC config{mcp_location}"
                         "\n  Declared callbacks: `chat.message` (prompt scanning), "
                         "`tool.execute.before`, and `tool.execute.after`; complete "
                         "callback coverage is not verified"
-                        "\n  Kilo 7.8.27 native synthetic prompt-to-refusal "
-                        "replacement and Bash post-tool redaction manually "
-                        "confirmed; pre-tool enforcement, post-tool fixed-refusal "
+                        f"\n  {validation_baseline}; pre-tool enforcement, "
+                        "post-tool fixed-refusal "
                         "delivery and broader results remain unverified"
                     )
                 else:

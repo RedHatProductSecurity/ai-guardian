@@ -476,15 +476,24 @@ only CLI help and mocked contracts; no Google credentials/notebooks are used.
 
 ### One-time Read the Docs setup
 
-This is a one-time **project dashboard** setting. Neither `.readthedocs.yaml` nor the release script manages Read the Docs automation rules. Configure the rule in **Read the Docs → Admin → Automation Rules**:
+This is a one-time **project dashboard** setting. The release script does not manage Read the Docs automation rules; neither does `.readthedocs.yaml`. Configure these two enabled rules in **Read the Docs → Admin → Automation Rules**:
 
-1. Match: **SemVer versions**
-2. Version type: **Tag**
-3. Action: **Activate version**
+1. Release tags:
+   - Match: **SemVer versions**
+   - Version type: **Tag**
+   - Action: **Trigger build for version**
+2. Development docs:
+   - Match: **Custom** `^main$`
+   - Version type: **Branch**
+   - Action: **Trigger build for version**
 
-The GitHub integration then builds each `vX.Y.Z` tag automatically. Activated versions appear in the Read the Docs version selector. Read the Docs maps the greatest stable PEP 440-compatible tag to `/en/stable/`, while `/en/latest/` continues to track `main`. Avoid timestamp-shaped non-release tags that parse as a PEP 440 version greater than `vX.Y.Z`; they can unexpectedly become the stable target.
+When any **Trigger build for version** rule is enabled, Read the Docs gates builds on matching rules; keep the `main` rule so `/en/latest/` continues to build. Do not use **Activate version** or **Set version as default** for release tags: those actions activate before the initial build completes. The release script activates and unhides the tag after that build succeeds. Activated, non-hidden versions appear in the version selector. Read the Docs maps the greatest stable PEP 440-compatible tag to `/en/stable/`. Avoid timestamp-shaped non-release tags that parse as a PEP 440 version greater than `vX.Y.Z`; they can unexpectedly become the stable target.
 
-After setting the rule, check **Read the Docs → Versions** and confirm a released `vX.Y.Z` is active and its build succeeds. Confirm the stable version's `ref` is that tag and the latest version's `identifier` is `main` (the public API endpoints are `/api/v3/projects/ai-guardian/versions/stable/` and `/api/v3/projects/ai-guardian/versions/latest/`). If a tag was missed, activate that version there and inspect its build. The release script verifies that the exact `/en/vX.Y.Z/` URL serves that release without redirecting to another version, `/en/stable/` serves the same release and the stable API `ref` matches its tag, and `/en/latest/` serves the main branch and the latest API `identifier` is `main`. It cannot create or activate the dashboard rule.
+For `--execute`, provide `RTD_API_TOKEN` in the release environment. Create a Read the Docs access token under [account tokens](https://app.readthedocs.org/accounts/tokens/) with access to this project; keep it in a local secret manager or protected shell environment, never in the repository. The script validates project access before release mutations and does not place the token in curl arguments or logs.
+
+After the tag is published, the release script verifies the RTD version points to the exact tag commit and waits for a successful build. If no build was queued, it requests one through the RTD API. Once that build completes, it activates and unhides the release version. RTD may start another build when a version is activated, so the script waits for that activation-triggered build too. After the exact `/en/vX.Y.Z/` URL serves the release without redirecting elsewhere, the script sets and verifies the project's `default_version` as `vX.Y.Z`. This changes the version used at the unversioned project docs URL; it does not change `/en/latest/`, which continues to track `main`.
+
+After setting the rules, check **Read the Docs → Versions** and confirm a released `vX.Y.Z` is active, visible, and built. Confirm the stable version's `ref` is that tag and the latest version's `identifier` is `main` (the public API endpoints are `/api/v3/projects/ai-guardian/versions/stable/` and `/api/v3/projects/ai-guardian/versions/latest/`). If the script reports RTD activation, build, or default-version failure, inspect the exact version in the dashboard and resolve it there; do not rerun the full release script. The script continues post-release merge-back and reports the RTD failure rather than reverting publication.
 
 ## Table of Contents
 

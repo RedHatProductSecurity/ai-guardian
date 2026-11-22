@@ -2,6 +2,7 @@
 
 from nicegui import run, ui
 
+from ai_guardian.cli_runtime import runtime_activation_label
 from ai_guardian.web.components.config_notice import create_config_source_banner
 from ai_guardian.web.components.header import create_header, create_sidebar
 
@@ -25,6 +26,21 @@ def _detail_label(text: str):
     label.classes("text-xs text-grey-6")
     label.style("white-space: pre-line")
     return label
+
+
+def _runtime_activation_text(integration: dict) -> str:
+    """Format separate runtime evidence for a Doctor integration row."""
+    activation = integration.get("runtime_activation")
+    if not isinstance(activation, dict):
+        return ""
+    status = activation.get("status")
+    if status in {None, "not_applicable", "not_detected"}:
+        return ""
+    text = f"Runtime activation: {runtime_activation_label(status)}"
+    reason = activation.get("reason")
+    if isinstance(reason, str) and reason:
+        text += f" — {reason}"
+    return text
 
 
 def create_health_check_page(service, daemon_name: str):
@@ -150,6 +166,14 @@ def create_health_check_page(service, daemon_name: str):
                                         ui.label(
                                             integration.get("message", "")
                                         ).classes("text-sm text-grey-4 flex-grow")
+
+                                    activation_text = _runtime_activation_text(
+                                        integration
+                                    )
+                                    if activation_text:
+                                        ui.label(activation_text).classes(
+                                            "text-xs text-grey-6 ml-8"
+                                        )
 
                                     detail = integration.get("detail")
                                     fix_hint = integration.get("fix_hint")

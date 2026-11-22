@@ -166,6 +166,15 @@ Historical changelog entries and historical examples are intentionally not
 rewritten. The release-readiness workflow derives its previous stable package
 from `CHANGELOG.md`, so it does not require a manually maintained version pin.
 
+For an executing release, export `RTD_API_TOKEN` with access to the AI Guardian
+Read the Docs project. The canonical release script validates that access before
+making release changes. After publication it waits for the exact tag commit's
+RTD build (requesting one if needed), activates and unhides the version only after
+that build succeeds, waits for any activation-triggered build, and sets the RTD
+project `default_version` to the release after its exact docs URL is available.
+This changes the unversioned project docs default; `/en/latest/` remains on `main`.
+See [Read the Docs setup and verification](../../../RELEASING.md#one-time-read-the-docs-setup).
+
 **Version Format**:
 - Production: `"1.0.0"` (semantic versioning)
 - Development: `"1.1.0-dev"` (on main branch)
@@ -676,6 +685,7 @@ for prerequisites, journal location, source-slot requirements and recovery.
 13. [ ] Verify the tagged combined docs export was generated before tagging, after source documentation and stable references were finalized; do not defer its generation until after publication
 14. [ ] Review the optional `nlm` NotebookLM refresh status (Phase 7c); use `refresh-notebooklm X.Y.Z` only for recovery, not a second MCP/manual upload or another release
 15. [ ] Generate demo guide — create `X.Y-demo-guide.md` in the external docs directory (see AGENTS.md) documenting new features with step-by-step demonstrations for stakeholder walkthroughs
+16. [ ] Confirm Phase 7 verified the release tag's Read the Docs build, active/visible version, project default version, `/stable/` target, and `/latest/` tracking; retry only the failed RTD action rather than rerunning the full release
 
 The automated `scripts/release.sh` merge-back resolves only known metadata
 conflicts: it retains `main`'s unreleased changelog notes and status, inserts the
