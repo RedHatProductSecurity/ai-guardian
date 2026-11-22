@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
 
+from ai_guardian.cli_runtime import runtime_activation_info
 from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
 from ai_guardian.ui.display import (
     _ensure_tcl_library,
@@ -61,6 +62,21 @@ def _cli_installation_status(integration):
         logger.warning("Unable to check %s CLI availability: %s", integration.key, exc)
         return "unknown"
     return "not_installed"
+
+
+def _runtime_activation_for(
+    integration, verification=None, cli_status="unknown", ide_detected=None
+):
+    """Build activation evidence without treating setup or version as proof."""
+    if not integration.cli_capable:
+        detected = True
+    elif ide_detected is True or cli_status == "installed":
+        detected = True
+    elif ide_detected is False and cli_status == "not_installed":
+        detected = False
+    else:
+        detected = None
+    return runtime_activation_info(integration, verification, detected=detected)
 
 
 def _state_path() -> Path:
@@ -274,6 +290,9 @@ def sync_ide_setup_state(
             "cli": cli_statuses[integration.key],
             "ide_detected": None,
             "setup": "unknown",
+            "runtime_activation": _runtime_activation_for(
+                integration, cli_status=cli_statuses[integration.key]
+            ),
         }
         for integration in SUPPORTED_IDE_REGISTRY
     }
@@ -363,6 +382,16 @@ def sync_ide_setup_state(
         current = dict(verification)
         current["name"] = config.get("name", ide_type)
         current["excluded"] = ide_type in exclusions
+        integration = next(
+            (item for item in SUPPORTED_IDE_REGISTRY if item.key == ide_type), None
+        )
+        if integration is not None:
+            current["runtime_activation"] = _runtime_activation_for(
+                integration,
+                current,
+                cli_statuses.get(ide_type, "unknown"),
+                ide_detected=ide_type in installed,
+            )
         verifications[ide_type] = current
         if ide_type in installed:
             integrations[ide_type] = current
@@ -384,18 +413,19 @@ def sync_ide_setup_state(
             ):
                 setup_status = "unknown"
             elif menu_verification["healthy"]:
-                setup_status = (
-                    "unknown"
-                    if ide_type == "kilo"
-                    and menu_verification.get("plugin_runtime_status") == "unverified"
-                    else "configured"
-                )
+                setup_status = "configured"
             else:
                 setup_status = "needs_setup"
         tray_status[ide_type] = {
             "cli": cli_status,
             "ide_detected": ide_detected,
             "setup": setup_status,
+            "runtime_activation": _runtime_activation_for(
+                integration,
+                verifications.get(ide_type),
+                cli_status,
+                ide_detected=ide_detected,
+            ),
         }
 
     configured = [

@@ -6501,6 +6501,47 @@ class TestKiloMcpConfig:
         assert "separate" in status["mcp_diagnostic"]
 
 
+class TestKiloPluginVerification:
+    def test_missing_declared_callback_marks_plugin_unhealthy(
+        self, tmp_path, monkeypatch
+    ):
+        setup = IDESetup()
+        plugin_dir = tmp_path / "kilo" / "plugin"
+        plugin_dir.mkdir(parents=True)
+        bridge_dir = tmp_path / "kilo" / "ai-guardian"
+        bridge_dir.mkdir()
+        (bridge_dir / "ai-guardian-bridge.ts").write_text("bridge\n", encoding="utf-8")
+        plugin_file = plugin_dir / "ai-guardian.ts"
+        plugin_file.write_text(
+            "// ai-guardian-kilo-generation: v1\n"
+            "export const plugin = { ideType: 'kilo' };\n"
+            "async 'chat.message'(input, output) {}\n"
+            "async 'tool.execute.before'(input, output) {}\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            setup,
+            "get_config_path",
+            lambda *args, **kwargs: str(plugin_dir),
+        )
+
+        verification = setup.verify_hooks_for_ide("kilo")
+
+        assert verification["healthy"] is False
+        assert verification["events"]["plugin"] == "changed"
+        assert verification["diagnostics"] == [
+            "Kilo plugin callbacks missing: tool.execute.after"
+        ]
+
+        with plugin_file.open("a", encoding="utf-8") as plugin_source:
+            plugin_source.write("async 'tool.execute.after'(input, output) {}\n")
+        verification = setup.verify_hooks_for_ide("kilo")
+
+        assert verification["healthy"] is True
+        assert verification["events"]["plugin"] == "healthy"
+        assert verification["diagnostics"] == []
+
+
 class TestResolveBinaryPath:
     """Tests for _resolve_binary_path helper."""
 
