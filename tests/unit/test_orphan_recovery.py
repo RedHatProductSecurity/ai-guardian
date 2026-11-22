@@ -909,7 +909,10 @@ def test_inventory_matches_canonical_setup_paths(
         if not raw or not raw.startswith(("~", str(tmp_path))):
             continue  # Explicit project-local configurations are not user scope.
         path = Path(raw).expanduser()
-        if metadata.get("plugin_file"):
+        if metadata.get("mcp_only"):
+            mcp_path = get_mcp_config_path(host)
+            assert mcp_path is not None and mcp_path in paths, host
+        elif metadata.get("plugin_file"):
             assert path / "ai-guardian.ts" in files, host
         elif metadata.get("managed_extension"):
             assert path / "ai-guardian/index.ts" in files, host

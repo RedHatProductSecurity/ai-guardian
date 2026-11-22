@@ -186,7 +186,8 @@ retry/continuation unverified. `—`: no managed surface for that stage.
 | Copilot (`copilot`) | — | H/U | H/U | — | M/U if explicitly configured | Top-level managed event arrays |
 | Grok Build (`grok`) | H/U | H/U | H/U | — | M/U | Only `PreToolUse` has a blocking decision channel |
 | Goose (`goose`) | H/U | H/U | — | — | M/U | Managed pre-tool action uses `on_failure: block`, so a missing executable blocks tools; desktop/native Windows and live package-first lifecycle unqualified |
-| Codex CLI / desktop Codex mode (`codex`) | H/U | H/U | H/U | — | M/U | Managed lifecycle includes compaction/end; regular ChatGPT mode is not covered |
+| Codex CLI / desktop Codex mode (`codex`) | H/U | H/U | H/U | — | M/U | Managed lifecycle includes compaction/end; regular ChatGPT mode is a separate MCP-only integration |
+| ChatGPT desktop regular mode (`chatgpt`) | — | — | — | L/U | M/U | Personal-marketplace local plugin; host installation/load unverified; user-invoked advisory MCP only, with no automatic hook enforcement |
 | Windsurf (`windsurf`) | — | H/U | H/U | — | M/U if configured | Nested hook events; no universal fail-open assumption |
 | Gemini CLI (`gemini`) | H/U | H/U | H/U | — | M/U if configured | BeforeAgent/BeforeTool/AfterTool and startup registration |
 | Antigravity (`antigravity`) | — | H/U (PreInvocation) | H/U | — | M/U | Post-tool observation has limited host data |

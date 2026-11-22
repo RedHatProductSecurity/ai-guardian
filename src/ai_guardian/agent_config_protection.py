@@ -542,7 +542,13 @@ def build_agent_config_inventory(
     from ai_guardian.setup.mcp import get_mcp_config_path, get_pi_extension_dir
 
     setup = IDESetup()
-    global_directory_integrations = {"aiderdesk", "openclaw", "opencode", "kilo"}
+    global_directory_integrations = {
+        "aiderdesk",
+        "chatgpt",
+        "kilo",
+        "openclaw",
+        "opencode",
+    }
     for integration in SUPPORTED_IDE_REGISTRY:
         key = integration.key
         global_roots = _GLOBAL_ARTIFACT_ROOTS.get(key, ())
@@ -683,6 +689,16 @@ def build_agent_config_inventory(
                     recursive=True,
                     kind="managed bridge",
                 )
+        if key == "chatgpt":
+            _add_path(
+                paths,
+                seen,
+                str(Path.home() / ".agents" / "plugins" / "marketplace.json"),
+                key,
+                "global",
+                active_project,
+                kind="marketplace configuration",
+            )
 
     # Project paths intentionally use the active workspace directly.  No IDE
     # home environment variable is consulted for this layer.
