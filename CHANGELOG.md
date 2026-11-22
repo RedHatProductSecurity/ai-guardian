@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not a configuration fault. Kilo repair hints use the targeted force setup command,
   and Doctor calls out when the installed CLI differs from the callback-validation
   baseline.
+### Fixed
+- **Read the Docs release lifecycle:** Require an RTD API token before release
+  mutations, wait for the exact tag commit's build, activate and unhide the
+  version after success, and set the project default only after the release docs
+  are available. Keep `/latest/` tracking `main`.
 
 ## [1.23.0] - 2026-11-21
 
