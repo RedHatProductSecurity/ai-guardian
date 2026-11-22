@@ -1,6 +1,7 @@
 """User experience contract for tray IDE/CLI setup flows (#2257)."""
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -198,6 +199,139 @@ def test_doctor_reports_mcp_status_for_generic_local_clients(tmp_path):
     assert "OpenCode: configured; MCP: missing" in result.message
     opencode = next(item for item in result.integrations if item["ide"] == "opencode")
     assert opencode["status"] == CheckStatus.WARN.value
+
+
+def test_doctor_reports_chatgpt_plugin_health_without_claiming_hook_enforcement(
+    tmp_path,
+):
+    """
+    USER EXPERIENCE: Regular ChatGPT desktop -> report plugin config separately.
+
+    Scenario:
+    1. The user configures the personal desktop-only AI Guardian plugin source.
+    2. Doctor verifies the local marketplace and bundled MCP configuration.
+    3. The ChatGPT app itself has not been inspected for install/load state.
+
+    Expected User Experience:
+    - Doctor reports local MCP advisor plugin configuration health.
+    - ChatGPT installation/load is explicitly unverified.
+    - No Codex hooks or automatic enforcement are attributed to regular ChatGPT.
+    """
+    plugin_dir = tmp_path / ".agents" / "plugins" / "ai-guardian-chatgpt"
+    verification = {
+        "mcp_installed": True,
+        "mcp_status": "healthy",
+        "mcp_registration": "local-plugin",
+        "mcp_config_path": str(plugin_dir / "mcp.json"),
+        "mcp_plugin_path": str(plugin_dir),
+        "mcp_marketplace_path": str(
+            tmp_path / ".agents" / "plugins" / "marketplace.json"
+        ),
+        "mcp_host_installation_status": "unverified",
+    }
+
+    with (
+        patch(
+            "ai_guardian.setup.IDESetup.list_detected_ides",
+            return_value=["chatgpt"],
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.get_config_path",
+            return_value=str(plugin_dir),
+        ),
+        patch.object(Doctor, "_has_ide_install_evidence", return_value=True),
+        patch("ai_guardian.setup.mcp.verify_mcp_config", return_value=verification),
+    ):
+        result = Doctor().check_hooks()
+
+    assert result.status == CheckStatus.PASS
+    assert "MCP advisor plugin configuration: healthy" in result.message
+    assert "ChatGPT desktop installation/load: unverified" in result.message
+    assert "no automatic hook enforcement" in result.message
+    chatgpt = next(item for item in result.integrations if item["ide"] == "chatgpt")
+    assert chatgpt["status"] == CheckStatus.PASS.value
+    assert chatgpt["verification"]["mcp_registration"] == "local-plugin"
+
+    report = DoctorReport(checks=[result])
+    assert "MCP advisor plugin configuration: healthy" in format_human(report)
+    structured = json.loads(format_json(report))["checks"][0]["integrations"]
+    structured_chatgpt = next(item for item in structured if item["ide"] == "chatgpt")
+    assert "installation/load: unverified" in structured_chatgpt["message"]
+
+
+@pytest.mark.parametrize(
+    ("no_mcp", "expected_action"),
+    [(None, "configure"), (True, "remove")],
+)
+def test_chatgpt_setup_confirmation_describes_plugin_not_hooks(
+    tmp_path, capsys, no_mcp, expected_action
+):
+    """
+    USER EXPERIENCE: Regular ChatGPT setup -> describe the advisory plugin only.
+
+    Scenario:
+    1. The user explicitly selects regular ChatGPT desktop setup or `--no-mcp`.
+    2. The CLI asks for confirmation before changing the local plugin source.
+
+    Expected User Experience:
+    - Setup identifies the MCP advisor plugin and its source directory.
+    - Setup never says that ChatGPT hooks will be installed or configured.
+    - The install and removal choices are explicit and distinct.
+    """
+    setup = IDESetup()
+    plugin_dir = tmp_path / ".agents" / "plugins" / "ai-guardian-chatgpt"
+    with (
+        patch("ai_guardian.setup.IDESetup", return_value=setup),
+        patch.object(setup, "get_config_path", return_value=str(plugin_dir)),
+        patch.object(setup, "_is_setup_already_configured", return_value=False),
+        patch.object(
+            setup,
+            "setup_ide_hooks",
+            return_value=(True, "ChatGPT desktop does not support hooks."),
+        ),
+        patch("ai_guardian.setup._handle_mcp_setup", return_value=True),
+        patch("ai_guardian.setup._notify_daemon_reload"),
+        patch("builtins.input", return_value="yes"),
+    ):
+        assert setup_hooks(ide_type="chatgpt", no_mcp=no_mcp, interactive=True) is True
+
+    output = capsys.readouterr().out
+    assert (
+        f"This will {expected_action} the AI Guardian ChatGPT MCP advisor plugin."
+        in output
+    )
+    assert f"Plugin source: {plugin_dir}" in output
+    assert "configure ai-guardian hooks for ChatGPT" not in output
+    assert "Config file:" not in output
+
+
+def test_chatgpt_mcp_skill_does_not_claim_automatic_hook_enforcement():
+    """
+    USER EXPERIENCE: ChatGPT MCP skill -> state the advisory-only boundary.
+
+    The same bundled MCP instructions reach clients without hook support, so
+    they must not tell regular ChatGPT users that hooks enforce skipped checks.
+    """
+    skill_path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "ai_guardian"
+        / "skills"
+        / "ai-guardian-security"
+        / "SKILL.md"
+    )
+    skill = skill_path.read_text(encoding="utf-8")
+
+    assert "Regular ChatGPT desktop mode has no AI Guardian hooks" in skill
+    assert (
+        "does not automatically monitor or block prompts, tool calls, or results"
+        in skill
+    )
+    assert (
+        "do not treat it as approval or assume another enforcement layer exists"
+        in skill
+    )
+    assert "Hooks always enforce regardless of level" not in skill
 
 
 def test_doctor_shows_detected_cli_version_in_all_health_views(tmp_path):

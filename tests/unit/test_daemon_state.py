@@ -1365,6 +1365,13 @@ class TestConfigError:
 
 
 class TestMcpInstalled:
+    @pytest.fixture(autouse=True)
+    def isolate_user_home(self, monkeypatch, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
+
     def test_mcp_installed_in_stats(self, tmp_path):
         state = DaemonState(config_path=tmp_path / "nonexistent.json")
         stats = state.get_stats()

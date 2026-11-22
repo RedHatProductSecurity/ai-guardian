@@ -283,7 +283,7 @@ def _setup_single_ide(
         return False
 
     hook_kwargs: Dict[str, Any] = {"dry_run": dry_run, "force": force}
-    if ide_type == "pi":
+    if ide_type in ("pi", "chatgpt"):
         hook_kwargs["enable_mcp"] = not bool(no_mcp)
     if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
         hook_kwargs.update({"scope": scope, "project_dir": project_dir})
@@ -321,7 +321,9 @@ def _setup_single_ide(
             mcp_kwargs["no_mcp"] = True
         if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
             mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
-        _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
+        mcp_setup_result = _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
+        if ide_type == "chatgpt" and mcp_setup_result is False:
+            return False
 
     if setup_success and rules:
         _handle_rules_setup(ide_type, dry_run=dry_run, force=force)
@@ -702,6 +704,15 @@ def setup_hooks(
             print(f"\nAI Guardian hooks are already configured for {ide_name}.")
             print(f"Config file: {ide_config_path}")
             prompt = "\nForce setup and overwrite the existing configuration? [y/N]: "
+        elif selected_ide == "chatgpt":
+            if no_mcp:
+                print("\nThis will remove the AI Guardian ChatGPT MCP advisor plugin.")
+            else:
+                print(
+                    "\nThis will configure the AI Guardian ChatGPT MCP advisor plugin."
+                )
+            print(f"Plugin source: {ide_config_path}")
+            prompt = "\nContinue? [y/N]: "
         else:
             print(f"\nThis will configure ai-guardian hooks for {ide_name}")
             print(f"Config file: {ide_config_path}")
@@ -913,7 +924,7 @@ def _setup_hooks_json_output(
     _devnull = io.StringIO()
     with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
         hook_kwargs: Dict[str, Any] = {"dry_run": dry_run, "force": force}
-        if ide_type == "pi":
+        if ide_type in ("pi", "chatgpt"):
             hook_kwargs["enable_mcp"] = not bool(no_mcp)
         if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
             hook_kwargs.update({"scope": scope, "project_dir": project_dir})
@@ -950,6 +961,7 @@ def _setup_hooks_json_output(
         result["warnings"] = [stability_warning]
 
     # MCP server always installed by default (Issue #477, #808, #1377)
+    mcp_setup_result = None
     if setup_success:
         with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
             if no_mcp:
@@ -958,19 +970,50 @@ def _setup_hooks_json_output(
                     scope != "user" or project_dir
                 ):
                     mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
-                _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
+                mcp_setup_result = _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
             else:
                 mcp_kwargs = {"dry_run": dry_run}
                 if _supports_project_scope(ide_type) and (
                     scope != "user" or project_dir
                 ):
                     mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
-                _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
+                mcp_setup_result = _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
+
+    if ide_type == "chatgpt" and setup_success:
+        if mcp_setup_result is False:
+            setup_success = False
+            result["success"] = False
+        if dry_run:
+            from ai_guardian.setup.mcp import _chatgpt_paths
+
+            chatgpt_paths = _chatgpt_paths()
+            result.update(
+                {
+                    "mcp_installed": None,
+                    "mcp_status": "would_remove" if no_mcp else "would_install",
+                    "mcp_registration": "local-plugin",
+                    "mcp_config_path": str(chatgpt_paths["mcp"]),
+                    "mcp_plugin_path": str(chatgpt_paths["plugin_dir"]),
+                    "mcp_manifest_path": str(chatgpt_paths["manifest"]),
+                    "mcp_marketplace_path": str(chatgpt_paths["marketplace"]),
+                    "mcp_plugin_name": "ai-guardian-chatgpt-advisor",
+                    "mcp_host_installation_status": "unverified",
+                }
+            )
+        else:
+            from ai_guardian.setup.mcp import verify_mcp_config
+
+            mcp_verification = verify_mcp_config("chatgpt")
+            result.update(mcp_verification)
+            if mcp_setup_result is False:
+                result["error"] = mcp_verification.get(
+                    "mcp_diagnostic", "Unable to configure the ChatGPT advisor plugin."
+                )
 
     # Include local MCP configuration in JSON output. Cursor Cloud MCP is
     # registered through Cursor's dashboard/team settings or API, not a local
     # project file, so report that external registration separately.
-    if setup_success and not no_mcp:
+    if setup_success and not no_mcp and ide_type != "chatgpt":
         if ide_type == "cursor" and scope == "project":
             result["mcp_config_path"] = None
             result["mcp_status"] = "external"

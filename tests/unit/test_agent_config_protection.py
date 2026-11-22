@@ -193,15 +193,36 @@ def test_windows_path_spelling_matches_relative_project_artifact(tmp_path):
     assert inventory.match_path(".cursor\\hooks.json") is not None
 
 
-def test_inventory_has_a_project_artifact_root_for_every_supported_integration():
+def test_inventory_has_project_artifact_roots_except_host_global_chatgpt_plugin():
     inventory = build_agent_config_inventory("C:\\workspace")
 
     for integration in SUPPORTED_IDE_REGISTRY:
-        assert any(
+        has_project_artifact = any(
             item.integration == integration.key and item.scope == "project"
             for item in inventory.paths
         )
+        if integration.key == "chatgpt":
+            assert not has_project_artifact
+        else:
+            assert has_project_artifact
     assert inventory.match_path(r"C:\\workspace\\.cursor\\hooks.json") is not None
+
+
+def test_chatgpt_local_plugin_and_marketplace_are_protected(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    inventory = build_agent_config_inventory(str(tmp_path / "workspace"))
+
+    plugin_manifest = home / ".agents/plugins/ai-guardian-chatgpt/plugin.json"
+    plugin_mcp = home / ".agents/plugins/ai-guardian-chatgpt/mcp.json"
+    marketplace = home / ".agents/plugins/marketplace.json"
+    for path in (plugin_manifest, plugin_mcp, marketplace):
+        match = inventory.match_path(str(path))
+        assert match is not None
+        assert match.integration == "chatgpt"
 
 
 def test_kilo_plugin_and_config_paths_remain_under_kilo_identity(tmp_path, monkeypatch):

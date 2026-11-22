@@ -554,6 +554,8 @@ def inventory(
         )
         config("augment", home / ".augment/settings.json")
         config("cline", root(".cline", "CLINE_DATA_DIR") / "mcp_settings.json")
+        chatgpt_plugin = home / ".agents/plugins/ai-guardian-chatgpt"
+        config("chatgpt", chatgpt_plugin / "mcp.json")
         config(
             "kiro",
             root(".kiro", "KIRO_HOME")

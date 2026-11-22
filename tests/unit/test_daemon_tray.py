@@ -3356,6 +3356,13 @@ class TestTrayStartAlreadyRunningMessage:
 class TestMcpProactiveMenuVisibility:
     """Tests for MCP Proactive menu visibility based on MCP installation (issue #726)."""
 
+    @pytest.fixture(autouse=True)
+    def isolate_user_home(self, monkeypatch, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
+
     @pytest.mark.parametrize("daemon_paused", [False, True])
     @pytest.mark.parametrize("configured_level", ["medium", "paused"])
     def test_mcp_proactive_label_shows_configured_level_and_pause_source(

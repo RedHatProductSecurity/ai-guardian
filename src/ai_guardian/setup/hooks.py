@@ -515,6 +515,14 @@ class IDESetup:
                 ],
             },
         },
+        "chatgpt": {
+            "name": "ChatGPT desktop (regular mode)",
+            "mcp_client_name": "chatgpt-desktop",
+            "config_path": "~/.agents/plugins/ai-guardian-chatgpt",
+            "config_dir_env_var": None,
+            "config_filename": None,
+            "mcp_only": True,
+        },
         "windsurf": {
             "name": "Windsurf",
             "mcp_client_name": "windsurf",
@@ -1134,6 +1142,22 @@ class IDESetup:
         ide_name = ide_config.get("name", ide_type)
 
         if ide_config.get("mcp_only"):
+            if ide_type == "chatgpt":
+                verification = self.verify_ide_setup(
+                    ide_type, scope=scope, project_dir=project_dir
+                )
+                mcp_status = str(verification.get("mcp_status", "missing"))
+                if verification.get("healthy") is True:
+                    return (
+                        True,
+                        f"{ide_name}: MCP-only; local plugin configuration healthy; "
+                        "ChatGPT desktop installation/load is unverified",
+                    )
+                return (
+                    False,
+                    f"{ide_name}: needs attention (MCP-only plugin configuration "
+                    f"{mcp_status})",
+                )
             return True, f"{ide_name}: MCP-only (no hooks needed)"
 
         if ide_type == "goose" and integrity and scope == "user" and not project_dir:
@@ -1817,6 +1841,12 @@ class IDESetup:
             "effective_mcp_source",
             "effective_mcp_config_path",
             "mcp_registration_layout",
+            "mcp_plugin_path",
+            "mcp_manifest_path",
+            "mcp_marketplace_path",
+            "mcp_plugin_name",
+            "mcp_host_installation_status",
+            "mcp_marketplace_entry",
         ):
             if key in mcp:
                 combined[key] = mcp[key]
@@ -2318,6 +2348,11 @@ class IDESetup:
                 or (config_path / "ai-guardian" / "index.ts").is_file()
                 or (config_path / "ai-guardian.ts").is_file()
             )
+
+        if ide_type == "chatgpt":
+            from ai_guardian.setup.mcp import chatgpt_plugin_has_install_evidence
+
+            return chatgpt_plugin_has_install_evidence()
 
         executable = self.IDE_CONFIGS.get(ide_type, {}).get("executable")
         if executable:
@@ -3791,12 +3826,20 @@ class IDESetup:
                 return setup_goose_hooks(self, config_path, dry_run=dry_run)
 
             if ide_config.get("mcp_only"):
-                msg = (
-                    f"{ide_name} does not support hooks.\n"
-                    f"MCP server will be installed. Use --no-mcp to skip.\n"
-                    f"Use --rules to install guidelines file.\n"
-                    f"  ai-guardian setup --ide {ide_type} --rules"
-                )
+                if enable_mcp:
+                    mcp_message = (
+                        "MCP advisor configuration will be installed by default. "
+                        "Use --no-mcp to remove it."
+                    )
+                else:
+                    mcp_message = "Existing AI Guardian MCP advisor configuration will be removed."
+                msg = f"{ide_name} does not support hooks.\n{mcp_message}\n"
+                integration = get_ide_integration(ide_type)
+                if integration is not None and integration.rules_supported:
+                    msg += (
+                        "Use --rules to install guidelines file.\n"
+                        f"  ai-guardian setup --ide {ide_type} --rules"
+                    )
                 return True, msg
 
             # Event-based hook files can be repaired in place, but existing

@@ -4,7 +4,8 @@ The command-hook integrations are installed into a temporary home/project and
 every managed lifecycle event is invoked with the applicable allow, block, or
 post-tool-output payloads. Plugin and extension integrations are verified at
 the generated-source boundary because their host runtimes are not available in
-this repository's test environment. Junie is verified as MCP-only.
+this repository's test environment. Junie and ChatGPT desktop are verified as
+MCP-only; ChatGPT host installation/load remains unverified.
 
 Set AI_GUARDIAN_TEST_IDE to run one IDE from the matrix. Without it, the test
 runs the complete local matrix. OpenCode's versioned plugin contract runs both
@@ -257,6 +258,23 @@ def _assert_mcp_registration(
     else:
         config = _read_json_config(path)
 
+    if ide_type == "chatgpt":
+        from ai_guardian.setup.mcp import CHATGPT_PLUGIN_NAME, verify_mcp_config
+
+        verification = verify_mcp_config("chatgpt")
+        assert verification["mcp_status"] == "healthy"
+        assert verification["mcp_host_installation_status"] == "unverified"
+        plugin_dir = Path(verification["mcp_plugin_path"])
+        manifest = _read_json_config(plugin_dir / "plugin.json")
+        marketplace = _read_json_config(Path(verification["mcp_marketplace_path"]))
+        assert manifest["name"] == CHATGPT_PLUGIN_NAME
+        assert "hooks" not in manifest["extensions"]["com.openai"]
+        assert any(
+            entry.get("name") == CHATGPT_PLUGIN_NAME
+            and entry.get("source", {}).get("path") == "./ai-guardian-chatgpt"
+            for entry in marketplace["plugins"]
+        )
+
     if ide_type == "opencode":
         from ai_guardian.opencode_support import detect_opencode_runtime
 
@@ -294,6 +312,12 @@ def _assert_mcp_registration(
             assert command and command[-1] == "mcp-server"
             assert not command[0].rstrip().endswith(" -m ai_guardian")
             assert entry.get("enabled") is True
+        elif ide_type == "chatgpt":
+            from ai_guardian.setup.mcp import _resolved_mcp_command
+
+            expected_command = _resolved_mcp_command()
+            assert entry.get("command") == expected_command[0]
+            assert entry.get("args") == expected_command[1:]
         else:
             assert entry.get("args") == ["mcp-server"]
             assert entry.get("command"), f"{ide_type}/mcp-config: command missing"

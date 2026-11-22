@@ -13,7 +13,7 @@
     Setup hooks for a specific IDE. When omitted, installed IDEs are detected
     and their hooks are set up automatically.
     Choices: claude, cursor, copilot, grok, codex, windsurf, gemini, cline,
-              antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, kilo, pi, augment, crush, junie
+              antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, kilo, pi, augment, crush, junie, chatgpt
     Goose command hooks are POSIX-only; native Windows setup is not qualified.
 
 .PARAMETER Profile

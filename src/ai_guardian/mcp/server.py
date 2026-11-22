@@ -57,7 +57,9 @@ _MCP_REASON_POLICY_ERROR = "policy_check_error"
 _MCP_REASON_PAUSED = "proactive_checks_paused"
 _MCP_PAUSED_MESSAGE = (
     "MCP action-gating check skipped because AI Guardian is paused. "
-    "Hooks remain active and enforce security."
+    "This pause does not change hook configuration; hook enforcement applies only "
+    "to supported integrations where hooks are installed and active. Regular "
+    "ChatGPT desktop mode has no AI Guardian hooks."
 )
 
 

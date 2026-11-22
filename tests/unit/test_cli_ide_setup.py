@@ -91,11 +91,17 @@ def test_setup_help_explains_codex_scope(capsys):
 
     assert exc_info.value.code == 0
     output = capsys.readouterr().out
-    assert "Codex mode in the ChatGPT" in output
-    assert "desktop app" in output
-    assert "regular ChatGPT mode is not protected" in output
-    assert "Shared MCP configuration does not imply hook enforcement" in output
     normalized = " ".join(output.split())
+    assert "Codex mode in the ChatGPT" in normalized
+    assert "desktop app" in normalized
+    assert "regular ChatGPT mode is outside those Codex hooks" in normalized
+    assert "--ide chatgpt" in normalized
+    assert "user-invoked advisory MCP" in normalized
+    assert (
+        "does not automatically monitor or enforce prompts, tools, or results"
+        in normalized
+    )
+    assert "Shared MCP availability does not imply hook enforcement" in normalized
     assert "skips configured integrations" in normalized
     assert "configure all detected unconfigured integrations" in normalized
 

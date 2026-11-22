@@ -9,8 +9,9 @@ from enum import Enum
 CODEX_DISPLAY_NAME = "OpenAI Codex (CLI + Desktop)"
 CODEX_COVERAGE_NOTE = (
     "AI Guardian hooks cover Codex CLI and Codex mode in the ChatGPT desktop app; "
-    "regular ChatGPT mode is not currently protected by these Codex lifecycle "
-    "hooks. Shared MCP configuration does not imply hook enforcement."
+    "regular ChatGPT mode is outside those hooks. Its separate desktop-only local "
+    "plugin exposes user-invoked advisory MCP tools, not automatic enforcement. "
+    "Shared MCP availability does not imply hook enforcement."
 )
 
 
@@ -363,6 +364,7 @@ PI_MANAGED_HOOK_EVENTS = (
     "session_shutdown",
 )
 JUNIE_MANAGED_HOOK_EVENTS = ()
+CHATGPT_MANAGED_HOOK_EVENTS = ()
 DUMMY_AGENT_MANAGED_HOOK_EVENTS = ()
 
 MANAGED_HOOK_EVENTS_BY_IDE = {
@@ -386,6 +388,7 @@ MANAGED_HOOK_EVENTS_BY_IDE = {
     "kilo": KILO_MANAGED_HOOK_EVENTS,
     "pi": PI_MANAGED_HOOK_EVENTS,
     "junie": JUNIE_MANAGED_HOOK_EVENTS,
+    "chatgpt": CHATGPT_MANAGED_HOOK_EVENTS,
     "dummy-agent": DUMMY_AGENT_MANAGED_HOOK_EVENTS,
 }
 

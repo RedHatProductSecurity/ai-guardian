@@ -1366,6 +1366,12 @@ class Doctor:
                 mcp_verification = verify_mcp_config(ide_type)
                 mcp_status = mcp_verification.get("mcp_status")
             mcp_detail = f"; MCP: {mcp_status}" if mcp_status else ""
+            if ide_type == "chatgpt":
+                mcp_detail = (
+                    f"; MCP advisor plugin configuration: {mcp_status}; "
+                    "ChatGPT desktop installation/load: unverified; "
+                    "no automatic hook enforcement"
+                )
             if ide_type == "opencode" and mcp_verification:
                 mcp_scope = mcp_verification.get("effective_mcp_scope")
                 mcp_source = mcp_verification.get("effective_mcp_source")

@@ -90,7 +90,7 @@ class TestMCPActionGatingPause:
         assert result["status"] == "paused"
         assert result["skipped"] is True
         assert result["reason"] == "proactive_checks_paused"
-        assert "Hooks remain active" in result["message"]
+        assert "ChatGPT desktop mode has no AI Guardian hooks" in result["message"]
         assert "policy_decision" not in result
         mock_paused.assert_called_once_with(cwd=str(tmp_path.resolve()))
         mock_checker_cls.assert_not_called()
