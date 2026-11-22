@@ -312,6 +312,12 @@ def _assert_mcp_registration(
             assert command and command[-1] == "mcp-server"
             assert not command[0].rstrip().endswith(" -m ai_guardian")
             assert entry.get("enabled") is True
+        elif ide_type == "chatgpt":
+            from ai_guardian.setup.mcp import _resolved_mcp_command
+
+            expected_command = _resolved_mcp_command()
+            assert entry.get("command") == expected_command[0]
+            assert entry.get("args") == expected_command[1:]
         else:
             assert entry.get("args") == ["mcp-server"]
             assert entry.get("command"), f"{ide_type}/mcp-config: command missing"

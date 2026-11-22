@@ -18,8 +18,8 @@ from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES, SUPPORTED_IDE_TYPE
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Keep launcher coverage aligned with qualified image/runtime support.
 CONTAINER_EXCLUDED_IDE_TYPES = frozenset(
-    {"goose", "kilo"}
-)  # Goose is not shipped; Kilo runtime qualification is pending.
+    {"chatgpt", "goose", "kilo"}
+)  # ChatGPT is MCP-only; Goose is not shipped; Kilo runtime qualification is pending.
 CONTAINER_SUPPORTED_IDE_TYPES = tuple(
     ide_type
     for ide_type in SUPPORTED_IDE_TYPES

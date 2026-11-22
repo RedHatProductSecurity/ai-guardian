@@ -31,6 +31,7 @@ def chatgpt_plugin_home(monkeypatch, tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(
         mcp,
         "_resolved_mcp_command",
