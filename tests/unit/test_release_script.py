@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RELEASE_SCRIPT = REPO_ROOT / "scripts" / "release.sh"
 README = REPO_ROOT / "README.md"
+CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 RELEASING_DOC = REPO_ROOT / "RELEASING.md"
 RELEASE_READINESS_WORKFLOW = (
     REPO_ROOT / ".github" / "workflows" / "release-readiness.yml"
@@ -71,11 +73,19 @@ def test_release_script_help_and_docs_verification_contract():
 
 
 def test_readme_links_to_latest_release_and_latest_development_docs():
-    """The README links to the current release and upcoming main docs."""
+    """The README links to the newest stable changelog version and main docs."""
     readme = README.read_text(encoding="utf-8")
+    changelog = CHANGELOG.read_text(encoding="utf-8")
+    latest_release = re.search(
+        r"^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}$",
+        changelog,
+        flags=re.MULTILINE,
+    )
 
-    assert "Full documentation site (latest release: v1.22.0)" in readme
-    assert "https://ai-guardian.readthedocs.io/en/v1.22.0/" in readme
+    assert latest_release, "CHANGELOG.md must list a stable release"
+    version = latest_release.group(1)
+    assert f"Full documentation site (latest release: v{version})" in readme
+    assert f"https://ai-guardian.readthedocs.io/en/v{version}/" in readme
     assert "Latest documentation (tracks `main`)" in readme
     assert "https://ai-guardian.readthedocs.io/en/latest/" in readme
 
