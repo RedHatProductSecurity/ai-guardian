@@ -5,7 +5,8 @@ Provides opt-in protection for programs where IDE hooks don't apply
 (LangChain, custom scripts, direct LLM API calls, etc.).
 
 This SDK is additive — it cannot bypass or weaken existing hook-based
-enforcement. Hooks remain the enforcement layer for IDE sessions.
+enforcement. Hooks enforce only in supported integrations where installed and
+active; integrations without hook support remain advisory.
 
 Usage:
     from ai_guardian.sdk import monitor

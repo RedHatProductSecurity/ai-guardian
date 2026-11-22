@@ -83,7 +83,9 @@ About
 
 The MCP Proactive submenu includes `low`, `medium`, `high`, and `paused`.
 Daemon pauses temporarily use the `paused` effective state without changing the
-saved proactive level; hooks continue enforcing security.
+saved proactive level. This affects MCP advisory checks only; hooks continue to
+enforce only in supported integrations where installed and active. Regular
+ChatGPT desktop mode has no AI Guardian hooks.
 
 The global **IDE/CLI Setup...** submenu enables setup entries only when the
 integration is detected; undetected or unavailable checks leave the entry

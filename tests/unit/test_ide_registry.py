@@ -18,6 +18,7 @@ from ai_guardian.hook_adapters import (
 )
 from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
 from ai_guardian.hook_adapters.kilo import KiloAdapter
+from ai_guardian.hook_adapters.chatgpt import ChatGPTAdapter
 from ai_guardian.hook_adapters.base import NormalizedHookInput
 from ai_guardian.hook_events.post_tool_use import (
     _supports_safe_post_output_replacement,
@@ -157,6 +158,21 @@ def test_setup_registry_matches_canonical_registry():
             assert config.get("extension_based") is True
         else:
             assert config.get("hooks") is not None
+
+
+def test_regular_chatgpt_has_a_distinct_mcp_only_plugin_identity():
+    integration = next(item for item in SUPPORTED_IDE_REGISTRY if item.key == "chatgpt")
+    adapter = ADAPTERS_BY_IDE_TYPE["chatgpt"]()
+
+    assert integration.display_name == "ChatGPT desktop (regular mode)"
+    assert integration.setup_mode == "mcp-only"
+    assert integration.mcp_registration == "local-plugin"
+    assert integration.supports_hooks is False
+    assert integration.managed_hook_events == ()
+    assert "no automatic" in integration.platform_contract
+    assert adapter.agent_type == "chatgpt"
+    assert adapter.name == "ChatGPT desktop (regular mode)"
+    assert ChatGPTAdapter.can_handle({}) is False
 
 
 def test_adapter_aliases_and_classes_match_canonical_registry():

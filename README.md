@@ -78,7 +78,7 @@ cloud jobs.
 | GitHub Copilot cloud coding-agent job | Not installed | Not installed | Not installed | Local setup does not provision remote job hooks. |
 | Grok Build | Observe only | Gate | Observe only | Passive-event output is ignored; project hooks require trust. |
 | Codex CLI / desktop Codex mode | Gate | Gate | Replace with feedback, not a sanitized copy | Codex hooks require review/trust and do not cover regular ChatGPT mode. |
-| ChatGPT desktop — regular mode | Unavailable | Unavailable | Unavailable | Outside the Codex hook surface; shared MCP configuration does not add hook enforcement. |
+| ChatGPT desktop — regular mode | Unavailable | Unavailable | Unavailable | An optional desktop-only local plugin exposes user-invoked advisory MCP tools; no automatic monitoring or enforcement, and ChatGPT installation/load is not verified by setup. |
 | Windsurf Cascade | Gate | Gate | Observe only | Post-hooks cannot block or replace completed results. |
 | Gemini CLI | Gate | Gate | Withhold with a fixed refusal | Does not deliver AI Guardian's sanitized copy of a sensitive result. |
 | Antigravity CLI (`agy`) | Advice only | Gate | Observe only; no result content | Prompt advice does not terminate the model request; post-hooks cannot inspect tool output. |

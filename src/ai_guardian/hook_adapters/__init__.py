@@ -21,6 +21,7 @@ from ai_guardian.hook_adapters.cursor import CursorAdapter
 from ai_guardian.hook_adapters.kiro import KiroAdapter
 from ai_guardian.hook_adapters.augment import AugmentAdapter
 from ai_guardian.hook_adapters.codex import CodexAdapter
+from ai_guardian.hook_adapters.chatgpt import ChatGPTAdapter
 from ai_guardian.hook_adapters.base_agent import BaseAgentAdapter
 from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
 from ai_guardian.hook_adapters.kilo import KiloAdapter
@@ -56,7 +57,12 @@ ADAPTER_CLASSES = [
 
 # Env var value → adapter class (includes aliases like "copilot" → CopilotAdapter)
 _ENV_ALIAS_MAP: Dict[str, type] = {}
-for _cls in ADAPTER_CLASSES + [CodexAdapter, JunieAdapter, DummyAgentAdapter]:
+for _cls in ADAPTER_CLASSES + [
+    CodexAdapter,
+    ChatGPTAdapter,
+    JunieAdapter,
+    DummyAgentAdapter,
+]:
     for _alias in _cls.ENV_ALIASES:
         _ENV_ALIAS_MAP[_alias] = _cls
 
@@ -73,6 +79,7 @@ _ADAPTER_CLASSES_BY_NAME = {
         GrokAdapter,
         GooseAdapter,
         CodexAdapter,
+        ChatGPTAdapter,
         WindsurfAdapter,
         GeminiCLIAdapter,
         ClineAdapter,
@@ -208,6 +215,7 @@ __all__ = [
     "GrokAdapter",
     "GooseAdapter",
     "CodexAdapter",
+    "ChatGPTAdapter",
     "WindsurfAdapter",
     "GeminiCLIAdapter",
     "ClineAdapter",

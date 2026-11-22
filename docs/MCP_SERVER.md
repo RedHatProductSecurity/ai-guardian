@@ -6,9 +6,9 @@ AI Guardian includes an MCP (Model Context Protocol) server that exposes read-on
 
 | Layer | Role | Trust |
 |-------|------|-------|
-| **MCP server** | Tools the AI *can* use | Advisory — AI chooses to use them |
+| **MCP server** | Tools the AI *can* use | Advisory — the agent chooses whether to use them; no automatic enforcement |
 | **Skill (instructions)** | Guidance for *when* to use them | Loaded automatically on MCP connect |
-| **Hooks** | Enforcement if AI doesn't check | Mandatory — can't bypass |
+| **Hooks** | Enforcement where a host supports and loads them | Host-dependent; regular ChatGPT desktop mode has no AI Guardian hooks |
 
 ## Setup
 
@@ -20,7 +20,8 @@ ai-guardian setup --ide cursor
 ai-guardian setup --ide pi
 ```
 
-The MCP server is installed by default during setup. Use `--no-mcp` to skip.
+The MCP server is installed by default during setup. Use `--no-mcp` to skip or
+remove AI Guardian's managed MCP integration.
 Cursor desktop and the local Cursor CLI share the local user configuration
 (`~/.cursor/hooks.json` and `~/.cursor/mcp.json`). A project
 `.cursor/mcp.json` is also supported for local Cursor workspaces, but it is not
@@ -51,6 +52,26 @@ exposes no usable MCP tools. No extension-local MCP SDK or npm install is needed
 Pi's shell command `pi mcp list` does not load extensions; use `/mcp` inside the
 active Pi session to inspect AI Guardian's extension-registered server.
 
+### ChatGPT desktop (regular mode)
+
+Regular ChatGPT desktop mode is separate from Codex mode and has no AI Guardian
+hooks. Setup creates a desktop-only local plugin source at
+`~/.agents/plugins/ai-guardian-chatgpt/` and merges its entry into the personal
+marketplace at `~/.agents/plugins/marketplace.json`:
+
+```bash
+ai-guardian setup --ide chatgpt
+```
+
+Restart ChatGPT desktop to refresh the local marketplace, then install the
+plugin from the personal Plugins Directory. Its local stdio MCP tools are
+user-invoked and advisory; they do not automatically monitor or block prompts,
+tool calls, or results. `ai-guardian doctor` verifies the local plugin and
+marketplace configuration only. It cannot verify ChatGPT installation or load.
+`ai-guardian setup --ide chatgpt --no-mcp` removes AI Guardian's plugin source
+and marketplace entry while preserving unrelated entries; it does not remove a
+host-cached plugin copy or stop a connection already open in ChatGPT.
+
 ### Manual setup
 
 Existing manual registrations are migrated automatically the first time the
@@ -61,8 +82,10 @@ refresh a valid identity record, so setup does not need to be rerun.
 registration state for supported clients without starting the server. A
 `healthy` registration means the client config contains an enabled
 `ai-guardian` entry, or (for Pi) the managed extension and identity registration
-are present; `missing`, `disabled`, and `invalid` states identify
-configuration problems separately from runtime identity failures.
+are present. For ChatGPT, it means the local plugin source and marketplace entry
+are configured; host installation/load remains unverified. `missing`,
+`disabled`, and `invalid` states identify configuration problems separately from
+runtime identity failures.
 
 Add to `~/.claude.json` (or `~/.claude/settings.json`):
 
@@ -112,6 +135,7 @@ For a manual Cursor registration, add the following to `~/.cursor/mcp.json`:
 | Cursor desktop / CLI | `~/.cursor/mcp.json` (`type: "stdio"`) |
 | Windsurf | `~/.windsurf/mcp.json` |
 | Pi | Managed extension API (`registerMcpServer`; Pi 0.99.0+) |
+| ChatGPT desktop (regular mode) | Desktop-only local plugin `~/.agents/plugins/ai-guardian-chatgpt/mcp.json`; host installation/load is not verified |
 
 ## Process lifecycle
 
@@ -134,15 +158,19 @@ reconnect behavior is host-specific.
 Stopping or restarting the AI Guardian daemon does not stop or restart the MCP
 process. Pausing the daemon also leaves the process running; global and
 applicable directory pauses are read by MCP action-gating checks and can make
-those checks return `paused`. See [Proactive Level](#proactive-level). Hooks
-remain the enforcement layer.
+those checks return `paused`. See [Proactive Level](#proactive-level). A pause
+does not change hook configuration; hook enforcement applies only where a
+supported host has AI Guardian hooks installed and active. Regular ChatGPT
+desktop mode has no such hooks.
 
 `setup --no-mcp` removes the locally managed host registration, or disables
 registration in Pi's generated extension. It changes future launches; it does
 not signal or terminate a process that the host has already started. Use the
 host's MCP reload/reconnect control, or restart the host, so it reads the
 updated registration and closes any old connection. Once that connection is
-closed, the server process exits. Cursor Cloud MCP is configured separately in
+closed, the server process exits. For ChatGPT, `--no-mcp` also removes the local
+source and marketplace entry, but setup does not manage or delete the app's
+cached plugin copy; remove that separately in ChatGPT if needed. Cursor Cloud MCP is configured separately in
 Cursor's dashboard/team settings or API; local project setup and `--no-mcp` do
 not change that external registration.
 
@@ -189,7 +217,7 @@ Controls how aggressively the AI uses proactive security checks. Higher levels a
 | **low** (default) | Check only when user asks or after a block | Most users — hooks enforce everything |
 | **medium** | Also check unfamiliar paths and suspicious commands | Teams wanting fewer blocked-and-retry cycles |
 | **high** | Check every file access and command | High-security environments |
-| **paused** | Skip proactive MCP action-gating checks; hooks continue enforcing security | Temporarily paused daemon or explicit proactive pause |
+| **paused** | Skip proactive MCP action-gating checks without changing hook configuration; hooks enforce only where supported, installed, and active. Regular ChatGPT desktop mode has no AI Guardian hooks. | Temporarily paused daemon or explicit proactive pause |
 
 Configure via:
 - `ai-guardian.json`: `"mcp_server": {"proactive_level": "low"}`
@@ -483,4 +511,6 @@ The instructions teach the AI:
 - When to use each tool based on the proactive level
 - How to handle annotation protection
 - The support bundle review workflow
-- That hooks are the enforcement layer — MCP is advisory
+- That MCP checks are advisory; hooks enforce only in supported integrations
+  where installed and active. Regular ChatGPT desktop mode has no AI Guardian
+  hooks or automatic enforcement.

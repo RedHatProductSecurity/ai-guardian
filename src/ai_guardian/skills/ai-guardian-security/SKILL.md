@@ -18,11 +18,11 @@ user-invocable: false
 
 You have access to ai-guardian MCP tools. These let you **check security before acting** — rather than being blocked by hooks and retrying.
 
-The tools are read-only and advisory. Hooks remain the enforcement layer. If a tool returns `{"status": "disabled"}`, ai-guardian MCP is turned off — proceed without checks and let hooks handle enforcement.
+The tools are read-only and advisory; they do not enforce the operation. AI Guardian hooks enforce only in supported integrations where hooks are installed and active. Regular ChatGPT desktop mode has no AI Guardian hooks: its optional desktop-only local plugin exposes user-invoked MCP tools and does not automatically monitor or block prompts, tool calls, or results. If a check returns `disabled` or `paused`, no MCP decision was made; do not treat it as approval or assume another enforcement layer exists.
 
 ## Proactive Check Level
 
-The `proactive_level` setting (in `get_config()` response) controls how often to use security checks. Hooks always enforce regardless of level — proactive checks add early detection at the cost of latency and token usage (each check adds a tool call and result to the conversation context, which increases tokens consumed on every subsequent API turn).
+The `proactive_level` setting (in `get_config()` response) controls how often to use security checks. Hook-based enforcement is separate from this setting and applies only in supported integrations where hooks are installed and active; regular ChatGPT desktop mode has no AI Guardian hooks. Proactive checks add early detection at the cost of latency and token usage (each check adds a tool call and result to the conversation context, which increases tokens consumed on every subsequent API turn).
 
 ### low (default) — Minimal checking
 Only use security tools when:
@@ -49,14 +49,17 @@ This adds noticeable latency, grows the conversation context, and increases toke
 An explicit `paused` level, or an active daemon/global or applicable directory
 pause, skips `check_path`, `check_command`, and `check_mcp_trust`. The saved
 `low`, `medium`, or `high` level is preserved during a runtime daemon pause and
-returns automatically when the pause expires or the daemon resumes. Hooks remain
-the mandatory enforcement layer and are not paused by this setting.
+returns automatically when the pause expires or the daemon resumes. Hook
+enforcement is independent of this setting where a supported host has installed
+and activated hooks; regular ChatGPT desktop mode has no AI Guardian hooks.
 
 ### Tool responses
 - `check_path`, `check_command`, and `check_mcp_trust` return `"paused"` with
   `skipped: true` when proactive action-gating is paused.
-- A paused response uses reason `proactive_checks_paused` and explains that
-  hooks remain active. Query, diagnostic, and reporting tools remain usable.
+- A paused response uses reason `proactive_checks_paused` and explains that this
+  pause does not change hook configuration. Hook enforcement exists only where
+  supported hooks are installed and active. Query, diagnostic, and reporting
+  tools remain usable.
 - `check_path`: `"allowed"` / `"denied"` (protected by rules) / `"not_found"` (file doesn't exist)
 - `check_command`: `"allowed"` / `"blocked"` + reason (`secret_detected`, `ssrf_detected`, `prompt_injection`, `directory_blocked`, `command_policy_denied`, `permission_denied`, `identity_failure`, `policy_check_error`)
 
@@ -67,7 +70,9 @@ directory.
 When workspace context is available, pass `project_dir` to `get_config()` so
 its effective proactive level includes directory-scoped pauses.
 
-All checks are advisory — hooks provide enforcement as a safety net.
+All checks are advisory. Hook enforcement is available only for supported
+integrations with hooks installed and active; regular ChatGPT desktop mode has
+no automatic hook enforcement.
 
 ## When a Tool is Blocked
 

@@ -197,6 +197,21 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         cli_executables=("codex",),
     ),
     IDEIntegration(
+        "chatgpt",
+        "ChatGPT desktop (regular mode)",
+        "ChatGPTAdapter",
+        ("chatgpt",),
+        "mcp-only",
+        "local-plugin",
+        (),
+        "none",
+        platform_contract=(
+            "ChatGPT desktop regular mode; user-installed desktop-only local "
+            "marketplace plugin exposes advisory MCP tools; no automatic "
+            "prompt, tool, result, or transcript enforcement"
+        ),
+    ),
+    IDEIntegration(
         "windsurf",
         "Windsurf",
         "WindsurfAdapter",

@@ -531,7 +531,646 @@ _MCP_IDE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "config_key": "mcpServers",
         "skill_dir": ".agents/skills",
     },
+    "chatgpt": {
+        "plugin_dir": "~/.agents/plugins/ai-guardian-chatgpt",
+        "marketplace_file": "~/.agents/plugins/marketplace.json",
+        "config_key": "mcpServers",
+        "mcp_client_name": "chatgpt-desktop",
+        "local_plugin": True,
+    },
 }
+
+CHATGPT_PLUGIN_NAME = "ai-guardian-chatgpt-advisor"
+CHATGPT_PLUGIN_DIRECTORY = "ai-guardian-chatgpt"
+CHATGPT_MARKETPLACE_NAME = "ai-guardian-personal"
+CHATGPT_MARKETPLACE_DISPLAY_NAME = "AI Guardian Personal Plugins"
+CHATGPT_PLUGIN_SOURCE_PATH = f"./{CHATGPT_PLUGIN_DIRECTORY}"
+_CHATGPT_PLUGIN_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+_CHATGPT_MCP_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
+_CHATGPT_PLUGIN_DESCRIPTION = (
+    "User-invoked advisory MCP security tools for ChatGPT desktop. "
+    "Does not automatically monitor or enforce prompts, tools, or results."
+)
+
+
+def _chatgpt_plugin_dir() -> Path:
+    """Return the managed ChatGPT plugin source under the personal marketplace."""
+    return Path.home() / ".agents" / "plugins" / CHATGPT_PLUGIN_DIRECTORY
+
+
+def _chatgpt_marketplace_path() -> Path:
+    """Return ChatGPT's documented personal local-marketplace path."""
+    return Path.home() / ".agents" / "plugins" / "marketplace.json"
+
+
+def _chatgpt_paths() -> Dict[str, Path]:
+    plugin_dir = _chatgpt_plugin_dir()
+    return {
+        "plugin_dir": plugin_dir,
+        "manifest": plugin_dir / "plugin.json",
+        "mcp": plugin_dir / "mcp.json",
+        "marketplace": _chatgpt_marketplace_path(),
+    }
+
+
+def _chatgpt_expected_plugin_manifest() -> Dict[str, Any]:
+    return {
+        "$schema": _CHATGPT_PLUGIN_SCHEMA,
+        "name": CHATGPT_PLUGIN_NAME,
+        "version": __version__,
+        "description": _CHATGPT_PLUGIN_DESCRIPTION,
+        "author": {"name": "AI Guardian"},
+        "license": "Apache-2.0",
+        "extensions": {
+            "com.openai": {
+                "interface": {
+                    "displayName": "AI Guardian Security Advisor",
+                    "shortDescription": "User-invoked advisory security checks.",
+                    "longDescription": (
+                        "Check paths, commands, and MCP trust or sanitize text "
+                        "with AI Guardian. Tools are advisory: regular ChatGPT "
+                        "mode does not automatically monitor or block prompts, "
+                        "tool calls, or results."
+                    ),
+                    "developerName": "AI Guardian",
+                    "category": "Productivity",
+                }
+            }
+        },
+    }
+
+
+def _chatgpt_expected_mcp_config() -> Dict[str, Any]:
+    command = _resolved_mcp_command()
+    return {
+        "$schema": _CHATGPT_MCP_SCHEMA,
+        "mcpServers": {
+            "ai-guardian": {
+                "type": "stdio",
+                "command": command[0],
+                "args": command[1:],
+            }
+        },
+    }
+
+
+def _load_chatgpt_json(
+    path: Path, label: str
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Load one managed ChatGPT JSON file without echoing its contents."""
+    if path.is_symlink():
+        return None, f"Refusing to follow a symbolic link for ChatGPT {label}: {path}"
+    if not path.exists():
+        return None, None
+    if not path.is_file():
+        return None, f"ChatGPT {label} is not a regular file: {path}"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None, f"Unable to read valid JSON from ChatGPT {label}: {path}"
+    if not isinstance(data, dict):
+        return None, f"ChatGPT {label} must have an object at its root: {path}"
+    return data, None
+
+
+def _chatgpt_marketplace_entry_is_owned(entry: Dict[str, Any]) -> bool:
+    """Return whether a marketplace entry points at this local plugin source."""
+    source = entry.get("source")
+    if isinstance(source, str):
+        return source == CHATGPT_PLUGIN_SOURCE_PATH
+    return (
+        isinstance(source, dict)
+        and source.get("source") == "local"
+        and source.get("path") == CHATGPT_PLUGIN_SOURCE_PATH
+    )
+
+
+def _chatgpt_marketplace_entries(
+    marketplace: Dict[str, Any], path: Path
+) -> Tuple[Optional[List[Tuple[int, Dict[str, Any]]]], Optional[str]]:
+    """Return plugin entries with indexes, rejecting an invalid marketplace list."""
+    plugins = marketplace.get("plugins", [])
+    if not isinstance(plugins, list) or any(
+        not isinstance(plugin, dict) for plugin in plugins
+    ):
+        return None, f"Invalid ChatGPT marketplace plugin list in {path}"
+    return list(enumerate(plugins)), None
+
+
+def _merge_chatgpt_plugin_manifest(
+    existing: Optional[Dict[str, Any]], path: Path
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Update AI Guardian-owned manifest fields and preserve other metadata."""
+    manifest = deepcopy(existing) if existing is not None else {}
+    if existing is not None and manifest.get("name") != CHATGPT_PLUGIN_NAME:
+        return None, f"Refusing to replace a non-AI Guardian plugin manifest: {path}"
+
+    expected = _chatgpt_expected_plugin_manifest()
+    for key in ("$schema", "name", "version", "description", "author", "license"):
+        manifest[key] = expected[key]
+
+    extensions = manifest.get("extensions", {})
+    if not isinstance(extensions, dict):
+        return None, f"Invalid ChatGPT plugin extensions object in {path}"
+    extensions = deepcopy(extensions)
+    openai_extension = extensions.get("com.openai", {})
+    if not isinstance(openai_extension, dict):
+        return None, f"Invalid ChatGPT OpenAI extension object in {path}"
+    openai_extension = deepcopy(openai_extension)
+    if "hooks" in openai_extension:
+        return None, (
+            "The AI Guardian ChatGPT plugin must remain MCP-only; "
+            f"remove its existing hook declaration before setup: {path}"
+        )
+    interface = openai_extension.get("interface", {})
+    if not isinstance(interface, dict):
+        return None, f"Invalid ChatGPT plugin interface object in {path}"
+    interface = deepcopy(interface)
+    interface.update(expected["extensions"]["com.openai"]["interface"])
+    openai_extension["interface"] = interface
+    extensions["com.openai"] = openai_extension
+    manifest["extensions"] = extensions
+    return manifest, None
+
+
+def _merge_chatgpt_mcp_config(
+    existing: Optional[Dict[str, Any]], path: Path
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Merge the managed stdio server while preserving unrelated MCP entries."""
+    config = deepcopy(existing) if existing is not None else {}
+    servers = config.get("mcpServers", {})
+    if not isinstance(servers, dict):
+        return None, f"Invalid ChatGPT MCP server map in {path}"
+    expected = _chatgpt_expected_mcp_config()
+    config["$schema"] = _CHATGPT_MCP_SCHEMA
+    servers = deepcopy(servers)
+    servers["ai-guardian"] = expected["mcpServers"]["ai-guardian"]
+    config["mcpServers"] = servers
+    return config, None
+
+
+def _merge_chatgpt_marketplace(
+    existing: Optional[Dict[str, Any]], path: Path
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Register the local plugin without replacing the user's marketplace."""
+    marketplace: Dict[str, Any] = (
+        deepcopy(existing)
+        if existing is not None
+        else {
+            "name": CHATGPT_MARKETPLACE_NAME,
+            "interface": {"displayName": CHATGPT_MARKETPLACE_DISPLAY_NAME},
+            "plugins": [],
+        }
+    )
+    if "name" not in marketplace:
+        marketplace["name"] = CHATGPT_MARKETPLACE_NAME
+    if not isinstance(marketplace.get("name"), str) or not marketplace.get("name"):
+        return None, f"Invalid ChatGPT marketplace name in {path}"
+
+    interface = marketplace.get("interface", {})
+    if not isinstance(interface, dict):
+        return None, f"Invalid ChatGPT marketplace interface in {path}"
+    if "displayName" not in interface:
+        interface = deepcopy(interface)
+        interface["displayName"] = CHATGPT_MARKETPLACE_DISPLAY_NAME
+        marketplace["interface"] = interface
+
+    if "plugins" not in marketplace:
+        marketplace["plugins"] = []
+    indexed_plugins, error = _chatgpt_marketplace_entries(marketplace, path)
+    if error or indexed_plugins is None:
+        return None, error
+    matches = [
+        (index, entry)
+        for index, entry in indexed_plugins
+        if entry.get("name") == CHATGPT_PLUGIN_NAME
+    ]
+    if len(matches) > 1:
+        return (
+            None,
+            f"Duplicate AI Guardian plugin entries in ChatGPT marketplace: {path}",
+        )
+
+    if matches:
+        index, entry = matches[0]
+        if not _chatgpt_marketplace_entry_is_owned(entry):
+            return None, (
+                "The AI Guardian ChatGPT plugin name is already used by a "
+                f"different marketplace source: {path}"
+            )
+        plugin_entry = deepcopy(entry)
+        source = plugin_entry.get("source")
+        source_config = deepcopy(source) if isinstance(source, dict) else {}
+        source_config.update({"source": "local", "path": CHATGPT_PLUGIN_SOURCE_PATH})
+        plugin_entry["source"] = source_config
+        policy = plugin_entry.get("policy", {})
+        if not isinstance(policy, dict):
+            return None, f"Invalid AI Guardian marketplace policy in {path}"
+        policy = deepcopy(policy)
+        policy.update({"installation": "AVAILABLE", "authentication": "ON_INSTALL"})
+        plugin_entry["policy"] = policy
+        plugin_entry["category"] = "Productivity"
+        marketplace["plugins"][index] = plugin_entry
+    else:
+        marketplace["plugins"].append(
+            {
+                "name": CHATGPT_PLUGIN_NAME,
+                "source": {
+                    "source": "local",
+                    "path": CHATGPT_PLUGIN_SOURCE_PATH,
+                },
+                "policy": {
+                    "installation": "AVAILABLE",
+                    "authentication": "ON_INSTALL",
+                },
+                "category": "Productivity",
+            }
+        )
+    return marketplace, None
+
+
+def _apply_chatgpt_file_changes(
+    changes: Dict[Path, Optional[str]], setup: Any, operation: str
+) -> bool:
+    """Back up all changed files before writing or removing any of them."""
+    pending: Dict[Path, Optional[str]] = {}
+    for path, contents in changes.items():
+        if path.is_symlink():
+            message = (
+                f"Refusing to modify a symbolic link for ChatGPT configuration: {path}"
+            )
+            print(f"  MCP setup stopped: {message}", file=sys.stderr)
+            return False
+        if contents is None and not path.exists():
+            continue
+        if contents is not None and path.is_file():
+            try:
+                if path.read_text(encoding="utf-8") == contents:
+                    continue
+            except (OSError, UnicodeError):
+                print(
+                    f"  MCP setup stopped: Unable to read ChatGPT configuration: {path}",
+                    file=sys.stderr,
+                )
+                return False
+        if path.exists() and not path.is_file():
+            print(
+                f"  MCP setup stopped: ChatGPT configuration is not a regular file: {path}",
+                file=sys.stderr,
+            )
+            return False
+        pending[path] = contents
+
+    # Complete every backup before the first file is mutated.
+    for path in pending:
+        if path.exists() and not _backup_before_write(setup, path, operation):
+            return False
+
+    try:
+        for path, contents in pending.items():
+            if contents is None:
+                path.unlink()
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(contents, encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Unable to %s ChatGPT plugin configuration: %s", operation, exc)
+        print(
+            f"  MCP setup stopped: Unable to {operation} ChatGPT plugin configuration",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
+def _install_chatgpt_plugin(setup: Any, dry_run: bool = False) -> bool:
+    """Install the desktop-only local plugin and preserve the personal catalog."""
+    paths = _chatgpt_paths()
+    plugin_dir = paths["plugin_dir"]
+    if plugin_dir.is_symlink() or (plugin_dir.exists() and not plugin_dir.is_dir()):
+        print(
+            f"  MCP setup stopped: ChatGPT plugin path is not a safe directory: {plugin_dir}",
+            file=sys.stderr,
+        )
+        return False
+    if dry_run:
+        print(
+            "  MCP: Would install the ChatGPT desktop-only local plugin and add it "
+            f"to {paths['marketplace']}"
+        )
+        return True
+
+    loaded: Dict[str, Optional[Dict[str, Any]]] = {}
+    for key, label in (
+        ("manifest", "plugin manifest"),
+        ("mcp", "plugin MCP configuration"),
+        ("marketplace", "personal marketplace"),
+    ):
+        loaded[key], error = _load_chatgpt_json(paths[key], label)
+        if error:
+            print(f"  MCP setup stopped: {error}", file=sys.stderr)
+            return False
+
+    manifest, error = _merge_chatgpt_plugin_manifest(
+        loaded["manifest"], paths["manifest"]
+    )
+    if error or manifest is None:
+        print(f"  MCP setup stopped: {error}", file=sys.stderr)
+        return False
+    mcp_config, error = _merge_chatgpt_mcp_config(loaded["mcp"], paths["mcp"])
+    if error or mcp_config is None:
+        print(f"  MCP setup stopped: {error}", file=sys.stderr)
+        return False
+    marketplace, error = _merge_chatgpt_marketplace(
+        loaded["marketplace"], paths["marketplace"]
+    )
+    if error or marketplace is None:
+        print(f"  MCP setup stopped: {error}", file=sys.stderr)
+        return False
+
+    changes: Dict[Path, Optional[str]] = {
+        paths["manifest"]: json.dumps(manifest, indent=2) + "\n",
+        paths["mcp"]: json.dumps(mcp_config, indent=2) + "\n",
+        paths["marketplace"]: json.dumps(marketplace, indent=2) + "\n",
+    }
+    if not _apply_chatgpt_file_changes(changes, setup, "ChatGPT MCP setup"):
+        return False
+
+    print(
+        "  MCP: Installed the AI Guardian ChatGPT desktop-only local plugin "
+        f"at {plugin_dir}; restart ChatGPT desktop, then install it from the "
+        "personal Plugins Directory"
+    )
+    _register_mcp_identity(_resolve_binary_path())
+    return True
+
+
+def _remove_chatgpt_plugin(setup: Any, dry_run: bool = False) -> bool:
+    """Remove only AI Guardian's local package and personal-marketplace entry."""
+    paths = _chatgpt_paths()
+    plugin_dir = paths["plugin_dir"]
+    if plugin_dir.is_symlink() or (plugin_dir.exists() and not plugin_dir.is_dir()):
+        print(
+            f"  MCP removal stopped: ChatGPT plugin path is not a safe directory: {plugin_dir}",
+            file=sys.stderr,
+        )
+        return False
+    if dry_run:
+        print(
+            "  MCP: Would remove AI Guardian's ChatGPT plugin source and only its "
+            f"entry from {paths['marketplace']}"
+        )
+        return True
+
+    loaded: Dict[str, Optional[Dict[str, Any]]] = {}
+    for key, label in (
+        ("manifest", "plugin manifest"),
+        ("mcp", "plugin MCP configuration"),
+        ("marketplace", "personal marketplace"),
+    ):
+        loaded[key], error = _load_chatgpt_json(paths[key], label)
+        if error:
+            print(f"  MCP removal stopped: {error}", file=sys.stderr)
+            return False
+
+    manifest = loaded["manifest"]
+    if manifest is not None and manifest.get("name") != CHATGPT_PLUGIN_NAME:
+        print(
+            f"  MCP removal stopped: Refusing to remove a non-AI Guardian plugin manifest: {paths['manifest']}",
+            file=sys.stderr,
+        )
+        return False
+
+    marketplace = loaded["marketplace"]
+    marketplace_entry_index = None
+    if marketplace is not None:
+        indexed_plugins, error = _chatgpt_marketplace_entries(
+            marketplace, paths["marketplace"]
+        )
+        if error or indexed_plugins is None:
+            print(f"  MCP removal stopped: {error}", file=sys.stderr)
+            return False
+        matches = [
+            (index, entry)
+            for index, entry in indexed_plugins
+            if entry.get("name") == CHATGPT_PLUGIN_NAME
+        ]
+        if len(matches) > 1:
+            print(
+                "  MCP removal stopped: Duplicate AI Guardian plugin entries in "
+                f"ChatGPT marketplace: {paths['marketplace']}",
+                file=sys.stderr,
+            )
+            return False
+        if matches:
+            marketplace_entry_index, entry = matches[0]
+            if not _chatgpt_marketplace_entry_is_owned(entry):
+                print(
+                    "  MCP removal stopped: The AI Guardian ChatGPT plugin name "
+                    "points to a different marketplace source",
+                    file=sys.stderr,
+                )
+                return False
+
+    changes: Dict[Path, Optional[str]] = {}
+    if manifest is not None:
+        changes[paths["manifest"]] = None
+
+    mcp_config = loaded["mcp"]
+    if mcp_config is not None:
+        servers = mcp_config.get("mcpServers", {})
+        if not isinstance(servers, dict):
+            print(
+                f"  MCP removal stopped: Invalid ChatGPT MCP server map in {paths['mcp']}",
+                file=sys.stderr,
+            )
+            return False
+        if "ai-guardian" in servers:
+            updated = deepcopy(mcp_config)
+            updated_servers = deepcopy(servers)
+            del updated_servers["ai-guardian"]
+            if updated_servers:
+                updated["mcpServers"] = updated_servers
+            else:
+                updated.pop("mcpServers", None)
+            if not updated_servers and set(updated).issubset({"$schema", "mcpServers"}):
+                changes[paths["mcp"]] = None
+            else:
+                changes[paths["mcp"]] = json.dumps(updated, indent=2) + "\n"
+
+    if marketplace is not None and marketplace_entry_index is not None:
+        updated_marketplace = deepcopy(marketplace)
+        del updated_marketplace["plugins"][marketplace_entry_index]
+        changes[paths["marketplace"]] = json.dumps(updated_marketplace, indent=2) + "\n"
+
+    if not changes:
+        print("  MCP: AI Guardian ChatGPT plugin was not found; nothing to remove")
+        return True
+    if not _apply_chatgpt_file_changes(changes, setup, "ChatGPT MCP removal"):
+        return False
+
+    try:
+        plugin_dir.rmdir()
+    except OSError:
+        # Preserve any unrelated files left in the plugin directory.
+        pass
+    print(
+        "  MCP: Removed AI Guardian's ChatGPT plugin source and personal-marketplace entry; "
+        "the desktop app's cached installation is not managed"
+    )
+    return True
+
+
+def _verify_chatgpt_plugin() -> Dict[str, Any]:
+    """Verify the local source configuration without claiming host activation."""
+    paths = _chatgpt_paths()
+    result: Dict[str, Any] = {
+        "mcp_installed": False,
+        "mcp_status": "missing",
+        "mcp_registration": "local-plugin",
+        "mcp_config_path": str(paths["mcp"]),
+        "mcp_plugin_path": str(paths["plugin_dir"]),
+        "mcp_manifest_path": str(paths["manifest"]),
+        "mcp_marketplace_path": str(paths["marketplace"]),
+        "mcp_plugin_name": CHATGPT_PLUGIN_NAME,
+        "mcp_host_installation_status": "unverified",
+        "mcp_marketplace_entry": False,
+    }
+    if paths["plugin_dir"].is_symlink():
+        result.update(
+            mcp_status="invalid",
+            mcp_diagnostic="ChatGPT plugin directory is a symbolic link",
+        )
+        return result
+
+    loaded: Dict[str, Optional[Dict[str, Any]]] = {}
+    for key, label in (
+        ("manifest", "plugin manifest"),
+        ("mcp", "plugin MCP configuration"),
+        ("marketplace", "personal marketplace"),
+    ):
+        loaded[key], error = _load_chatgpt_json(paths[key], label)
+        if error:
+            result.update(mcp_status="invalid", mcp_diagnostic=error)
+            return result
+
+    marketplace = loaded["marketplace"]
+    marketplace_entry: Optional[Dict[str, Any]] = None
+    if marketplace is not None:
+        indexed_plugins, error = _chatgpt_marketplace_entries(
+            marketplace, paths["marketplace"]
+        )
+        if error or indexed_plugins is None:
+            result.update(mcp_status="invalid", mcp_diagnostic=error)
+            return result
+        matches = [
+            entry
+            for _, entry in indexed_plugins
+            if entry.get("name") == CHATGPT_PLUGIN_NAME
+        ]
+        if len(matches) > 1:
+            result.update(
+                mcp_status="invalid",
+                mcp_diagnostic="Duplicate AI Guardian plugin entries in ChatGPT marketplace",
+            )
+            return result
+        if matches:
+            marketplace_entry = matches[0]
+            result["mcp_marketplace_entry"] = True
+            if not _chatgpt_marketplace_entry_is_owned(marketplace_entry):
+                result.update(
+                    mcp_status="invalid",
+                    mcp_diagnostic=(
+                        "AI Guardian ChatGPT plugin name points to a different "
+                        "marketplace source"
+                    ),
+                )
+                return result
+
+    manifest = loaded["manifest"]
+    mcp_config = loaded["mcp"]
+    if manifest is None or mcp_config is None or marketplace_entry is None:
+        result["mcp_diagnostic"] = (
+            "ChatGPT plugin source or personal-marketplace entry is missing; "
+            "run ai-guardian setup --ide chatgpt"
+        )
+        return result
+
+    if manifest.get("name") != CHATGPT_PLUGIN_NAME:
+        result.update(
+            mcp_status="invalid",
+            mcp_diagnostic="ChatGPT plugin manifest has an unexpected identity",
+        )
+        return result
+    if manifest.get("version") != __version__:
+        result.update(
+            mcp_status="stale",
+            mcp_diagnostic="ChatGPT plugin source is from a different AI Guardian version",
+        )
+        return result
+    extensions = manifest.get("extensions", {})
+    openai_extension = (
+        extensions.get("com.openai", {}) if isinstance(extensions, dict) else {}
+    )
+    if not isinstance(openai_extension, dict) or "hooks" in openai_extension:
+        result.update(
+            mcp_status="invalid",
+            mcp_diagnostic="ChatGPT plugin must remain MCP-only and contain no hooks",
+        )
+        return result
+
+    servers = mcp_config.get("mcpServers")
+    if not isinstance(servers, dict):
+        result.update(
+            mcp_status="invalid",
+            mcp_diagnostic="ChatGPT plugin MCP server map is malformed",
+        )
+        return result
+    server = servers.get("ai-guardian")
+    if not isinstance(server, dict):
+        result["mcp_diagnostic"] = "ChatGPT plugin's AI Guardian MCP server is missing"
+        return result
+    expected_server = _chatgpt_expected_mcp_config()["mcpServers"]["ai-guardian"]
+    if server != expected_server:
+        result.update(
+            mcp_status="executable_changed",
+            mcp_diagnostic="ChatGPT plugin MCP executable configuration differs from setup",
+        )
+        return result
+
+    policy = marketplace_entry.get("policy")
+    if (
+        not isinstance(policy, dict)
+        or policy.get("installation") != "AVAILABLE"
+        or policy.get("authentication") != "ON_INSTALL"
+    ):
+        result.update(
+            mcp_status="invalid",
+            mcp_diagnostic="ChatGPT marketplace entry has an invalid installation policy",
+        )
+        return result
+
+    result.update(mcp_installed=True, mcp_status="healthy")
+    return result
+
+
+def chatgpt_plugin_has_install_evidence() -> bool:
+    """Return whether the personal marketplace references this plugin identity."""
+    paths = _chatgpt_paths()
+    if paths["manifest"].is_file() or paths["mcp"].is_file():
+        return True
+    marketplace, error = _load_chatgpt_json(
+        paths["marketplace"], "personal marketplace"
+    )
+    if error or marketplace is None:
+        return False
+    entries, error = _chatgpt_marketplace_entries(marketplace, paths["marketplace"])
+    return (
+        not error
+        and entries is not None
+        and any(entry.get("name") == CHATGPT_PLUGIN_NAME for _, entry in entries)
+    )
+
 
 _MCP_SERVER_ENTRY: Dict[str, object] = {
     "args": ["mcp-server"],
@@ -813,6 +1452,8 @@ def get_mcp_config_path(
     project_dir: Optional[str] = None,
 ) -> Optional[Path]:
     """Return an IDE's user or project MCP configuration path."""
+    if ide_type == "chatgpt":
+        return _chatgpt_plugin_dir() / "mcp.json"
     if ide_type == "goose":
         from ai_guardian.goose_support import goose_hook_path
 
@@ -1008,6 +1649,8 @@ def verify_mcp_config(
     the configured command, create an identity manifest, or create a runtime
     attestation; those actions belong to MCP server startup.
     """
+    if ide_type == "chatgpt":
+        return _verify_chatgpt_plugin()
     if ide_type == "pi":
         return verify_pi_mcp_extension(scope=scope, project_dir=project_dir)
     if ide_type == "opencode":
@@ -1289,16 +1932,15 @@ def _handle_mcp_setup(
     dry_run: bool = False,
     scope: str = "user",
     project_dir: Optional[str] = None,
-) -> None:
+) -> Optional[bool]:
     """Install or remove MCP server config for an IDE."""
     if no_mcp:
-        _remove_mcp_config(
+        return _remove_mcp_config(
             setup, ide_type, dry_run, scope=scope, project_dir=project_dir
         )
-    else:
-        _install_mcp_config(
-            setup, ide_type, dry_run, scope=scope, project_dir=project_dir
-        )
+    return _install_mcp_config(
+        setup, ide_type, dry_run, scope=scope, project_dir=project_dir
+    )
 
 
 def _install_mcp_config(
@@ -1307,11 +1949,13 @@ def _install_mcp_config(
     dry_run: bool = False,
     scope: str = "user",
     project_dir: Optional[str] = None,
-) -> None:
+) -> Optional[bool]:
     """Add MCP server entry to IDE config and enable in ai-guardian config."""
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
-        return
+        return None
+    if ide_type == "chatgpt":
+        return _install_chatgpt_plugin(setup, dry_run=dry_run)
     generation = _opencode_mcp_generation() if ide_type == "opencode" else None
 
     if ide_type == "pi":
@@ -1325,18 +1969,18 @@ def _install_mcp_config(
                 "  MCP: Pi MCP tools are provided by the managed ai-guardian extension"
             )
             _register_mcp_identity(_resolve_binary_path())
-        return
+        return None
 
     if ide_type == "cursor":
         if project_dir and scope == "user":
             scope = "project"
         if scope not in ("user", "project"):
             logger.warning("Cursor MCP setup scope must be 'user' or 'project'")
-            return
+            return None
         if scope == "project":
             if not project_dir:
                 logger.warning("Cursor project MCP setup requires a project directory")
-                return
+                return None
             project_path = Path(project_dir).expanduser()
             if not project_path.is_dir():
                 logger.warning(
@@ -1344,32 +1988,32 @@ def _install_mcp_config(
                     "directory: %s",
                     project_path,
                 )
-                return
+                return None
             project_dir = str(project_path.resolve())
             print(
                 "  MCP: Cursor Cloud MCP is managed by the Cursor dashboard/team "
                 "settings or Cloud Agents API; project .cursor/mcp.json was "
                 "left unchanged"
             )
-            return
+            return None
         else:
             project_dir = None
 
     config_path = get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
     if config_path is None:
-        return
+        return None
 
     if ide_type == "kilo" and scope == "project":
         if not project_dir:
             logger.warning("Kilo project MCP setup requires a project directory")
-            return
+            return None
         project_root = project_dir
         try:
             ensure_project_path_no_symlink(config_path, project_root)
         except ValueError as exc:
             logger.warning("Kilo MCP setup stopped for unsafe project path: %s", exc)
             print(f"  MCP setup stopped: {exc}", file=sys.stderr)
-            return
+            return None
 
     if ide_type == "goose":
         from ai_guardian.setup.goose import validate_goose_mcp_target
@@ -1380,11 +2024,11 @@ def _install_mcp_config(
             logger.warning(
                 "Goose MCP setup stopped: managed plugin layout cannot be verified"
             )
-            return
+            return None
 
     if ide_type == "codex":
         _install_codex_mcp_config(config_path, dry_run=dry_run, setup=setup)
-        return
+        return None
     if mcp_ide.get("config_format") == "toml":
         _install_toml_mcp_config(
             config_path,
@@ -1392,11 +2036,11 @@ def _install_mcp_config(
             dry_run=dry_run,
             setup=setup,
         )
-        return
+        return None
 
     if dry_run:
         print(f"  MCP: Would add ai-guardian MCP server to {config_path}")
-        return
+        return None
 
     # Read or create config file
     config, config_error = _load_mcp_config(config_path, mcp_ide)
@@ -1410,7 +2054,7 @@ def _install_mcp_config(
         # not have the host's expected MCP container shape.
         logger.warning("Failed to read MCP config %s: %s", config_path, config_error)
         print(f"  MCP setup stopped: {config_error}", file=sys.stderr)
-        return
+        return None
     if config is None:
         config = {}
     original_config = deepcopy(config)
@@ -1451,10 +2095,10 @@ def _install_mcp_config(
     if config == original_config:
         print(f"  MCP: ai-guardian MCP server already configured in {config_path}")
         _register_mcp_identity(abs_path)
-        return
+        return None
 
     if not _backup_before_write(setup, config_path, "MCP setup"):
-        return
+        return None
     serialized_config = json.dumps(config, indent=2) + "\n"
     if ide_type == "kilo" and scope == "project":
         try:
@@ -1463,7 +2107,7 @@ def _install_mcp_config(
             logger.warning(
                 "Unable to write Kilo project MCP config %s: %s", config_path, exc
             )
-            return
+            return None
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "w", encoding="utf-8") as f:
@@ -1478,7 +2122,7 @@ def _install_mcp_config(
             "claude", "~/.claude/settings.json", filename="settings.json"
         )
         if raw_settings_path is None:
-            return
+            return None
         settings_path = Path(raw_settings_path).expanduser()
         if settings_path.exists():
             settings, settings_error = _load_cli_config(settings_path)
@@ -1486,7 +2130,7 @@ def _install_mcp_config(
                 logger.warning(
                     "Failed to read config %s: %s", settings_path, settings_error
                 )
-                return
+                return None
             if settings and "ai-guardian" in settings.get("mcpServers", {}):
                 print(
                     "  MCP: Warning: ai-guardian MCP entry found in "
@@ -1494,6 +2138,8 @@ def _install_mcp_config(
                     f"  MCP servers should be in {config_path}. "
                     "Remove the entry from settings.json to avoid conflicts."
                 )
+
+    return None
 
 
 def _install_codex_mcp_config(
@@ -1652,11 +2298,13 @@ def _remove_mcp_config(
     dry_run: bool = False,
     scope: str = "user",
     project_dir: Optional[str] = None,
-) -> None:
+) -> Optional[bool]:
     """Remove MCP server entry from IDE config."""
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
-        return
+        return None
+    if ide_type == "chatgpt":
+        return _remove_chatgpt_plugin(setup, dry_run=dry_run)
 
     if ide_type == "pi":
         if dry_run:
@@ -1671,7 +2319,7 @@ def _remove_mcp_config(
                 "`ai-guardian setup --ide pi --no-mcp` to disable MCP while "
                 "retaining hook protection"
             )
-        return
+        return None
 
     if ide_type == "cursor":
         if project_dir and scope == "user":
@@ -1681,23 +2329,23 @@ def _remove_mcp_config(
                 "  MCP: Cursor Cloud MCP is managed by the Cursor dashboard/team "
                 "settings or Cloud Agents API; no project MCP file was changed"
             )
-            return
+            return None
 
     config_path = get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
     if config_path is None:
-        return
+        return None
 
     if ide_type == "kilo" and scope == "project":
         if not project_dir:
             logger.warning("Kilo project MCP removal requires a project directory")
-            return
+            return None
         project_root = project_dir
         try:
             ensure_project_path_no_symlink(config_path, project_root)
         except ValueError as exc:
             logger.warning("Kilo MCP removal stopped for unsafe project path: %s", exc)
             print(f"  MCP removal stopped: {exc}", file=sys.stderr)
-            return
+            return None
 
     if ide_type == "goose":
         from ai_guardian.setup.goose import validate_goose_mcp_target
@@ -1708,11 +2356,11 @@ def _remove_mcp_config(
             logger.warning(
                 "Goose MCP removal stopped: managed plugin layout cannot be verified"
             )
-            return
+            return None
 
     if ide_type == "codex":
         _remove_codex_mcp_config(config_path, dry_run=dry_run, setup=setup)
-        return
+        return None
     if mcp_ide.get("config_format") == "toml":
         _remove_toml_mcp_config(
             config_path,
@@ -1720,27 +2368,27 @@ def _remove_mcp_config(
             dry_run=dry_run,
             setup=setup,
         )
-        return
+        return None
 
     if dry_run:
         print(f"  MCP: Would remove ai-guardian MCP server from {config_path}")
-        return
+        return None
 
     if not config_path.exists():
         print("  MCP: No config file found, nothing to remove")
-        return
+        return None
 
     config, config_error = _load_mcp_config(config_path, mcp_ide)
     if config_error or config is None:
         logger.warning("Failed to read MCP config %s: %s", config_path, config_error)
-        return
+        return None
 
     if ide_type == "opencode":
         if not _remove_opencode_mcp_entries(config):
             print("  MCP: ai-guardian MCP server not found in config")
-            return
+            return None
         if not _backup_before_write(setup, config_path, "MCP removal"):
-            return
+            return None
         serialized_config = json.dumps(config, indent=2) + "\n"
         if ide_type == "kilo" and scope == "project":
             write_project_text_no_symlink(config_path, serialized_config, project_root)
@@ -1748,7 +2396,7 @@ def _remove_mcp_config(
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write(serialized_config)
         print(f"  MCP: Removed ai-guardian MCP server from {config_path}")
-        return
+        return None
 
     key = mcp_ide["config_key"]
     if key in config and "ai-guardian" in config[key]:
@@ -1756,13 +2404,15 @@ def _remove_mcp_config(
         if not config[key]:
             del config[key]
         if not _backup_before_write(setup, config_path, "MCP removal"):
-            return
+            return None
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
             f.write("\n")
         print(f"  MCP: Removed ai-guardian MCP server from {config_path}")
     else:
         print("  MCP: ai-guardian MCP server not found in config")
+
+    return None
 
 
 def _remove_codex_mcp_config(

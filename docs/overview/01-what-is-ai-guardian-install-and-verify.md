@@ -15,7 +15,7 @@ AI Guardian evaluates activity at several points in an AI workflow:
 - File contents and commands can be scanned for secrets or dangerous behavior.
 - Tool output can be inspected before it is returned to the agent or user.
 
-The optional MCP security advisor allows an agent to ask whether an action appears safe before attempting it. Hooks remain the enforcement layer: they evaluate the operation during execution and can block it according to policy. This distinction matters because an advisory check depends on the agent choosing to ask, while a hook check is part of the execution path.
+The optional MCP security advisor allows an agent to ask whether an action appears safe before attempting it. MCP checks are advisory; hooks enforce only in supported integrations where installed and active. Regular ChatGPT desktop mode has no AI Guardian hooks: its optional desktop-only plugin exposes user-invoked MCP tools and does not automatically monitor or block prompts, tool calls, or results. This distinction matters because an advisory check depends on the agent choosing to ask, while a hook check is part of the execution path.
 
 ## Install the stable package
 

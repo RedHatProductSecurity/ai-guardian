@@ -322,6 +322,9 @@ jobs:
       - name: Verify supported IDE registry parity
         run: python -m pytest tests/unit/test_ide_registry.py -q
 
+      - name: Verify ChatGPT desktop local-plugin lifecycle
+        run: python -m pytest tests/unit/test_chatgpt_plugin.py -q
+
       - name: Verify real CLI coverage ledger (inventory, not qualification)
         run: |
           python -m pytest tests/unit/test_agent_cli_coverage.py -q
@@ -329,7 +332,7 @@ jobs:
 
       - name: Test IDE adapter setup
         run: |
-          IDES="claude cursor copilot grok codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode kilo pi augment crush junie goose"
+          IDES="claude cursor copilot grok codex chatgpt windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode kilo pi augment crush junie goose"
           FAILED=""
           for ide in $IDES; do
             echo "--- Testing setup --ide $ide ---"
@@ -384,6 +387,29 @@ jobs:
               test -f "$GOOSE_PROJECT/.agents/plugins/ai-guardian-goose/hooks/hooks.json"
               test -f "$GOOSE_PROJECT/.agents/plugins/ai-guardian-goose/.mcp.json"
             fi
+            if [ "$ide" = "chatgpt" ]; then
+              test -f "$HOME/.agents/plugins/ai-guardian-chatgpt/plugin.json"
+              test -f "$HOME/.agents/plugins/ai-guardian-chatgpt/mcp.json"
+              test -f "$HOME/.agents/plugins/marketplace.json"
+              python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["HOME"]) / ".agents" / "plugins"
+          manifest = json.loads((root / "ai-guardian-chatgpt" / "plugin.json").read_text())
+          mcp = json.loads((root / "ai-guardian-chatgpt" / "mcp.json").read_text())
+          marketplace = json.loads((root / "marketplace.json").read_text())
+          assert manifest["name"] == "ai-guardian-chatgpt-advisor"
+          assert "hooks" not in manifest["extensions"]["com.openai"]
+          assert mcp["mcpServers"]["ai-guardian"]["type"] == "stdio"
+          assert any(
+              entry["name"] == manifest["name"]
+              and entry["source"]["path"] == "./ai-guardian-chatgpt"
+              for entry in marketplace["plugins"]
+          )
+          PY
+            fi
             rm -rf "$WORK_DIR"
           done
 
@@ -418,6 +444,8 @@ jobs:
             variant: grok
           - ide: codex
             variant: codex
+          - ide: chatgpt
+            variant: chatgpt
           - ide: windsurf
             variant: windsurf
           - ide: gemini

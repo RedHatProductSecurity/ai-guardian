@@ -24,7 +24,7 @@ class TestMCPPauseUX:
         USER EXPERIENCE: Daemon pause -> MCP action-gating check is skipped.
 
         The response distinguishes a skipped proactive check from an allow or
-        block result and reminds the agent that hooks still enforce security.
+        block result and does not imply that all integrations have hooks.
         """
         server = create_server()
         tool = server._tool_manager._tools["check_command"]
@@ -36,7 +36,9 @@ class TestMCPPauseUX:
         assert result["pause_source"] == "daemon"
         assert result["message"] == (
             "MCP action-gating check skipped because AI Guardian is paused. "
-            "Hooks remain active and enforce security."
+            "This pause does not change hook configuration; hook enforcement applies only "
+            "to supported integrations where hooks are installed and active. Regular "
+            "ChatGPT desktop mode has no AI Guardian hooks."
         )
         assert "policy_decision" not in result
         mock_paused.assert_called_once_with(cwd=str(tmp_path.resolve()))

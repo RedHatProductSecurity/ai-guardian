@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **ChatGPT desktop regular-mode MCP advisor plugin (#2831):** Add an optional
+  desktop-only local plugin and personal-marketplace entry with backup-aware
+  setup/removal and local source health checks. Doctor reports ChatGPT host
+  installation/load as unverified; the plugin is user-invoked MCP only and does
+  not add automatic prompt, tool, or result enforcement.
+
 ### Fixed
 - **Read the Docs release lifecycle:** Require an RTD API token before release
   mutations, wait for the exact tag commit's build, activate and unhide the

@@ -31,15 +31,21 @@ for doctor output details.
 
 `OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** in the
 ChatGPT desktop app. It does not include regular ChatGPT mode in that app.
-AI Guardian's Codex lifecycle hooks currently run only for the Codex hook
-surface, so regular ChatGPT mode is not protected by those hooks. The ChatGPT
-desktop app, Codex CLI, and Codex IDE extension can share MCP configuration,
-but shared MCP availability is separate from hook enforcement and does not
-extend Codex lifecycle hooks to regular ChatGPT mode. See the official
+AI Guardian's Codex lifecycle hooks run only on the Codex hook surface.
+Regular ChatGPT mode is outside those hooks. `ai-guardian setup --ide chatgpt`
+instead creates a separate desktop-only local plugin in the personal marketplace
+at `~/.agents/plugins/marketplace.json`, with its source under
+`~/.agents/plugins/ai-guardian-chatgpt/`. The plugin provides user-invoked,
+advisory MCP tools; it does not monitor or block prompts, tools, or results.
+Doctor verifies the local source and marketplace configuration, not whether the
+user installed or loaded it in ChatGPT. `--no-mcp` removes AI Guardian's source
+and marketplace entry, but does not manage a host-cached plugin copy. See the
+official
 [Codex environments](https://learn.chatgpt.com/docs/environments/modes),
 [Codex hooks](https://learn.chatgpt.com/docs/hooks), and
-[MCP](https://learn.chatgpt.com/docs/extend/mcp) documentation for the
-upstream distinction.
+[desktop-only plugin](https://developers.openai.com/plugins/deploy/desktop-only.md)
+and [plugin packaging](https://developers.openai.com/plugins/build/plugins.md)
+documentation for the upstream format.
 
 ## Supported Agents
 
@@ -50,6 +56,7 @@ upstream distinction.
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
 | Grok Build | `--ide grok` | 6 managed events; only `PreToolUse` blocks | Local TOML `config.toml` | **Complete for documented hooks; passive output is observation-only** |
 | OpenAI Codex (CLI + Desktop) | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete for Codex CLI and desktop Codex mode** |
+| ChatGPT desktop (regular mode) | `--ide chatgpt` | N/A | Desktop-only local plugin in the personal marketplace | **MCP-only advisory; ChatGPT installation/load is unverified** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
 | Cline / ZooCode | `--ide cline` | Full | N/A | **Complete** |
@@ -81,6 +88,7 @@ supports a relocated user home. With no variables set, defaults below apply.
 |---|---|---|---|
 | Claude Code | `CLAUDE_CONFIG_DIR` | Hooks: `<dir>/settings.json`; MCP: `<dir>/.claude.json`; sessions: `<dir>/projects` | Project `.claude/` and `.mcp.json` paths are not redirected |
 | OpenAI Codex | `CODEX_HOME` | Hooks: `<dir>/hooks.json`; MCP: `<dir>/config.toml`; sessions: `<dir>/sessions` | Project `.codex/` layers remain project-local |
+| ChatGPT desktop (regular mode) | None documented or used by AI Guardian | Plugin: `~/.agents/plugins/ai-guardian-chatgpt`; marketplace: `~/.agents/plugins/marketplace.json` | User installs the marketplace plugin in ChatGPT desktop; host cache and activation are not managed or verified |
 | Cursor | `CURSOR_CONFIG_DIR` | User hooks: `<dir>/hooks.json`; user MCP: `<dir>/mcp.json` | Project hooks/MCP remain under the selected project `.cursor/` directory |
 | GitHub Copilot CLI | `COPILOT_HOME` | Hooks: `<dir>/hooks/hooks.json`; optional MCP: `<dir>/mcp-config.json`; CLI transcript: `<dir>/session-state/events.jsonl` | Project files are not redirected; without the variable the hook default remains `~/.github/hooks/hooks.json` |
 | Grok Build | `GROK_HOME` | Hooks: `<dir>/hooks/ai-guardian.json`; MCP: `<dir>/config.toml` | Project hooks/MCP remain under the selected project `.grok/` directory; no local transcript adapter |
@@ -163,6 +171,7 @@ bridge contracts because their host SDKs are not repository dependencies.
 | `copilot` | Dedicated adapter, prompt/pre-tool response contract and no-local-MCP boundary | Copilot CLI JSONL and VS Code delta journal; browser session adapter | Isolated managed-event matrix; command-hook health |
 | `grok` | Dedicated camelCase adapter, six managed events, project hook/MCP setup | No local transcript/session adapter | Isolated managed-event matrix; PreToolUse deny contract and passive-event limitation |
 | `codex` | Dedicated adapter, five managed events, layered config/MCP reconciliation, Codex UX contracts | Codex JSONL default-path discovery; browser session adapter | Isolated event matrix; CLI/desktop Codex-mode scope explicitly separated from regular ChatGPT |
+| `chatgpt` | Distinct no-hook adapter identity, desktop-only plugin package, personal marketplace merge/removal and source health | No local transcript/session adapter | Isolated plugin/MCP setup and verification; user installation/load remains unverified; advisory-only boundary |
 | `windsurf` | Dedicated adapter and nine managed command-hook events | Windsurf JSONL; browser session adapter | Isolated all-managed-event matrix; command-hook process I/O |
 | `gemini` | Dedicated adapter, SessionStart/BeforeAgent/BeforeTool/AfterTool mapping | Explicit-path JSONL; browser session adapter | Isolated all-managed-event matrix; command-hook health |
 | `cline` | Cline adapter and script-hook setup/reconciliation | Cline JSON-array transcript; shared Cline session adapter | Isolated script-event matrix; project-local hook scope |
@@ -199,6 +208,7 @@ blocking, observation, context injection, and output transformation.
 | Grok Build | Yes | Yes | Yes | Yes (observation) | N/A | Yes | Yes |
 | Goose | Yes | Yes (observation) | Yes | Yes (observation) | Not installed | N/A | Yes |
 | OpenAI Codex (CLI + Desktop) | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
+| ChatGPT desktop (regular mode) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
 | Cline / ZooCode | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
@@ -232,7 +242,7 @@ of truth for host/version limitations and failure behavior.
 |---|---|
 | **Prompt control and pre-tool gate** | Claude Code; Cursor desktop/local CLI; Codex CLI and desktop Codex mode; Windsurf; Gemini CLI; Kiro IDE; AiderDesk; OpenCode V1/V2; Pi. OpenCode replaces the submitted draft with a fixed refusal rather than returning a native prompt denial. |
 | **Pre-tool gate; prompt gate absent, advisory, conditional, or unverified** | Copilot command hooks; Grok Build; Antigravity CLI; Cline; Cursor Cloud Agent; Kiro CLI; OpenClaw; ZooCode; Augment; Crush; Kilo Code CLI (historical full-matrix pre-tool cases passed; current-candidate requalification is pending; prompt replacement does not cancel the model turn). Copilot's command prompt-hook output is ignored; Antigravity injects advice but does not terminate the model request. |
-| **MCP-only advisory checks** | Junie. MCP availability does not itself enforce a check; the agent must call and follow it. |
+| **MCP-only advisory checks** | Junie; ChatGPT desktop regular mode through its optional local plugin. MCP availability does not itself enforce a check; the agent must call and follow it. |
 
 Post-tool result handling is a separate capability. Claude Code supports
 model-visible output replacement, but a post-tool `block` alone leaves the
@@ -281,6 +291,7 @@ a guarantee that every installed version behaves identically.
 | `copilot` | Copilot cloud coding-agent job | **Not installed** by AI Guardian. | **Not installed** by AI Guardian. | **Not installed** by AI Guardian. | The local `COPILOT_HOME`/user command-hook setup does not provision a repository's remote `.github/hooks/` policy. Do not infer cloud enforcement from a local CLI/IDE installation. [Hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference). |
 | `grok` | Grok Build command hooks | **Observe only** in AI Guardian; the adapter emits no prompt decision or context. | **Gate** on an explicit deny. | **Observe only**; passive-event output is ignored, so no result replacement. | Command hooks receive event JSON on stdin and return JSON/exit status. AI Guardian does not set a timeout; Grok's documented default is 5s. Only an explicit deny blocks; crashes, malformed output, non-deny exit codes, and timeouts fail open. Project hooks require the project to be trusted. [Hooks reference](https://docs.x.ai/build/features/hooks). |
 | `codex` | Codex CLI and desktop **Codex mode** only; not regular ChatGPT mode | **Gate** with a block decision or exit 2; no prompt rewrite. | **Gate**; the deny response includes Codex's required sanitized `permissionDecisionReason`. | **Replace with feedback** when blocked; Codex can substitute the completed result with feedback, but AI Guardian does not claim a sanitized replacement of the original result. | Command hooks use JSON stdin/stdout. Generated timeout is 300s for prompt/pre-tool and 60s for post-tool. Hooks must be reviewed/trusted by Codex; ordinary hook failures continue rather than deny. Post-tool runs after side effects. [Codex hooks](https://learn.chatgpt.com/docs/hooks); [scope note](#codex-and-chatgpt-desktop-scope). |
+| `chatgpt` | Regular ChatGPT mode in the desktop app; separate from Codex mode | **Not installed**; no prompt hook | **Not installed**; no tool gate | **Not installed**; no result hook | Setup creates a root `plugin.json` and `mcp.json` local plugin source under `~/.agents/plugins/ai-guardian-chatgpt/` and merges one entry into `~/.agents/plugins/marketplace.json`, backing up changed existing files and preserving unrelated marketplace/plugin server entries. The MCP server is stdio and advisory; the user must install the plugin in ChatGPT's Plugins Directory and invoke its tools. Setup/Doctor cannot verify host installation or activation. `--no-mcp` removes the source and marketplace entry, not any host-cached copy. [Desktop-only plugins](https://developers.openai.com/plugins/deploy/desktop-only.md); [plugin packaging](https://developers.openai.com/plugins/build/plugins.md). |
 | `windsurf` | Cascade hooks in the configured user/project scope | **Gate** through `pre_user_prompt` (exit 2). | **Gate** through installed pre-command, pre-read, pre-write, and pre-MCP events (exit 2). | **Observe only**; post-hooks cannot block or replace completed tool results. | Command receives event JSON on stdin; exit 2 blocks pre-hooks, other errors continue. AI Guardian does not set a timeout or `show_output`. Hook files must be present in the actual Cascade scope. [Cascade hooks](https://docs.windsurf.com/windsurf/cascade/hooks). |
 | `gemini` | Gemini CLI | **Gate** through `BeforeAgent`; no prompt rewrite. | **Gate** through `BeforeTool`. | **Withhold by refusal** on a sensitive result; Gemini replaces the model-visible result with a fixed refusal, not AI Guardian's sanitized copy. | Command hooks use JSON stdin/stdout. Host default timeout is 60s; exit 2 blocks, while other nonzero exits warn and continue. Requires the generated Gemini settings hook config to be loaded. [Hooks reference](https://geminicli.com/docs/hooks/reference/). |
 | `antigravity` | Antigravity CLI (`agy`) | **Advice only** through `PreInvocation`, the closest equivalent; AI Guardian does not set the host's `terminationBehavior: terminate`. | **Gate** on explicit deny; a clean check returns `ask` to preserve the host permission flow. | **Observe only** for tool output: Antigravity's `PostToolUse` payload has no result content. | CamelCase JSON on stdin/stdout. AI Guardian configures 300s for `PreToolUse` and 60s for `PostToolUse`/`PreInvocation`. Requires `~/.gemini/config/hooks.json` (or the configured hook file) and `agy`. Host handling of hook process failure is not relied on; verify the target version. [Hooks reference](https://antigravity.google/docs/hooks/). |
@@ -328,6 +339,7 @@ integration guides.
 | Pi | Extension | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd | Supported |
 | Crush | Command hooks | PreToolUse | Supported (partial hook surface) |
 | Junie | MCP | None | MCP-only; no hook latency |
+| ChatGPT desktop (regular mode) | Desktop-only local plugin MCP | None | MCP-only; no hook latency |
 | Goose | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd | Supported; prompt/post events observation-only |
 | Aider CLI | Git pre-commit hook | None | Commit-time scan; no per-interaction hook latency |
 
@@ -337,9 +349,9 @@ Codex setup installs five managed events. The adapter also records timing for
 those recognized events. These events are recognized but are not installed or
 health-checked by `ai-guardian setup`.
 
-Junie's MCP calls and Aider CLI's commit-time `ai-guardian scan` do not enter
-the hook pipeline, so they do not create latency entries. A paused daemon also
-does not create entries because it intentionally skips hook processing.
+Junie's and ChatGPT's MCP calls and Aider CLI's commit-time `ai-guardian scan`
+do not enter the hook pipeline, so they do not create latency entries. A paused
+daemon also does not create entries because it intentionally skips hook processing.
 
 ## Interpreting violation coverage
 

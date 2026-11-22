@@ -2940,7 +2940,7 @@
             "paused"
           ],
           "default": "low",
-          "description": "How aggressively the AI should use proactive security checks. 'low' (default): only check when user asks or after a block. 'medium': check unfamiliar paths and suspicious commands. 'high': check every file access and command. 'paused': skip proactive MCP action-gating checks while hooks continue enforcing security. An active daemon or directory pause reports 'paused' at runtime without changing the saved level. Higher levels add latency and token usage."
+          "description": "How aggressively the AI should use proactive security checks. 'low' (default): only check when user asks or after a block. 'medium': check unfamiliar paths and suspicious commands. 'high': check every file access and command. 'paused': skip proactive MCP action-gating without changing hook configuration. Hook enforcement applies only to supported integrations where hooks are installed and active; regular ChatGPT desktop mode has no AI Guardian hooks. An active daemon or directory pause reports 'paused' at runtime without changing the saved level. Higher levels add latency and token usage."
         }
       },
       "additionalProperties": false

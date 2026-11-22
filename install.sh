@@ -34,7 +34,7 @@ Options:
                         installed IDEs and set up their hooks automatically
                         Choices: claude, cursor, copilot, grok, codex, windsurf,
                                  gemini, antigravity, cline, zoocode, kiro, aiderdesk,
-                                  openclaw, opencode, kilo, pi, augment, crush, junie, goose
+                                  openclaw, opencode, kilo, pi, augment, crush, junie, goose, chatgpt
     --no-setup          Install only, don't auto-detect or update IDE hooks
     --profile PROFILE   Security profile: @minimal, @standard (default), @strict
     --version VERSION   Install a specific version or a local .whl file

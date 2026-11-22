@@ -6,7 +6,7 @@ Programmatic security checking for Python agent programs.
 
 AI Guardian's hook-based protection covers IDE sessions (Claude Code, Cursor, VS Code). The SDK extends this protection to **programmatic use cases** — custom agents, LangChain pipelines, direct LLM API calls, and any Python program that processes untrusted content.
 
-The SDK is **additive protection**. It cannot bypass or weaken existing hook-based enforcement. Hooks remain the enforcement layer for IDE sessions; the SDK serves programs where hooks don't apply.
+The SDK is **additive protection**. It cannot bypass or weaken existing hook-based enforcement. Hooks enforce only in supported integrations where installed and active; the SDK serves programs where hooks don't apply. Regular ChatGPT desktop mode has no AI Guardian hooks, and its optional local MCP plugin remains advisory.
 
 ## Installation
 

@@ -13,7 +13,7 @@ The canonical production registry is
 [`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). Its current
 keys are `claude`, `cursor`, `copilot`, `grok`, `codex`, `windsurf`, `gemini`,
 `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`,
-`pi`, `augment`, `crush`, `junie`, and `goose`. Add a new IDE there first. The parity contract in
+`pi`, `augment`, `crush`, `junie`, `goose`, and `chatgpt`. Add a new IDE there first. The parity contract in
 [`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py) then
 requires setup, adapter aliases, MCP/rules capability, transcript/session
 registries, installer text, support documentation, and the release-readiness
@@ -44,6 +44,14 @@ ChatGPT desktop app. Regular ChatGPT mode is not currently protected by those
 Codex hooks. Shared MCP configuration must be documented independently; MCP
 availability does not imply hook enforcement.
 
+Regular ChatGPT desktop mode has a distinct optional desktop-only local plugin
+under the personal marketplace. Use the official root `plugin.json` and
+`mcp.json` format; preserve unrelated marketplace entries and back up files
+before changing them. Local source health is not proof that the user installed
+or loaded the plugin in ChatGPT, and its user-invoked MCP tools are advisory,
+not automatic prompt/tool/result enforcement. `--no-mcp` removes AI Guardian's
+source and marketplace entry, not a host-cached plugin copy.
+
 ## New-agent issue checklist
 
 Use this shorter checklist in the tracking issue before adding a new agent. The
@@ -65,6 +73,10 @@ evidence exists.
   MCP, rules, transcript, console, tray, doctor, and REST surfaces that apply.
 - [ ] Record user, project, cloud/team, and remote scope boundaries; preserve
   unrelated settings and keep setup idempotent.
+- [ ] For ChatGPT desktop regular mode, test local plugin package and marketplace
+  setup, backup/preservation, verification, dry-run, and `--no-mcp` removal;
+  report host installation/load as unverified and do not imply Codex hook
+  coverage or automatic enforcement.
 - [ ] Decide support separately for Docker/Podman and OpenShell. Add an agent
   to a runtime selector only when the image contains or explicitly installs it.
 - [ ] Add image/version checks, runtime home/config paths, workdir behavior,
