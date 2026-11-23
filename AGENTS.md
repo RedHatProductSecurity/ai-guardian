@@ -1683,12 +1683,7 @@ For questions about:
 - **Contributing**: Open an issue on GitHub
 
 <!-- openwolf:begin -->
-# OpenWolf (local, optional)
+# OpenWolf
 
-OpenWolf context files are **not tracked in this repository** (`.wolf/`,
-`.opencode/plugins/openwolf/`, `.cursor/rules/openwolf.mdc` are gitignored). If
-you have OpenWolf installed locally, read and follow `.wolf/OPENWOLF.md` at
-session start, check `.wolf/cerebrum.md` before generating code, and grep
-`.wolf/anatomy.md` for a file's path before reading it. If those files are
-absent, ignore this section.
+This project uses OpenWolf for context management. Read and follow .wolf/OPENWOLF.md at session start. Check .wolf/cerebrum.md before generating code. Grep .wolf/anatomy.md for a file's path before reading it (never read the whole index).
 <!-- openwolf:end -->
