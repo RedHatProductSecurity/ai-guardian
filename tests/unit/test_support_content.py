@@ -24,9 +24,7 @@ def _write_text(path, text, *, encoding="utf-8"):
 @pytest.mark.parametrize(
     "saved", [{}, {"support": {}}, {"support": {"export_destination": ""}}]
 )
-def test_unset_saved_destination_defaults_to_local_export(
-    monkeypatch, tmp_path, saved
-):
+def test_unset_saved_destination_defaults_to_local_export(monkeypatch, tmp_path, saved):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("ai_guardian.config.utils.get_config_dir", lambda: tmp_path)
     _write_text(tmp_path / "ai-guardian.json", json.dumps(saved))
