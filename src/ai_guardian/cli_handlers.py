@@ -1249,8 +1249,7 @@ def _handle_tray_start(args):
             return 1
 
     from ai_guardian.tray.app import DaemonTray, is_tray_available, _is_tray_running
-    from ai_guardian.daemon.discovery import DaemonDiscovery
-    from ai_guardian.daemon.multi_client import MultiDaemonClient
+    from ai_guardian.daemon.target_service import DaemonTargetService
 
     if not is_tray_available():
         import platform
@@ -1305,11 +1304,12 @@ def _handle_tray_start(args):
         disc_config.setdefault("daemon", {}).setdefault("tray", {})
         disc_config["daemon"]["tray"]["discover_containers"] = False
         disc_config["daemon"]["tray"]["discover_kubernetes"] = False
-        discovery = DaemonDiscovery(config=disc_config)
     else:
-        discovery = DaemonDiscovery(config=config)
+        disc_config = config
 
-    multi_client = MultiDaemonClient()
+    target_service = DaemonTargetService(config=disc_config)
+    discovery = target_service.discovery
+    multi_client = target_service
 
     from ai_guardian.daemon.client import send_status_request
 

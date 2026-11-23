@@ -3335,8 +3335,9 @@ class TestTrayStartAlreadyRunningMessage:
                 "ai_guardian.cli_handlers._load_config_file", return_value=({}, None)
             ),
             mock.patch("ai_guardian.tray.app.DaemonTray") as MockTray,
-            mock.patch("ai_guardian.daemon.discovery.DaemonDiscovery"),
-            mock.patch("ai_guardian.daemon.multi_client.MultiDaemonClient"),
+            mock.patch(
+                "ai_guardian.daemon.target_service.DaemonTargetService"
+            ) as MockTargetService,
             mock.patch(
                 "ai_guardian.daemon.client.send_status_request", return_value={}
             ),
@@ -3351,6 +3352,9 @@ class TestTrayStartAlreadyRunningMessage:
         mock_print.assert_called_once_with(
             "ai-guardian tray started (multi-daemon mode)"
         )
+        target_service = MockTargetService.return_value
+        assert MockTray.call_args.kwargs["discovery"] is target_service.discovery
+        assert MockTray.call_args.kwargs["multi_client"] is target_service
 
 
 class TestMcpProactiveMenuVisibility:
