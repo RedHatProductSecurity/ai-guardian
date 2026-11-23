@@ -17,12 +17,15 @@ implementing a compatible API.
 """
 
 import logging
+import hashlib
+import json
 import os
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 
 from ai_guardian.config.utils import get_cache_dir, is_feature_enabled
 
@@ -80,6 +83,9 @@ class PatternServerClient:
         "secrets": "secrets-patterns.toml",
     }
 
+    OFFICIAL_HOST = "raw.githubusercontent.com"
+    OFFICIAL_PATH_PREFIX = "/leaktk/"
+
     def __init__(self, config: dict, pattern_type: str = "gitleaks"):
         """
         Initialize pattern server client.
@@ -99,6 +105,8 @@ class PatternServerClient:
         # Only False if explicitly set (backward compatibility)
         self.enabled_config = config.get("enabled", True)
         self.base_url: Optional[str] = config.get("url")
+        self.allow_untrusted_host = bool(config.get("allow_untrusted_host", False))
+        self.expected_sha256 = str(config.get("sha256", "")).strip().lower()
 
         # Get endpoint - use config value or default for pattern type
         default_endpoint = self.DEFAULT_ENDPOINTS.get(
@@ -127,6 +135,9 @@ class PatternServerClient:
         self.cache_path = Path(
             cache_config.get("path", default_cache_path)
         ).expanduser()
+        self.metadata_path = self.cache_path.with_suffix(
+            self.cache_path.suffix + ".meta.json"
+        )
 
         self.refresh_interval = (
             cache_config.get("refresh_interval_hours", 12) * 3600
@@ -274,6 +285,18 @@ class PatternServerClient:
             # Build URL
             url = f"{self.base_url.rstrip('/')}{self.patterns_endpoint}"
 
+            parsed = urlparse(url)
+            official = (
+                parsed.scheme == "https"
+                and parsed.hostname == self.OFFICIAL_HOST
+                and parsed.path.startswith(self.OFFICIAL_PATH_PREFIX)
+            )
+            if not official and not self.allow_untrusted_host:
+                logger.error(
+                    "Pattern server host is not allowlisted; set allow_untrusted_host explicitly"
+                )
+                return False
+
             # Prepare headers
             headers = {
                 "User-Agent": "ai-guardian/1.0.0",
@@ -335,9 +358,34 @@ class PatternServerClient:
                 logger.error(f"Pattern server returned invalid TOML: {e}")
                 return False
 
+            raw_content = response.content
+            if not isinstance(raw_content, bytes):
+                raw_content = response.text.encode("utf-8")
+            content_hash = hashlib.sha256(raw_content).hexdigest()
+            if self.expected_sha256 and content_hash != self.expected_sha256:
+                logger.error(
+                    "Pattern bundle SHA-256 verification failed; cached bundle retained"
+                )
+                return False
+            if not self.expected_sha256:
+                logger.warning(
+                    "Pattern bundle has no pinned SHA-256; refusing to mark it verified"
+                )
+
             # Save patterns to cache
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
             self.cache_path.write_text(response.text)
+            self.metadata_path.write_text(
+                json.dumps(
+                    {
+                        "origin": url,
+                        "sha256": content_hash,
+                        "verified": bool(self.expected_sha256),
+                        "fetched_at": time.time(),
+                    },
+                    indent=2,
+                )
+            )
 
             logger.info(
                 f"Successfully fetched and cached {self.pattern_type} patterns to {self.cache_path}"
@@ -376,3 +424,22 @@ class PatternServerClient:
         except Exception as e:
             logger.error(f"Error saving token: {e}")
             return False
+
+    def verification_info(self) -> Dict[str, Any]:
+        """Return display-safe integrity metadata for Doctor and diagnostics."""
+        info: Dict[str, Any] = {
+            "host": urlparse(self.base_url or "").hostname or "",
+            "expected_sha256": self.expected_sha256,
+            "allow_untrusted_host": self.allow_untrusted_host,
+            "cache": str(self.cache_path),
+            "bundle_sha256": "",
+            "verified": False,
+        }
+        try:
+            metadata = json.loads(self.metadata_path.read_text(encoding="utf-8"))
+            if isinstance(metadata, dict):
+                info["bundle_sha256"] = metadata.get("sha256", "")
+                info["verified"] = bool(metadata.get("verified"))
+        except (OSError, ValueError, TypeError):
+            pass  # intentionally silent — diagnostic metadata is best effort
+        return info

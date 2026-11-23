@@ -305,6 +305,8 @@ if program == "git":
             sys.exit(1)
     elif args[:2] == ["tag", "--list"]:
         print("v1.2.2")
+    elif args[:2] == ["ls-remote", "--exit-code"]:
+        sys.exit(1)
     elif args[:3] == ["diff", "--name-only", "--diff-filter=U"]:
         conflicts = json.loads(os.environ["RELEASE_MERGE_CONFLICTS"])
         commands = [
@@ -386,6 +388,10 @@ elif program == "gh":
 
     if args[:2] == ["auth", "status"]:
         pass
+    elif args[:2] == ["api", "user"]:
+        print(os.environ.get("RELEASE_MAINTAINER", "itdove"))
+    elif args[:2] == ["release", "view"]:
+        sys.exit(1)
     elif args[:2] == ["workflow", "run"]:
         workflow = args[2]
         if workflow == dispatch_failure:
@@ -649,6 +655,7 @@ elif program not in ("curl", "git-cliff", "sleep"):
             "NOTEBOOKLM_TEST_OUTCOME": notebooklm_outcome,
             "PIP_TEST_EXIT": str(pip_exit),
             "RELEASE_CURRENT_BRANCH": current_branch,
+            "AI_GUARDIAN_RELEASE_MAINTAINER": "itdove",
             "RELEASE_REPO_ROOT": str(tmp_path),
             "RELEASE_CALCULATED_VERSION": calculated_version,
             "RELEASE_HEAD_SHA": head_sha,
@@ -684,8 +691,12 @@ elif program not in ("curl", "git-cliff", "sleep"):
         else:
             test_env["RTD_API_TOKEN"] = rtd_token
 
+        command = ["bash", str(script), "--skip-cursor", *flags]
+        if "--execute" in flags:
+            command.extend(("--confirm-version", calculated_version))
+        command.append(release_type)
         result = subprocess.run(
-            ["bash", str(script), "--skip-cursor", *flags, release_type],
+            command,
             input=answers,
             capture_output=True,
             text=True,

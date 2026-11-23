@@ -22,6 +22,7 @@ RELEASE_MODE=""
 SKIP_CURSOR=false
 RESUME_CI=false
 RELEASE_TYPE=""
+CONFIRM_VERSION=""
 
 usage() {
     cat <<'EOF'
@@ -30,6 +31,8 @@ Usage: scripts/release.sh [OPTIONS] <minor|patch|major>
 Options:
   --dry-run        Preview release changes; required CI still runs (default)
   --execute        Execute the release; required for any release mutations
+  --confirm-version VERSION
+                   Required for --execute; must match the computed version
   --resume         Resume the saved, incomplete required-CI attempt only
   --skip-cursor    Skip Cursor hook verification
   -h, --help       Show this help message
@@ -63,6 +66,11 @@ while [[ $# -gt 0 ]]; do
             RELEASE_MODE="execute"
             DRY_RUN=false
             shift
+            ;;
+        --confirm-version)
+            [[ $# -ge 2 ]] || { echo "Error: --confirm-version requires a version" >&2; exit 2; }
+            CONFIRM_VERSION="$2"
+            shift 2
             ;;
         --skip-cursor) SKIP_CURSOR=true; shift ;;
         --resume) RESUME_CI=true; shift ;;
@@ -246,6 +254,25 @@ if [[ "$RELEASE_TYPE" == "patch" ]]; then
         die "Local $RELEASE_BRANCH is not synchronized with origin/$RELEASE_BRANCH. Preserve or reconcile local commits, then retry from the remote stable tip."
     fi
     info "Patch release source verified: $RELEASE_BRANCH ($LOCAL_RELEASE_SHA)"
+fi
+
+if ! $DRY_RUN; then
+    [[ -n "$CONFIRM_VERSION" ]] || die \
+        "--confirm-version is required for --execute and must match the computed release version"
+    [[ "$CONFIRM_VERSION" == "$NEW_VERSION" ]] || die \
+        "Confirmation version ${CONFIRM_VERSION} does not match computed version ${NEW_VERSION}"
+    EXPECTED_MAINTAINER="${AI_GUARDIAN_RELEASE_MAINTAINER:-}"
+    [[ -n "$EXPECTED_MAINTAINER" ]] || die \
+        "AI_GUARDIAN_RELEASE_MAINTAINER is required for --execute"
+    AUTHENTICATED_MAINTAINER=$(gh api user --jq .login 2>/dev/null || true)
+    [[ "$AUTHENTICATED_MAINTAINER" == "$EXPECTED_MAINTAINER" ]] || die \
+        "GitHub identity ${AUTHENTICATED_MAINTAINER:-unknown} does not match the expected maintainer"
+    if git ls-remote --exit-code --tags origin "$TAG_NAME" >/dev/null 2>&1; then
+        die "Release tag ${TAG_NAME} already exists on origin"
+    fi
+    if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+        die "GitHub release ${TAG_NAME} already exists"
+    fi
 fi
 
 # Next dev version (for post-release merge back)

@@ -815,17 +815,41 @@ class Doctor:
             )
 
         detail_lines = []
+        warnings = []
         for source, ps_config in ps_configs:
             endpoint = ps_config.get("patterns_endpoint") or "(default)"
+            try:
+                from ai_guardian.patterns.server import PatternServerClient
+
+                integrity = PatternServerClient(ps_config).verification_info()
+            except Exception:
+                integrity = {}
+            host = integrity.get("host") or "unknown"
+            expected = integrity.get("expected_sha256")
+            verified = integrity.get("verified")
+            if not expected:
+                warnings.append(f"{source}: no pinned SHA-256")
+            if host != "raw.githubusercontent.com" and not integrity.get(
+                "allow_untrusted_host", False
+            ):
+                warnings.append(f"{source}: host {host} is not allowlisted")
             detail_lines.append(
                 f"{source}: URL={ps_config.get('url', 'unknown')}; "
-                f"patterns_endpoint={endpoint}"
+                f"patterns_endpoint={endpoint}; host={host}; "
+                f"verification={'verified' if verified else 'unverified'}; "
+                f"bundle_sha256={integrity.get('bundle_sha256') or 'none'}"
             )
         return CheckResult(
             name="pattern_server",
-            status=CheckStatus.PASS,
-            message="Configured",
+            status=CheckStatus.WARN if warnings else CheckStatus.PASS,
+            message="Configured with integrity warnings" if warnings else "Configured",
             detail="\n".join(detail_lines),
+            fix_hint=(
+                "Set pattern_server.sha256 and use the official raw.githubusercontent.com/leaktk path, "
+                "or explicitly set allow_untrusted_host for a reviewed private server."
+                if warnings
+                else None
+            ),
         )
 
     def check_ps_cache_path(self) -> CheckResult:

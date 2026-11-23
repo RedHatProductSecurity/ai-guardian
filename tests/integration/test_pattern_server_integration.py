@@ -13,6 +13,7 @@ NEW in v1.8.0: Pattern server support for enterprise pattern management.
 
 import pytest
 import tempfile
+import hashlib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -57,6 +58,44 @@ class TestPatternServerClient:
             {"url": "https://example.com"}, pattern_type="secrets"
         )
         assert "secrets-patterns.toml" in str(secrets_client.cache_path)
+
+    @patch("ai_guardian.patterns.server.requests")
+    def test_untrusted_hosts_require_explicit_opt_in(self, mock_requests, tmp_path):
+        from ai_guardian.patterns.server import PatternServerClient
+
+        client = PatternServerClient(
+            {
+                "url": "https://patterns.example.com",
+                "cache": {"path": str(tmp_path / "p.toml")},
+            }
+        )
+        assert client._fetch_patterns() is False
+        mock_requests.get.assert_not_called()
+
+    @patch("ai_guardian.patterns.server.requests")
+    def test_pinned_hash_is_recorded_and_mismatch_keeps_cache(
+        self, mock_requests, tmp_path
+    ):
+        from ai_guardian.patterns.server import PatternServerClient
+
+        content = '[metadata]\nversion = "1.0.0"\n'
+        response = mock_requests.get.return_value
+        response.status_code = 200
+        response.text = content
+        response.content = content.encode()
+        cache_path = tmp_path / "patterns.toml"
+        client = PatternServerClient(
+            {
+                "url": "https://raw.githubusercontent.com",
+                "patterns_endpoint": "/leaktk/patterns/main/bundle",
+                "sha256": hashlib.sha256(response.content).hexdigest(),
+                "cache": {"path": str(cache_path)},
+            }
+        )
+        assert client.get_patterns_path() == cache_path
+        info = client.verification_info()
+        assert info["verified"] is True
+        assert info["bundle_sha256"] == client.expected_sha256
 
     def test_pattern_server_disabled_by_default(self):
         """Test that features work without pattern server (backward compatibility)."""

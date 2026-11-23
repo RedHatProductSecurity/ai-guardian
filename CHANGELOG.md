@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failures during release dry-runs without checking authentication or contacting
   NotebookLM.
 ### Changed
+- **Pattern server integrity:** Record bundle origin and SHA-256 metadata, reject
+  mismatched pinned hashes, and warn in Doctor for unpinned or non-allowlisted
+  pattern hosts. Official LeakTK bundles use the `raw.githubusercontent.com/leaktk`
+  allowlist; private servers require explicit opt-in.
+- **Release execution gates:** Keep release previews dry-run by default and require
+  an exact version confirmation, matching maintainer identity, and absent tag/release
+  checks before mutating release state.
 - **Local agent tooling is no longer tracked:** Remove `.wolf/`, `.codex/`,
   `.cursor/`, `.opencode/` (including the OpenWolf plugin), `.claude/`, and the
   OpenWolf plugin contract tests from the repository; all are now gitignored and
