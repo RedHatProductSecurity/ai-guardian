@@ -12,8 +12,8 @@ from unittest.mock import Mock
 
 import pytest
 
-SKILL_DIR = Path(__file__).resolve().parents[2] / ".claude/skills/release"
-sys.path.insert(0, str(SKILL_DIR))
+SCRIPT_DIR = Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(SCRIPT_DIR))
 import notebooklm_release as refresh_module
 import release_helper
 

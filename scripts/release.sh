@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HELPER="python3 ${REPO_ROOT}/.claude/skills/release/release_helper.py --repo ${REPO_ROOT}"
+HELPER="python3 ${REPO_ROOT}/scripts/release_helper.py --repo ${REPO_ROOT}"
 CONTAINER_VERIFIER="${REPO_ROOT}/scripts/verify_container_images.py"
 RELEASE_CI_GATE="${REPO_ROOT}/scripts/release_ci_gate.py"
 

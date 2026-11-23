@@ -582,12 +582,12 @@ jobs:
 
       - name: Verify release announcement CLI and mocked publication contracts
         run: |
-          python .claude/skills/release/release_helper.py announce-release --help
+          python scripts/release_helper.py announce-release --help
           python -m pytest tests/unit/test_release_helper.py tests/unit/test_release_script.py -q
 
       - name: Verify optional NotebookLM refresh CLI and mocked replacement contracts
         run: |
-          python .claude/skills/release/release_helper.py refresh-notebooklm --help
+          python scripts/release_helper.py refresh-notebooklm --help
           python -m pytest tests/unit/test_notebooklm_release.py -q
 
       - name: Create config
