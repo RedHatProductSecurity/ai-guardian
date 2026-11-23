@@ -23,10 +23,6 @@ from ai_guardian.setup.hooks import (
     _OPENCODE_PLUGIN_V2_TS,
 )
 
-OPENWOLF_PLUGIN_DIR = (
-    Path(__file__).resolve().parents[2] / ".opencode" / "plugins" / "openwolf"
-)
-
 
 @pytest.fixture(autouse=True)
 def _reset_opencode_version_cache():
@@ -420,40 +416,6 @@ def test_v2_tool_blocks_add_safe_pre_and_post_refusal_notices():
     assert "result.error" not in before_hook
     assert "result.error" not in after_hook
     assert "resume: false" in _OPENCODE_PLUGIN_V2_TS
-
-
-def test_openwolf_plugin_review_regressions_are_present():
-    """Keep current usage, context, and event-loop contracts in the plugin."""
-    core = (OPENWOLF_PLUGIN_DIR / "core.ts").read_text(encoding="utf-8")
-    index = (OPENWOLF_PLUGIN_DIR / "index.ts").read_text(encoding="utf-8")
-    usage = (OPENWOLF_PLUGIN_DIR / "usage.ts").read_text(encoding="utf-8")
-
-    assert "id: messageID" in core
-    assert "id: `usage:${event.id}`" in core
-    assert (
-        'approvedMemory(getWolfDir(directory), "OPENWOLF.md")' in core
-        and "<openwolf-protocol>" in core
-    )
-    assert (
-        'const id = crypto.createHash("sha256").update(`${info.sessionID}:${info.id}`)'
-        in usage
-    )
-    assert (
-        "if (previous?.time?.completed && !info.time?.completed) return true" in usage
-    )
-    assert (
-        "if ((previous?.time?.completed ?? 0) > (info.time?.completed ?? 0)) return true"
-        in usage
-    )
-
-    subscription = index.index(
-        "for await (const event of ctx.event.subscribe({ signal: controller.signal }))"
-    )
-    event_call = index.index("await handleOpenCodeEvent(", subscription)
-    handler_failure = index.index("OpenWolf: event handler failed", event_call)
-    event_handling = index[subscription:handler_failure]
-    assert "try {" in event_handling
-    assert "} catch (error) {" in event_handling
 
 
 def test_v2_registration_removes_direct_file_entry_and_preserves_packages(tmp_path):

@@ -44,26 +44,18 @@ versions.json
 # Release
 .release-config.json
 
-# Claude Code - only track release skill
-.claude/*
-!.claude/skills/
-.claude/skills/*
-!.claude/skills/release/
-coverage.json
-
-# ----------------------------------------------------
-# OpenWolf AI Middleware Configuration
-# ----------------------------------------------------
-
-# 1. Ignore everything inside the local .wolf folder by default
-.wolf/*
-
-# 2. Explicitly allow only the shared AI context and settings files
-!.wolf/anatomy.md
-!.wolf/cerebrum.md
-!.wolf/STATUS.md
-!.wolf/config.json
-
-# Caveman
+# Local agent tooling (never tracked)
+.claude/
+.codex/
+.cursor/
+.opencode/
 .agents/
 skills-lock.json
+
+# Local caches
+.ruff_cache/
+.mypy_cache/
+coverage.json
+
+# OpenWolf AI Middleware configuration (local tooling, never tracked)
+.wolf/

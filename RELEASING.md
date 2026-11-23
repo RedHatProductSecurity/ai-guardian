@@ -327,7 +327,7 @@ failed/incomplete API lookups prevent creation.
 Preview offline, without GitHub/PyPI access or any local/remote mutations:
 
 ```bash
-python3 .claude/skills/release/release_helper.py announce-release X.Y.Z --dry-run
+python3 scripts/release_helper.py announce-release X.Y.Z --dry-run
 ```
 
 `scripts/release.sh --dry-run minor` also previews this announcement. A preview
@@ -336,7 +336,7 @@ does not verify publication or claim that anything was posted.
 To retry **only the announcement** for an explicitly specified published version:
 
 ```bash
-python3 .claude/skills/release/release_helper.py announce-release X.Y.Z
+python3 scripts/release_helper.py announce-release X.Y.Z
 ```
 
 This command is independent of the current branch/development version. It never
@@ -419,22 +419,22 @@ current title before attempting another rename and never re-uploads the export.
 Preview the intended replacement completely offline:
 
 ```bash
-python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z --dry-run
+python3 scripts/release_helper.py refresh-notebooklm X.Y.Z --dry-run
 ```
 
 Retry **only this optional step** for an explicitly specified published release:
 
 ```bash
-python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z
+python3 scripts/release_helper.py refresh-notebooklm X.Y.Z
 ```
 
 For a reviewed `generated_text` source that is the exact prior export, preview and
 retry with its full source UUID:
 
 ```bash
-python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z \
+python3 scripts/release_helper.py refresh-notebooklm X.Y.Z \
   --replace-generated-text-source-id <SOURCE_UUID> --dry-run
-python3 .claude/skills/release/release_helper.py refresh-notebooklm X.Y.Z \
+python3 scripts/release_helper.py refresh-notebooklm X.Y.Z \
   --replace-generated-text-source-id <SOURCE_UUID>
 ```
 
@@ -683,10 +683,10 @@ main (v1.1.0-dev)
 Before creating the release branch, verify that Cursor still supports hooks via `~/.cursor/hooks.json`. The `/release` skill automates this check as a mandatory gate.
 
 If running manually:
-1. Run: `python .claude/skills/release/release_helper.py cursor-verify-setup`
+1. Run: `python scripts/release_helper.py cursor-verify-setup`
 2. Perform manual Cursor test (see instructions printed by setup)
-3. Run: `python .claude/skills/release/release_helper.py cursor-verify-analyze`
-4. Run: `python .claude/skills/release/release_helper.py cursor-verify-cleanup`
+3. Run: `python scripts/release_helper.py cursor-verify-analyze`
+4. Run: `python scripts/release_helper.py cursor-verify-cleanup`
 
 If any hook event fails, investigate before proceeding with the release.
 
@@ -791,7 +791,7 @@ directly related unit tests and complete affected UX contract files when fixing
 code; documentation-only preparation does not require a full test run.
 
 ```bash
-python3 .claude/skills/release/release_helper.py get-version
+python3 scripts/release_helper.py get-version
 python3 scripts/sync_rust_middleware_version.py --version 1.0.0 --check
 python3 scripts/sync_release_versions.py --check
 ```
@@ -900,8 +900,9 @@ grep 'raw.githubusercontent.com' README.md
 The automated release script creates the merge without committing immediately so
 it can safely resolve the expected release metadata conflicts: version-only hunks
 are set to the next development version, the release's versioned changelog section
-is combined with `main`'s `[Unreleased]` notes, and `.wolf/STATUS.md` keeps the
-`main` side. Conflicts outside those files, or conflicts containing additional
+is combined with `main`'s `[Unreleased]` notes. If your checkout tracks a
+project-local `.wolf/STATUS.md` (not tracked in this repository), that file keeps
+the `main` side. Conflicts outside those files, or conflicts containing additional
 changes in a version file, stop for manual resolution; do not choose `ours` or
 `theirs` for the whole merge.
 
@@ -923,7 +924,7 @@ Update both Python version files, synchronize Rust, restore README installer
 URLs to `main`, and retain the exact release documentation link and new stable
 container references:
 ```bash
-python3 .claude/skills/release/release_helper.py update-version 1.1.0-dev
+python3 scripts/release_helper.py update-version 1.1.0-dev
 python3 scripts/sync_rust_middleware_version.py --version 1.1.0-dev
 python3 scripts/sync_rust_middleware_version.py --version 1.1.0-dev --check
 python3 scripts/sync_release_versions.py --check

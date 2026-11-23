@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `>=0.16.2,<2.0.0` instead of requiring exactly 0.16.2, and report local CLI
   failures during release dry-runs without checking authentication or contacting
   NotebookLM.
+### Changed
+- **Local agent tooling is no longer tracked:** Remove `.wolf/`, `.codex/`,
+  `.cursor/`, `.opencode/` (including the OpenWolf plugin), `.claude/`, and the
+  OpenWolf plugin contract tests from the repository; all are now gitignored and
+  stay local to each checkout. OpenWolf remains optional local tooling.
+- **Release automation moved off the agent skill surface:** Remove the
+  `.claude/skills/release/` skill package and keep `release_helper.py` and
+  `notebooklm_release.py` under `scripts/`. `scripts/release.sh` remains the
+  single release entry point, so the auto-discovered skill surface no longer
+  exposes high-privilege git and publishing operations.
 ### Documentation
 - Add a screenshot-based guide for installing AI Guardian in Claude Code on the web.
 ### Added

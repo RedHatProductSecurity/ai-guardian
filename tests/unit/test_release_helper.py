@@ -26,9 +26,9 @@ import pytest
 try:
     # Get project root (parent of tests directory)
     project_root = Path(__file__).parent.parent.parent
-    skills_path = project_root / ".claude" / "skills" / "release"
+    scripts_path = project_root / "scripts"
 
-    sys.path.insert(0, str(skills_path))
+    sys.path.insert(0, str(scripts_path))
     import release_helper
 
     from release_helper import (
@@ -47,7 +47,7 @@ except (ImportError, ModuleNotFoundError):
 # Skip all tests if release_helper is not available
 pytestmark = pytest.mark.skipif(
     not RELEASE_HELPER_AVAILABLE,
-    reason="release_helper module not available (.claude/skills/release/ not found)",
+    reason="release_helper module not available (scripts/release_helper.py not found)",
 )
 
 

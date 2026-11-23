@@ -376,15 +376,15 @@ Examples:
 **Automated Release Workflow (Recommended):**
 
 ```bash
-# Using the /release skill in Claude Code (automated)
-/release minor              # Create minor version release (1.1.0 -> 1.2.0)
-/release patch              # Create patch version release (1.1.0 -> 1.1.1)
-/release major              # Create major version release (1.0.0 -> 2.0.0)
-/release hotfix v1.1.0      # Create hotfix from v1.1.0 tag
-/release test               # Create TestPyPI test release
+# Using the release script (no agent required)
+scripts/release.sh minor                 # Preview a minor release (1.1.0 -> 1.2.0)
+scripts/release.sh --execute minor       # Create a minor version release
+scripts/release.sh --execute patch       # Create a patch version release
+scripts/release.sh --execute major       # Create a major version release
+scripts/release.sh --execute --resume patch  # Resume this attempt's required CI
 ```
 
-The `/release` skill automates:
+`scripts/release.sh` automates:
 - Version updates in both `pyproject.toml` and `src/ai_guardian/__init__.py`
 - CHANGELOG.md updates with proper formatting
 - Git branch creation and commit messages
@@ -428,9 +428,9 @@ AI Guardian uses GitHub Actions for automated publishing:
 - **RELEASING.md**: Complete step-by-step release and hotfix procedures
 - **CHANGELOG.md**: All notable changes, following [Keep a Changelog](https://keepachangelog.com/) format
 - **Version storage**: `pyproject.toml` (line 7) and `src/ai_guardian/__init__.py` (line 13)
-- **Release skill**: `/release` command for automated releases (see skill documentation)
+- **Release automation**: `scripts/release.sh` plus `scripts/release_helper.py` (see RELEASING.md)
 
-See [RELEASING.md](RELEASING.md) for detailed instructions, or use the `/release` skill for automated workflow.
+See [RELEASING.md](RELEASING.md) for detailed instructions, or use `scripts/release.sh` for the automated workflow.
 
 ---
 
@@ -597,7 +597,7 @@ ai-guardian/
      - **smoke-tests**: Calls `.github/workflows/smoke-tests.yml` (detection scan, hook pipeline, false positives)
      - **config-validation**: Doctor, permissions migration, profiles, config merge (project + user level)
      - **mcp-server**: JSON-RPC initialize and tool call response
-   - **⚠️ IMPORTANT**: When adding new CLI commands, config options, IDE adapters, detection patterns, or daemon endpoints, update this workflow to test them. The `/release` skill runs this workflow as a gate before releasing.
+   - **⚠️ IMPORTANT**: When adding new CLI commands, config options, IDE adapters, detection patterns, or daemon endpoints, update this workflow to test them. `scripts/release.sh` runs this workflow as a gate before releasing.
 
 5. **Smoke Tests** (`.github/workflows/smoke-tests.yml`)
    - Runs on: pull_request to main, workflow_call, workflow_dispatch
@@ -1284,13 +1284,13 @@ modals. See [Modal implementation guide](docs/MODAL_PROVIDERS.md#adding-a-modal)
 
 ### Preparing a Release
 
-**Recommended: Use the `/release` skill (automated)**
+**Recommended: Use `scripts/release.sh` (automated)**
 ```bash
-# In Claude Code
-/release minor   # or /release patch, /release major
+scripts/release.sh minor                 # Preview a minor release
+scripts/release.sh --execute minor       # Create a minor release (or patch/major)
 ```
 
-The skill automates steps 2-6 below and provides guidance for step 7.
+The script automates steps 2-6 below and provides guidance for step 7.
 
 **Manual alternative:**
 1. Follow [RELEASING.md](RELEASING.md) step-by-step
@@ -1683,7 +1683,12 @@ For questions about:
 - **Contributing**: Open an issue on GitHub
 
 <!-- openwolf:begin -->
-# OpenWolf
+# OpenWolf (local, optional)
 
-This project uses OpenWolf for context management. Read and follow .wolf/OPENWOLF.md at session start. Check .wolf/cerebrum.md before generating code. Grep .wolf/anatomy.md for a file's path before reading it (never read the whole index).
+OpenWolf context files are **not tracked in this repository** (`.wolf/`,
+`.opencode/plugins/openwolf/`, `.cursor/rules/openwolf.mdc` are gitignored). If
+you have OpenWolf installed locally, read and follow `.wolf/OPENWOLF.md` at
+session start, check `.wolf/cerebrum.md` before generating code, and grep
+`.wolf/anatomy.md` for a file's path before reading it. If those files are
+absent, ignore this section.
 <!-- openwolf:end -->
