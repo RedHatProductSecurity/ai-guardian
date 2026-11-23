@@ -21,7 +21,7 @@ def test_schema_defaults_profiles_and_example_are_consistent():
     support_schema = schema["definitions"]["support"]
     assert (
         support_schema["properties"]["export_destination"]["default"]
-        == "github-discussions"
+        == "~/support-bundles"
     )
     assert support_schema["properties"]["github_category"]["enum"] == [
         "bug-reports",
@@ -36,7 +36,7 @@ def test_schema_defaults_profiles_and_example_are_consistent():
         if "support" in profile:
             configs.append(profile)
     for config in configs:
-        assert config["support"]["export_destination"] == "github-discussions"
+        assert config["support"]["export_destination"] == "~/support-bundles"
         assert config["support"]["github_category"] == "bug-reports"
         jsonschema.validate(config["support"], support_schema)
     for category in ("polls", "announcements", "general", "D_arbitrary"):
@@ -124,7 +124,7 @@ async def test_web_support_settings_round_trip_preserves_selection(monkeypatch, 
     assert category.options == {"bug-reports": "Bug Reports", "q-a": "Q&A"}
     await buttons["Save"]()
     original_dest = (
-        saved.get("support", {}).get("export_destination") or "github-discussions"
+        saved.get("support", {}).get("export_destination") or "~/support-bundles"
     )
     assert save.call_args.args[0]["support"]["export_destination"] == original_dest
     controls["Support channel"].value = "github-discussions"

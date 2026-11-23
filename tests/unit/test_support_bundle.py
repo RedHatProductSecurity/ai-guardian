@@ -304,7 +304,10 @@ class TestPrepareBundle:
         finally:
             _cleanup_bundle(prepared["bundle_id"])
 
-    @patch("ai_guardian.reporting.support_bundle._get_support_config", return_value={})
+    @patch(
+        "ai_guardian.reporting.support_bundle._get_support_config",
+        return_value={"export_destination": "github-discussions"},
+    )
     def test_blank_default_title_is_a_draft_and_file_list_puts_doctor_first(
         self, mock_config
     ):
@@ -429,31 +432,12 @@ class TestSendBundle:
         assert dest.exists()
 
     @patch("ai_guardian.reporting.support_bundle._get_support_config")
-    def test_defaults_to_reviewed_github_discussions(self, mock_config):
-        """Unset destinations use GitHub, but preparation cannot grant approval."""
+    def test_defaults_to_local_export(self, mock_config):
+        """Unset destinations remain local and require review before export."""
         mock_config.return_value = {}
 
         bundle = prepare_bundle()
-        assert bundle["destination"] == "github-discussions"
-        with (
-            patch(
-                "ai_guardian.reporting.github_support.send_discussion",
-                return_value={"status": "error", "error_code": "cancelled"},
-            ) as sender,
-            patch(
-                "ai_guardian.reporting.github_support.credentials_available",
-                return_value=True,
-            ),
-            patch(
-                "ai_guardian.reporting.github_support.review_dialog",
-                side_effect=lambda request: {
-                    "request_id": request["request_id"],
-                    "delivery": "discussion",
-                },
-            ),
-        ):
-            assert send_bundle(bundle["bundle_id"])["error_code"] == "cancelled"
-            sender.assert_called_once()
+        assert bundle["destination"] == "~/support-bundles"
 
     @patch("ai_guardian.reporting.support_bundle._get_support_config")
     def test_local_export_retains_reviewed_copy(self, mock_config, tmp_path):
@@ -588,8 +572,8 @@ class TestGetBundleStatus:
     def test_no_destination_defaults(self, mock_config):
         mock_config.return_value = {}
         status = _get_bundle_status()
-        assert status["destination_type"] == "github-discussions"
-        assert status["destination"] == "github-discussions"
+        assert status["destination_type"] == "local"
+        assert status["destination"] == "~/support-bundles"
 
 
 class TestSupportCommand:

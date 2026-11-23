@@ -11,6 +11,7 @@ from ai_guardian.reporting.github_support import (
     PUBLIC_WARNING,
     REPOSITORY,
 )
+from ai_guardian.reporting.support_bundle import DEFAULT_EXPORT_DESTINATION
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.config_helpers import load_web_config, save_web_config
 
@@ -87,7 +88,7 @@ def create_mcp_servers_page(service, daemon_name: str):
                     ui.label("Support Bundle Export").classes("text-lg font-bold")
                     support = config.get("support", {})
                     dest_val = (
-                        support.get("export_destination") or DESTINATION
+                        support.get("export_destination") or DEFAULT_EXPORT_DESTINATION
                         if isinstance(support, dict)
                         else DESTINATION
                     )
@@ -125,7 +126,7 @@ def create_mcp_servers_page(service, daemon_name: str):
                         ui.input(
                             label="Destination",
                             value="" if dest_val == DESTINATION else dest_val,
-                            placeholder="Local path / S3 / GCS / email; empty uses GitHub Discussions",
+                            placeholder="Local path / S3 / GCS / email; empty uses ~/support-bundles",
                         )
                         .props("outlined dense")
                         .classes("w-full")

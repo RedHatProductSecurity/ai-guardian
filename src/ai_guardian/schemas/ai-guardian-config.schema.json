@@ -2951,8 +2951,8 @@
       "properties": {
         "export_destination": {
           "type": "string",
-          "description": "Default: 'github-discussions', offering Create ZIP only (local, not encrypted, no authentication/upload) or public support in the fixed RedHatProductSecurity/ai-guardian repository with native final approval. Preparation stays local. Missing/empty destinations use GitHub. Explicit local paths, S3, GCS, and email remain in effect for tray, CLI and MCP. No saved settings or existing bundle destinations are changed. Agent cannot override the destination.",
-          "default": "github-discussions"
+          "description": "Default: '~/support-bundles' (local, not encrypted). Public support in the fixed RedHatProductSecurity/ai-guardian repository requires explicit configuration and native final approval. Preparation stays local. Missing/empty destinations use ~/support-bundles. Explicit local paths, S3, GCS, and email remain in effect for tray, CLI and MCP. No saved settings or existing bundle destinations are changed. Agent cannot override the destination.",
+          "default": "~/support-bundles"
         },
         "github_category": {
           "type": "string",

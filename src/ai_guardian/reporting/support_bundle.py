@@ -52,6 +52,7 @@ def _write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
 
 _active_bundles: Dict[str, Dict[str, Any]] = {}
 CANCELLED_MESSAGE = "Support cancelled. Nothing was sent; prepared files remain local."
+DEFAULT_EXPORT_DESTINATION = "~/support-bundles"
 
 
 def _get_support_config() -> Dict:
@@ -63,7 +64,7 @@ def _get_support_config() -> Dict:
         config_path = Path.cwd() / ".ai-guardian.json"
     if not config_path.exists():
         return {
-            "export_destination": "github-discussions",
+            "export_destination": DEFAULT_EXPORT_DESTINATION,
             "github_category": "bug-reports",
         }
     try:
@@ -71,7 +72,7 @@ def _get_support_config() -> Dict:
             config = json.load(f)
         support = dict(config.get("support") or {})
         support["export_destination"] = (
-            support.get("export_destination") or "github-discussions"
+            support.get("export_destination") or DEFAULT_EXPORT_DESTINATION
         )
         return support
     except (OSError, ValueError, TypeError, AttributeError):
@@ -419,7 +420,7 @@ def prepare_bundle(
     destination = (
         export_destination
         or support_config.get("export_destination")
-        or "github-discussions"
+        or DEFAULT_EXPORT_DESTINATION
     )
     ttl = support_config.get("bundle_ttl_minutes", 30)
 
@@ -1212,7 +1213,7 @@ def _load_bundle_from_path(bundle_path: str) -> Optional[str]:
         bundle_id = f"support-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}"
 
     support_config = _get_support_config()
-    destination = support_config.get("export_destination") or "github-discussions"
+    destination = support_config.get("export_destination") or DEFAULT_EXPORT_DESTINATION
 
     if destination == "github-discussions":
         if path.is_symlink():
@@ -1250,7 +1251,7 @@ def _get_bundle_status() -> Dict[str, Any]:
     """Get support bundle configuration and status information."""
     _load_last_bundle()
     support_config = _get_support_config()
-    destination = support_config.get("export_destination") or "github-discussions"
+    destination = support_config.get("export_destination") or DEFAULT_EXPORT_DESTINATION
 
     if destination == "github-discussions":
         dest_type = "github-discussions"

@@ -395,9 +395,9 @@
   "mcp_server": {
     "proactive_level": "medium"
   },
-  "_comment_support": "Prepare locally and review. Default: GitHub, offering Create ZIP only (no authentication/upload; not encrypted) or public Discussions in RedHatProductSecurity/ai-guardian with native final user approval. Only Bug Reports (default) and Q&A are supported. Missing/empty destinations use GitHub; explicit local/S3/GCS/email destinations are honored by tray, CLI and MCP. Logs/violations cover the last 12 hours; only logs may be truncated. Configurations and included violation records stay complete and fully viewable through pages.",
+  "_comment_support": "Prepare locally and review. Default: ~/support-bundles (local, not encrypted); public Discussions in RedHatProductSecurity/ai-guardian require explicit configuration and native final user approval. Only Bug Reports (default) and Q&A are supported. Missing/empty destinations use ~/support-bundles; explicit local/S3/GCS/email destinations are honored by tray, CLI and MCP. Logs/violations cover the last 12 hours; only logs may be truncated. Configurations and included violation records stay complete and fully viewable through pages.",
   "support": {
-    "export_destination": "github-discussions",
+    "export_destination": "~/support-bundles",
     "github_category": "bug-reports",
     "auth": {
       "method": "none",
