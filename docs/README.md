@@ -64,6 +64,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | Document | Description |
 |----------|-------------|
 | [Security Design](SECURITY_DESIGN.md) | Architecture principles, self-protection, known limitations |
+| [Remote Broker Architecture](REMOTE_BROKER_ARCHITECTURE.md) | Existing daemon targets and proposed secure broker boundaries, pairing, routing, rollout, and follow-up documentation requirements |
 | [Tool Policy](TOOL_POLICY.md) | Allow/deny lists for Skills, MCP, Bash, Write |
 | [Permissions Comparison](PERMISSIONS_COMPARISON.md) | ai-guardian vs settings.json permissions |
 | [Violation Logging](VIOLATION_LOGGING.md) | Privacy-aware violation history, remote mirroring, and desktop/email alerts |
