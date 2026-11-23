@@ -267,7 +267,7 @@ def import_diagnostics(payload: dict, source: str) -> dict:
     """Register a new desktop-owned bundle; remote data cannot set its destination."""
     checked = validate_diagnostics(payload)
     config = bundles._get_support_config()
-    destination = config.get("export_destination") or "github-discussions"
+    destination = config.get("export_destination") or bundles.DEFAULT_EXPORT_DESTINATION
     root = Path(tempfile.mkdtemp(prefix="ai-guardian-support-"))
     try:
         (root / ".ai-read-deny").touch(mode=0o600)

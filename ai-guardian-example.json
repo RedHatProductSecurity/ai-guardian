@@ -1384,9 +1384,9 @@
   },
 
   "support": {
-    "export_destination": "github-discussions",
+    "export_destination": "~/support-bundles",
     "github_category": "bug-reports",
-    "_comment_export_destination_examples": "Default: github-discussions, including missing/empty destinations. Offers Create ZIP only (local, no GitHub authentication/upload; not encrypted) or PUBLIC Discussions with native final approval. Only bug-reports (default) and q-a. Tray, CLI and MCP respect explicit destinations; existing bundles are not rerouted. Logs and violations cover the last 12 hours; only logs may be truncated. Collected configurations and included violation records stay complete and fully viewable through pages. Alternatives: ~/support-bundles | s3://bucket/prefix/ | gs://company-bucket/ai-guardian/support/config-bundle/ | mailto:support@company.com",
+    "_comment_export_destination_examples": "Default: ~/support-bundles, including missing/empty destinations. Local export is not encrypted and does not authenticate or upload. PUBLIC Discussions require explicit configuration and native final approval. Only bug-reports (default) and q-a. Tray, CLI and MCP respect explicit destinations; existing bundles are not rerouted. Logs and violations cover the last 12 hours; only logs may be truncated. Collected configurations and included violation records stay complete and fully viewable through pages. Alternatives: ~/support-bundles | s3://bucket/prefix/ | gs://company-bucket/ai-guardian/support/config-bundle/ | mailto:support@company.com",
     "auth": {
       "method": "none",
       "token_env": ""

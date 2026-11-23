@@ -24,15 +24,13 @@ def _write_text(path, text, *, encoding="utf-8"):
 @pytest.mark.parametrize(
     "saved", [{}, {"support": {}}, {"support": {"export_destination": ""}}]
 )
-def test_unset_saved_destination_defaults_to_public_categories(
-    monkeypatch, tmp_path, saved
-):
+def test_unset_saved_destination_defaults_to_local_export(monkeypatch, tmp_path, saved):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("ai_guardian.config.utils.get_config_dir", lambda: tmp_path)
     _write_text(tmp_path / "ai-guardian.json", json.dumps(saved))
     status = bundles._get_bundle_status()
-    assert status["destination"] == gh.DESTINATION
-    assert status["destination_type"] == "github-discussions"
+    assert status["destination"] == "~/support-bundles"
+    assert status["destination_type"] == "local"
 
 
 def test_tray_honors_configured_destination_without_rewriting_it(monkeypatch, tmp_path):
@@ -408,7 +406,11 @@ def test_violation_window_accepts_offsets_fractions_and_empty_sources(log_source
 def test_public_size_budget_only_clips_logs_and_never_configs(
     collectors, monkeypatch, padding
 ):
-    monkeypatch.setattr(bundles, "_get_support_config", lambda: {})
+    monkeypatch.setattr(
+        bundles,
+        "_get_support_config",
+        lambda: {"export_destination": gh.DESTINATION},
+    )
     original = {"details": "x" * padding, "end": "END-CONFIG"}
     source = collectors / "ai-guardian.json"
     _write_text(source, json.dumps(original))

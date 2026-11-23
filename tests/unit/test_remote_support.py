@@ -208,10 +208,8 @@ def test_two_sources_remain_distinct_and_cannot_set_desktop_context(
                 json.loads((root / "ai-guardian.json").read_text())["diagnostic_marker"]
                 == marker
             )
-            assert (
-                json.loads((root / "support-context.json").read_text())["title"] == ""
-            )
-            assert prepared["destination"] == "github-discussions"
+            assert not (root / "support-context.json").exists()
+            assert prepared["destination"] == "~/support-bundles"
     finally:
         bundles._cleanup_bundle(first["bundle_id"])
         bundles._cleanup_bundle(second["bundle_id"])
@@ -370,10 +368,7 @@ def test_source_configuration_cannot_override_desktop_destination_or_category(
     )
     prepared = remote.import_diagnostics(payload, "Source VM (ssh)")
     try:
-        assert prepared["destination"] == "github-discussions"
-        context = json.loads(
-            (Path(prepared["temp_path"]) / "support-context.json").read_text()
-        )
-        assert context == {"title": "", "description": "", "category": "bug-reports"}
+        assert prepared["destination"] == "~/support-bundles"
+        assert not (Path(prepared["temp_path"]) / "support-context.json").exists()
     finally:
         bundles._cleanup_bundle(prepared["bundle_id"])

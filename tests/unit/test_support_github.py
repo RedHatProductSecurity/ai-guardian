@@ -14,14 +14,14 @@ from ai_guardian.reporting import support_bundle as bundles
 
 def test_fresh_default_and_saved_empty_destination(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    assert bundles._get_support_config()["export_destination"] == "github-discussions"
+    assert bundles._get_support_config()["export_destination"] == "~/support-bundles"
     from ai_guardian.config.utils import get_config_dir
 
     config = get_config_dir() / "ai-guardian.json"
     for saved in ({}, {"support": {}}, {"support": {"export_destination": ""}}):
         config.write_text(json.dumps(saved))
         assert (
-            bundles._get_support_config()["export_destination"] == "github-discussions"
+            bundles._get_support_config()["export_destination"] == "~/support-bundles"
         )
 
 
