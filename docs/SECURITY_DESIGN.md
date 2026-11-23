@@ -13,6 +13,10 @@ AI Guardian's security architecture is built on defense-in-depth principles with
 - **Privacy-first**: Heuristic detection runs locally, no external calls
 - **MCP security boundary**: MCP tools expose yes/no decisions only — never rules, patterns, or allowlists (see [MCP Server](MCP_SERVER.md))
 
+Remote daemon and Console management boundaries, including the proposed
+optional secure broker, are documented separately in the
+[Remote Broker Architecture](REMOTE_BROKER_ARCHITECTURE.md).
+
 ## Self-Protecting Security Architecture
 
 AI Guardian uses **hardcoded deny patterns** that protect its own critical files from being modified by AI agents. This prevents AI from disabling security features or bypassing protection.

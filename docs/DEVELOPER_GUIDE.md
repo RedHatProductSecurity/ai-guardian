@@ -6,6 +6,11 @@ This guide covers everything you need to contribute to AI Guardian: architecture
 
 AI Guardian protects AI-assisted coding tools through multiple layers:
 
+For the architecture of local, container, SSH-managed, and Kubernetes daemon
+targets, plus the proposed optional secure broker, see the
+[Remote Broker Architecture](REMOTE_BROKER_ARCHITECTURE.md). That document is
+the canonical source for remote-management boundaries and broker rollout state.
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │  AI IDE (Claude Code, Cursor, GitHub Copilot, etc.) │

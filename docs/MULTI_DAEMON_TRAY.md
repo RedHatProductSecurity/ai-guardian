@@ -2,6 +2,10 @@
 
 The system tray client discovers and manages AI Guardian daemons across multiple environments.
 
+This guide documents the tray's current target discovery and management behavior.
+For the broader local, container, SSH, Kubernetes, and proposed broker architecture,
+see [Remote Broker Architecture](REMOTE_BROKER_ARCHITECTURE.md).
+
 ## Quick Start
 
 ```bash
