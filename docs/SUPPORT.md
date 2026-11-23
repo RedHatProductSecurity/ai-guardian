@@ -1,11 +1,13 @@
 # Support bundles and public GitHub Discussions
 
-The default support destination is **GitHub Discussions** in
-[`RedHatProductSecurity/ai-guardian`](https://github.com/RedHatProductSecurity/ai-guardian/discussions).
-When GitHub is selected, the first native screen has a **Destination** dropdown:
-**Create ZIP only** (default, no upload) or **Gist + Discussion** (requires GitHub
-credentials). Choose a destination and click **Next** to open its review page;
-changing the dropdown alone does not continue or send anything. For **Gist +
+The default support destination is a local ZIP export under `~/support-bundles`.
+Creating the ZIP does not authenticate, upload, or send anything to support. The
+user reviews the retained archive and chooses whether and how to share it. Public
+support is opt-in: when GitHub Discussions is explicitly configured, the first
+native screen has a **Destination** dropdown: **Create ZIP only** (default, no
+upload) or **Gist + Discussion** (requires GitHub credentials). Choose a
+destination and click **Next** to open its review page; changing the dropdown
+alone does not continue or send anything. For **Gist +
 Discussion**, selected diagnostic files go into one **unlisted Gist owned by your
 GitHub account**; the public Discussion
 contains your sanitized message and a separate **Diagnostics** link, not inline
@@ -88,9 +90,10 @@ platform limits and the manual fallback. Placement never supplies consent.
 Choose **Contact supports — local tray host**, directly above **About** in the
 top-level tray menu, for diagnostics from the desktop running the tray.
 It honors the configured support destination and opens a native modal, not a
-shell or terminal. Empty/missing destinations use **GitHub Discussions**; that
-route uses a **Destination** dropdown and **Next** button rather than separate
-destination buttons. **Create ZIP only** is selected initially. Selecting
+shell or terminal. Empty/missing destinations use the local `~/support-bundles`
+export. When GitHub Discussions is explicitly configured, that route uses a
+**Destination** dropdown and **Next** button rather than separate destination
+buttons. **Create ZIP only** is selected initially. Selecting
 **Gist + Discussion** disables Next with an explanation if GitHub CLI has no
 configured credential for `github.com`; switching back to ZIP re-enables Next.
 The chooser checks only local credential availability; GitHub verifies the
