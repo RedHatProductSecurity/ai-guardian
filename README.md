@@ -163,6 +163,7 @@ upstream references. That guide is the source of truth for this summary.
 | OpenShell supervisor middleware | [OpenShell Middleware][openshell] |
 | Kubernetes deployment | [Kubernetes Guide][kubernetes] |
 | Multi-daemon tray | [Multi-Daemon Tray][tray] |
+| Remote daemon and secure broker architecture | [Remote Broker Architecture][remote-broker] |
 | Tray CLI and setup health indicators | [Multi-Daemon Tray][tray] |
 | Desktop shortcut and autostart | [Multi-Daemon Tray][tray] |
 | Tray plugins and event-driven updates | [Multi-Daemon Tray][tray] |
@@ -226,6 +227,7 @@ For production use, install a stable release from PyPI. The `main` branch contai
 [openshell]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENSHELL_MIDDLEWARE.md
 [kubernetes]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md
 [tray]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md
+[remote-broker]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/REMOTE_BROKER_ARCHITECTURE.md
 [hooks]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md
 [observability]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OBSERVABILITY.md
 [sdk]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md

@@ -171,5 +171,6 @@ fallback. Security hooks and daemon APIs continue to work without the Console.
 
 - [Configuration](CONFIGURATION.md)
 - [Multi-Daemon Tray](MULTI_DAEMON_TRAY.md)
+- [Remote Broker Architecture](REMOTE_BROKER_ARCHITECTURE.md)
 - [Tool Policy](TOOL_POLICY.md)
 - [Violation Logging](VIOLATION_LOGGING.md)
