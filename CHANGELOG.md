@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Headless daemon target service (#2641):** Provide a display-safe inventory,
+  runtime capability checks, and explicit action routing for discovered daemon
+  targets. The tray now uses the shared service; no broker listener or automatic
+  remote trust is added.
 - **ChatGPT desktop regular-mode MCP advisor plugin (#2831):** Add an optional
   desktop-only local plugin and personal-marketplace entry with backup-aware
   setup/removal and local source health checks. Doctor reports ChatGPT host
